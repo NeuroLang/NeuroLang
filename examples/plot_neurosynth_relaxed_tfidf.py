@@ -109,15 +109,18 @@ SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
 ###############################################################################
 # Probabilistic program and querying
 #
-# Compute a forward inference map for studies associated to both terms 'angular
-# gyrus' and 'semantic'. As per [1]_, "semantic processing is the most
-# consistent function that activates the angular gyrus".
+# Compute a forward inference map for studies associated to both terms
+# 'stimulus' and 'outcome'. In [1]_, a CBMA is carried out too "look for areas
+# that exhibit reliable correlations with stimulus value at the time of outcome
+# across studies". Only "contrasts that looked at parametric measures of
+# subjective value during the outcome or reward consumption phase" are included
+# in this meta-analysis. The ALE analysis identified two clusters: VMPFC/OFC
+# and bilateral VSTR.
 #
-# .. [1] Seghier, Mohamed L. 2013. ‘The Angular Gyrus: Multiple Functions and
-#    Multiple Subdivisions’. The Neuroscientist 19 (1): 43–61.
-#    https://doi.org/10.1177/1073858412440596.
-
-
+# .. [1] Clithero, John A., and Antonio Rangel. 2014. ‘Informatic Parcellation
+#    of the Network Involved in the Computation of Subjective Value’. Social
+#    Cognitive and Affective Neuroscience 9 (9): 1289–1302.
+#    https://doi.org/10.1093/scan/nst106.
 
 with nl.environment as e:
     (e.TermInStudy @ (1 / (1 + e.exp(-e.alpha * (e.tfidf - e.tau)))))[
@@ -129,7 +132,7 @@ with nl.environment as e:
     )
     e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
         e.Activation[e.i, e.j, e.k]
-    ) // (e.TermAssociation["semantic"] & e.TermAssociation["angular gyrus"])
+    ) // (e.TermAssociation["stimulus"] & e.TermAssociation["outcome"])
     e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
         e.i, e.j, e.k, e.p
     ]
@@ -141,7 +144,32 @@ with nl.environment as e:
 
 result_image = img_query.fetch_one()[0].spatial_image()
 img = result_image.get_fdata()
-plot = nilearn.plotting.plot_stat_map(
-    result_image, threshold=np.percentile(img[img > 0], 95)
+nilearn.plotting.plot_stat_map(
+    result_image,
+    threshold=np.percentile(img[img > 0], 90),
+    cut_coords=(-6,),
+    display_mode="x",
+    title="Expect vPCC and dPCC",
+)
+nilearn.plotting.plot_stat_map(
+    result_image,
+    threshold=np.percentile(img[img > 0], 90),
+    cut_coords=(-8,),
+    display_mode="y",
+    title="Expect VSTR",
+)
+nilearn.plotting.plot_stat_map(
+    result_image,
+    threshold=np.percentile(img[img > 0], 90),
+    cut_coords=(4,),
+    display_mode="x",
+    title="Expect VMPFC",
+)
+nilearn.plotting.plot_stat_map(
+    result_image,
+    threshold=np.percentile(img[img > 0], 90),
+    cut_coords=(-6,),
+    display_mode="z",
+    title="Expect VMPFC",
 )
 nilearn.plotting.show()
