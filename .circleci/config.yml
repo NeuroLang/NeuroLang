@@ -67,7 +67,6 @@ commands:
             ./cc-test-reporter before-build
             make test
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
-            export CODACY_PROJECT_TOKEN=819af61c85004229a83cb34b8089930c
             python-codacy-coverage -r coverage.xml
 
       - run:
