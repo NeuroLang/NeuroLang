@@ -10,7 +10,7 @@ associations using a sigmoid-based soft thresholding of TFIDF features.
 
 It then shows how a two-term conjunctive query can be expressed and solved to
 obtain an uncorreted forward inference map for studies associated with both
-terms 'auditory' and 'memory'.
+terms 'stimulus' and 'outcome'.
 """
 from typing import Callable, Iterable
 
