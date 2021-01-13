@@ -715,7 +715,12 @@ class NamedRelationalAlgebraFrozenSet(
             new_containers.append(groups.agg(**aggs))
 
         for dst, fun in aggs_multi_column.items():
-            new_col = groups.apply(fun).rename(dst).to_frame()
+            new_col = (
+                groups
+                .apply(fun)
+                .rename(dst)
+                .to_frame()
+            )
             new_containers.append(new_col)
 
         new_container = pd.concat(new_containers, axis=1)
