@@ -10,8 +10,9 @@ from sqlalchemy.sql import table
 # engine = sqlalchemy.create_engine('sqlite:///neurolang.db', echo=True)
 # metadata = MetaData()
 
-class SQLAEngineFactory():
-    engine = create_engine('sqlite:///neurolang.db', echo=True)
+
+class SQLAEngineFactory:
+    engine = create_engine("sqlite:///neurolang.db", echo=True)
 
     @classmethod
     def get_engine(cls):
@@ -39,7 +40,12 @@ class SQLARelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 if not isinstance(iterable, pd.DataFrame):
                     iterable = pd.DataFrame(iterable)
                 iterable.to_sql(self._table_name, engine, index=False)
-                self._table = Table(self._table_name, MetaData(), autoload=True, autoload_with=engine)
+                self._table = Table(
+                    self._table_name,
+                    MetaData(),
+                    autoload=True,
+                    autoload_with=engine,
+                )
 
     @classmethod
     def create_view_from(cls, other):
@@ -76,13 +82,13 @@ class SQLARelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return cls()
 
     def is_empty(self):
-        return (self._count == 0)
+        return self._count == 0
 
     def is_dum(self):
-        return (self.arity == 0 and self.is_empty())
+        return self.arity == 0 and self.is_empty()
 
     def is_dee(self):
-        return (self.arity == 0 and not self.is_empty())
+        return self.arity == 0 and not self.is_empty()
 
     @property
     def arity(self):
@@ -136,14 +142,19 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         if not isinstance(data, pd.DataFrame):
             data = pd.DataFrame(data, columns=columns)
         data.to_sql(self._table_name, self.engine, index=False)
-        self._table = Table(self._table_name, MetaData(), autoload=True, autoload_with=self.engine)
+        self._table = Table(
+            self._table_name,
+            MetaData(),
+            autoload=True,
+            autoload_with=self.engine,
+        )
 
     def _init_from(self, other):
         self._table_name = other._table_name
         self._count = other._count
         self._table = other._table
         self._query = other._query
-    
+
     @staticmethod
     def _check_for_duplicated_columns(columns):
         if columns is not None and len(set(columns)) != len(columns):
@@ -182,10 +193,10 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         return len(self) == 0
 
     def is_dum(self):
-        return (self.arity == 0 and self.is_empty())
+        return self.arity == 0 and self.is_empty()
 
     def is_dee(self):
-        return (self.arity == 0 and not self.is_empty())
+        return self.arity == 0 and not self.is_empty()
 
     @property
     def arity(self):
@@ -211,10 +222,9 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
             return res
         if len(set(self.columns).intersection(set(other.columns))) > 0:
             raise ValueError(
-                "Cross product with common columns "
-                "is not valid"
+                "Cross product with common columns " "is not valid"
             )
-        
+
         query = select([self._table, other._table])
         return self._create_view_from_query(query)
 
@@ -222,14 +232,21 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         res = self._dee_dum_product(other)
         if res is not None:
             return res
-        
+
         on = [c for c in self.columns if c in other.columns]
         if len(on) == 0:
             return self.cross_product(other)
 
-        on_clause = and_(*[self._table.c.get(col) == other._table.c.get(col) for col in on])
-        select_cols = [self._table] + [other._table.c.get(col) for col in set(other.columns) - set(self.columns)]
-        query = select(select_cols).select_from(self._table.join(other._table, on_clause))
+        on_clause = and_(
+            *[self._table.c.get(col) == other._table.c.get(col) for col in on]
+        )
+        select_cols = [self._table] + [
+            other._table.c.get(col)
+            for col in set(other.columns) - set(self.columns)
+        ]
+        query = select(select_cols).select_from(
+            self._table.join(other._table, on_clause)
+        )
         return self._create_view_from_query(query)
 
     def _create_view_from_query(self, query):
@@ -253,11 +270,13 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
 
     def __iter__(self):
         if self.arity > 0 and len(self) > 0:
-            query = select(self.sql_columns).select_from(self._table).distinct()
+            query = (
+                select(self.sql_columns).select_from(self._table).distinct()
+            )
             with self.engine.connect() as conn:
                 res = conn.execute(query)
-            for t in res:
-                yield tuple(t)
+                for t in res:
+                    yield tuple(t)
         elif self.arity == 0 and len(self) > 0:
             yield tuple()
 
@@ -317,5 +336,10 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         d = {}
         if self._table is not None and not self.is_empty():
             with self.engine.connect() as conn:
-                d = pd.read_sql(select(self.sql_columns).select_from(self._table).distinct(), conn)
+                d = pd.read_sql(
+                    select(self.sql_columns)
+                    .select_from(self._table)
+                    .distinct(),
+                    conn,
+                )
         return "{}({},\n {})".format(type(self), t, d)
