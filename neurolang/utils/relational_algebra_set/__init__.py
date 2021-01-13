@@ -3,11 +3,15 @@ from .pandas import (NamedRelationalAlgebraFrozenSet,
                      RelationalAlgebraColumnInt, RelationalAlgebraColumnStr,
                      RelationalAlgebraStringExpression)
 
+from .sql import SQLARelationalAlgebraFrozenSet, NamedSQLARelationalAlgebraFrozenSet
+
 __all__ = [
     "RelationalAlgebraColumnInt",
     "RelationalAlgebraColumnStr",
     "RelationalAlgebraStringExpression",
     "RelationalAlgebraFrozenSet",
     "RelationalAlgebraSet",
-    "NamedRelationalAlgebraFrozenSet"
+    "NamedRelationalAlgebraFrozenSet",
+    "SQLARelationalAlgebraFrozenSet",
+    "NamedSQLARelationalAlgebraFrozenSet"
 ]
