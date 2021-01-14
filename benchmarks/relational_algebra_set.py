@@ -4,10 +4,12 @@ from functools import reduce
 from neurolang.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
+    NamedSQLARelationalAlgebraFrozenSet,
 )
+import sqlalchemy
 
 
-class TimeNamedRelationalAlgebraFrozenSets:
+class TimeNamedLeftNaturalJoins:
     params = [[10 ** 4, 10 ** 5, 10 ** 6], [10], [3], [2, 8], [0.75]]
 
     param_names = [
@@ -67,8 +69,19 @@ class TimeNamedRelationalAlgebraFrozenSets:
         reduce(lambda a, b: a.left_naturaljoin(b), self.sets)
 
 
+engine = sqlalchemy.create_engine("sqlite:///neurolang.db", echo=False)
+
+
 class TimeChainedNaturalJoins:
-    params = [[10 ** 4, 10 ** 5, 10 ** 6], [10], [3], [8], [0.75]]
+    params = [
+        [10 ** 5],
+        # [10 ** 4, 10 ** 5, 10 ** 6],
+        [10],
+        [3],
+        [6],
+        [0.75],
+        [NamedRelationalAlgebraFrozenSet, NamedSQLARelationalAlgebraFrozenSet],
+    ]
 
     param_names = [
         "rows",
@@ -76,11 +89,12 @@ class TimeChainedNaturalJoins:
         "number of join columns",
         "number of chained joins",
         "ratio of dictinct elements",
+        "engine class",
     ]
 
-    timeout = 60 * 3
+    # timeout = 60 * 3
 
-    def setup(self, N, ncols, njoin_columns, njoins, distinct_r):
+    def setup(self, N, ncols, njoin_columns, njoins, distinct_r, set_class):
         """
         Generate NamedRelationalAlgebraFrozenSets to test performance impact
         of chain order on natural joins. All sets share the same key columns,
@@ -132,19 +146,55 @@ class TimeChainedNaturalJoins:
                 ],
                 axis=1,
             )
-            self.sets.append(
-                NamedRelationalAlgebraFrozenSet(join_columns + cols, df)
-            )
+            if set_class == NamedSQLARelationalAlgebraFrozenSet:
+                s = set_class(engine, join_columns + cols, df)
+                # Place an index on the key columns
+                i = sqlalchemy.Index(
+                    "idx_{}".format(s._table_name),
+                    *[s._table.c.get(c) for c in join_columns]
+                )
+                i.create(engine)
+                # Analyze the DB
+                with engine.connect() as conn:
+                    conn.execute("PRAGMA optimize")
+            else:
+                s = set_class(join_columns + cols, df)
+            self.sets.append(s)
 
     def time_ra_naturaljoin_hard(
-        self, N, ncols, njoin_columns, njoins, distinct_r
+        self, N, ncols, njoin_columns, njoins, distinct_r, set_class
     ):
-        reduce(lambda a, b: a.naturaljoin(b), self.sets)
+        res = reduce(lambda a, b: a.naturaljoin(b), self.sets)
+        self.post_process_result(res)
 
     def time_ra_naturaljoin_easy(
-        self, N, ncols, njoin_columns, njoins, distinct_r
+        self, N, ncols, njoin_columns, njoins, distinct_r, set_class
     ):
-        reduce(lambda a, b: a.naturaljoin(b), self.sets[::-1])
+        res = reduce(lambda a, b: a.naturaljoin(b), self.sets[::-1])
+        self.post_process_result(res)
+
+    def post_process_result(self, result):
+        if isinstance(result, NamedSQLARelationalAlgebraFrozenSet):
+            # Fetch the results from the view to execute the join query
+            query = (
+                sqlalchemy.select(result._table.c)
+                .select_from(result._table)
+                .distinct()
+            )
+            with engine.connect() as conn:
+                conn.execute(query).fetchall()
+
+            # Analyze the query plan
+            qp = "EXPLAIN QUERY PLAN %s" % (str(query))
+            with engine.connect() as conn:
+                eqp = conn.execute(qp).fetchall()
+                for i, s in enumerate(self.sets):
+                    print("s{} : {}".format(i, s._table_name))
+                print("Query Plan: ")
+                for r in eqp:
+                    print(r)
+        else:
+            print(result._container.info())
 
 
 class TimeRelationalAlgebraFrozenSets:
