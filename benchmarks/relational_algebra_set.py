@@ -156,7 +156,7 @@ class TimeChainedNaturalJoins:
                 i.create(engine)
                 # Analyze the DB
                 with engine.connect() as conn:
-                    conn.execute("PRAGMA optimize")
+                    conn.execute("ANALYZE")
             else:
                 s = set_class(join_columns + cols, df)
             self.sets.append(s)

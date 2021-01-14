@@ -19,101 +19,6 @@ class SQLAEngineFactory:
         return cls.engine
 
 
-class SQLARelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
-    """
-    A RelationalAlgebraFrozenSet with an underlying SQL representation.
-    Data for this set is either stored in a table in an SQL database,
-    or constructed as a query which will then be evaluated on the
-    database tables.
-    """
-
-    def __init__(self, engine, iterable=None):
-        self._table_name = str(uuid.uuid4())
-        self._might_have_duplicates = True
-        self._dtypes = None
-        self._len = 0
-        self._table = None
-        if iterable is not None:
-            if isinstance(iterable, SQLARelationalAlgebraFrozenSet):
-                self._copy_from(iterable)
-            else:
-                if not isinstance(iterable, pd.DataFrame):
-                    iterable = pd.DataFrame(iterable)
-                iterable.to_sql(self._table_name, engine, index=False)
-                self._table = Table(
-                    self._table_name,
-                    MetaData(),
-                    autoload=True,
-                    autoload_with=engine,
-                )
-
-    @classmethod
-    def create_view_from(cls, other):
-        if not isinstance(other, cls):
-            raise ValueError(
-                "View can only be created from an object of the same class"
-            )
-        output = cls()
-        output._copy_from(other)
-        return output
-
-    def _copy_from(self, other):
-        """
-        Copy the underlying attributes of the other set on this one.
-
-        Parameters
-        ----------
-        other : [type]
-            [description]
-        """
-        self._table_name = other._table_name
-        self._count = other._count
-        self._dtypes = other._dtypes
-        self._might_have_duplicates = other._might_have_duplicates
-
-    @classmethod
-    def dee(cls):
-        output = cls()
-        output._count = 1
-        return output
-
-    @classmethod
-    def dum(cls):
-        return cls()
-
-    def is_empty(self):
-        return self._count == 0
-
-    def is_dum(self):
-        return self.arity == 0 and self.is_empty()
-
-    def is_dee(self):
-        return self.arity == 0 and not self.is_empty()
-
-    @property
-    def arity(self):
-        if self._dtypes is None:
-            return 0
-        return len(self._dtypes)
-
-    @property
-    def columns(self):
-        return self._dtypes.index
-
-    def _empty_set_same_structure(self):
-        return type(self)()
-
-    def projection(self, *columns):
-        if self.is_empty():
-            return self._empty_set_same_structure()
-        self
-        new_container = self._container[list(columns)]
-        new_container.columns = pd.RangeIndex(len(columns))
-        output = self._empty_set_same_structure()
-        output._container = new_container
-        return output
-
-
 class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
     """
     A RelationalAlgebraFrozenSet with an underlying SQL representation.
@@ -128,7 +33,7 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         self._table = None
         self.engine = engine
         self._check_for_duplicated_columns(columns)
-        if isinstance(data, SQLARelationalAlgebraFrozenSet):
+        if isinstance(data, NamedSQLARelationalAlgebraFrozenSet):
             self._init_from(data)
         elif data is not None:
             self._create_insert_table(data, columns)
