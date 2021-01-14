@@ -39,7 +39,7 @@ GRAMMAR = u"""
               | negated_predicate
               | comparison
               | logical_constant
-              | '(' @predicate ')';
+              | '(' @:predicate ')';
 
     constant_predicate = identifier'(' ','.{ literal } ')' ;
 

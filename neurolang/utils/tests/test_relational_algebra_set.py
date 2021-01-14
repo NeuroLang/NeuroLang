@@ -101,23 +101,40 @@ def test_relational_algebra_ra_projection(ra_module):
 
 def test_relational_algebra_ra_selection(ra_module):
     a = [(i % 2, i, i * 2) for i in range(5)]
-
     ras = ra_module.RelationalAlgebraSet(a)
 
+    # Select elements where col0 == 1
     ras_0 = ras.selection({0: 1})
     a_sel = set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1)
     assert ras_0 == a_sel
 
+    # Select elements where col0 == 1 and col1 == 2. Result should be empty.
     ras_0 = ras.selection({0: 1, 1: 2})
-    a_sel = set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1 and i == 2)
+    a_sel = set()
     assert ras_0 == a_sel
 
-    ras_1 = ras.selection_columns({0: 1, 1: 2})
-    assert ras_1 == set(t for t in a if t[0] == t[1] & t[1] == t[2])
-    assert ras.selection({0: 10000}).selection_columns({0: 1}).is_empty()
+    # Select elements where the first parameter is 0
+    ras_0 = ras.selection(lambda x: x[0] == 0)
+    assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 0)
+
+    # Select elements where the col1 has values that are odd
+    ras_0 = ras.selection({1: lambda x: x % 2 == 1})
+    assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1)
+
+    # Select elements where the col0 is 1 and col2 > 2
+    ras_0 = ras.selection({0: 1, 2: lambda x: x > 2})
+    assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1 and i > 1)
 
     assert ra_module.RelationalAlgebraSet.dum().selection({0: 1}).is_empty()
 
+def test_relational_algebra_ra_selection_columns(ra_module):
+    a = [(i % 2, i, i * 2) for i in range(5)]
+    ras = ra_module.RelationalAlgebraSet(a)
+
+    # Select elements where col0 == col1 and col1 == col2. Result should be set((0, 0, 0))
+    ras_1 = ras.selection_columns({0: 1, 1: 2})
+    assert ras_1 == set(t for t in a if t[0] == t[1] & t[1] == t[2])
+    assert ra_module.RelationalAlgebraSet.dum().selection_columns({0: 1}).is_empty()
 
 def test_relational_algebra_ra_equijoin(ra_module):
     a = [(i, i * 2) for i in range(5)]

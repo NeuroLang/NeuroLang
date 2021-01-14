@@ -83,7 +83,8 @@
          "pip+tatsu": [""],
          "pip+neurosynth": ["0.3.7"],
          "matplotlib": [""],
-         "pip+typing_inspect": [""]
+         "pip+typing_inspect": [""],
+         "importlib-metadata": [""]
     },
 
     // Combinations of libraries/python versions can be excluded/included
