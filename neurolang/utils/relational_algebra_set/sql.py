@@ -16,10 +16,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.sql import table
 
-# Create the engine to connect to the PostgreSQL database
-# engine = sqlalchemy.create_engine('sqlite:///neurolang.db', echo=True)
-# metadata = MetaData()
-
 
 class SQLAEngineFactory(ABC):
     """
@@ -55,11 +51,14 @@ class SQLAEngineFactory(ABC):
         The engine is created with the db+dialect string found in the
         `NEURO_SQLA_DIALECT` environment variable.
         """
-        print(
-            "Creating SQLA engine with {} uri."
-            + " Set the $NEURO_SQLA_DIALECT environment var to change it."
-        )
         dialect = os.getenv("NEURO_SQLA_DIALECT", "sqlite:///neurolang.db")
+        print(
+            (
+                "Creating SQLA engine with {} uri."
+                " Set the $NEURO_SQLA_DIALECT environment"
+                " var to change it.".format(dialect)
+            )
+        )
         return create_engine(dialect, echo=echo)
 
 
@@ -161,9 +160,7 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
 
     @property
     def arity(self):
-        if self._table is None:
-            return 0
-        return len(self._table.c)
+        return len(self.columns)
 
     @property
     def columns(self):
@@ -284,7 +281,7 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         bool
             True if _table has an index with the same set of columns.
         """
-        if self._table is None or self._table.indexes is None:
+        if self._table is not None or self._table.indexes is not None:
             for index in self._table.indexes:
                 if set(index.columns.keys()) == set(columns):
                     return True
@@ -337,7 +334,24 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
             yield tuple()
 
     def __contains__(self, element):
-        pass
+        if self.arity == 0:
+            return False
+        element = self._normalise_element(element)
+        query = select(self.sql_columns).select_from(self._table).limit(1)
+        for c, v in element.items():
+            query = query.where(self.sql_columns.get(c) == v)
+        with SQLAEngineFactory.get_engine().connect() as conn:
+            res = conn.execute(query)
+            return res.first() is not None
+
+    def _normalise_element(self, element):
+        if isinstance(element, dict):
+            pass
+        elif hasattr(element, "__iter__") and not isinstance(element, str):
+            element = dict(zip(self.columns, element))
+        else:
+            element = dict(zip(self.columns, (element,)))
+        return element
 
     def projection(self, *columns):
         pass
