@@ -16,6 +16,9 @@ def mock_sql_engine():
         _fixture.return_value = engine_
         yield _fixture
 
+    # meta = MetaData()
+    # meta.reflect(bind=engine_, views=True)
+    # meta.drop_all(engine_)
     engine_.dispose()
 
 
@@ -28,6 +31,9 @@ def test_set_init():
     ras_b = NamedRelationalAlgebraFrozenSet(("y", "x"), b)
     ras_c = NamedRelationalAlgebraFrozenSet(("u", "v"), b)
 
+    assert((4, 8) in ras_a)
+
     res = ras_a.naturaljoin(ras_b)
     res2 = ras_a.naturaljoin(ras_c)
-    # res3 = ras_a.naturaljoin(ras_c).naturaljoin(ras_b)
+    res3 = res2.naturaljoin(ras_b)
+
