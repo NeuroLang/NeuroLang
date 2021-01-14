@@ -4,27 +4,46 @@ import os
 
 from . import abstract as abc
 import pandas as pd
-from sqlalchemy import Table, func, MetaData, Index, and_, select, create_engine
+from abc import ABC
+from sqlalchemy import (
+    Table,
+    MetaData,
+    Index,
+    func,
+    and_,
+    select,
+    create_engine,
+)
 from sqlalchemy.sql import table
 
 # Create the engine to connect to the PostgreSQL database
 # engine = sqlalchemy.create_engine('sqlite:///neurolang.db', echo=True)
 # metadata = MetaData()
 
-class SQLAEngineFactory():
+
+class SQLAEngineFactory(ABC):
     """
     Singleton class to store the SQLAlchemy engine.
     The engine is initialised using environment variables.
 
     Returns
     -------
-    [type]
-        [description]
+    None
+        Abstract class. Do not instantiate.
     """
+
     _engine = None
 
     @classmethod
     def get_engine(cls):
+        """
+        Get the SQLA engine.
+
+        Returns
+        -------
+        sqlalchemy.engine.Engine
+            The singleton engine.
+        """
         if cls._engine == None:
             cls._engine = cls._create_engine(echo=False)
         return cls._engine
@@ -33,27 +52,33 @@ class SQLAEngineFactory():
     def _create_engine(echo=False):
         """
         Create the engine for the singleton.
+        The engine is created with the db+dialect string found in the
+        `NEURO_SQLA_DIALECT` environment variable.
         """
+        print(
+            "Creating SQLA engine with {} uri."
+            + " Set the $NEURO_SQLA_DIALECT environment var to change it."
+        )
         dialect = os.getenv("NEURO_SQLA_DIALECT", "sqlite:///neurolang.db")
         return create_engine(dialect, echo=echo)
 
 
-class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
+class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
     """
     A RelationalAlgebraFrozenSet with an underlying SQL representation.
     Data for this set is either stored in a table in an SQL database,
-    or constructed as a query which will then be evaluated on the
-    database tables.
+    or stored as a view which represents a query to be executed by the SQL
+    server.
     """
 
-    def __init__(self, engine, columns=None, data=None):
+    def __init__(self, columns=None, data=None):
         self._table_name = self._new_name()
         self._count = None
         self._table = None
-        self.engine = engine
+        # self.engine = engine
         self._is_view = False
         self._check_for_duplicated_columns(columns)
-        if isinstance(data, NamedSQLARelationalAlgebraFrozenSet):
+        if isinstance(data, NamedRelationalAlgebraFrozenSet):
             self._init_from(data)
         elif data is not None:
             self._create_insert_table(data, columns)
@@ -72,15 +97,17 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         columns : List[str], optional
             The column names, by default None.
         """
-        
+
         if not isinstance(data, pd.DataFrame):
             data = pd.DataFrame(data, columns=columns)
-        data.to_sql(self._table_name, self.engine, index=False)
+        data.to_sql(
+            self._table_name, SQLAEngineFactory.get_engine(), index=False
+        )
         self._table = Table(
             self._table_name,
             MetaData(),
             autoload=True,
-            autoload_with=self.engine,
+            autoload_with=SQLAEngineFactory.get_engine(),
         )
 
     def _init_from(self, other):
@@ -234,13 +261,13 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         if not self._is_view and not self.has_index(on):
             # Create an index on the columns
             i = Index(
-                'idx_{}_{}'.format(self._table_name, '_'.join(on)),
-                *[self._table.c.get(c) for c in on]
+                "idx_{}_{}".format(self._table_name, "_".join(on)),
+                *[self._table.c.get(c) for c in on],
             )
-            i.create(self.engine)
+            i.create(SQLAEngineFactory.get_engine())
             # Analyze the table
-            with self.engine.connect() as conn:
-                conn.execute('ANALYZE {}'.format(self._table_name))
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                conn.execute("ANALYZE {}".format(self._table_name))
 
     def has_index(self, columns):
         """
@@ -278,9 +305,9 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         NamedRelationalAlgebraFrozenSet
             A new set.
         """
-        output = NamedSQLARelationalAlgebraFrozenSet(self.engine)
+        output = NamedRelationalAlgebraFrozenSet()
         view = CreateView(output._table_name, query)
-        with self.engine.connect() as conn:
+        with SQLAEngineFactory.get_engine().connect() as conn:
             conn.execute(view)
         t = table(output._table_name)
         for c in query.c:
@@ -292,7 +319,7 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
     def __len__(self):
         if self._count is None:
             query = select([func.count()]).select_from(self._table).distinct()
-            with self.engine.connect() as conn:
+            with SQLAEngineFactory.get_engine().connect() as conn:
                 res = conn.execute(query).scalar()
                 self._count = res
         return self._count
@@ -302,7 +329,7 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
             query = (
                 select(self.sql_columns).select_from(self._table).distinct()
             )
-            with self.engine.connect() as conn:
+            with SQLAEngineFactory.get_engine().connect() as conn:
                 res = conn.execute(query)
                 for t in res:
                     yield tuple(t)
@@ -338,7 +365,7 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
 
     def fetch_one(self):
         query = select(self.sql_columns).select_from(self._table).limit(1)
-        with self.engine.connect() as conn:
+        with SQLAEngineFactory.get_engine().connect() as conn:
             res = conn.execute(query)
         return res.fetchone()
 
@@ -364,7 +391,7 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         t = self._table_name
         d = {}
         if self._table is not None and not self.is_empty():
-            with self.engine.connect() as conn:
+            with SQLAEngineFactory.get_engine().connect() as conn:
                 d = pd.read_sql(
                     select(self.sql_columns)
                     .select_from(self._table)
