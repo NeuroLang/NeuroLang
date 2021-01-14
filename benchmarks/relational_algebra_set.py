@@ -9,7 +9,7 @@ from neurolang.utils.relational_algebra_set import (
 import sqlalchemy
 
 
-class TimeNamedLeftNaturalJoins:
+class TimeLeftNaturalJoins:
     params = [[10 ** 4, 10 ** 5, 10 ** 6], [10], [3], [2, 8], [0.75]]
 
     param_names = [
@@ -149,11 +149,11 @@ class TimeChainedNaturalJoins:
             if set_class == NamedSQLARelationalAlgebraFrozenSet:
                 s = set_class(engine, join_columns + cols, df)
                 # Place an index on the key columns
-                i = sqlalchemy.Index(
-                    "idx_{}".format(s._table_name),
-                    *[s._table.c.get(c) for c in join_columns]
-                )
-                i.create(engine)
+                # i = sqlalchemy.Index(
+                #     "idx_{}".format(s._table_name),
+                #     *[s._table.c.get(c) for c in join_columns]
+                # )
+                # i.create(engine)
                 # Analyze the DB
                 with engine.connect() as conn:
                     conn.execute("ANALYZE")
@@ -179,7 +179,6 @@ class TimeChainedNaturalJoins:
             query = (
                 sqlalchemy.select(result._table.c)
                 .select_from(result._table)
-                .distinct()
             )
             with engine.connect() as conn:
                 conn.execute(query).fetchall()
@@ -197,7 +196,7 @@ class TimeChainedNaturalJoins:
             print(result._container.info())
 
 
-class TimeRelationalAlgebraFrozenSets:
+class TimeEquiJoin:
     params = [[10 ** 4, 10 ** 5, 10 ** 6], [10], [3], [2, 8], [0.75]]
 
     param_names = [
