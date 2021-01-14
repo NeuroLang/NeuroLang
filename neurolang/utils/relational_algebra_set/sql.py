@@ -1,22 +1,41 @@
 from neurolang.utils.relational_algebra_set.sql_helpers import CreateView
 import uuid
+import os
 
 from . import abstract as abc
 import pandas as pd
-from sqlalchemy import Table, func, MetaData, and_, select, create_engine
+from sqlalchemy import Table, func, MetaData, Index, and_, select, create_engine
 from sqlalchemy.sql import table
 
 # Create the engine to connect to the PostgreSQL database
 # engine = sqlalchemy.create_engine('sqlite:///neurolang.db', echo=True)
 # metadata = MetaData()
 
+class SQLAEngineFactory():
+    """
+    Singleton class to store the SQLAlchemy engine.
+    The engine is initialised using environment variables.
 
-class SQLAEngineFactory:
-    engine = create_engine("sqlite:///neurolang.db", echo=True)
+    Returns
+    -------
+    [type]
+        [description]
+    """
+    _engine = None
 
     @classmethod
     def get_engine(cls):
-        return cls.engine
+        if cls._engine == None:
+            cls._engine = cls._create_engine(echo=False)
+        return cls._engine
+
+    @staticmethod
+    def _create_engine(echo=False):
+        """
+        Create the engine for the singleton.
+        """
+        dialect = os.getenv("NEURO_SQLA_DIALECT", "sqlite:///neurolang.db")
+        return create_engine(dialect, echo=echo)
 
 
 class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
@@ -32,6 +51,7 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         self._count = None
         self._table = None
         self.engine = engine
+        self._is_view = False
         self._check_for_duplicated_columns(columns)
         if isinstance(data, NamedSQLARelationalAlgebraFrozenSet):
             self._init_from(data)
@@ -40,10 +60,19 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
 
     def _create_insert_table(self, data, columns=None):
         """
+        Initialise the set with the provided data collection.
         We use pandas to infer datatypes from the data and create
         the appropriate sql statement.
-        We then read the table metadata and store it in self._table
+        We then read the table metadata and store it in self._table.
+
+        Parameters
+        ----------
+        data : Union[pd.DataFrame, Iterable[Any]]
+            The initial data for the set.
+        columns : List[str], optional
+            The column names, by default None.
         """
+        
         if not isinstance(data, pd.DataFrame):
             data = pd.DataFrame(data, columns=columns)
         data.to_sql(self._table_name, self.engine, index=False)
@@ -58,7 +87,7 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         self._table_name = other._table_name
         self._count = other._count
         self._table = other._table
-        self._query = other._query
+        self._is_view = other._is_view
 
     @staticmethod
     def _check_for_duplicated_columns(columns):
@@ -111,17 +140,52 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
 
     @property
     def columns(self):
+        """
+        List of columns as string identifiers.
+
+        Returns
+        -------
+        Iterable[str]
+            Set of column names.
+        """
         if self._table is None:
             return []
         return self._table.c.keys()
 
     @property
     def sql_columns(self):
+        """
+        List of columns as sqlalchemy.schema.Columns collection.
+
+        Returns
+        -------
+        Iterable[sqlalchemy.schema.Columns]
+            Set of columns.
+        """
         if self._table is None:
             return []
         return self._table.c
 
     def cross_product(self, other):
+        """
+        Cross product with other set.
+
+        Parameters
+        ----------
+        other : NamedRelationalAlgebraFrozenSet
+            The other set for the join.
+
+        Returns
+        -------
+        NamedRelationalAlgebraFrozenSet
+            Resulting set of cross product.
+
+        Raises
+        ------
+        ValueError
+            Raises ValueError when cross product is done on sets with
+            intersecting columns.
+        """
         res = self._dee_dum_product(other)
         if res is not None:
             return res
@@ -142,6 +206,8 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         if len(on) == 0:
             return self.cross_product(other)
 
+        self._try_to_create_index(on)
+        other._try_to_create_index(on)
         on_clause = and_(
             *[self._table.c.get(col) == other._table.c.get(col) for col in on]
         )
@@ -154,7 +220,64 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         )
         return self._create_view_from_query(query)
 
+    def _try_to_create_index(self, on):
+        """
+        Create an index on this set's table and specified columns. Index is
+        only created if set is not a view and if it does not already have an
+        index on the same set of columns.
+
+        Parameters
+        ----------
+        on : List[str]
+            List of columns to create the index on.
+        """
+        if not self._is_view and not self.has_index(on):
+            # Create an index on the columns
+            i = Index(
+                'idx_{}_{}'.format(self._table_name, '_'.join(on)),
+                *[self._table.c.get(c) for c in on]
+            )
+            i.create(self.engine)
+            # Analyze the table
+            with self.engine.connect() as conn:
+                conn.execute('ANALYZE {}'.format(self._table_name))
+
+    def has_index(self, columns):
+        """
+        Checks whether the SQL table already has an index on the specified
+        columns
+
+        Parameters
+        ----------
+        columns : List[str]
+            List of column identifiers
+
+        Returns
+        -------
+        bool
+            True if _table has an index with the same set of columns.
+        """
+        if self._table is None or self._table.indexes is None:
+            for index in self._table.indexes:
+                if set(index.columns.keys()) == set(columns):
+                    return True
+        return False
+
     def _create_view_from_query(self, query):
+        """
+        Create a new NamedRelationalAlgebraFrozenSet backed by an underlying
+        VIEW representation.
+
+        Parameters
+        ----------
+        query : sqlachemy.selectable.select
+            View expression.
+
+        Returns
+        -------
+        NamedRelationalAlgebraFrozenSet
+            A new set.
+        """
         output = NamedSQLARelationalAlgebraFrozenSet(self.engine)
         view = CreateView(output._table_name, query)
         with self.engine.connect() as conn:
@@ -163,6 +286,7 @@ class NamedSQLARelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         for c in query.c:
             c._make_proxy(t)
         output._table = t
+        output._is_view = True
         return output
 
     def __len__(self):
