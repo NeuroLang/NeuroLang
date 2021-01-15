@@ -1,3 +1,4 @@
+from collections import namedtuple
 from neurolang.utils.relational_algebra_set.sql_helpers import CreateView
 import uuid
 import os
@@ -212,7 +213,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             res = conn.execute(query)
             return res.first() is not None
 
-    def _create_view_from_query(self, query, parent_tables):
+    @classmethod
+    def create_view_from_query(cls, query, parent_tables):
         """
         Create a new RelationalAlgebraFrozenSet backed by an underlying
         VIEW representation.
@@ -227,10 +229,10 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         Returns
         -------
-        NamedRelationalAlgebraFrozenSet
+        RelationalAlgebraFrozenSet
             A new set.
         """
-        output = type(self)()
+        output = cls()
         view = CreateView(output._table_name, query)
         with SQLAEngineFactory.get_engine().connect() as conn:
             conn.execute(view)
@@ -271,6 +273,52 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def projection(self, *columns):
         pass
+
+    def __repr__(self):
+        t = self._table_name
+        d = {}
+        if self._table is not None and not self.is_empty():
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                d = pd.read_sql(
+                    select(self.sql_columns)
+                    .select_from(self._table)
+                    .distinct(),
+                    conn,
+                )
+        return "{}({},\n {})".format(type(self), t, d)
+
+    def __eq__(self, other):
+        if isinstance(other, RelationalAlgebraFrozenSet):
+            if self.is_dee() or other.is_dee():
+                res = self.is_dee() and other.is_dee()
+            elif self.is_dum() or other.is_dum():
+                res = self.is_dum() and other.is_dum()
+            elif self._table_name == other._table_name:
+                res = True
+            elif not self._equal_sets_structure(other):
+                res = False
+            else:
+                select_left = select(columns=self.sql_columns).select_from(
+                    self._table
+                )
+                select_right = select(
+                    [other.sql_columns.get(c) for c in self.columns]
+                ).select_from(other._table)
+                diff_left = select_left.except_(select_right)
+                diff_right = select_right.except_(select_left)
+                with SQLAEngineFactory.get_engine().connect() as conn:
+                    if conn.execute(diff_left).fetchone() is not None:
+                        res = False
+                    elif conn.execute(diff_right).fetchone() is not None:
+                        res = False
+                    else:
+                        res = True
+            return res
+        else:
+            return super().__eq__(other)
+
+    def _equal_sets_structure(self, other):
+        return set(self.columns) == set(other.columns)
 
 
 class NamedRelationalAlgebraFrozenSet(
@@ -407,11 +455,26 @@ class NamedRelationalAlgebraFrozenSet(
             )
 
         query = select([self._table, other._table])
-        return self._create_view_from_query(
+        return NamedRelationalAlgebraFrozenSet.create_view_from_query(
             query, self._parent_tables | other._parent_tables
         )
 
     def naturaljoin(self, other):
+        """
+        Natural join on the two sets. Natural join creates a view
+        representing the join query. Indexes are created on all parent tables
+        for the join column tuple if needed.
+
+        Parameters
+        ----------
+        other : NamedRelationalAlgebraSet
+            The other set to join with.
+
+        Returns
+        -------
+        NamedRelationalAlgebraSet
+            The joined set.
+        """
         res = self._dee_dum_product(other)
         if res is not None:
             return res
@@ -432,7 +495,7 @@ class NamedRelationalAlgebraFrozenSet(
         query = select(select_cols).select_from(
             self._table.join(other._table, on_clause)
         )
-        return self._create_view_from_query(
+        return NamedRelationalAlgebraFrozenSet.create_view_from_query(
             query, self._parent_tables | other._parent_tables
         )
 
@@ -501,6 +564,7 @@ class NamedRelationalAlgebraFrozenSet(
         return self._count
 
     def __iter__(self):
+        named_tuple_type = namedtuple("tuple", self.columns)
         if self.arity > 0 and len(self) > 0:
             query = (
                 select(self.sql_columns).select_from(self._table).distinct()
@@ -508,7 +572,7 @@ class NamedRelationalAlgebraFrozenSet(
             with SQLAEngineFactory.get_engine().connect() as conn:
                 res = conn.execute(query)
                 for t in res:
-                    yield tuple(t)
+                    yield named_tuple_type(**t)
         elif self.arity == 0 and len(self) > 0:
             yield tuple()
 
@@ -542,7 +606,9 @@ class NamedRelationalAlgebraFrozenSet(
         query = select([self.sql_columns.get(c) for c in columns]).select_from(
             self._table
         )
-        return self._create_view_from_query(query, self._parent_tables)
+        return NamedRelationalAlgebraFrozenSet.create_view_from_query(
+            query, self._parent_tables
+        )
 
     def equijoin(self, other, join_indices, return_mappings=False):
         raise NotImplementedError()
@@ -551,7 +617,15 @@ class NamedRelationalAlgebraFrozenSet(
         pass
 
     def rename_column(self, src, dst):
-        pass
+        query = select(
+            [
+                c.label(str(dst)) if c.name == src else c
+                for c in self.sql_columns
+            ]
+        ).select_from(self._table)
+        return NamedRelationalAlgebraFrozenSet.create_view_from_query(
+            query, self._parent_tables
+        )
 
     def rename_columns(self, renames):
         pass
@@ -572,7 +646,12 @@ class NamedRelationalAlgebraFrozenSet(
         return res.fetchone()
 
     def to_unnamed(self):
-        pass
+        query = select(
+            [c.label(str(i)) for i, c in enumerate(self.sql_columns)]
+        ).select_from(self._table)
+        return RelationalAlgebraFrozenSet.create_view_from_query(
+            query, self._parent_tables
+        )
 
     def selection(self, select_criteria):
         pass
@@ -588,49 +667,3 @@ class NamedRelationalAlgebraFrozenSet(
 
     def as_numpy_array():
         pass
-
-    def __repr__(self):
-        t = self._table_name
-        d = {}
-        if self._table is not None and not self.is_empty():
-            with SQLAEngineFactory.get_engine().connect() as conn:
-                d = pd.read_sql(
-                    select(self.sql_columns)
-                    .select_from(self._table)
-                    .distinct(),
-                    conn,
-                )
-        return "{}({},\n {})".format(type(self), t, d)
-
-    def __eq__(self, other):
-        if isinstance(other, NamedRelationalAlgebraFrozenSet):
-            if self.is_dee() or other.is_dee():
-                res = self.is_dee() and other.is_dee()
-            elif self.is_dum() or other.is_dum():
-                res = self.is_dum() and other.is_dum()
-            elif self._table_name == other._table_name:
-                res = True
-            elif not self._equal_sets_structure(other):
-                res = False
-            else:
-                select_left = select(columns=self.sql_columns).select_from(
-                    self._table
-                )
-                select_right = select(
-                    [other.sql_columns.get(c) for c in self.columns]
-                ).select_from(other._table)
-                diff_left = select_left.except_(select_right)
-                diff_right = select_right.except_(select_left)
-                with SQLAEngineFactory.get_engine().connect() as conn:
-                    if conn.execute(diff_left).fetchone() is not None:
-                        res = False
-                    elif conn.execute(diff_right).fetchone() is not None:
-                        res = False
-                    else:
-                        res = True
-            return res
-        else:
-            return super().__eq__(other)
-
-    def _equal_sets_structure(self, other):
-        return set(self.columns) == set(other.columns)
