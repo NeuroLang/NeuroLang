@@ -12,7 +12,6 @@ from sqlalchemy import (
     func,
     and_,
     select,
-    distinct,
     create_engine,
 )
 from sqlalchemy.sql import table
@@ -63,7 +62,220 @@ class SQLAEngineFactory(ABC):
         return create_engine(dialect, echo=echo)
 
 
-class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
+class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
+    def __init__(self, iterable=None):
+        self.is_view = False
+        self._count = None
+        self._table_name = self._new_name()
+        if isinstance(iterable, RelationalAlgebraFrozenSet):
+            self._init_from(iterable)
+        else:
+            self._create_insert_table(iterable)
+
+    @staticmethod
+    def _new_name():
+        return "table_" + str(uuid.uuid4()).replace("-", "_")
+
+    @classmethod
+    def create_view_from(cls, other):
+        if not isinstance(other, cls):
+            raise ValueError(
+                "View can only be created from an object of the same class"
+            )
+        output = cls()
+        output._init_from(other)
+        return output
+
+    def _init_from(self, other):
+        self._table_name = other._table_name
+        self._count = other._count
+        self._table = other._table
+        self._is_view = other._is_view
+        self._parent_tables = other._parent_tables
+
+    def _create_insert_table(self, data):
+        """
+        Initialise the set with the provided data collection.
+        We use pandas to infer datatypes from the data and create
+        the appropriate sql statement.
+        We then read the table metadata and store it in self._table.
+
+        Parameters
+        ----------
+        data : Iterable[Any]
+            The initial data for the set.
+        """
+        if data is None:
+            self._count = 0
+        else:
+            data = pd.DataFrame(data)
+            if len(data.columns) > 0:
+                data.to_sql(
+                    self._table_name,
+                    SQLAEngineFactory.get_engine(),
+                    index=False,
+                )
+                self._table = Table(
+                    self._table_name,
+                    MetaData(),
+                    autoload=True,
+                    autoload_with=SQLAEngineFactory.get_engine(),
+                )
+            self._parent_tables = {self._table}
+
+    @classmethod
+    def dee(cls):
+        output = cls()
+        output._count = 1
+        return output
+
+    @classmethod
+    def dum(cls):
+        return cls()
+
+    def is_empty(self):
+        return len(self) == 0
+
+    def is_dum(self):
+        return self.arity == 0 and self.is_empty()
+
+    def is_dee(self):
+        return self.arity == 0 and not self.is_empty()
+
+    @property
+    def arity(self):
+        return len(self.columns)
+
+    @property
+    def columns(self):
+        """
+        List of columns as string identifiers.
+
+        Returns
+        -------
+        Iterable[str]
+            Set of column names.
+        """
+        if self._table is None:
+            return tuple()
+        return tuple(self._table.c.keys())
+
+    @property
+    def sql_columns(self):
+        """
+        List of columns as sqlalchemy.schema.Columns collection.
+
+        Returns
+        -------
+        Iterable[sqlalchemy.schema.Columns]
+            Set of columns.
+        """
+        if self._table is None:
+            return []
+        return self._table.c
+
+    def __len__(self):
+        if self._count is None:
+            if self._table is not None:
+                query = select([func.count()]).select_from(
+                    select(self.sql_columns)
+                    .select_from(self._table)
+                    .distinct()
+                )
+                with SQLAEngineFactory.get_engine().connect() as conn:
+                    res = conn.execute(query).scalar()
+                    self._count = res
+            else:
+                self._count = 0
+        return self._count
+
+    def __iter__(self):
+        if self.arity > 0 and len(self) > 0:
+            query = (
+                select(self.sql_columns).select_from(self._table).distinct()
+            )
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                res = conn.execute(query)
+                for t in res:
+                    yield tuple(t)
+        elif self.arity == 0 and len(self) > 0:
+            yield tuple()
+
+    def __contains__(self, element):
+        if self.arity == 0:
+            return False
+        element = self._normalise_element(element)
+        query = select(self.sql_columns).select_from(self._table).limit(1)
+        for c, v in element.items():
+            query = query.where(self.sql_columns.get(c) == v)
+        with SQLAEngineFactory.get_engine().connect() as conn:
+            res = conn.execute(query)
+            return res.first() is not None
+
+    def _create_view_from_query(self, query, parent_tables):
+        """
+        Create a new RelationalAlgebraFrozenSet backed by an underlying
+        VIEW representation.
+
+        Parameters
+        ----------
+        query : sqlachemy.selectable.select
+            View expression.
+
+        parent_tables: Set(RelationalAlgebraFrozenSet)
+            Set of parent tables.
+
+        Returns
+        -------
+        NamedRelationalAlgebraFrozenSet
+            A new set.
+        """
+        output = type(self)()
+        view = CreateView(output._table_name, query)
+        with SQLAEngineFactory.get_engine().connect() as conn:
+            conn.execute(view)
+        t = table(output._table_name)
+        for c in query.c:
+            c._make_proxy(t)
+        output._table = t
+        output._is_view = True
+        output._parent_tables = parent_tables
+        return output
+
+    def selection(self, select_criteria):
+        pass
+
+    def selection_columns(self, select_criteria):
+        pass
+
+    def copy(self):
+        pass
+
+    def itervalues(self):
+        pass
+
+    def as_numpy_array(self):
+        pass
+
+    def equijoin(self, other, join_indices, return_mappings=False):
+        raise NotImplementedError()
+
+    def cross_product(self, other):
+        pass
+
+    def fetch_one(self):
+        pass
+
+    def groupby(self, columns):
+        pass
+
+    def projection(self, *columns):
+        pass
+
+
+class NamedRelationalAlgebraFrozenSet(
+    abc.NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
+):
     """
     A RelationalAlgebraFrozenSet with an underlying SQL representation.
     Data for this set is either stored in a table in an SQL database,
@@ -112,12 +324,7 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
             autoload=True,
             autoload_with=SQLAEngineFactory.get_engine(),
         )
-
-    def _init_from(self, other):
-        self._table_name = other._table_name
-        self._count = other._count
-        self._table = other._table
-        self._is_view = other._is_view
+        self._parent_tables = {self._table}
 
     @staticmethod
     def _check_for_duplicated_columns(columns):
@@ -129,20 +336,6 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
                 f"Found the following duplicated columns: {dup_cols}"
             )
 
-    @staticmethod
-    def _new_name():
-        return "table_" + str(uuid.uuid4()).replace("-", "_")
-
-    @classmethod
-    def create_view_from(cls, other):
-        if not isinstance(other, cls):
-            raise ValueError(
-                "View can only be created from an object of the same class"
-            )
-        output = cls()
-        output._init_from(other)
-        return output
-
     @classmethod
     def dee(cls):
         output = cls()
@@ -152,15 +345,6 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
     @classmethod
     def dum(cls):
         return cls()
-
-    def is_empty(self):
-        return len(self) == 0
-
-    def is_dum(self):
-        return self.arity == 0 and self.is_empty()
-
-    def is_dee(self):
-        return self.arity == 0 and not self.is_empty()
 
     @property
     def arity(self):
@@ -223,7 +407,9 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
             )
 
         query = select([self._table, other._table])
-        return self._create_view_from_query(query)
+        return self._create_view_from_query(
+            query, self._parent_tables | other._parent_tables
+        )
 
     def naturaljoin(self, other):
         res = self._dee_dum_product(other)
@@ -246,12 +432,14 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         query = select(select_cols).select_from(
             self._table.join(other._table, on_clause)
         )
-        return self._create_view_from_query(query)
+        return self._create_view_from_query(
+            query, self._parent_tables | other._parent_tables
+        )
 
     def _try_to_create_index(self, on):
         """
-        Create an index on this set's table and specified columns. Index is
-        only created if set is not a view and if it does not already have an
+        Create an index on this set's parent tables and specified columns.
+        Index is only created for each table if it does not already have an
         index on the same set of columns.
 
         Parameters
@@ -259,69 +447,51 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         on : List[str]
             List of columns to create the index on.
         """
-        if not self._is_view and not self.has_index(on):
-            # Create an index on the columns
-            i = Index(
-                "idx_{}_{}".format(self._table_name, "_".join(on)),
-                *[self._table.c.get(c) for c in on],
-            )
-            i.create(SQLAEngineFactory.get_engine())
-            # Analyze the table
-            with SQLAEngineFactory.get_engine().connect() as conn:
-                conn.execute("ANALYZE {}".format(self._table_name))
+        for table in self._parent_tables:
+            if not self.has_index(table, on):
+                table_idx_cols = [table.c.get(c) for c in on if c in table.c]
+                if len(table_idx_cols) > 0:
+                    # Create an index on the columns
+                    i = Index(
+                        "idx_{}_{}".format(table, "_".join(on)),
+                        *table_idx_cols,
+                    )
+                    i.create(SQLAEngineFactory.get_engine())
+                    # Analyze the table
+                    with SQLAEngineFactory.get_engine().connect() as conn:
+                        conn.execute("ANALYZE {}".format(table))
 
-    def has_index(self, columns):
+    @staticmethod
+    def has_index(table, columns):
         """
         Checks whether the SQL table already has an index on the specified
         columns
 
         Parameters
         ----------
+        table : sqlalchemy.schema.Table
+            The SQLA table representation.
         columns : List[str]
-            List of column identifiers
+            List of column identifiers.
 
         Returns
         -------
         bool
             True if _table has an index with the same set of columns.
         """
-        if self._table is not None or self._table.indexes is not None:
-            for index in self._table.indexes:
+        if table is not None and table.indexes is not None:
+            for index in table.indexes:
                 if set(index.columns.keys()) == set(columns):
                     return True
         return False
-
-    def _create_view_from_query(self, query):
-        """
-        Create a new NamedRelationalAlgebraFrozenSet backed by an underlying
-        VIEW representation.
-
-        Parameters
-        ----------
-        query : sqlachemy.selectable.select
-            View expression.
-
-        Returns
-        -------
-        NamedRelationalAlgebraFrozenSet
-            A new set.
-        """
-        output = NamedRelationalAlgebraFrozenSet()
-        view = CreateView(output._table_name, query)
-        with SQLAEngineFactory.get_engine().connect() as conn:
-            conn.execute(view)
-        t = table(output._table_name)
-        for c in query.c:
-            c._make_proxy(t)
-        output._table = t
-        output._is_view = True
-        return output
 
     def __len__(self):
         if self._count is None:
             if self._table is not None:
                 query = select([func.count()]).select_from(
-                    select(self.sql_columns).select_from(self._table).distinct()
+                    select(self.sql_columns)
+                    .select_from(self._table)
+                    .distinct()
                 )
                 with SQLAEngineFactory.get_engine().connect() as conn:
                     res = conn.execute(query).scalar()
@@ -372,7 +542,7 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         query = select([self.sql_columns.get(c) for c in columns]).select_from(
             self._table
         )
-        return self._create_view_from_query(query)
+        return self._create_view_from_query(query, self._parent_tables)
 
     def equijoin(self, other, join_indices, return_mappings=False):
         raise NotImplementedError()
