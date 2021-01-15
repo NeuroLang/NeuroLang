@@ -12,6 +12,7 @@ from sqlalchemy import (
     func,
     and_,
     select,
+    distinct,
     create_engine,
 )
 from sqlalchemy.sql import table
@@ -70,17 +71,19 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
     server.
     """
 
-    def __init__(self, columns=None, data=None):
+    def __init__(self, columns=None, iterable=None):
+        if isinstance(columns, NamedRelationalAlgebraFrozenSet):
+            iterable = columns
+            columns = columns.columns
         self._table_name = self._new_name()
         self._count = None
         self._table = None
-        # self.engine = engine
         self._is_view = False
         self._check_for_duplicated_columns(columns)
-        if isinstance(data, NamedRelationalAlgebraFrozenSet):
-            self._init_from(data)
-        elif data is not None:
-            self._create_insert_table(data, columns)
+        if isinstance(iterable, NamedRelationalAlgebraFrozenSet):
+            self._init_from(iterable)
+        elif columns is not None:
+            self._create_insert_table(iterable, columns)
 
     def _create_insert_table(self, data, columns=None):
         """
@@ -96,7 +99,8 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         columns : List[str], optional
             The column names, by default None.
         """
-
+        if data is None:
+            data = []
         if not isinstance(data, pd.DataFrame):
             data = pd.DataFrame(data, columns=columns)
         data.to_sql(
@@ -173,8 +177,8 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
             Set of column names.
         """
         if self._table is None:
-            return []
-        return self._table.c.keys()
+            return tuple()
+        return tuple(self._table.c.keys())
 
     @property
     def sql_columns(self):
@@ -315,10 +319,15 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
 
     def __len__(self):
         if self._count is None:
-            query = select([func.count()]).select_from(self._table).distinct()
-            with SQLAEngineFactory.get_engine().connect() as conn:
-                res = conn.execute(query).scalar()
-                self._count = res
+            if self._table is not None:
+                query = select([func.count()]).select_from(
+                    select(self.sql_columns).select_from(self._table).distinct()
+                )
+                with SQLAEngineFactory.get_engine().connect() as conn:
+                    res = conn.execute(query).scalar()
+                    self._count = res
+            else:
+                self._count = 0
         return self._count
 
     def __iter__(self):
@@ -354,7 +363,16 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
         return element
 
     def projection(self, *columns):
-        pass
+        if len(columns) == 0 or self.arity == 0:
+            new = type(self)()
+            if len(self) > 0:
+                new._count = 1
+            return new
+
+        query = select([self.sql_columns.get(c) for c in columns]).select_from(
+            self._table
+        )
+        return self._create_view_from_query(query)
 
     def equijoin(self, other, join_indices, return_mappings=False):
         raise NotImplementedError()
@@ -413,3 +431,36 @@ class NamedRelationalAlgebraFrozenSet(abc.NamedRelationalAlgebraFrozenSet):
                     conn,
                 )
         return "{}({},\n {})".format(type(self), t, d)
+
+    def __eq__(self, other):
+        if isinstance(other, NamedRelationalAlgebraFrozenSet):
+            if self.is_dee() or other.is_dee():
+                res = self.is_dee() and other.is_dee()
+            elif self.is_dum() or other.is_dum():
+                res = self.is_dum() and other.is_dum()
+            elif self._table_name == other._table_name:
+                res = True
+            elif not self._equal_sets_structure(other):
+                res = False
+            else:
+                select_left = select(columns=self.sql_columns).select_from(
+                    self._table
+                )
+                select_right = select(
+                    [other.sql_columns.get(c) for c in self.columns]
+                ).select_from(other._table)
+                diff_left = select_left.except_(select_right)
+                diff_right = select_right.except_(select_left)
+                with SQLAEngineFactory.get_engine().connect() as conn:
+                    if conn.execute(diff_left).fetchone() is not None:
+                        res = False
+                    elif conn.execute(diff_right).fetchone() is not None:
+                        res = False
+                    else:
+                        res = True
+            return res
+        else:
+            return super().__eq__(other)
+
+    def _equal_sets_structure(self, other):
+        return set(self.columns) == set(other.columns)
