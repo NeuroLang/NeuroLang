@@ -381,3 +381,77 @@ def test_relational_algebra_set_semantics():
     r = RelationalAlgebraSet(ras)
     assert r == ras
     assert r is not ras
+
+def test_relational_algebra_ra_union():
+    first = RelationalAlgebraFrozenSet(
+        [(7, 8), (9, 2)]
+    )
+    second = RelationalAlgebraFrozenSet(
+        [(9, 2), (42, 0)]
+    )
+    assert first | first == first
+    expected = RelationalAlgebraFrozenSet(
+        [(7, 8), (9, 2), (42, 0)]
+    )
+    assert first | second == expected
+    empty = RelationalAlgebraFrozenSet([])
+    dee = RelationalAlgebraFrozenSet.dee()
+    dum = RelationalAlgebraFrozenSet.dum()
+
+    assert first | empty == first
+    assert empty | first == first
+    assert dee | dee == dee
+    assert first | dum == first
+    assert dum | first == first
+    assert first | empty | second == first | second
+
+    assert first | set() == first
+
+def test_relational_algebra_ra_union_update():
+    first = RelationalAlgebraSet(
+        [(7, 8), (9, 2)]
+    )
+    second = RelationalAlgebraSet(
+        [(9, 2), (42, 0)]
+    )
+    f = first.copy()
+    f |= first
+    assert f == first
+    expected = RelationalAlgebraSet(
+        [(7, 8), (9, 2), (42, 0)]
+    )
+    f = first.copy()
+    f |= second
+    assert f == expected
+    empty = RelationalAlgebraSet([])
+    dee = RelationalAlgebraSet.dee()
+    dum = RelationalAlgebraSet.dum()
+
+    f = first.copy()
+    f |= empty
+    assert f == first
+
+    e = empty.copy()
+    e |= first
+    assert e == first
+
+    d = dee.copy()
+    d |= dee
+    assert d == dee
+
+    f = first.copy()
+    f |= dum
+    assert f == first
+
+    d = dum.copy()
+    d |= first
+    assert d == first
+
+    f = first.copy()
+    f |= empty
+    f |= second
+    assert f == first | second
+
+    f = first.copy()
+    f |= set()
+    assert f == first
