@@ -76,13 +76,15 @@ class SQLAEngineFactory(ABC):
 
 
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
+
+    _is_view = False
+    _count = None
+    _table_name = None
+    _table = None
+    _parent_tables = {}
+
     def __init__(self, iterable=None):
-        self.is_view = False
-        self._count = None
         self._table_name = self._new_name()
-        self._table = None
-        self._is_view = False
-        self._parent_tables = {}
         if isinstance(iterable, RelationalAlgebraFrozenSet):
             self._init_from(iterable)
         else:
@@ -135,7 +137,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                     autoload=True,
                     autoload_with=SQLAEngineFactory.get_engine(),
                 )
-            self._parent_tables = {self._table}
+                self._parent_tables = {self._table}
 
     @classmethod
     def dee(cls):
@@ -964,3 +966,29 @@ class RelationalAlgebraSet(
         with SQLAEngineFactory.get_engine().connect() as conn:
             conn.execute(query)
         self._count = None
+
+    def __ior__(self, other):
+        if isinstance(other, RelationalAlgebraFrozenSet):
+            if self.is_dee() or other.is_dee() or other.is_empty():
+                return self
+            elif self.is_empty():
+                self._table_name = self._new_name()
+                self._create_insert_table(other)
+                self._count = None
+                return self
+            else:
+                if not self._equal_sets_structure(other):
+                    raise ValueError(
+                        "Relational algebra set operators can only be used on sets"
+                        " with same columns."
+                    )
+                query = self._table.insert().from_select(
+                    self.columns,
+                    select(other.sql_columns).select_from(other._table)
+                )
+                with SQLAEngineFactory.get_engine().connect() as conn:
+                    conn.execute(query)
+                self._count = None
+                return self
+        else:
+            return super().__ior__(other)
