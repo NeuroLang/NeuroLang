@@ -175,7 +175,7 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
         | grpd_symbs["post_probabilistic"]
     ).issuperset(dep_symbs):
         idb_type = "post_probabilistic"
-    elif not grpd_symbs["probabilistic"].isdisjoint(dep_symbs):
+    elif not (grpd_symbs["probabilistic"] - wlq_symbs).isdisjoint(dep_symbs):
         idb_type = "probabilistic"
     return idb_type
 
