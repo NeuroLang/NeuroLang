@@ -295,9 +295,28 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return output
 
     def selection(self, select_criteria):
+        """
+        Selection elements from the set matching selection criteria.
+
+        Parameters
+        ----------
+        select_criteria : Union[callable, RelationalAlgebraStringExpression,
+        Dict[int, str]]
+            selection criteria
+
+        Returns
+        -------
+        RelationalAlgebraFrozenSet
+            The set with elements matching the given criteria
+
+        Raises
+        ------
+        NotImplementedError
+            callable criteria not implemented.
+        """
         if self.is_empty():
             return type(self)()
-        query = select(["*"]).select_from(self._table)
+        query = select(self.sql_columns).select_from(self._table)
 
         if callable(select_criteria):
             raise NotImplementedError(
@@ -307,19 +326,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             query = query.where(text(select_criteria))
         else:
             for k, v in select_criteria.items():
-                query = query.where()
-                query.append_whereclause(sqlalchemy.sql.column(str(k)) == v)
-        query = CreateView(new_name, query)
-        conn = self.engine.connect()
-        conn.execute(query)
-        result = type(self).create_from_table_or_view(
-            name=new_name,
-            engine=self.engine,
-            is_view=True,
-            columns=self.columns,
-            parents=[self],
-        )
-        return result
+                query = query.where(self.sql_columns.get(str(k)) == v)
+        return type(self).create_view_from_query(query, self._parent_tables)
 
     def selection_columns(self, select_criteria):
         pass
@@ -736,9 +744,6 @@ class NamedRelationalAlgebraFrozenSet(
             query, self._parent_tables
         )
 
-    def selection(self, select_criteria):
-        pass
-
     def selection_columns(self, select_criteria):
         pass
 
@@ -749,4 +754,17 @@ class NamedRelationalAlgebraFrozenSet(
         raise NotImplementedError()
 
     def as_numpy_array():
+        pass
+
+
+class RelationalAlgebraSet(
+    RelationalAlgebraFrozenSet, abc.RelationalAlgebraSet
+):
+    def __init__(self, iterable=None):
+        super().__init__(iterable=iterable)
+
+    def add(self, value):
+        pass
+
+    def discard(self, value):
         pass

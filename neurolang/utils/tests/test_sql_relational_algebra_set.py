@@ -1,7 +1,9 @@
 from neurolang.utils.relational_algebra_set.sql import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
+    RelationalAlgebraSet,
     SQLAEngineFactory,
+    RelationalAlgebraStringExpression
 )
 from sqlalchemy import create_engine, Table, MetaData
 from unittest.mock import patch
@@ -165,3 +167,63 @@ def test_relational_algebra_ra_projection():
     ras_0 = ras.projection(0, 2)
     assert all((i % 2, i * 2) for i in range(5))
     assert ras.projection() == RelationalAlgebraFrozenSet.dee()
+
+def test_relational_algebra_ra_selection():
+    a = [(i % 2, i, i * 2) for i in range(5)]
+    ras = RelationalAlgebraSet(a)
+
+    # Select elements where col0 == 1
+    ras_0 = ras.selection({0: 1})
+    a_sel = set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1)
+    assert ras_0 == a_sel
+
+    # Select elements where col0 == 1 and col1 == 2. Result should be empty.
+    ras_0 = ras.selection({0: 1, 1: 2})
+    a_sel = set()
+    assert ras_0 == a_sel
+
+    # Select elements where the first parameter is 0
+    # ras_0 = ras.selection(lambda x: x[0] == 0)
+    # assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 0)
+
+    # # Select elements where the col1 has values that are odd
+    # ras_0 = ras.selection({1: lambda x: x % 2 == 1})
+    # assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1)
+
+    # # Select elements where the col0 is 1 and col2 > 2
+    # ras_0 = ras.selection({0: 1, 2: lambda x: x > 2})
+    # assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1 and i > 1)
+
+    assert RelationalAlgebraSet.dum().selection({0: 1}).is_empty()
+
+
+def test_named_relational_algebra_ra_selection():
+    a = [(i % 2, i, i * 2) for i in range(5)]
+
+    ras = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), a)
+
+    ras_0 = ras.selection({"x": 1})
+    print(ras_0)
+    a_sel = NamedRelationalAlgebraFrozenSet(
+        ras.columns, set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1)
+    )
+    print(a_sel)
+    assert ras_0 == a_sel
+
+    ras_0 = ras.selection({"x": 1, "y": 2})
+    a_sel = NamedRelationalAlgebraFrozenSet(
+        ras.columns,
+        set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1 and i == 2),
+    )
+    assert ras_0 == a_sel
+
+    # ras_0 = ras.selection({"x": lambda x: x == 1, "y": lambda y: y == 2})
+    # assert ras_0 == a_sel
+
+    # ras_0 = ras.selection(lambda t: t.x == 1 and t.y == 2)
+    # assert ras_0 == a_sel
+
+    ras_0 = ras.selection(
+        RelationalAlgebraStringExpression("x == 1 and y == 2")
+    )
+    assert ras_0 == a_sel
