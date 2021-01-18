@@ -13,9 +13,15 @@ from sqlalchemy import (
     func,
     and_,
     select,
+    text,
     create_engine,
 )
 from sqlalchemy.sql import table
+
+
+class RelationalAlgebraStringExpression(str):
+    def __repr__(self):
+        return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
 class SQLAEngineFactory(ABC):
@@ -109,9 +115,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         data : Iterable[Any]
             The initial data for the set.
         """
-        if data is None:
-            self._count = 0
-        else:
+        if data is not None:
             data = pd.DataFrame(data)
             if len(data.columns) > 0:
                 data.to_sql(
@@ -179,6 +183,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return self._table.c
 
     def __len__(self):
+        """
+        Length of the set is equal to distinct values in the view or table.
+
+        Returns
+        -------
+        int
+            length.
+        """
         if self._count is None:
             if self._table is not None:
                 query = select([func.count()]).select_from(
@@ -206,6 +218,19 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             yield tuple()
 
     def __contains__(self, element):
+        """
+        Check whether the set contains the element.
+
+        Parameters
+        ----------
+        element : Any
+            the element to check
+
+        Returns
+        -------
+        bool
+            True if the set contains the element.
+        """
         if self.arity == 0:
             return False
         element = self._normalise_element(element)
@@ -215,6 +240,28 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         with SQLAEngineFactory.get_engine().connect() as conn:
             res = conn.execute(query)
             return res.first() is not None
+
+    def _normalise_element(self, element):
+        """
+        Returns a dict representation of the element as col -> value.
+
+        Parameters
+        ----------
+        element : Iterable[Any]
+            the element to normalize
+
+        Returns
+        -------
+        Dict[str, Any]
+            the dict reprensentation of the element
+        """
+        if isinstance(element, dict):
+            pass
+        elif hasattr(element, "__iter__") and not isinstance(element, str):
+            element = dict(zip(self.columns, element))
+        else:
+            element = dict(zip(self.columns, (element,)))
+        return element
 
     @classmethod
     def create_view_from_query(cls, query, parent_tables):
@@ -248,7 +295,31 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return output
 
     def selection(self, select_criteria):
-        pass
+        if self.is_empty():
+            return type(self)()
+        query = select(["*"]).select_from(self._table)
+
+        if callable(select_criteria):
+            raise NotImplementedError(
+                "Arbitrary python expressions not allowed"
+            )
+        elif isinstance(select_criteria, RelationalAlgebraStringExpression):
+            query = query.where(text(select_criteria))
+        else:
+            for k, v in select_criteria.items():
+                query = query.where()
+                query.append_whereclause(sqlalchemy.sql.column(str(k)) == v)
+        query = CreateView(new_name, query)
+        conn = self.engine.connect()
+        conn.execute(query)
+        result = type(self).create_from_table_or_view(
+            name=new_name,
+            engine=self.engine,
+            is_view=True,
+            columns=self.columns,
+            parents=[self],
+        )
+        return result
 
     def selection_columns(self, select_criteria):
         pass
@@ -280,7 +351,25 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         pass
 
     def projection(self, *columns):
-        pass
+        """
+        Project the set on the specified columns. Creates a view with only the
+        specified columns.
+
+        Returns
+        -------
+        RelationalAlgebraFrozenSet
+            The projected set.
+        """
+        if len(columns) == 0 or self.arity == 0:
+            new = type(self)()
+            if len(self) > 0:
+                new._count = 1
+            return new
+
+        query = select(
+            [self.sql_columns.get(str(c)) for c in columns]
+        ).select_from(self._table)
+        return type(self).create_view_from_query(query, self._parent_tables)
 
     def __repr__(self):
         t = self._table_name
@@ -290,7 +379,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 d = pd.read_sql(
                     select(self.sql_columns)
                     .select_from(self._table)
-                    .distinct().limit(15),
+                    .distinct()
+                    .limit(15),
                     conn,
                 )
         return "{}({},\n {})".format(type(self), t, d)
@@ -330,7 +420,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
 
 class NamedRelationalAlgebraFrozenSet(
-    abc.NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
+    RelationalAlgebraFrozenSet, abc.NamedRelationalAlgebraFrozenSet
 ):
     """
     A RelationalAlgebraFrozenSet with an underlying SQL representation.
@@ -557,29 +647,6 @@ class NamedRelationalAlgebraFrozenSet(
                     return True
         return False
 
-    def __len__(self):
-        """
-        Length of the set is equal to distinct values in the view or table.
-
-        Returns
-        -------
-        int
-            length.
-        """
-        if self._count is None:
-            if self._table is not None:
-                query = select([func.count()]).select_from(
-                    select(self.sql_columns)
-                    .select_from(self._table)
-                    .distinct()
-                )
-                with SQLAEngineFactory.get_engine().connect() as conn:
-                    res = conn.execute(query).scalar()
-                    self._count = res
-            else:
-                self._count = 0
-        return self._count
-
     def __iter__(self):
         """
         Iterate over set values. Values are returned as namedtuples.
@@ -601,75 +668,6 @@ class NamedRelationalAlgebraFrozenSet(
         elif self.arity == 0 and len(self) > 0:
             yield tuple()
 
-    def __contains__(self, element):
-        """
-        Check whether the set contains the element.
-
-        Parameters
-        ----------
-        element : Any
-            the element to check
-
-        Returns
-        -------
-        bool
-            True if the set contains the element.
-        """
-        if self.arity == 0:
-            return False
-        element = self._normalise_element(element)
-        query = select(self.sql_columns).select_from(self._table).limit(1)
-        for c, v in element.items():
-            query = query.where(self.sql_columns.get(c) == v)
-        with SQLAEngineFactory.get_engine().connect() as conn:
-            res = conn.execute(query)
-            return res.first() is not None
-
-    def _normalise_element(self, element):
-        """
-        Returns a dict representation of the element as col -> value.
-
-        Parameters
-        ----------
-        element : Iterable[Any]
-            the element to normalize
-
-        Returns
-        -------
-        Dict[str, Any]
-            the dict reprensentation of the element
-        """
-        if isinstance(element, dict):
-            pass
-        elif hasattr(element, "__iter__") and not isinstance(element, str):
-            element = dict(zip(self.columns, element))
-        else:
-            element = dict(zip(self.columns, (element,)))
-        return element
-
-    def projection(self, *columns):
-        """
-        Project the set on the specified columns. Creates a view with only the
-        specified columns.
-
-        Returns
-        -------
-        NamedRelationalAlgebraFrozenSet
-            The projected set.
-        """
-        if len(columns) == 0 or self.arity == 0:
-            new = type(self)()
-            if len(self) > 0:
-                new._count = 1
-            return new
-
-        query = select([self.sql_columns.get(c) for c in columns]).select_from(
-            self._table
-        )
-        return NamedRelationalAlgebraFrozenSet.create_view_from_query(
-            query, self._parent_tables
-        )
-
     def equijoin(self, other, join_indices, return_mappings=False):
         raise NotImplementedError()
 
@@ -677,7 +675,7 @@ class NamedRelationalAlgebraFrozenSet(
         pass
 
     def rename_column(self, src, dst):
-        if (dst) in self.columns :
+        if (dst) in self.columns:
             raise ValueError(
                 "Duplicated column names are not allowed. "
                 f"{dst} is already a column name."

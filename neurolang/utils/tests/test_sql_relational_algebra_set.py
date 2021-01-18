@@ -152,3 +152,16 @@ def test_named_iter_and_fetch_one():
     assert list(iter(res_dee)) == [tuple()]
     assert res_dee.fetch_one() == tuple()
 
+def test_relational_algebra_ra_projection():
+    a = [(i % 2, i, i * 2) for i in range(5)]
+    ras = RelationalAlgebraFrozenSet(a)
+
+    ras_0 = ras.projection(0)
+    assert (0,) in ras_0 and (1,) in ras_0
+    assert len(ras_0) == 2
+    assert RelationalAlgebraFrozenSet.dum().projection(0).is_empty()
+    assert RelationalAlgebraFrozenSet.dee().projection().is_dee()
+
+    ras_0 = ras.projection(0, 2)
+    assert all((i % 2, i * 2) for i in range(5))
+    assert ras.projection() == RelationalAlgebraFrozenSet.dee()

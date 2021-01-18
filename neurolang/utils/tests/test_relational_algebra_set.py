@@ -1,9 +1,9 @@
 import pytest
 
-from ..relational_algebra_set import RelationalAlgebraStringExpression, pandas
+from ..relational_algebra_set import RelationalAlgebraStringExpression, pandas, sql
 
 
-@pytest.fixture(ids=['pandas'], params=[(pandas,)])
+@pytest.fixture(ids=['pandas', 'sql'], params=[(pandas,), (sql,)])
 def ra_module(request):
     return request.param[0]
 
