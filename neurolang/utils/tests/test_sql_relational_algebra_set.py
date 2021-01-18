@@ -227,3 +227,104 @@ def test_named_relational_algebra_ra_selection():
         RelationalAlgebraStringExpression("x == 1 and y == 2")
     )
     assert ras_0 == a_sel
+
+def test_relational_algebra_ra_equijoin():
+    a = [(i, i * 2) for i in range(5)]
+    b = [(i * 2, i * 3) for i in range(5)]
+    c = [(i, i * 2, i * 2, i * 3) for i in range(5)]
+    d = [(i, i * 2, i, i * 2) for i in range(5)]
+
+    ras_a = RelationalAlgebraSet(a)
+    ras_b = RelationalAlgebraSet(b)
+    ras_c = RelationalAlgebraSet(c)
+    ras_d = RelationalAlgebraSet(d)
+    ras_empty = ras_d.selection({0: 1000})
+    dee = RelationalAlgebraSet.dee()
+    dum = RelationalAlgebraSet.dum()
+
+    res = ras_a.equijoin(ras_b, [(1, 0)])
+    assert res == ras_c
+
+    res = ras_a.equijoin(ras_a, [(0, 0)])
+    assert res == ras_d
+
+    res = ras_a.equijoin(dee, [(0, 0)])
+    assert res == ras_a
+
+    res = ras_a.equijoin(dum, [(0, 0)])
+    assert res == dum
+
+    res = ras_a.equijoin(ras_empty, [(0, 0)])
+    assert res.is_empty()
+
+
+def test_relational_algebra_ra_cross_product():
+    a = [(i, i * 2) for i in range(5)]
+    b = [(i * 2, i * 3) for i in range(5)]
+    c = [u + v for u in a for v in b]
+
+    ras_a = RelationalAlgebraSet(a)
+    ras_b = RelationalAlgebraSet(b)
+    ras_c = RelationalAlgebraSet(c)
+    ras_empty = ras_a.selection({0: 1000})
+    dee = RelationalAlgebraSet.dee()
+    dum = RelationalAlgebraSet.dum()
+
+    res = ras_a.cross_product(ras_b)
+    assert res == ras_c
+
+    res = ras_a.cross_product(dee)
+    assert res == ras_a
+
+    res = ras_a.cross_product(dum)
+    assert res == dum
+
+    res = ras_a.cross_product(ras_empty)
+    assert res.is_empty()
+
+    res = ras_empty.cross_product(ras_a)
+    assert res.is_empty()
+
+
+def test_relational_algebra_ra_equijoin_mixed_types():
+    a = [(chr(ord("a") + i), i * 2) for i in range(5)]
+    b = [(i * 2, i * 3) for i in range(5)]
+    c = [(chr(ord("a") + i), i * 2, i * 2, i * 3) for i in range(5)]
+
+    ras_a = RelationalAlgebraSet(a)
+    ras_b = RelationalAlgebraSet(b)
+    ras_c = RelationalAlgebraSet(c)
+
+    res = ras_a.equijoin(ras_b, [(1, 0)])
+    assert res == ras_c
+
+def test_named_relational_algebra_ra_naturaljoin():
+    a = [(i, i * 2) for i in range(5)]
+    b = [(i * 2, i * 3) for i in range(5)]
+    c = [(i, i * 2, i * 3) for i in range(5)]
+    d = [(i, i * 2, j * 2, j * 3) for i in range(5) for j in range(5)]
+
+    ras_a = NamedRelationalAlgebraFrozenSet(("z", "y"), a)
+    ras_b = NamedRelationalAlgebraFrozenSet(("y", "x"), b)
+    ras_b2 = NamedRelationalAlgebraFrozenSet(("u", "v"), b)
+    ras_c = NamedRelationalAlgebraFrozenSet(("z", "y", "x"), c)
+    ras_d = NamedRelationalAlgebraFrozenSet(("z", "y", "u", "v"), d)
+    empty = NamedRelationalAlgebraFrozenSet(("z", "y"), [])
+    dee = NamedRelationalAlgebraFrozenSet.dee()
+    dum = NamedRelationalAlgebraFrozenSet.dum()
+
+    assert len(ras_a.naturaljoin(empty)) == 0
+    assert len(empty.naturaljoin(ras_a)) == 0
+    assert ras_a.naturaljoin(dee) == ras_a
+    assert dee.naturaljoin(ras_a) == ras_a
+    assert ras_a.naturaljoin(dum) == dum
+    assert dum.naturaljoin(ras_a) == dum
+
+    res = ras_a.naturaljoin(ras_b)
+    assert res == ras_c
+
+    res = ras_a.naturaljoin(ras_a)
+    assert res == ras_a
+
+    res = ras_a.naturaljoin(ras_b2)
+    assert res == ras_d
