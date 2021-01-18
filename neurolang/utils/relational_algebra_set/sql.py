@@ -2,7 +2,10 @@ from collections import namedtuple
 
 import numpy as np
 from sqlalchemy.sql.expression import join
-from neurolang.utils.relational_algebra_set.sql_helpers import CreateView
+from neurolang.utils.relational_algebra_set.sql_helpers import (
+    CreateTableAs,
+    CreateView,
+)
 import uuid
 import os
 
@@ -168,8 +171,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             Set of column names.
         """
         if self._table is None:
-            return tuple()
-        return tuple(self._table.c.keys())
+            return []
+        return self._table.c.keys()
 
     @property
     def sql_columns(self):
@@ -296,6 +299,38 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         output._is_view = True
         output._parent_tables = parent_tables
         return output
+
+    def deep_copy(self):
+        """
+        Creates a new deepcopy of the set. This creates a new table in the DB
+        with the same elements.
+
+        Returns
+        -------
+        RelationalAlgebraSet
+            Same set with new table representation.
+        """
+        if self.is_dee():
+            return self.dee()
+        if len(self) > 0:
+            query = select(self.sql_columns)
+            output = type(self)()
+            new_table = CreateTableAs(output._table_name, query)
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                conn.execute(new_table)
+
+            output._table = Table(
+                output._table_name,
+                MetaData(),
+                autoload=True,
+                autoload_with=SQLAEngineFactory.get_engine(),
+            )
+            output._count = self._count
+            output._is_view = False
+            output._parent_tables = {output._table}
+            return output
+        else:
+            return type(self)()
 
     def selection(self, select_criteria):
         """
@@ -857,10 +892,24 @@ class RelationalAlgebraSet(
     RelationalAlgebraFrozenSet, abc.RelationalAlgebraSet
 ):
     def __init__(self, iterable=None):
+        if isinstance(iterable, RelationalAlgebraFrozenSet):
+            iterable = iterable.deep_copy()
         super().__init__(iterable=iterable)
 
     def add(self, value):
-        pass
+        if self._table is None:
+            self._create_insert_table((value,))
+        else:
+            query = self._table.insert().values(self._normalise_element(value))
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                conn.execute(query)
+        self._count = None
 
     def discard(self, value):
-        pass
+        value = self._normalise_element(value)
+        query = self._table.delete()
+        for c, v in value.items():
+            query = query.where(self.sql_columns.get(c) == v)
+        with SQLAEngineFactory.get_engine().connect() as conn:
+            conn.execute(query)
+        self._count = None
