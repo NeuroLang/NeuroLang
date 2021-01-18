@@ -29,14 +29,7 @@ from neurolang.frontend import ExplicitVBR, ExplicitVBROverlay, NeurolangPDL
 # Load the MNI atlas and resample it to 4mm voxels
 
 mni_t1 = nibabel.load(nilearn.datasets.fetch_icbm152_2009()["t1"])
-mni_t1_4mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 4)
-
-###############################################################################
-# Define a function that transforms TFIDF features to probabilities
-
-term_1 = "memory"
-term_2 = "auditory"
-terms = [term_1, term_2]
+mni_t1_4mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 2)
 
 ###############################################################################
 # Probabilistic Logic Programming in NeuroLang
@@ -96,7 +89,6 @@ ns_docs = ns_features[["pmid"]].drop_duplicates()
 ns_terms = pd.melt(
     ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
 ).query("TfIdf > 1e-3")[["term", "pmid"]]
-ns_terms = ns_terms.loc[ns_terms["term"].isin(terms)]
 
 TermInStudy = nl.add_tuple_set(ns_terms, name="TermInStudy")
 FocusReported = nl.add_tuple_set(ns_database, name="FocusReported")
@@ -133,7 +125,7 @@ with nl.environment as e:
     )
     e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
         e.Activation[e.i, e.j, e.k]
-    ) // (e.TermAssociation["auditory"] & e.TermAssociation["memory"])
+    ) // e.TermAssociation["emotion"]
     e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
         e.i, e.j, e.k, e.p
     ]

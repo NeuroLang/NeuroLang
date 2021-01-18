@@ -360,6 +360,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             res = self._dee_dum_sum(other)
             if res is not None:
                 return res
+            self._drop_duplicates_if_needed()
+            other._drop_duplicates_if_needed()
             ocont = other._container
             new_container = pd.merge(
                 left=self._container,
@@ -379,6 +381,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             res = self._dee_dum_product(other)
             if res is not None:
                 return res
+            self._drop_duplicates_if_needed()
+            other._drop_duplicates_if_needed()
             new_container = pd.merge(
                 left=self._container,
                 right=other._container,
@@ -574,6 +578,8 @@ class NamedRelationalAlgebraFrozenSet(
             c for c in other.columns if c not in self.columns
         )
 
+        self._drop_duplicates_if_needed()
+        other._drop_duplicates_if_needed()
         new_container = self._container.merge(other._container)
         return self._light_init_same_structure(
             new_container,
@@ -614,6 +620,8 @@ class NamedRelationalAlgebraFrozenSet(
         if self.is_empty() or other.is_empty():
             res = type(self)(new_columns)
         else:
+            self._drop_duplicates_if_needed()
+            other._drop_duplicates_if_needed()
             left = self._container.copy(deep=False)
             right = other._container.copy(deep=False)
             tmpcol = str(uuid1())
@@ -875,6 +883,8 @@ class NamedRelationalAlgebraFrozenSet(
             raise ValueError(
                 "Union defined only for sets with the same columns"
             )
+        self._drop_duplicates_if_needed()
+        other._drop_duplicates_if_needed()
         new_container = pd.merge(
             left=self._container,
             right=other._container,
@@ -898,6 +908,8 @@ class NamedRelationalAlgebraFrozenSet(
             )
         if self.is_empty():
             return self.copy()
+        self._drop_duplicates_if_needed()
+        other._drop_duplicates_if_needed()
         new_container = pd.merge(
             left=self._container,
             right=other._container,
@@ -958,6 +970,8 @@ class RelationalAlgebraSet(
                 raise ValueError(
                     "Operation only valid for sets with the same arity"
                 )
+            self._drop_duplicates_if_needed()
+            other._drop_duplicates_if_needed()
             new_container = pd.merge(
                 left=self._container,
                 right=other._container,
@@ -981,6 +995,8 @@ class RelationalAlgebraSet(
                     "Operation only valid for sets with the same arity"
                 )
             else:
+                self._drop_duplicates_if_needed()
+                other._drop_duplicates_if_needed()
                 new_container = pd.merge(
                     left=self._container,
                     right=other._container,
