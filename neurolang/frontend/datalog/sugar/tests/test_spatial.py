@@ -15,7 +15,7 @@ def test_euclidean_spatial_bound_detection():
     SecondRange = Symbol("SecondRange")
     EUCLIDEAN = Symbol("EUCLIDEAN")
     d = Symbol("d")
-    max_dist = Constant("10mm")
+    max_dist = Constant(2)
     detector = DetectEuclideanDistanceBoundMatrix()
     expression = Implication(
         P(i2, j2, k2),
