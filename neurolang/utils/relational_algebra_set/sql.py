@@ -1,4 +1,7 @@
 from collections import namedtuple
+
+import numpy as np
+from sqlalchemy.sql.expression import join
 from neurolang.utils.relational_algebra_set.sql_helpers import CreateView
 import uuid
 import os
@@ -330,7 +333,28 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return type(self).create_view_from_query(query, self._parent_tables)
 
     def selection_columns(self, select_criteria):
-        pass
+        """
+        Select elements in the set with equal column values.
+
+        Parameters
+        ----------
+        select_criteria : Dict[Union[int, str], Union[int, str]]
+            The dict of column names to check equality on.
+
+        Returns
+        -------
+        RelationalAlgebraFrozenSet
+            The set with selected elements
+        """
+        if self.is_empty():
+            return type(self)()
+        query = select(self.sql_columns).select_from(self._table)
+        for k, v in select_criteria.items():
+            query = query.where(
+                self.sql_columns.get(str(k)) == self.sql_columns.get(str(v))
+            )
+
+        return type(self).create_view_from_query(query, self._parent_tables)
 
     def copy(self):
         pass
@@ -339,13 +363,80 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         pass
 
     def as_numpy_array(self):
-        pass
+        if self.arity > 0 and self._table is not None:
+            query = (
+                select(self.sql_columns).select_from(self._table).distinct()
+            )
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                res = conn.execute(query)
+                return np.array(res.fetchall())
+        else:
+            return np.array([])
 
-    def equijoin(self, other, join_indices, return_mappings=False):
-        raise NotImplementedError()
+    def equijoin(self, other, join_indices=None):
+        """
+        Join sets on column equality.
+
+        Parameters
+        ----------
+        other : RelationalAlgebraFrozenSet
+            The other set to join on
+        join_indices : Iterable[tuple(int)], optional
+            The column indices to join on, by default None
+
+        Returns
+        -------
+        RelationalAlgebraFrozenSet
+            The set with elements where all columns in join_indices are equal.
+        """
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
+
+        query = select(
+            self.sql_columns
+            + [
+                other.sql_columns.get(str(i)).label(str(i + self.arity))
+                for i in range(other.arity)
+            ]
+        )
+
+        if join_indices is not None and len(join_indices) > 0:
+            on_clause = and_(
+                *[
+                    self.sql_columns.get(str(i))
+                    == other.sql_columns.get(str(j))
+                    for i, j in join_indices
+                ]
+            )
+            # Create an alias on the other table's name if we're joining on
+            # the same table.
+            other_join_table = other._table
+            if other._table_name == self._table_name:
+                other_join_table = other_join_table.alias()
+            query = query.select_from(
+                self._table.join(other_join_table, on_clause)
+            )
+
+        return RelationalAlgebraFrozenSet.create_view_from_query(
+            query, self._parent_tables | other._parent_tables
+        )
 
     def cross_product(self, other):
-        pass
+        """
+        Cross product with other set.
+
+        Parameters
+        ----------
+        other : RelationalAlgebraFrozenSet
+            The other set for the join.
+
+        Returns
+        -------
+        RelationalAlgebraFrozenSet
+            Resulting set of cross product.
+        """
+        return self.equijoin(other)
 
     def fetch_one(self):
         if self.is_dee():
@@ -599,8 +690,13 @@ class NamedRelationalAlgebraFrozenSet(
             other._table.c.get(col)
             for col in set(other.columns) - set(self.columns)
         ]
+        # Create an alias on the other table's name if we're joining on the
+        # same table.
+        other_join_table = other._table
+        if other._table_name == self._table_name:
+            other_join_table = other_join_table.alias()
         query = select(select_cols).select_from(
-            self._table.join(other._table, on_clause)
+            self._table.join(other_join_table, on_clause)
         )
         return NamedRelationalAlgebraFrozenSet.create_view_from_query(
             query, self._parent_tables | other._parent_tables
