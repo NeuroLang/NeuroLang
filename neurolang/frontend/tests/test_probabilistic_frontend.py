@@ -1021,9 +1021,7 @@ def test_postprob_conjunct_with_wlq_result():
         name="TIS",
     )
 
-    @nl.add_symbol
-    def agg_count(*args) -> int:
-        return len(next(iter(args)))
+    nl.add_symbol(len, name="agg_count")
 
     with nl.environment as e:
         e.TheWLQ[e.t, e.PROB(e.t)] = e.SS(e.s) & e.TIS(e.t, e.s)

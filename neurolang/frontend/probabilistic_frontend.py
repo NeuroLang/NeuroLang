@@ -67,10 +67,10 @@ from ..relational_algebra import (
 )
 from . import query_resolution_expressions as fe
 from .datalog.sugar import (
-    TranslateEuclideanDistanceBoundMatrixMixin,
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
 )
+from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 

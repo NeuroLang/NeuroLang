@@ -28,7 +28,6 @@ from ....type_system import (
     get_generic_type,
     is_leq_informative,
 )
-from .spatial import TranslateEuclideanDistanceBoundMatrixMixin
 
 
 class Column(ir.Definition):

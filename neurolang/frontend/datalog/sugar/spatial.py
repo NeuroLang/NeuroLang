@@ -10,7 +10,6 @@ from ....datalog.expression_processing import (
     UnifyVariableEqualitiesMixin,
     extract_logic_atoms,
 )
-from ....exceptions import UnsupportedProgramError
 from ....expression_pattern_matching import add_match
 from ....expression_walker import IdentityWalker, PatternWalker
 from ....expressions import Constant, Expression, FunctionApplication, Symbol

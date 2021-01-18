@@ -1,6 +1,5 @@
 import operator
 
-from .....datalog.expression_processing import EQ
 from .....expressions import Constant, Symbol
 from .....logic import Conjunction, Implication
 from ..spatial import DetectEuclideanDistanceBoundMatrix

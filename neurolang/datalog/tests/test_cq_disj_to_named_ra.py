@@ -1,4 +1,4 @@
-from operator import contains, eq, gt, mul, not_, neg
+from operator import contains, eq, gt, mul, not_
 from typing import AbstractSet, Tuple, Callable
 
 import numpy
