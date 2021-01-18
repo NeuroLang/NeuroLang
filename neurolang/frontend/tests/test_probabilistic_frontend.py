@@ -1004,3 +1004,37 @@ def test_simple_sigmoid():
         res = nl.query((e.l, e.p), e.Query[e.l, e.p])
     expected = {(l, (1 / (1 + np.exp(-x)))) for l, x in unnormalised.value}
     assert_almost_equal(res, expected)
+
+
+def test_postprob_conjunct_with_wlq_result():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1",), ("s2",)],
+        name="S",
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)],
+        name="SS",
+    )
+    nl.add_tuple_set(
+        [("t1", "s1"), ("t1", "s2"), ("t2", "s2")],
+        name="TIS",
+    )
+
+    @nl.add_symbol
+    def agg_count(*args) -> int:
+        return len(next(iter(args)))
+
+    with nl.environment as e:
+        e.TheWLQ[e.t, e.PROB(e.t)] = e.SS(e.s) & e.TIS(e.t, e.s)
+        e.P[e.t, e.agg_count(e.s)] = e.TIS(e.t, e.s)
+        e.Q[e.agg_count(e.s)] = e.S(e.s)
+        e.TheQuery[e.t, e.N, e.m, e.p] = (
+            e.TheWLQ(e.t, e.p) & e.P(e.t, e.m) & e.Q(e.N)
+        )
+        sol = nl.query((e.t, e.N, e.m, e.p), e.TheQuery(e.t, e.N, e.m, e.p))
+    expected = {
+        ("t1", 2, 2, 1.0),
+        ("t2", 2, 1, 0.5),
+    }
+    assert_almost_equal(sol, expected)
