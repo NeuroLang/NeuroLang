@@ -655,7 +655,7 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         pass
 
     @add_match(
-        FunctionApplication,
+        FunctionApplication(Symbol, ...),
         lambda fa: all(isinstance(arg, (Constant, Symbol)) for arg in fa.args),
     )
     def query_predicate(self, qpred):
@@ -671,6 +671,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
                 exp = self.walk(exp)
             cqs.append(exp)
         return maybe_disjunct(cqs)
+
+    @add_match(FunctionApplication(Constant, ...))
+    def builtin_application(self, fa):
+        return fa
 
     def _unify_cq_antecedent(self, cq, qpred):
         mgu = most_general_unifier(cq.consequent, qpred)

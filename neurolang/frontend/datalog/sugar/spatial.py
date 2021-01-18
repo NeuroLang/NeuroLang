@@ -1,5 +1,6 @@
 import operator
 import typing
+import logging
 
 import numpy
 import pandas
@@ -15,9 +16,11 @@ from ....expression_walker import IdentityWalker, PatternWalker
 from ....expressions import Constant, Expression, FunctionApplication, Symbol
 from ....logic import Conjunction, Implication
 from ....relational_algebra import RelationalAlgebraSet
+from ....utils import log_performance
 
 EUCLIDEAN = Symbol("EUCLIDEAN")
 
+LOG = logging.getLogger(__name__)
 
 class DetectEuclideanDistanceBoundMatrix(PatternWalker):
     """
@@ -192,25 +195,26 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         second_coord_array: numpy.array,
         max_dist: float,
     ) -> numpy.array:
-        first_ckd_tree = scipy.spatial.cKDTree(first_coord_array)
-        second_ckd_tree = scipy.spatial.cKDTree(second_coord_array)
-        dist_mat = first_ckd_tree.sparse_distance_matrix(
-            second_ckd_tree,
-            max_dist,
-            output_type="ndarray",
-            p=2,
-        )
-        dist_mat = pandas.DataFrame(dist_mat)
-        solution_df = pandas.DataFrame(
-            numpy.c_[
-                first_coord_array[dist_mat.iloc[:, 0].values],
-                second_coord_array[dist_mat.iloc[:, 1].values],
-            ],
-            dtype=int,
-        )
-        solution_df[len(solution_df.columns)] = numpy.atleast_2d(
-            dist_mat.iloc[:, 2].values
-        ).T
+        with log_performance(LOG, "spatial bound resolution"):
+            first_ckd_tree = scipy.spatial.cKDTree(first_coord_array)
+            second_ckd_tree = scipy.spatial.cKDTree(second_coord_array)
+            dist_mat = first_ckd_tree.sparse_distance_matrix(
+                second_ckd_tree,
+                max_dist,
+                output_type="ndarray",
+                p=2,
+            )
+            dist_mat = pandas.DataFrame(dist_mat)
+            solution_df = pandas.DataFrame(
+                numpy.c_[
+                    first_coord_array[dist_mat.iloc[:, 0].values],
+                    second_coord_array[dist_mat.iloc[:, 1].values],
+                ],
+                dtype=int,
+            )
+            solution_df[len(solution_df.columns)] = numpy.atleast_2d(
+                dist_mat.iloc[:, 2].values
+            ).T
         return solution_df
 
     def safe_range_pred_to_coord_set(
