@@ -328,3 +328,56 @@ def test_named_relational_algebra_ra_naturaljoin():
 
     res = ras_a.naturaljoin(ras_b2)
     assert res == ras_d
+
+def test_relational_algebra_set_semantics_empty():
+    ras = RelationalAlgebraSet()
+
+    assert len(ras) == 0
+    assert ras.is_empty()
+    assert ras.arity == 0
+    assert 0 not in ras
+    assert list(iter(ras)) == []
+    assert ras == RelationalAlgebraSet.dum()
+
+    ras.add((0, 1))
+    assert (0, 1) in ras
+    assert len(ras) == 1
+    assert ras.arity == 2
+
+
+def test_relational_algebra_set_semantics():
+    a = [5, 4, 3, 2, 3, 1]
+    ras = RelationalAlgebraSet(a)
+    ras_ = RelationalAlgebraSet(a)
+    ras__ = set((e,) for e in a)
+
+    # assert ras.columns == [0]
+
+    assert ras == ras_
+    assert ras == ras__
+
+    assert len(ras) == len(a) - 1
+    ras.discard(5)
+    assert 5 not in ras
+    assert len(ras) == len(a) - 2
+    ras.add(10)
+    assert len(ras) == len(a) - 1
+    assert 10 in ras
+    assert [10] in ras
+    assert (5, 2) not in ras
+    assert all(a_ in ras for a_ in a if a_ != 5)
+    assert ras.fetch_one() in ras__
+
+    dee = RelationalAlgebraSet.dee()
+    dum = RelationalAlgebraSet.dum()
+
+    assert len(dee) > 0 and dee.arity == 0
+    assert len(dum) == 0 and dum.arity == 0
+
+    r = RelationalAlgebraSet.create_view_from(ras)
+    assert r == ras
+    assert r is not ras
+
+    r = RelationalAlgebraSet(ras)
+    assert r == ras
+    assert r is not ras
