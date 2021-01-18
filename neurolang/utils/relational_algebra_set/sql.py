@@ -22,7 +22,7 @@ from sqlalchemy import (
     text,
     create_engine,
 )
-from sqlalchemy.sql import table
+from sqlalchemy.sql import table, intersect, union, except_
 
 
 class RelationalAlgebraStringExpression(str):
@@ -392,7 +392,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return type(self).create_view_from_query(query, self._parent_tables)
 
     def copy(self):
-        pass
+        if self.is_dee():
+            return self.dee()
+        elif self.is_dum():
+            return self.dum()
+        return type(self).create_view_from_query(
+            select(self.sql_columns).select_from(self._table),
+            self._parent_tables,
+        )
 
     def itervalues(self):
         pass
@@ -551,6 +558,47 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def _equal_sets_structure(self, other):
         return set(self.columns) == set(other.columns)
+
+    def _do_set_operation(self, other, sql_operator):
+        if not self._equal_sets_structure(other):
+            raise ValueError(
+                "Relational algebra set operators can only be used on sets"
+                " with same columns."
+            )
+        query = sql_operator(
+            select(self.sql_columns).select_from(self._table),
+            select(other.sql_columns).select_from(other._table),
+        )
+        return type(self).create_view_from_query(
+            query, self._parent_tables | other._parent_tables
+        )
+
+    def __and__(self, other):
+        if not isinstance(other, RelationalAlgebraFrozenSet):
+            return super().__and__(other)
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
+        return self._do_set_operation(other, intersect)
+
+    def __or__(self, other):
+        if not isinstance(other, RelationalAlgebraFrozenSet):
+            return super().__or__(other)
+        res = self._dee_dum_sum(other)
+        if res is not None:
+            return res
+        return self._do_set_operation(other, union)
+
+    def __sub__(self, other):
+        if not isinstance(other, RelationalAlgebraFrozenSet):
+            return super().__sub__(other)
+        if self.is_empty() or other.is_empty():
+            return self.copy()
+        if self.is_dee():
+            if other.is_dee():
+                return self.dum()
+            return self.dee()
+        return self._do_set_operation(other, except_)
 
 
 class NamedRelationalAlgebraFrozenSet(
@@ -895,6 +943,9 @@ class RelationalAlgebraSet(
         if isinstance(iterable, RelationalAlgebraFrozenSet):
             iterable = iterable.deep_copy()
         super().__init__(iterable=iterable)
+
+    def copy(self):
+        return self.deep_copy()
 
     def add(self, value):
         if self._table is None:
