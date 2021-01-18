@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-TODO
+Example where a spatial prior is defined based on the distance between voxels \
+and foci in a coordinate-based meta-analysis database
 ============================================================================
 
-TODO
+Each voxel's probability of being reported by a study is calculated based on
+whether that particular study reports a focus (peak activation) near the voxel.
+The probability is defined based on how far from the focus that voxel happens
+to be.
+
 """
 from typing import Callable, Iterable
 
