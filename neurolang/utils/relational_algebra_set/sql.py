@@ -405,7 +405,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         )
 
     def itervalues(self):
-        pass
+        raise NotImplementedError()
 
     def as_numpy_array(self):
         if self.arity > 0 and self._table is not None:
@@ -492,7 +492,37 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return tuple(res.fetchone())
 
     def groupby(self, columns):
-        pass
+        """
+        Apply group_by to a subset of columns.
+
+        Parameters
+        ----------
+        columns : Iterable[int, str]
+            The list of columns to group on.
+
+        Yields
+        -------
+        tuple(Union[int, str], RelationalAlgebraFrozenSet)
+            The different values for the group_by clause with the
+            associated result set.
+        """
+        if self._table is not None:
+            single_column = False
+            if isinstance(columns, (str, int)):
+                single_column = True
+                columns = (columns,)
+
+            groupby = [self.sql_columns.get(str(c)) for c in columns]
+            query = select(self.sql_columns).select_from(self._table).group_by(*groupby)
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                res = conn.execute(query).fetchall()
+            for row in res:
+                group = self.selection(dict(zip(columns, row)))
+                if single_column:
+                    t_out = row[0]
+                else:
+                    t_out = tuple(row)
+                yield t_out, group
 
     def projection(self, *columns):
         """
@@ -902,9 +932,6 @@ class NamedRelationalAlgebraFrozenSet(
             query, self._parent_tables
         )
 
-    def groupby(self, columns):
-        pass
-
     def aggregate(self, group_columns, aggregate_function):
         pass
 
@@ -930,9 +957,6 @@ class NamedRelationalAlgebraFrozenSet(
 
     def selection_columns(self, select_criteria):
         pass
-
-    def itervalues(self):
-        raise NotImplementedError()
 
     def as_numpy_array():
         pass
