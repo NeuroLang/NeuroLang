@@ -10,6 +10,7 @@ from ....datalog.expression_processing import (
     UnifyVariableEqualitiesMixin,
     extract_logic_atoms,
 )
+from ....exceptions import UnsupportedProgramError
 from ....expression_pattern_matching import add_match
 from ....expression_walker import IdentityWalker, PatternWalker
 from ....expressions import Constant, Expression, FunctionApplication, Symbol
@@ -59,11 +60,13 @@ class DetectEuclideanDistanceBoundMatrix(PatternWalker):
             formulas
         )
         distance_upper_bound_formula = self.get_distance_upper_bound(formulas)
-        if (
-            var_to_euclidean_equality_formula is None
-            or distance_upper_bound_formula is None
-        ):
+        if var_to_euclidean_equality_formula is None:
             return False
+        elif distance_upper_bound_formula is None:
+            raise UnsupportedProgramError(
+                "A maximum distance must be provided when defining a spatial "
+                "prior using the Euclidean distance between two sets of points"
+            )
         i1, j1, k1, i2, j2, k2 = next(
             arg
             for arg in var_to_euclidean_equality_formula.args

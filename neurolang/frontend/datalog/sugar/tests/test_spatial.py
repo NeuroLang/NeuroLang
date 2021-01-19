@@ -1,5 +1,8 @@
 import operator
 
+import pytest
+
+from .....exceptions import UnsupportedProgramError
 from .....expressions import Constant, Symbol
 from .....logic import Conjunction, Implication
 from ..spatial import DetectEuclideanDistanceBoundMatrix
@@ -86,3 +89,19 @@ def test_reversed_equality():
         ),
     )
     assert detector.walk(expression)
+
+
+def test_unsupported_unbounded_distance():
+    detector = DetectEuclideanDistanceBoundMatrix()
+    expression = Implication(
+        P(i2, j2, k2),
+        Conjunction(
+            (
+                FirstRange(i1, j1, k1),
+                SecondRange(i2, j2, k2),
+                EQ(EUCLIDEAN(i1, j1, k1, i2, j2, k2), d),
+            )
+        ),
+    )
+    with pytest.raises(UnsupportedProgramError):
+        detector.walk(expression)
