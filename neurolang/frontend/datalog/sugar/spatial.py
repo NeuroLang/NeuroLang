@@ -1,6 +1,6 @@
+import logging
 import operator
 import typing
-import logging
 
 import numpy
 import pandas
@@ -21,17 +21,20 @@ EUCLIDEAN = Symbol("EUCLIDEAN")
 
 LOG = logging.getLogger(__name__)
 
+
 class DetectEuclideanDistanceBoundMatrix(PatternWalker):
     """
     Detect a Euclidean spatial bound in the antecedent of a rule.
 
     This spatial bound is defined by 4 conjuncts in the antecedent of the rule:
-
-        - a formula of the form `d = EUCLIDEAN(i1, j1, k1, i2, j2, k2)`, where
-          EUCLIDEAN a special reserved symbol corresponding
-        - a formula of the form `d < MAX_DIST`, where MAX_DIST is a constant
-          value limiting the distance between 3D points (i1, j1, k1) and (i2,
-          j2, k2)
+        - an equality formula between some variable `d` and an expression of
+          the form `EUCLIDEAN(i1, j1, k1, i2, j2, k2)`, where `EUCLIDEAN` is a
+          special reserved symbol for the Euclidean distance function in a
+          3-dimensional space.
+        - a comparison formula between that same variable `d` and a constant
+          value that sets an upper bound for the distance between points,
+          thereby limiting the set of points that will be considered in the
+          computation.
         - a formula of the form `R1(x)` where x is a tuple containing `i1`,
           `j1` and `k1` providing a range for (i1, j1, k1) coordinates
         - a formula of the form `R2(x)` where x is a tuple containing `i2`,

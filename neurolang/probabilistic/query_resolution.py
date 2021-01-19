@@ -40,7 +40,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
         Union,
         lambda union: any(
             is_query_based_probfact(formula)
-            and not hasattr(formula, "__already_walked__")
+            and not hasattr(formula, "__QueryBasedProbFactToDetRule__")
             for formula in union.formulas
         ),
     )
@@ -63,14 +63,13 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     @add_match(
         Implication,
         lambda implication: is_query_based_probfact(implication)
-        and not hasattr(implication, "__already_walked__"),
+        and not hasattr(implication, "__QueryBasedProbFactToDetRule__"),
     )
     def query_based_probafact(self, impl):
         (
             det_rule,
             prob_rule,
         ) = self._query_based_probabilistic_fact_to_det_and_prob_rules(impl)
-        prob_rule.__already_walked__ = True
         return self.walk(Union((det_rule, prob_rule)))
 
     @staticmethod
@@ -85,6 +84,14 @@ class QueryBasedProbFactToDetRule(PatternWalker):
             prob_symb, impl.consequent.body
         )
         prob_rule = Implication(prob_consequent, det_consequent)
+        # add specific tag to already-processed rule
+        # this is used to prevent an infinite recursion
+        # our first strategy for this was to check that the consequent's
+        # relational symbol was fresh (meaning it was already processed) but
+        # this does not work in combination with other walkers that also
+        # generate fresh consequent relational symbols
+        # TODO: find a better solution than this one
+        prob_rule.__QueryBasedProbFactToDetRule__ = True
         return det_rule, prob_rule
 
 

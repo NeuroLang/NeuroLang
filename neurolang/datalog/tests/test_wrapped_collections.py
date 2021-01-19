@@ -139,7 +139,7 @@ def test_create_from_dataframe():
 
     assert len(r1) == 2
     assert r1.row_type == Tuple[int, str, float]
-    assert set(df.itertuples(index=None, name=None)) == r1.unwrap()
+    assert set(df.itertuples(index=False)) == r1.unwrap()
 
 
 def test_type_inference():
