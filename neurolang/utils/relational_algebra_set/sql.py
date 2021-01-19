@@ -20,6 +20,7 @@ from sqlalchemy import (
     and_,
     select,
     text,
+    tuple_,
     create_engine,
 )
 from sqlalchemy.sql import table, intersect, union, except_
@@ -984,7 +985,7 @@ class RelationalAlgebraSet(
                     )
                 query = self._table.insert().from_select(
                     self.columns,
-                    select(other.sql_columns).select_from(other._table)
+                    select(other.sql_columns).select_from(other._table),
                 )
                 with SQLAEngineFactory.get_engine().connect() as conn:
                     conn.execute(query)
@@ -992,3 +993,26 @@ class RelationalAlgebraSet(
                 return self
         else:
             return super().__ior__(other)
+
+    def __isub__(self, other):
+        if isinstance(other, RelationalAlgebraFrozenSet):
+            if other.is_empty() or self.is_empty():
+                return self
+            if self.is_dee() and other.is_dee():
+                return self.dum()
+            if not self._equal_sets_structure(other):
+                raise ValueError(
+                    "Relational algebra set operators can only be used on sets"
+                    " with same columns."
+                )
+            query = self._table.delete().where(
+                tuple_(*self.sql_columns).in_(
+                    select(other.sql_columns).select_from(other._table)
+                )
+            )
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                conn.execute(query)
+            self._count = None
+            return self
+        else:
+            return super().__isub__(other)
