@@ -1,5 +1,5 @@
 from operator import contains, eq, gt, mul, not_
-from typing import AbstractSet, Tuple, Callable
+from typing import AbstractSet, Callable, Tuple
 
 import numpy
 import pytest
@@ -24,7 +24,6 @@ from ...relational_algebra import (
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
 from ..translate_to_named_ra import TranslateToNamedRA
-from ...type_system import Unknown
 
 C_ = Constant
 S_ = Symbol
@@ -791,6 +790,7 @@ def test_equality_nested_builtin_application():
     )
     assert result == expected
 
+
 def test_arithmetic_extended_projection():
     x = Symbol("x")
     z = Symbol("z")
@@ -826,9 +826,7 @@ def test_extended_projection_constant_callable():
     EXP = Constant[Callable[[float], float]](
         numpy.exp, verify_type=False, auto_infer_type=False
     )
-    conjunction = Conjunction(
-        (P(x), EQ(z, EXP(x)))
-    )
+    conjunction = Conjunction((P(x), EQ(z, EXP(x))))
     result = TranslateToNamedRA().walk(conjunction)
     expected = ExtendedProjection(
         NameColumns(
@@ -867,8 +865,7 @@ def test_sigmoid():
         ),
         (
             ExtendedProjectionListMember(
-                Constant(1)
-                / (Constant(1) + EXP(-C_(ColumnStr("x")))),
+                Constant(1) / (Constant(1) + EXP(-C_(ColumnStr("x")))),
                 str2columnstr_constant("z"),
             ),
             ExtendedProjectionListMember(

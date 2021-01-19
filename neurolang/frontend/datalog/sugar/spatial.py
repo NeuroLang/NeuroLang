@@ -64,7 +64,11 @@ class DetectEuclideanDistanceBoundMatrix(PatternWalker):
             or distance_upper_bound_formula is None
         ):
             return False
-        i1, j1, k1, i2, j2, k2 = var_to_euclidean_equality_formula.args[1].args
+        i1, j1, k1, i2, j2, k2 = next(
+            arg
+            for arg in var_to_euclidean_equality_formula.args
+            if isinstance(arg, FunctionApplication)
+        ).args
         if (
             self.get_range_pred_for_coord(formulas, (i1, j1, k1)) is None
             or self.get_range_pred_for_coord(formulas, (i2, j2, k2)) is None
@@ -100,10 +104,24 @@ class DetectEuclideanDistanceBoundMatrix(PatternWalker):
             if isinstance(formula.functor, Constant)
             and formula.functor.value == operator.eq
             and len(formula.args) == 2
-            and isinstance(formula.args[0], Symbol)
-            and isinstance(formula.args[1], FunctionApplication)
-            and formula.args[1].functor == EUCLIDEAN
-            and len(formula.args[1].args) == 6
+            and any(isinstance(arg, Symbol) for arg in formula.args)
+            and any(
+                isinstance(arg, FunctionApplication) for arg in formula.args
+            )
+            and next(
+                arg
+                for arg in formula.args
+                if isinstance(arg, FunctionApplication)
+            ).functor
+            == EUCLIDEAN
+            and len(
+                next(
+                    arg
+                    for arg in formula.args
+                    if isinstance(arg, FunctionApplication)
+                ).args
+            )
+            == 6
         )
         if len(matching_formulas) != 1:
             return None
@@ -115,10 +133,11 @@ class DetectEuclideanDistanceBoundMatrix(PatternWalker):
             formula
             for formula in formulas
             if isinstance(formula.functor, Constant)
-            and formula.functor.value == operator.lt
+            and formula.functor.value
+            in (operator.lt, operator.le, operator.gt, operator.ge)
             and len(formula.args) == 2
-            and isinstance(formula.args[0], Symbol)
-            and isinstance(formula.args[1], Constant)
+            and any(isinstance(arg, Symbol) for arg in formula.args)
+            and any(isinstance(arg, Constant) for arg in formula.args)
         )
         if len(matching_formulas) != 1:
             return None
@@ -142,9 +161,21 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
                 formulas
             )
         )
-        d = var_to_euclidean_equality_formula.args[0]
-        i1, j1, k1, i2, j2, k2 = var_to_euclidean_equality_formula.args[1].args
-        upper_bound = distance_upper_bound_formula.args[1]
+        d = next(
+            arg
+            for arg in var_to_euclidean_equality_formula.args
+            if isinstance(arg, Symbol)
+        )
+        i1, j1, k1, i2, j2, k2 = next(
+            arg
+            for arg in var_to_euclidean_equality_formula.args
+            if isinstance(arg, FunctionApplication)
+        ).args
+        upper_bound = next(
+            arg
+            for arg in distance_upper_bound_formula.args
+            if isinstance(arg, Constant)
+        )
         first_range_pred = (
             DetectEuclideanDistanceBoundMatrix.get_range_pred_for_coord(
                 formulas, (i1, j1, k1)
