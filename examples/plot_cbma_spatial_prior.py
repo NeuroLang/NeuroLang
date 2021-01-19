@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-# %%
-# %matplotlib inline
-
-# %% [markdown]
 """
 Example where a spatial prior is defined based on the distance between voxels \
 and foci in a coordinate-based meta-analysis database
@@ -14,6 +9,7 @@ The probability is defined based on how far from the focus that voxel happens
 to be.
 
 """
+
 # %%
 from typing import Callable, Iterable
 
@@ -27,10 +23,12 @@ import pandas as pd
 from neurolang.frontend import ExplicitVBR, ExplicitVBROverlay, NeurolangPDL
 
 # %% [markdown]
+###############################################################################
 # Data preparation
 # ----------------
 
 # %% [markdown]
+###############################################################################
 # Load the MNI atlas and resample it to 4mm voxels
 
 # %%
@@ -38,6 +36,7 @@ mni_t1 = nibabel.load(nilearn.datasets.fetch_icbm152_2009()["t1"])
 mni_t1_4mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 2)
 
 # %% [markdown]
+###############################################################################
 # Probabilistic Logic Programming in NeuroLang
 # --------------------------------------------
 
@@ -46,10 +45,10 @@ nl = NeurolangPDL()
 
 
 # %% [markdown]
+###############################################################################
 # Adding new aggregation function to build a region overlay
 
 # %%
-
 @nl.add_symbol
 def agg_create_region_overlay(
     i: Iterable, j: Iterable, k: Iterable, p: Iterable
@@ -61,6 +60,7 @@ def agg_create_region_overlay(
 
 
 # %% [markdown]
+###############################################################################
 # Loading the database
 
 # %%
@@ -118,6 +118,7 @@ Voxel = nl.add_tuple_set(
 )
 
 # %% [markdown]
+###############################################################################
 # Probabilistic program and querying
 
 # %%
@@ -143,6 +144,7 @@ with nl.environment as e:
     img_query = nl.query((e.x,), e.img[e.x])
 
 # %% [markdown]
+###############################################################################
 # Plotting results
 # --------------------------------------------
 
