@@ -570,7 +570,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             )
         query = sql_operator(
             select(self.sql_columns).select_from(self._table),
-            select(other.sql_columns).select_from(other._table),
+            select(
+                [other.sql_columns.get(c) for c in self.columns]
+            ).select_from(other._table),
         )
         return type(self).create_view_from_query(
             query, self._parent_tables | other._parent_tables
@@ -929,9 +931,6 @@ class NamedRelationalAlgebraFrozenSet(
     def selection_columns(self, select_criteria):
         pass
 
-    def copy(self):
-        pass
-
     def itervalues(self):
         raise NotImplementedError()
 
@@ -985,7 +984,9 @@ class RelationalAlgebraSet(
                     )
                 query = self._table.insert().from_select(
                     self.columns,
-                    select(other.sql_columns).select_from(other._table),
+                    select(
+                        [other.sql_columns.get(c) for c in self.columns]
+                    ).select_from(other._table),
                 )
                 with SQLAEngineFactory.get_engine().connect() as conn:
                     conn.execute(query)
@@ -1007,7 +1008,9 @@ class RelationalAlgebraSet(
                 )
             query = self._table.delete().where(
                 tuple_(*self.sql_columns).in_(
-                    select(other.sql_columns).select_from(other._table)
+                    select(
+                        [other.sql_columns.get(c) for c in self.columns]
+                    ).select_from(other._table)
                 )
             )
             with SQLAEngineFactory.get_engine().connect() as conn:

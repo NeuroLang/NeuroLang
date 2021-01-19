@@ -455,3 +455,36 @@ def test_relational_algebra_ra_union_update():
     f = first.copy()
     f |= set()
     assert f == first
+
+def test_named_relational_algebra_difference():
+    a = [(i, i * 2) for i in range(5)]
+    b = [(i, i * 2) for i in range(1, 5)]
+    c = [(i, i * 2) for i in range(1)]
+
+    ras_a = NamedRelationalAlgebraFrozenSet(("x", "y"), a)
+    ras_b = NamedRelationalAlgebraFrozenSet(("x", "y"), b)
+    ras_b_inv = NamedRelationalAlgebraFrozenSet(
+        ("y", "x"), [t[::-1] for t in b]
+    )
+    ras_c = NamedRelationalAlgebraFrozenSet(("x", "y"), c)
+
+    empty = NamedRelationalAlgebraFrozenSet(("x", "y"), [])
+    dee = NamedRelationalAlgebraFrozenSet.dee()
+
+    assert (ras_a - empty) == ras_a
+    assert (empty - ras_a) == empty
+    assert (empty - empty) == empty
+    assert (dee - empty) == dee
+    assert (dee - dee) == NamedRelationalAlgebraFrozenSet.dum()
+
+    res = ras_a - ras_b
+    assert res == ras_c
+
+    res = ras_b - ras_a
+    assert len(res) == 0
+
+    res = ras_a - ras_b_inv
+    assert res == ras_c
+
+    res = ras_b_inv - ras_a
+    assert len(res) == 0
