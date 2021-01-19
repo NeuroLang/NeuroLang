@@ -1,6 +1,7 @@
 import pytest
 
-from ..relational_algebra_set import RelationalAlgebraStringExpression, pandas, sql
+from ..relational_algebra_set import (RelationalAlgebraStringExpression,
+                                      pandas, sql)
 
 
 @pytest.fixture(ids=['pandas', 'sql'], params=[(pandas,), (sql,)])
