@@ -1,7 +1,8 @@
 from collections import namedtuple
+from collections.abc import Iterable
 
 import numpy as np
-from sqlalchemy.sql.expression import join
+import types
 from neurolang.utils.relational_algebra_set.sql_helpers import (
     CreateTableAs,
     CreateView,
@@ -23,7 +24,7 @@ from sqlalchemy import (
     tuple_,
     create_engine,
 )
-from sqlalchemy.sql import table, intersect, union, except_
+from sqlalchemy.sql import table, intersect, union, except_, column
 
 
 class RelationalAlgebraStringExpression(str):
@@ -273,7 +274,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return element
 
     @classmethod
-    def create_view_from_query(cls, query, parent_tables):
+    def create_view_from_query(cls, query, parent_tables, connection=None):
         """
         Create a new RelationalAlgebraFrozenSet backed by an underlying
         VIEW representation.
@@ -282,9 +283,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         ----------
         query : sqlachemy.selectable.select
             View expression.
-
         parent_tables: Set(RelationalAlgebraFrozenSet)
             Set of parent tables.
+        connection : sqlalchemy.Connection, optional
+            The connection to use to execute the query, by default None.
+            If None, a new connection will be created and then closed.
+            If connection is provided, transaction and closing of
+            the connection should be managed by the provider.
 
         Returns
         -------
@@ -293,14 +298,58 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         """
         output = cls()
         view = CreateView(output._table_name, query)
-        with SQLAEngineFactory.get_engine().connect() as conn:
-            conn.execute(view)
+        if connection is None:
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                conn.execute(view)
+        else:
+            connection.execute(view)
         t = table(output._table_name)
         for c in query.c:
             c._make_proxy(t)
         output._table = t
         output._is_view = True
         output._parent_tables = parent_tables
+        return output
+
+    @classmethod
+    def create_table_from_query(cls, query, connection=None):
+        """
+        Create a new RelationalAlgebraFrozenSet backed by an underlying
+        Table representation.
+
+        Parameters
+        ----------
+        query : sqlachemy.selectable.select
+            View expression.
+        connection : sqlalchemy.Connection, optional
+            The connection to use to execute the query, by default None.
+            If None, a new connection will be created and then closed.
+            If connection is provided, transaction and closing of
+            the connection should be managed by the provider.
+
+        Returns
+        -------
+        RelationalAlgebraFrozenSet
+            A new set.
+        """
+        output = cls()
+        new_table = CreateTableAs(output._table_name, query)
+        if connection is None:
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                conn.execute(new_table)
+        else:
+            connection.execute(new_table)
+        t = table(output._table_name)
+        for c in query.c:
+            c._make_proxy(t)
+        output._table = Table(
+            output._table_name,
+            MetaData(),
+            autoload=True,
+            autoload_with=SQLAEngineFactory.get_engine(),
+        )
+        output._is_view = False
+        output._parent_tables = {output._table}
         return output
 
     def deep_copy(self):
@@ -317,20 +366,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return self.dee()
         if len(self) > 0:
             query = select(self.sql_columns)
-            output = type(self)()
-            new_table = CreateTableAs(output._table_name, query)
-            with SQLAEngineFactory.get_engine().connect() as conn:
-                conn.execute(new_table)
-
-            output._table = Table(
-                output._table_name,
-                MetaData(),
-                autoload=True,
-                autoload_with=SQLAEngineFactory.get_engine(),
-            )
+            output = type(self).create_table_from_query(query)
             output._count = self._count
-            output._is_view = False
-            output._parent_tables = {output._table}
             return output
         else:
             return type(self)()
@@ -513,7 +550,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 columns = (columns,)
 
             groupby = [self.sql_columns.get(str(c)) for c in columns]
-            query = select(self.sql_columns).select_from(self._table).group_by(*groupby)
+            query = (
+                select(self.sql_columns)
+                .select_from(self._table)
+                .group_by(*groupby)
+            )
             with SQLAEngineFactory.get_engine().connect() as conn:
                 res = conn.execute(query).fetchall()
             for row in res:
@@ -933,7 +974,82 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def aggregate(self, group_columns, aggregate_function):
-        pass
+        """
+        Aggregate.
+        For custom aggregate functions see
+        https://docs.sqlalchemy.org/en/14/dialects/sqlite.html#regular-expression-support
+        https://www.sqlite.org/appfunc.html
+        https://docs.python.org/2/library/sqlite3.html#sqlite3.Connection.create_function
+        
+
+        Parameters
+        ----------
+        group_columns : [type]
+            [description]
+        aggregate_function : [type]
+            [description]
+
+        Returns
+        -------
+        [type]
+            [description]
+
+        Raises
+        ------
+        ValueError
+            [description]
+        """
+        if isinstance(group_columns, str) or not isinstance(
+            group_columns, Iterable
+        ):
+            group_columns = (group_columns,)
+
+        agg_cols = []
+        connection = None
+        for c, f in aggregate_function.items():
+            if isinstance(f, types.BuiltinFunctionType):
+                f = f.__name__
+            if callable(f):
+
+                def _transform_value(v):
+                    if not v:
+                        return v
+                    print("Calling lambda with {}".format(v))
+                    return f(v)
+
+                f_ = getattr(func, "transform")
+                if connection is None:
+                    connection = SQLAEngineFactory.get_engine().connect()
+                connection.connection.create_function(
+                    "transform", 1, _transform_value
+                )
+            elif isinstance(f, str):
+                f_ = getattr(func, f)
+            else:
+                raise ValueError(
+                    f"Aggregate function for {c} needs "
+                    "to be callable or a string"
+                )
+            # c_ = column(str(c))
+            agg_cols.append(f_(tuple_(*[self.sql_columns.get(c_) for c_ in self.columns if c_ not in group_columns])).label(str(c)))
+
+        groupby = [self.sql_columns.get(str(c)) for c in group_columns]
+        query = (
+            select(groupby + agg_cols)
+            .select_from(self._table)
+            .group_by(*groupby)
+        )
+        if connection is None:
+            return NamedRelationalAlgebraFrozenSet.create_view_from_query(
+                query, self._parent_tables, connection=connection
+            )
+        try:
+            table = NamedRelationalAlgebraFrozenSet.create_table_from_query(
+                query, connection
+            )
+            return table
+        finally:
+            connection.close()
 
     def extended_projection(self, eval_expressions):
         pass

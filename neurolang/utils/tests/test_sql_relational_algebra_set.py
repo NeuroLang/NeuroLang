@@ -13,7 +13,7 @@ import pytest
 @pytest.fixture(scope="session", autouse=True)
 def mock_sql_engine():
     """yields a SQLAlchemy engine which is suppressed after the test session"""
-    engine_ = create_engine("sqlite:///test.db", echo=False)
+    engine_ = create_engine("sqlite:///test.db", echo=True)
 
     with patch.object(SQLAEngineFactory, "get_engine") as _fixture:
         _fixture.return_value = engine_
@@ -502,3 +502,51 @@ def test_groupby():
     res = list(ras_a.groupby(0))
     assert res[0] == (1, ras_b)
     assert res[1] == (2, ras_c)
+
+def test_aggregate():
+    initial_set = NamedRelationalAlgebraFrozenSet(
+        ("x", "y", "z"), [(7, 8, 1), (7, 8, 9)]
+    )
+    expected_sum = NamedRelationalAlgebraFrozenSet(
+        ("x", "y", "z"), [(7, 8, 10)]
+    )
+    expected_str = NamedRelationalAlgebraFrozenSet(
+        ("x", "y", "z"), [(7, 8, 2)]
+    )
+    expected_lambda = NamedRelationalAlgebraFrozenSet(
+        ("x", "y", "z"), [(7, 8, 8)]
+    )
+
+    initial_set2 = NamedRelationalAlgebraFrozenSet(
+        ("w", "x", "y", "z"), [(1, 7, 8, 1), (2, 7, 8, 9)]
+    )
+    expected_op2 = NamedRelationalAlgebraFrozenSet(
+        ("w", "x", "y", "z"), [(2, 7, 8, 8)]
+    )
+    expected_op3 = NamedRelationalAlgebraFrozenSet(
+        ("x", "y", "qq"), [(7, 8, 13)]
+    )
+
+    new_set = initial_set.aggregate(["x", "y"], {"z": sum})
+    assert expected_sum == new_set
+    new_set = initial_set.aggregate(["x", "y"], {"z": "count"})
+    assert expected_str == new_set
+    # new_set = initial_set.aggregate(["x", "y"], {"z": lambda x: max(x) - 1})
+    # assert expected_lambda == new_set
+    # new_set = initial_set.aggregate(
+    #    ["x", "y"],
+    #    [
+    #        ("z", "z", lambda x: max(x) - 1),
+    #    ],
+    # )
+    # assert expected_lambda == new_set
+    # new_set = initial_set2.aggregate(
+    #     ["x", "y"], {"z": lambda x: max(x) - 1, "w": "count"}
+    # )
+    # assert expected_op2 == new_set
+
+    new_set = initial_set2.aggregate(
+        ["x", "y"], {'qq': lambda t: sum(t.w + t.z)}
+    )
+
+    assert new_set == expected_op3
