@@ -188,6 +188,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def to_unnamed(self):
         pass
 
+    @abstractmethod
+    def projection_to_unnamed(self, *columns):
+        pass
+
     def __lt__(self, other):
         raise NotImplementedError()
 

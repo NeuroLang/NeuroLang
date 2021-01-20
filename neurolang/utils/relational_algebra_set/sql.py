@@ -676,6 +676,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return self.dee()
         return self._do_set_operation(other, except_)
 
+    def __hash__(self):
+        if self._table is None:
+            return hash((tuple(), None))
+        return hash(tuple(self.columns, self.as_numpy_array().tobytes()))
+
 
 class NamedRelationalAlgebraFrozenSet(
     RelationalAlgebraFrozenSet, abc.NamedRelationalAlgebraFrozenSet
@@ -1099,11 +1104,11 @@ class NamedRelationalAlgebraFrozenSet(
             query, self._parent_tables
         )
 
-    def selection_columns(self, select_criteria):
-        pass
-
-    def as_numpy_array():
-        pass
+    def projection_to_unnamed(self, *columns):
+        unnamed_self = self.to_unnamed()
+        named_columns = self.columns
+        columns = tuple(named_columns.index(c) for c in columns)
+        return unnamed_self.projection(*columns)
 
 
 class RelationalAlgebraSet(
