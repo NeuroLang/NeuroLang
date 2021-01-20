@@ -839,7 +839,33 @@ class NamedRelationalAlgebraFrozenSet(
         on = [c for c in self.columns if c in other.columns]
         if len(on) == 0:
             return self.cross_product(other)
+        return self._do_join(other, on, isouter=False)
+        
 
+    def left_naturaljoin(self, other):
+        on = [c for c in self.columns if c in other.columns]
+        if len(on) == 0:
+            return self
+        return self._do_join(other, on, isouter=True)
+
+    def _do_join(self, other, on, isouter=False):
+        """
+        Performs the join on the two sets.
+
+        Parameters
+        ----------
+        other : NamedRelationalAlgebraFrozenSet
+            The other set
+        on : Iterable[sqlalchemy.Columns]
+            The columns to join on
+        isouter : bool, optional
+            If True, performs a left outer join, by default False
+
+        Returns
+        -------
+        NamedRelationalAlgebraFrozenSet
+            The joined set
+        """
         self._try_to_create_index(on)
         other._try_to_create_index(on)
         on_clause = and_(
@@ -855,11 +881,12 @@ class NamedRelationalAlgebraFrozenSet(
         if other._table_name == self._table_name:
             other_join_table = other_join_table.alias()
         query = select(select_cols).select_from(
-            self._table.join(other_join_table, on_clause)
+            self._table.join(other_join_table, on_clause, isouter=isouter)
         )
         return NamedRelationalAlgebraFrozenSet.create_view_from_query(
             query, self._parent_tables | other._parent_tables
         )
+
 
     def _try_to_create_index(self, on):
         """
@@ -934,9 +961,6 @@ class NamedRelationalAlgebraFrozenSet(
     def equijoin(self, other, join_indices, return_mappings=False):
         raise NotImplementedError()
 
-    def left_naturaljoin(self, other):
-        pass
-
     def rename_column(self, src, dst):
         if (dst) in self.columns:
             raise ValueError(
@@ -980,24 +1004,7 @@ class NamedRelationalAlgebraFrozenSet(
         https://docs.sqlalchemy.org/en/14/dialects/sqlite.html#regular-expression-support
         https://www.sqlite.org/appfunc.html
         https://docs.python.org/2/library/sqlite3.html#sqlite3.Connection.create_function
-        
 
-        Parameters
-        ----------
-        group_columns : [type]
-            [description]
-        aggregate_function : [type]
-            [description]
-
-        Returns
-        -------
-        [type]
-            [description]
-
-        Raises
-        ------
-        ValueError
-            [description]
         """
         if isinstance(group_columns, str) or not isinstance(
             group_columns, Iterable

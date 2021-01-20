@@ -13,7 +13,7 @@ import pytest
 @pytest.fixture(scope="session", autouse=True)
 def mock_sql_engine():
     """yields a SQLAlchemy engine which is suppressed after the test session"""
-    engine_ = create_engine("sqlite:///test.db", echo=True)
+    engine_ = create_engine("sqlite:///test.db", echo=False)
 
     with patch.object(SQLAEngineFactory, "get_engine") as _fixture:
         _fixture.return_value = engine_
@@ -531,22 +531,53 @@ def test_aggregate():
     assert expected_sum == new_set
     new_set = initial_set.aggregate(["x", "y"], {"z": "count"})
     assert expected_str == new_set
-    # new_set = initial_set.aggregate(["x", "y"], {"z": lambda x: max(x) - 1})
-    # assert expected_lambda == new_set
-    # new_set = initial_set.aggregate(
-    #    ["x", "y"],
-    #    [
-    #        ("z", "z", lambda x: max(x) - 1),
-    #    ],
-    # )
-    # assert expected_lambda == new_set
-    # new_set = initial_set2.aggregate(
-    #     ["x", "y"], {"z": lambda x: max(x) - 1, "w": "count"}
-    # )
-    # assert expected_op2 == new_set
 
-    new_set = initial_set2.aggregate(
-        ["x", "y"], {'qq': lambda t: sum(t.w + t.z)}
+def test_named_relational_algebra_ra_left_naturaljoin():
+    import numpy as np
+
+    ras_a = NamedRelationalAlgebraFrozenSet(
+        ("z", "y"), [(0, 0), (1, 2), (2, 4), (3, 6), (4, 8)]
     )
 
-    assert new_set == expected_op3
+    ras_b = NamedRelationalAlgebraFrozenSet(
+        ("z", "y", "v"), [(0, 0, 1), (2, 3, 2), (4, 6, 3), (6, 9, 4), (8, 12, 5)]
+    )
+
+    ras_c = NamedRelationalAlgebraFrozenSet(
+        ("y", "v"), [(0, 0), (2, 6), (4, 9), (8, 4)]
+    )
+
+    empty = NamedRelationalAlgebraFrozenSet(("z", "y"), [])
+    dee = NamedRelationalAlgebraFrozenSet.dee()
+    dum = NamedRelationalAlgebraFrozenSet.dum()
+
+    expected_a_b = NamedRelationalAlgebraFrozenSet(
+        ("z", "y", "v")
+        , [(0, 0, 1), (1, 2, np.nan), (2, 4, np.nan), (3, 6, np.nan), (4, 8, np.nan)]
+    )
+
+    expected_b_a = ras_b
+
+    expected_a_c = NamedRelationalAlgebraFrozenSet(
+        ("y", "z", "v"), [(0, 0, 0), (2, 1, 6), (4, 2, 9), (6, 3, np.nan), (8, 4, 4)]
+    )
+
+    res = ras_a.left_naturaljoin(ras_b)
+    assert res == expected_a_b
+
+    res = ras_b.left_naturaljoin(ras_a)
+    assert res == expected_b_a
+
+    res = ras_a.left_naturaljoin(ras_a)
+    assert res == ras_a
+
+    res = ras_a.left_naturaljoin(ras_c)
+    assert res == expected_a_c
+
+
+    assert len(ras_a.left_naturaljoin(empty)) == 5
+    assert len(empty.left_naturaljoin(ras_a)) == 0
+    assert ras_a.left_naturaljoin(dee) == ras_a
+    assert dee.left_naturaljoin(ras_a) == dee
+    assert ras_a.left_naturaljoin(dum) == ras_a
+    assert dum.left_naturaljoin(ras_a) == dum
