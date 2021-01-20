@@ -693,7 +693,7 @@ class NamedRelationalAlgebraFrozenSet(
     """
 
     def __init__(self, columns=None, iterable=None):
-        if isinstance(columns, NamedRelationalAlgebraFrozenSet):
+        if isinstance(columns, RelationalAlgebraFrozenSet):
             iterable = columns
             columns = columns.columns
         self._table_name = self._new_name()
@@ -702,8 +702,11 @@ class NamedRelationalAlgebraFrozenSet(
         self._is_view = False
         self._parent_tables = {}
         self._check_for_duplicated_columns(columns)
-        if isinstance(iterable, NamedRelationalAlgebraFrozenSet):
-            self._init_from(iterable)
+        if isinstance(iterable, RelationalAlgebraFrozenSet):
+            if columns is None or columns == iterable.columns:
+                self._init_from(iterable)
+            else:
+                self._init_from_and_rename(iterable, columns)
         elif columns is not None and len(columns) > 0:
             self._create_insert_table(iterable, columns)
 
@@ -745,6 +748,48 @@ class NamedRelationalAlgebraFrozenSet(
                 "Duplicated column names are not allowed. "
                 f"Found the following duplicated columns: {dup_cols}"
             )
+
+    def _init_from_and_rename(self, other, columns):
+        """
+        Initialize this set using the other set's values while also
+        renaming the columns. Called on init when a new
+        list of columns is passed along with a set to init from.
+        This method creates a view pointing to the other table
+        with new column names.
+
+        Parameters
+        ----------
+        other : NamedRelationalAlgebraFrozenSet
+            The set to initialize from
+        columns : List[str]
+            The list of new column names
+
+        Raises
+        ------
+        ValueError
+            Raised if the list of new column names does not have the same
+            length as the other set's column names.
+        """
+        # if len(columns) != len(other.columns):
+        #     raise ValueError(
+        #         "Invalid number of columns. Expected {} columns, got {}".format(
+        #             len(other.columns), len(columns)
+        #         )
+        #     )
+        if other._table is not None:
+            query = select(
+                [c.label(str(nc)) for c, nc in zip(other.sql_columns, columns)]
+            ).select_from(other._table)
+            view = CreateView(self._table_name, query)
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                conn.execute(view)
+            t = table(self._table_name)
+            for c in query.c:
+                c._make_proxy(t)
+            self._table = t
+            self._is_view = True
+            self._count = other._count
+            self._parent_tables = other._parent_tables
 
     @classmethod
     def dee(cls):
