@@ -840,7 +840,6 @@ class NamedRelationalAlgebraFrozenSet(
         if len(on) == 0:
             return self.cross_product(other)
         return self._do_join(other, on, isouter=False)
-        
 
     def left_naturaljoin(self, other):
         on = [c for c in self.columns if c in other.columns]
@@ -886,7 +885,6 @@ class NamedRelationalAlgebraFrozenSet(
         return NamedRelationalAlgebraFrozenSet.create_view_from_query(
             query, self._parent_tables | other._parent_tables
         )
-
 
     def _try_to_create_index(self, on):
         """
@@ -1010,10 +1008,23 @@ class NamedRelationalAlgebraFrozenSet(
             group_columns, Iterable
         ):
             group_columns = (group_columns,)
+        if len(set(group_columns)) < len(group_columns):
+            raise ValueError("Cannot group on repeated columns")
 
-        agg_cols = []
+        if isinstance(aggregate_function, dict):
+            agg_iter = aggregate_function.items()
+        elif isinstance(aggregate_function, (tuple, list)):
+            agg_iter = aggregate_function
+        else:
+            raise ValueError(
+                "Unsupported aggregate_function: {} of type {}".format(
+                    aggregate_function, type(aggregate_function)
+                )
+            )
+
         connection = None
-        for c, f in aggregate_function.items():
+        agg_cols = []
+        for c, f in agg_iter:
             if isinstance(f, types.BuiltinFunctionType):
                 f = f.__name__
             if callable(f):
@@ -1038,7 +1049,17 @@ class NamedRelationalAlgebraFrozenSet(
                     "to be callable or a string"
                 )
             # c_ = column(str(c))
-            agg_cols.append(f_(tuple_(*[self.sql_columns.get(c_) for c_ in self.columns if c_ not in group_columns])).label(str(c)))
+            agg_cols.append(
+                f_(
+                    tuple_(
+                        *[
+                            self.sql_columns.get(c_)
+                            for c_ in self.columns
+                            if c_ not in group_columns
+                        ]
+                    )
+                ).label(str(c))
+            )
 
         groupby = [self.sql_columns.get(str(c)) for c in group_columns]
         query = (
