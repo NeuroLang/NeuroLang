@@ -48,7 +48,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         >>> a = [(i % 2, i, i * 2) for i in range(5)]
         >>> ras = RelationalAlgebraFrozenSet(a)
         >>> ras
-          0  1  2
+           0  1  2
         0  0  0  0
         1  1  1  2
         2  0  2  4
