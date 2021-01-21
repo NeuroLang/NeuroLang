@@ -55,6 +55,13 @@ def test_named_set_init():
     assert (4, 6) in ras_b
 
 
+def test_is_empty():
+    ras_a = NamedRelationalAlgebraFrozenSet(('x', 'y', 'z'), [])
+    assert ras_a.is_empty()
+    # check that is_empty does not call count()
+    assert ras_a._count is None
+
+
 def test_try_to_create_index():
     """
     try_to_create_index should not create duplicate indexes.

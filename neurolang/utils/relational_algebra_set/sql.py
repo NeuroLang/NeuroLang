@@ -25,7 +25,6 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.sql import table, intersect, union, except_
-from sqlalchemy.exc import ArgumentError
 
 
 class RelationalAlgebraStringExpression(str):
@@ -153,7 +152,17 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return cls()
 
     def is_empty(self):
-        return len(self) == 0
+        # Avoid using len(self) == 0 because len computation is
+        # costly (count(*) over distinct values). Instead, only check if
+        # there is at least one element in the set.        
+        if self._count is not None:
+            return self._count == 0
+        if self._table is None:
+            return True
+        query = select(self.sql_columns).select_from(self._table).limit(1)
+        with SQLAEngineFactory.get_engine().connect() as conn:
+            res = conn.execute(query)
+            return res.fetchone() == None
 
     def is_dum(self):
         return self.arity == 0 and self.is_empty()
@@ -1024,9 +1033,7 @@ class NamedRelationalAlgebraFrozenSet(
                 for c in self.sql_columns
             ]
         ).select_from(self._table)
-        return type(self).create_view_from_query(
-            query, self._parent_tables
-        )
+        return type(self).create_view_from_query(query, self._parent_tables)
 
     def rename_columns(self, renames):
         # prevent duplicated destination columns
@@ -1044,9 +1051,7 @@ class NamedRelationalAlgebraFrozenSet(
                 for c in self.sql_columns
             ]
         ).select_from(self._table)
-        return type(self).create_view_from_query(
-            query, self._parent_tables
-        )
+        return type(self).create_view_from_query(query, self._parent_tables)
 
     def aggregate(self, group_columns, aggregate_function):
         """
@@ -1125,9 +1130,7 @@ class NamedRelationalAlgebraFrozenSet(
                 query, self._parent_tables, connection=connection
             )
         try:
-            table = type(self).create_table_from_query(
-                query, connection
-            )
+            table = type(self).create_table_from_query(query, connection)
             return table
         finally:
             connection.close()
