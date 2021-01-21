@@ -15,7 +15,7 @@ def mock_sql_engine():
     """yields a SQLAlchemy engine which is suppressed after the test session"""
     engine_ = create_engine("sqlite:///test.db", echo=False)
 
-    with patch.object(SQLAEngineFactory, "get_engine") as _fixture:
+    with patch.object(SQLAEngineFactory, "_create_engine") as _fixture:
         _fixture.return_value = engine_
         yield _fixture
 
@@ -155,7 +155,6 @@ def test_named_iter_and_fetch_one():
     res = list(iter(ras_a))
     assert res == a
     assert ras_a.fetch_one() in res
-    print(ras_a.fetch_one())
 
     res_dee = NamedRelationalAlgebraFrozenSet.dee()
     assert list(iter(res_dee)) == [tuple()]
@@ -190,16 +189,16 @@ def test_relational_algebra_ra_selection():
     assert ras_0 == a_sel
 
     # Select elements where the first parameter is 0
-    # ras_0 = ras.selection(lambda x: x[0] == 0)
-    # assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 0)
+    ras_0 = ras.selection(lambda x: x[0] == 0)
+    assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 0)
 
-    # # Select elements where the col1 has values that are odd
-    # ras_0 = ras.selection({1: lambda x: x % 2 == 1})
-    # assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1)
+    # Select elements where the col1 has values that are odd
+    ras_0 = ras.selection({1: lambda x: x % 2 == 1})
+    assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1)
 
-    # # Select elements where the col0 is 1 and col2 > 2
-    # ras_0 = ras.selection({0: 1, 2: lambda x: x > 2})
-    # assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1 and i > 1)
+    # Select elements where the col0 is 1 and col2 > 2
+    ras_0 = ras.selection({0: 1, 2: lambda x: x > 2})
+    assert ras_0 == set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1 and i > 1)
 
     assert RelationalAlgebraSet.dum().selection({0: 1}).is_empty()
 
@@ -210,11 +209,9 @@ def test_named_relational_algebra_ra_selection():
     ras = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), a)
 
     ras_0 = ras.selection({"x": 1})
-    print(ras_0)
     a_sel = NamedRelationalAlgebraFrozenSet(
         ras.columns, set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1)
     )
-    print(a_sel)
     assert ras_0 == a_sel
 
     ras_0 = ras.selection({"x": 1, "y": 2})
@@ -224,11 +221,11 @@ def test_named_relational_algebra_ra_selection():
     )
     assert ras_0 == a_sel
 
-    # ras_0 = ras.selection({"x": lambda x: x == 1, "y": lambda y: y == 2})
-    # assert ras_0 == a_sel
+    ras_0 = ras.selection({"x": lambda x: x == 1, "y": lambda y: y == 2})
+    assert ras_0 == a_sel
 
-    # ras_0 = ras.selection(lambda t: t.x == 1 and t.y == 2)
-    # assert ras_0 == a_sel
+    ras_0 = ras.selection(lambda t: t.x == 1 and t.y == 2)
+    assert ras_0 == a_sel
 
     ras_0 = ras.selection(
         RelationalAlgebraStringExpression("x == 1 and y == 2")
