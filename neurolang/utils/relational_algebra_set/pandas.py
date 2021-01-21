@@ -853,6 +853,8 @@ class NamedRelationalAlgebraFrozenSet(
             if other.is_dee():
                 return self.dum()
             return self.dee()
+        self._drop_duplicates_if_needed()
+        other._drop_duplicates_if_needed()
         new_container = self._container.merge(
             other._container, indicator=True, how="left"
         )
