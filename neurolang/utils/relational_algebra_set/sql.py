@@ -24,7 +24,8 @@ from sqlalchemy import (
     tuple_,
     create_engine,
 )
-from sqlalchemy.sql import table, intersect, union, except_, column
+from sqlalchemy.sql import table, intersect, union, except_
+from sqlalchemy.exc import ArgumentError
 
 
 class RelationalAlgebraStringExpression(str):
@@ -500,7 +501,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 self._table.join(other_join_table, on_clause)
             )
 
-        return RelationalAlgebraFrozenSet.create_view_from_query(
+        return type(self).create_view_from_query(
             query, self._parent_tables | other._parent_tables
         )
 
@@ -565,7 +566,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                     t_out = tuple(row)
                 yield t_out, group
 
-    def projection(self, *columns):
+    def projection(self, *columns, reindex=True):
         """
         Project the set on the specified columns. Creates a view with only the
         specified columns.
@@ -581,9 +582,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 new._count = 1
             return new
 
-        query = select(
-            [self.sql_columns.get(str(c)) for c in columns]
-        ).select_from(self._table)
+        if reindex:
+            proj_columns = [
+                self.sql_columns.get(str(c)).label(str(i))
+                for i, c in enumerate(columns)
+            ]
+        else:
+            proj_columns = [self.sql_columns.get(str(c)) for c in columns]
+        query = select(proj_columns).select_from(self._table)
         return type(self).create_view_from_query(query, self._parent_tables)
 
     def __repr__(self):
@@ -770,12 +776,6 @@ class NamedRelationalAlgebraFrozenSet(
             Raised if the list of new column names does not have the same
             length as the other set's column names.
         """
-        # if len(columns) != len(other.columns):
-        #     raise ValueError(
-        #         "Invalid number of columns. Expected {} columns, got {}".format(
-        #             len(other.columns), len(columns)
-        #         )
-        #     )
         if other._table is not None:
             query = select(
                 [c.label(str(nc)) for c, nc in zip(other.sql_columns, columns)]
@@ -833,6 +833,9 @@ class NamedRelationalAlgebraFrozenSet(
             return []
         return self._table.c
 
+    def projection(self, *columns):
+        return super().projection(*columns, reindex=False)
+
     def cross_product(self, other):
         """
         Cross product with other set.
@@ -862,7 +865,7 @@ class NamedRelationalAlgebraFrozenSet(
             )
 
         query = select([self._table, other._table])
-        return NamedRelationalAlgebraFrozenSet.create_view_from_query(
+        return type(self).create_view_from_query(
             query, self._parent_tables | other._parent_tables
         )
 
@@ -932,7 +935,7 @@ class NamedRelationalAlgebraFrozenSet(
         query = select(select_cols).select_from(
             self._table.join(other_join_table, on_clause, isouter=isouter)
         )
-        return NamedRelationalAlgebraFrozenSet.create_view_from_query(
+        return type(self).create_view_from_query(
             query, self._parent_tables | other._parent_tables
         )
 
@@ -1021,7 +1024,7 @@ class NamedRelationalAlgebraFrozenSet(
                 for c in self.sql_columns
             ]
         ).select_from(self._table)
-        return NamedRelationalAlgebraFrozenSet.create_view_from_query(
+        return type(self).create_view_from_query(
             query, self._parent_tables
         )
 
@@ -1041,7 +1044,7 @@ class NamedRelationalAlgebraFrozenSet(
                 for c in self.sql_columns
             ]
         ).select_from(self._table)
-        return NamedRelationalAlgebraFrozenSet.create_view_from_query(
+        return type(self).create_view_from_query(
             query, self._parent_tables
         )
 
@@ -1118,11 +1121,11 @@ class NamedRelationalAlgebraFrozenSet(
             .group_by(*groupby)
         )
         if connection is None:
-            return NamedRelationalAlgebraFrozenSet.create_view_from_query(
+            return type(self).create_view_from_query(
                 query, self._parent_tables, connection=connection
             )
         try:
-            table = NamedRelationalAlgebraFrozenSet.create_table_from_query(
+            table = type(self).create_table_from_query(
                 query, connection
             )
             return table
@@ -1142,12 +1145,14 @@ class NamedRelationalAlgebraFrozenSet(
             return named_tuple_type(*res.fetchone())
 
     def to_unnamed(self):
-        query = select(
-            [c.label(str(i)) for i, c in enumerate(self.sql_columns)]
-        ).select_from(self._table)
-        return RelationalAlgebraFrozenSet.create_view_from_query(
-            query, self._parent_tables
-        )
+        if self._table is not None:
+            query = select(
+                [c.label(str(i)) for i, c in enumerate(self.sql_columns)]
+            ).select_from(self._table)
+            return RelationalAlgebraFrozenSet.create_view_from_query(
+                query, self._parent_tables
+            )
+        return RelationalAlgebraFrozenSet()
 
     def projection_to_unnamed(self, *columns):
         unnamed_self = self.to_unnamed()
