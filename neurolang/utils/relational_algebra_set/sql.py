@@ -9,6 +9,7 @@ from neurolang.utils.relational_algebra_set.sql_helpers import (
 )
 import uuid
 import os
+import re
 
 from . import abstract as abc
 import pandas as pd
@@ -25,6 +26,7 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.sql import table, intersect, union, except_
+from sqlalchemy.event import listen
 
 
 class RelationalAlgebraStringExpression(str):
@@ -44,11 +46,105 @@ class SQLAEngineFactory(ABC):
     """
 
     _engine = None
+    _funcs = {}
+
+    @classmethod
+    def register_function(cls, name, num_params, func, param_names=None):
+        """
+        Register a custom function on the engine factory. This function
+        will be added to each new connection to the SQLite database and can
+        be called from queries.
+        See https://docs.python.org/3/library/
+        sqlite3.html#sqlite3.Connection.create_function
+
+        The sqlite3.create_function method is scoped on each connection and
+        must be invoked with each new connection. Hence registered
+        functions are stored on the SQLAEngineFactory and passed to each
+        new connection with a listener.
+
+        Parameters
+        ----------
+        name : str
+            a unique function name
+        num_params : int
+            the number of params for the function
+        func : callable
+            the function to be called
+        param_names : List[str], optional
+            if given, the function will be called with the arguments casted
+            as a namedtuple with given field_names, by default None
+
+        Example
+        -------
+        Registering the following function will let you call the my_sum
+        function from an SQL query
+        >>> mysum = lambda r: r.x + r.y
+        >>> SQLAEngineFactory.register_function(
+                "my_sum", 2, mysum, ["x", "y"]
+            )
+
+        You can then use the my_sum function in SQL:
+        >>> SELECT * FROM users WHERE my_sum(users.parents, users.kids) > 5
+        """
+
+        def _transform_value(*v):
+            if v is None:
+                return v
+            if len(v) > 1:
+                if param_names is not None and cls._check_namedtuple_names(param_names):
+                    # Pass arguments as namedtuple
+                    named_tuple_type = namedtuple(name, param_names)
+                    named_v = named_tuple_type(*v)
+                    return func(named_v)
+                # Pass arguments as tuple
+                return func(v)
+            # Pass single argument value
+            return func(v[0])
+
+        cls._funcs[(name, num_params)] = _transform_value
+
+    @staticmethod
+    def _check_namedtuple_names(field_names):
+        """
+        Checks that the given field_names are valid field names for
+        namedtuples. Namedtuples do not accept field names which start
+        with a digit or an underscore.
+
+        Parameters
+        ----------
+        field_names : List[str]
+            field names
+
+        Returns
+        -------
+        bool
+            True if all field names are valid
+        """
+        valid_name = re.compile("^[^0-9_]")
+        return all(valid_name.match(n) is not None for n in field_names)
+
+    @classmethod
+    def _on_connect(cls, dbapi_con, connection_record):
+        """
+        Listener callback. Called each time cls._engine.connect() is called.
+        See https://docs.sqlalchemy.org/en/14/core/event.html on events in
+        SQLAlchemy.
+
+        Parameters
+        ----------
+        dbapi_con : sqlite3.Connection
+            a DBAPI connection
+        connection_record : sqlalchemy.pool._ConnectionRecord
+            the _ConnectionRecord managing the DBAPI connection.
+        """
+        for (name, num_params), func in cls._funcs.items():
+            dbapi_con.create_function(name, num_params, func)
 
     @classmethod
     def get_engine(cls):
         """
         Get the SQLA engine.
+        Registers the _on_connect listener on engine creation.
 
         Returns
         -------
@@ -57,6 +153,7 @@ class SQLAEngineFactory(ABC):
         """
         if cls._engine == None:
             cls._engine = cls._create_engine(echo=False)
+            listen(cls._engine, "connect", cls._on_connect)
         return cls._engine
 
     @staticmethod
@@ -93,8 +190,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             self._create_insert_table(iterable)
 
     @staticmethod
-    def _new_name():
-        return "table_" + str(uuid.uuid4()).replace("-", "_")
+    def _new_name(prefix="table_"):
+        return prefix + str(uuid.uuid4()).replace("-", "_")
 
     @classmethod
     def create_view_from(cls, other):
@@ -154,7 +251,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def is_empty(self):
         # Avoid using len(self) == 0 because len computation is
         # costly (count(*) over distinct values). Instead, only check if
-        # there is at least one element in the set.        
+        # there is at least one element in the set.
         if self._count is not None:
             return self._count == 0
         if self._table is None:
@@ -404,17 +501,26 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         """
         if self.is_empty():
             return type(self)()
-        query = select(self.sql_columns).select_from(self._table)
 
+        query = select(self.sql_columns).select_from(self._table)
         if callable(select_criteria):
-            raise NotImplementedError(
-                "Arbitrary python expressions not allowed"
-            )
+            lambda_name = self._new_name("lambda")
+            SQLAEngineFactory.register_function(lambda_name, len(self.sql_columns), select_criteria, param_names=self.columns)
+            f_ = getattr(func, lambda_name)
+            query = query.where(f_(*self.sql_columns))
         elif isinstance(select_criteria, RelationalAlgebraStringExpression):
             query = query.where(text(select_criteria))
         else:
             for k, v in select_criteria.items():
-                query = query.where(self.sql_columns.get(str(k)) == v)
+                if callable(v):
+                    lambda_name = self._new_name("lambda")
+                    SQLAEngineFactory.register_function(lambda_name, 1, v)
+                    f_ = getattr(func, lambda_name)
+                    query = query.where(f_(self.sql_columns.get(str(k))))
+                elif isinstance(select_criteria, RelationalAlgebraStringExpression):
+                    query = query.where(text(v))
+                else:
+                    query = query.where(self.sql_columns.get(str(k)) == v)
         return type(self).create_view_from_query(query, self._parent_tables)
 
     def selection_columns(self, select_criteria):
