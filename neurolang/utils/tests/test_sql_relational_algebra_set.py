@@ -535,6 +535,25 @@ def test_aggregate():
     assert expected_sum == new_set
     new_set = initial_set.aggregate(["x", "y"], {"z": "count"})
     assert expected_str == new_set
+    new_set = initial_set.aggregate(["x", "y"], {"z": lambda x: max(x) - 1})
+    assert expected_lambda == new_set
+    new_set = initial_set.aggregate(
+       ["x", "y"],
+       [
+           ("z", "z", lambda x: max(x) - 1),
+       ],
+    )
+    assert expected_lambda == new_set
+    new_set = initial_set2.aggregate(
+        ["x", "y"], {"z": lambda x: max(x) - 1, "w": "count"}
+    )
+    assert expected_op2 == new_set
+
+    new_set = initial_set2.aggregate(
+        ["x", "y"], {'qq': lambda t: sum(t.w + t.z)}
+    )
+
+    assert new_set == expected_op3
 
 def test_named_relational_algebra_ra_left_naturaljoin():
     import numpy as np
