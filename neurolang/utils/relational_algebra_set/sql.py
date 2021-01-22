@@ -488,9 +488,6 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             new_table = CreateTableAs(output._table_name, query)
             with SQLAEngineFactory.get_engine().connect() as conn:
                 conn.execute(new_table)
-            t = table(output._table_name)
-            for c in query.c:
-                c._make_proxy(t)
             output._table = Table(
                 output._table_name,
                 MetaData(),
@@ -506,7 +503,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def selection(self, select_criteria):
         """
-        Selection elements from the set matching selection criteria.
+        Select elements from the set matching selection criteria.
 
         Parameters
         ----------
@@ -911,12 +908,6 @@ class NamedRelationalAlgebraFrozenSet(
             The set to initialize from
         columns : List[str]
             The list of new column names
-
-        Raises
-        ------
-        ValueError
-            Raised if the list of new column names does not have the same
-            length as the other set's column names.
         """
         if other._table is not None:
             query = select(
@@ -1188,12 +1179,26 @@ class NamedRelationalAlgebraFrozenSet(
 
     def aggregate(self, group_columns, aggregate_function):
         """
-        Aggregate.
-        For custom aggregate functions see
-        https://docs.sqlalchemy.org/en/14/dialects/sqlite.html#regular-expression-support
-        https://www.sqlite.org/appfunc.html
-        https://docs.python.org/2/library/sqlite3.html#sqlite3.Connection.create_function
+        Group by set values on group_columns, while applying aggregate
+        functions.
 
+        Parameters
+        ----------
+        group_columns : List[str, int]
+            List of columns to group on
+        aggregate_function : Union[Dict[str, Union[callable, str]], 
+                    List[tuple(str, str, Union[callable, str])]]
+            dict of destination column name -> aggregate function
+
+        Returns
+        -------
+        NamedRelationalAlgebraFrozenSet
+            New set with aggregated values as columns
+
+        Raises
+        ------
+        ValueError
+            Raised on unsupported aggregate function
         """
         if isinstance(group_columns, str) or not isinstance(
             group_columns, Iterable
@@ -1214,6 +1219,9 @@ class NamedRelationalAlgebraFrozenSet(
         return type(self).create_view_from_query(query, self._parent_tables)
 
     def _build_aggregate_functions(self, group_columns, aggregate_function):
+        """
+        Create the list of aggregated destination columns.
+        """
         if isinstance(aggregate_function, dict):
             agg_iter = ((k, k, v) for k, v in aggregate_function.items())
         elif isinstance(aggregate_function, (tuple, list)):
@@ -1255,7 +1263,6 @@ class NamedRelationalAlgebraFrozenSet(
                     f"Aggregate function for {src} needs "
                     "to be callable or a string"
                 )
-            # c_ = column(str(c))
             agg_cols.append(f_(*c_).label(str(dst)))
         return agg_cols
 
