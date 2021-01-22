@@ -35,6 +35,27 @@ class RelationalAlgebraStringExpression(str):
 
 
 class CustomAggregateClass(object):
+    """
+    AggregateClass for use with sqlite3.Connection.create_aggregate
+    This Class should have two attributes set on it when created:
+    field_names : List[str] and agg_func : callable.
+    Such as :
+
+    >>> type(
+            'AggSum',
+            (CustomAggregateClass,),
+            {"field_names": ['x', 'y'], "agg_func": staticmethod(
+                lambda r: sum(r.x + r.y)
+            )},
+        )
+
+    SQLite will call step on this class with each value to aggregate,
+    then call finalize to return the aggregated value. In order to be
+    compatible with pandas aggregation mecanism, the step method stores
+    all the values in an array, then calls the given agg_func on the
+    final result.
+    """
+
     def __init__(self):
         self.values = []
 
@@ -50,7 +71,6 @@ class CustomAggregateClass(object):
             # apply the agg_func to the aggregated values 
             # and return the scalar value
             res = agg.apply(self.agg_func).tolist()[0]
-        print("Agg finalized value: {}".format(res))
         return res
 
 
@@ -70,11 +90,27 @@ class SQLAEngineFactory(ABC):
     _aggregates = {}
 
     @classmethod
-    def register_aggregate(cls, name, num_params, f, param_names=None):
+    def register_aggregate(cls, name, num_params, func, param_names=None):
+        """
+        Register a custom aggregate function. This function will be added
+        to each new connection to the SQLite db and can be called from
+        groupby queries.
+
+        Parameters
+        ----------
+        name : str
+            a unique function name
+        num_params : int
+            the number of params for the function
+        func : callable
+            the aggregate function to be called
+        param_names : List[str], optional
+            the string identifiers for the params, by default None
+        """
         agg_class = type(
             name,
             (CustomAggregateClass,),
-            {"field_names": param_names, "agg_func": staticmethod(f)},
+            {"field_names": param_names, "agg_func": staticmethod(func)},
         )
         cls._aggregates[(name, num_params)] = agg_class
 
@@ -283,17 +319,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return cls()
 
     def is_empty(self):
-        # Avoid using len(self) == 0 because len computation is
-        # costly (count(*) over distinct values). Instead, only check if
-        # there is at least one element in the set.
-        if self._count is not None:
-            return self._count == 0
-        if self._table is None:
-            return True
-        query = select(self.sql_columns).select_from(self._table).limit(1)
-        with SQLAEngineFactory.get_engine().connect() as conn:
-            res = conn.execute(query)
-            return res.fetchone() == None
+        return len(self) == 0
 
     def is_dum(self):
         return self.arity == 0 and self.is_empty()
