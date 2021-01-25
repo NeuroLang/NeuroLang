@@ -1,3 +1,4 @@
+from neurolang.utils.relational_algebra_set.pandas import RelationalAlgebraColumn, RelationalAlgebraColumnInt, RelationalAlgebraStringExpression
 from neurolang.utils.relational_algebra_set.sql import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
@@ -108,3 +109,60 @@ def test_natural_join_creates_view():
 
     res = ras_a.naturaljoin(ras_b)
     assert res._is_view == True
+
+def test_extended_projection():
+    initial_set = NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(7, 8), (9, 2)]
+    )
+    expected_sum = NamedRelationalAlgebraFrozenSet(
+        ("z",), [(15,), (11,)]
+    )
+    expected_lambda = NamedRelationalAlgebraFrozenSet(
+        ("z",), [(14,), (10,)]
+    )
+    expected_lambda2 = NamedRelationalAlgebraFrozenSet(
+        ("z", "x"), [(14, 8), (10, 10)]
+    )
+    expected_new_colum_str = NamedRelationalAlgebraFrozenSet(
+        ("x", "z",), [(7, "a",), (9, "a",)]
+    )
+    expected_new_colum_int = NamedRelationalAlgebraFrozenSet(
+        ("z",), [(1,), (1,)]
+    )
+    new_set = initial_set.extended_projection({"z": sum})
+    assert expected_sum == new_set
+    new_set = initial_set.extended_projection(
+        {"z": RelationalAlgebraStringExpression("x+y")}
+    )
+    assert expected_sum == new_set
+    new_set = initial_set.extended_projection({"z": lambda r: r.x + r.y - 1})
+    assert expected_lambda == new_set
+    new_set = initial_set.extended_projection(
+        {
+            "z": lambda r: (r.x + r.y - 1),
+            "x": RelationalAlgebraStringExpression("x+1"),
+        }
+    )
+    assert expected_lambda2 == new_set
+    new_set = initial_set.extended_projection(
+        {"z": "a", "x": RelationalAlgebraStringExpression("x")}
+    )
+    assert expected_new_colum_str == new_set
+    new_set = initial_set.extended_projection({"z": 1})
+    assert expected_new_colum_int == new_set
+
+    new_set = initial_set.extended_projection(
+        {"x": RelationalAlgebraColumn("x")}
+    )
+    assert initial_set.projection("x") == new_set
+
+    base_set = NamedRelationalAlgebraFrozenSet(
+        (1, 2), [(7, 8), (9, 2)]
+    )
+
+    new_set = base_set.extended_projection({
+        "x": RelationalAlgebraColumnInt(1),
+        "y": RelationalAlgebraColumnInt(2)
+    })
+
+    assert initial_set == new_set

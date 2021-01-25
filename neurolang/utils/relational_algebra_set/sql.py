@@ -1,5 +1,9 @@
 from collections import namedtuple
 from collections.abc import Iterable
+from neurolang.utils.relational_algebra_set.pandas import (
+    RelationalAlgebraColumn,
+    RelationalAlgebraStringExpression,
+)
 
 import numpy as np
 import types
@@ -24,14 +28,11 @@ from sqlalchemy import (
     text,
     tuple_,
     create_engine,
+    literal_column,
+    literal,
 )
 from sqlalchemy.sql import table, intersect, union, except_
 from sqlalchemy.event import listen
-
-
-class RelationalAlgebraStringExpression(str):
-    def __repr__(self):
-        return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
 class CustomAggregateClass(object):
@@ -68,7 +69,7 @@ class CustomAggregateClass(object):
             # call the agg_func with the aggregated values
             res = self.agg_func(agg)
         else:
-            # apply the agg_func to the aggregated values 
+            # apply the agg_func to the aggregated values
             # and return the scalar value
             res = agg.apply(self.agg_func).tolist()[0]
         return res
@@ -1186,7 +1187,7 @@ class NamedRelationalAlgebraFrozenSet(
         ----------
         group_columns : List[str, int]
             List of columns to group on
-        aggregate_function : Union[Dict[str, Union[callable, str]], 
+        aggregate_function : Union[Dict[str, Union[callable, str]],
                     List[tuple(str, str, Union[callable, str])]]
             dict of destination column name -> aggregate function
 
@@ -1267,7 +1268,39 @@ class NamedRelationalAlgebraFrozenSet(
         return agg_cols
 
     def extended_projection(self, eval_expressions):
-        pass
+        if self._table is None:
+            return type(self)(
+                columns=list(eval_expressions.keys()), iterable=[]
+            )
+        proj_columns = []
+        for dst_column, operation in eval_expressions.items():
+            if callable(operation):
+                lambda_name = self._new_name("lambda")
+                SQLAEngineFactory.register_function(
+                    lambda_name,
+                    len(self.sql_columns),
+                    operation,
+                    param_names=self.columns,
+                )
+                f_ = getattr(func, lambda_name)
+                proj_columns.append(
+                    f_(*self.sql_columns).label(str(dst_column))
+                )
+            elif isinstance(operation, RelationalAlgebraStringExpression):
+                if str(operation) != str(dst_column):
+                    proj_columns.append(
+                        literal_column(operation).label(str(dst_column))
+                    )
+                    # proj_columns.append(text(operation).label(str(dst_column)))
+            elif isinstance(operation, RelationalAlgebraColumn):
+                proj_columns.append(
+                    self.sql_columns.get(str(operation)).label(str(dst_column))
+                )
+            else:
+                proj_columns.append(literal(operation).label(str(dst_column)))
+
+        query = select(proj_columns).select_from(self._table)
+        return type(self).create_view_from_query(query, self._parent_tables)
 
     def fetch_one(self):
         if self.is_dee():
