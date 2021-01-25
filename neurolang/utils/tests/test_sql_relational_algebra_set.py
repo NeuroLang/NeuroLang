@@ -1,4 +1,4 @@
-from neurolang.utils.relational_algebra_set.pandas import RelationalAlgebraColumn, RelationalAlgebraColumnInt, RelationalAlgebraStringExpression
+from ..relational_algebra_set.abstract import RelationalAlgebraColumnInt, RelationalAlgebraColumnStr, RelationalAlgebraStringExpression
 from neurolang.utils.relational_algebra_set.sql import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
@@ -152,7 +152,7 @@ def test_extended_projection():
     assert expected_new_colum_int == new_set
 
     new_set = initial_set.extended_projection(
-        {"x": RelationalAlgebraColumn("x")}
+        {"x": RelationalAlgebraColumnStr("x")}
     )
     assert initial_set.projection("x") == new_set
 

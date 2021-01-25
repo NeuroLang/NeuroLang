@@ -1,9 +1,5 @@
 from collections import namedtuple
 from collections.abc import Iterable
-from neurolang.utils.relational_algebra_set.pandas import (
-    RelationalAlgebraColumn,
-    RelationalAlgebraStringExpression,
-)
 
 import numpy as np
 import types
@@ -531,7 +527,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             )
             f_ = getattr(func, lambda_name)
             query = query.where(f_(*self.sql_columns))
-        elif isinstance(select_criteria, RelationalAlgebraStringExpression):
+        elif isinstance(
+            select_criteria, abc.RelationalAlgebraStringExpression
+        ):
             query = query.where(text(select_criteria))
         else:
             for k, v in select_criteria.items():
@@ -541,7 +539,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                     f_ = getattr(func, lambda_name)
                     query = query.where(f_(self.sql_columns.get(str(k))))
                 elif isinstance(
-                    select_criteria, RelationalAlgebraStringExpression
+                    select_criteria, abc.RelationalAlgebraStringExpression
                 ):
                     query = query.where(text(v))
                 else:
@@ -1286,13 +1284,14 @@ class NamedRelationalAlgebraFrozenSet(
                 proj_columns.append(
                     f_(*self.sql_columns).label(str(dst_column))
                 )
-            elif isinstance(operation, RelationalAlgebraStringExpression):
+            elif isinstance(operation, abc.RelationalAlgebraStringExpression):
                 if str(operation) != str(dst_column):
                     proj_columns.append(
                         literal_column(operation).label(str(dst_column))
                     )
-                    # proj_columns.append(text(operation).label(str(dst_column)))
-            elif isinstance(operation, RelationalAlgebraColumn):
+                else:
+                    proj_columns.append(self.sql_columns.get(str(operation)))
+            elif isinstance(operation, abc.RelationalAlgebraColumn):
                 proj_columns.append(
                     self.sql_columns.get(str(operation)).label(str(dst_column))
                 )
