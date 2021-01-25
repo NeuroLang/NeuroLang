@@ -1,7 +1,6 @@
 import pytest
 
-from ..relational_algebra_set import (RelationalAlgebraStringExpression,
-                                      pandas, sql)
+from ..relational_algebra_set import (pandas, sql, RelationalAlgebraColumnInt, RelationalAlgebraColumnStr, RelationalAlgebraStringExpression)
 
 
 @pytest.fixture(ids=['pandas', 'sql'], params=[(pandas,), (sql,)])
@@ -534,7 +533,7 @@ def test_named_relational_algebra_ra_selection(ra_module):
     assert ras_0 == a_sel
 
     ras_0 = ras.selection(
-        ra_module.RelationalAlgebraStringExpression("x == 1 and y == 2")
+        RelationalAlgebraStringExpression("x == 1 and y == 2")
     )
     assert ras_0 == a_sel
 
@@ -860,7 +859,7 @@ def test_extended_projection(ra_module):
     new_set = initial_set.extended_projection({"z": sum})
     assert expected_sum == new_set
     new_set = initial_set.extended_projection(
-        {"z": ra_module.RelationalAlgebraStringExpression("x+y")}
+        {"z": RelationalAlgebraStringExpression("x+y")}
     )
     assert expected_sum == new_set
     new_set = initial_set.extended_projection({"z": lambda r: r.x + r.y - 1})
@@ -868,19 +867,19 @@ def test_extended_projection(ra_module):
     new_set = initial_set.extended_projection(
         {
             "z": lambda r: (r.x + r.y - 1),
-            "x": ra_module.RelationalAlgebraStringExpression("x+1"),
+            "x": RelationalAlgebraStringExpression("x+1"),
         }
     )
     assert expected_lambda2 == new_set
     new_set = initial_set.extended_projection(
-        {"z": "a", "x": ra_module.RelationalAlgebraStringExpression("x")}
+        {"z": "a", "x": RelationalAlgebraStringExpression("x")}
     )
     assert expected_new_colum_str == new_set
     new_set = initial_set.extended_projection({"z": 1})
     assert expected_new_colum_int == new_set
 
     new_set = initial_set.extended_projection(
-        {"x": ra_module.RelationalAlgebraColumnStr("x")}
+        {"x": RelationalAlgebraColumnStr("x")}
     )
     assert initial_set.projection("x") == new_set
 
@@ -889,8 +888,8 @@ def test_extended_projection(ra_module):
     )
 
     new_set = base_set.extended_projection({
-        "x": ra_module.RelationalAlgebraColumnInt(1),
-        "y": ra_module.RelationalAlgebraColumnInt(2)
+        "x": RelationalAlgebraColumnInt(1),
+        "y": RelationalAlgebraColumnInt(2)
     })
 
     assert initial_set == new_set

@@ -7,23 +7,6 @@ import pandas as pd
 from . import abstract as abc
 
 
-class RelationalAlgebraStringExpression(str):
-    def __repr__(self):
-        return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
-
-
-class RelationalAlgebraColumn:
-    pass
-
-
-class RelationalAlgebraColumnInt(int, RelationalAlgebraColumn):
-    pass
-
-
-class RelationalAlgebraColumnStr(str, RelationalAlgebraColumn):
-    pass
-
-
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     """
     RelationalAlgebraFrozenSet implementation using in-memory pandas.DataFrame
@@ -203,7 +186,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         self,
         select_criteria: Union[
             Callable,
-            RelationalAlgebraStringExpression,
+            abc.RelationalAlgebraStringExpression,
             Dict[int, Union[int, Callable]],
         ],
     ):
@@ -228,7 +211,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         if callable(select_criteria):
             ix = self._container.apply(select_criteria, axis=1)
-        elif isinstance(select_criteria, RelationalAlgebraStringExpression):
+        elif isinstance(
+            select_criteria, abc.RelationalAlgebraStringExpression
+        ):
             ix = self._container.eval(select_criteria)
         else:
             ix = self._selection_dict(select_criteria)
@@ -644,7 +629,7 @@ class NamedRelationalAlgebraFrozenSet(
             raise ValueError(f"{dst} cannot be in the columns")
         src_idx = self._columns.index(src)
         new_columns = (
-            self._columns[:src_idx] + (dst,) + self._columns[src_idx + 1:]
+            self._columns[:src_idx] + (dst,) + self._columns[src_idx + 1 :]
         )
         new_container = self._container.rename(columns={src: dst})
         return self._light_init_same_structure(
@@ -798,13 +783,13 @@ class NamedRelationalAlgebraFrozenSet(
             )
         new_container = self._container.copy()
         for dst_column, operation in eval_expressions.items():
-            if isinstance(operation, RelationalAlgebraStringExpression):
+            if isinstance(operation, abc.RelationalAlgebraStringExpression):
                 if str(operation) != str(dst_column):
                     new_container = new_container.eval(
                         "{}={}".format(str(dst_column), str(operation)),
                         engine="python",
                     )
-            elif isinstance(operation, RelationalAlgebraColumn):
+            elif isinstance(operation, abc.RelationalAlgebraColumn):
                 new_container[dst_column] = new_container[operation]
             elif callable(operation):
                 new_container[dst_column] = new_container.apply(
