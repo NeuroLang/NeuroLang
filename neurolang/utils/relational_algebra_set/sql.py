@@ -1206,18 +1206,20 @@ class NamedRelationalAlgebraFrozenSet(
         if len(set(group_columns)) < len(group_columns):
             raise ValueError("Cannot group on repeated columns")
 
+        distinct_sub_query = select(self.sql_columns).select_from(self._table).distinct().alias()
         agg_cols = self._build_aggregate_functions(
-            group_columns, aggregate_function
+            group_columns, aggregate_function, distinct_sub_query
         )
-        groupby = [self.sql_columns.get(str(c)) for c in group_columns]
+        groupby = [distinct_sub_query.c.get(str(c)) for c in group_columns]
+        
         query = (
             select(groupby + agg_cols)
-            .select_from(self._table)
+            # .select_from(distinct_from)
             .group_by(*groupby)
         )
         return type(self).create_view_from_query(query, self._parent_tables)
 
-    def _build_aggregate_functions(self, group_columns, aggregate_function):
+    def _build_aggregate_functions(self, group_columns, aggregate_function, distinct_view):
         """
         Create the list of aggregated destination columns.
         """
@@ -1232,15 +1234,14 @@ class NamedRelationalAlgebraFrozenSet(
                 )
             )
         un_grouped_cols = [
-            self.sql_columns.get(c_)
-            for c_ in self.columns
-            if c_ not in group_columns
+            c_ for c_ in distinct_view.c
+            if c_.name not in group_columns
         ]
         agg_cols = []
         for dst, src, f in agg_iter:
-            if src in self.sql_columns:
+            if src in distinct_view.c:
                 # call the aggregate function on only one column
-                c_ = [self.sql_columns.get(src)]
+                c_ = [distinct_view.c.get(src)]
             else:
                 # call the aggregate function on all the non-grouped columns
                 c_ = un_grouped_cols
