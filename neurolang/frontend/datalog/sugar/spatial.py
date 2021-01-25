@@ -259,6 +259,11 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         coord_args: typing.Tuple[Symbol],
     ) -> RelationalAlgebraSet:
         pred_symb = range_pred.functor
+        if pred_symb not in self.symbol_table:
+            raise NotImplementedError(
+                "Cannot solve spatial prior with non-extensional dependency "
+                "(yet)"
+            )
         ra_set = self.symbol_table[pred_symb].value
         args_as_str = list(
             arg.name for arg in range_pred.args if isinstance(arg, Symbol)
