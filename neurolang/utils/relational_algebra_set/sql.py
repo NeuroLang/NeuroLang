@@ -71,6 +71,22 @@ class CustomAggregateClass(object):
         return res
 
 
+class PandasGroupbyFirstAggregateClass(CustomAggregateClass):
+    """
+    Datalog Chase resolution algorithm makes extensive use of pandas
+    built-in `first` function (https://pandas.pydata.org/pandas-docs/
+    stable/reference/api/pandas.core.groupby.GroupBy.first.html).
+    This class replicates the behaviour of this function to make it available
+    in SQLite.
+    """
+
+    def finalize(self):
+        res = self.values[0]
+        if isinstance(res, tuple):
+            return res[0]
+        return res
+
+
 class SQLAEngineFactory(ABC):
     """
     Singleton class to store the SQLAlchemy engine.
@@ -202,6 +218,9 @@ class SQLAEngineFactory(ABC):
         connection_record : sqlalchemy.pool._ConnectionRecord
             the _ConnectionRecord managing the DBAPI connection.
         """
+        dbapi_con.create_aggregate(
+            "first", 1, PandasGroupbyFirstAggregateClass
+        )
         for (name, num_params), func in cls._funcs.items():
             dbapi_con.create_function(name, num_params, func)
         for (name, num_params), klass in cls._aggregates.items():
@@ -1206,12 +1225,17 @@ class NamedRelationalAlgebraFrozenSet(
         if len(set(group_columns)) < len(group_columns):
             raise ValueError("Cannot group on repeated columns")
 
-        distinct_sub_query = select(self.sql_columns).select_from(self._table).distinct().alias()
+        distinct_sub_query = (
+            select(self.sql_columns)
+            .select_from(self._table)
+            .distinct()
+            .alias()
+        )
         agg_cols = self._build_aggregate_functions(
             group_columns, aggregate_function, distinct_sub_query
         )
         groupby = [distinct_sub_query.c.get(str(c)) for c in group_columns]
-        
+
         query = (
             select(groupby + agg_cols)
             # .select_from(distinct_from)
@@ -1219,7 +1243,9 @@ class NamedRelationalAlgebraFrozenSet(
         )
         return type(self).create_view_from_query(query, self._parent_tables)
 
-    def _build_aggregate_functions(self, group_columns, aggregate_function, distinct_view):
+    def _build_aggregate_functions(
+        self, group_columns, aggregate_function, distinct_view
+    ):
         """
         Create the list of aggregated destination columns.
         """
@@ -1234,12 +1260,11 @@ class NamedRelationalAlgebraFrozenSet(
                 )
             )
         un_grouped_cols = [
-            c_ for c_ in distinct_view.c
-            if c_.name not in group_columns
+            c_ for c_ in distinct_view.c if c_.name not in group_columns
         ]
         agg_cols = []
         for dst, src, f in agg_iter:
-            if src in distinct_view.c:
+            if src in distinct_view.c.keys():
                 # call the aggregate function on only one column
                 c_ = [distinct_view.c.get(src)]
             else:
