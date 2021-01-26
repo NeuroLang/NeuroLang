@@ -55,19 +55,21 @@ class CustomAggregateClass(object):
 
     def __init__(self):
         self.values = []
+        self.multi_value = len(self.field_names) > 1
 
     def step(self, *value):
-        self.values.append(value)
+        if self.multi_value:
+            self.values.append(value)
+        else:
+            self.values.append(value[0])
 
     def finalize(self):
-        agg = pd.DataFrame(self.values, columns=self.field_names)
-        if len(agg.columns) > 1:
-            # call the agg_func with the aggregated values
+        # call the agg_func with the aggregated values
+        if self.multi_value:
+            agg = pd.DataFrame(self.values, columns=self.field_names)
             res = self.agg_func(agg)
         else:
-            # apply the agg_func to the aggregated values
-            # and return the scalar value
-            res = agg.apply(self.agg_func).tolist()[0]
+            res = self.agg_func(self.values)
         return res
 
 
@@ -79,11 +81,12 @@ class PandasGroupbyFirstAggregateClass(CustomAggregateClass):
     This class replicates the behaviour of this function to make it available
     in SQLite.
     """
+    def __init__(self):
+        self.values = []
+        self.multi_value = False
 
     def finalize(self):
         res = self.values[0]
-        if isinstance(res, tuple):
-            return res[0]
         return res
 
 
@@ -103,7 +106,7 @@ class SQLAEngineFactory(ABC):
     _aggregates = {}
 
     @classmethod
-    def register_aggregate(cls, name, num_params, func, param_names=None):
+    def register_aggregate(cls, name, num_params, func, param_names):
         """
         Register a custom aggregate function. This function will be added
         to each new connection to the SQLite db and can be called from
@@ -117,8 +120,8 @@ class SQLAEngineFactory(ABC):
             the number of params for the function
         func : callable
             the aggregate function to be called
-        param_names : List[str], optional
-            the string identifiers for the params, by default None
+        param_names : List[str]
+            the string identifiers for the params
         """
         agg_class = type(
             name,
