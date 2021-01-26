@@ -17,7 +17,7 @@ from .expression_processing import (
 from .expressions import Condition, ProbabilisticPredicate
 
 
-def _is_already_translated_qbased_probfact(formula: Implication) -> bool:
+def _qbased_probfact_needs_translation(formula: Implication) -> bool:
     if isinstance(formula.antecedent, FunctionApplication):
         antecedent_pred = formula.antecedent
     elif (
@@ -26,8 +26,8 @@ def _is_already_translated_qbased_probfact(formula: Implication) -> bool:
     ):
         antecedent_pred = formula.antecedent.formulas[0]
     else:
-        return False
-    return (
+        return True
+    return not (
         isinstance(antecedent_pred.functor, Symbol)
         and antecedent_pred.functor.is_fresh
     )
@@ -56,7 +56,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
         Union,
         lambda union: any(
             is_query_based_probfact(formula)
-            and not _is_already_translated_qbased_probfact(formula)
+            and _qbased_probfact_needs_translation(formula)
             for formula in union.formulas
         ),
     )
@@ -65,7 +65,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
         for formula in union.formulas:
             if is_query_based_probfact(
                 formula
-            ) and not _is_already_translated_qbased_probfact(formula):
+            ) and _qbased_probfact_needs_translation(formula):
                 (
                     det_rule,
                     prob_rule,
@@ -81,7 +81,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     @add_match(
         Implication,
         lambda implication: is_query_based_probfact(implication)
-        and not _is_already_translated_qbased_probfact(implication),
+        and _qbased_probfact_needs_translation(implication),
     )
     def query_based_probafact(self, impl):
         (
