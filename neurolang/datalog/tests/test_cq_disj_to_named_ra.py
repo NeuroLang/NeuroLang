@@ -1,6 +1,7 @@
 from operator import contains, eq, gt, mul, not_
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Callable, Tuple
 
+import numpy
 import pytest
 
 from ...exceptions import NeuroLangException
@@ -784,6 +785,92 @@ def test_equality_nested_builtin_application():
             ExtendedProjectionListMember(
                 f(g(C_(ColumnStr("x"))), g(C_(ColumnStr("y")))),
                 str2columnstr_constant("z"),
+            ),
+        ),
+    )
+    assert result == expected
+
+
+def test_arithmetic_extended_projection():
+    x = Symbol("x")
+    z = Symbol("z")
+    P = Symbol("P")
+    conjunction = Conjunction(
+        (P(x), EQ(z, Constant(1) / (Constant(1) + (Constant(3) * x))))
+    )
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NameColumns(
+            Projection(P, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            ExtendedProjectionListMember(
+                Constant(1)
+                / (Constant(1) + (Constant(3) * C_(ColumnStr("x")))),
+                str2columnstr_constant("z"),
+            ),
+        ),
+    )
+    assert result == expected
+
+
+def test_extended_projection_constant_callable():
+    x = Symbol("x")
+    z = Symbol("z")
+    P = Symbol("P")
+    EXP = Constant[Callable[[float], float]](
+        numpy.exp, verify_type=False, auto_infer_type=False
+    )
+    conjunction = Conjunction((P(x), EQ(z, EXP(x))))
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NameColumns(
+            Projection(P, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            ExtendedProjectionListMember(
+                EXP(Constant(ColumnStr("x"))),
+                str2columnstr_constant("z"),
+            ),
+        ),
+    )
+    assert result == expected
+
+
+def test_sigmoid():
+    x = Symbol("x")
+    z = Symbol("z")
+    P = Symbol("P")
+    EXP = Constant[Callable[[float], float]](
+        numpy.exp, verify_type=False, auto_infer_type=False
+    )
+    conjunction = Conjunction(
+        (P(x), EQ(z, Constant(1) / (Constant(1) + EXP(-x))))
+    )
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NameColumns(
+            Projection(P, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            ExtendedProjectionListMember(
+                Constant(1) / (Constant(1) + EXP(-C_(ColumnStr("x")))),
+                str2columnstr_constant("z"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
             ),
         ),
     )

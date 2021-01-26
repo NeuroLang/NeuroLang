@@ -1,5 +1,7 @@
 import operator
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Callable, Tuple
+
+import numpy
 
 from . import expression_walker as ew
 from . import type_system
@@ -11,12 +13,14 @@ from .expressions import (
     Expression,
     FunctionApplication,
     Symbol,
-    Unknown, sure_is_not_pattern,
+    Unknown,
+    sure_is_not_pattern,
 )
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
 from .utils.relational_algebra_set import (
-    RelationalAlgebraColumnInt, RelationalAlgebraColumnStr,
-    RelationalAlgebraStringExpression
+    RelationalAlgebraColumnInt,
+    RelationalAlgebraColumnStr,
+    RelationalAlgebraStringExpression,
 )
 
 eq_ = Constant(operator.eq)
@@ -386,7 +390,8 @@ OPERATOR_STRING = {
     operator.gt: ">",
     operator.lt: "<",
     operator.ge: ">=",
-    operator.le: "<="
+    operator.le: "<=",
+    operator.pow: "**",
 }
 
 
@@ -431,7 +436,33 @@ class StringArithmeticWalker(ew.PatternWalker):
                 ),
             ),
             auto_infer_type=False,
-            verify_type=False,
+        )
+
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
+        lambda fa: (
+            isinstance(fa.functor.value, Callable)
+            and numpy.exp == fa.functor.value
+        ),
+    )
+    def numpy_exponential(self, fa):
+        return Constant[RelationalAlgebraStringExpression](
+            RelationalAlgebraStringExpression(
+                "exp({})".format(self.walk(fa.args[0]).value)
+            ),
+            auto_infer_type=False,
+        )
+
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
+        lambda fa: fa.functor.value == operator.neg,
+    )
+    def negative_value(self, fa):
+        return Constant[RelationalAlgebraStringExpression](
+            RelationalAlgebraStringExpression(
+                "-({})".format(self.walk(fa.args[0]).value)
+            ),
+            auto_infer_type=False,
         )
 
     @ew.add_match(Constant[ColumnStr])
@@ -439,31 +470,27 @@ class StringArithmeticWalker(ew.PatternWalker):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(cst_col_str.value),
             auto_infer_type=False,
-            verify_type=False,
         )
 
     @ew.add_match(Constant[int])
     def constant_int(self, cst):
         return Constant[RelationalAlgebraStringExpression](
-            str(cst.value),
+            RelationalAlgebraStringExpression(cst.value),
             auto_infer_type=False,
-            verify_type=False,
         )
 
     @ew.add_match(Constant[float])
     def constant_float(self, cst):
         return Constant[RelationalAlgebraStringExpression](
-            str(cst.value),
+            RelationalAlgebraStringExpression(cst.value),
             auto_infer_type=False,
-            verify_type=False,
         )
 
     @ew.add_match(Constant[str])
     def constant_str(self, cst):
         return Constant[RelationalAlgebraStringExpression](
-            f'"{cst.value}"',
+            RelationalAlgebraStringExpression(cst.value),
             auto_infer_type=False,
-            verify_type=False,
         )
 
 
