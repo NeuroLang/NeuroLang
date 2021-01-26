@@ -856,6 +856,23 @@ def test_aggregate_with_duplicates(ra_module):
     assert expected_op2 == new_set
 
 
+def test_aggregate_with_pandas_builtin_functions(ra_module):
+    initial_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(i, i * j) for i in range(3) for j in range(3)]
+    )
+    expected_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(0, 9)]
+    )
+    agg_set = initial_set.aggregate(
+        [],
+        {
+            "x": RelationalAlgebraStringExpression('first'),
+            "y": lambda x: sum(x),
+        },
+    )
+    assert agg_set == expected_set
+
+
 def test_extended_projection(ra_module):
     initial_set = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y"), [(7, 8), (9, 2)]

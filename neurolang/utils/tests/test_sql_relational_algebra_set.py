@@ -113,24 +113,3 @@ def test_natural_join_creates_view():
 
     res = ras_a.naturaljoin(ras_b)
     assert res._is_view == True
-
-
-def test_aggregate_with_duplicates():
-    initial_set = NamedRelationalAlgebraFrozenSet(
-        ("x", "y", "z"), [(7, 8, 1), (7, 8, 9), (7, 8, 1)]
-    )
-    expected_sum = NamedRelationalAlgebraFrozenSet(
-        ("x", "y", "z"), [(7, 8, 10)]
-    )
-
-    new_set = initial_set.aggregate(["x", "y"], {"z": sum})
-    assert expected_sum == new_set
-
-    initial_set2 = NamedRelationalAlgebraFrozenSet(
-        ("w", "x", "y", "z"), [(1, 7, 8, 1), (2, 7, 8, 9), (2, 7, 8, 9)]
-    )
-    expected_op2 = NamedRelationalAlgebraFrozenSet(
-        ("x", "y", "t"), [(7, 8, 13)]
-    )
-    new_set = initial_set2.aggregate(["x", "y"], {"t": lambda t: sum(t.w + t.z)})
-    assert expected_op2 == new_set
