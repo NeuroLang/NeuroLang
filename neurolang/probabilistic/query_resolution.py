@@ -5,8 +5,8 @@ from ..datalog.expression_processing import EQ, conjunct_formulas
 from ..datalog.instance import MapInstance
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
-from ..expressions import Constant, Symbol
-from ..logic import TRUE, Implication, Union
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..logic import TRUE, Conjunction, Implication, Union
 from .cplogic.program import CPLogicProgram
 from .expression_processing import (
     construct_within_language_succ_result,
@@ -15,6 +15,22 @@ from .expression_processing import (
     within_language_succ_query_to_intensional_rule,
 )
 from .expressions import Condition, ProbabilisticPredicate
+
+
+def _is_already_translated_qbased_probfact(formula: Implication) -> bool:
+    if isinstance(formula.antecedent, FunctionApplication):
+        antecedent_pred = formula.antecedent
+    elif (
+        isinstance(formula.antecedent, Conjunction)
+        and len(formula.antecedent.formulas) == 1
+    ):
+        antecedent_pred = formula.antecedent.formulas[0]
+    else:
+        return False
+    return (
+        isinstance(antecedent_pred.functor, Symbol)
+        and antecedent_pred.functor.is_fresh
+    )
 
 
 class QueryBasedProbFactToDetRule(PatternWalker):
@@ -40,14 +56,16 @@ class QueryBasedProbFactToDetRule(PatternWalker):
         Union,
         lambda union: any(
             is_query_based_probfact(formula)
-            and not hasattr(formula, "__QueryBasedProbFactToDetRule__")
+            and not _is_already_translated_qbased_probfact(formula)
             for formula in union.formulas
         ),
     )
     def union_with_query_based_pfact(self, union):
         new_formulas = list()
         for formula in union.formulas:
-            if is_query_based_probfact(formula):
+            if is_query_based_probfact(
+                formula
+            ) and not _is_already_translated_qbased_probfact(formula):
                 (
                     det_rule,
                     prob_rule,
@@ -63,7 +81,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     @add_match(
         Implication,
         lambda implication: is_query_based_probfact(implication)
-        and not hasattr(implication, "__QueryBasedProbFactToDetRule__"),
+        and not _is_already_translated_qbased_probfact(implication),
     )
     def query_based_probafact(self, impl):
         (
@@ -84,14 +102,6 @@ class QueryBasedProbFactToDetRule(PatternWalker):
             prob_symb, impl.consequent.body
         )
         prob_rule = Implication(prob_consequent, det_consequent)
-        # add specific tag to already-processed rule
-        # this is used to prevent an infinite recursion
-        # our first strategy for this was to check that the consequent's
-        # relational symbol was fresh (meaning it was already processed) but
-        # this does not work in combination with other walkers that also
-        # generate fresh consequent relational symbols
-        # TODO: find a better solution than this one
-        prob_rule.__QueryBasedProbFactToDetRule__ = True
         return det_rule, prob_rule
 
 
