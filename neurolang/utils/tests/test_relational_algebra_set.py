@@ -892,15 +892,15 @@ def test_aggregate_with_pandas_builtin_functions(ra_module):
 
 def test_relational_algebra_set_python_type_support(ra_module):
     data = [
-            (5, "dog", frozenset({(1, 2), (5, 6)})),
-            (10, "cat", frozenset({(5, 6), (8, 9)})),
-        ]
+        (5, "dog", frozenset({(1, 2), (5, 6)})),
+        (10, "cat", frozenset({(5, 6), (8, 9)})),
+    ]
     ras_a = ra_module.RelationalAlgebraFrozenSet(data)
     assert data[0] in ras_a
     assert data[1] in ras_a
     assert set(data) == ras_a
 
-    ras_b = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y', 'z'), data)
+    ras_b = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y", "z"), data)
     assert data[0] in ras_b
     assert data[1] in ras_b
 
@@ -976,6 +976,18 @@ def test_extended_projection(ra_module):
     )
 
     assert initial_set == new_set
+
+
+def test_extended_projection_on_dee(ra_module):
+    ras_a = (
+        ra_module.NamedRelationalAlgebraFrozenSet.dee().extended_projection(
+            {"new_col": "b"}
+        )
+    )
+    expected_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("new_col",), [("b",)]
+    )
+    assert ras_a == expected_set
 
 
 def test_rename_columns(ra_module):
