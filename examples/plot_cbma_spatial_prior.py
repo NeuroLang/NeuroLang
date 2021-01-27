@@ -107,7 +107,7 @@ Voxel = nl.add_tuple_set(
 
 nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
 
-with nl.environment as e:
+with nl.scope as e:
     (e.VoxelReported @ e.exp(-e.d / 5.0))[e.x1, e.y1, e.z1, e.s] = (
         e.FocusReported(e.x2, e.y2, e.z2, e.s)
         & e.Voxel(e.x1, e.y1, e.z1)
