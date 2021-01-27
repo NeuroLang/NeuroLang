@@ -105,18 +105,3 @@ def test_natural_join_creates_view():
 
     res = ras_a.naturaljoin(ras_b)
     assert res._is_view == True
-
-
-def test_relational_algebra_set_python_type_support():
-    data = [
-            (5, "dog", frozenset({(1, 2), (5, 6)})),
-            (None, "cat", frozenset({(5, 6), (8, 9)})),
-        ]
-    ras_a = RelationalAlgebraFrozenSet(data)
-    assert data[0] in ras_a
-    assert data[1] in ras_a
-    assert set(data) == ras_a
-
-    ras_b = NamedRelationalAlgebraFrozenSet(('x', 'y', 'z'), data)
-    assert data[0] in ras_b
-    assert data[1] in ras_b

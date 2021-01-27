@@ -7,7 +7,7 @@ from neurolang.utils.relational_algebra_set.sql_helpers import (
     CreateTableAs,
     CreateView,
     map_dtype_to_sqla,
-    SQLAEngineFactory
+    SQLAEngineFactory,
 )
 import uuid
 
@@ -29,10 +29,6 @@ from sqlalchemy import (
     PickleType,
 )
 from sqlalchemy.sql import table, intersect, union, except_
-
-
-
-
 
 
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
@@ -1068,10 +1064,13 @@ class NamedRelationalAlgebraFrozenSet(
         return agg_cols
 
     def extended_projection(self, eval_expressions):
-        if self._table is None:
+        if self.is_empty():
             return type(self)(
                 columns=list(eval_expressions.keys()), iterable=[]
             )
+        elif self.is_dee():
+            return self._extended_projection_on_dee(eval_expressions)
+
         proj_columns = []
         for dst_column, operation in eval_expressions.items():
             if callable(operation):
@@ -1102,6 +1101,16 @@ class NamedRelationalAlgebraFrozenSet(
 
         query = select(proj_columns).select_from(self._table)
         return type(self).create_view_from_query(query, self._parent_tables)
+
+    def _extended_projection_on_dee(self, eval_expressions):
+        """
+        Extended projection when called on Dee to create set with
+        constant values.
+        """
+        return type(self)(
+            columns=eval_expressions.keys(),
+            iterable=[eval_expressions.values()],
+        )
 
     def fetch_one(self):
         if self.is_dee():
