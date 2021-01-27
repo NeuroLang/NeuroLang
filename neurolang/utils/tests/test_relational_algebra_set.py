@@ -7,11 +7,28 @@ from ..relational_algebra_set import (
     RelationalAlgebraColumnStr,
     RelationalAlgebraStringExpression,
 )
+from neurolang.utils.relational_algebra_set.sql_helpers import (
+    SQLAEngineFactory,
+)
+from unittest.mock import patch
+from sqlalchemy import create_engine
 
 
 @pytest.fixture(ids=["pandas", "sql"], params=[(pandas,), (sql,)])
 def ra_module(request):
     return request.param[0]
+
+
+@pytest.fixture(scope="session", autouse=True)
+def mock_sql_engine():
+    """yields a SQLAlchemy engine which is suppressed after the test session"""
+    engine_ = create_engine("sqlite:///test.db", echo=False)
+
+    with patch.object(SQLAEngineFactory, "_create_engine") as _fixture:
+        _fixture.return_value = engine_
+        yield _fixture
+
+    engine_.dispose()
 
 
 def test_relational_algebra_set_semantics_empty(ra_module):
@@ -866,11 +883,26 @@ def test_aggregate_with_pandas_builtin_functions(ra_module):
     agg_set = initial_set.aggregate(
         [],
         {
-            "x": RelationalAlgebraStringExpression('first'),
+            "x": RelationalAlgebraStringExpression("first"),
             "y": lambda x: sum(x),
         },
     )
     assert agg_set == expected_set
+
+
+def test_relational_algebra_set_python_type_support(ra_module):
+    data = [
+            (5, "dog", frozenset({(1, 2), (5, 6)})),
+            (10, "cat", frozenset({(5, 6), (8, 9)})),
+        ]
+    ras_a = ra_module.RelationalAlgebraFrozenSet(data)
+    assert data[0] in ras_a
+    assert data[1] in ras_a
+    assert set(data) == ras_a
+
+    ras_b = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y', 'z'), data)
+    assert data[0] in ras_b
+    assert data[1] in ras_b
 
 
 def test_extended_projection(ra_module):
