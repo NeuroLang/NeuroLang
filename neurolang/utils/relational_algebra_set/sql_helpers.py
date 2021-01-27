@@ -9,7 +9,7 @@ import pandas as pd
 from collections import namedtuple
 from abc import ABC
 from pandas.api.types import infer_dtype
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, Table, BLOB
 from sqlalchemy.schema import DDLElement
 from sqlalchemy.ext import compiler
 from sqlalchemy.event import listen
@@ -64,6 +64,17 @@ def _create_table_as(element, compiler, **kw):
         element.name,
         compiler.sql_compiler.process(element.selectable, literal_binds=True),
     )
+
+@event.listens_for(Table, "column_reflect")
+def _setup_pickletype(inspector, table, column_info):
+    """
+    This listener converts all BLOB column types to PickleType
+    when using SQLA Table reflection to get table info.
+    See : https://docs.sqlalchemy.org/en/13/core/custom_types.html
+    #working-with-custom-types-and-reflection
+    """
+    if isinstance(column_info["type"], BLOB):
+        column_info["type"] = PickleType()
 
 
 class CustomAggregateClass(object):

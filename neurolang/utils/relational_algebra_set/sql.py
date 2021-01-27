@@ -100,19 +100,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             index=False,
             dtype=column_names_and_types,
         )
-        # Reflecting database objects cannot infer column type PickleType from
-        # SQL types (https://docs.sqlalchemy.org/en/13/core/
-        # custom_types.html#working-with-custom-types-and-reflection) so we
-        # need to override their type manually.
-        override_cols = [
-            Column(str(col), PickleType)
-            for col, t in column_names_and_types.items()
-            if isinstance(t, PickleType)
-        ]
         _table = Table(
             self._table_name,
             MetaData(),
-            *override_cols,
             autoload=True,
             autoload_with=SQLAEngineFactory.get_engine(),
         )
