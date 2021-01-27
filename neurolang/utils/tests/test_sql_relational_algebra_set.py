@@ -1,12 +1,7 @@
-from ..relational_algebra_set.abstract import (
-    RelationalAlgebraColumnInt,
-    RelationalAlgebraColumnStr,
-    RelationalAlgebraStringExpression,
-)
+from neurolang.utils.relational_algebra_set.sql_helpers import SQLAEngineFactory
 from neurolang.utils.relational_algebra_set.sql import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
-    SQLAEngineFactory,
 )
 from sqlalchemy import create_engine, Table, MetaData
 from unittest.mock import patch
@@ -22,9 +17,6 @@ def mock_sql_engine():
         _fixture.return_value = engine_
         yield _fixture
 
-    # meta = MetaData()
-    # meta.reflect(bind=engine_, views=True)
-    # meta.drop_all(engine_)
     engine_.dispose()
 
 
@@ -113,3 +105,18 @@ def test_natural_join_creates_view():
 
     res = ras_a.naturaljoin(ras_b)
     assert res._is_view == True
+
+
+def test_relational_algebra_set_python_type_support():
+    data = [
+            (5, "dog", frozenset({(1, 2), (5, 6)})),
+            (None, "cat", frozenset({(5, 6), (8, 9)})),
+        ]
+    ras_a = RelationalAlgebraFrozenSet(data)
+    assert data[0] in ras_a
+    assert data[1] in ras_a
+    assert set(data) == ras_a
+
+    ras_b = NamedRelationalAlgebraFrozenSet(('x', 'y', 'z'), data)
+    assert data[0] in ras_b
+    assert data[1] in ras_b
