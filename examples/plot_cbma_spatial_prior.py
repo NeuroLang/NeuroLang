@@ -26,10 +26,12 @@ from neurolang.frontend import ExplicitVBR, ExplicitVBROverlay, NeurolangPDL
 # ----------------
 
 # ##############################################################################
-# Load the MNI atlas and resample it to 4mm voxels
+# Load the MNI Gray Matter mask and resample it to 2mm voxels
 
-mni_t1 = nibabel.load(nilearn.datasets.fetch_icbm152_2009()["t1"])
-mni_t1_4mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 2)
+mni_mask = nilearn.image.resample_img(
+    nibabel.load(nilearn.datasets.fetch_icbm152_2009()["gm"]),
+    np.eye(3) * 2
+)
 
 # ##############################################################################
 # Probabilistic Logic Programming in NeuroLang
@@ -43,12 +45,15 @@ nl = NeurolangPDL()
 # ----------------------------------
 
 @nl.add_symbol
-def agg_create_region_overlay(
-    i: Iterable, j: Iterable, k: Iterable, p: Iterable
+def agg_create_region_overlay_MNI(
+    x: Iterable, y: Iterable, z: Iterable, p: Iterable
 ) -> ExplicitVBR:
-    voxels = np.c_[i, j, k]
+    voxels = nibabel.affines.apply_affine(
+        np.linalg.inv(mni_mask.affine),
+        np.c_[x, y, z]
+    )
     return ExplicitVBROverlay(
-        voxels, mni_t1_4mm.affine, p, image_dim=mni_t1_4mm.shape
+        voxels, mni_mask.affine, p, image_dim=mni_mask.shape
     )
 
 
@@ -75,16 +80,7 @@ ns_database_fn, ns_features_fn = nilearn.datasets.utils._fetch_files(
 )
 
 ns_database = pd.read_csv(ns_database_fn, sep="\t")
-ijk_positions = np.round(
-    nibabel.affines.apply_affine(
-        np.linalg.inv(mni_t1_4mm.affine),
-        ns_database[["x", "y", "z"]].values.astype(float),
-    )
-).astype(int)
-ns_database["i"] = ijk_positions[:, 0]
-ns_database["j"] = ijk_positions[:, 1]
-ns_database["k"] = ijk_positions[:, 2]
-ns_database = ns_database[["i", "j", "k", "id"]]
+ns_database = ns_database[["x", "y", "z", "id"]]
 
 ns_features = pd.read_csv(ns_features_fn, sep="\t")
 ns_docs = ns_features[["pmid"]].drop_duplicates()
@@ -98,15 +94,11 @@ SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
     ns_docs, name="SelectedStudy"
 )
 Voxel = nl.add_tuple_set(
-    np.hstack(
-        np.meshgrid(
-            *(np.arange(0, dim) for dim in mni_t1_4mm.get_fdata().shape)
-        )
-    )
-    .swapaxes(0, 1)
-    .reshape(3, -1)
-    .T,
-    name="Voxel",
+    nibabel.affines.apply_affine(
+        mni_mask.affine,
+        np.transpose(mni_mask.get_fdata().nonzero())
+    ),
+    name='Voxel'
 )
 
 # ##############################################################################
@@ -116,21 +108,21 @@ Voxel = nl.add_tuple_set(
 nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
 
 with nl.environment as e:
-    (e.VoxelReported @ e.exp(-e.d / 5.0))[e.i1, e.j1, e.k1, e.s] = (
-        e.FocusReported(e.i2, e.j2, e.k2, e.s)
-        & e.Voxel(e.i1, e.j1, e.k1)
-        & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
-        & (e.d < 1)
+    (e.VoxelReported @ e.exp(-e.d / 5.0))[e.x1, e.y1, e.z1, e.s] = (
+        e.FocusReported(e.x2, e.y2, e.z2, e.s)
+        & e.Voxel(e.x1, e.y1, e.z1)
+        & (e.d == e.EUCLIDEAN(e.x1, e.y1, e.z1, e.x2, e.y2, e.z2))
+        & (e.d < 4)
     )
     e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]
-    e.Activation[e.i, e.j, e.k] = (
-        e.SelectedStudy[e.s] & e.VoxelReported[e.i, e.j, e.k, e.s]
+    e.Activation[e.x, e.y, e.z] = (
+        e.SelectedStudy[e.s] & e.VoxelReported[e.x, e.y, e.z, e.s]
     )
-    e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
-        e.Activation[e.i, e.j, e.k]
+    e.probmap[e.x, e.y, e.z, e.PROB[e.x, e.y, e.z]] = (
+        e.Activation[e.x, e.y, e.z]
     ) // e.TermAssociation["emotion"]
-    e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
-        e.i, e.j, e.k, e.p
+    e.img[e.agg_create_region_overlay_MNI[e.x, e.y, e.z, e.p]] = e.probmap[
+        e.x, e.y, e.z, e.p
     ]
     img_query = nl.query((e.x,), e.img[e.x])
 
@@ -141,6 +133,7 @@ with nl.environment as e:
 result_image = img_query.fetch_one()[0].spatial_image()
 img = result_image.get_fdata()
 plot = nilearn.plotting.plot_stat_map(
-    result_image, threshold=np.percentile(img[img > 0], 95)
+    result_image, threshold=np.percentile(img[img > 0], 95),
+    display_mode='y'
 )
 nilearn.plotting.show()
