@@ -566,6 +566,13 @@ class Constant(Expression):
                 (self.value, self.type)
             )
 
+    def __reduce__(self):
+        """
+        Make Constants pickable.
+        See https://docs.python.org/3/library/pickle.html#object.__reduce__
+        """
+        return (Constant, (self.value, ))
+
 
 class Lambda(Definition):
     def __init__(self, args, function_expression):
