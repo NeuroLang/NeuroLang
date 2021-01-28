@@ -84,6 +84,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             if len(data.columns) > 0:
                 self._table = self._insert_dataframe_into_db(data)
                 self._parent_tables = {self._table}
+            elif len(data) == 1:
+                self._count = 1
 
     def _insert_dataframe_into_db(self, df):
         column_names_and_types = {

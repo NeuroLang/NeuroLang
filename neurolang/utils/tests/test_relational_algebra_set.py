@@ -84,6 +84,9 @@ def test_relational_algebra_set_semantics(ra_module):
     assert r == ras
     assert r is not ras
 
+    r = ra_module.RelationalAlgebraSet([()])
+    assert r.is_dee()
+
 
 def test_iter_and_fetch_one(ra_module):
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
