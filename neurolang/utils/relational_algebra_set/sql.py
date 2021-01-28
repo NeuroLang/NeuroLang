@@ -711,8 +711,8 @@ class NamedRelationalAlgebraFrozenSet(
                 c._make_proxy(t)
             self._table = t
             self._is_view = True
-            self._count = other._count
-            self._parent_tables = other._parent_tables
+        self._count = other._count
+        self._parent_tables = other._parent_tables
 
     @classmethod
     def dee(cls):
