@@ -762,6 +762,11 @@ def test_named_ra_set_from_other(ra_module):
     assert len(third) == 0
     assert third.columns == ("x",)
 
+    fourth = ra_module.NamedRelationalAlgebraFrozenSet(
+        (), ra_module.RelationalAlgebraFrozenSet.dee()
+    )
+    assert fourth.is_dee()
+
 
 def test_named_ra_union(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
