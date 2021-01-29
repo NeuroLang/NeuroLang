@@ -314,8 +314,6 @@ class OntologyParser:
             cut_graph
         )
 
-        nodes_someValuesFrom = self._parse_list(values)
-
         property_symbol = Symbol(str(parsed_prop))
         rdfs_type = Constant(str(RDF.type))
         y = Symbol.fresh()
