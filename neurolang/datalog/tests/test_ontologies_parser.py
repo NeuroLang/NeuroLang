@@ -125,12 +125,18 @@ def test_some_values_from():
         </owl:Class>
         <owl:ObjectProperty rdf:ID="p"/>
         <owl:Class rdf:ID="c"/>
-        <first:r rdf:ID="i">
+        <first:r rdf:ID="i1">
             <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
             <first:p>
-                <owl:Thing rdf:ID="o" />
+                <owl:Thing rdf:ID="o1" />
             </first:p>
         </first:r>
+        <first:q rdf:ID="i2">
+            <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+            <first:p>
+                <owl:Thing rdf:ID="o2" />
+            </first:p>
+        </first:q>
         </rdf:RDF>
     """
 
@@ -138,7 +144,7 @@ def test_some_values_from():
     answer = Symbol("answer")
     x = Symbol("x")
     y = Symbol("y")
-    test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
+    test_base_q = Union((Implication(answer(x), p2(x, y)),))
 
     onto = OntologyParser(io.StringIO(premise_ontology))
     predicate_tuples, union_of_constraints = onto.parse_ontology()
@@ -169,8 +175,7 @@ def test_some_values_from():
     resp = list(solution_instance["answer"].value.unwrapped_iter())
 
     assert (
-        "http://www.w3.org/2002/03owlt/someValuesFrom/premises001#i",
-        "http://www.w3.org/2002/03owlt/someValuesFrom/premises001#c",
+        "http://www.w3.org/2002/03owlt/someValuesFrom/premises001#i1",
     ) in resp
 
 

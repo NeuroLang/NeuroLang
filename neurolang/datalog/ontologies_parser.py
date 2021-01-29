@@ -310,29 +310,23 @@ class OntologyParser:
             <owl:someValuesFrom rdf:resource="#Physician" />
         </owl:Restriction>
         """
-        parsed_prop, restricted_node, values = self._parse_restriction_nodes(
+        parsed_prop, restricted_node, _ = self._parse_restriction_nodes(
             cut_graph
         )
 
-        nodes_someValuesFrom = self._parse_list(values)
-
-        constraints = Union(())
         property_symbol = Symbol(str(parsed_prop))
         rdfs_type = Constant(str(RDF.type))
         y = Symbol.fresh()
 
-        for value in nodes_someValuesFrom:
-            constraints = Union(
-                constraints.formulas
-                + (
-                    RightImplication(
-                        self._triple(
-                            y, rdfs_type, Constant(str(restricted_node))
-                        ),
-                        property_symbol(y, Constant(str(value))),
+        constraints = Union((
+                RightImplication(
+                    self._triple(
+                        y, rdfs_type, Constant(str(restricted_node))
                     ),
-                )
+                    property_symbol(y, Symbol.fresh()),
+                ),
             )
+        )
 
         return constraints
 
