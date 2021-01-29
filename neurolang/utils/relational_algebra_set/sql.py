@@ -16,7 +16,6 @@ import pandas as pd
 
 from sqlalchemy import (
     Table,
-    Column,
     MetaData,
     Index,
     func,
@@ -26,7 +25,6 @@ from sqlalchemy import (
     tuple_,
     literal_column,
     literal,
-    PickleType,
 )
 from sqlalchemy.sql import table, intersect, union, except_
 
@@ -324,7 +322,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 lambda_name,
                 len(self.sql_columns),
                 select_criteria,
-                param_names=self.columns,
+                params=self.sql_columns.values(),
             )
             f_ = getattr(func, lambda_name)
             query = query.where(f_(*self.sql_columns))
@@ -336,9 +334,10 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             for k, v in select_criteria.items():
                 if callable(v):
                     lambda_name = self._new_name("lambda")
-                    SQLAEngineFactory.register_function(lambda_name, 1, v)
+                    c_ = self.sql_columns.get(str(k))
+                    SQLAEngineFactory.register_function(lambda_name, 1, v, [c_])
                     f_ = getattr(func, lambda_name)
-                    query = query.where(f_(self.sql_columns.get(str(k))))
+                    query = query.where(f_(c_))
                 elif isinstance(
                     select_criteria, abc.RelationalAlgebraStringExpression
                 ):
@@ -1052,7 +1051,7 @@ class NamedRelationalAlgebraFrozenSet(
                     lambda_name,
                     len(c_),
                     f,
-                    param_names=[col.name for col in c_],
+                    params=c_,
                 )
                 f_ = getattr(func, lambda_name)
             elif isinstance(f, str):
@@ -1081,7 +1080,7 @@ class NamedRelationalAlgebraFrozenSet(
                     lambda_name,
                     len(self.sql_columns),
                     operation,
-                    param_names=self.columns,
+                    params=self.sql_columns.values(),
                 )
                 f_ = getattr(func, lambda_name)
                 proj_columns.append(
