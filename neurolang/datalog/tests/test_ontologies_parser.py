@@ -9,7 +9,7 @@ from ...expressions import Symbol
 from ...logic import Union
 from ..chase import Chase
 from ..constraints_representation import DatalogConstraintsProgram
-from ..expressions import Implication
+from ..expressions import Implication, Conjunction
 from ..ontologies_parser import OntologyParser
 from ..ontologies_rewriter import OntologyRewriter
 
@@ -125,20 +125,25 @@ def test_some_values_from():
         </owl:Class>
         <owl:ObjectProperty rdf:ID="p"/>
         <owl:Class rdf:ID="c"/>
-        <first:r rdf:ID="i">
+        <first:r rdf:ID="i1">
             <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
             <first:p>
-                <owl:Thing rdf:ID="o" />
+                <owl:Thing rdf:ID="o1" />
             </first:p>
         </first:r>
-        </rdf:RDF>
+        <first:q rdf:ID="i2">
+            <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+            <first:p>
+                <owl:Thing rdf:ID="o2" />
+            </first:p>
+        </first:q>
     """
 
     p2 = Symbol("http://www.w3.org/2002/03owlt/someValuesFrom/premises001#p2")
     answer = Symbol("answer")
     x = Symbol("x")
     y = Symbol("y")
-    test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
+    test_base_q = Union((Implication(answer(x), p2(x, y)),))
 
     onto = OntologyParser(io.StringIO(premise_ontology))
     predicate_tuples, union_of_constraints = onto.parse_ontology()
@@ -170,7 +175,6 @@ def test_some_values_from():
 
     assert (
         "http://www.w3.org/2002/03owlt/someValuesFrom/premises001#i",
-        "http://www.w3.org/2002/03owlt/someValuesFrom/premises001#c",
     ) in resp
 
 
