@@ -1,5 +1,5 @@
 import operator
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Callable, Tuple
 
 import numpy
 
@@ -13,12 +13,14 @@ from .expressions import (
     Expression,
     FunctionApplication,
     Symbol,
-    Unknown, sure_is_not_pattern,
+    Unknown,
+    sure_is_not_pattern,
 )
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
 from .utils.relational_algebra_set import (
-    RelationalAlgebraColumnInt, RelationalAlgebraColumnStr,
-    RelationalAlgebraStringExpression
+    RelationalAlgebraColumnInt,
+    RelationalAlgebraColumnStr,
+    RelationalAlgebraStringExpression,
 )
 
 eq_ = Constant(operator.eq)
@@ -388,7 +390,8 @@ OPERATOR_STRING = {
     operator.gt: ">",
     operator.lt: "<",
     operator.ge: ">=",
-    operator.le: "<="
+    operator.le: "<=",
+    operator.pow: "**",
 }
 
 
@@ -437,7 +440,10 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     @ew.add_match(
         FunctionApplication(Constant, ...),
-        lambda fa: fa.functor.value == numpy.exp,
+        lambda fa: (
+            isinstance(fa.functor.value, Callable)
+            and numpy.exp == fa.functor.value
+        ),
     )
     def numpy_exponential(self, fa):
         return Constant[RelationalAlgebraStringExpression](

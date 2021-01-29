@@ -38,7 +38,7 @@ def reachable_code_from_query(query, program):
     if query is None:
         return Union(tuple(_get_list_of_intensional_rules(program)))
     predicates = [query.consequent] + list(
-        extract_logic_predicates(query.antecedent)
+        extract_logic_atoms(query.antecedent)
     )
     reachable = set()
     for pred in predicates:
@@ -175,7 +175,7 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
         | grpd_symbs["post_probabilistic"]
     ).issuperset(dep_symbs):
         idb_type = "post_probabilistic"
-    elif not grpd_symbs["probabilistic"].isdisjoint(dep_symbs):
+    elif not (grpd_symbs["probabilistic"] - wlq_symbs).isdisjoint(dep_symbs):
         idb_type = "probabilistic"
     return idb_type
 

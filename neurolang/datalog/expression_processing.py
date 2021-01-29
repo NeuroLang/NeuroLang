@@ -655,7 +655,7 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         pass
 
     @add_match(
-        FunctionApplication,
+        FunctionApplication(Symbol, ...),
         lambda fa: all(isinstance(arg, (Constant, Symbol)) for arg in fa.args),
     )
     def query_predicate(self, qpred):
@@ -671,6 +671,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
                 exp = self.walk(exp)
             cqs.append(exp)
         return maybe_disjunct(cqs)
+
+    @add_match(FunctionApplication(Constant, ...))
+    def builtin_application(self, fa):
+        return fa
 
     def _unify_cq_antecedent(self, cq, qpred):
         mgu = most_general_unifier(cq.consequent, qpred)
@@ -759,10 +763,12 @@ def is_aggregation_predicate(predicate):
     )
 
 
-def is_variable_equality(formula):
+def is_var_equality_to_var_or_const(formula):
     return (
         isinstance(formula, FunctionApplication)
         and formula.functor == EQ
+        and len(formula.args) == 2
+        and all(isinstance(arg, (Symbol, Constant)) for arg in formula.args)
         and any(isinstance(arg, Symbol) for arg in formula.args)
     )
 
@@ -804,7 +810,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
             for arg in implication.consequent.args
         )
         and any(
-            is_variable_equality(formula)
+            is_var_equality_to_var_or_const(formula)
             for formula in extract_logic_predicates(implication.antecedent)
         ),
     )
@@ -816,7 +822,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
             tuple(
                 formula
                 for formula in extract_logic_predicates(implication.antecedent)
-                if not is_variable_equality(formula)
+                if not is_var_equality_to_var_or_const(formula)
             )
         )
         antecedent = replacer.walk(antecedent)
@@ -832,7 +838,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         Implication(FunctionApplication(Symbol, ...), ...),
         lambda implication: is_aggregation_rule(implication)
         and any(
-            is_variable_equality(formula)
+            is_var_equality_to_var_or_const(formula)
             for formula in extract_logic_predicates(implication.antecedent)
         ),
     )
@@ -925,4 +931,42 @@ class CollapseConjunctiveAntecedents(CollapseConjunctions):
             implication.apply(
                 implication.consequent, self.walk(implication.antecedent)
             )
+        )
+
+
+def is_to_be_sorted_equality(formula):
+    return (
+        formula.functor == Constant(operator.eq)
+        and isinstance(formula.args[1], Symbol)
+        and not isinstance(formula.args[0], Symbol)
+    )
+
+
+class EqualitySymbolLeftHandSideNormaliseMixin(PatternWalker):
+    @add_match(
+        Implication(FunctionApplication, Conjunction),
+        lambda implication: any(
+            is_to_be_sorted_equality(conjunct)
+            for conjunct in extract_logic_atoms(implication.antecedent)
+        ),
+    )
+    def sort_antecedent_equalities(self, implication):
+        new_conjuncts = tuple(
+            self.reverse_equality(conjunct)
+            if is_to_be_sorted_equality(conjunct)
+            else conjunct
+            for conjunct in implication.antecedent.formulas
+        )
+        new_implication = Implication(
+            implication.consequent, Conjunction(new_conjuncts)
+        )
+        return self.walk(new_implication)
+
+    @staticmethod
+    def reverse_equality(equality):
+        new_type = typing.Callable[
+            [equality.args[1].type, equality.args[0].type], bool
+        ]
+        return Constant[new_type](operator.eq, auto_infer_type=False)(
+            *reversed(equality.args)
         )

@@ -29,6 +29,9 @@ from ..datalog.aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.expression_processing import (
+    EqualitySymbolLeftHandSideNormaliseMixin,
+)
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
@@ -63,18 +66,21 @@ from ..relational_algebra import (
     RelationalAlgebraStringExpression,
 )
 from . import query_resolution_expressions as fe
-from .datalog.intermediate_sugar import (
+from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
 )
+from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
 class RegionFrontendCPLogicSolver(
+    EqualitySymbolLeftHandSideNormaliseMixin,
     TranslateProbabilisticQueryMixin,
     TranslateToLogicWithAggregation,
     TranslateQueryBasedProbabilisticFactMixin,
+    TranslateEuclideanDistanceBoundMatrixMixin,
     QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
     RegionSolver,

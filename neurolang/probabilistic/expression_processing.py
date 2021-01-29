@@ -10,6 +10,7 @@ from ..datalog.expression_processing import (
     conjunct_formulas,
     enforce_conjunction,
     extract_logic_predicates,
+    extract_logic_atoms,
     reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
@@ -51,10 +52,6 @@ def is_query_based_probfact(expression):
         isinstance(expression, Implication)
         and isinstance(expression.consequent, ProbabilisticPredicate)
         and expression.antecedent != TRUE
-        and not (
-            isinstance(expression.antecedent, FunctionApplication)
-            and expression.antecedent.functor.is_fresh
-        )
     )
 
 
@@ -175,7 +172,7 @@ def separate_deterministic_probabilistic_code(
         initial_unclassified_length = len(unclassified_code)
         preds_antecedent = set(
             p.functor
-            for p in extract_logic_predicates(pred.antecedent)
+            for p in extract_logic_atoms(pred.antecedent)
             if p.functor != pred.consequent.functor
             and not is_builtin(p, program.builtins())
         )
@@ -345,12 +342,12 @@ def lift_optimization_for_choice_predicates(query, program):
     if len(program.pchoice_pred_symbs) == 0:
         return query
     pchoice_eqs = get_probchoice_variable_equalities(
-        query.formulas, program.pchoice_pred_symbs
+        extract_logic_atoms(query), program.pchoice_pred_symbs
     )
     if len(pchoice_eqs) == 0:
         return query
     eq_conj = Conjunction(tuple(EQ(x, y) for x, y in pchoice_eqs))
-    grpd_preds = group_preds_by_functor(query.formulas)
+    grpd_preds = group_preds_by_functor(extract_logic_atoms(query))
     new_formulas = set(eq_conj.formulas)
     for functor, preds in grpd_preds.items():
         if functor not in program.pchoice_pred_symbs:
@@ -381,7 +378,7 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
         for rule in program.symbol_table[pred_symb].formulas:
             stack += [
                 apred.functor
-                for apred in extract_logic_predicates(rule.antecedent)
+                for apred in extract_logic_atoms(rule.antecedent)
                 if apred.functor not in wlq_symbs
             ]
     return False

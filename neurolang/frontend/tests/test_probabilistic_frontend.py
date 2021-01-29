@@ -1,4 +1,5 @@
 import io
+import itertools
 from typing import AbstractSet, Callable, Tuple
 
 import numpy as np
@@ -920,6 +921,72 @@ def test_cbma_two_term_conjunctive_query():
     assert_almost_equal(res, expected)
 
 
+def test_query_based_spatial_prior():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [
+            (5, 5, 5, "s1"),
+            (7, 5, 5, "s1"),
+            (5, 5, 5, "s2"),
+            (10, 10, 10, "s2"),
+            (10, 10, 11, "s2"),
+        ],
+        name="FocusReported",
+    )
+    nl.add_tuple_set(
+        list(itertools.product(range(15), range(15), range(15))), name="Voxel"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="SelectedStudy"
+    )
+    exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
+    with nl.environment as e:
+        (e.VoxelReported @ exp(-(e.d ** 2) / 5.0))[e.i1, e.j1, e.k1, e.s] = (
+            e.FocusReported(e.i2, e.j2, e.k2, e.s)
+            & e.Voxel(e.i1, e.j1, e.k1)
+            & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
+            & (e.d < 1)
+        )
+        e.Activation[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = e.VoxelReported(
+            e.i, e.j, e.k, e.s
+        ) & e.SelectedStudy(e.s)
+        result = nl.query(
+            (e.i, e.j, e.k, e.p), e.Activation(e.i, e.j, e.k, e.p)
+        )
+    expected = RelationalAlgebraFrozenSet(
+        [
+            (4, 5, 5, np.exp(-1 / 5)),
+            (5, 4, 5, np.exp(-1 / 5)),
+            (5, 5, 4, np.exp(-1 / 5)),
+            (5, 5, 5, 1.0),
+            (5, 5, 6, np.exp(-1 / 5)),
+            (5, 6, 5, np.exp(-1 / 5)),
+            (6, 5, 5, np.exp(-1 / 5)),
+            (5, 6, 5, np.exp(-1 / 5)),
+            (6, 5, 5, np.exp(-1 / 5)),
+            (7, 4, 5, np.exp(-1 / 5) / 2),
+            (7, 5, 4, np.exp(-1 / 5) / 2),
+            (7, 5, 5, 1 / 2),
+            (7, 5, 6, np.exp(-1 / 5) / 2),
+            (7, 6, 5, np.exp(-1 / 5) / 2),
+            (8, 5, 5, np.exp(-1 / 5) / 2),
+            (9, 10, 10, np.exp(-1 / 5) / 2),
+            (9, 10, 11, np.exp(-1 / 5) / 2),
+            (10, 9, 10, np.exp(-1 / 5) / 2),
+            (10, 9, 11, np.exp(-1 / 5) / 2),
+            (10, 10, 9, np.exp(-1 / 5) / 2),
+            (10, 10, 10, 0.5 + np.exp(-1 / 5) / 2),
+            (10, 10, 11, 0.5 + np.exp(-1 / 5) / 2),
+            (10, 10, 12, np.exp(-1 / 5) / 2),
+            (10, 11, 10, np.exp(-1 / 5) / 2),
+            (10, 11, 11, np.exp(-1 / 5) / 2),
+            (11, 10, 10, np.exp(-1 / 5) / 2),
+            (11, 10, 11, np.exp(-1 / 5) / 2),
+        ]
+    )
+    assert_almost_equal(result, expected)
+
+
 def test_simple_sigmoid():
     nl = NeurolangPDL()
     unnormalised = nl.add_tuple_set(
@@ -937,3 +1004,35 @@ def test_simple_sigmoid():
         res = nl.query((e.l, e.p), e.Query[e.l, e.p])
     expected = {(l, (1 / (1 + np.exp(-x)))) for l, x in unnormalised.value}
     assert_almost_equal(res, expected)
+
+
+def test_postprob_conjunct_with_wlq_result():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [("s1",), ("s2",)],
+        name="S",
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)],
+        name="SS",
+    )
+    nl.add_tuple_set(
+        [("t1", "s1"), ("t1", "s2"), ("t2", "s2")],
+        name="TIS",
+    )
+
+    nl.add_symbol(len, name="agg_count")
+
+    with nl.environment as e:
+        e.TheWLQ[e.t, e.PROB(e.t)] = e.SS(e.s) & e.TIS(e.t, e.s)
+        e.P[e.t, e.agg_count(e.s)] = e.TIS(e.t, e.s)
+        e.Q[e.agg_count(e.s)] = e.S(e.s)
+        e.TheQuery[e.t, e.N, e.m, e.p] = (
+            e.TheWLQ(e.t, e.p) & e.P(e.t, e.m) & e.Q(e.N)
+        )
+        sol = nl.query((e.t, e.N, e.m, e.p), e.TheQuery(e.t, e.N, e.m, e.p))
+    expected = {
+        ("t1", 2, 2, 1.0),
+        ("t2", 2, 1, 0.5),
+    }
+    assert_almost_equal(sol, expected)

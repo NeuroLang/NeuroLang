@@ -293,3 +293,31 @@ def test_cannot_stratify_qbased_probfact_with_prob_dependency():
     query = Implication(Query(x), Q(x))
     with pytest.raises(UnsupportedProgramError):
         stratify_program(query, program)
+
+
+def test_stratification_deep_post_probabilistic_dependency():
+    code = Union(
+        (
+            Implication(ProbabilisticPredicate(Constant(0.2), P(a)), TRUE),
+            Implication(ProbabilisticPredicate(Constant(0.4), T(a)), TRUE),
+            Implication(Z(x, y, p1, p2), Conjunction((Q(x, p1), R(y, p2)))),
+            Implication(Q(x, ProbabilisticQuery(PROB, (x,))), P(x)),
+            Implication(R(y, ProbabilisticQuery(PROB, (y,))), T(x)),
+        )
+    )
+    program = CPLogicWithQueryBasedProbFactProgram()
+    program.walk(code)
+    query = Implication(Query(x, y, p1, p2), Z(x, y, p1, p2))
+    strats = stratify_program(query, program)
+    assert any(
+        rule.consequent.functor == "Z"
+        for rule in strats["post_probabilistic"].formulas
+    )
+    assert any(
+        rule.consequent.functor == "Q"
+        for rule in strats["probabilistic"].formulas
+    )
+    assert any(
+        rule.consequent.functor == "R"
+        for rule in strats["probabilistic"].formulas
+    )
