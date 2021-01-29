@@ -790,6 +790,7 @@ def test_equality_nested_builtin_application():
     )
     assert result == expected
 
+
 def test_arithmetic_extended_projection():
     x = Symbol("x")
     z = Symbol("z")
