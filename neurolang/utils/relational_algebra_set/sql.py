@@ -384,15 +384,22 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         raise NotImplementedError()
 
     def as_numpy_array(self):
+        return np.array(self._fetchall())
+
+    def as_pandas_dataframe(self):
+        return pd.DataFrame(self._fetchall(), columns=self.columns)
+
+    def _fetchall(self):
         if self.arity > 0 and self._table is not None:
             query = (
                 select(self.sql_columns).select_from(self._table).distinct()
             )
             with SQLAEngineFactory.get_engine().connect() as conn:
                 res = conn.execute(query)
-                return np.array(res.fetchall())
-        else:
-            return np.array([])
+                return res.fetchall()
+        elif self._count == 1:
+            return [()]
+        return []
 
     def equijoin(self, other, join_indices=None):
         """
@@ -672,6 +679,8 @@ class NamedRelationalAlgebraFrozenSet(
             data = []
         if not isinstance(data, pd.DataFrame):
             data = pd.DataFrame(data, columns=columns)
+        else:
+            data.columns=list(columns)
         self._table = self._insert_dataframe_into_db(data)
         self._parent_tables = {self._table}
 
@@ -1116,7 +1125,11 @@ class NamedRelationalAlgebraFrozenSet(
     def fetch_one(self):
         if self.is_dee():
             return tuple()
-        named_tuple_type = namedtuple("tuple", self.columns)
+        try:
+            named_tuple_type = namedtuple("tuple", self.columns)
+        except ValueError:
+            # Invalid column names, just return a tuple
+            return super().fetch_one()
         query = select(self.sql_columns).select_from(self._table).limit(1)
         with SQLAEngineFactory.get_engine().connect() as conn:
             res = conn.execute(query)
