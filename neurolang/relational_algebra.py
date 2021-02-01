@@ -563,15 +563,23 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(Projection(Constant, ...))
     def ra_projection(self, projection):
-        try:
-            relation = projection.relation
-            cols = tuple(v.value for v in projection.attributes)
-            projected_relation = relation.value.projection(*cols)
-        except KeyError:
-            raise ProjectionOverMissingColumnsError(
-                f"Not all columns {projection.attributes} are present in "
-                "the RelationalAlgebra set"
+        relation = projection.relation
+        cols = tuple(v.value for v in projection.attributes)
+        if not(set(cols) <= set(relation.value.columns)):
+            missing_cols = set(cols) - set(relation.value.columns)
+            msg = (
+                "Could not project on columns {}. "
+                "Columns ({}) are missing. "
+                "Relation columns are {}"
             )
+            raise ProjectionOverMissingColumnsError(
+                msg.format(
+                    ", ".join(str(c) for c in cols),
+                    ", ".join(str(c) for c in missing_cols),
+                    ", ".join(str(c) for c in relation.value.columns)
+                )
+            )
+        projected_relation = relation.value.projection(*cols)
         return self._build_relation_constant(projected_relation)
 
     @ew.add_match(

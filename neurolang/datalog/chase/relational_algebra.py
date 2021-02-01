@@ -189,10 +189,10 @@ class ChaseNamedRelationalAlgebraMixin:
             return self.compute_result_set(
                 rule, substitutions, instance, restriction_instance
             )
-        except ProjectionOverMissingColumnsError:
+        except ProjectionOverMissingColumnsError as e:
             raise WrongArgumentsInPredicateError(
-                "There is a preducate in the query with the "
-                "wrong number of arguments."
+                "There is a predicate in the query with the "
+                "wrong number of arguments. {}".format(str(e))
             )
 
     @lru_cache(1024)
