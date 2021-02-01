@@ -69,6 +69,7 @@ def _create_table_as(element, compiler, **kw):
         compiler.sql_compiler.process(element.selectable, literal_binds=True),
     )
 
+
 @event.listens_for(Table, "column_reflect")
 def _setup_pickletype(inspector, table, column_info):
     """
@@ -81,7 +82,19 @@ def _setup_pickletype(inspector, table, column_info):
         column_info["type"] = PickleType()
 
 
-VALID_SQL_PYTHON_TYPES = set([int, str, float, datetime.datetime, datetime.date, datetime.time, bytes, bool, ])
+VALID_SQL_PYTHON_TYPES = set(
+    [
+        int,
+        str,
+        float,
+        datetime.datetime,
+        datetime.date,
+        datetime.time,
+        bytes,
+        bool,
+    ]
+)
+
 
 def _sql_result_processor(value):
     """
@@ -102,7 +115,10 @@ def _sql_result_processor(value):
             return value
     return pickle.dumps(value)
 
-def _sql_params_processor(params: Iterable[sqlalchemy.Column], *values, as_namedtuple=False):
+
+def _sql_params_processor(
+    params: Iterable[sqlalchemy.Column], *values, as_namedtuple=False
+):
     """
     Process the params passed by SQL to a registered function or aggregate
     function by unpacking the values and applying pickle.loads to those
@@ -124,12 +140,12 @@ def _sql_params_processor(params: Iterable[sqlalchemy.Column], *values, as_named
             unpickled.append(pickle.loads(values[i]))
         else:
             unpickled.append(values[i])
-    
+
     if len(unpickled) > 1:
         param_names = [p.name for p in params]
         if as_namedtuple and _check_namedtuple_names(param_names):
             # return arguments as namedtuple
-            named_tuple_type = namedtuple('LambdaArgs', param_names)
+            named_tuple_type = namedtuple("LambdaArgs", param_names)
             named_v = named_tuple_type(*unpickled)
             return named_v
         # return arguments as tuple
@@ -137,24 +153,25 @@ def _sql_params_processor(params: Iterable[sqlalchemy.Column], *values, as_named
     # return single argument value
     return unpickled[0]
 
+
 def _check_namedtuple_names(field_names):
-        """
-        Checks that the given field_names are valid field names for
-        namedtuples. Namedtuples do not accept field names which start
-        with a digit or an underscore.
+    """
+    Checks that the given field_names are valid field names for
+    namedtuples. Namedtuples do not accept field names which start
+    with a digit or an underscore.
 
-        Parameters
-        ----------
-        field_names : List[str]
-            field names
+    Parameters
+    ----------
+    field_names : List[str]
+        field names
 
-        Returns
-        -------
-        bool
-            True if all field names are valid
-        """
-        valid_name = re.compile("^[^0-9_]")
-        return all(valid_name.match(n) is not None for n in field_names)
+    Returns
+    -------
+    bool
+        True if all field names are valid
+    """
+    valid_name = re.compile("^[^0-9_]")
+    return all(valid_name.match(n) is not None for n in field_names)
 
 
 class CustomAggregateClass(object):
@@ -185,12 +202,16 @@ class CustomAggregateClass(object):
         self.multi_value = len(self.params) > 1
 
     def step(self, *value):
-        self.values.append(_sql_params_processor(self.params, *value, as_namedtuple=False))
+        self.values.append(
+            _sql_params_processor(self.params, *value, as_namedtuple=False)
+        )
 
     def finalize(self):
         # call the agg_func with the aggregated values
         if self.multi_value:
-            agg = pd.DataFrame(self.values, columns=[c.name for c in self.params])
+            agg = pd.DataFrame(
+                self.values, columns=[c.name for c in self.params]
+            )
             res = self.agg_func(agg)
         else:
             res = self.agg_func(self.values)
@@ -230,6 +251,7 @@ class SQLAEngineFactory(ABC):
     """
 
     _engine = None
+    _in_memory_sqlite = False
     _funcs = {}
     _aggregates = {}
 
@@ -257,6 +279,8 @@ class SQLAEngineFactory(ABC):
             {"params": params, "agg_func": staticmethod(func)},
         )
         cls._aggregates[(name, num_params)] = agg_class
+        if cls._in_memory_sqlite:
+            cls._engine.raw_connection().create_aggregate(name, num_params, agg_class)
 
     @classmethod
     def register_function(cls, name, num_params, func, params):
@@ -291,7 +315,7 @@ class SQLAEngineFactory(ABC):
         function from an SQL query
         >>> mysum = lambda r: r.x + r.y
         >>> SQLAEngineFactory.register_function(
-                "my_sum", 2, mysum, 
+                "my_sum", 2, mysum,
                 [Column("x", Integer), Column("y", Integer)]
             )
 
@@ -305,6 +329,8 @@ class SQLAEngineFactory(ABC):
             return func(_sql_params_processor(params, *v, as_namedtuple=True))
 
         cls._funcs[(name, num_params)] = _transform_value
+        if cls._in_memory_sqlite:
+            cls._engine.raw_connection().create_function(name, num_params, _transform_value)
 
     @classmethod
     def _on_connect(cls, dbapi_con, connection_record):
@@ -312,6 +338,12 @@ class SQLAEngineFactory(ABC):
         Listener callback. Called each time cls._engine.connect() is called.
         See https://docs.sqlalchemy.org/en/14/core/event.html on events in
         SQLAlchemy.
+        Note: this event is only usefull when using connection pooling with
+        a persistent database. When using an in-memory SQLite database,
+        SQLAlchemy uses only one connection which is kept open all the time,
+        hence the _on_connect listener is called only once.
+        See https://docs.sqlalchemy.org/en/14/dialects/
+        sqlite.html#threading-pooling-behavior
 
         Parameters
         ----------
@@ -344,8 +376,8 @@ class SQLAEngineFactory(ABC):
             listen(cls._engine, "connect", cls._on_connect)
         return cls._engine
 
-    @staticmethod
-    def _create_engine(echo=False):
+    @classmethod
+    def _create_engine(cls, echo=False):
         """
         Create the engine for the singleton.
         The engine is created with the db+dialect string found in the
@@ -358,6 +390,11 @@ class SQLAEngineFactory(ABC):
                 " Set the $NEURO_SQLA_DIALECT environment"
                 " var to change it.".format(dialect)
             )
+        )
+        cls._in_memory_sqlite = (
+            (dialect == "sqlite://")
+            or (dialect == "sqlite:///")
+            or (dialect == ":memory:")
         )
         return create_engine(dialect, echo=echo)
 
