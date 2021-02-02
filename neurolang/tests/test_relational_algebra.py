@@ -2,6 +2,7 @@ import operator
 from typing import AbstractSet, Tuple
 
 import pytest
+import numpy
 
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
 from ..exceptions import NeuroLangException
@@ -868,3 +869,38 @@ def test_eliminate_trivial_projections_optimiser():
     exp1 = Projection(r, (a, b))
     res1 = opt.walk(exp1)
     assert res1 is r
+
+
+def test_numpy_log():
+    r = Constant[AbstractSet[Tuple[str, float]]](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"),
+            iterable=[
+                ("a", 1.0),
+                ("b", 2.0),
+            ],
+        )
+    )
+    projlist = (
+        ExtendedProjectionListMember(
+            fun_exp=Constant(RelationalAlgebraStringExpression("x")),
+            dst_column=Constant(ColumnStr("x")),
+        ),
+        ExtendedProjectionListMember(
+            fun_exp=Constant(numpy.log)(Constant(ColumnStr("y"))),
+            dst_column=Constant(ColumnStr("z")),
+        ),
+    )
+    op = ExtendedProjection(r, projlist)
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(op)
+    expected = Constant[AbstractSet[Tuple[str, float]]](
+        NamedRelationalAlgebraFrozenSet(
+            iterable={
+                ("a", 0.0),
+                ("b", numpy.log(2.0)),
+            },
+            columns=("x", "z"),
+        )
+    )
+    assert result == expected
