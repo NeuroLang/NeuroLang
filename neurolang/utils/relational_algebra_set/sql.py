@@ -330,8 +330,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         RelationalAlgebraFrozenSet
             The set with elements matching the given criteria
         """
-        if self.is_empty():
-            return type(self)()
+        if self._table is None:
+            return self.copy()
 
         query = select(self.sql_columns).select_from(self._table)
         if callable(select_criteria):
@@ -380,8 +380,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         RelationalAlgebraFrozenSet
             The set with selected elements
         """
-        if self.is_empty():
-            return type(self)()
+        if self._table is None:
+            return self.copy()
         query = select(self.sql_columns).select_from(self._table)
         for k, v in select_criteria.items():
             query = query.where(
@@ -630,12 +630,12 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __sub__(self, other):
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__sub__(other)
-        if self.is_empty() or other.is_empty():
-            return self.copy()
         if self.is_dee():
             if other.is_dee():
                 return self.dum()
             return self.dee()
+        if self._table is None or other._table is None:
+            return self.copy()
         return self._do_set_operation(other, except_)
 
     def __hash__(self):
@@ -1202,9 +1202,9 @@ class RelationalAlgebraSet(
 
     def __ior__(self, other):
         if isinstance(other, RelationalAlgebraFrozenSet):
-            if self.is_dee() or other.is_dee() or other.is_empty():
+            if self.is_dee() or other.is_dee() or other._table is None:
                 return self
-            elif self.is_empty():
+            elif self._table is None:
                 self._table_name = self._new_name()
                 self._create_insert_table(other)
                 self._count = None
@@ -1230,10 +1230,10 @@ class RelationalAlgebraSet(
 
     def __isub__(self, other):
         if isinstance(other, RelationalAlgebraFrozenSet):
-            if other.is_empty() or self.is_empty():
-                return self
             if self.is_dee() and other.is_dee():
                 return self.dum()
+            if other._table is None or self._table is None:
+                return self
             if not self._equal_sets_structure(other):
                 raise ValueError(
                     "Relational algebra set operators can only be used on sets"
