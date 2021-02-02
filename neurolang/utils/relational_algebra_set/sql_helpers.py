@@ -5,11 +5,15 @@ on how to integrate views into SQLA.
 """
 import os
 import re
+import pickle
+import datetime
+from typing import Iterable
 import pandas as pd
 from collections import namedtuple
 from abc import ABC
 from pandas.api.types import infer_dtype
 from sqlalchemy import create_engine, event, Table, BLOB
+import sqlalchemy
 from sqlalchemy.schema import DDLElement
 from sqlalchemy.ext import compiler
 from sqlalchemy.event import listen
@@ -77,17 +81,94 @@ def _setup_pickletype(inspector, table, column_info):
         column_info["type"] = PickleType()
 
 
+VALID_SQL_PYTHON_TYPES = set([int, str, float, datetime.datetime, datetime.date, datetime.time, bytes, bool, ])
+
+def _sql_result_processor(value):
+    """
+    Process the result value of a custom function or aggregate function
+    to be returned to SQL. SQL can only handle specific python types. If
+    the value is not an instance of one of VALID_SQL_PYTHON_TYPES, we
+    return the value as bytes using pickle.
+
+    Parameters
+    ----------
+    value : ANY
+        the value to process
+    """
+    if value is None:
+        return value
+    for type_ in VALID_SQL_PYTHON_TYPES:
+        if isinstance(value, type_):
+            return value
+    return pickle.dumps(value)
+
+def _sql_params_processor(params: Iterable[sqlalchemy.Column], *values, as_namedtuple=False):
+    """
+    Process the params passed by SQL to a registered function or aggregate
+    function by unpacking the values and applying pickle.loads to those
+    that are of type PickleType.
+
+    Parameters
+    ----------
+    params : Iterable[sqlalchemy.Column]
+        param column description
+    as_namedtuple: bool, optional
+        if True, return the values as namedtuple
+    values: Any
+        param values
+    """
+    # Unpickle PickleType values
+    unpickled = []
+    for i, p in enumerate(params):
+        if isinstance(p.type, PickleType) or p.type == PickleType:
+            unpickled.append(pickle.loads(values[i]))
+        else:
+            unpickled.append(values[i])
+    
+    if len(unpickled) > 1:
+        param_names = [p.name for p in params]
+        if as_namedtuple and _check_namedtuple_names(param_names):
+            # return arguments as namedtuple
+            named_tuple_type = namedtuple('LambdaArgs', param_names)
+            named_v = named_tuple_type(*unpickled)
+            return named_v
+        # return arguments as tuple
+        return unpickled
+    # return single argument value
+    return unpickled[0]
+
+def _check_namedtuple_names(field_names):
+        """
+        Checks that the given field_names are valid field names for
+        namedtuples. Namedtuples do not accept field names which start
+        with a digit or an underscore.
+
+        Parameters
+        ----------
+        field_names : List[str]
+            field names
+
+        Returns
+        -------
+        bool
+            True if all field names are valid
+        """
+        valid_name = re.compile("^[^0-9_]")
+        return all(valid_name.match(n) is not None for n in field_names)
+
+
 class CustomAggregateClass(object):
     """
     AggregateClass for use with sqlite3.Connection.create_aggregate
     This Class should have two attributes set on it when created:
-    field_names : List[str] and agg_func : callable.
+    params: List[sqlalchemy.Column] and agg_func : callable.
     Such as :
 
     >>> type(
             'AggSum',
             (CustomAggregateClass,),
-            {"field_names": ['x', 'y'], "agg_func": staticmethod(
+            {"params": [Column('x', Integer), Column('y', Integer)],
+             "agg_func": staticmethod(
                 lambda r: sum(r.x + r.y)
             )},
         )
@@ -101,18 +182,15 @@ class CustomAggregateClass(object):
 
     def __init__(self):
         self.values = []
-        self.multi_value = len(self.field_names) > 1
+        self.multi_value = len(self.params) > 1
 
     def step(self, *value):
-        if self.multi_value:
-            self.values.append(value)
-        else:
-            self.values.append(value[0])
+        self.values.append(_sql_params_processor(self.params, *value, as_namedtuple=False))
 
     def finalize(self):
         # call the agg_func with the aggregated values
         if self.multi_value:
-            agg = pd.DataFrame(self.values, columns=self.field_names)
+            agg = pd.DataFrame(self.values, columns=[c.name for c in self.params])
             res = self.agg_func(agg)
         else:
             res = self.agg_func(self.values)
@@ -131,6 +209,9 @@ class PandasGroupbyFirstAggregateClass(CustomAggregateClass):
     def __init__(self):
         self.values = []
         self.multi_value = False
+
+    def step(self, *value):
+        self.values.append(value[0])
 
     def finalize(self):
         res = self.values[0]
@@ -153,7 +234,7 @@ class SQLAEngineFactory(ABC):
     _aggregates = {}
 
     @classmethod
-    def register_aggregate(cls, name, num_params, func, param_names):
+    def register_aggregate(cls, name, num_params, func, params):
         """
         Register a custom aggregate function. This function will be added
         to each new connection to the SQLite db and can be called from
@@ -167,18 +248,18 @@ class SQLAEngineFactory(ABC):
             the number of params for the function
         func : callable
             the aggregate function to be called
-        param_names : List[str]
-            the string identifiers for the params
+        params : List[sqlalchemy.Column]
+            the Column desc for the params
         """
         agg_class = type(
             name,
             (CustomAggregateClass,),
-            {"field_names": param_names, "agg_func": staticmethod(func)},
+            {"params": params, "agg_func": staticmethod(func)},
         )
         cls._aggregates[(name, num_params)] = agg_class
 
     @classmethod
-    def register_function(cls, name, num_params, func, param_names=None):
+    def register_function(cls, name, num_params, func, params):
         """
         Register a custom function on the engine factory. This function
         will be added to each new connection to the SQLite database and can
@@ -199,9 +280,10 @@ class SQLAEngineFactory(ABC):
             the number of params for the function
         func : callable
             the function to be called
-        param_names : List[str], optional
-            if given, the function will be called with the arguments casted
-            as a namedtuple with given field_names, by default None
+        params : List[sqlalchemy.Column]
+            list of sqlalchemy Column describing the params that will be
+            passed to the function when called by SQL. This list is used
+            to process PickleType columns.
 
         Example
         -------
@@ -209,7 +291,8 @@ class SQLAEngineFactory(ABC):
         function from an SQL query
         >>> mysum = lambda r: r.x + r.y
         >>> SQLAEngineFactory.register_function(
-                "my_sum", 2, mysum, ["x", "y"]
+                "my_sum", 2, mysum, 
+                [Column("x", Integer), Column("y", Integer)]
             )
 
         You can then use the my_sum function in SQL:
@@ -219,40 +302,9 @@ class SQLAEngineFactory(ABC):
         def _transform_value(*v):
             if v is None:
                 return v
-            if len(v) > 1:
-                if param_names is not None and cls._check_namedtuple_names(
-                    param_names
-                ):
-                    # Pass arguments as namedtuple
-                    named_tuple_type = namedtuple(name, param_names)
-                    named_v = named_tuple_type(*v)
-                    return func(named_v)
-                # Pass arguments as tuple
-                return func(v)
-            # Pass single argument value
-            return func(v[0])
+            return func(_sql_params_processor(params, *v, as_namedtuple=True))
 
         cls._funcs[(name, num_params)] = _transform_value
-
-    @staticmethod
-    def _check_namedtuple_names(field_names):
-        """
-        Checks that the given field_names are valid field names for
-        namedtuples. Namedtuples do not accept field names which start
-        with a digit or an underscore.
-
-        Parameters
-        ----------
-        field_names : List[str]
-            field names
-
-        Returns
-        -------
-        bool
-            True if all field names are valid
-        """
-        valid_name = re.compile("^[^0-9_]")
-        return all(valid_name.match(n) is not None for n in field_names)
 
     @classmethod
     def _on_connect(cls, dbapi_con, connection_record):
@@ -310,6 +362,14 @@ class SQLAEngineFactory(ABC):
         return create_engine(dialect, echo=echo)
 
 
+def pickle_comparator(x, y):
+    if x == y:
+        return True
+    if type(x) == bytes and type(y) == bytes:
+        return pickle.loads(x) == pickle.loads(y)
+    return False
+
+
 def map_dtype_to_sqla(col):
     """
     Map a pandas.DataFrame column to an SQLA Type by infering data type.
@@ -361,4 +421,4 @@ def map_dtype_to_sqla(col):
     elif col_type == "string":
         return Text
 
-    return PickleType()
+    return PickleType(comparator=pickle_comparator)

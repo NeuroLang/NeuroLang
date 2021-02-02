@@ -559,6 +559,8 @@ class NamedRelationalAlgebraFrozenSet(
             c for c in other.columns if c not in self.columns
         )
 
+        self._drop_duplicates_if_needed()
+        other._drop_duplicates_if_needed()
         new_container = self._container.merge(other._container)
         return self._light_init_same_structure(
             new_container,
@@ -836,6 +838,8 @@ class NamedRelationalAlgebraFrozenSet(
             if other.is_dee():
                 return self.dum()
             return self.dee()
+        self._drop_duplicates_if_needed()
+        other._drop_duplicates_if_needed()
         new_container = self._container.merge(
             other._container, indicator=True, how="left"
         )
@@ -881,6 +885,8 @@ class NamedRelationalAlgebraFrozenSet(
             )
         if self.is_empty():
             return self.copy()
+        self._drop_duplicates_if_needed()
+        other._drop_duplicates_if_needed()
         new_container = pd.merge(
             left=self._container,
             right=other._container,

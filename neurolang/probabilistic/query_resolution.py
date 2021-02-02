@@ -5,8 +5,8 @@ from ..datalog.expression_processing import EQ, conjunct_formulas
 from ..datalog.instance import MapInstance
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
-from ..expressions import Constant, Symbol
-from ..logic import TRUE, Implication, Union
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..logic import TRUE, Conjunction, Implication, Union
 from .cplogic.program import CPLogicProgram
 from .expression_processing import (
     construct_within_language_succ_result,
@@ -15,6 +15,22 @@ from .expression_processing import (
     within_language_succ_query_to_intensional_rule,
 )
 from .expressions import Condition, ProbabilisticPredicate
+
+
+def _qbased_probfact_needs_translation(formula: Implication) -> bool:
+    if isinstance(formula.antecedent, FunctionApplication):
+        antecedent_pred = formula.antecedent
+    elif (
+        isinstance(formula.antecedent, Conjunction)
+        and len(formula.antecedent.formulas) == 1
+    ):
+        antecedent_pred = formula.antecedent.formulas[0]
+    else:
+        return True
+    return not (
+        isinstance(antecedent_pred.functor, Symbol)
+        and antecedent_pred.functor.is_fresh
+    )
 
 
 class QueryBasedProbFactToDetRule(PatternWalker):
@@ -39,13 +55,17 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     @add_match(
         Union,
         lambda union: any(
-            is_query_based_probfact(formula) for formula in union.formulas
+            is_query_based_probfact(formula)
+            and _qbased_probfact_needs_translation(formula)
+            for formula in union.formulas
         ),
     )
     def union_with_query_based_pfact(self, union):
         new_formulas = list()
         for formula in union.formulas:
-            if is_query_based_probfact(formula):
+            if is_query_based_probfact(
+                formula
+            ) and _qbased_probfact_needs_translation(formula):
                 (
                     det_rule,
                     prob_rule,
@@ -58,15 +78,17 @@ class QueryBasedProbFactToDetRule(PatternWalker):
                 new_formulas.append(formula)
         return self.walk(Union(tuple(new_formulas)))
 
-    @add_match(Implication, is_query_based_probfact)
+    @add_match(
+        Implication,
+        lambda implication: is_query_based_probfact(implication)
+        and _qbased_probfact_needs_translation(implication),
+    )
     def query_based_probafact(self, impl):
-        return self.walk(
-            Union(
-                self._query_based_probabilistic_fact_to_det_and_prob_rules(
-                    impl
-                )
-            )
-        )
+        (
+            det_rule,
+            prob_rule,
+        ) = self._query_based_probabilistic_fact_to_det_and_prob_rules(impl)
+        return self.walk(Union((det_rule, prob_rule)))
 
     @staticmethod
     def _query_based_probabilistic_fact_to_det_and_prob_rules(impl):

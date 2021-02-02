@@ -1,11 +1,18 @@
-from neurolang.utils.relational_algebra_set.sql_helpers import SQLAEngineFactory
+from collections import namedtuple
+from neurolang.utils.relational_algebra_set.sql_helpers import (
+    SQLAEngineFactory,
+    _sql_params_processor,
+    _check_namedtuple_names,
+)
 from neurolang.utils.relational_algebra_set.sql import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
 )
-from sqlalchemy import create_engine, Table, MetaData
+from sqlalchemy import create_engine, Table, MetaData, Column
+from sqlalchemy.types import Integer, PickleType
 from unittest.mock import patch
 import pytest
+import pickle
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -27,6 +34,31 @@ def get_table_from_engine(table_name):
         autoload=True,
         autoload_with=SQLAEngineFactory.get_engine(),
     )
+
+
+def test_sql_params_processor():
+    cols = [
+        Column("id", Integer),
+        Column("a", PickleType),
+        Column("b", PickleType()),
+    ]
+    values = (15, pickle.dumps(frozenset((5, 6))), pickle.dumps([8, 9]))
+    res = _sql_params_processor(cols, *values, as_namedtuple=True)
+
+    tuple_type = namedtuple("LambdaArgs", ("id", "a", "b"))
+    assert res == tuple_type(15, frozenset((5, 6)), [8, 9])
+
+    res = _sql_params_processor(cols, *values, as_namedtuple=False)
+    assert res == [15, frozenset((5, 6)), [8, 9]]
+
+    res = _sql_params_processor(cols[:1], *values[:1])
+    assert res == 15
+
+
+def test_check_namedtuple_names():
+    assert _check_namedtuple_names(["param1", "param2"])
+    assert not _check_namedtuple_names(["param1", "_param2"])
+    assert not _check_namedtuple_names(["param1", "0", "2"])
 
 
 def test_set_init():

@@ -2,7 +2,7 @@ from collections import namedtuple
 from inspect import isclass
 from itertools import tee
 from functools import lru_cache
-from typing import Tuple
+from typing import Tuple, Iterable
 
 import numpy as np
 
@@ -154,9 +154,13 @@ class WrappedRelationalAlgebraSetBaseMixin:
         )
 
     def __eq__(self, other):
+        if not isinstance(other, Iterable):
+            return False
         return self._operator_wrapped('__eq__', other)
 
     def __ne__(self, other):
+        if not isinstance(other, Iterable):
+            return False
         return self._operator_wrapped('__ne__', other)
 
     def __lt__(self, other):

@@ -4,25 +4,25 @@ Set of syntactic sugar processors at the intermediate level.
 
 import operator as op
 import typing
-from typing import AbstractSet, Callable, DefaultDict
+from typing import AbstractSet, Any, Callable, DefaultDict
 
-from ... import expression_walker as ew
-from ... import expressions as ir
-from ...datalog.expression_processing import (
+from .... import expression_walker as ew
+from .... import expressions as ir
+from ....datalog.expression_processing import (
     conjunct_formulas,
     extract_logic_atoms,
 )
-from ...exceptions import ForbiddenExpressionError, SymbolNotFoundError
-from ...expression_walker import ReplaceExpressionWalker
-from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import TRUE, Conjunction, Implication
-from ...probabilistic.expressions import (
+from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
+from ....expression_walker import ReplaceExpressionWalker
+from ....expressions import Constant, FunctionApplication, Symbol
+from ....logic import TRUE, Conjunction, Implication
+from ....probabilistic.expressions import (
     PROB,
     Condition,
     ProbabilisticPredicate,
     ProbabilisticQuery,
 )
-from ...type_system import (
+from ....type_system import (
     Unknown,
     get_args,
     get_generic_type,
@@ -458,9 +458,15 @@ class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):
 
     @ew.add_match(
         Implication(
-            FunctionApplication(Constant(op.matmul)(Symbol, ...), ...),
+            FunctionApplication(
+                FunctionApplication(
+                    Constant[Callable[[Any, Any], Any]](op.matmul),
+                    ...,
+                ),
+                ...,
+            ),
             ...,
-        )
+        ),
     )
     def query_based_probfact_wannabe(self, impl):
         pred_symb, probability = impl.consequent.functor.args

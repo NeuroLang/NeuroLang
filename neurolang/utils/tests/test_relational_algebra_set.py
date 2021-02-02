@@ -84,6 +84,9 @@ def test_relational_algebra_set_semantics(ra_module):
     assert r == ras
     assert r is not ras
 
+    r = ra_module.RelationalAlgebraSet([()])
+    assert r.is_dee()
+
 
 def test_iter_and_fetch_one(ra_module):
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
@@ -993,6 +996,20 @@ def test_extended_projection_on_dee(ra_module):
         ("new_col",), [("b",)]
     )
     assert ras_a == expected_set
+
+
+def test_extended_projection_on_python_sets(ra_module):
+    data = [
+        (5, "dog", frozenset({(1, 2), (5, 6)})),
+        (10, "cat", frozenset({(5, 6), (8, 9)})),
+    ]
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y", "z"), data)
+    expected_len = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("l",), [(3,), (3,)]
+    )
+
+    new_set = ras.extended_projection({"l": lambda x: len(x)})
+    assert expected_len == new_set
 
 
 def test_rename_columns(ra_module):
