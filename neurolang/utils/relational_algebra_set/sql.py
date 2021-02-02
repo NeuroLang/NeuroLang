@@ -1,5 +1,7 @@
 from collections import namedtuple
 from collections.abc import Iterable
+from neurolang.type_system import Unknown
+from typing import Tuple
 
 import numpy as np
 import types
@@ -78,12 +80,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             The initial data for the set.
         """
         if data is not None:
-            data = pd.DataFrame(data)
+            data = pd.DataFrame(data).drop_duplicates()
             if len(data.columns) > 0:
                 self._table = self._insert_dataframe_into_db(data)
                 self._parent_tables = {self._table}
-            elif len(data) == 1:
-                self._count = 1
+            self._count = len(data)
+        else:
+            self._count = 0
 
     def _insert_dataframe_into_db(self, df):
         column_names_and_types = {
@@ -115,13 +118,24 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return cls()
 
     def is_empty(self):
-        return len(self) == 0
+        if self._count is not None:
+            return self._count == 0
+        elif self._table is None:
+            return True
+        else:
+            return self.fetch_one() is None
 
     def is_dum(self):
         return self.arity == 0 and self.is_empty()
 
     def is_dee(self):
         return self.arity == 0 and not self.is_empty()
+
+    @property
+    def row_type(self):
+        if self.arity > 0:
+            return Tuple[tuple(Unknown for _ in range(self.arity))]
+        return Tuple
 
     @property
     def arity(self):
@@ -237,7 +251,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return element
 
     @classmethod
-    def create_view_from_query(cls, query, parent_tables):
+    def create_view_from_query(cls, query, parent_tables, _count=None):
         """
         Create a new RelationalAlgebraFrozenSet backed by an underlying
         VIEW representation.
@@ -248,6 +262,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             View expression.
         parent_tables: Set(RelationalAlgebraFrozenSet)
             Set of parent tables.
+        _count: int, optional
+            The count of the query
+
 
         Returns
         -------
@@ -264,6 +281,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         output._table = t
         output._is_view = True
         output._parent_tables = parent_tables
+        output._count = _count
         return output
 
     def deep_copy(self):
@@ -278,7 +296,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         """
         if self.is_dee():
             return self.dee()
-        if len(self) > 0:
+        if self._table is None:
+            return type(self)()
+        else:
             query = select(self.sql_columns)
             output = type(self)()
             new_table = CreateTableAs(output._table_name, query)
@@ -294,8 +314,6 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             output._parent_tables = {output._table}
             output._count = self._count
             return output
-        else:
-            return type(self)()
 
     def selection(self, select_criteria):
         """
@@ -335,7 +353,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 if callable(v):
                     lambda_name = self._new_name("lambda")
                     c_ = self.sql_columns.get(str(k))
-                    SQLAEngineFactory.register_function(lambda_name, 1, v, [c_])
+                    SQLAEngineFactory.register_function(
+                        lambda_name, 1, v, [c_]
+                    )
                     f_ = getattr(func, lambda_name)
                     query = query.where(f_(c_))
                 elif isinstance(
@@ -378,6 +398,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return type(self).create_view_from_query(
             select(self.sql_columns).select_from(self._table),
             self._parent_tables,
+            self._count,
         )
 
     def itervalues(self):
@@ -471,8 +492,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return tuple()
         query = select(self.sql_columns).select_from(self._table).limit(1)
         with SQLAEngineFactory.get_engine().connect() as conn:
-            res = conn.execute(query)
-            return tuple(res.fetchone())
+            res = conn.execute(query).fetchone()
+        return None if res is None else tuple(res)
 
     def groupby(self, columns):
         """
@@ -539,17 +560,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def __repr__(self):
         t = self._table_name
-        d = {}
-        if self._table is not None and not self.is_empty():
-            with SQLAEngineFactory.get_engine().connect() as conn:
-                d = pd.read_sql(
-                    select(self.sql_columns)
-                    .select_from(self._table)
-                    .distinct()
-                    .limit(15),
-                    conn,
-                )
-        return "{}({},\n {})".format(type(self), t, d)
+        return "{}({})".format(type(self), t)
 
     def __eq__(self, other):
         if isinstance(other, RelationalAlgebraFrozenSet):
@@ -680,9 +691,11 @@ class NamedRelationalAlgebraFrozenSet(
         if not isinstance(data, pd.DataFrame):
             data = pd.DataFrame(data, columns=columns)
         else:
-            data.columns=list(columns)
+            data.columns = list(columns)
+        data = data.drop_duplicates()
         self._table = self._insert_dataframe_into_db(data)
         self._parent_tables = {self._table}
+        self._count = len(data)
 
     @staticmethod
     def _check_for_duplicated_columns(columns):
@@ -733,6 +746,12 @@ class NamedRelationalAlgebraFrozenSet(
     @classmethod
     def dum(cls):
         return cls()
+
+    @property
+    def row_type(self):
+        if self.arity > 0:
+            return Tuple[tuple(Unknown for _ in range(self.arity))]
+        return Tuple
 
     @property
     def arity(self):
@@ -957,7 +976,9 @@ class NamedRelationalAlgebraFrozenSet(
                 for c in self.sql_columns
             ]
         ).select_from(self._table)
-        return type(self).create_view_from_query(query, self._parent_tables)
+        return type(self).create_view_from_query(
+            query, self._parent_tables, self._count
+        )
 
     def rename_columns(self, renames):
         # prevent duplicated destination columns
@@ -975,7 +996,9 @@ class NamedRelationalAlgebraFrozenSet(
                 for c in self.sql_columns
             ]
         ).select_from(self._table)
-        return type(self).create_view_from_query(query, self._parent_tables)
+        return type(self).create_view_from_query(
+            query, self._parent_tables, self._count
+        )
 
     def aggregate(self, group_columns, aggregate_function):
         """
@@ -1018,11 +1041,7 @@ class NamedRelationalAlgebraFrozenSet(
         )
         groupby = [distinct_sub_query.c.get(str(c)) for c in group_columns]
 
-        query = (
-            select(groupby + agg_cols)
-            # .select_from(distinct_from)
-            .group_by(*groupby)
-        )
+        query = select(groupby + agg_cols).group_by(*groupby)
         return type(self).create_view_from_query(query, self._parent_tables)
 
     def _build_aggregate_functions(
@@ -1074,12 +1093,12 @@ class NamedRelationalAlgebraFrozenSet(
         return agg_cols
 
     def extended_projection(self, eval_expressions):
-        if self.is_empty():
+        if self.is_dee():
+            return self._extended_projection_on_dee(eval_expressions)
+        elif self._table is None:
             return type(self)(
                 columns=list(eval_expressions.keys()), iterable=[]
             )
-        elif self.is_dee():
-            return self._extended_projection_on_dee(eval_expressions)
 
         proj_columns = []
         for dst_column, operation in eval_expressions.items():
@@ -1132,8 +1151,8 @@ class NamedRelationalAlgebraFrozenSet(
             return super().fetch_one()
         query = select(self.sql_columns).select_from(self._table).limit(1)
         with SQLAEngineFactory.get_engine().connect() as conn:
-            res = conn.execute(query)
-            return named_tuple_type(*res.fetchone())
+            res = conn.execute(query).fetchone()
+        return None if res is None else named_tuple_type(*res)
 
     def to_unnamed(self):
         if self._table is not None:
@@ -1141,7 +1160,7 @@ class NamedRelationalAlgebraFrozenSet(
                 [c.label(str(i)) for i, c in enumerate(self.sql_columns)]
             ).select_from(self._table)
             return RelationalAlgebraFrozenSet.create_view_from_query(
-                query, self._parent_tables
+                query, self._parent_tables, self._count
             )
         return RelationalAlgebraFrozenSet()
 
