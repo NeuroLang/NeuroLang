@@ -28,10 +28,11 @@ from neurolang.frontend import ExplicitVBR, ExplicitVBROverlay, NeurolangPDL
 # ----------------
 
 ###############################################################################
-# Load the MNI atlas and resample it to 4mm voxels
+# Load the MNI gray matter mask and resample it to 2mm voxels
 
-mni_t1 = nibabel.load(nilearn.datasets.fetch_icbm152_2009()["t1"])
-mni_t1_4mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 4)
+mni_mask = nilearn.image.resample_img(
+    nibabel.load(nilearn.datasets.fetch_icbm152_2009()["gm"]), np.eye(3) * 2
+)
 
 
 ###############################################################################
@@ -46,11 +47,13 @@ nl = NeurolangPDL()
 
 @nl.add_symbol
 def agg_create_region_overlay(
-    i: Iterable, j: Iterable, k: Iterable, p: Iterable
+    x: Iterable, y: Iterable, z: Iterable, p: Iterable
 ) -> ExplicitVBR:
-    voxels = np.c_[i, j, k]
+    voxels = nibabel.affines.apply_affine(
+        np.linalg.inv(mni_mask.affine), np.c_[x, y, z]
+    )
     return ExplicitVBROverlay(
-        voxels, mni_t1_4mm.affine, p, image_dim=mni_t1_4mm.shape
+        voxels, mni_mask.affine, p, image_dim=mni_mask.shape
     )
 
 
@@ -83,16 +86,8 @@ ns_database_fn, ns_features_fn = nilearn.datasets.utils._fetch_files(
 )
 
 ns_database = pd.read_csv(ns_database_fn, sep="\t")
-ijk_positions = np.round(
-    nibabel.affines.apply_affine(
-        np.linalg.inv(mni_t1_4mm.affine),
-        ns_database[["x", "y", "z"]].values.astype(float),
-    )
-).astype(int)
-ns_database["i"] = ijk_positions[:, 0]
-ns_database["j"] = ijk_positions[:, 1]
-ns_database["k"] = ijk_positions[:, 2]
-ns_database = ns_database[["i", "j", "k", "id"]]
+# only keep coordinates and study PMIDs
+ns_database = ns_database[["x", "y", "z", "id"]]
 
 ns_features = pd.read_csv(ns_features_fn, sep="\t")
 ns_docs = ns_features[["pmid"]].drop_duplicates()
@@ -101,16 +96,23 @@ ns_tfidf = pd.melt(
 ).query("TfIdf > 0")[["pmid", "term", "TfIdf"]]
 
 StudyTFIDF = nl.add_tuple_set(ns_tfidf, name="StudyTFIDF")
-VoxelReported = nl.add_tuple_set(ns_database, name="VoxelReported")
+PeakReported = nl.add_tuple_set(ns_database, name="PeakReported")
 SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
     ns_docs, name="SelectedStudy"
+)
+
+Voxel = nl.add_tuple_set(
+    nibabel.affines.apply_affine(
+        mni_mask.affine, np.transpose(mni_mask.get_fdata().nonzero())
+    ),
+    name="Voxel",
 )
 
 ###############################################################################
 # Probabilistic program and querying
 #
 # Compute a forward inference map for studies associated to both terms
-# 'stimulus' and 'outcome'. In [1]_, a CBMA is carried out too "look for areas
+# 'stimulus' and 'outcome'. In [1]_, a CBMA is carried out to "look for areas
 # that exhibit reliable correlations with stimulus value at the time of outcome
 # across studies". Only "contrasts that looked at parametric measures of
 # subjective value during the outcome or reward consumption phase" are included
@@ -122,21 +124,42 @@ SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
 #    Cognitive and Affective Neuroscience 9 (9): 1289–1302.
 #    https://doi.org/10.1093/scan/nst106.
 
-with nl.environment as e:
+with nl.scope as e:
+    e.VoxelReported[e.x, e.y, e.z, e.s] = (
+        PeakReported(e.x, e.y, e.z, e.s)
+        & Voxel(e.x1, e.y1, e.z1)
+        & (e.d == e.EUCLIDEAN(e.x, e.y, e.z, e.x1, e.y1, e.z1))
+        & (e.d < 7)
+    )
+    voxel_reported = nl.query(
+        (e.x, e.y, e.z, e.s), e.VoxelReported(e.x, e.y, e.z, e.s)
+    )
+VoxelReported = nl.add_tuple_set(
+    voxel_reported.as_pandas_dataframe(), name="VoxelReported"
+)
+
+with nl.scope as e:
+    e.Query[e.x, e.y, e.z, e.s] = VoxelReported(e.x, e.y, e.z, e.s) & Voxel(
+        e.x, e.y, e.z
+    )
+    sol = nl.query((e.x, e.y, e.z, e.s), e.Query(e.x, e.y, e.z, e.s))
+
+with nl.scope as e:
     (e.TermInStudy @ (1 / (1 + e.exp(-e.alpha * (e.tfidf - e.tau)))))[
         e.t, e.s
-    ] = (e.StudyTFIDF[e.s, e.t, e.tfidf] & (e.alpha == 300) & (e.tau == 0.1))
-    e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]
-    e.Activation[e.i, e.j, e.k] = (
-        e.SelectedStudy[e.s] & e.VoxelReported[e.i, e.j, e.k, e.s]
+    ] = (e.StudyTFIDF(e.s, e.t, e.tfidf) & (e.alpha == 300) & (e.tau == 1e-3))
+    e.StudyMatchQuery[e.s] = e.TermInStudy("language", e.s) & e.TermInStudy(
+        "networks", e.s
     )
-    e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
-        e.Activation[e.i, e.j, e.k]
-    ) // (e.TermAssociation["stimulus"] & e.TermAssociation["outcome"])
-    e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
-        e.i, e.j, e.k, e.p
-    ]
-    img_query = nl.query((e.x,), e.img[e.x])
+    e.ProbMap[e.x, e.y, e.z, e.PROB[e.x, e.y, e.z]] = (
+        VoxelReported(e.x, e.y, e.z, e.s) & SelectedStudy(e.s)
+    ) // (e.StudyMatchQuery(e.s) & SelectedStudy(e.s))
+    e.BrainImage[e.agg_create_region_overlay(e.x, e.y, e.z, e.p)] = e.ProbMap(
+        e.x, e.y, e.z, e.p
+    )
+    img_query = nl.query((e.x,), e.BrainImage(e.x))
+result_image = img_query.fetch_one()[0].spatial_image()
+nilearn.plotting.plot_stat_map(result_image)
 
 ###############################################################################
 # Plotting results
@@ -146,28 +169,24 @@ result_image = img_query.fetch_one()[0].spatial_image()
 img = result_image.get_fdata()
 nilearn.plotting.plot_stat_map(
     result_image,
-    threshold=np.percentile(img[img > 0], 90),
     cut_coords=(-6,),
     display_mode="x",
     title="Expect vPCC and dPCC",
 )
 nilearn.plotting.plot_stat_map(
     result_image,
-    threshold=np.percentile(img[img > 0], 90),
     cut_coords=(-8,),
     display_mode="y",
     title="Expect VSTR",
 )
 nilearn.plotting.plot_stat_map(
     result_image,
-    threshold=np.percentile(img[img > 0], 90),
     cut_coords=(4,),
     display_mode="x",
     title="Expect VMPFC",
 )
 nilearn.plotting.plot_stat_map(
     result_image,
-    threshold=np.percentile(img[img > 0], 90),
     cut_coords=(-6,),
     display_mode="z",
     title="Expect VMPFC",
