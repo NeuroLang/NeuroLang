@@ -871,8 +871,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         equality_predicates = set(
             predicate
             for predicate in extract_logic_predicates(expression)
-            if predicate.functor == EQ
-            and any(isinstance(arg, Symbol) for arg in predicate.args)
+            if is_var_equality_to_var_or_const(predicate)
         )
         eq_sets = list()
         for equality_predicate in equality_predicates:
