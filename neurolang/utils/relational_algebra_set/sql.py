@@ -497,9 +497,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def fetch_one(self):
         if self.is_dee():
             return tuple()
-        query = select(self.sql_columns).select_from(self._table).limit(1)
-        with SQLAEngineFactory.get_engine().connect() as conn:
-            res = conn.execute(query).fetchone()
+        if hasattr(self, '_one_row'):
+            res = self._one_row
+        else:
+            query = select(self.sql_columns).select_from(self._table).limit(1)
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                res = conn.execute(query).fetchone()
+            self._one_row = res
         return None if res is None else tuple(res)
 
     def groupby(self, columns):
