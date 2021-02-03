@@ -1159,9 +1159,13 @@ class NamedRelationalAlgebraFrozenSet(
         except ValueError:
             # Invalid column names, just return a tuple
             return super().fetch_one()
-        query = select(self.sql_columns).select_from(self._table).limit(1)
-        with SQLAEngineFactory.get_engine().connect() as conn:
-            res = conn.execute(query).fetchone()
+        if hasattr(self, '_one_row'):
+            res = self._one_row
+        else:
+            query = select(self.sql_columns).select_from(self._table).limit(1)
+            with SQLAEngineFactory.get_engine().connect() as conn:
+                res = conn.execute(query).fetchone()
+            self._one_row = res
         return None if res is None else named_tuple_type(*res)
 
     def to_unnamed(self):
@@ -1189,10 +1193,16 @@ class RelationalAlgebraSet(
             iterable = iterable.deep_copy()
         super().__init__(iterable=iterable)
 
+    def _reset_chached(self):
+        self._count = None
+        if hasattr(self, '_one_row'):
+            delattr(self, '_one_row')
+
     def copy(self):
         return self.deep_copy()
 
     def add(self, value):
+        self._reset_cached()
         if self._table is None:
             self._create_insert_table((value,))
         else:
@@ -1202,6 +1212,7 @@ class RelationalAlgebraSet(
         self._count = None
 
     def discard(self, value):
+        self._reset_cached()
         value = self._normalise_element(value)
         query = self._table.delete()
         for c, v in value.items():
@@ -1211,6 +1222,7 @@ class RelationalAlgebraSet(
         self._count = None
 
     def __ior__(self, other):
+        self._reset_cached()
         if isinstance(other, RelationalAlgebraFrozenSet):
             if self.is_dee() or other.is_dee() or other._table is None:
                 return self
@@ -1239,6 +1251,7 @@ class RelationalAlgebraSet(
             return super().__ior__(other)
 
     def __isub__(self, other):
+        self._reset_cached()
         if isinstance(other, RelationalAlgebraFrozenSet):
             if self.is_dee() and other.is_dee():
                 return self.dum()
