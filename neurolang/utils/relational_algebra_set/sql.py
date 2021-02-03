@@ -132,7 +132,12 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return self.arity == 0 and not self.is_empty()
 
     @property
-    def row_type(self):
+    def dummy_row_type(self):
+        """
+        Return dummy row_type of Tuple[Unknown * arity] to avoid calls
+        to the DB.
+        TODO: implement this for real.
+        """
         if self.arity > 0:
             return Tuple[tuple(Unknown for _ in range(self.arity))]
         return Tuple
@@ -748,7 +753,12 @@ class NamedRelationalAlgebraFrozenSet(
         return cls()
 
     @property
-    def row_type(self):
+    def dummy_row_type(self):
+        """
+        Return dummy row_type of Tuple[Unknown * arity] to avoid calls
+        to the DB.
+        TODO: implement this for real.
+        """
         if self.arity > 0:
             return Tuple[tuple(Unknown for _ in range(self.arity))]
         return Tuple
