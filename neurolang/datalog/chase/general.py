@@ -373,9 +373,11 @@ class ChaseGeneral():
     def compute_instance_update(
         self, rule, new_tuples, instance, restriction_instance
     ):
-        instance_update = MapInstance({rule.consequent.functor: new_tuples})
-        instance_update -= instance
-        instance_update -= restriction_instance
+        instance_update = (
+            MapInstance({rule.consequent.functor: new_tuples})
+            - instance
+            - restriction_instance
+        )
         return instance_update
 
     def build_chase_tree(self, chase_set=chase_step):

@@ -108,7 +108,11 @@ class FrozenInstance:
             return super().__sub__(other)
         new_elements = dict()
         for predicate, tuple_set in self.elements.items():
-            new_set = tuple_set - other.elements.get(predicate, set())
+            other_tuple_set = other.elements.get(predicate)
+            if other_tuple_set is not None:
+                new_set = tuple_set - other_tuple_set
+            else:
+                new_set = tuple_set
             if not new_set.is_empty():
                 new_elements[predicate] = new_set
         res = type(self)(new_elements)
