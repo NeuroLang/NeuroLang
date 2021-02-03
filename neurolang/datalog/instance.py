@@ -25,24 +25,34 @@ class FrozenInstance:
         elif isinstance(elements, Iterable):
             elements = self._elements_from_iterable(elements)
         self.elements = elements
+        self._elements_clean = False
+
+    def _clean_elements(self):
+        if self._elements_clean:
+            return
+        to_clean = []
+        for k, v in self.elements.items():
+            if v.is_empty():
+                to_clean.append(k)
+        for k in to_clean:
+            del self.elements[k]
+        self._elements_clean = True
 
     def _elements_from_mapping(self, elements):
         in_elements = elements
         elements = dict()
         for k, v in in_elements.items():
             v = self._get_set(v)
-            if self._set_not_empty(v):
-                elements[k] = v
+            elements[k] = v
         return elements
 
     def _get_set(self, v):
         v_type = Unknown
         if not isinstance(v, self._set_type):
             v, v_type = self._get_set_and_type(v)
-            if self._set_not_empty(v):
-                v = self._set_type(
-                    v, row_type=v_type, verify_row_type=False
-                )
+            v = self._set_type(
+                v, row_type=v_type, verify_row_type=False
+            )
         return v
 
     def _set_not_empty(self, v):
@@ -87,6 +97,7 @@ class FrozenInstance:
         return result
 
     def __hash__(self):
+        self._clean_elements()
         if self.cached_hash is None:
             self.cached_hash = hash(tuple(zip(self.elements.items())))
         return self.cached_hash
@@ -133,16 +144,20 @@ class FrozenInstance:
     def copy(self):
         new_copy = type(self)()
         new_copy.elements = self.elements.copy()
+        new_copy._elements_clean = self._elements_clean
         new_copy.hash = self.cached_hash
         return new_copy
 
     def _create_view(self, class_):
         out = class_()
         out.elements = self.elements
+        out._elements_clean = self._elements_clean
         return out
 
     def __eq__(self, other):
+        self._clean_elements()
         if isinstance(other, Instance):
+            other._clean_elements()
             return self.elements == other.elements
         else:
             return super().__eq__(other)
@@ -161,17 +176,24 @@ class FrozenMapInstance(FrozenInstance, Mapping):
         )
 
     def __getitem__(self, predicate_symbol):
+        self._clean_elements()
         set_ = self.elements[predicate_symbol]
+        if set_.is_empty():
+            del self.elements[predicate_symbol]
+            raise KeyError()
         type_ = set_.row_type
         return self._set_to_constant(set_, type_=type_)
 
     def __iter__(self):
+        self._clean_elements()
         return iter(self.elements)
 
     def __len__(self):
+        self._clean_elements()
         return len(self.elements)
 
     def items(self):
+        self._clean_elements()
         for k, v in self.elements.items():
             row_type = v.row_type
             yield k, self._set_to_constant(
@@ -179,6 +201,7 @@ class FrozenMapInstance(FrozenInstance, Mapping):
             )
 
     def values(self):
+        self._clean_elements()
         for k, v in self.elements.items():
             row_type = v.row_type
             yield self._set_to_constant(v, type_=row_type)
@@ -246,6 +269,7 @@ class Instance(FrozenInstance):
         del self.elements[predicate_symbol]
 
     def __isub__(self, other):
+        self._elements_clean = False
         if not isinstance(other, Instance):
             return super().__isub__(other)
         for predicate in (self.elements.keys() & other.elements.keys()):
@@ -255,6 +279,7 @@ class Instance(FrozenInstance):
         return self
 
     def __iand__(self, other):
+        self._elements_clean = False
         if isinstance(other, Instance):
             return super().__iand__(other)
         subs = self.elements.keys() - other.elements.keys()
@@ -275,6 +300,7 @@ class Instance(FrozenInstance):
 class MapInstance(Instance, FrozenMapInstance, MutableMapping):
     def __setitem__(self, predicate_symbol, value):
         set_ = self._set_type(value.value)
+        self._elements_clean = False
         self.elements[predicate_symbol] = set_
 
     def __delitem__(self, predicate_symbol):
