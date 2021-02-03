@@ -1,5 +1,6 @@
 from collections import namedtuple
 from collections.abc import Iterable
+
 from neurolang.type_system import Unknown
 from typing import Tuple
 
@@ -282,12 +283,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             A new set.
         """
         output = cls()
-        view = CreateView(output._table_name, query)
+        view_name = cls._new_name("view_")
+        view = CreateView(view_name, query)
         with SQLAEngineFactory.get_engine().connect() as conn:
             conn.execute(view)
-        t = table(output._table_name)
+        t = table(view_name)
         for c in query.c:
             c._make_proxy(t)
+        output._table_name = view_name
         output._table = t
         output._is_view = True
         output._parent_tables = parent_tables
