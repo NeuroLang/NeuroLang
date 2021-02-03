@@ -66,6 +66,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         self._table = other._table
         self._is_view = other._is_view
         self._parent_tables = other._parent_tables
+        if hasattr(other, '_one_row'):
+            self._one_row = other._one_row
 
     def _create_insert_table(self, data):
         """
@@ -1193,7 +1195,7 @@ class RelationalAlgebraSet(
             iterable = iterable.deep_copy()
         super().__init__(iterable=iterable)
 
-    def _reset_chached(self):
+    def _reset_cached(self):
         self._count = None
         if hasattr(self, '_one_row'):
             delattr(self, '_one_row')
