@@ -3,6 +3,7 @@ from collections.abc import Iterable
 from neurolang.type_system import Unknown
 from typing import Tuple
 
+import logging
 import numpy as np
 import types
 from neurolang.utils.relational_algebra_set.sql_helpers import (
@@ -29,6 +30,8 @@ from sqlalchemy import (
     literal,
 )
 from sqlalchemy.sql import table, intersect, union, except_
+
+LOG = logging.getLogger(__name__)
 
 
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
@@ -66,7 +69,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         self._table = other._table
         self._is_view = other._is_view
         self._parent_tables = other._parent_tables
-        if hasattr(other, '_one_row'):
+        if hasattr(other, "_one_row"):
             self._one_row = other._one_row
 
     def _create_insert_table(self, data):
@@ -497,14 +500,39 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def fetch_one(self):
         if self.is_dee():
             return tuple()
-        if hasattr(self, '_one_row'):
+        if hasattr(self, "_one_row"):
             res = self._one_row
         else:
             query = select(self.sql_columns).select_from(self._table).limit(1)
             with SQLAEngineFactory.get_engine().connect() as conn:
                 res = conn.execute(query).fetchone()
+
             self._one_row = res
+            self._explain_long_query(
+                query,
+            )
         return None if res is None else tuple(res)
+
+    @staticmethod
+    def _explain_long_query(query, *params):
+        qp = "EXPLAIN QUERY PLAN %s" % (
+            str(query.compile(compile_kwargs={"literal_binds": True}))
+        )
+        with SQLAEngineFactory.get_engine().connect() as conn:
+            eqp = conn.execute(qp, params).fetchall()
+            tabs = {0: ""}
+            tree = "\nQUERY PLAN\n"
+            for r in eqp:
+                line = tabs[r[1]] + "|--"
+                if r[0] not in tabs:
+                    tabs[r[0]] = tabs[r[1]] + "  "
+                tree += line + r[3] + "\n"
+            LOG.info(
+                "EXPLAIN QUERY PLAN {}".format(
+                    str(query.compile(compile_kwargs={"literal_binds": True}))
+                )
+            )
+            LOG.info(tree)
 
     def groupby(self, columns):
         """
@@ -1165,7 +1193,7 @@ class NamedRelationalAlgebraFrozenSet(
         except ValueError:
             # Invalid column names, just return a tuple
             return super().fetch_one()
-        if hasattr(self, '_one_row'):
+        if hasattr(self, "_one_row"):
             res = self._one_row
         else:
             query = select(self.sql_columns).select_from(self._table).limit(1)
@@ -1201,8 +1229,8 @@ class RelationalAlgebraSet(
 
     def _reset_cached(self):
         self._count = None
-        if hasattr(self, '_one_row'):
-            delattr(self, '_one_row')
+        if hasattr(self, "_one_row"):
+            delattr(self, "_one_row")
 
     def copy(self):
         return self.deep_copy()

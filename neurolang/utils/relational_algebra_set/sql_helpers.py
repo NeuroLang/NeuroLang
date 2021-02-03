@@ -383,7 +383,8 @@ class SQLAEngineFactory(ABC):
         The engine is created with the db+dialect string found in the
         `NEURO_SQLA_DIALECT` environment variable.
         """
-        dialect = os.getenv("NEURO_SQLA_DIALECT", "sqlite:///neurolang.db")
+        dialect = os.getenv("NEURO_SQLA_DIALECT", "sqlite://")
+        # dialect = os.getenv("NEURO_SQLA_DIALECT", "sqlite:///neurolang.db")
         print(
             (
                 "Creating SQLA engine with {} uri."

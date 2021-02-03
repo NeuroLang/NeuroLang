@@ -40,10 +40,9 @@ class FrozenInstance:
         if not isinstance(v, self._set_type):
             v, v_type = self._get_set_and_type(v)
             if self._set_not_empty(v):
-                if not isinstance(v, self._set_type):
-                    v = self._set_type(
-                        v, row_type=v_type, verify_row_type=False
-                    )
+                v = self._set_type(
+                    v, row_type=v_type, verify_row_type=False
+                )
         return v
 
     def _set_not_empty(self, v):
