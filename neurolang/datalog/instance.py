@@ -46,10 +46,10 @@ class FrozenInstance:
         return v
 
     def _set_not_empty(self, v):
-        return (
-            (isinstance(v, RelationalAlgebraFrozenSet) and not v.is_empty())
-            or len(v) > 0
-        )
+        if isinstance(v, RelationalAlgebraFrozenSet):
+            return not v.is_empty()
+        else:
+            return len(v) > 0
 
     def _get_set_and_type(self, v):
         row_type = Unknown
