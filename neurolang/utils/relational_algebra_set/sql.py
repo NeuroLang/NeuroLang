@@ -91,6 +91,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             if len(data.columns) > 0:
                 self._table = self._insert_dataframe_into_db(data)
                 self._parent_tables = {self._table}
+                self._try_to_create_index(self.columns)
             self._count = len(data)
         else:
             self._count = 0
@@ -113,6 +114,56 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             autoload_with=SQLAEngineFactory.get_engine(),
         )
         return _table
+
+    def _try_to_create_index(self, on):
+        """
+        Create an index on this set's parent tables and specified columns.
+        Index is only created for each table if it does not already have an
+        index on the same set of columns.
+
+        Parameters
+        ----------
+        on : List[str]
+            List of columns to create the index on.
+        """
+        for table in self._parent_tables:
+            if not self.has_index(table, on):
+                table_idx_cols = [table.c.get(c) for c in on if c in table.c]
+                if len(table_idx_cols) > 0:
+                    # Create an index on the columns
+                    i = Index(
+                        "idx_{}_{}".format(table, "_".join(on)),
+                        *table_idx_cols,
+                    )
+                    i.create(SQLAEngineFactory.get_engine())
+                    LOG.info('Creating index {}'.format(i))
+                    # Analyze the table
+                    with SQLAEngineFactory.get_engine().connect() as conn:
+                        conn.execute("ANALYZE {}".format(table))
+
+    @staticmethod
+    def has_index(table, columns):
+        """
+        Checks whether the SQL table already has an index on the specified
+        columns
+
+        Parameters
+        ----------
+        table : sqlalchemy.schema.Table
+            The SQLA table representation.
+        columns : List[str]
+            List of column identifiers.
+
+        Returns
+        -------
+        bool
+            True if _table has an index with the same set of columns.
+        """
+        if table is not None and table.indexes is not None:
+            for index in table.indexes:
+                if set(index.columns.keys()) == set(columns):
+                    return True
+        return False
 
     @classmethod
     def dee(cls):
@@ -333,6 +384,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             output._is_view = False
             output._parent_tables = {output._table}
             output._count = self._count
+            output._try_to_create_index(output.columns)
             return output
 
     def selection(self, select_criteria):
@@ -522,18 +574,16 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                     res = conn.execute(query).fetchone()
 
             self._one_row = res
-            self._explain_long_query(
-                query,
-            )
+            self._explain_long_query(query)
         return None if res is None else tuple(res)
 
     @staticmethod
-    def _explain_long_query(query, *params):
+    def _explain_long_query(query):
         qp = "EXPLAIN QUERY PLAN %s" % (
             str(query.compile(compile_kwargs={"literal_binds": True}))
         )
         with SQLAEngineFactory.get_engine().connect() as conn:
-            eqp = conn.execute(qp, params).fetchall()
+            eqp = conn.execute(qp).fetchall()
             tabs = {0: ""}
             tree = "\nQUERY PLAN\n"
             for r in eqp:
@@ -748,6 +798,7 @@ class NamedRelationalAlgebraFrozenSet(
         data = data.drop_duplicates()
         self._table = self._insert_dataframe_into_db(data)
         self._parent_tables = {self._table}
+        self._try_to_create_index(self.columns)
         self._count = len(data)
 
     @staticmethod
@@ -948,55 +999,6 @@ class NamedRelationalAlgebraFrozenSet(
         return type(self).create_view_from_query(
             query, self._parent_tables | other._parent_tables
         )
-
-    def _try_to_create_index(self, on):
-        """
-        Create an index on this set's parent tables and specified columns.
-        Index is only created for each table if it does not already have an
-        index on the same set of columns.
-
-        Parameters
-        ----------
-        on : List[str]
-            List of columns to create the index on.
-        """
-        for table in self._parent_tables:
-            if not self.has_index(table, on):
-                table_idx_cols = [table.c.get(c) for c in on if c in table.c]
-                if len(table_idx_cols) > 0:
-                    # Create an index on the columns
-                    i = Index(
-                        "idx_{}_{}".format(table, "_".join(on)),
-                        *table_idx_cols,
-                    )
-                    i.create(SQLAEngineFactory.get_engine())
-                    # Analyze the table
-                    with SQLAEngineFactory.get_engine().connect() as conn:
-                        conn.execute("ANALYZE {}".format(table))
-
-    @staticmethod
-    def has_index(table, columns):
-        """
-        Checks whether the SQL table already has an index on the specified
-        columns
-
-        Parameters
-        ----------
-        table : sqlalchemy.schema.Table
-            The SQLA table representation.
-        columns : List[str]
-            List of column identifiers.
-
-        Returns
-        -------
-        bool
-            True if _table has an index with the same set of columns.
-        """
-        if table is not None and table.indexes is not None:
-            for index in table.indexes:
-                if set(index.columns.keys()) == set(columns):
-                    return True
-        return False
 
     def __iter__(self):
         """
