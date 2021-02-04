@@ -16,6 +16,7 @@ from neurolang.utils.relational_algebra_set.sql_helpers import (
 import uuid
 
 from . import abstract as abc
+from ..various import log_performance
 import pandas as pd
 
 from sqlalchemy import (
@@ -316,7 +317,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             output = type(self)()
             new_table = CreateTableAs(output._table_name, query)
             with SQLAEngineFactory.get_engine().connect() as conn:
-                conn.execute(new_table)
+                conn.execute("PRAGMA optimize;")
+                with log_performance(
+                    LOG, "Deep copy", end_message="\tDeep copy %2.2fs"
+                ):
+                    conn.execute(new_table)
+                conn.execute("PRAGMA optimize;")
+            self._explain_long_query(query)
             output._table = Table(
                 output._table_name,
                 MetaData(),
@@ -508,7 +515,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         else:
             query = select(self.sql_columns).select_from(self._table).limit(1)
             with SQLAEngineFactory.get_engine().connect() as conn:
-                res = conn.execute(query).fetchone()
+                conn.execute("PRAGMA optimize;")
+                with log_performance(
+                    LOG, "Fetch one", end_message="\tFetch one %2.2fs"
+                ):
+                    res = conn.execute(query).fetchone()
 
             self._one_row = res
             self._explain_long_query(
@@ -1281,7 +1292,8 @@ class RelationalAlgebraSet(
                     ).select_from(other._table),
                 )
                 with SQLAEngineFactory.get_engine().connect() as conn:
-                    conn.execute(query)
+                    with log_performance(LOG, "IOR"):
+                        conn.execute(query)
                 self._count = None
                 return self
         else:
@@ -1307,7 +1319,8 @@ class RelationalAlgebraSet(
                 )
             )
             with SQLAEngineFactory.get_engine().connect() as conn:
-                conn.execute(query)
+                with log_performance(LOG, "ISUB"):
+                    conn.execute(query)
             self._count = None
             return self
         else:
