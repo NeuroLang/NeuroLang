@@ -31,7 +31,7 @@ from sqlalchemy import (
     literal_column,
     literal,
 )
-from sqlalchemy.sql import table, intersect, union, except_
+from sqlalchemy.sql import table, intersect, union, except_, exists
 
 LOG = logging.getLogger(__name__)
 
@@ -136,7 +136,6 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                         *table_idx_cols,
                     )
                     i.create(SQLAEngineFactory.get_engine())
-                    LOG.info('Creating index {}'.format(i))
                     # Analyze the table
                     with SQLAEngineFactory.get_engine().connect() as conn:
                         conn.execute("ANALYZE {}".format(table))
@@ -367,12 +366,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             query = select(self.sql_columns)
             output = type(self)()
             new_table = CreateTableAs(output._table_name, query)
-            with SQLAEngineFactory.get_engine().connect() as conn:
+            with SQLAEngineFactory.get_engine().connect() as conn, log_performance(
+                LOG, "Deep copy", end_message="\tDeep copy %2.2fs"
+            ):
                 conn.execute("PRAGMA optimize;")
-                with log_performance(
-                    LOG, "Deep copy", end_message="\tDeep copy %2.2fs"
-                ):
-                    conn.execute(new_table)
+                conn.execute(new_table)
                 conn.execute("PRAGMA optimize;")
             self._explain_long_query(query)
             output._table = Table(
@@ -739,7 +737,62 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return self.dee()
         if self._table is None or other._table is None:
             return self.copy()
-        return self._do_set_operation(other, except_)
+        # return self._do_set_operation(other, except_)
+        # return self._do_sub_with_join(other)
+        return self._do_sub_with_not_in(other)
+
+    def _do_sub_with_not_in(self, other):
+        if not self._equal_sets_structure(other):
+            raise ValueError(
+                "Relational algebra set operators can only be used on sets"
+                " with same columns."
+            )
+
+        query = select(self.sql_columns).where(
+            tuple_(*self.sql_columns).notin_(
+                select(
+                    [other.sql_columns.get(c) for c in self.columns]
+                ).select_from(other._table)
+            )
+        )
+        query2 = select(self.sql_columns).where(~exists().where(
+            and_(
+            *[
+                self._table.c.get(col) == other._table.c.get(col)
+                for col in self.columns
+            ]
+            )
+        ))
+        return type(self).create_view_from_query(
+            query2, self._parent_tables | other._parent_tables
+        )
+
+    def _do_sub_with_join(self, other):
+        if not self._equal_sets_structure(other):
+            raise ValueError(
+                "Relational algebra set operators can only be used on sets"
+                " with same columns."
+            )
+        # Create an alias on the other table's name if we're joining on the
+        # same table.
+        other_join_table = other._table
+        if other._table_name == self._table_name:
+            other_join_table = other_join_table.alias()
+        on_clause = and_(
+            *[
+                self._table.c.get(col) == other_join_table.c.get(col)
+                for col in self.columns
+            ]
+        )
+        query = (
+            select(self.sql_columns)
+            .select_from(self._table.outerjoin(other_join_table, on_clause))
+            .where(other_join_table.c.values()[0] == None)
+        )
+
+        return type(self).create_view_from_query(
+            query, self._parent_tables | other._parent_tables
+        )
 
     def __hash__(self):
         if self._table is None:
