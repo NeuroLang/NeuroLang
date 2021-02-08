@@ -280,7 +280,9 @@ class SQLAEngineFactory(ABC):
         )
         cls._aggregates[(name, num_params)] = agg_class
         if cls._in_memory_sqlite:
-            cls._engine.raw_connection().create_aggregate(name, num_params, agg_class)
+            cls._engine.raw_connection().create_aggregate(
+                name, num_params, agg_class
+            )
 
     @classmethod
     def register_function(cls, name, num_params, func, params):
@@ -330,7 +332,9 @@ class SQLAEngineFactory(ABC):
 
         cls._funcs[(name, num_params)] = _transform_value
         if cls._in_memory_sqlite:
-            cls._engine.raw_connection().create_function(name, num_params, _transform_value)
+            cls._engine.raw_connection().create_function(
+                name, num_params, _transform_value
+            )
 
     @classmethod
     def _on_connect(cls, dbapi_con, connection_record):

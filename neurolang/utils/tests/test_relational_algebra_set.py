@@ -55,7 +55,7 @@ def test_relational_algebra_set_semantics(ra_module):
     ras_ = ra_module.RelationalAlgebraSet(a)
     ras__ = set((e,) for e in a)
 
-    assert ras.columns == [0]
+    assert list(map(int, ras.columns)) == [0]
 
     assert ras == ras_
     assert ras == ras__
@@ -497,15 +497,15 @@ def test_named_relational_algebra_ra_projection_to_unnamed(ra_module):
     ras_x = ras.projection_to_unnamed("x")
     assert (0,) in ras_x and (1,) in ras_x
     assert len(ras_x) == 2
-    assert ras_x.columns == (0,)
+    assert tuple(map(int, ras_x.columns)) == (0,)
 
     ras_xz = ras.projection_to_unnamed("x", "z")
     assert all((i % 2, i * 2) in ras_xz for i in range(5))
-    assert tuple(ras_xz.columns) == (0, 1)
+    assert tuple(map(int, ras_xz.columns)) == (0, 1)
 
     ras_xx = ras.projection_to_unnamed("x", "x")
     assert all((i % 2, i % 2) in ras_xx for i in range(5))
-    assert tuple(ras_xx.columns) == (0, 1)
+    assert tuple(map(int, ras_xx.columns)) == (0, 1)
 
     ras_ = ras.projection_to_unnamed()
     assert ras_.arity == 0

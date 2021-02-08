@@ -737,11 +737,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return self.dee()
         if self._table is None or other._table is None:
             return self.copy()
-        # return self._do_set_operation(other, except_)
+        return self._do_set_operation(other, except_)
         # return self._do_sub_with_join(other)
-        return self._do_sub_with_not_in(other)
+        # return self._do_sub_with_not_in(other)
 
     def _do_sub_with_not_in(self, other):
+        """
+        Alternative set substract method using sql not in statement.
+        """
         if not self._equal_sets_structure(other):
             raise ValueError(
                 "Relational algebra set operators can only be used on sets"
@@ -755,19 +758,24 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 ).select_from(other._table)
             )
         )
-        query2 = select(self.sql_columns).where(~exists().where(
-            and_(
-            *[
-                self._table.c.get(col) == other._table.c.get(col)
-                for col in self.columns
-            ]
+        query2 = select(self.sql_columns).where(
+            ~exists().where(
+                and_(
+                    *[
+                        self._table.c.get(col) == other._table.c.get(col)
+                        for col in self.columns
+                    ]
+                )
             )
-        ))
+        )
         return type(self).create_view_from_query(
             query2, self._parent_tables | other._parent_tables
         )
 
     def _do_sub_with_join(self, other):
+        """
+        Alternative set substract method using left outer join.
+        """
         if not self._equal_sets_structure(other):
             raise ValueError(
                 "Relational algebra set operators can only be used on sets"
@@ -789,7 +797,6 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             .select_from(self._table.outerjoin(other_join_table, on_clause))
             .where(other_join_table.c.values()[0] == None)
         )
-
         return type(self).create_view_from_query(
             query, self._parent_tables | other._parent_tables
         )
@@ -819,6 +826,7 @@ class NamedRelationalAlgebraFrozenSet(
         self._table = None
         self._is_view = False
         self._parent_tables = {}
+        self._init_columns = columns
         self._check_for_duplicated_columns(columns)
         if isinstance(iterable, RelationalAlgebraFrozenSet):
             if columns is None or columns == iterable.columns:
@@ -930,7 +938,7 @@ class NamedRelationalAlgebraFrozenSet(
             Set of column names.
         """
         if self._table is None:
-            return tuple()
+            return tuple() if self._init_columns is None else tuple(self._init_columns)
         return tuple(self._table.c.keys())
 
     @property
@@ -1009,6 +1017,9 @@ class NamedRelationalAlgebraFrozenSet(
         return self._do_join(other, on, isouter=False)
 
     def left_naturaljoin(self, other):
+        """
+        Same as naturaljoin with outher=True
+        """
         on = [c for c in self.columns if c in other.columns]
         if len(on) == 0:
             return self
@@ -1325,7 +1336,6 @@ class RelationalAlgebraSet(
         self._count = None
 
     def __ior__(self, other):
-        self._reset_cached()
         if isinstance(other, RelationalAlgebraFrozenSet):
             if self.is_dee() or other.is_dee() or other._table is None:
                 return self
@@ -1349,13 +1359,12 @@ class RelationalAlgebraSet(
                 with SQLAEngineFactory.get_engine().connect() as conn:
                     with log_performance(LOG, "IOR"):
                         conn.execute(query)
-                self._count = None
+                self._reset_cached()
                 return self
         else:
             return super().__ior__(other)
 
     def __isub__(self, other):
-        self._reset_cached()
         if isinstance(other, RelationalAlgebraFrozenSet):
             if self.is_dee() and other.is_dee():
                 return self.dum()
@@ -1376,7 +1385,7 @@ class RelationalAlgebraSet(
             with SQLAEngineFactory.get_engine().connect() as conn:
                 with log_performance(LOG, "ISUB"):
                     conn.execute(query)
-            self._count = None
+            self._reset_cached()
             return self
         else:
             return super().__isub__(other)
