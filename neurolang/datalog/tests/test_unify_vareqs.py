@@ -202,3 +202,22 @@ def test_aggregation():
     program = DatalogWithVariableEqualityUnificationAndAggregation()
     with pytest.raises(ForbiddenExpressionError):
         program.walk(rule)
+
+
+def test_unify_vareq_builtin():
+    some_builtin = Constant[typing.Callable[..., str]](
+        lambda s: s + s,
+        verify_type=False,
+        auto_infer_type=False,
+    )
+    rule = Implication(
+        P(x, y),
+        Conjunction((Q(x), Q(y), EQ(x, y), EQ(y, some_builtin(x)))),
+    )
+    program = DatalogWithVariableEqualityUnification()
+    program.walk(rule)
+    expected = Union(
+        (Implication(P(y, y), Conjunction((Q(y), EQ(y, some_builtin(y))))),)
+    )
+    result = program.intensional_database()[P]
+    assert logic_exp_commutative_equal(result, expected)
