@@ -42,7 +42,7 @@ def assert_almost_equal(set_a, set_b):
         )
 
 
-def test_postprob_conjunct_with_wlq_result():
+def test_deterministic_segregation_query():
     nl = NeurolangPDL()
     nl.add_tuple_set(
         [("a",), ("b",)],
