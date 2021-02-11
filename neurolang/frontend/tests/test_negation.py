@@ -1,32 +1,6 @@
-import io
-import itertools
-from typing import AbstractSet, Callable, Tuple
-
 import numpy as np
-import pandas as pd
-import pytest
 
-from ...exceptions import (
-    NegativeFormulaNotNamedRelationException,
-    NegativeFormulaNotSafeRangeException,
-    UnsupportedProgramError,
-    UnsupportedQueryError,
-    UnsupportedSolverError,
-)
-from ...probabilistic.exceptions import (
-    ForbiddenConditionalQueryNonConjunctive,
-    UnsupportedProbabilisticQueryError,
-)
-from ...regions import SphericalVolume
-from ...utils.relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraFrozenSet,
-)
-from ..probabilistic_frontend import (
-    NeurolangPDL,
-    lifted_solve_marg_query,
-    lifted_solve_succ_query,
-)
+from ..probabilistic_frontend import NeurolangPDL
 
 
 def assert_almost_equal(set_a, set_b):
@@ -49,6 +23,10 @@ def test_deterministic_segregation_query():
         name="Network",
     )
     nl.add_tuple_set(
+        [("s1",), ("s2",), ("s3",)],
+        name="Study",
+    )
+    nl.add_tuple_set(
         [
             ("a", "s1"),
             ("b", "s1"),
@@ -59,12 +37,9 @@ def test_deterministic_segregation_query():
         name="NetworkReported",
     )
     with nl.environment as e:
-        e.SegregationQuery[e.n, e.s] = (
-            e.NetworkReported(e.n, e.s)
-            & ~e.NetworkReported(e.n2, e.s)
-            & e.Network(e.n2)
-            & (e.n != e.n2)
-        )
+        e.SegregationQuery[e.n, e.s] = e.NetworkReported(
+            e.n, e.s
+        ) & ~nl.exists(e.n2, e.NetworkReported(e.n2, e.s) & (e.n2 != e.n))
         result = nl.query((e.n, e.s), e.SegregationQuery(e.n, e.s))
     expected = {
         ("c", "s3"),
