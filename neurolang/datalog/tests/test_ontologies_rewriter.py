@@ -1,3 +1,5 @@
+import pytest
+
 from rdflib import OWL, RDF, RDFS
 
 from ... import expression_walker as ew
@@ -10,6 +12,7 @@ from ...logic import (
     Implication,
 )
 from ...logic.transformations import CollapseConjunctions
+from ...exceptions import NeuroLangException
 from ..aggregation import DatalogWithAggregationMixin
 from ..expressions import TranslateToLogic
 from ..ontologies_parser import RightImplication
@@ -254,7 +257,7 @@ def test_infinite_walker():
     assert sigma_rep == expected
 
 
-def test_rewrite_negation():
+def test_rewrite_negation_exception():
     project = S_("project")
     inArea = S_("inArea")
     hasCollaborator = S_("hasCollaborator")
@@ -278,7 +281,38 @@ def test_rewrite_negation():
     sigmaB = dt.walk(sigmaB)
 
     orw = OntologyRewriter(qB, sigmaB)
+    with pytest.raises(NeuroLangException, match="The unification between *"):
+        orw.Xrewrite()
+
+
+
+def test_rewrite_negation():
+    project = S_("project")
+    inArea = S_("inArea")
+    hasCollaborator = S_("hasCollaborator")
+    hasDirector = S_("hasDirector")
+    p = S_("p")
+
+    x = S_("x")
+    y = S_("y")
+    z = S_("z")
+    a = S_("a")
+    b = S_("b")
+    db = C_("db")
+
+    sigma = RI_(project(x) & inArea(x, y), hasCollaborator(z, y, x))
+    q = I_(p(b), ~(hasDirector(a, db, b)))
+
+    qB = EB_((q,))
+    sigmaB = EB_((sigma,))
+
+    dt = DatalogTranslator()
+    qB = dt.walk(qB)
+    sigmaB = dt.walk(sigmaB)
+
+    orw = OntologyRewriter(qB, sigmaB)
     rewrite = orw.Xrewrite()
+    
 
     assert len(rewrite) == 1
     imp1 = rewrite.pop()

@@ -9,6 +9,7 @@ from ..logic.expression_processing import ExtractFreeVariablesWalker
 from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import apply_substitution, most_general_unifier
 from .ontologies_parser import RightImplication
+from ..exceptions import NeuroLangException
 
 
 class ExtractFreeVariablesRightImplicationWalker(ExtractFreeVariablesWalker):
@@ -32,6 +33,7 @@ class OntologyRewriter:
         rename_count = 0
         Q_rew = set({})
         for t in self.query.formulas:
+            self._check_negation_constraints(t.antecedent)
             Q_rew.add((t, "r", "u"))
 
         sigma_free_vars = self._extract_free_variables()
@@ -51,6 +53,23 @@ class OntologyRewriter:
                 Q_rew.add((q[0], q[1], "e"))
 
         return {x for x in Q_rew if x[2] == "e"}
+
+    def _check_negation_constraints(self, formula):
+        if isinstance(formula, NaryLogicOperator):
+            for f in formula.formulas:
+                self._check_negation_constraints(f)
+        
+        if (isinstance(formula, Negation) and self._exist_in_constraints(formula)):
+            raise NeuroLangException(f'The unification between the negated \
+                    term {formula.formula.functor} and the \
+                    constrains is not implemented yet.')
+            
+    def _exist_in_constraints(self, negation):
+        return any(
+            sigma.consequent.functor == negation.formula.functor 
+            for sigma in self.union_of_constraints.formulas
+        )
+
 
     def _extract_free_variables(self):
         sigma_free_vars = []
