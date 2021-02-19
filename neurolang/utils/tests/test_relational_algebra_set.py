@@ -221,6 +221,36 @@ def test_groupby(ra_module):
     assert res[0] == (1, ras_b)
     assert res[1] == (2, ras_c)
 
+def test_relational_algebra_difference(ra_module):
+    first = ra_module.RelationalAlgebraFrozenSet(
+        [(7, 8), (9, 2)]
+    )
+    second = ra_module.RelationalAlgebraFrozenSet(
+        [(9, 2), (42, 0)]
+    )
+    third = ra_module.RelationalAlgebraFrozenSet(
+        [(1, 2, 3), (4, 5, 6)]
+    )
+    empty = ra_module.RelationalAlgebraFrozenSet([])
+    dee = ra_module.RelationalAlgebraFrozenSet.dee()
+    dum = ra_module.RelationalAlgebraFrozenSet.dum()
+
+    expected = ra_module.RelationalAlgebraFrozenSet(
+        [(7, 8)]
+    )
+    assert first - second == expected
+    assert first - first == empty
+    assert first - empty == first
+    assert empty - first == empty
+    assert dee - dee == dum
+    assert first - dum == first
+    assert dum - first == dum
+    assert first - empty - second == first - second
+    with pytest.raises(
+        ValueError,
+        match="Difference only defined for sets with the same arity"
+    ):
+        first - third
 
 def test_relational_algebra_ra_union(ra_module):
     first = ra_module.RelationalAlgebraFrozenSet(

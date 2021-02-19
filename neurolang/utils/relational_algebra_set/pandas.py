@@ -353,6 +353,22 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return "{}"
         return repr(self._container.reset_index().drop("index", axis=1))
 
+    def __sub__(self, other):
+        if isinstance(other, RelationalAlgebraFrozenSet):
+            if (
+                self.arity > 0 and other.arity > 0
+            ) and self.arity != other.arity:
+                raise ValueError(
+                    "Difference only defined for sets with the same arity"
+                )
+            if self.is_empty() or other.is_empty():
+                return self.copy()
+            if self.is_dee():
+                if other.is_dee():
+                    return self.dum()
+                return self.dee()
+        return super().__sub__(other)
+
     def __or__(self, other):
         if self is other:
             return self.copy()
