@@ -3,7 +3,7 @@ from itertools import chain, tee
 import logging
 from neurolang.logic import Union
 from operator import contains, eq
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Type
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -512,19 +512,12 @@ class ChaseSemiNaive:
                     "Use a different resolution algorithm"
                 )
 
-#TODO: manage this properly in configuration
-DEFAULT_STRATIFIED_CHASE_CLASSES = [
-    ChaseNonRecursive, 
-    ChaseSemiNaive, 
-    ChaseNaive
-]
-
 
 class ChaseStratified(ChaseGeneral):
 
     def __init__(
-        self, datalog_program, rules=None,
-        chase_classes: List[ChaseGeneral]=DEFAULT_STRATIFIED_CHASE_CLASSES
+        self, datalog_program, chase_classes: List[Type[ChaseGeneral]],
+        rules=None
     ):
         super().__init__(datalog_program, rules=rules)
         self.chase_classes = chase_classes
@@ -536,7 +529,7 @@ class ChaseStratified(ChaseGeneral):
         chase_instance = None
         for chase_class in self.chase_classes:
             try:
-                chase_instance = chase_class(self.datalog_program, stratum)
+                chase_instance = chase_class(self.datalog_program, Union(stratum))
                 chase_instance.check_constraints(instance_update)
                 break
             except NeuroLangException:
