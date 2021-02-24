@@ -1,8 +1,9 @@
 from collections import namedtuple
 from itertools import chain, tee
 import logging
+from neurolang.logic import Union
 from operator import contains, eq
-from typing import Iterable, Tuple
+from typing import Iterable, List, Tuple
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -14,7 +15,7 @@ from ...type_system import (NeuroLangTypeException, Unknown, get_args,
 from ...utils import OrderedSet, log_performance
 from ..expression_processing import (extract_logic_free_variables,
                                      extract_logic_predicates, is_linear_rule,
-                                     dependency_matrix, program_has_loops)
+                                     dependency_matrix, program_has_loops, stratify)
 from ..instance import MapInstance
 
 
@@ -510,3 +511,51 @@ class ChaseSemiNaive:
                     f"Rule {rule} is non-linear. "
                     "Use a different resolution algorithm"
                 )
+
+#TODO: manage this properly in configuration
+DEFAULT_STRATIFIED_CHASE_CLASSES = [
+    ChaseNonRecursive, 
+    ChaseSemiNaive, 
+    ChaseNaive
+]
+
+
+class ChaseStratified(ChaseGeneral):
+
+    def __init__(
+        self, datalog_program, rules=None,
+        chase_classes: List[ChaseGeneral]=DEFAULT_STRATIFIED_CHASE_CLASSES
+    ):
+        super().__init__(datalog_program, rules=rules)
+        self.chase_classes = chase_classes
+        code = Union(tuple(self.rules))
+        stratified_code, stratifiable = stratify(code, self.datalog_program)
+        self.stratified_code = stratified_code
+
+    def pick_chase_instance_for_stratum(self, stratum, instance_update):
+        chase_instance = None
+        for chase_class in self.chase_classes:
+            try:
+                chase_instance = chase_class(self.datalog_program, stratum)
+                chase_instance.check_constraints(instance_update)
+                break
+            except NeuroLangException:
+                chase_instance = None
+        return chase_instance
+
+    def build_chase_solution(self):
+        instance_update = MapInstance(
+            self.datalog_program.extensional_database()
+        )
+        self.check_constraints(instance_update)
+        instance = MapInstance()
+        for stratum in self.stratified_code:
+            chase_instance = self.pick_chase_instance_for_stratum(
+                stratum, instance_update
+            )
+            instance = chase_instance.execute_chase(
+                stratum, instance_update, instance
+            )
+            instance_update = instance
+            instance = MapInstance()
+        return instance_update
