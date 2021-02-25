@@ -4,7 +4,7 @@ from pytest import raises
 
 from ... import expression_walker, expressions
 from .. import DatalogProgram, Fact, Implication, magic_sets
-from ..chase import Chase
+from ..chase import Chase, ChaseN, ChaseSN
 from ..expressions import TranslateToLogic
 
 C_ = expressions.Constant

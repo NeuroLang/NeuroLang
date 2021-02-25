@@ -32,15 +32,25 @@ __all__ = [
 class ChaseSN(ChaseSemiNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
     pass
 
-class ChaseNR(ChaseNonRecursive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
+
+class ChaseNR(
+    ChaseNonRecursive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral
+):
     pass
+
 
 class ChaseN(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
     pass
 
-class Chase(ChaseStratified, ChaseNamedRelationalAlgebraMixin):
 
-    def __init__(self, datalog_program, rules=None, chase_classes=[
-        ChaseNR, ChaseSN, ChaseN
-    ]):
+DEFAULT_STRATIFIED_CHASE_CLASSES = (ChaseNR, ChaseSN, ChaseN)
+
+
+class Chase(ChaseStratified, ChaseNamedRelationalAlgebraMixin):
+    def __init__(
+        self,
+        datalog_program,
+        rules=None,
+        chase_classes=DEFAULT_STRATIFIED_CHASE_CLASSES,
+    ):
         super().__init__(datalog_program, chase_classes, rules=rules)

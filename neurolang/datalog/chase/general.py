@@ -479,7 +479,7 @@ class ChaseNaive:
 class ChaseSemiNaive:
     """Chase implementation using the semi-naive algorithm.
     This algorithm will not work if there are non-linear rules.
-       """
+    """
 
     def execute_chase(self, rules, instance_update, instance):
         continue_chase = len(instance_update) > 0
@@ -529,7 +529,9 @@ class ChaseStratified(ChaseGeneral):
         chase_instance = None
         for chase_class in self.chase_classes:
             try:
-                chase_instance = chase_class(self.datalog_program, Union(stratum))
+                chase_instance = chase_class(
+                    self.datalog_program, Union(stratum)
+                )
                 chase_instance.check_constraints(instance_update)
                 break
             except NeuroLangException:

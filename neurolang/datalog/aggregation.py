@@ -128,21 +128,24 @@ class DatalogWithAggregationMixin(PatternWalker):
             )
 
 
-class Chase(chase.Chase):
+class ChaseAgg(chase.ChaseSN):
+    """Aggregation Chase class instantiated for each stratum.
+    `check_constraints` will be called after each initialization to check
+    if stratum can be run with aggregation.
+    """
     def check_constraints(self, instance_update):
-        for stratum in self.stratified_code:
-            seen_in_stratum = set()
-            aggregate_rules = []
-            for rule in stratum:
-                seen_in_stratum.add(rule.consequent.functor)
-                if is_aggregation_rule(rule):
-                    aggregate_rules.append(rule)
+        seen_in_stratum = set()
+        aggregate_rules = []
+        for rule in self.rules:
+            seen_in_stratum.add(rule.consequent.functor)
+            if is_aggregation_rule(rule):
+                aggregate_rules.append(rule)
 
-            self._stratum_is_aggregation_viable(
-                seen_in_stratum, aggregate_rules
-            )
+        self._stratum_is_aggregation_viable(
+            seen_in_stratum, aggregate_rules
+        )
 
-        return super().check_constraints(instance_update)
+        super().check_constraints(instance_update)
 
     def _stratum_is_aggregation_viable(self, seen_in_stratum, aggregate_rules):
         for rule in aggregate_rules:
@@ -229,3 +232,13 @@ class Chase(chase.Chase):
         return super().eliminate_already_computed(
             consequent, instance, substitutions
         )
+
+class Chase(chase.Chase):
+    """
+    Stratified Chase class which will try to run aggregation for
+    each stratum, then try the other default chase classes if stratum
+    cannot be run with aggregation.
+    """
+    def __init__(self, datalog_program, rules=None):
+        chase_classes = (ChaseAgg,) + chase.DEFAULT_STRATIFIED_CHASE_CLASSES
+        super().__init__(datalog_program, rules=rules, chase_classes=chase_classes)
