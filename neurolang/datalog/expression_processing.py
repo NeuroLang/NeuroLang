@@ -326,7 +326,7 @@ def reachable_code(query, datalog):
     return Union(reachable_code[::-1])
 
 
-def dependency_matrix(datalog, rules=None):
+def dependency_matrix(datalog, rules=None, instance=None):
     """Produces the dependecy matrix for a datalog's
     instance intensional database (IDB).
 
@@ -337,6 +337,9 @@ def dependency_matrix(datalog, rules=None):
     rules : None or Union of rules
         an optional subset of rules from the datalog
         program's IDB.
+    instance: Instance
+        an optional instance updated with the current
+        DatalogProgram resolution
 
     Returns
     -------
@@ -378,6 +381,8 @@ def dependency_matrix(datalog, rules=None):
 
     idb_symbols = tuple(sorted(idb_symbols, key=lambda s: s.name))
     edb = datalog.extensional_database()
+    if instance is not None:
+        edb = edb | instance.elements.keys()
     if hasattr(datalog, "constraints"):
         constraint_symbols = set(
             formula.consequent.functor

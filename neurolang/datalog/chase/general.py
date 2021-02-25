@@ -451,7 +451,8 @@ class ChaseNonRecursive:
         super().check_constraints(instance_update)
         self._dependency_matrix_symbols, self._dependency_matrix = \
             dependency_matrix(
-                self.datalog_program, rules=self.rules
+                self.datalog_program, rules=self.rules,
+                instance=instance_update
             )
         if program_has_loops(self._dependency_matrix):
             raise NeuroLangProgramHasLoopsException(

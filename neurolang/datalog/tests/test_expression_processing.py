@@ -31,6 +31,7 @@ from ..expression_processing import (
     HeadRepeatedVariableToBodyEquality,
     maybe_deconjunct_single_pred,
 )
+from ..instance import MapInstance
 
 S_ = Symbol
 C_ = Constant
@@ -310,6 +311,20 @@ def test_dependency_matrix():
 
     with raises(SymbolNotFoundError):
         dependency_matrix(datalog)
+
+    # Assume X was solved in previous stratum of program
+    instance = MapInstance({S_('X'): datalog.new_set([(0,)])})
+    idb_symbols_3, dep_matrix_3 = dependency_matrix(
+        datalog, instance=instance
+    )
+    assert idb_symbols_3 == (R, S, T)
+    assert np.array_equiv(dep_matrix_3, np.array(
+        [
+            [0, 0, 1],
+            [1, 0, 0],
+            [0, 0, 0]
+        ]
+    ))
 
 
 def test_program_has_loops():
