@@ -904,3 +904,38 @@ def test_numpy_log():
         )
     )
     assert result == expected
+
+
+def test_numpy_sqrt():
+    r = Constant[AbstractSet[Tuple[str, float]]](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"),
+            iterable=[
+                ("a", 1.0),
+                ("b", 4.0),
+            ],
+        )
+    )
+    projlist = (
+        ExtendedProjectionListMember(
+            fun_exp=Constant(RelationalAlgebraStringExpression("x")),
+            dst_column=Constant(ColumnStr("x")),
+        ),
+        ExtendedProjectionListMember(
+            fun_exp=Constant(numpy.sqrt)(Constant(ColumnStr("y"))),
+            dst_column=Constant(ColumnStr("z")),
+        ),
+    )
+    op = ExtendedProjection(r, projlist)
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(op)
+    expected = Constant[AbstractSet[Tuple[str, float]]](
+        NamedRelationalAlgebraFrozenSet(
+            iterable={
+                ("a", 1.0),
+                ("b", 2.0),
+            },
+            columns=("x", "z"),
+        )
+    )
+    assert result == expected

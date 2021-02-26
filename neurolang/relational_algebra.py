@@ -470,6 +470,21 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     @ew.add_match(
         FunctionApplication(Constant, ...),
+        lambda fa: (
+            isinstance(fa.functor.value, Callable)
+            and numpy.sqrt == fa.functor.value
+        ),
+    )
+    def numpy_sqrt(self, fa):
+        return Constant[RelationalAlgebraStringExpression](
+            RelationalAlgebraStringExpression(
+                "sqrt({})".format(self.walk(fa.args[0]).value)
+            ),
+            auto_infer_type=False,
+        )
+
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
         lambda fa: fa.functor.value == operator.neg,
     )
     def negative_value(self, fa):
