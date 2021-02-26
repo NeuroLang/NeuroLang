@@ -835,6 +835,9 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         else:
             antecedent = remove_conjunction_duplicates(antecedent)
         consequent = replacer.walk(implication.consequent)
+        self._check_no_agg_var_replaced_by_const(
+            implication.consequent, consequent
+        )
         new_implication = Implication(consequent, antecedent)
         return self.walk(new_implication)
 
@@ -902,6 +905,29 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
                 found_eq_set = True
         if not found_eq_set:
             eq_sets.append({first, second})
+
+    @staticmethod
+    def _check_no_agg_var_replaced_by_const(old_csqt, new_csqt) -> None:
+        for old_arg, new_arg in zip(old_csqt.args, new_csqt.args):
+            if isinstance(old_arg, FunctionApplication) and any(
+                isinstance(a1, Symbol) and isinstance(a2, Constant)
+                for a1, a2 in zip(old_arg.args, new_arg.args)
+            ):
+                problematic_replacements = set(
+                    (a1, a2)
+                    for a1, a2 in zip(old_arg.args, new_arg.args)
+                    if isinstance(a1, Symbol) and isinstance(a2, Constant)
+                )
+                raise ForbiddenExpressionError(
+                    "Variable equalities cannot lead to aggregation variables "
+                    "to be replaced by a constant. Problematic replacements "
+                    "that were found are {}".format(
+                        ", ".join(
+                            f"{a1} / {a2}"
+                            for a1, a2 in problematic_replacements
+                        )
+                    )
+                )
 
 
 class UnifyVariableEqualities(UnifyVariableEqualitiesMixin, ExpressionWalker):
