@@ -232,6 +232,7 @@ def test_stratification():
         list(code.formulas[3:])
     ]
 
+
 def test_stratification_with_consequent_in_multiple_rules():
     x = S_('X')
     y = S_('Y')
@@ -269,8 +270,7 @@ def test_stratification_with_consequent_in_multiple_rules():
         list(code.formulas[:4]),
         list(code.formulas[4:6]),
         list((code.formulas[6],)),
-        list((code.formulas[8],)),
-        list((code.formulas[7],)),
+        list(code.formulas[7:]),
     ]
 
 

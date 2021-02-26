@@ -152,6 +152,28 @@ def all_body_preds_in_set(implication, predicate_set):
     return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)
 
 
+def any_body_preds_in_set(implication, predicate_set):
+    """Checks wether any predicates in the antecedent
+    are in the predicate_set.
+
+    Parameters
+    ----------
+    implication :
+        Implication
+    predicate_set :
+        set of functors
+
+    Returns
+    -------
+    bool
+        True is any predicates in the antecedent are
+        in the predicate_set
+
+    """
+    preds = (e.functor for e in extract_logic_atoms(implication.antecedent))
+    return any(e in predicate_set for e in preds)
+
+
 def extract_logic_free_variables(expression):
     """Extract variables from expression assuming it's in datalog format.
 
@@ -274,15 +296,27 @@ def stratify_obtain_facts_stratum(to_process, seen):
 
 
 def stratify_obtain_new_stratum(to_process, seen):
-    stratum = []
+    # 1. add all the rule for which we've seen the body predicates
+    temp_stratum = []
     new_to_process = []
-    new_seen = set()
     for r in to_process:
         if all_body_preds_in_set(r, seen):
-            stratum.append(r)
-            new_seen.add(r.consequent.functor)
+            temp_stratum.append(r)
+            
         else:
             new_to_process.append(r)
+    
+    # 2. remove all the rules which have body predicates that will be updated
+    # by rules in later strata.
+    will_see_later = {r.consequent.functor for r in new_to_process}
+    stratum = []
+    new_seen = set()
+    for r in temp_stratum:
+        if any_body_preds_in_set(r, will_see_later):
+            new_to_process.insert(0, r)
+        else:
+            stratum.append(r)
+            new_seen.add(r.consequent.functor)
     
     return new_seen, new_to_process, stratum
 
