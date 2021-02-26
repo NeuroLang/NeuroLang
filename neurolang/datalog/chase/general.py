@@ -33,6 +33,10 @@ class NeuroLangProgramHasLoopsException(NeuroLangException):
     pass
 
 
+class NoValidChaseClassForStratumException(NeuroLangException):
+    pass
+
+
 class ChaseGeneral():
     """Chase implementation using the naive resolution algorithm.
 
@@ -515,15 +519,16 @@ class ChaseSemiNaive:
 
 
 class ChaseStratified(ChaseGeneral):
-
     def __init__(
-        self, datalog_program, chase_classes: List[Type[ChaseGeneral]],
-        rules=None
+        self,
+        datalog_program,
+        chase_classes: List[Type[ChaseGeneral]],
+        rules=None,
     ):
         super().__init__(datalog_program, rules=rules)
         self.chase_classes = chase_classes
         code = Union(tuple(self.rules))
-        stratified_code, stratifiable = stratify(code, self.datalog_program)
+        stratified_code, _ = stratify(code, self.datalog_program)
         self.stratified_code = stratified_code
 
     def pick_chase_instance_for_stratum(self, stratum, instance_update):
@@ -537,6 +542,11 @@ class ChaseStratified(ChaseGeneral):
                 break
             except NeuroLangException:
                 chase_instance = None
+        if chase_instance is None:
+            raise NoValidChaseClassForStratumException(
+                f"No class out of {self.chase_classes}"
+                f" can execute stratum {stratum}."
+            )
         return chase_instance
 
     def build_chase_solution(self):
