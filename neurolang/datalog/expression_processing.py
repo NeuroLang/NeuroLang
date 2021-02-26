@@ -807,6 +807,10 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         Implication(FunctionApplication(Symbol, ...), ...),
         lambda implication: all(
             isinstance(arg, (Symbol, Constant))
+            or (
+                isinstance(arg, FunctionApplication)
+                and all(isinstance(a, (Symbol, Constant)) for a in arg.args)
+            )
             for arg in implication.consequent.args
         )
         and any(
@@ -833,19 +837,6 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         consequent = replacer.walk(implication.consequent)
         new_implication = Implication(consequent, antecedent)
         return self.walk(new_implication)
-
-    @add_match(
-        Implication(FunctionApplication(Symbol, ...), ...),
-        lambda implication: is_aggregation_rule(implication)
-        and any(
-            is_var_equality_to_var_or_const(formula)
-            for formula in extract_logic_predicates(implication.antecedent)
-        ),
-    )
-    def unsupported_unification_for_aggregation(self, rule_with_aggregation):
-        raise ForbiddenExpressionError(
-            "Unification of rules with aggregation not supported"
-        )
 
     @staticmethod
     def build_substitutions_from_equalities(eq_sets):

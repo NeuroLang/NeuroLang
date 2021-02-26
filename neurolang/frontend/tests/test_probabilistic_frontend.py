@@ -15,6 +15,7 @@ from ...exceptions import (
 )
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
+    MalformedProbabilisticTupleError,
     UnsupportedProbabilisticQueryError,
 )
 from ...regions import SphericalVolume
@@ -1035,4 +1036,25 @@ def test_postprob_conjunct_with_wlq_result():
         ("t1", 2, 2, 1.0),
         ("t2", 2, 1, 0.5),
     }
+    assert_almost_equal(sol, expected)
+
+
+def test_no_tuple_unicity_qbased_pfact():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
+    with nl.environment as e:
+        (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
+        e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
+        with pytest.raises(MalformedProbabilisticTupleError):
+            nl.query((e.x, e.p), e.Query(e.x, e.p))
+
+
+def test_qbased_pfact_max_prob():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
+    with nl.environment as e:
+        (e.Q @ e.MAX(e.p))[e.x] = e.P(e.p, e.x)
+        e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
+        sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    expected = {("a", 0.9), ("b", 0.5)}
     assert_almost_equal(sol, expected)
