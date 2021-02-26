@@ -24,6 +24,7 @@ import pandas as pd
 
 from .. import expressions as ir
 from ..datalog.aggregation import (
+    BuiltinAggregationMixin,
     Chase,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
@@ -86,6 +87,7 @@ class RegionFrontendCPLogicSolver(
     RegionSolver,
     CPLogicMixin,
     DatalogWithAggregationMixin,
+    BuiltinAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
     ExpressionBasicEvaluator,
@@ -146,9 +148,6 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
         self.ontology_loaded = False
-        self.symbol_table[ir.Symbol("MAX")] = ir.Constant[
-            Callable[[Iterable], Any]
-        ](max)
 
     def load_ontology(
         self,

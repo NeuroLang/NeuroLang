@@ -1,6 +1,7 @@
 import typing
 from typing import AbstractSet
 
+from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import EQ, conjunct_formulas
 from ..datalog.instance import MapInstance
 from ..expression_pattern_matching import add_match
@@ -16,9 +17,6 @@ from .expression_processing import (
     within_language_succ_query_to_intensional_rule,
 )
 from .expressions import Condition, ProbabilisticPredicate
-
-AGG_MEAN = Symbol("MEAN")
-AGG_MAX = Symbol("MAX")
 
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
@@ -128,7 +126,9 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     ) -> typing.Union[None, typing.Callable]:
         if not isinstance(
             impl.consequent.probability, FunctionApplication
-        ) or impl.consequent.probability.functor not in (AGG_MEAN, AGG_MAX):
+        ) or not is_builtin_aggregation_functor(
+            impl.consequent.probability.functor
+        ):
             return
         return impl.consequent.probability.functor
 

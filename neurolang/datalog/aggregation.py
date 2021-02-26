@@ -10,7 +10,10 @@ in the set ``Q``.
    FNT in Databases. 5, 105–195 (2012).
 """
 
+import typing
 from warnings import warn
+
+import numpy
 
 from ..exceptions import ForbiddenUnstratifiedAggregation, NeuroLangException
 from ..expression_walker import (
@@ -20,7 +23,7 @@ from ..expression_walker import (
     add_match,
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..type_system import get_generic_type
+from ..type_system import get_generic_type, Unknown
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 from . import (
     Implication,
@@ -39,6 +42,22 @@ from .expressions import TranslateToLogic, AggregationApplication
 from .instance import MapInstance
 
 FA2L = FunctionApplicationToPythonLambda()
+
+AGG_MAX = Symbol("MAX")
+AGG_MEAN = Symbol("MEAN")
+
+
+def is_builtin_aggregation_functor(functor):
+    return functor in (AGG_MAX, AGG_MEAN)
+
+
+class BuiltinAggregationMixin:
+    def function_MAX(self, iterable: typing.AbstractSet) -> Unknown:
+        return numpy.max(iterable)
+
+    def function_MEAN(self, iterable: typing.AbstractSet) -> Unknown:
+        return numpy.mean(iterable)
+
 
 
 class TranslateToLogicWithAggregation(TranslateToLogic):
