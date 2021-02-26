@@ -15,7 +15,7 @@ from ...exceptions import (
 )
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
-    MalformedProbabilisticTupleError,
+    RepeatedTuplesInProbabilisticRelationError,
     UnsupportedProbabilisticQueryError,
 )
 from ...regions import SphericalVolume
@@ -1047,7 +1047,7 @@ def test_no_tuple_unicity_qbased_pfact():
     with nl.environment as e:
         (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
         e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
-        with pytest.raises(MalformedProbabilisticTupleError):
+        with pytest.raises(RepeatedTuplesInProbabilisticRelationError):
             nl.query((e.x, e.p), e.Query(e.x, e.p))
 
 

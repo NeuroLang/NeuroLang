@@ -8,7 +8,7 @@ from ..expression_walker import PatternWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
 from .cplogic.program import CPLogicProgram
-from .exceptions import MalformedProbabilisticTupleError
+from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
     construct_within_language_succ_result,
     is_query_based_probfact,
@@ -224,13 +224,15 @@ def _check_tuple_prob_unicity(ra_set: Constant[AbstractSet]) -> None:
     length_without_probs = len(ra_set.value.projection(*proj_cols))
     if length_without_probs != length:
         n_repeated_tuples = length - length_without_probs
-        raise MalformedProbabilisticTupleError(
+        raise RepeatedTuplesInProbabilisticRelationError(
+            n_repeated_tuples,
+            length,
             "Some tuples have multiple probability labels. "
             f"Found {n_repeated_tuples} tuple repetitions, out of "
             f"{length} total tuples. If your query-based probabilistic fact "
             "leads to multiple probabilities for the same tuple, you might "
             "want to consider aggregating these probabilities by taking their "
-            "maximum or average."
+            "maximum or average.",
         )
 
 
