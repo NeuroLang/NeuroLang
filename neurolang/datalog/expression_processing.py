@@ -283,6 +283,7 @@ def stratify_obtain_new_stratum(to_process, seen):
             new_seen.add(r.consequent.functor)
         else:
             new_to_process.append(r)
+    
     return new_seen, new_to_process, stratum
 
 

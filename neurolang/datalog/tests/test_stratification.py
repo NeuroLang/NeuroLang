@@ -35,8 +35,8 @@ def test_resolution_works():
     ])
 
     code = Eb_([
-        Imp_(q(x), anc(a, x)),
         Imp_(anc(x, y), par(x, y)),
+        Imp_(q(x), anc(a, x)),
         Imp_(anc(x, y), anc(x, z) & par(z, y)),
     ])
 

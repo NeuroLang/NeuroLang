@@ -232,6 +232,44 @@ def test_stratification():
         list(code.formulas[3:])
     ]
 
+def test_stratification_with_consequent_in_multiple_rules():
+    x = S_('X')
+    y = S_('Y')
+    z = S_('Z')
+    anc = S_('anc')
+    par = S_('par')
+    q = S_('q')
+    M = S_('M')
+    N = S_('N')
+    a = C_('a')
+    b = C_('b')
+    c = C_('c')
+    d = C_('d')
+
+    code = DT.walk(B_([
+        Fact(par(a, b)),
+        Fact(par(b, c)),
+        Fact(par(c, d)),
+        Fact(M(a)),
+        Imp_(N(a), M(a)),
+        Imp_(anc(x, y), par(x, y)),
+        Imp_(q(x), anc(a, x)),
+        Imp_(anc(x, y), anc(x, z) & par(z, y) & N(a)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    strata, stratifyiable = stratify(code, datalog)
+
+    assert stratifyiable
+    assert strata == [
+        list(code.formulas[:4]),
+        list(code.formulas[4:6]),
+        list((code.formulas[7],)),
+        list((code.formulas[6],)),
+    ]
+
 
 def test_reachable():
     Q = S_('Q')  # noqa: N806
