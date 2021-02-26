@@ -942,7 +942,9 @@ def test_query_based_spatial_prior():
     )
     exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
     with nl.environment as e:
-        (e.VoxelReported @ exp(-(e.d ** 2) / 5.0))[e.i1, e.j1, e.k1, e.s] = (
+        (e.VoxelReported @ e.MAX(exp(-(e.d ** 2) / 5.0)))[
+            e.i1, e.j1, e.k1, e.s
+        ] = (
             e.FocusReported(e.i2, e.j2, e.k2, e.s)
             & e.Voxel(e.i1, e.j1, e.k1)
             & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
@@ -976,8 +978,8 @@ def test_query_based_spatial_prior():
             (10, 9, 10, np.exp(-1 / 5) / 2),
             (10, 9, 11, np.exp(-1 / 5) / 2),
             (10, 10, 9, np.exp(-1 / 5) / 2),
-            (10, 10, 10, 0.5 + np.exp(-1 / 5) / 2),
-            (10, 10, 11, 0.5 + np.exp(-1 / 5) / 2),
+            (10, 10, 10, 0.5),
+            (10, 10, 11, 0.5),
             (10, 10, 12, np.exp(-1 / 5) / 2),
             (10, 11, 10, np.exp(-1 / 5) / 2),
             (10, 11, 11, np.exp(-1 / 5) / 2),
