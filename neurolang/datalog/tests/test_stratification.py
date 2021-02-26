@@ -23,6 +23,9 @@ def test_resolution_works():
     anc = S_('anc')
     par = S_('par')
     q = S_('q')
+    M = S_('M')
+    N = S_('N')
+    O = S_('O')
     a = C_('a')
     b = C_('b')
     c = C_('c')
@@ -32,12 +35,15 @@ def test_resolution_works():
         F_(par(a, b)),
         F_(par(b, c)),
         F_(par(c, d)),
+        F_(M(a)),
     ])
 
     code = Eb_([
+        Imp_(N(a), M(a)),
+        Imp_(O(x), N(x)),
         Imp_(anc(x, y), par(x, y)),
         Imp_(q(x), anc(a, x)),
-        Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        Imp_(anc(x, y), anc(x, z) & par(z, y) & O(a)),
     ])
 
     dl = Datalog()

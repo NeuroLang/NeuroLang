@@ -241,6 +241,7 @@ def test_stratification_with_consequent_in_multiple_rules():
     q = S_('q')
     M = S_('M')
     N = S_('N')
+    O = S_('O')
     a = C_('a')
     b = C_('b')
     c = C_('c')
@@ -253,8 +254,9 @@ def test_stratification_with_consequent_in_multiple_rules():
         Fact(M(a)),
         Imp_(N(a), M(a)),
         Imp_(anc(x, y), par(x, y)),
+        Imp_(O(x), N(x)),
         Imp_(q(x), anc(a, x)),
-        Imp_(anc(x, y), anc(x, z) & par(z, y) & N(a)),
+        Imp_(anc(x, y), anc(x, z) & par(z, y) & O(a)),
     ]))
 
     datalog = Datalog()
@@ -266,8 +268,9 @@ def test_stratification_with_consequent_in_multiple_rules():
     assert strata == [
         list(code.formulas[:4]),
         list(code.formulas[4:6]),
-        list((code.formulas[7],)),
         list((code.formulas[6],)),
+        list((code.formulas[8],)),
+        list((code.formulas[7],)),
     ]
 
 
