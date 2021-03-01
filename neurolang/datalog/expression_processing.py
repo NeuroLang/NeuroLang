@@ -416,8 +416,9 @@ def dependency_matrix(datalog, rules=None, instance=None):
 
     idb_symbols = tuple(sorted(idb_symbols, key=lambda s: s.name))
     edb = datalog.extensional_database()
+    previous_symbols = set()
     if instance is not None:
-        edb = edb | instance.elements.keys()
+        previous_symbols = instance.elements.keys()
     if hasattr(datalog, "constraints"):
         constraint_symbols = set(
             formula.consequent.functor
@@ -441,9 +442,13 @@ def dependency_matrix(datalog, rules=None, instance=None):
             elif functor in idb_symbols:
                 ix_functor = idb_symbols.index(functor)
                 dependency_matrix[ix_head, ix_functor] += 1
-            elif isinstance(functor, Symbol) and (
-                functor not in datalog.symbol_table
-                or functor in datalog.intensional_database()
+            elif (
+                isinstance(functor, Symbol)
+                and functor not in previous_symbols
+                and (
+                    functor not in datalog.symbol_table
+                    or functor in datalog.intensional_database()
+                )
             ):
                 raise SymbolNotFoundError(f"Symbol not found {functor.name}")
 

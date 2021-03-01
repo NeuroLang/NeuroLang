@@ -43,7 +43,7 @@ class ChaseN(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
     pass
 
 
-DEFAULT_STRATIFIED_CHASE_CLASSES = (ChaseSN, ChaseNR, ChaseN)
+DEFAULT_STRATIFIED_CHASE_CLASSES = (ChaseNR, ChaseSN, ChaseN)
 
 
 class Chase(ChaseStratified, ChaseNamedRelationalAlgebraMixin):
