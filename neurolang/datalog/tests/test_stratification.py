@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, ANY
 from ... import expression_walker, expressions
 from .. import DatalogProgram, Fact, Implication
-from ..chase import Chase, ChaseNR, ChaseSN
+from ..chase import ChaseNamedStratified, ChaseNR, ChaseSN
 from ..chase.general import NoValidChaseClassForStratumException
 from ..expressions import TranslateToLogic
 from ..instance import MapInstance
@@ -59,14 +59,14 @@ def datalog():
 
 
 def test_stratification_resolution_works(datalog):
-    solution = Chase(datalog).build_chase_solution()
+    solution = ChaseNamedStratified(datalog).build_chase_solution()
     assert solution[q].value == {C_((e,)) for e in (b, c, d)}
 
 
 def test_stratified_chases(datalog):
     # Recursive stratum can be solved by just ChaseSN
     classes = (ChaseSN,)
-    solution = Chase(datalog, chase_classes=classes).build_chase_solution()
+    solution = ChaseNamedStratified(datalog, chase_classes=classes).build_chase_solution()
     assert solution[q].value == {C_((e,)) for e in (b, c, d)}
 
     # Recursive stratum cannot be solved by just ChaseNR
@@ -74,7 +74,7 @@ def test_stratified_chases(datalog):
     with pytest.raises(
         NoValidChaseClassForStratumException,
     ):
-        solution = Chase(datalog, chase_classes=classes).build_chase_solution()
+        solution = ChaseNamedStratified(datalog, chase_classes=classes).build_chase_solution()
 
     # Check that each stratum is solved by the first possible class
     strata = list(datalog.intensional_database().values())
@@ -85,7 +85,7 @@ def test_stratified_chases(datalog):
         MagicMock(return_value=spied_chase_sn),
     )
 
-    solution = Chase(datalog, chase_classes=classes).build_chase_solution()
+    solution = ChaseNamedStratified(datalog, chase_classes=classes).build_chase_solution()
     assert solution[q].value == {C_((e,)) for e in (b, c, d)}
     spied_chase_sn.execute_chase.assert_called_with(
         list(strata[0].formulas),
@@ -114,5 +114,5 @@ def test_unstratifyable_code_resolution():
     )
     dl = Datalog()
     dl.walk(code)
-    solution = Chase(dl, chase_classes=(ChaseSN,)).build_chase_solution()
+    solution = ChaseNamedStratified(dl, chase_classes=(ChaseSN,)).build_chase_solution()
     assert solution[R].value == {(1, 2), (2, 1), (3, 2), (2, 3)}

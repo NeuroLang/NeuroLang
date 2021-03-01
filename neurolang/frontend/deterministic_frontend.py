@@ -4,8 +4,8 @@ import numpy as np
 
 from .. import expressions as ir
 from ..datalog import DatalogProgram
+from ..datalog.chase import Chase
 from ..datalog.aggregation import (
-    Chase,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation
 )

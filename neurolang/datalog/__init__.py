@@ -5,7 +5,7 @@ from .expression_processing import (
     is_conjunctive_expression_with_nested_predicates)
 from .expressions import (NULL, UNDEFINED, Conjunction, Union, Fact,
                           Implication, Negation, NullConstant, Undefined)
-from . import (aggregation, basic_representation, chase, expression_processing,
+from . import (basic_representation, chase, expression_processing, aggregation,
                expressions, instance, magic_sets)
 
 __all__ = [

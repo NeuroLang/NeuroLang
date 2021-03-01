@@ -8,7 +8,8 @@ from ...expressions import (Constant, ExpressionBlock, NeuroLangException,
                             Symbol)
 from ...type_system import Unknown
 from .. import DatalogProgram, Fact, Implication
-from ..aggregation import (AggregationApplication, Chase, ChaseAggregationSN,
+from ..chase import Chase, ChaseAggregationSN
+from ..aggregation import (AggregationApplication,
                            DatalogWithAggregationMixin,
                            TranslateToLogicWithAggregation)
 from ..expressions import Union

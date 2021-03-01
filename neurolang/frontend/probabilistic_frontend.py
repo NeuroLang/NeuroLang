@@ -23,8 +23,8 @@ from uuid import uuid1
 import pandas as pd
 
 from .. import expressions as ir
+from ..datalog.chase import Chase
 from ..datalog.aggregation import (
-    Chase,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
 )

@@ -13,6 +13,7 @@ from .relational_algebra import (
     ChaseNamedRelationalAlgebraMixin,
     ChaseRelationalAlgebraPlusCeriMixin,
 )
+from ..aggregation import ChaseAggregation
 
 __all__ = [
     "ChaseGeneral",
@@ -43,10 +44,22 @@ class ChaseN(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
     pass
 
 
+class ChaseAggregationNR(ChaseAggregation, ChaseNR):
+    pass
+
+
+class ChaseAggregationSN(ChaseAggregation, ChaseSN):
+    pass
+
+
+class ChaseAggregationN(ChaseAggregation, ChaseN):
+    pass
+
+
 DEFAULT_STRATIFIED_CHASE_CLASSES = (ChaseNR, ChaseSN, ChaseN)
 
 
-class Chase(ChaseStratified, ChaseNamedRelationalAlgebraMixin):
+class ChaseNamedStratified(ChaseStratified, ChaseNamedRelationalAlgebraMixin):
     def __init__(
         self,
         datalog_program,
@@ -54,3 +67,21 @@ class Chase(ChaseStratified, ChaseNamedRelationalAlgebraMixin):
         chase_classes=DEFAULT_STRATIFIED_CHASE_CLASSES,
     ):
         super().__init__(datalog_program, chase_classes, rules=rules)
+
+
+class Chase(ChaseNamedStratified):
+    """
+    Stratified Chase which will try to run (Aggregation + ChaseNonRecursive),
+    (Aggregation + ChaseSemiNaive) and then (Aggregation + ChaseNaive)
+    for each stratum.
+    """
+
+    def __init__(self, datalog_program, rules=None):
+        chase_classes = (
+            ChaseAggregationNR,
+            ChaseAggregationSN,
+            ChaseAggregationN,
+        )
+        super().__init__(
+            datalog_program, rules=rules, chase_classes=chase_classes
+        )

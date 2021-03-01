@@ -228,26 +228,3 @@ class ChaseAggregation:
         return super().eliminate_already_computed(
             consequent, instance, substitutions
         )
-
-
-class ChaseAggregationNR(ChaseAggregation, chase.ChaseNR):
-    pass
-
-
-class ChaseAggregationSN(ChaseAggregation, chase.ChaseSN):
-    pass
-
-
-class ChaseAggregationN(ChaseAggregation, chase.ChaseN):
-    pass
-
-
-class Chase(chase.Chase):
-    """
-    Stratified Chase which will try to run (Aggregation + ChaseNonRecursive),
-    (Aggregation + ChaseSemiNaive) and then (Aggregation + ChaseNaive)
-    for each stratum.
-    """
-    def __init__(self, datalog_program, rules=None):
-        chase_classes = (ChaseAggregationNR, ChaseAggregationSN, ChaseAggregationN)
-        super().__init__(datalog_program, rules=rules, chase_classes=chase_classes)
