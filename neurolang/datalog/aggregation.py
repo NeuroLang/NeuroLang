@@ -23,7 +23,6 @@ from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 from . import (
     Implication,
     Union,
-    chase,
     is_conjunctive_expression_with_nested_predicates,
 )
 from .basic_representation import UnionOfConjunctiveQueries
@@ -124,10 +123,9 @@ class DatalogWithAggregationMixin(PatternWalker):
             )
 
 
-class ChaseAggregation:
-    """Aggregation Chase class instantiated for each stratum.
-    `check_constraints` will be called after each initialization to check
-    if stratum can be run with aggregation.
+class ChaseAggregationMixin:
+    """Aggregation Chase Mixin to add support for aggregation to a Chase
+    class. Can be used with StratifiedChase.
     """
     def check_constraints(self, instance_update):
         seen_in_stratum = set()

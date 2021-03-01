@@ -13,7 +13,7 @@ from .relational_algebra import (
     ChaseNamedRelationalAlgebraMixin,
     ChaseRelationalAlgebraPlusCeriMixin,
 )
-from ..aggregation import ChaseAggregation
+from ..aggregation import ChaseAggregationMixin
 
 __all__ = [
     "ChaseGeneral",
@@ -44,15 +44,15 @@ class ChaseN(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
     pass
 
 
-class ChaseAggregationNR(ChaseAggregation, ChaseNR):
+class ChaseAggregationNR(ChaseAggregationMixin, ChaseNR):
     pass
 
 
-class ChaseAggregationSN(ChaseAggregation, ChaseSN):
+class ChaseAggregationSN(ChaseAggregationMixin, ChaseSN):
     pass
 
 
-class ChaseAggregationN(ChaseAggregation, ChaseN):
+class ChaseAggregationN(ChaseAggregationMixin, ChaseN):
     pass
 
 
