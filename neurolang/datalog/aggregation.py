@@ -124,7 +124,7 @@ class DatalogWithAggregationMixin(PatternWalker):
             )
 
 
-class ChaseAgg:
+class ChaseAggregation:
     """Aggregation Chase class instantiated for each stratum.
     `check_constraints` will be called after each initialization to check
     if stratum can be run with aggregation.
@@ -230,19 +230,24 @@ class ChaseAgg:
         )
 
 
-class ChaseAggNR(ChaseAgg, chase.ChaseNR):
+class ChaseAggregationNR(ChaseAggregation, chase.ChaseNR):
     pass
 
 
-class ChaseAggSN(ChaseAgg, chase.ChaseSN):
+class ChaseAggregationSN(ChaseAggregation, chase.ChaseSN):
+    pass
+
+
+class ChaseAggregationN(ChaseAggregation, chase.ChaseN):
     pass
 
 
 class Chase(chase.Chase):
     """
-    Stratified Chase which will try to run (Aggregation + ChaseSemiNaive),
-    (Aggregation + ChaseNonRecursive) and then ChaseNaive for each stratum.
+    Stratified Chase which will try to run (Aggregation + ChaseNonRecursive),
+    (Aggregation + ChaseSemiNaive) and then (Aggregation + ChaseNaive)
+    for each stratum.
     """
     def __init__(self, datalog_program, rules=None):
-        chase_classes = (ChaseAggNR, chase.ChaseSN, chase.ChaseN)
+        chase_classes = (ChaseAggregationNR, ChaseAggregationSN, ChaseAggregationN)
         super().__init__(datalog_program, rules=rules, chase_classes=chase_classes)

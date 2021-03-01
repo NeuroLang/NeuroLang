@@ -8,7 +8,7 @@ from ...expressions import (Constant, ExpressionBlock, NeuroLangException,
                             Symbol)
 from ...type_system import Unknown
 from .. import DatalogProgram, Fact, Implication
-from ..aggregation import (AggregationApplication, Chase, ChaseAggSN,
+from ..aggregation import (AggregationApplication, Chase, ChaseAggregationSN,
                            DatalogWithAggregationMixin,
                            TranslateToLogicWithAggregation)
 from ..expressions import Union
@@ -83,7 +83,7 @@ def test_aggregation_non_stratified():
     dl = Datalog()
     dl.walk(code)
 
-    chase = ChaseAggSN(dl)
+    chase = ChaseAggregationSN(dl)
 
     with pytest.raises(ForbiddenUnstratifiedAggregation):
         chase.build_chase_solution()

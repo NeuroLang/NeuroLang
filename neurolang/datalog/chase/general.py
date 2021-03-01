@@ -5,7 +5,7 @@ from neurolang.logic import Union
 from operator import contains, eq
 from typing import Iterable, List, Tuple, Type
 
-from ...exceptions import NeuroLangException
+from ...exceptions import NeuroLangException, NoValidChaseClassForStratumException
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic.unification import (apply_substitution,
                                   apply_substitution_arguments,
@@ -30,10 +30,6 @@ class NeuroLangNonLinearProgramException(NeuroLangException):
 
 
 class NeuroLangProgramHasLoopsException(NeuroLangException):
-    pass
-
-
-class NoValidChaseClassForStratumException(NeuroLangException):
     pass
 
 

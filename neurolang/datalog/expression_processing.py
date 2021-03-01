@@ -372,7 +372,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
     rules : None or Union of rules
         an optional subset of rules from the datalog
         program's IDB.
-    instance: Instance
+    instance: MapInstance
         an optional instance, meant to represent the current
         DatalogProgram resolution, and whose's symbols won't raise
         a SymbolNotFoundError if found as a dependency in the given
@@ -420,7 +420,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
     edb = datalog.extensional_database()
     previous_symbols = set()
     if instance is not None:
-        previous_symbols = instance.elements.keys()
+        previous_symbols = instance.as_map().keys()
     if hasattr(datalog, "constraints"):
         constraint_symbols = set(
             formula.consequent.functor
