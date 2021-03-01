@@ -10,8 +10,6 @@ in the set ``Q``.
    FNT in Databases. 5, 105–195 (2012).
 """
 
-from warnings import warn
-
 from ..exceptions import ForbiddenUnstratifiedAggregation, NeuroLangException
 from ..expression_walker import (
     FunctionApplicationToPythonLambda,
@@ -33,10 +31,8 @@ from .expression_processing import (
     extract_logic_predicates,
     is_aggregation_predicate,
     is_aggregation_rule,
-    stratify,
 )
 from .expressions import TranslateToLogic, AggregationApplication
-from .instance import MapInstance
 
 FA2L = FunctionApplicationToPythonLambda()
 

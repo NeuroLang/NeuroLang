@@ -302,10 +302,10 @@ def stratify_obtain_new_stratum(to_process, seen):
     for r in to_process:
         if all_body_preds_in_set(r, seen):
             temp_stratum.append(r)
-            
+
         else:
             new_to_process.append(r)
-    
+
     # 2. remove all the rules which have body predicates that will be updated
     # by rules in later strata.
     will_see_later = {r.consequent.functor for r in new_to_process}
@@ -317,7 +317,7 @@ def stratify_obtain_new_stratum(to_process, seen):
         else:
             stratum.append(r)
             new_seen.add(r.consequent.functor)
-    
+
     return new_seen, new_to_process, stratum
 
 
@@ -373,8 +373,10 @@ def dependency_matrix(datalog, rules=None, instance=None):
         an optional subset of rules from the datalog
         program's IDB.
     instance: Instance
-        an optional instance updated with the current
-        DatalogProgram resolution
+        an optional instance, meant to represent the current
+        DatalogProgram resolution, and whose's symbols won't raise
+        a SymbolNotFoundError if found as a dependency in the given
+        rules.
 
     Returns
     -------
