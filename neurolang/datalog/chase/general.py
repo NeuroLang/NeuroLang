@@ -555,6 +555,10 @@ class ChaseStratified(ChaseGeneral):
             chase_instance = self.pick_chase_instance_for_stratum(
                 stratum, instance_update
             )
+            LOG.debug(
+                f"Executing chase using {type(chase_instance)} "
+                f"for rules {stratum}"
+            )
             instance = chase_instance.execute_chase(
                 stratum, instance_update, instance
             )
