@@ -1,10 +1,11 @@
 from collections import namedtuple
 from itertools import chain, tee
 import logging
+from neurolang.logic import Union
 from operator import contains, eq
-from typing import Iterable, Tuple
+from typing import Iterable, List, Tuple, Type
 
-from ...exceptions import NeuroLangException
+from ...exceptions import NeuroLangException, NoValidChaseClassForStratumException
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic.unification import (apply_substitution,
                                   apply_substitution_arguments,
@@ -14,7 +15,7 @@ from ...type_system import (NeuroLangTypeException, Unknown, get_args,
 from ...utils import OrderedSet, log_performance
 from ..expression_processing import (extract_logic_free_variables,
                                      extract_logic_predicates, is_linear_rule,
-                                     dependency_matrix, program_has_loops)
+                                     dependency_matrix, program_has_loops, stratify)
 from ..instance import MapInstance
 
 
@@ -450,7 +451,8 @@ class ChaseNonRecursive:
         super().check_constraints(instance_update)
         self._dependency_matrix_symbols, self._dependency_matrix = \
             dependency_matrix(
-                self.datalog_program, rules=self.rules
+                self.datalog_program, rules=self.rules,
+                instance=instance_update
             )
         if program_has_loops(self._dependency_matrix):
             raise NeuroLangProgramHasLoopsException(
@@ -478,7 +480,7 @@ class ChaseNaive:
 class ChaseSemiNaive:
     """Chase implementation using the semi-naive algorithm.
     This algorithm will not work if there are non-linear rules.
-       """
+    """
 
     def execute_chase(self, rules, instance_update, instance):
         continue_chase = len(instance_update) > 0
@@ -510,3 +512,56 @@ class ChaseSemiNaive:
                     f"Rule {rule} is non-linear. "
                     "Use a different resolution algorithm"
                 )
+
+
+class ChaseStratified(ChaseGeneral):
+    def __init__(
+        self,
+        datalog_program,
+        chase_classes: List[Type[ChaseGeneral]],
+        rules=None,
+    ):
+        super().__init__(datalog_program, rules=rules)
+        self.chase_classes = chase_classes
+        code = Union(tuple(self.rules))
+        stratified_code, _ = stratify(code, self.datalog_program)
+        self.stratified_code = stratified_code
+
+    def pick_chase_instance_for_stratum(self, stratum, instance_update):
+        chase_instance = None
+        for chase_class in self.chase_classes:
+            try:
+                chase_instance = chase_class(
+                    self.datalog_program, Union(stratum)
+                )
+                chase_instance.check_constraints(instance_update)
+                break
+            except NeuroLangException:
+                chase_instance = None
+        if chase_instance is None:
+            raise NoValidChaseClassForStratumException(
+                f"No class out of {self.chase_classes}"
+                f" can execute stratum {stratum}."
+            )
+        return chase_instance
+
+    def build_chase_solution(self):
+        instance_update = MapInstance(
+            self.datalog_program.extensional_database()
+        )
+        self.check_constraints(instance_update)
+        instance = MapInstance()
+        for stratum in self.stratified_code:
+            chase_instance = self.pick_chase_instance_for_stratum(
+                stratum, instance_update
+            )
+            LOG.debug(
+                f"Executing chase using {type(chase_instance)} "
+                f"for rules {stratum}"
+            )
+            instance = chase_instance.execute_chase(
+                stratum, instance_update, instance
+            )
+            instance_update = instance
+            instance = MapInstance()
+        return instance_update

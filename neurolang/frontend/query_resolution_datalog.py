@@ -21,7 +21,7 @@ import pandas as pd
 
 from .. import datalog
 from .. import expressions as ir
-from ..datalog import aggregation
+from ..datalog.chase import Chase
 from ..datalog.constraints_representation import RightImplication
 from ..datalog.expression_processing import (
     TranslateToDatalogSemantics,
@@ -48,7 +48,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def __init__(
         self,
         program_ir: DatalogProgram,
-        chase_class: Type[aggregation.Chase] = aggregation.Chase,
+        chase_class: Type[Chase] = Chase,
     ) -> "QueryBuilderDatalog":
         """
         Query builder with query, Region, Neurosynth capabilities
@@ -58,9 +58,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         program_ir : DatalogProgram
             Datalog program's intermediate representation,
             usually blank
-        chase_class : Type[aggregation.Chase], optional
+        chase_class : Type[Chase], optional
             used to compute deterministic solutions,
-            by default aggregation.Chase
+            by default Chase
 
         Returns
         -------

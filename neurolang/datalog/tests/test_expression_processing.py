@@ -31,6 +31,7 @@ from ..expression_processing import (
     HeadRepeatedVariableToBodyEquality,
     maybe_deconjunct_single_pred,
 )
+from ..instance import MapInstance
 
 S_ = Symbol
 C_ = Constant
@@ -232,6 +233,47 @@ def test_stratification():
     ]
 
 
+def test_stratification_with_consequent_in_multiple_rules():
+    x = S_('X')
+    y = S_('Y')
+    z = S_('Z')
+    anc = S_('anc')
+    par = S_('par')
+    q = S_('q')
+    M = S_('M')
+    N = S_('N')
+    O = S_('O')
+    a = C_('a')
+    b = C_('b')
+    c = C_('c')
+    d = C_('d')
+
+    code = DT.walk(B_([
+        Fact(par(a, b)),
+        Fact(par(b, c)),
+        Fact(par(c, d)),
+        Fact(M(a)),
+        Imp_(N(a), M(a)),
+        Imp_(anc(x, y), par(x, y)),
+        Imp_(O(x), N(x)),
+        Imp_(q(x), anc(a, x)),
+        Imp_(anc(x, y), anc(x, z) & par(z, y) & O(a)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    strata, stratifyiable = stratify(code, datalog)
+
+    assert stratifyiable
+    assert strata == [
+        list(code.formulas[:4]),
+        list(code.formulas[4:6]),
+        list((code.formulas[6],)),
+        list(code.formulas[7:]),
+    ]
+
+
 def test_reachable():
     Q = S_('Q')  # noqa: N806
     R = S_('R')  # noqa: N806
@@ -310,6 +352,63 @@ def test_dependency_matrix():
 
     with raises(SymbolNotFoundError):
         dependency_matrix(datalog)
+
+
+def test_dependency_matrix_with_instance_update():
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    T = S_('T')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & S_('X')(y) & C_(eq)(x, y)),
+        Imp_(T(x), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    # Assume X was solved in previous stratum of program
+    instance = MapInstance({S_('X'): datalog.new_set([(0,)])})
+    idb_symbols, dep_matrix = dependency_matrix(
+        datalog, instance=instance
+    )
+    assert idb_symbols == (R, S, T)
+    assert np.array_equiv(dep_matrix, np.array(
+        [
+            [0, 0, 1],
+            [1, 0, 0],
+            [0, 0, 0]
+        ]
+    ))
+
+    code = DT.walk(B_([
+        Imp_(R(x, y), R(x, z) & Q(z, y)),
+        Imp_(S(x), R(C_(0), x)),
+    ]))
+    datalog = Datalog()
+    datalog.walk(code)
+
+    instance = MapInstance({
+        Q: datalog.new_set([(0, 1), (1, 2), (2, 3)]),
+        R: datalog.new_set([(0, 1), (1, 2), (2, 3)])
+    })
+    idb_symbols, dep_matrix = dependency_matrix(
+        datalog, instance=instance
+    )
+    assert idb_symbols == (R, S)
+    assert np.array_equiv(dep_matrix, np.array(
+        [
+            [1, 0],
+            [1, 0],
+        ]
+    ))
 
 
 def test_program_has_loops():
