@@ -309,21 +309,42 @@ class OntologyParser:
             <owl:onProperty rdf:resource="#hasParent" />
             <owl:someValuesFrom rdf:resource="#Physician" />
         </owl:Restriction>
+
+        Sources of this implementation:
+            1) https://www.uio.no/studier/emner/matnat/ifi/INF3170/h15/
+                undervisningsmateriale/dl1.pdf - Section: 'Translation to 
+                First order logic' -> πx(∃R.C) = ∃y(R(x, y) ∧ πy(C))
+            2) Towards more expressive ontology languages: The query 
+                answering problem - Lemma A.1
+                (https://doi.org/10.1016/j.artint.2012.08.002)
         """
-        parsed_prop, restricted_node, _ = self._parse_restriction_nodes(
+        parsed_prop, restricted_node, values = self._parse_restriction_nodes(
             cut_graph
         )
 
+        #someValuesFrom = self._parse_list(values)
+
         property_symbol = Symbol(str(parsed_prop))
         rdfs_type = Constant(str(RDF.type))
+        x = Symbol.fresh()
         y = Symbol.fresh()
+        z = Symbol.fresh()
+        aux_pred = Symbol.fresh()
 
         constraints = Union((
                 RightImplication(
                     self._triple(
-                        y, rdfs_type, Constant(str(restricted_node))
+                        x, rdfs_type, Constant(str(restricted_node))
                     ),
-                    property_symbol(y, Symbol.fresh()),
+                    aux_pred(x, y, z),
+                ),
+                RightImplication(
+                    aux_pred(x, y, z),
+                    property_symbol(x, y)
+                ),
+                RightImplication(
+                    aux_pred(x, y, z),
+                    self._triple(y, rdfs_type, z)
                 ),
             )
         )
