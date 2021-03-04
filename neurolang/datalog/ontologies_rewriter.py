@@ -7,7 +7,7 @@ from ..expressions import Symbol
 from ..logic import Constant, Implication, NaryLogicOperator
 from ..logic.expression_processing import ExtractFreeVariablesWalker
 from ..logic.transformations import CollapseConjunctions
-from ..logic.unification import apply_substitution, most_general_unifier
+from ..logic.unification import apply_substitution, most_general_unifier, most_general_unifier_arguments
 from .ontologies_parser import RightImplication
 
 
@@ -20,9 +20,10 @@ class ExtractFreeVariablesRightImplicationWalker(ExtractFreeVariablesWalker):
 
 
 class OntologyRewriter:
-    def __init__(self, query, union_of_constraints):
+    def __init__(self, query, union_of_constraints, triple_symbol):
         self.query = query
         self.union_of_constraints = union_of_constraints
+        self.triple_symbol = triple_symbol
 
     def Xrewrite(self):
         """Algorithm based on the one proposed in
@@ -256,13 +257,27 @@ class OntologyRewriter:
                 renamed.add(arg)
         return new_args, renamed
 
-    def _combine_rewriting(self, q, qS, S, sigma_ant):
-        sigma_ant = apply_substitution(sigma_ant, qS[0])
+    def _combine_rewriting(self, q, qS, S, sigma_ant2):
+        sigma_ant = apply_substitution(sigma_ant2, qS[0])
         replace = dict({S: sigma_ant})
         rsw = ReplaceExpressionWalker(replace)
         sigma_ant = rsw.walk(q.antecedent)
         sigma_ant = CollapseConjunctions().walk(sigma_ant)
-
-        q_cons = apply_substitution(q.consequent, qS[0])
+        
+        q_cons = q.consequent
+        temp = self._transform_and_unify(q_cons, sigma_ant)
+        if temp:
+            q_cons = apply_substitution(q_cons, temp[0])
 
         return Implication(q_cons, sigma_ant)
+
+        
+
+    def _transform_and_unify(self, q_ant, sigma_ant):
+        sigma_args = sigma_ant.args
+        if len(sigma_args) == 3 and sigma_ant.functor == self.triple_symbol:
+            sigma_args = (sigma_args[0], sigma_args[2])
+
+        temp = most_general_unifier_arguments(q_ant.args, sigma_args)
+
+        return temp

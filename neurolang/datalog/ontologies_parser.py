@@ -325,6 +325,7 @@ class OntologyParser:
         #someValuesFrom = self._parse_list(values)
 
         property_symbol = Symbol(str(parsed_prop))
+        type_symbol = Symbol(str(RDF.type))
         rdfs_type = Constant(str(RDF.type))
         x = Symbol.fresh()
         y = Symbol.fresh()
@@ -333,8 +334,8 @@ class OntologyParser:
 
         constraints = Union((
                 RightImplication(
-                    self._triple(
-                        x, rdfs_type, Constant(str(restricted_node))
+                    type_symbol(
+                        x, Constant(str(restricted_node))
                     ),
                     aux_pred(x, y, z),
                 ),
@@ -344,7 +345,7 @@ class OntologyParser:
                 ),
                 RightImplication(
                     aux_pred(x, y, z),
-                    self._triple(y, rdfs_type, z)
+                    type_symbol(y, z)
                 ),
             )
         )

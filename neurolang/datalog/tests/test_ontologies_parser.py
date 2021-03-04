@@ -160,7 +160,7 @@ def test_some_values_from():
         onto.get_pointers_symbol(), pointers
     )
 
-    orw = OntologyRewriter(test_base_q, union_of_constraints)
+    orw = OntologyRewriter(test_base_q, union_of_constraints, onto.get_triples_symbol())
     rewrite = orw.Xrewrite()
 
     uc = ()
