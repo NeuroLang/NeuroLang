@@ -144,7 +144,7 @@ def test_some_values_from():
     answer = Symbol("answer")
     x = Symbol("x")
     y = Symbol("y")
-    test_base_q = Union((Implication(answer(x), p2(x, y)),))
+    test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
 
     onto = OntologyParser(io.StringIO(premise_ontology))
     predicate_tuples, union_of_constraints = onto.parse_ontology()
