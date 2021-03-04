@@ -172,6 +172,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.program_ir.add_extensional_predicate_from_tuples(
             onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
         )
+        self.triple_symbol = onto.get_triples_symbol()
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -450,7 +451,9 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
-            deterministic_program, self.program_ir.constraints()
+            deterministic_program, 
+            self.program_ir.constraints(),
+            self.triple_symbol
         )
         rewrite = orw.Xrewrite()
 

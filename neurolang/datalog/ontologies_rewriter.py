@@ -20,7 +20,7 @@ class ExtractFreeVariablesRightImplicationWalker(ExtractFreeVariablesWalker):
 
 
 class OntologyRewriter:
-    def __init__(self, query, union_of_constraints, triple_symbol):
+    def __init__(self, query, union_of_constraints, triple_symbol=None):
         self.query = query
         self.union_of_constraints = union_of_constraints
         self.triple_symbol = triple_symbol
