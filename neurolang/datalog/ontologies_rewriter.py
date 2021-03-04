@@ -265,9 +265,10 @@ class OntologyRewriter:
         sigma_ant = CollapseConjunctions().walk(sigma_ant)
         
         q_cons = q.consequent
-        temp = self._transform_and_unify(q_cons, sigma_ant)
-        if temp:
-            q_cons = apply_substitution(q_cons, temp[0])
+        if self.triple_symbol:
+            temp = self._transform_and_unify(q_cons, sigma_ant)
+            if temp:
+                q_cons = apply_substitution(q_cons, temp[0])
 
         return Implication(q_cons, sigma_ant)
 
