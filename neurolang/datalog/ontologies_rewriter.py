@@ -79,7 +79,7 @@ class OntologyRewriter:
             sigma_i = self._rename(sigma[0], rename_count)
             qS = most_general_unifier(sigma_i.consequent, S)
             if qS:
-                new_q0 = self._combine_rewriting(q0, qS, S, sigma_i.antecedent)
+                new_q0 = self._combine_rewriting(q0, qS, S, sigma_i)
                 if self._is_new_rewriting(new_q0, Q_rew):
                     Q_rew.add((new_q0, "r", "u"))
 
@@ -263,42 +263,13 @@ class OntologyRewriter:
                 renamed.add(arg)
         return new_args, renamed
 
-    def _combine_rewriting(self, q, qS, S, sigma_ant):
-        '''sigma_ant = sigma.antecedent
-        if not self.triple_symbol:
-            if isinstance(sigma_ant, NaryLogicOperator):
-                new_sigmas = []
-                old_sigmas = []
-                for sigma in sigma_ant.formulas:
-                    sigma_temp = self._transform_triple(sigma)
-                    new_sigmas.append(sigma_temp)
-                    old_sigmas.append(sigma)
-                dic = {old_sigmas[i]: new_sigmas[i] for i in range(len(old_sigmas))} 
-            else:
-                sigma_temp = self._transform_triple(sigma_ant)
-                dic = {sigma_ant: sigma_temp}
-            rsw = ReplaceExpressionWalker(dic)
-            sigma_ant = rsw.walk(sigma_ant)'''  
-        
-        sigma_ant = apply_substitution(sigma_ant, qS[0])
-        #q_ant = q.antecedent
+    def _combine_rewriting(self, q, qS, S, sigma):
+        sigma_ant = apply_substitution(sigma.antecedent, qS[0])
         replace = dict({S: sigma_ant})
         rsw = ReplaceExpressionWalker(replace)
         sigma_ant = rsw.walk(q.antecedent)
         sigma_ant = CollapseConjunctions().walk(sigma_ant)
         
-        #q_cons = q.consequent
-
-        #imp = Implication(q.consequent, sigma_ant)
-        
         return Implication(q.consequent, sigma_ant)
-
-        
-    '''def _transform_triple(self, sigma):
-        sigma_args = sigma.args
-        if len(sigma_args) == 3 and sigma.functor == self.triple_symbol:
-            sigma = Symbol(sigma_args[1].value)(sigma_args[0], sigma_args[2])
-
-        return sigma'''
 
     
