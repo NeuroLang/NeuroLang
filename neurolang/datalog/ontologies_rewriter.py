@@ -51,7 +51,15 @@ class OntologyRewriter:
                 Q_rew.remove(q)
                 Q_rew.add((q[0], q[1], "e"))
 
-        return {x for x in Q_rew if x[2] == "e"}
+        return {x for x in Q_rew if x[2] == "e" and self._valid_rewrite(x[0])}
+
+    def _valid_rewrite(self, imp):
+        imp_con = imp.consequent
+        imp_ant = imp.antecedent
+        if len(set(imp_con.args).intersection(set(imp_ant.args))) == len(imp_con.args):
+            return True
+        
+        return False
 
     def _extract_free_variables(self):
         sigma_free_vars = []
@@ -169,8 +177,6 @@ class OntologyRewriter:
                 arg == free_var and i != pos for i, arg in enumerate(q.args)
             )
 
-        return False
-
     def _get_applicable(self, sigma, q):
         S = self._get_term(q, sigma[0].consequent)
         if self._is_applicable(sigma, q, S):
@@ -257,28 +263,42 @@ class OntologyRewriter:
                 renamed.add(arg)
         return new_args, renamed
 
-    def _combine_rewriting(self, q, qS, S, sigma_ant2):
-        sigma_ant = apply_substitution(sigma_ant2, qS[0])
+    def _combine_rewriting(self, q, qS, S, sigma_ant):
+        '''sigma_ant = sigma.antecedent
+        if not self.triple_symbol:
+            if isinstance(sigma_ant, NaryLogicOperator):
+                new_sigmas = []
+                old_sigmas = []
+                for sigma in sigma_ant.formulas:
+                    sigma_temp = self._transform_triple(sigma)
+                    new_sigmas.append(sigma_temp)
+                    old_sigmas.append(sigma)
+                dic = {old_sigmas[i]: new_sigmas[i] for i in range(len(old_sigmas))} 
+            else:
+                sigma_temp = self._transform_triple(sigma_ant)
+                dic = {sigma_ant: sigma_temp}
+            rsw = ReplaceExpressionWalker(dic)
+            sigma_ant = rsw.walk(sigma_ant)'''  
+        
+        sigma_ant = apply_substitution(sigma_ant, qS[0])
+        #q_ant = q.antecedent
         replace = dict({S: sigma_ant})
         rsw = ReplaceExpressionWalker(replace)
         sigma_ant = rsw.walk(q.antecedent)
         sigma_ant = CollapseConjunctions().walk(sigma_ant)
         
-        q_cons = q.consequent
-        if self.triple_symbol:
-            temp = self._transform_and_unify(q_cons, sigma_ant)
-            if temp:
-                q_cons = apply_substitution(q_cons, temp[0])
+        #q_cons = q.consequent
 
-        return Implication(q_cons, sigma_ant)
+        #imp = Implication(q.consequent, sigma_ant)
+        
+        return Implication(q.consequent, sigma_ant)
 
         
+    '''def _transform_triple(self, sigma):
+        sigma_args = sigma.args
+        if len(sigma_args) == 3 and sigma.functor == self.triple_symbol:
+            sigma = Symbol(sigma_args[1].value)(sigma_args[0], sigma_args[2])
 
-    def _transform_and_unify(self, q_ant, sigma_ant):
-        sigma_args = sigma_ant.args
-        if len(sigma_args) == 3 and sigma_ant.functor == self.triple_symbol:
-            sigma_args = (sigma_args[0], sigma_args[2])
+        return sigma'''
 
-        temp = most_general_unifier_arguments(q_ant.args, sigma_args)
-
-        return temp
+    
