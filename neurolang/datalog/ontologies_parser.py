@@ -105,7 +105,7 @@ class OntologyParser:
             symbol_name = str(pred)
             symbol = Symbol(symbol_name)
             const = Constant(symbol_name)
-            if symbol_name != str(RDF.type) or symbol_name != str(OWL.Class):
+            if symbol_name != str(RDF.type):
                 constraints += (
                     RightImplication(self._triple(x, const, z), symbol(x, z)),
                 )
