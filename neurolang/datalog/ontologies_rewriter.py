@@ -51,15 +51,7 @@ class OntologyRewriter:
                 Q_rew.remove(q)
                 Q_rew.add((q[0], q[1], "e"))
 
-        return {x for x in Q_rew if x[2] == "e" and self._valid_rewrite(x[0])}
-
-    def _valid_rewrite(self, imp):
-        imp_con = imp.consequent
-        imp_ant = imp.antecedent
-        if len(set(imp_con.args).intersection(set(imp_ant.args))) == len(imp_con.args):
-            return True
-        
-        return False
+        return {x for x in Q_rew if x[2] == "e"}
 
     def _extract_free_variables(self):
         sigma_free_vars = []

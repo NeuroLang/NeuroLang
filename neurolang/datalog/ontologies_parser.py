@@ -105,9 +105,39 @@ class OntologyParser:
             symbol_name = str(pred)
             symbol = Symbol(symbol_name)
             const = Constant(symbol_name)
+            if symbol_name != str(RDF.type) or symbol_name != str(OWL.Class):
+                constraints += (
+                    RightImplication(self._triple(x, const, z), symbol(x, z)),
+                )
+
+        type_triples = [
+            (e,v) for e, _, v in self.graph.triples((None, RDF.type, None))
+        ]
+
+        rdf_type = Constant(str(RDF.type))
+        for e,v in type_triples:
+            if isinstance(e, BNode):
+                continue
+            symbol_v = Symbol(str(v))
+            constant_v = Symbol(str(v))
+            constant_e = Constant(str(e))
             constraints += (
-                RightImplication(self._triple(x, const, z), symbol(x, z)),
-            )
+                    RightImplication(self._triple(constant_e, rdf_type, constant_v), symbol_v(constant_e)),
+                )
+
+        class_triples = [
+            (e,v) for e, _, v in self.graph.triples((None, OWL.Class, None))
+        ]
+        owl_class = Constant(str(OWL.Class))
+        for e,v in class_triples:
+            if isinstance(e, BNode):
+                continue
+            symbol_v = Symbol(str(v))
+            constant_e = Constant(str(e))
+            constant_v = Constant(str(v))
+            constraints += (
+                    RightImplication(self._triple(constant_e, owl_class, constant_v), symbol_v(constant_e)),
+                )
 
         return Union(constraints)
 
@@ -322,14 +352,14 @@ class OntologyParser:
             cut_graph
         )
 
-        #someValuesFrom = self._parse_list(values)
+        someValuesFrom = self._parse_list(values)
 
         property_symbol = Symbol(str(parsed_prop))
         type_symbol = Symbol(str(RDF.type))
-        rdfs_type = Constant(str(RDF.type))
+        #rdfs_type = Constant(str(RDF.type))
         x = Symbol.fresh()
         y = Symbol.fresh()
-        z = Symbol.fresh()
+        #owl_class = Symbol(str(OWL.Class))
         aux_pred = Symbol.fresh()
 
         constraints = Union((
@@ -337,18 +367,26 @@ class OntologyParser:
                     type_symbol(
                         x, Constant(str(restricted_node))
                     ),
-                    aux_pred(x, y, z),
+                    aux_pred(x, y),
                 ),
                 RightImplication(
-                    aux_pred(x, y, z),
+                    aux_pred(x, y),
                     property_symbol(x, y)
-                ),
-                RightImplication(
-                    aux_pred(x, y, z),
-                    type_symbol(y, z)
                 ),
             )
         )
+
+        for value in someValuesFrom:
+            value_symbol = Symbol(str(value))
+            constraints = Union(
+                constraints.formulas
+                + (
+                    RightImplication(
+                        aux_pred(x, y),
+                        value_symbol(y)
+                    ),
+                )
+            )
 
         return constraints
 
@@ -377,8 +415,8 @@ class OntologyParser:
         constraints = Union(())
 
         property_symbol = Symbol(str(parsed_prop))
-        rdf_type = Constant(str(RDF.type))
-        rdf_symbol = Symbol(str(RDF.type))
+        rdf_type_constant = Constant(str(RDF.type))
+        rdf_type_symbol = Symbol(str(RDF.type))
         y = Symbol.fresh()
         x = Symbol.fresh()
 
@@ -390,12 +428,12 @@ class OntologyParser:
                         Conjunction(
                             (
                                 self._triple(
-                                    y, rdf_type, Constant(str(restricted_node))
+                                    y, rdf_type_constant, Constant(str(restricted_node))
                                 ),
                                 property_symbol(y, x),
                             )
                         ),
-                        rdf_symbol(x, Constant(str(value))),
+                        rdf_type_symbol(x, Constant(str(value))),
                     ),
                 )
             )
