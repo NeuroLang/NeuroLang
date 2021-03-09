@@ -110,34 +110,17 @@ class OntologyParser:
                     RightImplication(self._triple(x, const, z), symbol(x, z)),
                 )
 
-        type_triples = [
-            (e,v) for e, _, v in self.graph.triples((None, RDF.type, None))
-        ]
+        rdf_type_constant = Constant(str(RDF.type))
+        symbol_e = Symbol.fresh()
+        rdf_type_constant = Constant(str(RDF.type))
+        owl_class_constant = Constant(str(OWL.Class))
+        owl_class_symbol = Symbol(str(OWL.Class))
+        constraints += (
+                RightImplication(
+                    self._triple(symbol_e, rdf_type_constant, owl_class_constant), 
+                    owl_class_symbol(symbol_e)),
+            )
 
-        rdf_type = Constant(str(RDF.type))
-        for e,v in type_triples:
-            if isinstance(e, BNode):
-                continue
-            symbol_v = Symbol(str(v))
-            constant_v = Symbol(str(v))
-            constant_e = Constant(str(e))
-            constraints += (
-                    RightImplication(self._triple(constant_e, rdf_type, constant_v), symbol_v(constant_e)),
-                )
-
-        class_triples = [
-            (e,v) for e, _, v in self.graph.triples((None, OWL.Class, None))
-        ]
-        owl_class = Constant(str(OWL.Class))
-        for e,v in class_triples:
-            if isinstance(e, BNode):
-                continue
-            symbol_v = Symbol(str(v))
-            constant_e = Constant(str(e))
-            constant_v = Constant(str(v))
-            constraints += (
-                    RightImplication(self._triple(constant_e, owl_class, constant_v), symbol_v(constant_e)),
-                )
 
         return Union(constraints)
 
@@ -348,45 +331,50 @@ class OntologyParser:
                 answering problem - Lemma A.1
                 (https://doi.org/10.1016/j.artint.2012.08.002)
         """
-        parsed_prop, restricted_node, values = self._parse_restriction_nodes(
+        parsed_prop, restricted_node, _ = self._parse_restriction_nodes(
             cut_graph
         )
 
-        someValuesFrom = self._parse_list(values)
+        #someValuesFrom = self._parse_list(values)
 
         property_symbol = Symbol(str(parsed_prop))
-        type_symbol = Symbol(str(RDF.type))
+        #type_symbol = Symbol(str(RDF.type))
+        rdfs_subClassOf = Constant(str(RDFS.subClassOf))
         #rdfs_type = Constant(str(RDF.type))
         x = Symbol.fresh()
         y = Symbol.fresh()
-        #owl_class = Symbol(str(OWL.Class))
+        owl_class = Symbol(str(OWL.Class))
         aux_pred = Symbol.fresh()
 
         constraints = Union((
                 RightImplication(
-                    type_symbol(
-                        x, Constant(str(restricted_node))
+                    self._triple(
+                        x, rdfs_subClassOf, Constant(str(restricted_node))
                     ),
-                    aux_pred(x, y),
+                    aux_pred(x, y)
                 ),
                 RightImplication(
                     aux_pred(x, y),
                     property_symbol(x, y)
                 ),
+                RightImplication(
+                    aux_pred(x, y),
+                    owl_class(y)
+                ),
             )
         )
 
-        for value in someValuesFrom:
-            value_symbol = Symbol(str(value))
-            constraints = Union(
-                constraints.formulas
-                + (
-                    RightImplication(
-                        aux_pred(x, y),
-                        value_symbol(y)
-                    ),
-                )
-            )
+        #for value in someValuesFrom:
+        #    value_symbol = Symbol(str(value))
+        #    constraints = Union(
+        #        constraints.formulas
+        #        + (
+        #            RightImplication(
+        #                aux_pred(x, y),
+        #                value_symbol(y)
+        #            ),
+        #        )
+        #    )
 
         return constraints
 
