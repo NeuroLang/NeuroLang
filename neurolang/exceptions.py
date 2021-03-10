@@ -86,6 +86,10 @@ class TranslateToNamedRAException(NeuroLangException):
     pass
 
 
+class NoValidChaseClassForStratumException(NeuroLangException):
+    pass
+
+
 class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
     def __init__(self, output):
         super().__init__(f"Could not translate conjunction: {output}")

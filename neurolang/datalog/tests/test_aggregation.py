@@ -1,11 +1,16 @@
-from neurolang.exceptions import ForbiddenUnstratifiedAggregation
 from typing import AbstractSet
 
 import pytest
 
+from neurolang.exceptions import ForbiddenUnstratifiedAggregation
+
 from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import (Constant, ExpressionBlock, NeuroLangException,
-                            Symbol)
+from ...expressions import (
+    Constant,
+    ExpressionBlock,
+    NeuroLangException,
+    Symbol,
+)
 from ...type_system import Unknown
 from .. import DatalogProgram, Fact, Implication
 from ..aggregation import (
@@ -13,10 +18,10 @@ from ..aggregation import (
     AGG_MEAN,
     AggregationApplication,
     BuiltinAggregationMixin,
-    Chase,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
 )
+from ..chase import Chase, ChaseAggregationSN
 from ..expressions import Union
 
 S_ = Symbol
@@ -89,7 +94,7 @@ def test_aggregation_non_stratified():
     dl = Datalog()
     dl.walk(code)
 
-    chase = Chase(dl)
+    chase = ChaseAggregationSN(dl)
 
     with pytest.raises(ForbiddenUnstratifiedAggregation):
         chase.build_chase_solution()

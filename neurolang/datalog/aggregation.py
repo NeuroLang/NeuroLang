@@ -28,7 +28,6 @@ from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 from . import (
     Implication,
     Union,
-    chase,
     is_conjunctive_expression_with_nested_predicates,
 )
 from .basic_representation import UnionOfConjunctiveQueries
@@ -36,7 +35,6 @@ from .expression_processing import (
     extract_logic_predicates,
     is_aggregation_predicate,
     is_aggregation_rule,
-    stratify,
 )
 from .expressions import AggregationApplication, TranslateToLogic
 from .instance import MapInstance
@@ -146,37 +144,23 @@ class DatalogWithAggregationMixin(PatternWalker):
             )
 
 
-class Chase(chase.Chase):
+class ChaseAggregationMixin:
+    """Aggregation Chase Mixin to add support for aggregation to a Chase
+    class. Can be used with StratifiedChase.
+    """
     def check_constraints(self, instance_update):
-        code = Union(tuple(self.rules))
-        stratified_code, stratifiable = stratify(code, self.datalog_program)
-        self.stratified_code = stratified_code
+        seen_in_stratum = set()
+        aggregate_rules = []
+        for rule in self.rules:
+            seen_in_stratum.add(rule.consequent.functor)
+            if is_aggregation_rule(rule):
+                aggregate_rules.append(rule)
 
-        for stratum in self.stratified_code:
-            seen_in_stratum = set()
-            aggregate_rules = []
-            for rule in stratum:
-                seen_in_stratum.add(rule.consequent.functor)
-                if is_aggregation_rule(rule):
-                    aggregate_rules.append(rule)
-
-            self._stratum_is_aggregation_viable(
-                seen_in_stratum, aggregate_rules
-            )
-
-        return super().check_constraints(instance_update)
-
-    def build_chase_solution(self):
-        instance_update = MapInstance(
-            self.datalog_program.extensional_database()
+        self._stratum_is_aggregation_viable(
+            seen_in_stratum, aggregate_rules
         )
-        self.check_constraints(instance_update)
-        instance = MapInstance()
-        for stratum in self.stratified_code:
-            instance = self.execute_chase(stratum, instance_update, instance)
-            instance_update = instance
-            instance = MapInstance()
-        return instance_update
+
+        super().check_constraints(instance_update)
 
     def _stratum_is_aggregation_viable(self, seen_in_stratum, aggregate_rules):
         for rule in aggregate_rules:
