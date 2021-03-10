@@ -130,6 +130,7 @@ class OntologyParser:
         It needs a function "_process_X", where X is the name of
         the restriction to be processed, to be defined.
         """
+        self.applied = []
         restriction_ids = [
             s for s, _, _ in self.graph.triples((None, None, OWL.Restriction))
         ]
@@ -197,6 +198,8 @@ class OntologyParser:
         parsed_prop, restricted_node, value = self._parse_restriction_nodes(
             cut_graph
         )
+
+        return Union(())
 
         rdfs_type = Constant(str(RDF.type))
         property_symbol = Symbol(str(parsed_prop))
@@ -322,8 +325,10 @@ class OntologyParser:
             <owl:onProperty rdf:resource="#hasParent" />
             <owl:someValuesFrom rdf:resource="#Physician" />
         </owl:Restriction>
+        
+        Source of the example: https://www.w3.org/TR/owl-ref/
 
-        Sources of this implementation:
+        Sources of the implementation:
             1) https://www.uio.no/studier/emner/matnat/ifi/INF3170/h15/
                 undervisningsmateriale/dl1.pdf - Section: 'Translation to 
                 First order logic' -> πx(∃R.C) = ∃y(R(x, y) ∧ πy(C))
@@ -335,12 +340,15 @@ class OntologyParser:
             cut_graph
         )
 
-        #someValuesFrom = self._parse_list(values)
+        restricted_name = str(restricted_node)
+        if restricted_name in self.applied:
+            return Union(())
+        
+        self.applied.append(restricted_name)
+
 
         property_symbol = Symbol(str(parsed_prop))
-        #type_symbol = Symbol(str(RDF.type))
-        rdfs_subClassOf = Constant(str(RDFS.subClassOf))
-        #rdfs_type = Constant(str(RDF.type))
+        rdfs_type = Constant(str(RDF.type))
         x = Symbol.fresh()
         y = Symbol.fresh()
         owl_class = Symbol(str(OWL.Class))
@@ -349,7 +357,7 @@ class OntologyParser:
         constraints = Union((
                 RightImplication(
                     self._triple(
-                        x, rdfs_subClassOf, Constant(str(restricted_node))
+                        x, rdfs_type, Constant(restricted_name)
                     ),
                     aux_pred(x, y)
                 ),
@@ -363,18 +371,6 @@ class OntologyParser:
                 ),
             )
         )
-
-        #for value in someValuesFrom:
-        #    value_symbol = Symbol(str(value))
-        #    constraints = Union(
-        #        constraints.formulas
-        #        + (
-        #            RightImplication(
-        #                aux_pred(x, y),
-        #                value_symbol(y)
-        #            ),
-        #        )
-        #    )
 
         return constraints
 
@@ -401,6 +397,7 @@ class OntologyParser:
         allValuesFrom = self._parse_list(values)
 
         constraints = Union(())
+        return constraints
 
         property_symbol = Symbol(str(parsed_prop))
         rdf_type_constant = Constant(str(RDF.type))
