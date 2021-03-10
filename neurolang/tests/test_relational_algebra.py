@@ -904,3 +904,14 @@ def test_numpy_log():
         )
     )
     assert result == expected
+
+
+def test_aggregation_translation():
+    x = Constant(ColumnStr("x"))
+    np_max = Constant(numpy.max, auto_infer_type=False)
+    np_exp = Constant(numpy.exp, auto_infer_type=False)
+    fun_exp = np_max(np_exp(x + Constant(2)))
+    solver = RelationalAlgebraSolver()
+    result = solver._saw.walk(fun_exp)
+    expected = Constant(RelationalAlgebraStringExpression("max(exp((x + 2)))"))
+    assert result == expected

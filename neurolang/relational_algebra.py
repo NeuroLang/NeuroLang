@@ -457,6 +457,36 @@ class StringArithmeticWalker(ew.PatternWalker):
         FunctionApplication(Constant, ...),
         lambda fa: (
             isinstance(fa.functor.value, Callable)
+            and numpy.max == fa.functor.value
+        ),
+    )
+    def numpy_max(self, fa):
+        return Constant[RelationalAlgebraStringExpression](
+            RelationalAlgebraStringExpression(
+                "max({})".format(self.walk(fa.args[0]).value)
+            ),
+            auto_infer_type=False,
+        )
+
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
+        lambda fa: (
+            isinstance(fa.functor.value, Callable)
+            and numpy.mean == fa.functor.value
+        ),
+    )
+    def numpy_mean(self, fa):
+        return Constant[RelationalAlgebraStringExpression](
+            RelationalAlgebraStringExpression(
+                "mean({})".format(self.walk(fa.args[0]).value)
+            ),
+            auto_infer_type=False,
+        )
+
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
+        lambda fa: (
+            isinstance(fa.functor.value, Callable)
             and numpy.log == fa.functor.value
         ),
     )

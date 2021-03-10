@@ -23,7 +23,7 @@ from ..expression_walker import (
     add_match,
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..type_system import get_generic_type, Unknown
+from ..type_system import Unknown, get_generic_type
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 from . import (
     Implication,
@@ -38,7 +38,7 @@ from .expression_processing import (
     is_aggregation_rule,
     stratify,
 )
-from .expressions import TranslateToLogic, AggregationApplication
+from .expressions import AggregationApplication, TranslateToLogic
 from .instance import MapInstance
 
 FA2L = FunctionApplicationToPythonLambda()
@@ -52,11 +52,10 @@ def is_builtin_aggregation_functor(functor):
 
 
 class BuiltinAggregationMixin:
-    def function_MAX(self, iterable: typing.AbstractSet) -> Unknown:
-        return numpy.max(iterable)
-
-    def function_MEAN(self, iterable: typing.AbstractSet) -> Unknown:
-        return numpy.mean(iterable)
+    _included_constant_functions = {
+        AGG_MAX: Constant(numpy.max),
+        AGG_MEAN: Constant(numpy.mean),
+    }
 
 
 

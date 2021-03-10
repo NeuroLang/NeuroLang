@@ -8,9 +8,15 @@ from ...expressions import (Constant, ExpressionBlock, NeuroLangException,
                             Symbol)
 from ...type_system import Unknown
 from .. import DatalogProgram, Fact, Implication
-from ..aggregation import (AggregationApplication, Chase,
-                           DatalogWithAggregationMixin,
-                           TranslateToLogicWithAggregation)
+from ..aggregation import (
+    AGG_MAX,
+    AGG_MEAN,
+    AggregationApplication,
+    BuiltinAggregationMixin,
+    Chase,
+    DatalogWithAggregationMixin,
+    TranslateToLogicWithAggregation,
+)
 from ..expressions import Union
 
 S_ = Symbol
@@ -282,3 +288,16 @@ def test_aggregation_emptyset():
     solution = chase.build_chase_solution()
 
     assert Q not in solution or solution[Q] == set()
+
+
+def test_builtin_max_aggregation():
+    class DatalogWithBuiltinAggregation(
+        BuiltinAggregationMixin,
+        DatalogWithAggregationMixin,
+        DatalogProgram,
+    ):
+        pass
+
+    dl = DatalogWithBuiltinAggregation()
+    assert AGG_MAX in dl.symbol_table
+    assert AGG_MEAN in dl.symbol_table
