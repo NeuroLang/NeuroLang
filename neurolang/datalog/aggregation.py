@@ -23,7 +23,7 @@ from ..expression_walker import (
     add_match,
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..type_system import Unknown, get_generic_type
+from ..type_system import get_generic_type
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 from . import (
     Implication,
