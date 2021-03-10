@@ -1042,13 +1042,21 @@ def test_postprob_conjunct_with_wlq_result():
 
 
 def test_no_tuple_unicity_qbased_pfact():
-    nl = NeurolangPDL()
+    nl = NeurolangPDL(check_qbased_pfact_tuple_unicity=True)
     nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
     with nl.environment as e:
         (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
         e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
         with pytest.raises(RepeatedTuplesInProbabilisticRelationError):
             nl.query((e.x, e.p), e.Query(e.x, e.p))
+    nl = NeurolangPDL(check_qbased_pfact_tuple_unicity=False)
+    nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
+    with nl.environment as e:
+        (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
+        e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
+        result = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    expected = {("a", 0.2), ("b", 0.5), ("a", 0.9)}
+    assert_almost_equal(result, expected)
 
 
 def test_qbased_pfact_max_prob():

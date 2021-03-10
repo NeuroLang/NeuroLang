@@ -23,12 +23,12 @@ from uuid import uuid1
 import pandas as pd
 
 from .. import expressions as ir
-from ..datalog.chase import Chase
 from ..datalog.aggregation import (
     BuiltinAggregationMixin,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
 )
+from ..datalog.chase import Chase
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
@@ -113,6 +113,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             lifted_solve_marg_query,
             wmc_solve_marg_query,
         ),
+        check_qbased_pfact_tuple_unicity=False,
     ) -> "NeurolangPDL":
         """
         Query builder with probabilistic capabilities
@@ -148,6 +149,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
         self.ontology_loaded = False
+        self.check_qbased_pfact_tuple_unicity = (
+            check_qbased_pfact_tuple_unicity
+        )
 
     def load_ontology(
         self,
@@ -388,6 +392,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                     prob_idb,
                     succ_solver,
                     marg_solver,
+                    self.check_qbased_pfact_tuple_unicity,
                 )
             except UnsupportedSolverError:
                 if i == len(self.probabilistic_solvers) - 1:

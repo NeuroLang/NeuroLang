@@ -169,10 +169,15 @@ def compute_probabilistic_solution(
     prob_idb,
     succ_prob_solver,
     marg_prob_solver,
+    check_qbased_pfact_tuple_unicity=False,
 ):
     solution = MapInstance()
     cpl = _build_probabilistic_program(
-        det_edb, pfact_db, pchoice_edb, prob_idb
+        det_edb,
+        pfact_db,
+        pchoice_edb,
+        prob_idb,
+        check_qbased_pfact_tuple_unicity,
     )
     for rule in prob_idb.formulas:
         if is_within_language_prob_query(rule):
@@ -202,7 +207,13 @@ def _discard_query_based_probfacts(prob_idb):
     )
 
 
-def _add_to_probabilistic_program(add_fun, pred_symb, expr, det_edb):
+def _add_to_probabilistic_program(
+    add_fun,
+    pred_symb,
+    expr,
+    det_edb,
+    check_qbased_pfact_tuple_unicity=False,
+):
     # handle set-based probabilistic tables
     if isinstance(expr, Constant[typing.AbstractSet]):
         ra_set = expr
@@ -214,7 +225,8 @@ def _add_to_probabilistic_program(add_fun, pred_symb, expr, det_edb):
         # where Q is an extensional relation symbol
         # so the values can be retrieved from the EDB
         ra_set = det_edb[impl.antecedent.functor]
-        _check_tuple_prob_unicity(ra_set)
+        if check_qbased_pfact_tuple_unicity:
+            _check_tuple_prob_unicity(ra_set)
     add_fun(pred_symb, ra_set.value.unwrap())
 
 
@@ -236,7 +248,13 @@ def _check_tuple_prob_unicity(ra_set: Constant[AbstractSet]) -> None:
         )
 
 
-def _build_probabilistic_program(det_edb, pfact_db, pchoice_edb, prob_idb):
+def _build_probabilistic_program(
+    det_edb,
+    pfact_db,
+    pchoice_edb,
+    prob_idb,
+    check_qbased_pfact_tuple_unicity=False,
+):
     cpl = CPLogicProgram()
     db_to_add_fun = [
         (det_edb, cpl.add_extensional_predicate_from_tuples),
@@ -245,7 +263,13 @@ def _build_probabilistic_program(det_edb, pfact_db, pchoice_edb, prob_idb):
     ]
     for database, add_fun in db_to_add_fun:
         for pred_symb, expr in database.items():
-            _add_to_probabilistic_program(add_fun, pred_symb, expr, det_edb)
+            _add_to_probabilistic_program(
+                add_fun,
+                pred_symb,
+                expr,
+                det_edb,
+                check_qbased_pfact_tuple_unicity,
+            )
     # remove query-based probabilistic facts that have already been processed
     # and transformed into probabilistic tables based on the deterministic
     # solution of their probability and antecedent
