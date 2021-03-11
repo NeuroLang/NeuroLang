@@ -394,6 +394,22 @@ OPERATOR_STRING = {
     operator.pow: "**",
 }
 
+TRANSLATABLE_NUMPY_OPERATION = {
+    numpy.exp: "exp",
+    numpy.max: "max",
+    numpy.min: "min",
+    numpy.log: "log",
+}
+
+
+def is_translatable_numpy_operation(exp):
+    return (
+        isinstance(exp, FunctionApplication)
+        and isinstance(exp.functor, Constant)
+        and exp.functor.value
+        in TRANSLATABLE_NUMPY_OPERATION
+    )
+
 
 def is_arithmetic_operation(exp):
     """
@@ -440,60 +456,15 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     @ew.add_match(
         FunctionApplication(Constant, ...),
-        lambda fa: (
-            isinstance(fa.functor.value, Callable)
-            and numpy.exp == fa.functor.value
-        ),
+        is_translatable_numpy_operation,
     )
-    def numpy_exponential(self, fa):
+    def translatable_numpy_operation(self, fa):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(
-                "exp({})".format(self.walk(fa.args[0]).value)
-            ),
-            auto_infer_type=False,
-        )
-
-    @ew.add_match(
-        FunctionApplication(Constant, ...),
-        lambda fa: (
-            isinstance(fa.functor.value, Callable)
-            and numpy.max == fa.functor.value
-        ),
-    )
-    def numpy_max(self, fa):
-        return Constant[RelationalAlgebraStringExpression](
-            RelationalAlgebraStringExpression(
-                "max({})".format(self.walk(fa.args[0]).value)
-            ),
-            auto_infer_type=False,
-        )
-
-    @ew.add_match(
-        FunctionApplication(Constant, ...),
-        lambda fa: (
-            isinstance(fa.functor.value, Callable)
-            and numpy.mean == fa.functor.value
-        ),
-    )
-    def numpy_mean(self, fa):
-        return Constant[RelationalAlgebraStringExpression](
-            RelationalAlgebraStringExpression(
-                "mean({})".format(self.walk(fa.args[0]).value)
-            ),
-            auto_infer_type=False,
-        )
-
-    @ew.add_match(
-        FunctionApplication(Constant, ...),
-        lambda fa: (
-            isinstance(fa.functor.value, Callable)
-            and numpy.log == fa.functor.value
-        ),
-    )
-    def numpy_log(self, fa):
-        return Constant[RelationalAlgebraStringExpression](
-            RelationalAlgebraStringExpression(
-                "log({})".format(self.walk(fa.args[0]).value)
+                "{}({})".format(
+                    TRANSLATABLE_NUMPY_OPERATION[fa.functor.value],
+                    self.walk(fa.args[0]).value,
+                )
             ),
             auto_infer_type=False,
         )
