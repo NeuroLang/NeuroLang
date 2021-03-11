@@ -1063,7 +1063,7 @@ def test_qbased_pfact_max_prob():
     nl = NeurolangPDL()
     nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
     with nl.environment as e:
-        (e.Q @ e.MAX(e.p))[e.x] = e.P(e.p, e.x)
+        (e.Q @ e.max(e.p))[e.x] = e.P(e.p, e.x)
         e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
         sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
     expected = {("a", 0.9), ("b", 0.5)}
