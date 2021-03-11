@@ -37,8 +37,8 @@ from .expressions import AggregationApplication, TranslateToLogic
 
 FA2L = FunctionApplicationToPythonLambda()
 
-AGG_MAX = Symbol("MAX")
-AGG_MEAN = Symbol("MEAN")
+AGG_MAX = Symbol("max")
+AGG_MEAN = Symbol("mean")
 
 
 def is_builtin_aggregation_functor(functor):
@@ -46,10 +46,8 @@ def is_builtin_aggregation_functor(functor):
 
 
 class BuiltinAggregationMixin:
-    _included_constant_functions = {
-        AGG_MAX: Constant(numpy.max),
-        AGG_MEAN: Constant(numpy.mean),
-    }
+    constant_max = Constant(numpy.max)
+    constant_mean = Constant(numpy.mean)
 
 
 
