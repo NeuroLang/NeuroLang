@@ -1024,12 +1024,10 @@ def test_postprob_conjunct_with_wlq_result():
         name="TIS",
     )
 
-    nl.add_symbol(len, name="agg_count")
-
     with nl.environment as e:
         e.TheWLQ[e.t, e.PROB(e.t)] = e.SS(e.s) & e.TIS(e.t, e.s)
-        e.P[e.t, e.agg_count(e.s)] = e.TIS(e.t, e.s)
-        e.Q[e.agg_count(e.s)] = e.S(e.s)
+        e.P[e.t, e.count(e.s)] = e.TIS(e.t, e.s)
+        e.Q[e.count(e.s)] = e.S(e.s)
         e.TheQuery[e.t, e.N, e.m, e.p] = (
             e.TheWLQ(e.t, e.p) & e.P(e.t, e.m) & e.Q(e.N)
         )

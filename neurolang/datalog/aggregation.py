@@ -9,6 +9,7 @@ in the set ``Q``.
    Datalog and Recursive Query Processing.
    FNT in Databases. 5, 105–195 (2012).
 """
+import typing
 
 import numpy
 
@@ -39,6 +40,7 @@ FA2L = FunctionApplicationToPythonLambda()
 
 AGG_MAX = Symbol("max")
 AGG_MEAN = Symbol("mean")
+AGG_COUNT = Symbol("count")
 
 
 def is_builtin_aggregation_functor(functor):
@@ -49,6 +51,8 @@ class BuiltinAggregationMixin:
     constant_max = Constant(numpy.max)
     constant_mean = Constant(numpy.mean)
 
+    def function_count(self, *iterables: typing.Iterable) -> int:
+        return len(next(iter(iterables)))
 
 
 class TranslateToLogicWithAggregation(TranslateToLogic):
