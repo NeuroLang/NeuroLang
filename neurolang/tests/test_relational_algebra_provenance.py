@@ -7,9 +7,10 @@ import pytest
 from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol
 from ..probabilistic.cplogic import testing
+from ..probabilistic.cplogic.testing import eq_prov_relations
 from ..relational_algebra import (
-    ColumnStr,
     ColumnInt,
+    ColumnStr,
     Difference,
     LeftNaturalJoin,
     NaturalJoin,
@@ -317,11 +318,11 @@ def test_projection():
     relation = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
-                ("a", "b", 1),
-                ("b", "a", 2),
-                ("c", "a", 2),
-                ("c", "a", 1),
-                ("b", "a", 1),
+                ("a", "b", 0.1),
+                ("b", "a", 0.2),
+                ("c", "a", 0.2),
+                ("c", "a", 0.1),
+                ("b", "a", 0.1),
             ],
             columns=["x", "y", "__provenance__"],
         ),
@@ -329,7 +330,11 @@ def test_projection():
     )
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            iterable=[("a", "b", 1), ("b", "a", 3), ("c", "a", 3)],
+            iterable=[
+                ("a", "b", 0.1),
+                ("b", "a", 1 - 0.9 * 0.8),
+                ("c", "a", 1 - 0.9 * 0.8)
+            ],
             columns=["x", "y", "__provenance__"],
         ),
         ColumnStr("__provenance__"),
@@ -340,7 +345,7 @@ def test_projection():
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(sum_agg_op)
 
-    assert result == expected
+    assert eq_prov_relations(result, expected)
 
 
 def test_concatenate_constant():
@@ -407,13 +412,17 @@ def test_provenance_projection():
     projection = Projection(relation, (Constant(ColumnStr("x")),))
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(projection)
-    assert len(result.value) == 2
-    for exp_prob, exp_x in [(1.0, "a"), (0.8, "b")]:
-        for tupl in result.value:
-            if tupl.x == exp_x:
-                assert np.isclose(
-                    exp_prob, getattr(tupl, result.provenance_column)
-                )
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[
+                (1 - 0.2 * 0.8, "a"),
+                (1 - 0.3 * 0.9, "b")
+            ],
+            columns=("_p_", "x"),
+        ),
+        ColumnStr("_p_"),
+    )
+    assert eq_prov_relations(result, expected)
 
 
 def test_provenance_product_with_shared_non_prov_col_should_fail():
