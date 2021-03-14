@@ -2,14 +2,16 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
 
-from ...probabilistic.expressions import ProbabilisticPredicate
 from ...datalog import Implication
 from ...datalog.aggregation import AggregationApplication
-from ...expressions import Expression, FunctionApplication
-from .standard_syntax import (
-    DatalogSemantics as DatalogClassicSemantics
+from ...expressions import Expression, FunctionApplication, Symbol
+from ...logic import ExistentialPredicate
+from ...probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate
 )
-
+from .standard_syntax import DatalogSemantics as DatalogClassicSemantics
 
 GRAMMAR = u"""
     @@grammar::Datalog
@@ -27,18 +29,34 @@ GRAMMAR = u"""
                                probability:probability [','] \
                                expression:expression ;
 
-    probability = (float | int_ext_identifier );
+    probability = argument;
 
-    expression = ['or'] @:rule | constraint | fact ;
+    expression = pir_rule | ['or'] @:rule | constraint | fact ;
     fact = constant_predicate ;
     rule = head implication body ;
+    pir_rule = \
+        probability_of head:head implication body:body \
+        [given condition:body];
     constraint = body right_implication head ;
     head = head_predicate ;
     body = ( conjunction ).{ predicate } ;
 
-    conjunction = ',' | '&' | '\N{LOGICAL AND}' | 'and';
-    implication = ':-' | '\N{LEFTWARDS ARROW}' | 'if' ;
-    right_implication = '-:' | '\N{RIGHTWARDS ARROW}' | 'implies' ;
+    conjunction = ',' | '&' | '\N{LOGICAL AND}' | 'and' | 'AND';
+    implication = ':-' | '\N{LEFTWARDS ARROW}' | 'if' | 'IF';
+    right_implication = '-:' | '\N{RIGHTWARDS ARROW}' | 'implies' | 'IMPLIES' ;
+    negation = '~' | '\u00AC' | 'not' | 'NOT';
+    exists = 'exists' | '\u2204' | 'EXISTS';
+    where = 'where' | 'WHERE';
+    given = 'given' | 'GIVEN';
+    reserved_words = conjunction
+                   | implication
+                   | right_implication
+                   | negation
+                   | exists
+                   | where
+                   | given;
+    probability_of = 'compute probability of' | 'COMPUTE PROBABILITY OF';
+
     head_predicate = predicate:identifier'(' arguments:[ arguments ] ')'
                    | arguments:argument 'is' arguments:argument"'s"\
                         predicate:identifier
@@ -46,17 +64,15 @@ GRAMMAR = u"""
                         preposition arguments:argument
                    | arguments:argument 'has' arguments:argument\
                         predicate:identifier
-                   | arguments+:argument 'is' ['a'] predicate:identifier ;
+                   | arguments+:argument 'is' ['a'] predicate:identifier
+                   | [ ','.{'?'arguments+:argument}+ ] {\
+                        { predicate:identifier }+ \
+                        ','.{ '?'arguments+:argument }+ \
+                     }+ [ { predicate:identifier }+ ];
 
-    predicate = predicate: int_ext_identifier'(' arguments:[ arguments ] ')'
-              | arguments:argument 'is' arguments:argument"'s"\
-                   predicate:int_ext_identifier
-              | arguments:argument 'is'  predicate:int_ext_identifier\
-                   preposition arguments:argument
-              | arguments:argument 'has' arguments:argument\
-                   [preposition] predicate:int_ext_identifier
-              | arguments+:argument 'is' ['a'] predicate:int_ext_identifier
+    predicate = >head_predicate
               | negated_predicate
+              | existential_predicate
               | comparison
               | logical_constant ;
 
@@ -72,7 +88,9 @@ GRAMMAR = u"""
 
     preposition = 'to' | 'from' | 'of' | 'than' | 'the' ;
 
-    negated_predicate = ('~' | '\u00AC' | 'not' ) predicate ;
+    negated_predicate = negation predicate [';'] ;
+    existential_predicate = \
+        exists ','.{ argument+:argument }+ where body:body [';'] ;
 
     comparison = argument comparison_operator argument ;
 
@@ -86,7 +104,7 @@ GRAMMAR = u"""
 
     function_application = int_ext_identifier'(' [ arguments ] ')';
 
-    arithmetic_operation = term [ ('+' | '-') term ] ;
+    arithmetic_operation = [('+' | '-')] term [ ('+' | '-') term ] ;
 
     term = factor [ ( '*' | '/' ) factor ] ;
 
@@ -96,15 +114,18 @@ GRAMMAR = u"""
 
     exponent = literal
              | function_application
-             | int_ext_identifier
+             | ['?']@:int_ext_identifier
              | '(' @:argument ')' ;
 
     literal = number
             | text
             | ext_identifier ;
 
-    identifier = /[a-zA-Z_][a-zA-Z0-9_]*/
+    identifier = !reserved_words identifier_pure
                | '`'@:?"[0-9a-zA-Z/#%._:-]+"'`';
+
+    identifier_qm = '?'identifier_pure;
+    identifier_pure = /[a-zA-Z_][a-zA-Z0-9_]*/;
 
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
 
@@ -148,21 +169,28 @@ class DatalogSemantics(DatalogClassicSemantics):
 
     def head_predicate(self, ast):
         if not isinstance(ast, Expression):
+            predicate = self.normalise_predicate(ast["predicate"])
             if ast["arguments"] is not None and len(ast["arguments"]) > 0:
                 arguments = []
                 for arg in ast["arguments"]:
                     if isinstance(arg, FunctionApplication):
                         arg = AggregationApplication(arg.functor, arg.args)
                     arguments.append(arg)
-                ast = ast["predicate"](*arguments)
+                ast = predicate(*arguments)
             else:
-                ast = ast["predicate"]()
+                ast = predicate()
         return ast
 
     def predicate(self, ast):
         if not isinstance(ast, Expression):
-            ast = ast["predicate"](*ast["arguments"])
+            predicate = self.normalise_predicate(ast["predicate"])
+            ast = predicate(*ast["arguments"])
         return ast
+
+    def normalise_predicate(self, predicate):
+        if isinstance(predicate, list) and not isinstance(predicate, str):
+            predicate = Symbol('_'.join([p.name for p in predicate]))
+        return predicate
 
     def probabilistic_expression(self, ast):
         probability = ast["probability"]
@@ -175,6 +203,25 @@ class DatalogSemantics(DatalogClassicSemantics):
             )
         else:
             raise ValueError("Invalid rule")
+
+    def pir_rule(self, ast):
+        head = ast['head']
+        head = FunctionApplication(
+            head.functor,
+            head.args + (PROB(*head.args),)
+        )
+        body = ast['body']
+        if 'condition' in ast:
+            body = Condition(
+                body, ast['condition']
+            )
+        return Implication(head, body)
+
+    def existential_predicate(self, ast):
+        exp = ast['body']
+        for arg in ast['argument']:
+            exp = ExistentialPredicate(arg, exp)
+        return exp
 
 
 def parser(code, locals=None, globals=None):

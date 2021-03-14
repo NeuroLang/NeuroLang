@@ -1,4 +1,4 @@
-from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
+from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
 
 import tatsu
 
@@ -213,12 +213,21 @@ class DatalogSemantics:
         if isinstance(ast, Expression):
             return ast
 
+        unary_op = None
+        if ast[0] in ('+', '-'):
+            if ast[0] == '-':
+                unary_op = Constant(neg)
+            ast = ast[1:]
+
         if len(ast) == 1:
-            return ast[0]
+            res = ast[0]
+        else:
+            op = Constant(OPERATOR[ast[1]])
+            res = op(*ast[0::2])
+        if unary_op is not None:
+            res = unary_op(res)
 
-        op = Constant(OPERATOR[ast[1]])
-
-        return op(*ast[0::2])
+        return res
 
     def term(self, ast):
         if isinstance(ast, Expression):

@@ -1,11 +1,17 @@
-from operator import add, eq, mul, pow, sub, truediv
+from operator import add, eq, lt, mul, neg, pow, sub, truediv
+
+from neurolang.logic import ExistentialPredicate
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....datalog.aggregation import AggregationApplication
-from ....expressions import Constant, Symbol
-from ..standard_syntax import ExternalSymbol
+from ....expressions import Constant, FunctionApplication, Symbol
+from ....probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate
+)
 from ..natural_syntax import parser
-from ....probabilistic.expressions import ProbabilisticPredicate
+from ..standard_syntax import ExternalSymbol
 
 
 def test_facts():
@@ -134,7 +140,7 @@ def test_rules():
             A(x),
             Conjunction((
                 B(
-                    Constant(add)(x, Constant(-5.)),
+                    Constant(add)(x, Constant(neg)(Constant(5))),
                     Constant("a")
                 ),
             ))
@@ -196,6 +202,102 @@ def test_nl_rules():
             legs(x, y), Conjunction((bird(x), Constant(eq)(y, Constant(2))))
         ),
     ))
+
+
+def test_aggregation_nsd_qm():
+    res = parser(
+        'term ?t count ?count(?t) IF term ?t reported in study ?s'
+    ).formulas[0]
+
+    assert res == Implication(
+        Symbol('term_count')(
+            Symbol('t'),
+            AggregationApplication(Symbol('count'), (Symbol('t'),))
+        ),
+        Conjunction((Symbol('term_reported_in_study')(
+            Symbol('t'), Symbol('s')
+        ),))
+    )
+
+
+def test_pir_nsd():
+    res = parser(
+        'COMPUTE PROBABILITY OF term ?t in study ?s IF '
+        'term ?t mentioned in study ?s AND study ?s'
+    ).formulas[0]
+
+    assert res == Implication(
+        Symbol('term_in_study')(
+            Symbol('t'), Symbol('s'), PROB(Symbol('t'), Symbol('s'))
+        ),
+        Conjunction((
+            Symbol('term_mentioned_in_study')(Symbol('t'), Symbol('s')),
+            Symbol('study')(Symbol('s'))
+        ))
+    )
+
+    res = parser(
+        'COMPUTE PROBABILITY OF term ?t in DMN study ?s IF '
+        'term ?t mentioned in study ?s AND ?s is study '
+        'GIVEN term ?"DMN" mentioned in study ?s'
+    ).formulas[0]
+
+    expected = Implication(
+        Symbol('term_in_DMN_study')(
+            Symbol('t'), Symbol('s'), PROB(Symbol('t'), Symbol('s'))
+        ),
+        Condition(
+            Conjunction((
+                Symbol('term_mentioned_in_study')(Symbol('t'), Symbol('s')),
+                Symbol('study')(Symbol('s'))
+            )),
+            Conjunction((
+                Symbol('term_mentioned_in_study')(
+                    Constant("DMN"), Symbol('s')
+                ),
+            ))
+        )
+    )
+
+    assert res == expected
+
+
+def test_multivalue_nsd_existential():
+    res = parser(
+        'point ?p is bounded IF ?p is point AND '
+        'EXISTS ?s1, ?s2 WHERE ?s1 < ?p AND ?p < ?s2'
+    ).formulas[0]
+
+    assert res == Implication(
+        Symbol('point_is_bounded')(Symbol('p')),
+        Conjunction((
+            Symbol('point')('p'),
+            ExistentialPredicate(
+                Symbol('s2'),
+                ExistentialPredicate(
+                    Symbol('s1'),
+                    Conjunction((
+                        Constant(lt)(Symbol('s1'), Symbol('p')),
+                        Constant(lt)(Symbol('p'), Symbol('s2'))
+                    ))
+                )
+            ),
+        ))
+    )
+
+
+def test_multivalue_nsd_rules():
+    res = parser(
+        'with probability ?exp(-?d ** 2) point ?x,?y,?z is active in study ?s '
+        'IF '
+        'point ?x1, ?y1, ?z1 reported in study ?s AND '
+        '?d == distance(?x1, ?y1, ?z1, ?x, ?y, ?z) AND '
+        '?d < 4. AND '
+        'NOT EXISTS ?s1 WHERE ?s1 != ?s2 AND ?s2 is study; AND '
+        'NOT ?x, ?y, ?z equals ?x1, ?y1, ?z1'
+    )
+
+    assert res
 
 
 def test_aggregation():
