@@ -436,22 +436,3 @@ def test_4():
     assert rules[0].antecedent.args[0] == rules[0].consequent.args[0]
     assert rules[0].antecedent.functor == imp5.antecedent.functor
     assert rules[0].consequent.functor == imp5.consequent.functor
-
-
-def test_cogat():
-    from nilearn import datasets
-    from neurolang.frontend import NeurolangPDL
-    cogAt = datasets.utils._fetch_files(
-    datasets.utils._get_dataset_dir('CogAt'),
-    [
-        (
-            'cogat.xml',
-            'http://data.bioontology.org/ontologies/COGAT/download?'
-            'apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb&download_format=rdf',
-            {'move': 'cogat.xml'}
-        )
-    ]
-    )[0]
-
-    nl = NeurolangPDL()
-    nl.load_ontology(cogAt)
