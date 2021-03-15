@@ -1,4 +1,4 @@
-from rdflib import OWL, RDF, RDFS
+import io
 
 from ... import expression_walker as ew
 from ...expression_walker import ReplaceExpressionWalker
@@ -14,6 +14,7 @@ from ..aggregation import DatalogWithAggregationMixin
 from ..expressions import TranslateToLogic
 from ..ontologies_parser import RightImplication
 from ..ontologies_rewriter import OntologyRewriter
+from ..ontologies_parser import OntologyParser
 
 S_ = Symbol
 C_ = Constant
@@ -230,8 +231,8 @@ def test_example_4_3():
 
 def test_infinite_walker():
 
-    subClassOf = Symbol(str(RDFS.subClassOf))
-    rest = Symbol(str(OWL.rest))
+    subClassOf = Symbol(str("subClassOf"))
+    rest = Symbol("rest")
     reg = Symbol("reg")
 
     x1 = Symbol("x1")
@@ -252,3 +253,133 @@ def test_infinite_walker():
     expected = CollapseConjunctions().walk(expected)
 
     assert sigma_rep == expected
+
+
+def test_empty_rewrite():
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <Ontology>
+            <versionInfo>0.3.1</versionInfo>
+        </Ontology>
+
+        <owl:Class rdf:ID="AdministrativeStaff">
+            <rdfs:label>administrative staff worker</rdfs:label>
+            <rdfs:subClassOf rdf:resource="#Employee"/>
+        </owl:Class>
+
+        <owl:Class rdf:ID="Article">
+            <rdfs:label>article</rdfs:label>
+            <rdfs:subClassOf rdf:resource="#Publication"/>
+        </owl:Class>
+
+        <owl:Class rdf:ID="AssistantProfessor">
+            <rdfs:label>assistant professor</rdfs:label>
+            <rdfs:subClassOf rdf:resource="#Professor"/>
+        </owl:Class>
+
+        <owl:Class rdf:ID="AssociateProfessor">
+            <rdfs:label>associate professor</rdfs:label>
+            <rdfs:subClassOf rdf:resource="#Professor"/>
+        </owl:Class>
+
+        <owl:Class rdf:ID="Book">
+            <rdfs:label>book</rdfs:label>
+            <rdfs:subClassOf rdf:resource="#Publication"/>
+        </owl:Class>
+    </rdf:RDF>'''
+
+    book = Symbol('book')
+    x = Symbol('x')
+    p = Symbol('p')
+
+    onto = OntologyParser(io.StringIO(owl))
+    _, constraints = onto.parse_ontology()
+
+    q = I_(p(x), book(x))
+
+    qB = EB_((q,))
+    sigmaB = EB_(tuple(constraints))
+
+    dt = DatalogTranslator()
+    qB = dt.walk(qB)
+    sigmaB = dt.walk(sigmaB)
+
+    orw = OntologyRewriter(qB, sigmaB)
+    rewrite = orw.Xrewrite()
+
+    rewrited = [a[0] for a in rewrite]
+
+    assert len(rewrited) == 1
+    assert rewrited[0] == q
+
+
+def test_ontology_parsed_rewrite():
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <Ontology>
+            <versionInfo>0.3.1</versionInfo>
+        </Ontology>
+        
+        <owl:Class rdf:ID="Chair">
+            <rdfs:label>chair</rdfs:label>
+            <rdfs:subClassOf>
+                <owl:Class>
+                    <owl:intersectionOf rdf:parseType="Collection">
+                        <owl:Class rdf:about="#Person" />
+                        <owl:Restriction>
+                            <owl:onProperty rdf:resource="#headOf" />
+                            <owl:someValuesFrom>
+                                <owl:Class rdf:about="#Department" />
+                            </owl:someValuesFrom>
+                        </owl:Restriction>
+                    </owl:intersectionOf>
+                </owl:Class>
+            </rdfs:subClassOf>
+            <rdfs:subClassOf rdf:resource="#Professor" />
+        </owl:Class> 
+    </rdf:RDF>'''
+
+    headof = Symbol('headof')
+    chair = Symbol('chair')
+    x = Symbol('x')
+    y = Symbol('y')
+    p = Symbol('p')
+
+    onto = OntologyParser(io.StringIO(owl))
+    _, constraints = onto.parse_ontology()
+
+    q = I_(p(x), headof(x, y))
+
+    qB = EB_((q,))
+    sigmaB = EB_(tuple(constraints))
+
+    dt = DatalogTranslator()
+    qB = dt.walk(qB)
+    sigmaB = dt.walk(sigmaB)
+
+    orw = OntologyRewriter(qB, sigmaB)
+    rewrite = orw.Xrewrite()
+
+    rewrited = [a[0] for a in rewrite]
+
+    assert len(rewrited) == 3
+    assert q in rewrited
+    index_no_q = [i for i, e in enumerate(rewrited) if e != q]
+    assert len(index_no_q) == 2
+    index_1 = index_no_q[0]
+    index_2 = index_no_q[1]
+
+    if rewrited[index_1].antecedent == chair(x):
+        assert len(rewrited[index_2].antecedent.args) == 2
+        assert rewrited[index_2].antecedent.args[0] == rewrited[index_2].consequent.args[0]
+    elif rewrited[index_2].antecedent == chair(x):
+        assert len(rewrited[index_1].antecedent.args) == 2
+        assert rewrited[index_1].antecedent.args[0] == rewrited[index_1].consequent.args[0]
+    else:
+        assert False
