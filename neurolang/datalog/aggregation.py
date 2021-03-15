@@ -41,15 +41,17 @@ FA2L = FunctionApplicationToPythonLambda()
 AGG_MAX = Symbol("max")
 AGG_MEAN = Symbol("mean")
 AGG_COUNT = Symbol("count")
+AGG_SUM = Symbol("sum")
 
 
 def is_builtin_aggregation_functor(functor):
-    return functor in (AGG_MAX, AGG_MEAN)
+    return functor in (AGG_MAX, AGG_MEAN, AGG_COUNT, AGG_SUM)
 
 
 class BuiltinAggregationMixin:
     constant_max = Constant(numpy.max)
     constant_mean = Constant(numpy.mean)
+    constant_sum = Constant(sum)
 
     def function_count(self, *iterables: typing.Iterable) -> int:
         return len(next(iter(iterables)))
