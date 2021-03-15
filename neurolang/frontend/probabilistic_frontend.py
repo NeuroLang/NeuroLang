@@ -163,16 +163,19 @@ class NeurolangPDL(QueryBuilderDatalog):
         load_format : typing.Union[str, List[str]], optional
             storage format, by default "xml"
         """
-        onto = OntologyParser(paths, load_format)
-        d_pred, u_constraints = onto.parse_ontology()
-        self.program_ir.walk(u_constraints)
-        self.program_ir.add_extensional_predicate_from_tuples(
-            onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
-        )
-        self.program_ir.add_extensional_predicate_from_tuples(
-            onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
-        )
-        self.triple_symbol = onto.get_triples_symbol()
+        self.onto = OntologyParser(paths)
+        d_pred, u_constraints = self.onto.parse_ontology()
+        #I can combine both results into a single variable
+        self.program_ir.walk(Union(d_pred))
+        self.program_ir.walk(Union(u_constraints))
+        
+        #self.program_ir.add_extensional_predicate_from_tuples(
+        #    self.onto.get_triples_symbol(), d_pred[self.onto.get_triples_symbol()]
+        #)
+        #self.program_ir.add_extensional_predicate_from_tuples(
+        #    self.onto.get_pointers_symbol(), d_pred[self.onto.get_pointers_symbol()]
+        #)
+        #self.triple_symbol = self.onto.get_triples_symbol()
 
     @property
     def current_program(self) -> List[fe.Expression]:
