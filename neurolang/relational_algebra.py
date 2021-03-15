@@ -1,8 +1,9 @@
-import operator
 import math
+import operator
 from typing import AbstractSet, Callable, Tuple
 
 import numpy
+import pandas.core.computation.ops
 
 from . import expression_walker as ew
 from . import type_system
@@ -395,28 +396,48 @@ OPERATOR_STRING = {
     operator.pow: "**",
 }
 
-EVAL_FUNCTION_TO_STRING = {
+EVAL_OP_TO_STR = {
     max: "max",
     min: "min",
     sum: "sum",
-    numpy.exp: "exp",
+    abs: "abs",
     numpy.max: "max",
     numpy.min: "min",
-    numpy.log: "log",
-    numpy.sqrt: "sqrt",
     numpy.mean: "mean",
-    math.sqrt: "sqrt",
-    math.log: "log",
-    math.exp: "exp",
 }
+EVAL_OP_TO_STR.update(
+    {
+        getattr(numpy, op_name): op_name
+        for op_name in pandas.core.computation.ops._unary_math_ops
+    }
+)
+_MATH_MODULE_EQUIVALENT_NAME = {
+    "arcsin": "asin",
+    "arccos": "acos",
+    "arctan": "atan",
+    "arcsinh": "asinh",
+    "arccosh": "acosh",
+    "arctanh": "atanh",
+}
+EVAL_OP_TO_STR.update(
+    {
+        getattr(
+            math,
+            op_name
+            if hasattr(math, op_name)
+            else _MATH_MODULE_EQUIVALENT_NAME[op_name],
+        ): op_name
+        for op_name in pandas.core.computation.ops._unary_math_ops
+        if hasattr(math, op_name) or op_name in _MATH_MODULE_EQUIVALENT_NAME
+    }
+)
 
 
 def is_translatable_numpy_operation(exp):
     return (
         isinstance(exp, FunctionApplication)
         and isinstance(exp.functor, Constant)
-        and exp.functor.value
-        in EVAL_FUNCTION_TO_STRING
+        and exp.functor.value in EVAL_OP_TO_STR
     )
 
 
@@ -436,8 +457,7 @@ def is_arithmetic_operation(exp):
     return (
         isinstance(exp, FunctionApplication)
         and isinstance(exp.functor, Constant)
-        and exp.functor.value
-        in OPERATOR_STRING
+        and exp.functor.value in OPERATOR_STRING
     )
 
 
@@ -450,6 +470,7 @@ class StringArithmeticWalker(ew.PatternWalker):
     length of an other constant relation.
 
     """
+
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def arithmetic_operation(self, fa):
         return Constant[RelationalAlgebraStringExpression](
@@ -471,7 +492,7 @@ class StringArithmeticWalker(ew.PatternWalker):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(
                 "{}({})".format(
-                    EVAL_FUNCTION_TO_STRING[fa.functor.value],
+                    EVAL_OP_TO_STR[fa.functor.value],
                     self.walk(fa.args[0]).value,
                 )
             ),

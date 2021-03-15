@@ -9,7 +9,7 @@ from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, Symbol
 from ..relational_algebra import (
-    EVAL_FUNCTION_TO_STRING,
+    EVAL_OP_TO_STR,
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
@@ -919,13 +919,13 @@ def test_aggregation_translation():
 
 def test_evaluatable_function_applications():
     x = Constant(ColumnStr("x"))
-    for fun in EVAL_FUNCTION_TO_STRING:
+    for fun in EVAL_OP_TO_STR:
         fun_exp = Constant(fun)(x + Constant(2))
         solver = RelationalAlgebraSolver()
         result = solver._saw.walk(fun_exp)
         expected = Constant(
             RelationalAlgebraStringExpression(
-                "{}((x + 2))".format(EVAL_FUNCTION_TO_STRING[fun])
+                "{}((x + 2))".format(EVAL_OP_TO_STR[fun])
             )
         )
         assert result == expected
