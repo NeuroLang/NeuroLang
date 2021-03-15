@@ -1,6 +1,6 @@
 import io
 import xml.etree.ElementTree as ET
-from ..logic import Implication, Symbol
+from ..logic import Implication, Symbol, Conjunction
 from .constraints_representation import RightImplication
 
 class OntologyParser:
@@ -128,13 +128,11 @@ class OntologyParser:
                         
                             parsed = parsed + [exists_imp, prop_imp]
 
-                        #need to check better this restriction
                         if type_of_restriction == 'allValuesFrom' and names:
-                            for value in names:
-                                parsed.append(Implication(Symbol(value)(y), support_prop(x, y)))
                             onProp = Symbol(self._cut_name_from_item(onProperty))
-                            prop_imp = Implication(onProp(x, y), support_prop(x, y))
-                            exists_imp = RightImplication(Symbol(prop)(x), support_prop(x, y))
+                            conj = Conjunction((prop(x), onProp(x, y)))
+                            for value in names:
+                                parsed.append(Implication(Symbol(value)(y), conj))
                         
                             parsed = parsed + [exists_imp, prop_imp]
             else:
@@ -172,13 +170,11 @@ class OntologyParser:
                             
                                 parsed = parsed + [exists_imp, prop_imp]
 
-                            #need to check better this restriction
                             if type_of_restriction == 'allValuesFrom' and names:
-                                for value in names:
-                                    parsed.append(Implication(Symbol(value)(y), support_prop(x, y)))
                                 onProp = Symbol(self._cut_name_from_item(onProperty))
-                                prop_imp = Implication(onProp(x, y), support_prop(x, y))
-                                exists_imp = RightImplication(Symbol(prop)(x), support_prop(x, y))
+                                conj = Conjunction((prop(x), onProp(x, y)))
+                                for value in names:
+                                    parsed.append(Implication(Symbol(value)(y), conj))
                             
                                 parsed = parsed + [exists_imp, prop_imp]
                         
