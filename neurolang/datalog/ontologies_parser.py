@@ -105,6 +105,7 @@ class OntologyParser:
     def _parse_subclass_and_restriction(self, list_of_subclasses, prop):
         parsed_rules = []
         parsed_constraints = []
+
         for subClassOf in list_of_subclasses:
             #If the inner class is defined, there is an intersection
             inner_classes = subClassOf.findall('owl:Class', self.namespace)
@@ -130,17 +131,18 @@ class OntologyParser:
                         support_prop = Symbol.fresh()
                         if type_of_restriction == 'someValuesFrom' and names:
                             for value in names:
-                                parsed_rules.append(Implication(Symbol(value)(y), support_prop(x, y)))
+                                parsed_constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
                             onProp = Symbol(self._cut_name_from_item(onProperty))
-                            prop_imp = Implication(onProp(x, y), support_prop(x, y))
+                            prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
                             exists_imp = RightImplication(Symbol(prop)(x), support_prop(x, y))
                         
-                            parsed_rules.append(prop_imp)
                             parsed_constraints.append(exists_imp)
+                            parsed_constraints.append(prop_imp)
 
                         if type_of_restriction == 'allValuesFrom' and names:
+                            ant = Symbol(prop)
                             onProp = Symbol(self._cut_name_from_item(onProperty))
-                            conj = Conjunction((prop(x), onProp(x, y)))
+                            conj = Conjunction((ant(x), onProp(x, y)))
                             for value in names:
                                 parsed_rules.append(Implication(Symbol(value)(y), conj))
                         
@@ -164,8 +166,8 @@ class OntologyParser:
                 imp = Implication(cons(x), ant(x))
                 parsed_rules.append(imp)
             else:
-                support_prop = Symbol.fresh()
                 for inter in intersection:
+                    support_prop = Symbol.fresh()
                     for child in inter.getchildren():
 
                         if child.tag == self.RESTRICTION:
@@ -174,15 +176,17 @@ class OntologyParser:
                             
                             if type_of_restriction == 'someValuesFrom' and names:
                                 for value in names:
-                                    parsed_rules.append(Implication(Symbol(value)(y), support_prop(x, y)))
+                                    parsed_constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
                                 onProp = Symbol(self._cut_name_from_item(onProperty))
-                                prop_imp = Implication(onProp(x, y), support_prop(x, y))
+                                prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
                                 exists_imp = RightImplication(Symbol(prop)(x), support_prop(x, y))
-                            
-                                parsed_rules.append(prop_imp)
+                        
                                 parsed_constraints.append(exists_imp)
+                                parsed_constraints.append(prop_imp)
 
+                            #allValuesFrom inside intersection?
                             if type_of_restriction == 'allValuesFrom' and names:
+                                ant = Symbol(prop)
                                 onProp = Symbol(self._cut_name_from_item(onProperty))
                                 conj = Conjunction((prop(x), onProp(x, y)))
                                 for value in names:
@@ -190,8 +194,8 @@ class OntologyParser:
                         
                         if child.tag == self.CLASS:
                             cons = Symbol(self._cut_name_from_item(child))
-                            imp = Implication(cons(x), support_prop(x, y))
-                            parsed_rules.append(imp)
+                            imp = RightImplication(support_prop(x, y), cons(x))
+                            parsed_constraints.append(imp)
 
         return parsed_rules, parsed_constraints
 

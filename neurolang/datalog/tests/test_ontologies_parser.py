@@ -302,49 +302,49 @@ def test_3():
     Department = Symbol('department')
     Person = Symbol('person')
 
-    imp1 = Implication(Person(x), supportChair(x, y))
+    imp1 = RightImplication(supportChair(x, y), Person(x))
     imp2 = RightImplication(Chair(x), supportChair(x, y))
-    imp3 = Implication(headOf(x, y), supportChair(x, y))
-    imp4 = Implication(Department(y), supportChair(x, y))
+    imp3 = RightImplication(supportChair(x, y), headOf(x, y))
+    imp4 = RightImplication(supportChair(x, y), Department(y))
     imp5 = Implication(Professor(x), Chair(x))
 
     onto = OntologyParser(io.StringIO(owl))
     rules, constraints = onto.parse_ontology()
 
     
-    assert len(constraints) == 1
-    assert len(rules) == 4
-
-    assert isinstance(rules[0], Implication)
-    assert len(rules[0].antecedent.args) == 2
-    assert len(rules[0].consequent.args) == 1
-    assert rules[0].antecedent.args[0] == rules[0].consequent.args[0]
-    assert rules[0].consequent.functor == imp1.consequent.functor
+    assert len(constraints) == 4
+    assert len(rules) == 1
 
     assert isinstance(constraints[0], RightImplication)
-    assert len(constraints[0].antecedent.args) == 1
-    assert len(constraints[0].consequent.args) == 2
+    assert len(constraints[0].antecedent.args) == 2
+    assert len(constraints[0].consequent.args) == 1
     assert constraints[0].antecedent.args[0] == constraints[0].consequent.args[0]
-    assert constraints[0].antecedent.functor == imp2.antecedent.functor
+    assert constraints[0].consequent.functor == imp1.consequent.functor
 
-    assert isinstance(rules[1], Implication)
-    assert len(rules[1].antecedent.args) == 2
-    assert len(rules[1].consequent.args) == 1
-    assert rules[1].antecedent.args[1] == rules[1].consequent.args[0]
-    assert rules[1].consequent.functor == imp4.consequent.functor
+    assert isinstance(constraints[1], RightImplication)
+    assert len(constraints[1].antecedent.args) == 2
+    assert len(constraints[1].consequent.args) == 1
+    assert constraints[1].antecedent.args[1] == constraints[1].consequent.args[0]
+    assert constraints[1].consequent.functor == imp4.consequent.functor
 
-    assert isinstance(rules[2], Implication)
-    assert len(rules[2].antecedent.args) == 2
-    assert len(rules[2].consequent.args) == 2
-    assert rules[2].antecedent.args == rules[2].consequent.args
-    assert rules[2].consequent.functor == imp3.consequent.functor
+    assert isinstance(constraints[2], RightImplication)
+    assert len(constraints[2].antecedent.args) == 1
+    assert len(constraints[2].consequent.args) == 2
+    assert constraints[2].antecedent.args[0] == constraints[2].consequent.args[0]
+    assert constraints[2].antecedent.functor == imp2.antecedent.functor
+
+    assert isinstance(constraints[3], RightImplication)
+    assert len(constraints[3].antecedent.args) == 2
+    assert len(constraints[3].consequent.args) == 2
+    assert constraints[3].antecedent.args[0] == constraints[3].consequent.args[0]
+    assert constraints[3].consequent.functor == imp3.consequent.functor
     
-    assert isinstance(rules[3], Implication)
-    assert len(rules[3].antecedent.args) == 1
-    assert len(rules[3].consequent.args) == 1
-    assert rules[3].antecedent.args[0] == rules[3].consequent.args[0]
-    assert rules[3].antecedent.functor == imp5.antecedent.functor
-    assert rules[3].consequent.functor == imp5.consequent.functor
+    assert isinstance(rules[0], Implication)
+    assert len(rules[0].antecedent.args) == 1
+    assert len(rules[0].consequent.args) == 1
+    assert rules[0].antecedent.args[0] == rules[0].consequent.args[0]
+    assert rules[0].antecedent.functor == imp5.antecedent.functor
+    assert rules[0].consequent.functor == imp5.consequent.functor
 
 
 def test_4():
@@ -393,112 +393,65 @@ def test_4():
     College = Symbol('college')
     Person = Symbol('person')
 
-    imp1 = Implication(Person(x), supportDean(x, y))
+    imp1 = RightImplication(supportDean(x, y), Person(x))
     imp2 = RightImplication(Dean(x), supportDean(x, y))
-    imp3 = Implication(headOf(x, y), supportDean(x, y))
-    imp4 = Implication(College(y), supportDean(x, y))
+    imp3 = RightImplication(supportDean(x, y), headOf(x, y))
+    imp4 = RightImplication(supportDean(x, y), College(y))
     imp5 = Implication(Professor(x), Dean(x))
 
     onto = OntologyParser(io.StringIO(owl))
     rules, constraints = onto.parse_ontology()
 
     
-    assert len(constraints) == 1
-    assert len(rules) == 4
-
-    assert isinstance(rules[0], Implication)
-    assert len(rules[0].antecedent.args) == 2
-    assert len(rules[0].consequent.args) == 1
-    assert rules[0].antecedent.args[0] == rules[0].consequent.args[0]
-    assert rules[0].consequent.functor == imp1.consequent.functor
+    assert len(constraints) == 4
+    assert len(rules) == 1
 
     assert isinstance(constraints[0], RightImplication)
-    assert len(constraints[0].antecedent.args) == 1
-    assert len(constraints[0].consequent.args) == 2
+    assert len(constraints[0].antecedent.args) == 2
+    assert len(constraints[0].consequent.args) == 1
     assert constraints[0].antecedent.args[0] == constraints[0].consequent.args[0]
-    assert constraints[0].antecedent.functor == imp2.antecedent.functor
+    assert constraints[0].consequent.functor == imp1.consequent.functor
 
-    assert isinstance(rules[1], Implication)
-    assert len(rules[1].antecedent.args) == 2
-    assert len(rules[1].consequent.args) == 1
-    assert rules[1].antecedent.args[1] == rules[1].consequent.args[0]
-    assert rules[1].consequent.functor == imp4.consequent.functor
+    assert isinstance(constraints[1], RightImplication)
+    assert len(constraints[1].antecedent.args) == 2
+    assert len(constraints[1].consequent.args) == 1
+    assert constraints[1].antecedent.args[1] == constraints[1].consequent.args[0]
+    assert constraints[1].consequent.functor == imp4.consequent.functor
 
-    assert isinstance(rules[2], Implication)
-    assert len(rules[2].antecedent.args) == 2
-    assert len(rules[2].consequent.args) == 2
-    assert rules[2].antecedent.args == rules[2].consequent.args
-    assert rules[2].consequent.functor == imp3.consequent.functor
+    assert isinstance(constraints[2], RightImplication)
+    assert len(constraints[2].antecedent.args) == 1
+    assert len(constraints[2].consequent.args) == 2
+    assert constraints[2].antecedent.args[0] == constraints[2].consequent.args[0]
+    assert constraints[2].antecedent.functor == imp2.antecedent.functor
+
+    assert isinstance(constraints[3], RightImplication)
+    assert len(constraints[3].antecedent.args) == 2
+    assert len(constraints[3].consequent.args) == 2
+    assert constraints[3].antecedent.args[0] == constraints[3].consequent.args[0]
+    assert constraints[3].consequent.functor == imp3.consequent.functor
     
-    assert isinstance(rules[3], Implication)
-    assert len(rules[3].antecedent.args) == 1
-    assert len(rules[3].consequent.args) == 1
-    assert rules[3].antecedent.args[0] == rules[3].consequent.args[0]
-    assert rules[3].antecedent.functor == imp5.antecedent.functor
-    assert rules[3].consequent.functor == imp5.consequent.functor
+    assert isinstance(rules[0], Implication)
+    assert len(rules[0].antecedent.args) == 1
+    assert len(rules[0].consequent.args) == 1
+    assert rules[0].antecedent.args[0] == rules[0].consequent.args[0]
+    assert rules[0].antecedent.functor == imp5.antecedent.functor
+    assert rules[0].consequent.functor == imp5.consequent.functor
 
-def test_all_values():
-    owl = '''<?xml version="1.0"?>
-    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
-     xml:base="http://www.w3.org/2002/07/owl"
-     xmlns:dc="http://purl.org/dc/elements/1.1/"
-     xmlns:ro="http://www.obofoundry.org/ro/ro.owl#"
-     xmlns:obo="http://data.bioontology.org/metadata/obo/"
-     xmlns:owl="http://www.w3.org/2002/07/owl#"
-     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-     xmlns:xml="http://www.w3.org/XML/1998/namespace"
-     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
-     xmlns:obo1="http://purl.obolibrary.org/obo/"
-     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-     xmlns:skos="http://www.w3.org/2004/02/skos/core#"
-     xmlns:terms="http://purl.org/dc/terms/"
-     xmlns:metadata="http://data.bioontology.org/metadata/">
-        <Ontology>
-            <versionInfo>0.3.1</versionInfo>
-        </Ontology>
 
-        <Class rdf:about="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00539">
-            <rdfs:subClassOf rdf:resource="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00380"/>
-            <rdfs:subClassOf>
-                <Restriction>
-                    <onProperty rdf:resource="http://www.cognitiveatlas.org/ontology/cogat.owl#measured_by"/>
-                    <someValuesFrom rdf:resource="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_02986"/>
-                </Restriction>
-            </rdfs:subClassOf>
-            <rdfs:subClassOf>
-                <Restriction>
-                    <onProperty rdf:resource="http://www.cognitiveatlas.org/ontology/cogat.owl#measured_by"/>
-                    <someValuesFrom rdf:resource="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_02987"/>
-                </Restriction>
-            </rdfs:subClassOf>
-            <rdfs:subClassOf>
-                <Restriction>
-                    <onProperty rdf:resource="http://www.cognitiveatlas.org/ontology/cogat.owl#measured_by"/>
-                    <allValuesFrom>
-                        <Class>
-                            <unionOf rdf:parseType="Collection">
-                                <rdf:Description rdf:about="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_02986"/>
-                                <rdf:Description rdf:about="http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_02987"/>
-                            </unionOf>
-                        </Class>
-                    </allValuesFrom>
-                </Restriction>
-            </rdfs:subClassOf>
-            <metadata:prefixIRI rdf:datatype="http://www.w3.org/2001/XMLSchema#string">cogat:CAO_00539</metadata:prefixIRI>
-            <terms:Contributor>Brenda Gregory</terms:Contributor>
-            <terms:Date>2011-05-18 21:24:27</terms:Date>
-            <terms:Title>Verbal memory</terms:Title>
-            <terms:identifier>trm_4a3fd79d0b457</terms:identifier>
-            <rdfs:label>Verbal memory</rdfs:label>
-            <skos:altLabel></skos:altLabel>
-            <skos:definition>Recall based on spoken words.</skos:definition>
-            <skos:hasTopConcept>Learning and Memory</skos:hasTopConcept>
-            <skos:prefLabel>Verbal memory</skos:prefLabel>
-        </Class>
-    </rdf:RDF>
-    '''
+def test_cogat():
+    from nilearn import datasets
+    from neurolang.frontend import NeurolangPDL
+    cogAt = datasets.utils._fetch_files(
+    datasets.utils._get_dataset_dir('CogAt'),
+    [
+        (
+            'cogat.xml',
+            'http://data.bioontology.org/ontologies/COGAT/download?'
+            'apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb&download_format=rdf',
+            {'move': 'cogat.xml'}
+        )
+    ]
+    )[0]
 
-    onto = OntologyParser(io.StringIO(owl))
-    res = onto.parse_ontology()
-
-    a = 1
+    nl = NeurolangPDL()
+    nl.load_ontology(cogAt)
