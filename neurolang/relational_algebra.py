@@ -404,6 +404,7 @@ EVAL_FUNCTION_TO_STRING = {
     numpy.min: "min",
     numpy.log: "log",
     numpy.sqrt: "sqrt",
+    numpy.mean: "mean",
     math.sqrt: "sqrt",
     math.log: "log",
     math.exp: "exp",
