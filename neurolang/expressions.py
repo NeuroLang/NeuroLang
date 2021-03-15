@@ -838,17 +838,17 @@ class TypedSymbolTableMixin:
             symbol_table = TypedSymbolTable()
         self.symbol_table = symbol_table
         self.simplify_mode = False
-        self.add_included_to_symbol_table()
+        self.add_included_constants_and_functions_to_symbol_table()
 
     @property
     def included_functions(self):
-        return self._get_included_with_prefix("function_")
+        return self._get_included_symbol_definitions_with_prefix("function_")
 
     @property
     def included_constants(self):
-        return self._get_included_with_prefix("constant_")
+        return self._get_included_symbol_definitions_with_prefix("constant_")
 
-    def add_included_to_symbol_table(self) -> None:
+    def add_included_constants_and_functions_to_symbol_table(self) -> None:
         included = self.included_functions
         included.update(self.included_constants)
         keyword_symbol_table = TypedSymbolTable()
@@ -860,7 +860,7 @@ class TypedSymbolTableMixin:
             top_scope = top_scope.enclosing_scope
         top_scope.enclosing_scope = keyword_symbol_table
 
-    def _get_included_with_prefix(
+    def _get_included_symbol_definitions_with_prefix(
         self,
         prefix: str,
     ) -> typing.Dict[str, Constant]:

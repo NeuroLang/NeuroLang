@@ -1,4 +1,5 @@
 import operator
+import math
 from typing import AbstractSet, Callable, Tuple
 
 import numpy
@@ -394,11 +395,18 @@ OPERATOR_STRING = {
     operator.pow: "**",
 }
 
-TRANSLATABLE_NUMPY_OPERATION = {
+EVAL_FUNCTION_TO_STRING = {
+    max: "max",
+    min: "min",
+    sum: "sum",
     numpy.exp: "exp",
     numpy.max: "max",
     numpy.min: "min",
     numpy.log: "log",
+    numpy.sqrt: "sqrt",
+    math.sqrt: "sqrt",
+    math.log: "log",
+    math.exp: "exp",
 }
 
 
@@ -407,7 +415,7 @@ def is_translatable_numpy_operation(exp):
         isinstance(exp, FunctionApplication)
         and isinstance(exp.functor, Constant)
         and exp.functor.value
-        in TRANSLATABLE_NUMPY_OPERATION
+        in EVAL_FUNCTION_TO_STRING
     )
 
 
@@ -462,7 +470,7 @@ class StringArithmeticWalker(ew.PatternWalker):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(
                 "{}({})".format(
-                    TRANSLATABLE_NUMPY_OPERATION[fa.functor.value],
+                    EVAL_FUNCTION_TO_STRING[fa.functor.value],
                     self.walk(fa.args[0]).value,
                 )
             ),
