@@ -106,3 +106,7 @@ class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
     def __init__(self, formula):
         super().__init__(f"Negative formula {formula} is not a named relation")
         self.formula = formula
+
+
+class NonLiftableException(NeuroLangException):
+    pass
