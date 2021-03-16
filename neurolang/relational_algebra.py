@@ -73,7 +73,18 @@ class RelationalAlgebraOperation(Definition):
         return self._columns
 
 
-class Selection(RelationalAlgebraOperation):
+class NAryRelationalAlgebraOperation(RelationalAlgebraOperation):
+    pass
+
+
+class BinaryRelationalAlgebraOperation(RelationalAlgebraOperation):
+    pass
+
+
+class UnaryRelationalAlgebraOperation(RelationalAlgebraOperation):
+    pass
+
+class Selection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, formula):
         self.relation = relation
         self.formula = formula
@@ -82,7 +93,7 @@ class Selection(RelationalAlgebraOperation):
         return f"\N{GREEK SMALL LETTER SIGMA}_{self.formula}({self.relation})"
 
 
-class Projection(RelationalAlgebraOperation):
+class Projection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
@@ -94,7 +105,7 @@ class Projection(RelationalAlgebraOperation):
         )
 
 
-class EquiJoin(RelationalAlgebraOperation):
+class EquiJoin(BinaryRelationalAlgebraOperation):
     def __init__(
         self, relation_left, columns_left, relation_right, columns_right
     ):
@@ -111,7 +122,7 @@ class EquiJoin(RelationalAlgebraOperation):
         )
 
 
-class NaturalJoin(RelationalAlgebraOperation):
+class NaturalJoin(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -120,7 +131,7 @@ class NaturalJoin(RelationalAlgebraOperation):
         return f"[{self.relation_left}" f"\N{JOIN}" f"{self.relation_right}]"
 
 
-class LeftNaturalJoin(RelationalAlgebraOperation):
+class LeftNaturalJoin(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -133,7 +144,7 @@ class LeftNaturalJoin(RelationalAlgebraOperation):
         )
 
 
-class Product(RelationalAlgebraOperation):
+class Product(NAryRelationalAlgebraOperation):
     def __init__(self, relations):
         self.relations = tuple(relations)
 
@@ -145,7 +156,7 @@ class Product(RelationalAlgebraOperation):
         )
 
 
-class Difference(RelationalAlgebraOperation):
+class Difference(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -154,7 +165,7 @@ class Difference(RelationalAlgebraOperation):
         return f"[{self.relation_left}" f"-" f"{self.relation_right}]"
 
 
-class Union(RelationalAlgebraOperation):
+class Union(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -163,7 +174,7 @@ class Union(RelationalAlgebraOperation):
         return f"{self.relation_left} ∪ {self.relation_right}"
 
 
-class Intersection(RelationalAlgebraOperation):
+class Intersection(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -172,7 +183,7 @@ class Intersection(RelationalAlgebraOperation):
         return f"{self.relation_left} & {self.relation_right}"
 
 
-class NameColumns(RelationalAlgebraOperation):
+class NameColumns(UnaryRelationalAlgebraOperation):
     """
     Give names to the columns of a relational algebra set.
 
@@ -192,7 +203,7 @@ class NameColumns(RelationalAlgebraOperation):
         )
 
 
-class RenameColumn(RelationalAlgebraOperation):
+class RenameColumn(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, src, dst):
         self.relation = relation
         self.src = src
@@ -206,7 +217,7 @@ class RenameColumn(RelationalAlgebraOperation):
         )
 
 
-class RenameColumns(RelationalAlgebraOperation):
+class RenameColumns(UnaryRelationalAlgebraOperation):
     """
     Convenient operation for renaming multiple columns at the same time.
 
@@ -358,7 +369,7 @@ class FunctionApplicationListMember(Definition):
         return "{} -> {}".format(self.fun_exp, self.dst_column)
 
 
-class Destroy(RelationalAlgebraOperation):
+class Destroy(UnaryRelationalAlgebraOperation):
     """
     Operation to map a column of a collection of elements into
     a new column with all collections concatenated
@@ -394,7 +405,7 @@ class Destroy(RelationalAlgebraOperation):
         )
 
 
-class ConcatenateConstantColumn(RelationalAlgebraOperation):
+class ConcatenateConstantColumn(UnaryRelationalAlgebraOperation):
     """
     Add a column with a repeated constant value to a relation.
 

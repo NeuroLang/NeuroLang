@@ -29,13 +29,15 @@ from ..datalog.expression_processing import (
     enforce_conjunction,
     extract_logic_atoms,
     extract_logic_predicates,
-    flatten_query,
+    flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
-from ..logic import FALSE, Conjunction, Implication
-from ..logic.expression_processing import extract_logic_free_variables
+from ..logic import FALSE, Conjunction, Disjunction, Implication
+from ..logic.expression_processing import (
+    extract_logic_free_variables,
+)
 from ..relational_algebra import (
     ColumnStr,
     EliminateTrivialProjections,
@@ -46,13 +48,13 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraPushInSelections,
     RelationalAlgebraStringExpression,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
-    RelationalAlgebraProvenanceExpressionSemringSolver,
+    RelationalAlgebraProvenanceExpressionSemringSolver
 )
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
@@ -62,7 +64,7 @@ from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query,
+    generate_probabilistic_symbol_table_for_query
 )
 from .shattering import shatter_easy_probfacts
 

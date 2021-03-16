@@ -294,6 +294,29 @@ class DistributeDisjunctions(LogicExpressionWalker):
         )
 
 
+class DistributeConjunctions(LogicExpressionWalker):
+    @add_match(Conjunction, lambda e: len(e.formulas) > 2)
+    def split(self, expression):
+        head, *rest = expression.formulas
+        rest = self.walk(Conjunction(tuple(rest)))
+        new_exp = Conjunction((head, rest))
+        return self.walk(new_exp)
+
+    @add_match(Conjunction((..., Disjunction)))
+    def rotate(self, expression):
+        q, c = expression.formulas
+        return self.walk(
+            Disjunction(tuple(map(lambda p: Conjunction((q, p)), c.formulas)))
+        )
+
+    @add_match(Conjunction((Disjunction, ...)))
+    def distribute(self, expression):
+        c, q = expression.formulas
+        return self.walk(
+            Disjunction(tuple(map(lambda p: Disjunction((p, q)), c.formulas)))
+        )
+
+
 class CollapseDisjunctionsMixin(PatternWalker):
     @add_match(
         Disjunction,
@@ -356,6 +379,19 @@ def convert_to_pnf_with_cnf_matrix(expression):
         DesambiguateQuantifiedVariables,
         MoveQuantifiersUp,
         DistributeDisjunctions,
+        CollapseDisjunctions,
+        CollapseConjunctions,
+    )
+    return walker.walk(expression)
+
+
+def convert_to_pnf_with_dnf_matrix(expression):
+    walker = ChainedWalker(
+        EliminateImplications,
+        MoveNegationsToAtoms,
+        DesambiguateQuantifiedVariables,
+        MoveQuantifiersUp,
+        DistributeConjunctions,
         CollapseDisjunctions,
         CollapseConjunctions,
     )

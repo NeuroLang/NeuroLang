@@ -439,7 +439,8 @@ class Symbol(NonConstant):
         return hash(self.name)
 
     def __repr__(self):
-        return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
+        return f'S{{{self.name}}}'
+        # return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
 
     def __getstate__(self):
         # Pickle a tuple instead of a set for _symbols to avoid calling hash
@@ -705,7 +706,7 @@ class FunctionApplication(Definition):
         return self.functor
 
     def __repr__(self):
-        r = u'\u03BB{{{}: {}}}'.format(self.functor, self.__type_repr__)
+        r = u'\u03BB{{{}}}'.format(self.functor)
         if self.args is ...:
             r += '(...)'
         elif self.args is not None:
