@@ -8,6 +8,7 @@ from .constraints_representation import RightImplication
 # 1) Refactor
 # 2) DONE: Change symbol names (x, y, ...) and rewrite asserts in test 
 # 3) Solve the temporary trick in __init__ 
+# 4) Discuss how we should process names
 
 class OntologyParser:
     """
@@ -52,8 +53,10 @@ class OntologyParser:
                 sym_dom = Symbol(domain)(x)
                 sym_rng = Symbol(rng)(y)
                 sym_prop = Symbol(prop)(x, y)
-                imp_dom = Implication(sym_dom, sym_prop)
-                imp_rng = Implication(sym_rng, sym_prop)
+                #imp_dom = Implication(sym_dom, sym_prop)
+                #imp_rng = Implication(sym_rng, sym_prop)
+                imp_dom = RightImplication(sym_prop, sym_dom)
+                imp_rng = RightImplication(sym_prop, sym_rng)
 
                 props = props + [imp_dom, imp_rng]
 
@@ -70,7 +73,8 @@ class OntologyParser:
                 new_prop = label.replace(' ', '_')
                 if new_prop != prop:
                     x = Symbol.fresh()
-                    imp_label = Implication(Symbol(prop)(x), Symbol(new_prop)(x))
+                    #imp_label = Implication(Symbol(prop)(x), Symbol(new_prop)(x))
+                    imp_label = RightImplication(Symbol(new_prop)(x), Symbol(prop)(x))
                     classes.append(imp_label)
             rules, cons = self._parse_subclass_and_restriction(obj.findall('rdfs:subClassOf', self.namespace), prop)
             classes = classes + rules
@@ -119,7 +123,8 @@ class OntologyParser:
                     cons = Symbol(self._cut_name_from_item(subClassOf))
                     ant = Symbol(prop)
                     x = Symbol.fresh()
-                    imp = Implication(cons(x), ant(x))
+                    #imp = Implication(cons(x), ant(x))
+                    imp = RightImplication(ant(x), cons(x))
                     parsed_rules.append(imp)
                 else:
                     for res in restrictions:
@@ -144,7 +149,8 @@ class OntologyParser:
                             onProp = Symbol(self._cut_name_from_item(onProperty))
                             conj = Conjunction((ant(x), onProp(x, y)))
                             for value in names:
-                                parsed_rules.append(Implication(Symbol(value)(y), conj))
+                                #parsed_rules.append(Implication(Symbol(value)(y), conj))
+                                parsed_rules.append(RightImplication(conj, Symbol(value)(y)))
                         
             else:
                 p_rules, p_constraints = self._parse_inner_classes(inner_classes, prop)
@@ -163,7 +169,8 @@ class OntologyParser:
             if not intersection:
                 cons = Symbol(self._cut_name_from_item(_class))
                 ant = Symbol(prop)
-                imp = Implication(cons(x), ant(x))
+                #imp = Implication(cons(x), ant(x))
+                imp = RightImplication(ant(x), cons(x))
                 parsed_rules.append(imp)
             else:
                 for inter in intersection:
@@ -190,7 +197,8 @@ class OntologyParser:
                                 onProp = Symbol(self._cut_name_from_item(onProperty))
                                 conj = Conjunction((prop(x), onProp(x, y)))
                                 for value in names:
-                                    parsed_rules.append(Implication(Symbol(value)(y), conj))
+                                    #parsed_rules.append(Implication(Symbol(value)(y), conj))
+                                    parsed_rules.append(RightImplication(conj, Symbol(value)(y)))
                         
                         if child.tag == self.CLASS:
                             cons = Symbol(self._cut_name_from_item(child))

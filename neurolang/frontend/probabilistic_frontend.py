@@ -165,7 +165,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         """
         self.onto = OntologyParser(paths)
         d_pred, u_constraints = self.onto.parse_ontology()
-        #I can combine both results into a single variable
+        #I can combine both results into a single variable, if needed
         self.program_ir.walk(Union(d_pred))
         self.program_ir.walk(Union(u_constraints))
         
@@ -456,7 +456,6 @@ class NeurolangPDL(QueryBuilderDatalog):
         orw = OntologyRewriter(
             deterministic_program, 
             self.program_ir.constraints(),
-            self.triple_symbol
         )
         rewrite = orw.Xrewrite()
 

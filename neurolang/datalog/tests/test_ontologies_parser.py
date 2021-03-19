@@ -436,3 +436,88 @@ def test_4():
     assert rules[0].antecedent.args[0] == rules[0].consequent.args[0]
     assert rules[0].antecedent.functor == imp5.antecedent.functor
     assert rules[0].consequent.functor == imp5.consequent.functor
+
+
+def test_open_world_example():
+    from neurolang.frontend import NeurolangPDL
+
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <Ontology>
+            <versionInfo>0.3.1</versionInfo>
+        </Ontology>
+        
+        <owl:Class rdf:ID="Dean">
+            <rdfs:label>dean</rdfs:label>
+            <rdfs:subClassOf>
+                <owl:Class>
+                    <owl:intersectionOf rdf:parseType="Collection">
+                        <owl:Class rdf:about="#Person" />
+                        <owl:Restriction>
+                            <owl:onProperty rdf:resource="#headOf" />
+                            <owl:someValuesFrom>
+                                <owl:Class rdf:about="#College" />
+                            </owl:someValuesFrom>
+                        </owl:Restriction>
+                    </owl:intersectionOf>
+                </owl:Class>
+            </rdfs:subClassOf>
+            <rdfs:subClassOf rdf:resource="#Professor" />
+        </owl:Class> 
+    </rdf:RDF>'''
+
+    '''
+    Professor(X) :- Dean(X).
+    #exists{Y}supportDean(X,Y) :- Dean(X).
+    headOf(X,Y) :- supportDean(X,Y).
+    College(Y) :- supportDean(X,Y).
+    Person(X) :- supportDean(X,Y).
+    '''
+
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(owl))
+
+    nl.add_tuple_set([('Juan',), ('Marcos',)], name='dean')
+    nl.add_tuple_set([('College A',), ('College B',)], name='college')
+
+    with nl.scope as e:
+        e.answer[e.a, e.b] = (
+            e.headof[e.a, e.b] &
+            e.college[e.b]
+        )
+
+        f_term = nl.solve_all()
+        a= 1
+
+'''def test_open_world_real_example():
+    from nilearn import datasets
+    from neurolang.frontend import NeurolangPDL
+
+    cogAt = datasets.utils._fetch_files(
+    datasets.utils._get_dataset_dir('CogAt'),
+        [
+            (
+                'cogat.xml',
+                'http://data.bioontology.org/ontologies/COGAT/download?'
+                'apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb&download_format=rdf',
+                {'move': 'cogat.xml'}
+            )
+        ]
+    )[0]
+
+    nl = NeurolangPDL()
+    nl.load_ontology(cogAt)
+
+    nl.add_tuple_set([('xxx',)], name='cao_00418')
+
+    with nl.scope as e:
+        e.answer[e.a] = (
+            e.part_of[e.a, ...]
+        )
+
+        f_term = nl.solve_all()
+        a= 1
+'''
