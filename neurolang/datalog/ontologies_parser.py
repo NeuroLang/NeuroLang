@@ -137,8 +137,10 @@ class OntologyParser:
                         if type_of_restriction == 'someValuesFrom' and names:
                             for value in names:
                                 parsed_constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
+                                ##parsed_constraints.append(Implication(Symbol(value)(y), support_prop(x, y)))
                             onProp = Symbol(self._cut_name_from_item(onProperty))
                             prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
+                            ##prop_imp = Implication(onProp(x, y), support_prop(x, y))
                             exists_imp = RightImplication(Symbol(prop)(x), support_prop(x, y))
                         
                             parsed_constraints.append(exists_imp)
@@ -184,8 +186,10 @@ class OntologyParser:
                             if type_of_restriction == 'someValuesFrom' and names:
                                 for value in names:
                                     parsed_constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
+                                    ##parsed_constraints.append(Implication(Symbol(value)(y), support_prop(x, y)))
                                 onProp = Symbol(self._cut_name_from_item(onProperty))
                                 prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
+                                ##prop_imp = Implication(onProp(x, y), support_prop(x, y))
                                 exists_imp = RightImplication(Symbol(prop)(x), support_prop(x, y))
                         
                                 parsed_constraints.append(exists_imp)
@@ -203,6 +207,7 @@ class OntologyParser:
                         if child.tag == self.CLASS:
                             cons = Symbol(self._cut_name_from_item(child))
                             imp = RightImplication(support_prop(x, y), cons(x))
+                            ##imp = Implication(cons(x), support_prop(x, y))
                             parsed_constraints.append(imp)
 
         return parsed_rules, parsed_constraints
@@ -238,7 +243,6 @@ class OntologyParser:
                         names.append(name)
             else:
                 names = [self._cut_name_from_item(allValuesFrom)]
-                #elements = [inner_class]
 
             return 'allValuesFrom', names
 
