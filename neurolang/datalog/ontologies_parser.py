@@ -70,7 +70,7 @@ class OntologyParser:
             prop = self._cut_name_from_item(obj)
             label = self._get_name_from_text_atribute(obj.find('rdfs:label', self.namespace))
             if label is not None:
-                new_prop = label.replace(' ', '_')
+                new_prop = label.replace(' ', '_').lower()
                 if new_prop != prop:
                     x = Symbol.fresh()
                     #imp_label = Implication(Symbol(prop)(x), Symbol(new_prop)(x))
