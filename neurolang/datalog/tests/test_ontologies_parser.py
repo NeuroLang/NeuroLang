@@ -1,6 +1,7 @@
 
 import io
 
+from ...frontend import NeurolangPDL
 from ...expressions import Symbol
 from ..constraints_representation import RightImplication
 from ..expressions import Implication
@@ -439,8 +440,6 @@ def test_4():
 
 
 def test_open_world_example():
-    from neurolang.frontend import NeurolangPDL
-
     owl = '''<?xml version="1.0"?>
     <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
         xmlns:owl="http://www.w3.org/2002/07/owl#"
@@ -505,3 +504,31 @@ def test_open_world_example():
     
     res = f_term['answer'].as_pandas_dataframe().values
     assert (res == [['Juan'], ['Manuel']]).all()
+
+
+def test_cogat():
+    from nilearn import datasets
+
+    cogAt = datasets.utils._fetch_files(
+        datasets.utils._get_dataset_dir('CogAt'),
+        [
+            (
+                'cogat.xml',
+                'http://data.bioontology.org/ontologies/COGAT/download?'
+                'apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb&download_format=rdf',
+                {'move': 'cogat.xml'}
+            )
+        ]
+    )[0]
+
+    nl = NeurolangPDL()
+    nl.load_ontology(cogAt)
+
+    with nl.scope as e:
+        e.answer[e.a] = (
+            e.part_of[e.a, e.b] &
+            e.cao_00418[e.b] #perception 
+            
+        )
+
+        f_term = nl.solve_all()

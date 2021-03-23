@@ -36,9 +36,9 @@ class OntologyParser:
 
     def parse_ontology(self):
         props = self._parse_object_properties()
-        classes, constraints = self._parse_classes()
+        constraints = self._parse_classes()
 
-        return props + classes, constraints
+        return props + constraints
         
     def _parse_object_properties(self):
         props = []
@@ -63,24 +63,17 @@ class OntologyParser:
         return props
 
     def _parse_classes(self):
-        classes = []
         constraints = []
         for obj in self.root.findall(self.CLASS):
-            imp_label = None
             prop = self._cut_name_from_item(obj)
-            label = self._get_name_from_text_atribute(obj.find('rdfs:label', self.namespace))
-            if label is not None:
-                new_prop = label.replace(' ', '_').lower()
-                if new_prop != prop:
-                    x = Symbol.fresh()
-                    #imp_label = Implication(Symbol(prop)(x), Symbol(new_prop)(x))
-                    imp_label = RightImplication(Symbol(new_prop)(x), Symbol(prop)(x))
-                    classes.append(imp_label)
-            rules, cons = self._parse_subclass_and_restriction(obj.findall('rdfs:subClassOf', self.namespace), prop)
-            classes = classes + rules
+            thing = Symbol(name='thing')
+            x = Symbol.fresh()
+            imp_label = RightImplication(Symbol(prop)(x), Symbol(thing)(x))
+            constraints.append(imp_label)
+            cons = self._parse_subclass_and_restriction(obj.findall('rdfs:subClassOf', self.namespace), prop)
             constraints = constraints + cons
 
-        return classes, constraints
+        return constraints
 
 
     def _cut_name_from_item(self, obj):    
@@ -88,11 +81,15 @@ class OntologyParser:
             return None
         
         items = obj.items()
+        if not items:
+            return None
+
         if len(items) > 1:
             raise Exception(f'More than 1 element, check: {items}')
         split = items[0][1].split('#')
         if len(split) == 1:
-            name = split[0].lower()
+            name = split[0].split('/')[-1]
+            #name = split[0].lower()
         else:
             name = split[1].lower()
             
@@ -107,7 +104,6 @@ class OntologyParser:
         return label
 
     def _parse_subclass_and_restriction(self, list_of_subclasses, prop):
-        parsed_rules = []
         parsed_constraints = []
 
         for subClassOf in list_of_subclasses:
@@ -125,7 +121,7 @@ class OntologyParser:
                     x = Symbol.fresh()
                     #imp = Implication(cons(x), ant(x))
                     imp = RightImplication(ant(x), cons(x))
-                    parsed_rules.append(imp)
+                    parsed_constraints.append(imp)
                 else:
                     for res in restrictions:
                         onProperty = res.find('owl:onProperty', self.namespace)
@@ -152,19 +148,17 @@ class OntologyParser:
                             conj = Conjunction((ant(x), onProp(x, y)))
                             for value in names:
                                 #parsed_rules.append(Implication(Symbol(value)(y), conj))
-                                parsed_rules.append(RightImplication(conj, Symbol(value)(y)))
+                                parsed_constraints.append(RightImplication(conj, Symbol(value)(y)))
                         
             else:
-                p_rules, p_constraints = self._parse_inner_classes(inner_classes, prop)
-                parsed_rules = parsed_rules + p_rules
+                p_constraints = self._parse_inner_classes(inner_classes, prop)
                 parsed_constraints = parsed_constraints + p_constraints
                 
-        return parsed_rules, parsed_constraints
+        return parsed_constraints
                     
     def _parse_inner_classes(self, inner_classes, prop):
         x = Symbol.fresh()
         y = Symbol.fresh()
-        parsed_rules = []
         parsed_constraints = []
         for _class in inner_classes:
             intersection = _class.findall('owl:intersectionOf', self.namespace)
@@ -173,7 +167,7 @@ class OntologyParser:
                 ant = Symbol(prop)
                 #imp = Implication(cons(x), ant(x))
                 imp = RightImplication(ant(x), cons(x))
-                parsed_rules.append(imp)
+                parsed_constraints.append(imp)
             else:
                 for inter in intersection:
                     support_prop = Symbol.fresh()
@@ -202,7 +196,7 @@ class OntologyParser:
                                 conj = Conjunction((prop(x), onProp(x, y)))
                                 for value in names:
                                     #parsed_rules.append(Implication(Symbol(value)(y), conj))
-                                    parsed_rules.append(RightImplication(conj, Symbol(value)(y)))
+                                    parsed_constraints.append(RightImplication(conj, Symbol(value)(y)))
                         
                         if child.tag == self.CLASS:
                             cons = Symbol(self._cut_name_from_item(child))
@@ -210,7 +204,7 @@ class OntologyParser:
                             ##imp = Implication(cons(x), support_prop(x, y))
                             parsed_constraints.append(imp)
 
-        return parsed_rules, parsed_constraints
+        return parsed_constraints
 
 
     def _parse_restriction(self, subClassOf):
@@ -246,7 +240,11 @@ class OntologyParser:
 
             return 'allValuesFrom', names
 
-        if allValuesFrom is None and someValuesFrom is None:
+        hasValue = subClassOf.find('owl:hasValue', self.namespace)
+        if hasValue is not None:
+            return 'hasValue', []
+
+        if allValuesFrom is None and someValuesFrom is None and hasValue is None:
             raise Exception(f'Restriction not parsed: {subClassOf}')         
         
         

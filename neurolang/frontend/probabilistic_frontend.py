@@ -145,7 +145,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
-        self.ontology_loaded = False
+        self.current_program_rewrited = None
 
     def load_ontology(
         self,
@@ -164,18 +164,8 @@ class NeurolangPDL(QueryBuilderDatalog):
             storage format, by default "xml"
         """
         self.onto = OntologyParser(paths)
-        d_pred, u_constraints = self.onto.parse_ontology()
-        #I can combine both results into a single variable, if needed
-        self.program_ir.walk(Union(d_pred))
-        self.program_ir.walk(Union(u_constraints))
-        
-        #self.program_ir.add_extensional_predicate_from_tuples(
-        #    self.onto.get_triples_symbol(), d_pred[self.onto.get_triples_symbol()]
-        #)
-        #self.program_ir.add_extensional_predicate_from_tuples(
-        #    self.onto.get_pointers_symbol(), d_pred[self.onto.get_pointers_symbol()]
-        #)
-        #self.triple_symbol = self.onto.get_triples_symbol()
+        constraints = self.onto.parse_ontology()
+        self.program_ir.walk(Union(constraints))
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -371,6 +361,7 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _solve_deterministic_stratum(self, det_idb):
         if "__constraints__" in self.symbol_table:
             det_idb = self._rewrite_program_with_ontology(det_idb)
+            self.current_program_rewrited = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
         return solution
