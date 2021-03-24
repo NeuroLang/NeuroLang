@@ -10,6 +10,8 @@ from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 from warnings import warn
 
+import pandas as pd
+
 from ..expression_walker import PatternWalker, add_match
 from ..exceptions import ProtectedKeywordError
 from ..expressions import (Constant, Expression, FunctionApplication,
@@ -304,7 +306,11 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
                 if first == tuple():
                     first = None
         else:
-            iterable_, iterable = tee(iterable)
+            if isinstance(iterable, pd.DataFrame):
+                # prevent iteration on dataframe's columns instead of tuples
+                iterable_, iterable = iterable.itertuples(index=None, name=None), iterable
+            else:
+                iterable_, iterable = tee(iterable)
             try:
                 first = next(iterable_)
             except StopIteration:
