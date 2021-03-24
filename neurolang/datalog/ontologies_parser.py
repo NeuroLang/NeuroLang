@@ -53,8 +53,6 @@ class OntologyParser:
                 sym_dom = Symbol(domain)(x)
                 sym_rng = Symbol(rng)(y)
                 sym_prop = Symbol(prop)(x, y)
-                #imp_dom = Implication(sym_dom, sym_prop)
-                #imp_rng = Implication(sym_rng, sym_prop)
                 imp_dom = RightImplication(sym_prop, sym_dom)
                 imp_rng = RightImplication(sym_prop, sym_rng)
 
@@ -68,7 +66,7 @@ class OntologyParser:
             prop = self._cut_name_from_item(obj)
             thing = Symbol(name='thing')
             x = Symbol.fresh()
-            imp_label = RightImplication(Symbol(prop)(x), Symbol(thing)(x))
+            imp_label = RightImplication(Symbol(prop)(x), thing(x))
             constraints.append(imp_label)
             cons = self._parse_subclass_and_restriction(obj.findall('rdfs:subClassOf', self.namespace), prop)
             constraints = constraints + cons
@@ -89,11 +87,10 @@ class OntologyParser:
         split = items[0][1].split('#')
         if len(split) == 1:
             name = split[0].split('/')[-1]
-            #name = split[0].lower()
         else:
-            name = split[1].lower()
+            name = split[1]
             
-        return name
+        return name.lower()
 
     def _get_name_from_text_atribute(self, obj):
         if hasattr(obj, 'text'):
@@ -119,7 +116,6 @@ class OntologyParser:
                     cons = Symbol(self._cut_name_from_item(subClassOf))
                     ant = Symbol(prop)
                     x = Symbol.fresh()
-                    #imp = Implication(cons(x), ant(x))
                     imp = RightImplication(ant(x), cons(x))
                     parsed_constraints.append(imp)
                 else:
@@ -133,10 +129,8 @@ class OntologyParser:
                         if type_of_restriction == 'someValuesFrom' and names:
                             for value in names:
                                 parsed_constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
-                                ##parsed_constraints.append(Implication(Symbol(value)(y), support_prop(x, y)))
                             onProp = Symbol(self._cut_name_from_item(onProperty))
                             prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
-                            ##prop_imp = Implication(onProp(x, y), support_prop(x, y))
                             exists_imp = RightImplication(Symbol(prop)(x), support_prop(x, y))
                         
                             parsed_constraints.append(exists_imp)
@@ -147,7 +141,6 @@ class OntologyParser:
                             onProp = Symbol(self._cut_name_from_item(onProperty))
                             conj = Conjunction((ant(x), onProp(x, y)))
                             for value in names:
-                                #parsed_rules.append(Implication(Symbol(value)(y), conj))
                                 parsed_constraints.append(RightImplication(conj, Symbol(value)(y)))
                         
             else:
@@ -165,7 +158,6 @@ class OntologyParser:
             if not intersection:
                 cons = Symbol(self._cut_name_from_item(_class))
                 ant = Symbol(prop)
-                #imp = Implication(cons(x), ant(x))
                 imp = RightImplication(ant(x), cons(x))
                 parsed_constraints.append(imp)
             else:
@@ -180,10 +172,8 @@ class OntologyParser:
                             if type_of_restriction == 'someValuesFrom' and names:
                                 for value in names:
                                     parsed_constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
-                                    ##parsed_constraints.append(Implication(Symbol(value)(y), support_prop(x, y)))
                                 onProp = Symbol(self._cut_name_from_item(onProperty))
                                 prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
-                                ##prop_imp = Implication(onProp(x, y), support_prop(x, y))
                                 exists_imp = RightImplication(Symbol(prop)(x), support_prop(x, y))
                         
                                 parsed_constraints.append(exists_imp)
@@ -195,13 +185,11 @@ class OntologyParser:
                                 onProp = Symbol(self._cut_name_from_item(onProperty))
                                 conj = Conjunction((prop(x), onProp(x, y)))
                                 for value in names:
-                                    #parsed_rules.append(Implication(Symbol(value)(y), conj))
                                     parsed_constraints.append(RightImplication(conj, Symbol(value)(y)))
                         
                         if child.tag == self.CLASS:
                             cons = Symbol(self._cut_name_from_item(child))
                             imp = RightImplication(support_prop(x, y), cons(x))
-                            ##imp = Implication(cons(x), support_prop(x, y))
                             parsed_constraints.append(imp)
 
         return parsed_constraints
