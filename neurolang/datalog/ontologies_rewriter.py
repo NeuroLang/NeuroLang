@@ -46,18 +46,10 @@ class OntologyRewriter:
                 selected_sigmas = self._get_related_sigmas(q0, sigma_free_vars)
                 for sigma in selected_sigmas:
                     new_q0 = self.rewriting_step(q0, sigma, rename_count)
-                    if new_q0 and self._is_new_rewriting(new_q0, Q_rew):
-                        sigma_free_vars = self._add_new_free_var(
-                                            new_q0, 
-                                            sigma_free_vars
-                                        )
+                    if new_q0 and self._is_new_rewriting(new_q0, Q_rew, Q_explored):
                         Q_rew.add((new_q0, "r", "u"))
                     new_q0 = self.factorization_step(q0, sigma)
-                    if new_q0 and self._is_new_factorization(new_q0, Q_rew):
-                        sigma_free_vars = self._add_new_free_var(
-                                            new_q0,  
-                                            sigma_free_vars
-                                        )
+                    if new_q0 and self._is_new_factorization(new_q0, Q_rew, Q_explored):
                         Q_rew.add((new_q0, "f", "u"))
 
                 Q_rew.remove(q)
@@ -115,12 +107,12 @@ class OntologyRewriter:
                 
         return new_q0
 
-    def _is_new_rewriting(self, new_q0, Q_rew):
+    def _is_new_rewriting(self, new_q0, Q_rew, Q_explored):
         return (new_q0, "r", "u") not in Q_rew and (
             new_q0,
             "r",
             "e",
-        ) not in Q_rew
+        ) not in Q_explored
 
     def factorization_step(self, q0, sigma):
         body_q = q0.antecedent
@@ -133,12 +125,12 @@ class OntologyRewriter:
                 
         return new_q0
 
-    def _is_new_factorization(self, new_q0, Q_rew):
+    def _is_new_factorization(self, new_q0, Q_rew, Q_explored):
         return (
             (new_q0, "r", "u") not in Q_rew
-            and (new_q0, "r", "e") not in Q_rew
+            and (new_q0, "r", "e") not in Q_explored
             and (new_q0, "f", "u") not in Q_rew
-            and (new_q0, "f", "e") not in Q_rew
+            and (new_q0, "f", "e") not in Q_explored
         )
 
     def _full_unification(self, S):
