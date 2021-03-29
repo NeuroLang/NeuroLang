@@ -64,10 +64,10 @@ class OntologyParser:
         constraints = []
         for obj in self.root.findall(self.CLASS):
             prop = self._cut_name_from_item(obj)
-            thing = Symbol(name='thing')
-            x = Symbol.fresh()
-            imp_label = RightImplication(Symbol(prop)(x), thing(x))
-            constraints.append(imp_label)
+            #thing = Symbol(name='thing')
+            #x = Symbol.fresh()
+            #imp_label = RightImplication(Symbol(prop)(x), thing(x))
+            #constraints.append(imp_label)
             cons = self._parse_subclass_and_restriction(obj.findall('rdfs:subClassOf', self.namespace), prop)
             constraints = constraints + cons
 

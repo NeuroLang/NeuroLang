@@ -70,10 +70,8 @@ def test_1():
     imp_label3 = Implication(AssociateProfessor(x), AssociateProfessor_label(x))
 
     onto = OntologyParser(io.StringIO(owl))
-    rules, constraints = onto.parse_ontology()
+    rules = onto.parse_ontology()
 
-    
-    assert len(constraints) == 0
     assert len(rules) == 8
 
     assert isinstance(rules[0], Implication)
@@ -192,10 +190,8 @@ def test_2():
     imp_label4 = Implication(Course(x), Course_label(x))
 
     onto = OntologyParser(io.StringIO(owl))
-    rules, constraints = onto.parse_ontology()
+    rules = onto.parse_ontology()
 
-    
-    assert len(constraints) == 0
     assert len(rules) == 8
 
     assert isinstance(rules[0], Implication)
@@ -507,7 +503,10 @@ def test_open_world_example():
 
 
 def test_cogat():
-    from nilearn import datasets
+    from nilearn import datasets, image
+    import pandas as pd
+    import numpy as np
+    import nibabel as nib
 
     cogAt = datasets.utils._fetch_files(
         datasets.utils._get_dataset_dir('CogAt'),
@@ -521,8 +520,76 @@ def test_cogat():
         ]
     )[0]
 
+    mni_t1 = nib.load(datasets.fetch_icbm152_2009()['t1'])
+    mni_t1_4mm = image.resample_img(mni_t1, np.eye(3) * 4)
+
+    ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
+        datasets.utils._get_dataset_dir('neurosynth'),
+        [
+            (
+                'database.txt',
+                'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
+                {'uncompress': True}
+            ),
+            (
+                'features.txt',
+                'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
+                {'uncompress': True}
+            ),
+        ]
+    )
+
+    ns_database = pd.read_csv(ns_database_fn, sep=f'\t')
+    ijk_positions = (
+        nib.affines.apply_affine(
+            np.linalg.inv(mni_t1_4mm.affine),
+            ns_database[['x', 'y', 'z']]
+        ).astype(int)
+    )
+    ns_database['i'] = ijk_positions[:, 0]
+    ns_database['j'] = ijk_positions[:, 1]
+    ns_database['k'] = ijk_positions[:, 2]
+
+    ns_features = pd.read_csv(ns_features_fn, sep=f'\t')
+    ns_terms = (
+        pd.melt(
+                ns_features,
+                var_name='term', id_vars='pmid', value_name='TfIdf'
+        )
+        .query('TfIdf > 1e-3')[['pmid', 'term']]
+    )
+    ns_docs = ns_features[['pmid']].drop_duplicates()
+
+    import rdflib
+    from rdflib import RDFS
+    g = rdflib.Graph()
+    g.load(cogAt)
+
+    onto_dic = {}
+    for a in g.subjects():
+        for b in g.triples((a, RDFS.label, None)):
+            ent = a.split('#')[1]
+            label = b[2].lower().replace(' ', '_')
+            onto_dic[label] = ent
+
+    group_terms = ns_terms.groupby('term')
+    dic_term_pmid = {}
+
+    for term, ids in group_terms:
+        term = term.lower().replace(' ', '_')
+        dic_term_pmid[term] = ids
+        
+    merge_dic = {}
+    for k, v in onto_dic.items():
+        if k in dic_term_pmid.keys():
+            vl = v.lower()
+            merge_dic[vl] = dic_term_pmid[k]
+
     nl = NeurolangPDL()
     nl.load_ontology(cogAt)
+
+    for k, v in dic_term_pmid.items():
+        nl.add_tuple_set(v.pmid.values, name=k)  
 
     with nl.scope as e:
         e.answer[e.a] = (
@@ -532,3 +599,5 @@ def test_cogat():
         )
 
         f_term = nl.solve_all()
+
+    a = 1 

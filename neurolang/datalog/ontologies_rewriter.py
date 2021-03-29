@@ -7,7 +7,7 @@ from ..expressions import Symbol
 from ..logic import Constant, Implication, NaryLogicOperator
 from ..logic.expression_processing import ExtractFreeVariablesWalker
 from ..logic.transformations import CollapseConjunctions
-from ..logic.unification import apply_substitution, most_general_unifier, most_general_unifier_arguments
+from ..logic.unification import apply_substitution, most_general_unifier
 from .ontologies_parser import RightImplication
 
 
@@ -45,12 +45,14 @@ class OntologyRewriter:
                 q0 = q[0]
                 selected_sigmas = self._get_related_sigmas(q0, sigma_free_vars)
                 for sigma in selected_sigmas:
-                    new_q0 = self.rewriting_step(q0, sigma, rename_count)
-                    if new_q0 and self._is_new_rewriting(new_q0, Q_rew, Q_explored):
-                        Q_rew.add((new_q0, "r", "u"))
-                    new_q0 = self.factorization_step(q0, sigma)
-                    if new_q0 and self._is_new_factorization(new_q0, Q_rew, Q_explored):
-                        Q_rew.add((new_q0, "f", "u"))
+                    list_q0 = self.rewriting_step(q0, sigma, rename_count)
+                    for new_q0 in list_q0:
+                        if self._is_new_rewriting(new_q0, Q_rew, Q_explored):
+                            Q_rew.add((new_q0, "r", "u"))
+                    list_q0 = self.factorization_step(q0, sigma)
+                    for new_q0 in list_q0:
+                        if self._is_new_factorization(new_q0, Q_rew, Q_explored):
+                            Q_rew.add((new_q0, "f", "u"))
 
                 Q_rew.remove(q)
                 Q_explored.add((q[0], q[1], "e"))
@@ -97,15 +99,17 @@ class OntologyRewriter:
     def rewriting_step(self, q0, sigma, rename_count):
         body_q = q0.antecedent
         S_applicable = self._get_applicable(sigma, body_q)
-        new_q0 = None
+        list_q0 = []
         for S in S_applicable:
             rename_count += 1
             sigma_i = self._rename(sigma[0], rename_count)
             qS = most_general_unifier(sigma_i.consequent, S)
             if qS:
                 new_q0 = self._combine_rewriting(q0, qS, S, sigma_i)
+                list_q0.append(new_q0)
+
                 
-        return new_q0
+        return list_q0
 
     def _is_new_rewriting(self, new_q0, Q_rew, Q_explored):
         return (new_q0, "r", "u") not in Q_rew and (
@@ -117,13 +121,14 @@ class OntologyRewriter:
     def factorization_step(self, q0, sigma):
         body_q = q0.antecedent
         S_factorizable = self._get_factorizable(sigma, body_q)
-        new_q0 = None
+        list_q0 = []
         if len(S_factorizable) > 1:
             qS = self._full_unification(S_factorizable)
             if qS:
                 new_q0 = Implication(q0.consequent, qS)
+                list_q0.append(new_q0)
                 
-        return new_q0
+        return list_q0
 
     def _is_new_factorization(self, new_q0, Q_rew, Q_explored):
         return (
