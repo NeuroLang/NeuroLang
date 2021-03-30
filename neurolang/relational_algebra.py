@@ -396,41 +396,54 @@ OPERATOR_STRING = {
     operator.pow: "**",
 }
 
-EVAL_OP_TO_STR = {
-    max: "max",
-    min: "min",
-    sum: "sum",
-    abs: "abs",
-    numpy.max: "max",
-    numpy.min: "min",
-    numpy.mean: "mean",
-}
-EVAL_OP_TO_STR.update(
-    {
-        getattr(numpy, op_name): op_name
-        for op_name in pandas.core.computation.ops._unary_math_ops
+def _get_evaluatable_operations_and_string_translations():
+    """
+    Get all operations that can be translated for fast evaluations in pandas
+    `eval` expressions.
+
+    The operations include some Python builtins, mathematical operations in
+    the Python standard library's `math` module, and numpy operations.
+
+    """
+    eval_op_to_str = {
+        max: "max",
+        min: "min",
+        sum: "sum",
+        abs: "abs",
+        numpy.max: "max",
+        numpy.min: "min",
+        numpy.mean: "mean",
     }
-)
-_MATH_MODULE_EQUIVALENT_NAME = {
-    "arcsin": "asin",
-    "arccos": "acos",
-    "arctan": "atan",
-    "arcsinh": "asinh",
-    "arccosh": "acosh",
-    "arctanh": "atanh",
-}
-EVAL_OP_TO_STR.update(
-    {
-        getattr(
-            math,
-            op_name
-            if hasattr(math, op_name)
-            else _MATH_MODULE_EQUIVALENT_NAME[op_name],
-        ): op_name
-        for op_name in pandas.core.computation.ops._unary_math_ops
-        if hasattr(math, op_name) or op_name in _MATH_MODULE_EQUIVALENT_NAME
+    eval_op_to_str.update(
+        {
+            getattr(numpy, op_name): op_name
+            for op_name in pandas.core.computation.ops._unary_math_ops
+        }
+    )
+    math_module_equivalent_name = {
+        "arcsin": "asin",
+        "arccos": "acos",
+        "arctan": "atan",
+        "arcsinh": "asinh",
+        "arccosh": "acosh",
+        "arctanh": "atanh",
     }
-)
+    eval_op_to_str.update(
+        {
+            getattr(
+                math,
+                op_name
+                if hasattr(math, op_name)
+                else math_module_equivalent_name[op_name],
+            ): op_name
+            for op_name in pandas.core.computation.ops._unary_math_ops
+            if hasattr(math, op_name) or op_name in math_module_equivalent_name
+        }
+    )
+    return eval_op_to_str
+
+
+EVAL_OP_TO_STR = _get_evaluatable_operations_and_string_translations()
 
 
 def is_translatable_numpy_operation(exp):
