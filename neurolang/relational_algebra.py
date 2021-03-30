@@ -414,12 +414,6 @@ def _get_evaluatable_operations_and_string_translations():
         numpy.min: "min",
         numpy.mean: "mean",
     }
-    eval_op_to_str.update(
-        {
-            getattr(numpy, op_name): op_name
-            for op_name in pandas.core.computation.ops._unary_math_ops
-        }
-    )
     math_module_equivalent_name = {
         "arcsin": "asin",
         "arccos": "acos",
@@ -428,18 +422,13 @@ def _get_evaluatable_operations_and_string_translations():
         "arccosh": "acosh",
         "arctanh": "atanh",
     }
-    eval_op_to_str.update(
-        {
-            getattr(
-                math,
-                op_name
-                if hasattr(math, op_name)
-                else math_module_equivalent_name[op_name],
-            ): op_name
-            for op_name in pandas.core.computation.ops._unary_math_ops
-            if hasattr(math, op_name) or op_name in math_module_equivalent_name
-        }
-    )
+    for op_name in pandas.core.computation.ops._unary_math_ops:
+        eval_op_to_str[getattr(numpy, op_name)] = op_name
+        if hasattr(math, op_name):
+            eval_op_to_str[getattr(math, op_name)] = op_name
+        elif op_name in math_module_equivalent_name:
+            op = getattr(math, math_module_equivalent_name[op_name])
+            eval_op_to_str[op] = op_name
     return eval_op_to_str
 
 
