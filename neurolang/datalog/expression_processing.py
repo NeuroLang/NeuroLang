@@ -41,6 +41,7 @@ from ..logic import (
 from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import most_general_unifier
+from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
 
 EQ = Constant(operator.eq)
@@ -965,7 +966,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
                     for a1, a2 in zip(old_arg.args, new_arg.args)
                     if isinstance(a1, Symbol) and isinstance(a2, Constant)
                 )
-                raise ForbiddenExpressionError(
+                raise AggregatedVariableReplacedByConstantError(
                     "Variable equalities cannot lead to aggregation variables "
                     "to be replaced by a constant. Problematic replacements "
                     "that were found are {}".format(
