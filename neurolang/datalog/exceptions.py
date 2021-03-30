@@ -1,5 +1,5 @@
-from ..exceptions import NeuroLangException
+from ..exceptions import ForbiddenExpressionError
 
 
-class AggregatedVariableReplacedByConstantError(NeuroLangException):
+class AggregatedVariableReplacedByConstantError(ForbiddenExpressionError):
     pass
