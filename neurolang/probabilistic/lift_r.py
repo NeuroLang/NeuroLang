@@ -51,6 +51,14 @@ __all__ = [
 
 
 def dalvi_suciu_lift(rule):
+    '''
+    Translation from a datalog rule which allows disjunctions in the body
+    to a safe plan according to [1]_. Non-liftable segments are identified
+    by the `NonLiftable` expression.
+
+    [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
+    for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
+    '''
     if isinstance(rule, Implication):
         rule = convert_rule_to_e_query(rule)
     rule = RemoveTrivialOperations().walk(rule)
@@ -223,25 +231,10 @@ def convert_to_dnf_rule(expression):
 def minimize_component_disjunction(disjunction):
     if not isinstance(disjunction, Disjunction):
         return disjunction
-    components = disjunction.formulas
-    components_fv = [
-        extract_logic_free_variables(c)
-        for c in components
-    ]
-    s = Symbol.fresh()
-    keep = tuple()
-    for i, c in enumerate(components):
-        c_fv = components_fv[i]
-        for j, c_ in enumerate(components):
-            if i == j:
-                continue
-            head = s(*(c_fv & components_fv[j]))
-            q = Implication(head, c)
-            q_ = Implication(head, c_)
-            if is_contained(q, q_):
-                break
-        else:
-            keep += (c,)
+    keep = minimise_formulas_containment(
+        disjunction.formulas,
+        lambda x, y: is_contained(y, x)
+    )
 
     return Disjunction(keep)
 
@@ -249,7 +242,15 @@ def minimize_component_disjunction(disjunction):
 def minimize_component_conjunction(conjunction):
     if not isinstance(conjunction, Conjunction):
         return conjunction
-    components = conjunction.formulas
+    keep = minimise_formulas_containment(
+        conjunction.formulas,
+        is_contained
+    )
+
+    return Conjunction(keep)
+
+
+def minimise_formulas_containment(components, containment_op):
     components_fv = [
         extract_logic_free_variables(c)
         for c in components
@@ -264,12 +265,11 @@ def minimize_component_conjunction(conjunction):
             head = s(*(c_fv & components_fv[j]))
             q = Implication(head, c)
             q_ = Implication(head, c_)
-            if is_contained(q_, q):
+            if containment_op(q_, q):
                 break
         else:
             keep += (c,)
-
-    return Conjunction(keep)
+    return keep
 
 
 def inclusion_exclusion_formulas(query):
