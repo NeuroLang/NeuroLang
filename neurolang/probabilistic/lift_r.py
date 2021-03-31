@@ -60,14 +60,14 @@ def dalvi_suciu_lift(rule):
     rule_cnf = minimize_rule_in_cnf(rule)
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
-        return conjunctive_components_plan(connected_components)
+        return components_plan(connected_components, rap.NaturalJoin)
     elif len(rule_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf)
 
     rule_dnf = minimize_rule_in_dnf(rule)
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
-        return disjunctive_components_plan(connected_components)
+        return components_plan(connected_components, rap.Union)
     elif has_separator_variables(rule_dnf):
         return separator_variable_plan(rule_dnf)
 
@@ -270,22 +270,6 @@ def minimize_component_conjunction(conjunction):
     return Conjunction(keep)
 
 
-def _splits_to_expression(atom_groups_indices, query, operation):
-    new_formulas = []
-    for formula_indices in atom_groups_indices:
-        new_formula = tuple(
-           query.formulas[i]
-           for i in formula_indices
-        )
-        if len(new_formula) == 1:
-            new_formula = new_formula[0]
-        else:
-            new_formula = operation(tuple(new_formula))
-        new_formulas.append(new_formula)
-    new_query = operation(tuple(new_formulas))
-    return new_query
-
-
 def inclusion_exclusion_formulas(query):
     query_powerset = powerset(query.formulas)
     clean_powerset = set(
@@ -437,59 +421,6 @@ def _unify_existential_variables(query):
     return query
 
 
-def _clause_separator_variable_candidates(
-    formula, separator_variable_position
-):
-    '''
-    Variables in a clause are candidates to be a separator variable if
-    they appear in every atom in the clause once; and
-    for each predicate in the query, they appear always in the same position.
-    '''
-    atoms = extract_logic_atoms(formula)
-    clause_separator_variables = _separator_variable_candidates_atom(
-        atoms[0], separator_variable_position
-    )
-    for atom in atoms[1:]:
-        clause_separator_variables &= _separator_variable_candidates_atom(
-            atom, separator_variable_position
-        )
-        if len(clause_separator_variables) == 0:
-            break
-    return clause_separator_variables
-
-
-def _separator_variable_candidates_atom(atom, separator_variable_position):
-    '''
-    Obtains the separator variable candidates defined as all variables
-    which appear once in the arguments and for each appearance of the
-    relational symbol, they appear in the same position.
-    '''
-    functor = atom.functor
-    args = atom.args
-    res = set()
-    for arg in atom.args:
-        ix = args.index(arg)
-        if (
-            args.count(arg) == 1 and
-            separator_variable_position.setdefault((functor, arg), ix) == ix
-        ):
-            res.add(arg)
-    return res
-
-
-def _assemble_separator_variables(
-    separator_variable_per_clause, separator_variable_position
-):
-    separator_variables = set(
-        v for _, v in separator_variable_position.keys()
-    )
-    for sv_clause in separator_variable_per_clause:
-        separator_variables &= sv_clause
-        if len(separator_variables) == 0:
-            break
-    return set(separator_variables)
-
-
 class IsPureLiftedPlan(PatternWalker):
     @add_match(NonLiftable)
     def non_liftable(self, expression):
@@ -584,23 +515,12 @@ def symbol_co_occurence_graph(expression):
     return c_matrix
 
 
-def conjunctive_components_plan(components):
-    component_fvs = [extract_logic_free_variables(c) for c in components]
-    formulas = []
-    for component, component_fv in zip(components, component_fvs):
-        formulas.append(dalvi_suciu_lift(component))
-    return reduce(
-        lambda x, y: rap.NaturalJoin(x, y),
-        formulas[1:], formulas[0]
-    )
-
-
-def disjunctive_components_plan(components):
+def components_plan(components, operation):
     formulas = []
     for component in components:
         formulas.append(dalvi_suciu_lift(component))
     return reduce(
-        lambda x, y: rap.Union(x, y),
+        lambda x, y: operation(x, y),
         formulas[1:], formulas[0]
     )
 
@@ -614,9 +534,7 @@ def inclusion_exclusion_conjunction(expression):
             formula_powerset.append(formula[0])
         else:
             formula_powerset.append(Disjunction(tuple(formula)))
-    formulas_weights = _formulas_weights(
-        formula_powerset, is_contained
-    )
+    formulas_weights = _formulas_weights(formula_powerset)
     new_formulas, weights = zip(*(
         (dalvi_suciu_lift(formula), weight)
         for formula, weight in formulas_weights.items()
@@ -636,7 +554,7 @@ def _formulas_weights(formula_powerset, containment_function):
             for c0, c1 in ((f0, f1), (f1, f0)):
                 if (
                     (c1 not in formula_containments[f0]) &
-                    containment_function(c0, c1)
+                    is_contained(c0, c1)
                 ):
                     formula_containments[c0].add(c1)
                     formula_containments[c0] |= (
