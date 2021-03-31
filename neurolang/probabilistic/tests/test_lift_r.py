@@ -1,10 +1,12 @@
-from neurolang.logic.transformations import convert_to_pnf_with_cnf_matrix
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
 from ...expressions import Symbol
-from ...logic import Conjunction, Disjunction, ExistentialPredicate, Implication, Negation
-from ...relational_algebra_provenance import NaturalJoin, Projection, Union
+from ...logic import (
+    Conjunction,
+    Disjunction,
+    ExistentialPredicate,
+    Implication
+)
 from .. import lift_r
-from ..dichotomy_theorem_based_solver import is_hierarchical_without_self_joins
 
 TNRA = TranslateToNamedRA()
 

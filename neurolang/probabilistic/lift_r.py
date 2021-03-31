@@ -18,7 +18,7 @@ from ..logic import (
     ExistentialPredicate,
     Implication,
     LogicOperator,
-    NaryLogicOperator,
+    NaryLogicOperator
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
@@ -31,9 +31,9 @@ from ..logic.transformations import (
     DistributeDisjunctions,
     GuaranteeConjunction,
     GuaranteeDisjunction,
+    MakeExistentialsImplicit,
     PushExistentialsDown,
     RemoveTrivialOperations,
-    MakeExistentialsImplicit,
     convert_to_pnf_with_dnf_matrix
 )
 from ..logic.unification import compose_substitutions, most_general_unifier
@@ -112,13 +112,13 @@ class NonLiftable(RelationalAlgebraOperation):
         )
 
 
-def minimize_rule_in_cnf(rule):
-    rule = convert_to_cnf_rule(rule)
-    head_variables = extract_logic_free_variables(rule)
-    antecedent = MakeExistentialsImplicit().walk(rule)
+def minimize_rule_in_cnf(query):
+    query = convert_to_cnf_rule(query)
+    head_variables = extract_logic_free_variables(query)
+    query = MakeExistentialsImplicit().walk(query)
     cq_d_min = Conjunction(tuple(
         minimize_component_disjunction(c)
-        for c in antecedent.formulas
+        for c in query.formulas
     ))
 
     simplify = ChainedWalker(
@@ -134,13 +134,13 @@ def minimize_rule_in_cnf(rule):
     return simplify.walk(cq_min)
 
 
-def minimize_rule_in_dnf(rule):
-    rule = convert_to_dnf_rule(rule)
-    head_variables = extract_logic_free_variables(rule)
-    antecedent = MakeExistentialsImplicit().walk(rule)
+def minimize_rule_in_dnf(query):
+    query = convert_to_dnf_rule(query)
+    head_variables = extract_logic_free_variables(query)
+    query = MakeExistentialsImplicit().walk(query)
     cq_d_min = Disjunction(tuple(
         minimize_component_conjunction(c)
-        for c in antecedent.formulas
+        for c in query.formulas
     ))
 
     simplify = ChainedWalker(
