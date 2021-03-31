@@ -19,6 +19,7 @@ from .relational_algebra import (
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
+    Difference,
     EquiJoin,
     ExtendedProjection,
     FunctionApplicationListMember,
@@ -26,6 +27,7 @@ from .relational_algebra import (
     GroupByAggregation,
     LeftNaturalJoin,
     NameColumns,
+    NAryRelationalAlgebraOperation,
     NaturalJoin,
     Product,
     Projection,
@@ -96,6 +98,18 @@ class NaturalJoinInverse(NaturalJoin):
             f"[{self.relation_left}"
             f"INVERSE \N{JOIN}"
             f"{self.relation_right}]"
+        )
+
+
+class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
+    def __init__(self, relations, weights):
+        self.relations = relations
+        self.weights = weights
+
+    def __repr__(self):
+        return (
+            "\N{Greek Capital Letter Sigma}"
+            f"_{self.weights}({self.relations})"
         )
 
 
