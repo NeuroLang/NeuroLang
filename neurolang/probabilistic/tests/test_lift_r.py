@@ -4,6 +4,7 @@ from ...expressions import Symbol
 from ...logic import Conjunction, Disjunction, ExistentialPredicate, Implication, Negation
 from ...relational_algebra_provenance import NaturalJoin, Projection, Union
 from .. import lift_r
+from ..dichotomy_theorem_based_solver import is_hierarchical_without_self_joins
 
 TNRA = TranslateToNamedRA()
 
@@ -49,38 +50,34 @@ def test_sort_independent_splits():
     )
 
 
-def test_has_separator_variable():
+def test_has_separator_variable_existential():
     A = Symbol('A')
     B = Symbol('B')
     C = Symbol('C')
     x = Symbol('x')
     y = Symbol('y')
 
-    expression = Implication(
-        A(x),
+    expression = ExistentialPredicate(
+        y,
         Disjunction((B(x, y), Conjunction((A(y), B(x, y))), C(y)))
     )
 
     sv, _ = lift_r.find_separator_variables(expression)
     assert sv == {y}
 
-    expression = Implication(
-        A(x),
+    expression = ExistentialPredicate(
+        y,
         Disjunction((B(x, y), Conjunction((A(y), B(y, x))), C(y)))
     )
 
     sv, _ = lift_r.find_separator_variables(expression)
     assert sv == set()
 
-    expression = Implication(
-        A(x, y),
-        Disjunction((B(x, y), Conjunction((A(y), B(x, y))), C(y)))
-    )
+    expression = Disjunction((B(x, y), Conjunction((A(y), B(x, y))), C(y)))
 
     sv, _ = lift_r.find_separator_variables(expression)
     assert sv == set()
 
-    Q = Symbol('Q')
     R = Symbol('R')
     S = Symbol('S')
     T = Symbol('T')
@@ -89,19 +86,22 @@ def test_has_separator_variable():
     y1 = Symbol('y1')
     y2 = Symbol('y2')
 
-    expression = Implication(
-        Q(),
-        Disjunction((
-            Conjunction((R(x1), S(x1, y1))),
-            Conjunction((T(x2), S(x2, y2)))
+    expression = ExistentialPredicate(x1, ExistentialPredicate(
+        x2,
+        ExistentialPredicate(y1, ExistentialPredicate(
+            y2,
+            Disjunction((
+                Conjunction((R(x1), S(x1, y1))),
+                Conjunction((T(x2), S(x2, y2)))
+            ))
         ))
-    )
+    ))
 
     assert lift_r.has_separator_variables(expression)
     assert lift_r.find_separator_variables(expression)[0] & {x1, x2}
 
 
-def test_lifted_bcq():
+def test_lifted_bcq_fig_4_():
     Q = Symbol('Q')
     R = Symbol('R')
     S = Symbol('S')
@@ -137,31 +137,98 @@ def test_lifted_bcq():
     # )))
     # plan = lift_r.LiftRAlgorithm().walk(cq)
 
+    cq = Implication(Q(z), Conjunction((
+         R(z, x1), S(x1, y1), T(z, x2), S(x2, y2)
+    )))
+
+    plan = lift_r.dalvi_suciu_lift(cq)
+    res = lift_r.is_pure_lifted_plan(plan)
+    assert res
+
+
+def test_lifted_join():
+    Q = Symbol('Q')
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    x1 = Symbol('x1')
+    x2 = Symbol('x2')
+    y1 = Symbol('y1')
+    y2 = Symbol('y2')
+    z = Symbol('z')
+
+    cq = Implication(Q(z), Conjunction((R(x1, z), S(x1, x2), T(x1, z))))
+    plan = lift_r.dalvi_suciu_lift(cq)
+    res = lift_r.is_pure_lifted_plan(plan)
+    assert res
+
+
+def test_lifted_bcq_fig_4_4():
+    Q = Symbol('Q')
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    U = Symbol('U')
+    x1 = Symbol('x1')
+    x2 = Symbol('x2')
+    y1 = Symbol('y1')
+    y2 = Symbol('y2')
+    z = Symbol('z')
+
+    cq = Implication(Q(z), Conjunction((
+         R(z, x1), S(x1, y1), T(z, x2), U(x2, y2)
+    )))
+
+    plan = lift_r.dalvi_suciu_lift(cq)
+    res = lift_r.is_pure_lifted_plan(plan)
+    assert res
+
+
+def test_lifted_cq_fig_4_5():
+    Q = Symbol('Q')
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    x1 = Symbol('x1')
+    x2 = Symbol('x2')
+    x3 = Symbol('x3')
+    y1 = Symbol('y1')
+    y2 = Symbol('y2')
+    y3 = Symbol('y3')
+    z = Symbol('z')
+
     cq = Implication(Q(z), Disjunction((
         Conjunction((R(z, x1), S(x1, y1))),
         Conjunction((S(x2, y2), T(z, y2))),
         Conjunction((R(z, x3), T(z, y3))),
     )))
 
-    # cq = Implication(Q(z), Conjunction((
-    #     Disjunction((R(z, x3), Conjunction((S(x2, y2), T(z, y2))))),
-    #     Disjunction((Conjunction((R(z, x1), S(x1, y1))), T(z, y3)))
-    # )))
-
-    # S1 = Symbol('S1')
-    # S2 = Symbol('S2')
-    # S3 = Symbol('S3')
-    # cq = Implication(Q(z), Conjunction((
-    #     R(z, x1), S(x1, y1), T(z, x2), S(x2, y2)
-    # )))
-    plan = lift_r.LiftRAlgorithm().walk(cq)
+    plan = lift_r.dalvi_suciu_lift(cq)
     res = lift_r.is_pure_lifted_plan(plan)
     assert res
+
+
+def test_containment_query():
+    R = Symbol('R')
+    w = Symbol('w')
+    x = Symbol('x')
+    y = Symbol('y')
+    z = Symbol('z')
+
+    r1 = ExistentialPredicate(y, ExistentialPredicate(w, ExistentialPredicate(
+        z,
+        Conjunction((R(x, y), R(y, z), R(z, w)))
+    )))
+    r2 = ExistentialPredicate(y, Conjunction((R(x, y), R(y, x))))
+
+    assert lift_r.is_contained(r2, r1)
+    assert not lift_r.is_contained(r1, r2)
 
 
 def test_containment():
     Q = Symbol('Q')
     R = Symbol('R')
+    S = Symbol('S')
     w = Symbol('w')
     x = Symbol('x')
     y = Symbol('y')
@@ -174,5 +241,23 @@ def test_containment():
         Q(x), Conjunction((R(x, y), R(y, x)))
     )
 
+    r3 = Implication(
+        Q(x), R(x, y)
+    )
+
+    r4 = Implication(
+        Q(x), Disjunction((R(x, y), S(x, y)))
+    )
+
+    r5 = Implication(
+        Q(x), S(x, y)
+    )
+
+    assert lift_r.is_contained(r1, r1)
     assert lift_r.is_contained(r2, r1)
     assert not lift_r.is_contained(r1, r2)
+    assert lift_r.is_contained(r1, r3)
+    assert lift_r.is_contained(r2, r3)
+    assert lift_r.is_contained(r4, r3)
+    assert not lift_r.is_contained(r3, r5)
+    assert not lift_r.is_contained(r5, r3)

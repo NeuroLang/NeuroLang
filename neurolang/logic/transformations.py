@@ -1,32 +1,39 @@
+from ..expression_walker import (
+    ChainedWalker,
+    ExpressionWalker, IdentityWalker,
+    PatternWalker,
+    ReplaceSymbolWalker,
+    add_match
+)
+from ..logic.expression_processing import (
+    ExtractFreeVariablesWalker,
+    extract_logic_free_variables
+)
 from . import (
-    Symbol,
+    Conjunction,
     Constant,
+    Disjunction,
+    ExistentialPredicate,
     FunctionApplication,
     Implication,
-    Union,
-    Conjunction,
-    Disjunction,
+    NaryLogicOperator,
     Negation,
-    UniversalPredicate,
-    ExistentialPredicate,
     Quantifier,
-)
-from ..logic.expression_processing import ExtractFreeVariablesWalker
-from ..expression_walker import (
-    ExpressionWalker,
-    add_match,
-    PatternWalker,
-    ChainedWalker,
-    ReplaceSymbolWalker,
+    Symbol, UnaryLogicOperator,
+    Union,
+    UniversalPredicate
 )
 
 
 class LogicExpressionWalker(PatternWalker):
     @add_match(Quantifier)
     def walk_quantifier(self, expression):
-        return expression.apply(
-            self.walk(expression.head), self.walk(expression.body)
-        )
+        new_head = self.walk(expression.head)
+        new_body = self.walk(expression.body)
+        if new_head != expression.head or new_body != expression.body:
+            return self.walk(expression.apply(new_head, new_body))
+        else:
+            return expression
 
     @add_match(Constant)
     def walk_constant(self, expression):
@@ -36,27 +43,34 @@ class LogicExpressionWalker(PatternWalker):
     def walk_symbol(self, expression):
         return expression
 
-    @add_match(Negation)
+    @add_match(UnaryLogicOperator)
     def walk_negation(self, expression):
-        return expression.apply(self.walk(expression.formula))
+        formula = self.walk(expression.formula)
+        if formula != expression.formula:
+            return self.walk(expression.apply(self.walk(expression.formula)))
+        else:
+            return expression
 
     @add_match(FunctionApplication)
     def walk_function(self, expression):
-        return expression.apply(
-            expression.functor, tuple(map(self.walk, expression.args))
-        )
+        new_args = tuple(map(self.walk, expression.args))
+        if new_args != expression.args:
+            return self.walk(expression.apply(
+                    expression.functor, new_args
+                ))
+        else:
+            return expression
 
-    @add_match(Union)
-    def walk_union(self, expression):
-        return expression.apply(self.walk(expression.formulas))
-
-    @add_match(Disjunction)
-    def walk_disjunction(self, expression):
-        return expression.apply(map(self.walk, expression.formulas))
-
-    @add_match(Conjunction)
-    def walk_conjunction(self, expression):
-        return expression.apply(map(self.walk, expression.formulas))
+    @add_match(NaryLogicOperator)
+    def walk_nary(self, expression):
+        try:
+            new_formulas = tuple(self.walk(expression.formulas))
+            if any(nf != f for nf, f in zip(new_formulas, expression.formulas)):
+                return self.walk(expression.apply(new_formulas))
+            else:
+                return expression
+        except RecursionError:
+            breakpoint
 
 
 class EliminateImplications(LogicExpressionWalker):
@@ -132,7 +146,10 @@ class MoveQuantifiersUp(LogicExpressionWalker):
         lambda exp: any(isinstance(f, Quantifier) for f in exp.formulas),
     )
     def disjunction_with_quantifiers(self, expression):
-        expression = self.walk_disjunction(expression)
+        expression = Disjunction(tuple(
+            self.walk(formula)
+            for formula in expression.formulas
+        ))
         quantifiers = []
         formulas = []
         for f in expression.formulas:
@@ -151,7 +168,10 @@ class MoveQuantifiersUp(LogicExpressionWalker):
         lambda exp: any(isinstance(f, Quantifier) for f in exp.formulas),
     )
     def conjunction_with_quantifiers(self, expression):
-        expression = self.walk_conjunction(expression)
+        expression = Conjunction(tuple(
+            self.walk(formula)
+            for formula in expression.formulas
+        ))
         quantifiers = []
         formulas = []
         for f in expression.formulas:
@@ -313,7 +333,7 @@ class DistributeConjunctions(LogicExpressionWalker):
     def distribute(self, expression):
         c, q = expression.formulas
         return self.walk(
-            Disjunction(tuple(map(lambda p: Disjunction((p, q)), c.formulas)))
+            Disjunction(tuple(map(lambda p: Conjunction((p, q)), c.formulas)))
         )
 
 
@@ -372,12 +392,19 @@ class RemoveUniversalPredicates(LogicExpressionWalker):
         )
 
 
+class MakeExistentialsImplicit(LogicExpressionWalker):
+    @add_match(ExistentialPredicate)
+    def existential(self, expression):
+        return self.walk(expression.body)
+
+
 def convert_to_pnf_with_cnf_matrix(expression):
     walker = ChainedWalker(
         EliminateImplications,
         MoveNegationsToAtoms,
         DesambiguateQuantifiedVariables,
         MoveQuantifiersUp,
+        RemoveTrivialOperations,
         DistributeDisjunctions,
         CollapseDisjunctions,
         CollapseConjunctions,
@@ -391,6 +418,7 @@ def convert_to_pnf_with_dnf_matrix(expression):
         MoveNegationsToAtoms,
         DesambiguateQuantifiedVariables,
         MoveQuantifiersUp,
+        RemoveTrivialOperations,
         DistributeConjunctions,
         CollapseDisjunctions,
         CollapseConjunctions,
@@ -434,3 +462,91 @@ class DistributeImplicationsWithConjunctiveHeads(PatternWalker):
                 )
             )
         )
+
+
+class RemoveTrivialOperations(LogicExpressionWalker):
+    @add_match(Implication)
+    def implication(self, expression):
+        return Implication(
+            expression.consequent,
+            self.walk(expression.antecedent)
+        )
+
+    @add_match(NaryLogicOperator, lambda e: len(e.formulas) == 1)
+    def remove_single(self, expression):
+        return self.walk(expression.formulas[0])
+
+
+class PushExistentialsDown(LogicExpressionWalker):
+    @add_match(ExistentialPredicate(..., Disjunction))
+    def push_existential_down_disjunction(self, expression):
+        variable = expression.head
+        changed = False
+        new_formulas = tuple()
+        for formula in expression.body.formulas:
+            if variable in extract_logic_free_variables(formula):
+                changed = True
+                formula = self.walk(ExistentialPredicate(variable, formula))
+            new_formulas += (formula,)
+        if changed:
+            res = self.walk(Disjunction(new_formulas))
+        else:
+            res = expression
+        return res
+
+    @add_match(ExistentialPredicate(..., Conjunction))
+    def push_existential_down(self, expression):
+        variable = expression.head
+        in_ = tuple()
+        out_ = tuple()
+        for formula in expression.body.formulas:
+            if variable in extract_logic_free_variables(formula):
+                in_ += (formula,)
+            else:
+                out_ += (formula,)
+
+        if len(out_) == 0:
+            res = ExistentialPredicate(variable, self.walk(Conjunction(in_)))
+        elif len(in_) == 0:
+            res = self.walk(Conjunction(out_))
+        if len(in_) > 0 and len(out_) > 0:
+            res = self.walk(
+                Conjunction((
+                    ExistentialPredicate(variable, Conjunction(in_)),
+                    Conjunction(out_)
+                ))
+            )
+        return res
+
+    @add_match(ExistentialPredicate(..., ExistentialPredicate))
+    def nested_existential(self, expression):
+        outer_var = expression.head
+        new_body = self.walk(expression.body)
+        if new_body != expression.body:
+            expression = self.walk(
+                ExistentialPredicate(outer_var, new_body)
+            )
+        else:
+            inner_var = expression.body.head
+            inner_body = expression.body.body
+            swapped_body = ExistentialPredicate(
+                outer_var, inner_body
+            )
+            new_body = self.walk(swapped_body)
+            if new_body != swapped_body:
+                expression = self.walk(
+                    ExistentialPredicate(inner_var, new_body)
+                )
+        return expression
+
+
+class GuaranteeConjunction(IdentityWalker):
+    @add_match(..., lambda e: not isinstance(e, Conjunction))
+    def guarantee_conjunction(self, expression):
+        return Conjunction((expression,))
+
+
+class GuaranteeDisjunction(IdentityWalker):
+    @add_match(..., lambda e: not isinstance(e, Disjunction))
+    def guarantee_conjunction(self, expression):
+        return Disjunction((expression,))
