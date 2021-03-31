@@ -164,7 +164,9 @@ def mobius_weights(formula_containments):
     return _mobius_weights
 
 
-def mobius_function(formula, formula_containments, known_weights={}):
+def mobius_function(formula, formula_containments, known_weights=None):
+    if known_weights is None:
+        known_weights = dict()
     if formula in known_weights:
         return known_weights[formula]
     res = -sum(
@@ -324,7 +326,7 @@ def find_separator_variables(query):
 
     candidates = None
     all_atoms = set()
-    for i, formula in enumerate(formulas):
+    for formula in formulas:
         atoms = extract_logic_atoms(formula)
         all_atoms |= atoms
         root_variables = reduce(
@@ -519,10 +521,7 @@ def components_plan(components, operation):
     formulas = []
     for component in components:
         formulas.append(dalvi_suciu_lift(component))
-    return reduce(
-        lambda x, y: operation(x, y),
-        formulas[1:], formulas[0]
-    )
+    return reduce(operation, formulas[1:], formulas[0])
 
 
 def inclusion_exclusion_conjunction(expression):
@@ -544,7 +543,7 @@ def inclusion_exclusion_conjunction(expression):
     return rap.WeightedNaturalJoin(tuple(new_formulas), weights)
 
 
-def _formulas_weights(formula_powerset, containment_function):
+def _formulas_weights(formula_powerset):
     formula_containments = {
         formula: set()
         for formula in formula_powerset
