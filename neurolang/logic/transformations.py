@@ -1,6 +1,7 @@
 from ..expression_walker import (
     ChainedWalker,
-    ExpressionWalker, IdentityWalker,
+    ExpressionWalker,
+    IdentityWalker,
     PatternWalker,
     ReplaceSymbolWalker,
     add_match
@@ -19,7 +20,8 @@ from . import (
     NaryLogicOperator,
     Negation,
     Quantifier,
-    Symbol, UnaryLogicOperator,
+    Symbol,
+    UnaryLogicOperator,
     Union,
     UniversalPredicate
 )
@@ -63,14 +65,11 @@ class LogicExpressionWalker(PatternWalker):
 
     @add_match(NaryLogicOperator)
     def walk_nary(self, expression):
-        try:
-            new_formulas = tuple(self.walk(expression.formulas))
-            if any(nf != f for nf, f in zip(new_formulas, expression.formulas)):
-                return self.walk(expression.apply(new_formulas))
-            else:
-                return expression
-        except RecursionError:
-            breakpoint
+        new_formulas = tuple(self.walk(expression.formulas))
+        if any(nf != f for nf, f in zip(new_formulas, expression.formulas)):
+            return self.walk(expression.apply(new_formulas))
+        else:
+            return expression
 
 
 class EliminateImplications(LogicExpressionWalker):
