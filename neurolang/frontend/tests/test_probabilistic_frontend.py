@@ -529,6 +529,16 @@ def test_empty_boolean_query_result():
     assert not res
 
 
+def test_trivial_probability_query_result():
+    nl = NeurolangPDL()
+    b = set(((0.4, "a"), (0.5, "b")))
+    B = nl.add_probabilistic_facts_from_tuples(b, name='B')
+    with nl.scope as e:
+        e.D[e.x, e.PROB[e.x]] = B[e.x]
+        res = nl.query((e.p, e.x), e.D[e.x, e.p])
+    assert set(res) == b
+
+
 def test_equality():
     nl = NeurolangPDL()
     r1 = nl.add_tuple_set([(i,) for i in range(5)], name="r1")
