@@ -1,6 +1,8 @@
-from neurolang.probabilistic.expression_processing import is_probabilistic_fact
+from collections import defaultdict
+from typing import AbstractSet
 from ..expressions import Constant, Symbol
 from ..relational_algebra import RelationalAlgebraOperation, ColumnInt
+from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
 
 
 class ProbabilisticFactSet(RelationalAlgebraOperation):
@@ -43,7 +45,9 @@ def generate_probabilistic_symbol_table_for_query(
         The tables has neurolang.expressions.Symbol as keys and
         relational algebra representations as values
     """
-    symbol_table = dict()
+    symbol_table = defaultdict(
+        lambda: Constant[AbstractSet](WrappedRelationalAlgebraFrozenSet())
+    )
     classify_and_wrap_symbols(
         cpl_program.probabilistic_facts(), query_predicate,
         symbol_table, ProbabilisticFactSet

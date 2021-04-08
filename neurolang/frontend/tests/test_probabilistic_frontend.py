@@ -529,6 +529,16 @@ def test_empty_boolean_query_result():
     assert not res
 
 
+def test_trivial_probability_query_result():
+    nl = NeurolangPDL()
+    b = set(((0.4, "a"), (0.5, "b")))
+    B = nl.add_probabilistic_facts_from_tuples(b, name='B')
+    with nl.scope as e:
+        e.D[e.x, e.PROB[e.x]] = B[e.x]
+        res = nl.query((e.p, e.x), e.D[e.x, e.p])
+    assert set(res) == b
+
+
 def test_equality():
     nl = NeurolangPDL()
     r1 = nl.add_tuple_set([(i,) for i in range(5)], name="r1")
@@ -752,6 +762,26 @@ def test_query_based_pfact():
             (7, 0.4),
             (4, 0.2),
         ]
+    )
+    assert_almost_equal(result, expected)
+
+
+def test_query_based_pfact_empty():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [
+            (2, 0.2),
+            (7, 0.8),
+            (4, 0.4),
+        ],
+        name="A",
+    )
+    with nl.environment as e:
+        (e.B @ (e.p / 2))[e.x] = e.A[e.x, e.p] & (e.p > 0.8)
+        e.Query[e.PROB[e.x], e.x] = e.B[e.x]
+        result = nl.query((e.x, e.p), e.Query[e.p, e.x])
+    expected = RelationalAlgebraFrozenSet(
+        []
     )
     assert_almost_equal(result, expected)
 

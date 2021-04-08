@@ -188,9 +188,12 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         )
         relation = NameColumns(relation, named_columns)
         relation = self.walk(relation)
-        rap_column = ColumnStr(
-            relation.value.columns[prob_fact_set.probability_column.value]
-        )
+        if len(relation.value.columns) > 0:
+            rap_column = ColumnStr(
+                relation.value.columns[prob_fact_set.probability_column.value]
+            )
+        else:
+            rap_column = ColumnStr('p')
 
         self.translated_probfact_sets[relation_symbol] = ProvenanceAlgebraSet(
             relation.value, rap_column
