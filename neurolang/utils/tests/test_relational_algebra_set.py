@@ -447,6 +447,15 @@ def test_relational_algebra_ra_difference_update(ra_module):
     assert f == first
 
 
+def test_columns(ra_module):
+    first = ra_module.RelationalAlgebraSet(
+        [(7, 8), (9, 2)]
+    )
+
+    assert tuple(first.columns) == (0, 1)
+    assert len(ra_module.RelationalAlgebraSet.dum().columns) == 0
+
+
 def test_named_relational_algebra_set_semantics_empty(ra_module):
     ras = ra_module.NamedRelationalAlgebraFrozenSet(("y", "x"))
 

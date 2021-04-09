@@ -3,7 +3,7 @@ from typing import AbstractSet
 
 from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import EQ, conjunct_formulas
-from ..datalog.instance import MapInstance
+from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -216,7 +216,7 @@ def _add_to_probabilistic_program(
 ):
     # handle set-based probabilistic tables
     if isinstance(expr, Constant[typing.AbstractSet]):
-        ra_set = expr
+        ra_set = expr.value
     # handle query-based probabilistic facts
     elif isinstance(expr, Union):
         impl = expr.formulas[0]
@@ -224,10 +224,13 @@ def _add_to_probabilistic_program(
         # P(x_1, ..., x_n) : y :- Q(y, x_1, ..., x_n)
         # where Q is an extensional relation symbol
         # so the values can be retrieved from the EDB
-        ra_set = det_edb[impl.antecedent.functor]
-        if check_qbased_pfact_tuple_unicity:
-            _check_tuple_prob_unicity(ra_set)
-    add_fun(pred_symb, ra_set.value.unwrap())
+        if impl.antecedent.functor in det_edb:
+            ra_set = det_edb[impl.antecedent.functor].value
+            if check_qbased_pfact_tuple_unicity:
+                _check_tuple_prob_unicity(ra_set)
+        else:
+            ra_set = WrappedRelationalAlgebraFrozenSet.dum()
+    add_fun(pred_symb, ra_set.unwrap())
 
 
 def _check_tuple_prob_unicity(ra_set: Constant[AbstractSet]) -> None:
