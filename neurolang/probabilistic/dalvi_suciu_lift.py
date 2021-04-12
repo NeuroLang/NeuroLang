@@ -50,6 +50,10 @@ __all__ = [
 ]
 
 
+PED = PushExistentialsDown()
+RTO = RemoveTrivialOperations()
+
+
 def dalvi_suciu_lift(rule):
     '''
     Translation from a datalog rule which allows disjunctions in the body
@@ -61,7 +65,7 @@ def dalvi_suciu_lift(rule):
     '''
     if isinstance(rule, Implication):
         rule = convert_rule_to_e_query(rule)
-    rule = RemoveTrivialOperations().walk(rule)
+    rule = RTO.walk(rule)
     if isinstance(rule, FunctionApplication):
         return TranslateToNamedRA().walk(rule)
 
@@ -192,7 +196,7 @@ def mobius_function(formula, formula_containments, known_weights=None):
 
 
 def convert_rule_to_e_query(implication):
-    implication = RemoveTrivialOperations().walk(implication)
+    implication = RTO.walk(implication)
     consequent, antecedent = implication.unapply()
     head_vars = set(consequent.args)
     existential_vars = (
@@ -201,11 +205,11 @@ def convert_rule_to_e_query(implication):
     )
     for a in existential_vars:
         antecedent = ExistentialPredicate(a, antecedent)
-    return PushExistentialsDown().walk(antecedent)
+    return RTO.walk(PED.walk(antecedent))
 
 
 def convert_to_cnf_rule(expression):
-    expression = RemoveTrivialOperations().walk(expression)
+    expression = RTO.walk(expression)
     expression = Conjunction((expression,))
     c = ChainedWalker(
         PushExistentialsDown,
@@ -217,7 +221,7 @@ def convert_to_cnf_rule(expression):
 
 
 def convert_to_dnf_rule(expression):
-    expression = RemoveTrivialOperations().walk(expression)
+    expression = RTO.walk(expression)
     expression = Disjunction((expression,))
     c = ChainedWalker(
         PushExistentialsDown,
@@ -257,6 +261,7 @@ def minimise_formulas_containment(components, containment_op):
     ]
     s = Symbol.fresh()
     keep = tuple()
+    containments = {}
     for i, c in enumerate(components):
         c_fv = components_fv[i]
         for j, c_ in enumerate(components):
@@ -265,24 +270,18 @@ def minimise_formulas_containment(components, containment_op):
             head = s(*(c_fv & components_fv[j]))
             q = Implication(head, c)
             q_ = Implication(head, c_)
-            if containment_op(q_, q):
+            containments.setdefault((i, j), containment_op(q_, q))
+            if (
+                containment_op(q_, q) and
+                not (
+                    j < i and
+                    containment_op(q, q_)
+                )
+            ):
                 break
         else:
             keep += (c,)
     return keep
-
-
-def inclusion_exclusion_formulas(query):
-    query_powerset = powerset(query.formulas)
-    clean_powerset = set(
-        set(q) if len(q) > 1 else set((q,))
-        for q in query_powerset
-    )
-    result = tuple(
-        Conjunction(tuple(q)) if len(q) > 1 else q.pop()
-        for q in clean_powerset
-    )
-    return result
 
 
 def powerset(iterable):
@@ -388,7 +387,7 @@ class HasExistentialPredicates(PatternWalker):
 def _unify_existential_variables(query):
     original_query = query
     exclude_variables = extract_logic_free_variables(query)
-    query = PushExistentialsDown().walk(query)
+    query = PED.walk(query)
     while isinstance(query, ExistentialPredicate):
         query = query.body
     if not isinstance(query, Disjunction):
