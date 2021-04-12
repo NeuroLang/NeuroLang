@@ -1,5 +1,5 @@
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
-from ...expressions import Symbol
+from ...expressions import Symbol, Constant
 from ...logic import (
     Conjunction,
     Disjunction,
@@ -7,6 +7,9 @@ from ...logic import (
     Implication
 )
 from .. import dalvi_suciu_lift
+from ...relational_algebra import (
+    Projection, NameColumns, NaturalJoin, ColumnInt, ColumnStr
+)
 from pytest import mark
 
 TNRA = TranslateToNamedRA()
@@ -294,3 +297,41 @@ def test_intractable_queries():
         plan = dalvi_suciu_lift.dalvi_suciu_lift(h)
         assert isinstance(plan, dalvi_suciu_lift.NonLiftable)
         assert plan.non_liftable_query == h
+
+
+def test_example_4_6_a_really_simple_query():
+    R = Symbol("R")
+    S = Symbol("S")
+    x = Symbol("x")
+    y = Symbol("y")
+    col_0 = Constant(ColumnInt(0))
+    col_1 = Constant(ColumnInt(1))
+    col_x = Constant(ColumnStr("x"))
+    col_y = Constant(ColumnStr("y"))
+    query = ExistentialPredicate(
+        x, Conjunction((R(x), ExistentialPredicate(y, S(x, y))))
+    )
+    expected_plan = Projection(
+        Projection(
+            NaturalJoin(
+                Projection(
+                    Projection(
+                        NameColumns(
+                            Projection(S, (col_0, col_1)),
+                            (col_x, col_y),
+                        ),
+                        (x, y),
+                    ),
+                    (x,),
+                ),
+                NameColumns(
+                    Projection(R, (col_0,)),
+                    (col_x,)
+                )
+            ),
+            (x,),
+        ),
+        tuple(),
+    )
+    resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query)
+    assert resulting_plan == expected_plan
