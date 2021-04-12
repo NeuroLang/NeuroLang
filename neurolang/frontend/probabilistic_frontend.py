@@ -64,7 +64,7 @@ from ..probabilistic.weighted_model_counting import (
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression,
+    RelationalAlgebraColumnStr,
 )
 from . import query_resolution_expressions as fe
 from .datalog.sugar import (
@@ -672,7 +672,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         projections = collections.OrderedDict()
         projections[prob_col] = probability
         for col in columns:
-            projections[col] = RelationalAlgebraStringExpression(col)
+            projections[col] = RelationalAlgebraColumnStr(col)
         ra_set = ra_set.extended_projection(projections)
         self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return fe.Symbol(self, name)

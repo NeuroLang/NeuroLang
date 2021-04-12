@@ -155,7 +155,10 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     @property
     def columns(self):
-        return self._container.columns
+        if self._container is not None:
+            return self._container.columns
+        else:
+            return tuple()
 
     def as_numpy_array(self):
         res = self._container.values.view()

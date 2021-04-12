@@ -622,9 +622,11 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     @staticmethod
     def _rap_projection(projection, agg_fun):
         cols = tuple(v.value for v in projection.attributes)
-        if cols == tuple(
-            c for c in projection.relation.relations.columns
-            if c != projection.relation.provenance_column
+        if projection.relation.relations.is_dum() or (
+            cols == tuple(
+                c for c in projection.relation.relations.columns
+                if c != projection.relation.provenance_column
+            )
         ):
             return projection.relation
 
