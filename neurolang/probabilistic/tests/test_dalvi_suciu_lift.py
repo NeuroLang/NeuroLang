@@ -236,3 +236,61 @@ def test_minimize_component_conjunction():
     ))
     res = dalvi_suciu_lift.minimize_component_conjunction(expr)
     assert res == Conjunction((Q(x1, y1)))
+
+
+def test_intractable_queries():
+    """
+    Queries that are "intractable", in that they are #P-hard, as defined in
+    section 3.2 of [1]_.
+
+    The lifted query processing algorithm should return a NonLiftable object
+    containing the unprocessed query.
+
+    [1] Suciu, D. Probabilistic Databases for All. in Proceedings of the
+    39th ACM SIGMOD-SIGACT-SIGAI Symposium on Principles of Database Systems
+    19–31 (ACM, 2020).
+    """
+    Q = Symbol('Q')
+    R = Symbol('R')
+    S = Symbol('S')
+    S1 = Symbol('S1')
+    S2 = Symbol('S2')
+    S3 = Symbol('S3')
+    T = Symbol('T')
+    x = Symbol("x")
+    x0 = Symbol('x0')
+    x1 = Symbol('x1')
+    x2 = Symbol('x2')
+    x3 = Symbol('x3')
+    y = Symbol("y")
+    y0 = Symbol("y0")
+    y1 = Symbol('y1')
+    y2 = Symbol('y2')
+    y3 = Symbol('y3')
+    z = Symbol('z')
+    h0 = Conjunction((R(x), S(x, y), T(y)))
+    h1 = Disjunction(
+        (
+            Conjunction((R(x0), S(x0, y0))),
+            Conjunction((S(x1, y1), T(y1))),
+        )
+    )
+    h2 = Disjunction(
+        (
+            Conjunction((R(x0), S1(x0, y0))),
+            Conjunction((S1(x1, y1), S2(x1, y1))),
+            Conjunction((S2(x2, y2), T(y2))),
+        )
+    )
+    h3 = Disjunction(
+        (
+            Conjunction((R(x0), S1(x0, y0))),
+            Conjunction((S1(x1, y1), S2(x1, y1))),
+            Conjunction((S2(x2, y2), S3(x2, y2))),
+            Conjunction((S3(x3, y3), T(y3))),
+        )
+    )
+    for h in (h0, h1, h2, h3):
+        plan = dalvi_suciu_lift.dalvi_suciu_lift(h)
+        assert isinstance(plan, dalvi_suciu_lift.NonLiftable)
+        assert plan.non_liftable_query == h
