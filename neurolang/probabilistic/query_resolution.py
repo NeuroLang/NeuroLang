@@ -234,9 +234,9 @@ def _add_to_probabilistic_program(
 
 
 def _check_tuple_prob_unicity(ra_set: Constant[AbstractSet]) -> None:
-    length = len(ra_set.value)
-    proj_cols = list(ra_set.value.columns)[1:]
-    length_without_probs = len(ra_set.value.projection(*proj_cols))
+    length = len(ra_set)
+    proj_cols = list(ra_set.columns)[1:]
+    length_without_probs = len(ra_set.projection(*proj_cols))
     if length_without_probs != length:
         n_repeated_tuples = length - length_without_probs
         raise RepeatedTuplesInProbabilisticRelationError(
