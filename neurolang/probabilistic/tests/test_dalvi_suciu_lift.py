@@ -10,6 +10,7 @@ from .. import dalvi_suciu_lift
 from ...relational_algebra import (
     Projection, NameColumns, NaturalJoin, ColumnInt, ColumnStr
 )
+from ...relational_algebra_provenance import WeightedNaturalJoin
 from pytest import mark
 
 TNRA = TranslateToNamedRA()
@@ -332,6 +333,77 @@ def test_example_4_6_a_really_simple_query():
             (x,),
         ),
         tuple(),
+    )
+    resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query)
+    assert resulting_plan == expected_plan
+
+
+def test_example_4_7_a_query_with_self_joins():
+    R = Symbol("R")
+    S = Symbol("S")
+    S1 = Symbol("S1")
+    S2 = Symbol("S2")
+    S3 = Symbol("S3")
+    T = Symbol("T")
+    x = Symbol("x")
+    x0 = Symbol("x0")
+    x1 = Symbol("x1")
+    x2 = Symbol("x2")
+    x3 = Symbol("x3")
+    y = Symbol("y")
+    y0 = Symbol("y0")
+    y1 = Symbol("y1")
+    y2 = Symbol("y2")
+    y3 = Symbol("y3")
+    z = Symbol("z")
+    col_0 = Constant(ColumnInt(0))
+    col_1 = Constant(ColumnInt(1))
+    col_x = Constant(ColumnStr("x"))
+    col_y = Constant(ColumnStr("y"))
+    col_x1 = Constant(ColumnStr("x1"))
+    col_x2 = Constant(ColumnStr("x2"))
+    col_y2 = Constant(ColumnStr("y2"))
+    Q1 = ExistentialPredicate(
+        x1,
+        ExistentialPredicate(
+            y1,
+            Conjunction((R(x1), S(x1, y1))),
+        ),
+    )
+    Q2 = ExistentialPredicate(
+        x2,
+        ExistentialPredicate(
+            y2,
+            Conjunction((T(x2), S(x2, y2))),
+        ),
+    )
+    query = Conjunction((Q1, Q2))
+    expected_plan = WeightedNaturalJoin(
+        (
+            Projection(
+                Projection(
+                    NaturalJoin(
+                        Projection(
+                            Projection(
+                                NameColumns(
+                                    Projection(
+                                        S,
+                                        (col_0, col_1),
+                                    ),
+                                    (col_x2, col_y2),
+                                ),
+                                (x2, y2),
+                            ),
+                            (x2,)
+                        ),
+                        NameColumns(Projection(T, (col_0,)), (col_x2,)),
+                    ),
+                    (x2,),
+                ),
+                tuple(),
+            ),
+        ),
+        (1, 1, 1),
     )
     resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query)
     assert resulting_plan == expected_plan
