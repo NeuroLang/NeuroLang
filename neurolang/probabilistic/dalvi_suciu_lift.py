@@ -49,7 +49,8 @@ __all__ = [
     "dalvi_suciu_lift",
 ]
 
-
+GC = GuaranteeConjunction()
+GD = GuaranteeDisjunction()
 PED = PushExistentialsDown()
 RTO = RemoveTrivialOperations()
 
@@ -240,7 +241,7 @@ def minimize_component_disjunction(disjunction):
         is_contained
     )
 
-    return Disjunction(keep)
+    return GD.walk(RTO.walk(Disjunction(keep)))
 
 
 def minimize_component_conjunction(conjunction):
@@ -251,7 +252,7 @@ def minimize_component_conjunction(conjunction):
         lambda x, y: is_contained(y, x)
     )
 
-    return Conjunction(keep)
+    return GC.walk(RTO.walk(Conjunction(keep)))
 
 
 def minimise_formulas_containment(components, containment_op):

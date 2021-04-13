@@ -276,6 +276,62 @@ def test_minimize_component_conjunction():
     assert res == Conjunction((ExistentialPredicate(y2, Q(x1, y2)),))
 
 
+def test_minimize_component_disjunction():
+    Q = Symbol('Q')
+    R = Symbol('R')
+    T = Symbol('T')
+    x1 = Symbol('x1')
+    y1 = Symbol('y1')
+    y2 = Symbol('y2')
+
+    expr = Disjunction((Q(x1),))
+    res = dalvi_suciu_lift.minimize_component_disjunction(expr)
+    assert res == expr
+
+    expr = Disjunction((Q(x1, y1), R(x1, y2)))
+    res = dalvi_suciu_lift.minimize_component_disjunction(expr)
+    assert res == expr
+
+    expr = Disjunction((
+        ExistentialPredicate(y1, Q(x1, y1)),
+        ExistentialPredicate(y2, Q(x1, y2))
+    ))
+    res = dalvi_suciu_lift.minimize_component_disjunction(expr)
+    assert res in (
+        Disjunction((q,)) for q in
+        (
+            ExistentialPredicate(y1, Q(x1, y1)),
+            ExistentialPredicate(y2, Q(x1, y2))
+        )
+    )
+
+    expr = Disjunction((
+        ExistentialPredicate(y2, Q(x1, y2)),
+        Disjunction((
+            ExistentialPredicate(y1, Q(x1, y1)),
+            T(x1)
+        ))
+    ))
+    res = dalvi_suciu_lift.minimize_component_disjunction(expr)
+    assert res == Disjunction((
+        ExistentialPredicate(y1, Q(x1, y1)),
+        T(x1)
+        ))
+
+    expr = Disjunction((
+        Disjunction((
+            ExistentialPredicate(y1, Q(x1, y1)),
+            T(x1)
+        )),
+        ExistentialPredicate(y2, Q(x1, y2)),
+    ))
+    res = dalvi_suciu_lift.minimize_component_disjunction(expr)
+    assert res == Disjunction((
+        ExistentialPredicate(y1, Q(x1, y1)),
+        T(x1)
+    ))
+
+
 def test_intractable_queries():
     """
     Queries that are "intractable", in that they are #P-hard, as defined in
