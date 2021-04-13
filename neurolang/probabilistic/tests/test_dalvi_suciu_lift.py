@@ -360,26 +360,68 @@ def test_intractable_queries():
     y1 = Symbol('y1')
     y2 = Symbol('y2')
     y3 = Symbol('y3')
-    h0 = ExistentialPredicate(x, ExistentialPredicate(y, Conjunction((R(x), S(x, y), T(y)))))
+    h0 = ExistentialPredicate(
+        x,
+        Conjunction(
+            (
+                R(x),
+                ExistentialPredicate(y, Conjunction((S(x, y), T(y)))),
+            )
+        ),
+    )
     h1 = Disjunction(
         (
-            Conjunction((R(x0), S(x0, y0))),
-            Conjunction((S(x1, y1), T(y1))),
+            ExistentialPredicate(
+                x0, Conjunction((R(x0), ExistentialPredicate(y0, S(x0, y0))))
+            ),
+            ExistentialPredicate(
+                y1, Conjunction((ExistentialPredicate(x1, S(x1, y1)), T(y1)))
+            ),
         )
     )
     h2 = Disjunction(
         (
-            Conjunction((R(x0), S1(x0, y0))),
-            Conjunction((S1(x1, y1), S2(x1, y1))),
-            Conjunction((S2(x2, y2), T(y2))),
+            ExistentialPredicate(
+                x0,
+                Conjunction((R(x0), S1(x0, y0))),
+            ),
+            ExistentialPredicate(
+                x1,
+                ExistentialPredicate(
+                    y1,
+                    Conjunction((S1(x1, y1), S2(x1, y1))),
+                )
+            ),
+            ExistentialPredicate(
+                y2,
+                Conjunction((ExistentialPredicate(x2, S2(x2, y2)), T(y2))),
+            ),
         )
     )
     h3 = Disjunction(
         (
-            Conjunction((R(x0), S1(x0, y0))),
-            Conjunction((S1(x1, y1), S2(x1, y1))),
-            Conjunction((S2(x2, y2), S3(x2, y2))),
-            Conjunction((S3(x3, y3), T(y3))),
+            ExistentialPredicate(
+                x0,
+                Conjunction((R(x0), S1(x0, y0))),
+            ),
+            ExistentialPredicate(
+                x1,
+                ExistentialPredicate(
+                    y1,
+                    Conjunction((S1(x1, y1), S2(x1, y1))),
+                )
+            ),
+            ExistentialPredicate(
+                x2,
+                ExistentialPredicate(
+                    y2,
+                    Conjunction((S2(x2, y2), S3(x2, y2))),
+                )
+            ),
+            ExistentialPredicate(
+                y3,
+                Conjunction((ExistentialPredicate(x3, S3(x3, y3)), T(y3))),
+            ),
         )
     )
     for h in (h0, h1, h2, h3):
