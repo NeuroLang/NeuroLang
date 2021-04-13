@@ -4,7 +4,8 @@ from .orderedset import OrderedSet
 from .relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
-    RelationalAlgebraSet
+    RelationalAlgebraSet,
+    RelationalAlgebraStringExpression
 )
 from .various import log_performance
 
