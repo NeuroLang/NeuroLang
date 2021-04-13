@@ -360,7 +360,7 @@ def test_intractable_queries():
     y1 = Symbol('y1')
     y2 = Symbol('y2')
     y3 = Symbol('y3')
-    h0 = Conjunction((R(x), S(x, y), T(y)))
+    h0 = ExistentialPredicate(x, ExistentialPredicate(y, Conjunction((R(x), S(x, y), T(y)))))
     h1 = Disjunction(
         (
             Conjunction((R(x0), S(x0, y0))),
@@ -384,8 +384,7 @@ def test_intractable_queries():
     )
     for h in (h0, h1, h2, h3):
         plan = dalvi_suciu_lift.dalvi_suciu_lift(h)
-        assert isinstance(plan, dalvi_suciu_lift.NonLiftable)
-        assert plan.non_liftable_query == h
+        assert not dalvi_suciu_lift.is_pure_lifted_plan(plan)
 
 
 def test_example_4_6_a_really_simple_query():
