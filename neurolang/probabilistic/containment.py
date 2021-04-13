@@ -10,6 +10,8 @@ from ..logic.transformations import (
     convert_to_pnf_with_dnf_matrix
 )
 
+__all__ = ['is_contained_rule', 'is_contained']
+
 
 def canonical_database_program(rule):
     '''
@@ -32,6 +34,11 @@ def canonical_database_program(rule):
 
 
 def freeze_atom(atom):
+    '''
+    Converts all symbols of the atom
+    to constants with a string representing
+    the symbol.
+    '''
     args = (
         Constant(s.name)
         for s in atom.args
@@ -42,7 +49,7 @@ def freeze_atom(atom):
 def is_contained_rule(q1, q2):
     '''
     Computes if q1 is contained in q2. Specifically,
-    for 2 non-recursive Datalog queries, computes wether
+    for 2 Datalog rules without constants, computes wether
     q1←q2.
     '''
     s = Symbol.fresh()
@@ -52,60 +59,53 @@ def is_contained_rule(q1, q2):
     q2 = Implication(
         s(*q2.consequent.args), q2.antecedent
     )
-    d_q1, frozen_head = canonical_database_program(q1)
+    d_q2, frozen_head = canonical_database_program(q2)
     dp = DatalogProgram()
-    for f in d_q1.formulas:
+    for f in d_q2.formulas:
         dp.walk(f)
-    dp.walk(q2)
+    dp.walk(q1)
     solution = chase.Chase(dp).build_chase_solution()
-    contained = (
-        frozen_head.functor in solution and
-        (
-            tuple(a.value for a in frozen_head.args)
-            in solution[frozen_head.functor].value.unwrap()
-        )
-    )
-    return contained
+    return frozen_head in solution.as_set()
 
 
 def is_contained(q1, q2):
     '''
     Computes if q1 is contained in q2. Specifically,
-    for 2 non-recursive Datalog queries, computes wether
-    q1←q2.
+    for 2 non-recursive positive ∃ logic queries,
+    without constants, computes wether q1←q2.
     '''
     s = Symbol.fresh()
-    if not isinstance(q1, Implication):
-        q1 = Implication(
-            s(*extract_logic_free_variables(q1)),
-            q1
-        )
-    if not isinstance(q2, Implication):
-        q2 = Implication(
-            s(*extract_logic_free_variables(q2)),
-            q2
-        )
-    args1 = set(q1.consequent.args)
-    args2 = set(q2.consequent.args)
-    mei = MakeExistentialsImplicit()
-    antecedent1 = mei.walk(convert_to_pnf_with_dnf_matrix(q1.antecedent))
-    antecedent2 = mei.walk(convert_to_pnf_with_dnf_matrix(q2.antecedent))
-    if not isinstance(antecedent1, Disjunction):
-        antecedent1 = Disjunction((antecedent1,))
-    if not isinstance(antecedent2, Disjunction):
-        antecedent2 = Disjunction((antecedent2,))
+    programs = []
+    for query in (q1, q2):
+        program = convert_pos_logic_query_to_datalog_rules(query, s)
+        programs.append(program)
 
-    return all(
-        any(
-            is_contained_rule(
-                Implication(
-                    s(*(args1 & extract_logic_free_variables(q1_))), q1_
-                ),
-                Implication(
-                    s(*(args2 & extract_logic_free_variables(q2_))), q2_
-                )
-            )
-            for q1_ in antecedent1.formulas
+    for q2_ in programs[1]:
+        for q1_ in programs[0]:
+            if is_contained_rule(q1_, q2_):
+                break
+        else:
+            return False
+    return True
+
+
+def convert_pos_logic_query_to_datalog_rules(query, head):
+    '''
+    Converts a positive ∃ logic query without constants
+    to a list of datalog rules.
+    '''
+    mei = MakeExistentialsImplicit()
+    q_args = set(extract_logic_free_variables(query))
+    antecedent = mei.walk(convert_to_pnf_with_dnf_matrix(query))
+    if isinstance(antecedent, Disjunction):
+        program = antecedent.formulas
+    else:
+        program = (antecedent,)
+    program = [
+        Implication(
+            head(*(q_args & extract_logic_free_variables(formula))),
+            formula
         )
-        for q2_ in antecedent2.formulas
-    )
+        for formula in program
+    ]
+    return program
