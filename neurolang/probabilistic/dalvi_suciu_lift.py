@@ -11,7 +11,7 @@ from ..expression_walker import (
     ReplaceExpressionWalker,
     add_match
 )
-from ..expressions import FunctionApplication, Symbol
+from ..expressions import FunctionApplication
 from ..logic import (
     Conjunction,
     Disjunction,
@@ -284,8 +284,8 @@ def minimise_formulas_containment(components, containment_op):
     return keep
 
 
-def add_existentials_except(query, vars):
-    fv = extract_logic_free_variables(query) - vars
+def add_existentials_except(query, variables):
+    fv = extract_logic_free_variables(query) - variables
     for v in fv:
         query = ExistentialPredicate(v, query)
     return query
