@@ -153,16 +153,29 @@ def test_lifted_join():
     assert res
 
 
-def test_non_liftable_join():
+def test_another_liftable_join():
     Q = Symbol('Q')
     R = Symbol('R')
     S = Symbol('S')
-    T = Symbol('T')
     x1 = Symbol('x1')
     x2 = Symbol('x2')
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x1, x2), S(x1, z))))
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq)
+    res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
+    assert res
+
+
+def test_non_liftable_join():
+    Q = Symbol('Q')
+    R = Symbol('R')
+    S = Symbol('S')
+    x1 = Symbol('x1')
+    x2 = Symbol('x2')
+    z = Symbol('z')
+
+    cq = Implication(Q(z), Conjunction((R(x1, z), S(x2, x1), S(x1, z))))
     plan = dalvi_suciu_lift.dalvi_suciu_lift(cq)
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert not res
@@ -216,15 +229,10 @@ def test_lifted_cq_fig_4_5():
 def test_minimize_component_conjunction():
     Q = Symbol('Q')
     R = Symbol('R')
-    S = Symbol('S')
     T = Symbol('T')
     x1 = Symbol('x1')
-    x2 = Symbol('x2')
-    x3 = Symbol('x3')
     y1 = Symbol('y1')
     y2 = Symbol('y2')
-    y3 = Symbol('y3')
-    z = Symbol('z')
 
     expr = Conjunction((Q(x1),))
     res = dalvi_suciu_lift.minimize_component_conjunction(expr)
@@ -239,7 +247,33 @@ def test_minimize_component_conjunction():
         ExistentialPredicate(y2, Q(x1, y2))
     ))
     res = dalvi_suciu_lift.minimize_component_conjunction(expr)
-    assert res == Conjunction((Q(x1, y1)))
+    assert res in (
+        Conjunction((q,)) for q in
+        (
+            ExistentialPredicate(y1, Q(x1, y1)),
+            ExistentialPredicate(y2, Q(x1, y2))
+        )
+    )
+
+    expr = Conjunction((
+        ExistentialPredicate(y2, Q(x1, y2)),
+        Disjunction((
+            ExistentialPredicate(y1, Q(x1, y1)),
+            T(x1)
+        ))
+    ))
+    res = dalvi_suciu_lift.minimize_component_conjunction(expr)
+    assert res == Conjunction((ExistentialPredicate(y2, Q(x1, y2)),))
+
+    expr = Conjunction((
+        Disjunction((
+            ExistentialPredicate(y1, Q(x1, y1)),
+            T(x1)
+        )),
+        ExistentialPredicate(y2, Q(x1, y2)),
+    ))
+    res = dalvi_suciu_lift.minimize_component_conjunction(expr)
+    assert res == Conjunction((ExistentialPredicate(y2, Q(x1, y2)),))
 
 
 def test_intractable_queries():

@@ -237,7 +237,7 @@ def minimize_component_disjunction(disjunction):
         return disjunction
     keep = minimise_formulas_containment(
         disjunction.formulas,
-        lambda x, y: is_contained(y, x)
+        is_contained
     )
 
     return Disjunction(keep)
@@ -248,7 +248,7 @@ def minimize_component_conjunction(conjunction):
         return conjunction
     keep = minimise_formulas_containment(
         conjunction.formulas,
-        is_contained
+        lambda x, y: is_contained(y, x)
     )
 
     return Conjunction(keep)
@@ -259,29 +259,36 @@ def minimise_formulas_containment(components, containment_op):
         extract_logic_free_variables(c)
         for c in components
     ]
-    s = Symbol.fresh()
     keep = tuple()
     containments = {}
     for i, c in enumerate(components):
-        c_fv = components_fv[i]
         for j, c_ in enumerate(components):
             if i == j:
                 continue
-            head = s(*(c_fv & components_fv[j]))
-            q = Implication(head, c)
-            q_ = Implication(head, c_)
-            containments.setdefault((i, j), containment_op(q_, q))
+            c_fv = components_fv[i] & components_fv[j]
+            q = add_existentials_except(c, c_fv)
+            q_ = add_existentials_except(c_, c_fv)
+            is_contained = containments.setdefault(
+                (i, j), containment_op(q_, q)
+            )
             if (
-                containment_op(q_, q) and
+                is_contained and
                 not (
                     j < i and
-                    containment_op(q, q_)
+                    containments[(j, i)]
                 )
             ):
                 break
         else:
             keep += (c,)
     return keep
+
+
+def add_existentials_except(query, vars):
+    fv = extract_logic_free_variables(query) - vars
+    for v in fv:
+        query = ExistentialPredicate(v, query)
+    return query
 
 
 def powerset(iterable):
