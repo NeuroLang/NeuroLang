@@ -232,9 +232,11 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
         q.body = ReplaceFreeSymbolWalker({q.head: ns}).walk(q.body)
         q.head = ns
 
-    def _desambiguate(self, l):
+    def _desambiguate(self, formulas):
         used_variables = set()
-        for f in l:
+        for uv in extract_logic_free_variables(formulas):
+            used_variables |= uv
+        for f in formulas:
             uq = UsedQuantifiers().walk(f)
             for q in self._conflicted_quantifiers(used_variables, uq):
                 self.rename_quantifier(q)

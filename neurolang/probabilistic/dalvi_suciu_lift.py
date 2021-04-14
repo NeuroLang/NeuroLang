@@ -5,19 +5,12 @@ import numpy as np
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import (
-    ChainedWalker,
-    PatternWalker,
-    ReplaceExpressionWalker,
-    add_match
-)
+from ..expression_walker import PatternWalker, add_match
 from ..expressions import FunctionApplication
 from ..logic import (
-    Conjunction,
     Disjunction,
     ExistentialPredicate,
     Implication,
-    LogicOperator,
     NaryLogicOperator
 )
 from ..logic.expression_processing import (
@@ -25,18 +18,12 @@ from ..logic.expression_processing import (
     extract_logic_free_variables
 )
 from ..logic.transformations import (
-    CollapseConjunctions,
-    CollapseDisjunctions,
-    DistributeConjunctions,
-    DistributeDisjunctions,
     GuaranteeConjunction,
     GuaranteeDisjunction,
     MakeExistentialsImplicit,
     PushExistentialsDown,
     RemoveTrivialOperations,
-    convert_to_pnf_with_dnf_matrix
 )
-from ..logic.unification import compose_substitutions, most_general_unifier
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     NAryRelationalAlgebraOperation,
@@ -44,6 +31,12 @@ from ..relational_algebra import (
     UnaryRelationalAlgebraOperation
 )
 from .containment import is_contained
+from .transforms import (
+    convert_rule_to_ucq,
+    minimize_rule_in_cnf,
+    minimize_rule_in_dnf,
+    unify_existential_variables
+)
 
 __all__ = [
     "dalvi_suciu_lift",
@@ -65,7 +58,7 @@ def dalvi_suciu_lift(rule):
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
     if isinstance(rule, Implication):
-        rule = convert_rule_to_e_query(rule)
+        rule = convert_rule_to_ucq(rule)
     rule = RTO.walk(rule)
     if isinstance(rule, FunctionApplication):
         return TranslateToNamedRA().walk(rule)
@@ -125,44 +118,6 @@ class NonLiftable(RelationalAlgebraOperation):
         )
 
 
-def minimize_rule_in_cnf(query):
-    query = convert_to_cnf_e_query(query)
-    head_variables = extract_logic_free_variables(query)
-    cq_d_min = Conjunction(tuple(
-        minimize_component_disjunction(c)
-        for c in query.formulas
-    ))
-
-    simplify = ChainedWalker(
-        PushExistentialsDown,
-        RemoveTrivialOperations,
-        GuaranteeConjunction,
-    )
-
-    cq_min = minimize_component_conjunction(cq_d_min)
-    cq_min = add_existentials_except(cq_min, head_variables)
-    return simplify.walk(cq_min)
-
-
-def minimize_rule_in_dnf(query):
-    query = convert_to_dnf_e_query(query)
-    head_variables = extract_logic_free_variables(query)
-    cq_d_min = Disjunction(tuple(
-        minimize_component_conjunction(c)
-        for c in query.formulas
-    ))
-
-    simplify = ChainedWalker(
-        PushExistentialsDown,
-        RemoveTrivialOperations,
-        GuaranteeDisjunction
-    )
-
-    cq_min = minimize_component_disjunction(cq_d_min)
-    cq_min = add_existentials_except(cq_min, head_variables)
-    return simplify.walk(cq_min)
-
-
 def mobius_weights(formula_containments):
     _mobius_weights = {}
     for formula in formula_containments:
@@ -191,141 +146,6 @@ def mobius_function(formula, formula_containments, known_weights=None):
     return res
 
 
-def convert_rule_to_e_query(implication):
-    """Convert datalog rule to logic ∃ query.
-
-    Parameters
-    ----------
-    expression : Implication
-        Datalog rule.
-
-    Returns
-    -------
-    LogicExpression
-       ∃ query with the same ground set as the
-       input datalog rule.
-    """
-    implication = RTO.walk(implication)
-    consequent, antecedent = implication.unapply()
-    head_vars = set(consequent.args)
-    existential_vars = (
-        extract_logic_free_variables(antecedent) -
-        set(head_vars)
-    )
-    for a in existential_vars:
-        antecedent = ExistentialPredicate(a, antecedent)
-    return RTO.walk(PED.walk(antecedent))
-
-
-def convert_to_cnf_e_query(expression):
-    """Convert logic ∃ query to
-    conjunctive normal from (CNF).
-
-    Parameters
-    ----------
-    expression : LogicExpression
-        ∃ query.
-
-    Returns
-    -------
-    LogicExpression
-       equivalent ∃ query in CNF form.
-    """
-    expression = RTO.walk(expression)
-    expression = Conjunction((expression,))
-    c = ChainedWalker(
-        PushExistentialsDown,
-        DistributeDisjunctions,
-        CollapseConjunctions,
-        CollapseDisjunctions,
-    )
-    return c.walk(expression)
-
-
-def convert_to_dnf_e_query(expression):
-    """Convert logic ∃ query to
-    disjunctive normal from (DNF).
-
-    Parameters
-    ----------
-    expression : LogicExpression
-        ∃ query.
-
-    Returns
-    -------
-    LogicExpression
-       equivalent ∃ query in DNF form.
-    """
-    expression = RTO.walk(expression)
-    expression = Disjunction((expression,))
-    c = ChainedWalker(
-        PushExistentialsDown,
-        DistributeConjunctions,
-        CollapseDisjunctions,
-        CollapseConjunctions,
-    )
-    return c.walk(expression)
-
-
-def minimize_component_disjunction(disjunction):
-    if not isinstance(disjunction, Disjunction):
-        return disjunction
-    keep = minimise_formulas_containment(
-        disjunction.formulas,
-        is_contained
-    )
-
-    return GD.walk(RTO.walk(Disjunction(keep)))
-
-
-def minimize_component_conjunction(conjunction):
-    if not isinstance(conjunction, Conjunction):
-        return conjunction
-    keep = minimise_formulas_containment(
-        conjunction.formulas,
-        lambda x, y: is_contained(y, x)
-    )
-
-    return GC.walk(RTO.walk(Conjunction(keep)))
-
-
-def minimise_formulas_containment(components, containment_op):
-    components_fv = [
-        extract_logic_free_variables(c)
-        for c in components
-    ]
-    keep = tuple()
-    containments = {}
-    for i, c in enumerate(components):
-        for j, c_ in enumerate(components):
-            if i == j:
-                continue
-            c_fv = components_fv[i] & components_fv[j]
-            q = add_existentials_except(c, c_fv)
-            q_ = add_existentials_except(c_, c_fv)
-            is_contained = containments.setdefault(
-                (i, j), containment_op(q_, q)
-            )
-            if (
-                is_contained and
-                not (
-                    j < i and
-                    containments[(j, i)]
-                )
-            ):
-                break
-        else:
-            keep += (c,)
-    return keep
-
-
-def add_existentials_except(query, variables):
-    fv = extract_logic_free_variables(query) - variables
-    for v in fv:
-        query = ExistentialPredicate(v, query)
-    return query
-
-
 def powerset(iterable):
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
@@ -352,8 +172,7 @@ def find_separator_variables(query):
     19–31 (ACM, 2020).
     '''
     exclude_variables = extract_logic_free_variables(query)
-    query = convert_to_pnf_with_dnf_matrix(query)
-    query = _unify_existential_variables(query)
+    query = unify_existential_variables(query)
 
     if isinstance(query, NaryLogicOperator):
         formulas = query.formulas
@@ -391,72 +210,6 @@ def find_separator_variables(query):
             separator_variables.add(var)
 
     return separator_variables - exclude_variables, query
-
-
-def has_existential_quantifiers(query):
-    return HasExistentialPredicates().walk(query)
-
-
-class HasExistentialPredicates(PatternWalker):
-    @add_match(FunctionApplication)
-    def function_application(self, expression):
-        return False
-
-    @add_match(ExistentialPredicate)
-    def existential_predicate(self, expression):
-        return True
-
-    @add_match(NaryLogicOperator)
-    def nary(self, expression):
-        return any(
-            self.walk(f)
-            for f in expression.formulas
-        )
-
-    @add_match(LogicOperator)
-    def operator(self, expression):
-        return any(
-            self.walk(f)
-            for f in expression.unapply()
-        )
-
-
-def _unify_existential_variables(query):
-    original_query = query
-    exclude_variables = extract_logic_free_variables(query)
-    query = PED.walk(query)
-    while isinstance(query, ExistentialPredicate):
-        query = query.body
-    if not isinstance(query, Disjunction):
-        return original_query
-    unifiers = []
-    for i, clause in enumerate(query.formulas):
-        atoms = extract_logic_atoms(clause)
-        for clause_ in query.formulas[i + 1:]:
-            atoms_ = extract_logic_atoms(clause_)
-            unifiers += [
-                most_general_unifier(a, a_)
-                for a in atoms
-                for a_ in atoms_
-            ]
-    unifiers = reduce(
-        compose_substitutions,
-        (u[0] for u in unifiers if u is not None),
-        {}
-    )
-    unifiers = {
-        k: v for k, v in unifiers.items()
-        if exclude_variables.isdisjoint((k, v))
-    }
-    for i in range(len(unifiers)):
-        query = ReplaceExpressionWalker(unifiers).walk(query)
-    new_formulas = tuple()
-    for formula in query.formulas:
-        while isinstance(formula, ExistentialPredicate):
-            formula = formula.body
-        new_formulas += (formula,)
-    query = Disjunction(new_formulas)
-    return query
 
 
 class IsPureLiftedPlan(PatternWalker):

@@ -6,6 +6,7 @@ from ...logic import (
     ExistentialPredicate,
     Implication
 )
+from .. import transforms
 from .. import dalvi_suciu_lift
 from ...relational_algebra import (
     Projection, NameColumns, NaturalJoin, ColumnInt, ColumnStr, Union
@@ -247,18 +248,18 @@ def test_minimize_component_conjunction():
     y2 = Symbol('y2')
 
     expr = Conjunction((Q(x1),))
-    res = dalvi_suciu_lift.minimize_component_conjunction(expr)
+    res = transforms.minimize_component_conjunction(expr)
     assert res == expr
 
     expr = Conjunction((Q(x1, y1), R(x1, y2)))
-    res = dalvi_suciu_lift.minimize_component_conjunction(expr)
+    res = transforms.minimize_component_conjunction(expr)
     assert res == expr
 
     expr = Conjunction((
         ExistentialPredicate(y1, Q(x1, y1)),
         ExistentialPredicate(y2, Q(x1, y2))
     ))
-    res = dalvi_suciu_lift.minimize_component_conjunction(expr)
+    res = transforms.minimize_component_conjunction(expr)
     assert res in (
         Conjunction((q,)) for q in
         (
@@ -274,7 +275,7 @@ def test_minimize_component_conjunction():
             T(x1)
         ))
     ))
-    res = dalvi_suciu_lift.minimize_component_conjunction(expr)
+    res = transforms.minimize_component_conjunction(expr)
     assert res == Conjunction((ExistentialPredicate(y2, Q(x1, y2)),))
 
     expr = Conjunction((
@@ -284,7 +285,7 @@ def test_minimize_component_conjunction():
         )),
         ExistentialPredicate(y2, Q(x1, y2)),
     ))
-    res = dalvi_suciu_lift.minimize_component_conjunction(expr)
+    res = transforms.minimize_component_conjunction(expr)
     assert res == Conjunction((ExistentialPredicate(y2, Q(x1, y2)),))
 
 
@@ -297,18 +298,18 @@ def test_minimize_component_disjunction():
     y2 = Symbol('y2')
 
     expr = Disjunction((Q(x1),))
-    res = dalvi_suciu_lift.minimize_component_disjunction(expr)
+    res = transforms.minimize_component_disjunction(expr)
     assert res == expr
 
     expr = Disjunction((Q(x1, y1), R(x1, y2)))
-    res = dalvi_suciu_lift.minimize_component_disjunction(expr)
+    res = transforms.minimize_component_disjunction(expr)
     assert res == expr
 
     expr = Disjunction((
         ExistentialPredicate(y1, Q(x1, y1)),
         ExistentialPredicate(y2, Q(x1, y2))
     ))
-    res = dalvi_suciu_lift.minimize_component_disjunction(expr)
+    res = transforms.minimize_component_disjunction(expr)
     assert res in (
         Disjunction((q,)) for q in
         (
@@ -324,7 +325,7 @@ def test_minimize_component_disjunction():
             T(x1)
         ))
     ))
-    res = dalvi_suciu_lift.minimize_component_disjunction(expr)
+    res = transforms.minimize_component_disjunction(expr)
     assert res == Disjunction((
         ExistentialPredicate(y1, Q(x1, y1)),
         T(x1)
@@ -337,7 +338,7 @@ def test_minimize_component_disjunction():
         )),
         ExistentialPredicate(y2, Q(x1, y2)),
     ))
-    res = dalvi_suciu_lift.minimize_component_disjunction(expr)
+    res = transforms.minimize_component_disjunction(expr)
     assert res == Disjunction((
         ExistentialPredicate(y1, Q(x1, y1)),
         T(x1)
