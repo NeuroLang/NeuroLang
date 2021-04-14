@@ -460,7 +460,9 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             ExtendedProjection(
                 Constant[AbstractSet](relation.relations),
                 (ExtendedProjectionListMember(
-                    weight * str2columnstr_constant(relation.provenance_column),
+                    weight * str2columnstr_constant(
+                        relation.provenance_column
+                    ),
                     prov_column
                 ),) + tuple(
                     ExtendedProjectionListMember(

@@ -64,7 +64,10 @@ def test_has_separator_variable_existential():
     ))
 
     assert dalvi_suciu_lift.has_separator_variables(expression, {})
-    assert dalvi_suciu_lift.find_separator_variables(expression, {})[0] & {x1, x2}
+    assert (
+        dalvi_suciu_lift.find_separator_variables(expression, {})[0] &
+        {x1, x2}
+    )
 
 
 def test_lifted_bcq_fig_4_():
