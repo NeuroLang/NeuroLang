@@ -1,9 +1,15 @@
+import logging
 from functools import lru_cache, reduce
 from itertools import chain, combinations
 
 import numpy as np
 
 from .. import relational_algebra_provenance as rap
+from ..datalog.expression_processing import (
+    UnifyVariableEqualities,
+    enforce_conjunction,
+    flatten_query
+)
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import FunctionApplication
@@ -22,7 +28,7 @@ from ..logic.transformations import (
     GuaranteeDisjunction,
     MakeExistentialsImplicit,
     PushExistentialsDown,
-    RemoveTrivialOperations,
+    RemoveTrivialOperations
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -30,13 +36,18 @@ from ..relational_algebra import (
     RelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation
 )
+from ..utils import log_performance
 from .containment import is_contained
+from .dichotomy_theorem_based_solver import ProbSemiringSolver
 from .transforms import (
     convert_rule_to_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables
 )
+
+LOG = logging.getLogger(__name__)
+
 
 __all__ = [
     "dalvi_suciu_lift",
@@ -353,3 +364,77 @@ def _formulas_weights(formula_powerset):
 
     formulas_weights = mobius_weights(formula_containments)
     return formulas_weights
+
+
+def solve_succ_query(query, cpl_program):
+    """
+    Solve a SUCC query on a CP-Logic program.
+
+    Parameters
+    ----------
+    query : Implication
+        SUCC query of the form `ans(x) :- P(x)`.
+    cpl_program : CPLogicProgram
+        CP-Logic program on which the query should be solved.
+
+    Returns
+    -------
+    ProvenanceAlgebraSet
+        Provenance set labelled with probabilities for each tuple in the result
+        set.
+
+    """
+    with log_performance(
+        LOG,
+        "Preparing query %s",
+        init_args=(query.consequent.functor.name,),
+    ):
+        flat_query_body = flatten_query(query.antecedent, cpl_program)
+
+    if flat_query_body == FALSE or (
+        isinstance(flat_query_body, Conjunction)
+        and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
+    ):
+        return ProvenanceAlgebraSet(
+            NamedRelationalAlgebraFrozenSet(("_p_",)),
+            ColumnStr("_p_"),
+        )
+
+    with log_performance(LOG, "Translation and lifted optimisation"):
+        flat_query_body = enforce_conjunction(
+            lift_optimization_for_choice_predicates(
+                flat_query_body, cpl_program
+            )
+        )
+        flat_query = Implication(query.consequent, flat_query_body)
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl_program, flat_query_body
+        )
+        unified_query = UnifyVariableEqualities().walk(flat_query)
+        shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
+        shattered_query_probabilistic_body = Conjunction(
+            tuple(
+                atom
+                for atom in extract_logic_atoms(shattered_query.antecedent)
+                if isinstance(
+                    atom.functor,
+                    (ProbabilisticChoiceSet, ProbabilisticFactSet),
+                )
+            )
+        )
+        ra_query = dalvi_suciu_lift(shattered_query)
+        if not is_pure_lifted_plan(ra_query):
+            LOG.info(
+                "Query not liftable %s",
+                shattered_query_probabilistic_body.formulas,
+            )
+            raise NotHierarchicalQueryException(
+                "Query not hierarchical, algorithm can't be applied"
+            )
+        ra_query = RAQueryOptimiser().walk(ra_query)
+
+    with log_performance(LOG, "Run RAP query"):
+        solver = ProbSemiringSolver(symbol_table)
+        prob_set_result = solver.walk(ra_query)
+
+    return prob_set_result

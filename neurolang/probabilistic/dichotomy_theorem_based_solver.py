@@ -20,7 +20,6 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 """
 
 import logging
-import typing
 from collections import defaultdict
 
 from ..datalog.expression_processing import (
@@ -32,7 +31,7 @@ from ..datalog.expression_processing import (
     flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ExpressionWalker, add_match
+from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, Symbol
 from ..logic import FALSE, Conjunction, Implication
 from ..logic.expression_processing import extract_logic_free_variables
@@ -41,29 +40,26 @@ from ..relational_algebra import (
     EliminateTrivialProjections,
     ExtendedProjection,
     ExtendedProjectionListMember,
-    NameColumns,
     NamedRelationalAlgebraFrozenSet,
     Projection,
     RelationalAlgebraPushInSelections,
-    RelationalAlgebraStringExpression,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceCountingSolver,
-    RelationalAlgebraProvenanceExpressionSemringSolver
+    RelationalAlgebraProvenanceCountingSolver
 )
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
 from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
-    DeterministicFactSet,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
+from .probabilistic_semiring_solver import ProbSemiringSolver
 from .shattering import shatter_easy_probfacts
 
 LOG = logging.getLogger(__name__)
@@ -113,146 +109,6 @@ def extract_atom_sets_and_detect_self_joins(query):
                 continue
             atom_set[variable].add(functor)
     return has_self_joins, atom_set
-
-
-class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.translated_probfact_sets = dict()
-
-    @add_match(
-        Projection,
-        lambda exp: (
-            isinstance(
-                exp.relation,
-                (
-                    DeterministicFactSet,
-                    ProbabilisticFactSet,
-                    ProbabilisticChoiceSet,
-                ),
-            )
-        ),
-    )
-    def eliminate_superfluous_projection(self, expression):
-        return self.walk(expression.relation)
-
-    @add_match(DeterministicFactSet(Symbol))
-    def deterministic_fact_set(self, deterministic_set):
-        relation_symbol = deterministic_set.relation
-        if relation_symbol in self.translated_probfact_sets:
-            return self.translated_probfact_sets[relation_symbol]
-
-        relation = self.walk(relation_symbol)
-        named_columns = tuple(
-            str2columnstr_constant(f"col_{i}") for i in relation.value.columns
-        )
-        projection_list = [
-            ExtendedProjectionListMember(
-                Constant[RelationalAlgebraStringExpression](
-                    RelationalAlgebraStringExpression(c.value),
-                    verify_type=False,
-                ),
-                c,
-            )
-            for c in named_columns
-        ]
-
-        prov_column = ColumnStr(Symbol.fresh().name)
-        provenance_set = self.walk(
-            ExtendedProjection(
-                NameColumns(relation, named_columns),
-                tuple(projection_list)
-                + (
-                    ExtendedProjectionListMember(
-                        Constant[float](1.0),
-                        str2columnstr_constant(prov_column),
-                    ),
-                ),
-            )
-        )
-
-        self.translated_probfact_sets[relation_symbol] = ProvenanceAlgebraSet(
-            provenance_set.value, prov_column
-        )
-        return self.translated_probfact_sets[relation_symbol]
-
-    @add_match(ProbabilisticFactSet(Symbol, ...))
-    def probabilistic_fact_set(self, prob_fact_set):
-        relation_symbol = prob_fact_set.relation
-        if relation_symbol in self.translated_probfact_sets:
-            return self.translated_probfact_sets[relation_symbol]
-
-        relation = self.walk(relation_symbol)
-        named_columns = tuple(
-            str2columnstr_constant(f"col_{i}") for i in relation.value.columns
-        )
-        relation = NameColumns(relation, named_columns)
-        relation = self.walk(relation)
-        if len(relation.value.columns) > 0:
-            rap_column = ColumnStr(
-                relation.value.columns[prob_fact_set.probability_column.value]
-            )
-        else:
-            rap_column = ColumnStr('p')
-
-        self.translated_probfact_sets[relation_symbol] = ProvenanceAlgebraSet(
-            relation.value, rap_column
-        )
-        return self.translated_probfact_sets[relation_symbol]
-
-    @add_match(ProbabilisticChoiceSet(Symbol, ...))
-    def probabilistic_choice_set(self, prob_choice_set):
-        return self.probabilistic_fact_set(prob_choice_set)
-
-    @add_match(ProbabilisticFactSet)
-    def probabilistic_fact_set_invalid(self, prob_fact_set):
-        raise NotImplementedError()
-
-    @add_match(ExtendedProjection(ProvenanceAlgebraSet, ...))
-    def extended_projection(self, proj_op):
-        provset = self.walk(proj_op.relation)
-        self._check_prov_col_not_in_proj_list(provset, proj_op.projection_list)
-        self._check_all_non_prov_cols_in_proj_list(
-            provset, proj_op.projection_list
-        )
-        relation = Constant[typing.AbstractSet](provset.relations)
-        prov_col = str2columnstr_constant(provset.provenance_column)
-        new_prov_col = str2columnstr_constant(Symbol.fresh().name)
-        proj_list_with_prov_col = proj_op.projection_list + (
-            ExtendedProjectionListMember(prov_col, new_prov_col),
-        )
-        ra_op = ExtendedProjection(relation, proj_list_with_prov_col)
-        new_relation = self.walk(ra_op)
-        new_provset = ProvenanceAlgebraSet(
-            new_relation.value, new_prov_col.value
-        )
-        return new_provset
-
-    @staticmethod
-    def _check_prov_col_not_in_proj_list(provset, proj_list):
-        if any(
-            member.dst_column.value == provset.provenance_column
-            for member in proj_list
-        ):
-            raise ValueError(
-                "Cannot project on provenance column: "
-                f"{provset.provenance_column}"
-            )
-
-    @staticmethod
-    def _check_all_non_prov_cols_in_proj_list(provset, proj_list):
-        non_prov_cols = set(provset.non_provenance_columns)
-        found_cols = set(
-            member.dst_column.value
-            for member in proj_list
-            if member.dst_column.value in non_prov_cols
-            and member.fun_exp == member.dst_column
-        )
-        if non_prov_cols.symmetric_difference(found_cols):
-            raise ValueError(
-                "All non-provenance columns must be part of the extended "
-                "projection as {c: c} projection list member."
-            )
 
 
 class RAQueryOptimiser(
