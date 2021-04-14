@@ -1,6 +1,5 @@
 import logging
-from collections import namedtuple
-from functools import lru_cache, reduce
+from functools import reduce
 from itertools import chain, combinations
 
 import numpy as np
@@ -12,7 +11,7 @@ from ..datalog.expression_processing import (
     flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..exceptions import NeuroLangException, NonLiftableException
+from ..exceptions import NonLiftableException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
@@ -52,8 +51,7 @@ from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .dichotomy_theorem_based_solver import (
     RAQueryOptimiser,
-    lift_optimization_for_choice_predicates,
-    shatter_easy_probfacts
+    lift_optimization_for_choice_predicates
 )
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import (
@@ -62,6 +60,7 @@ from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
+from .shattering import shatter_easy_probfacts
 from .transforms import (
     convert_rule_to_ucq,
     minimize_ucq_in_cnf,
@@ -123,15 +122,16 @@ def dalvi_suciu_lift(rule, symbol_table):
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
         return components_plan(connected_components, rap.Union, symbol_table)
-    elif has_separator_variables(rule_dnf, symbol_table):
-        return separator_variable_plan(rule_dnf, symbol_table)
+    else:
+        has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
+        if has_svs:
+            return plan
 
     return NonLiftable(rule)
 
 
 def has_separator_variables(query, symbol_table):
-    '''
-    Returns true if `query` has a separator variable.
+    """Returns true if `query` has a separator variable and the plan.
 
     According to Dalvi and Suciu [1]_ if `query` is in DNF,
     a variable z is called a separator variable if Q starts with ∃z,
@@ -151,9 +151,28 @@ def has_separator_variables(query, symbol_table):
     [2] Suciu, D. Probabilistic Databases for All. in Proceedings of the
     39th ACM SIGMOD-SIGACT-SIGAI Symposium on Principles of Database Systems
     19–31 (ACM, 2020).
-    '''
 
-    return len(find_separator_variables(query, symbol_table)[0]) > 0
+    Parameters
+    ----------
+    query : LogicExpression
+        UCQ to check if it can have a plan based on a separator variable
+        strategy.
+    symbol_table : dict
+        dictionary of symbols and probabilistic/deterministic fact sets.
+
+    Returns
+    -------
+    boolean, Expression
+        Returns true and the plan if the query has separation variables,
+        if not, False and None.
+    """
+    svs, expression = find_separator_variables(query, symbol_table)
+    if len(svs) > 0:
+        return True, separator_variable_plan(
+            svs, expression, symbol_table
+        )
+    else:
+        return False, None
 
 
 class NonLiftable(RelationalAlgebraOperation):
@@ -304,14 +323,13 @@ def is_pure_lifted_plan(query):
     return IsPureLiftedPlan().walk(query)
 
 
-def separator_variable_plan(expression, symbol_table):
+def separator_variable_plan(separator_variables, expression, symbol_table):
     variables_to_project = extract_logic_free_variables(expression)
-    svs, expression = find_separator_variables(expression, symbol_table)
     expression = MakeExistentialsImplicit().walk(expression)
     existentials_to_add = (
         extract_logic_free_variables(expression) -
         variables_to_project -
-        svs
+        separator_variables
     )
     for v in existentials_to_add:
         expression = ExistentialPredicate(v, expression)
@@ -320,7 +338,7 @@ def separator_variable_plan(expression, symbol_table):
             dalvi_suciu_lift(expression, symbol_table),
             tuple(
                 str2columnstr_constant(v.name)
-                for v in (variables_to_project | svs)
+                for v in (variables_to_project | separator_variables)
             )
         ),
         tuple(
