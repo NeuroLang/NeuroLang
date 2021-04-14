@@ -1,4 +1,3 @@
-from neurolang.utils.relational_algebra_set.pandas import RelationalAlgebraStringExpression
 import operator
 from typing import AbstractSet
 
@@ -9,17 +8,15 @@ from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
-    ColumnStr,
     ColumnInt,
-    Difference,
-    LeftNaturalJoin,
+    ColumnStr,
     NaturalJoin,
     Product,
     RenameColumn,
     RenameColumns,
     Selection,
     eq_,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
     ConcatenateConstantColumn,
@@ -30,7 +27,7 @@ from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     Union,
-    WeightedNaturalJoin,
+    WeightedNaturalJoin
 )
 from ..utils import (
     NamedRelationalAlgebraFrozenSet,
