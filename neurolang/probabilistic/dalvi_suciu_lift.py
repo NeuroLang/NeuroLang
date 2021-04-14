@@ -33,8 +33,8 @@ from ..relational_algebra import (
 from .containment import is_contained
 from .transforms import (
     convert_rule_to_ucq,
-    minimize_rule_in_cnf,
-    minimize_rule_in_dnf,
+    minimize_ucq_in_cnf,
+    minimize_ucq_in_dnf,
     unify_existential_variables
 )
 
@@ -63,14 +63,14 @@ def dalvi_suciu_lift(rule):
     if isinstance(rule, FunctionApplication):
         return TranslateToNamedRA().walk(rule)
 
-    rule_cnf = minimize_rule_in_cnf(rule)
+    rule_cnf = minimize_ucq_in_cnf(rule)
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
         return components_plan(connected_components, rap.NaturalJoin)
     elif len(rule_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf)
 
-    rule_dnf = minimize_rule_in_dnf(rule)
+    rule_dnf = minimize_ucq_in_dnf(rule)
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
         return components_plan(connected_components, rap.Union)
