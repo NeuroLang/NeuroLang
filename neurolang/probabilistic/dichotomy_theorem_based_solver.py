@@ -20,7 +20,6 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 """
 
 import logging
-import typing
 from collections import defaultdict
 
 from ..datalog.expression_processing import (
@@ -32,7 +31,7 @@ from ..datalog.expression_processing import (
     flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ExpressionWalker, add_match
+from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, Symbol
 from ..logic import FALSE, Conjunction, Implication
 from ..logic.expression_processing import extract_logic_free_variables
@@ -45,25 +44,23 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     Projection,
     RelationalAlgebraPushInSelections,
-    RelationalAlgebraStringExpression,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceCountingSolver,
-    RelationalAlgebraProvenanceExpressionSemringSolver
+    RelationalAlgebraProvenanceCountingSolver
 )
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
 from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
-    DeterministicFactSet,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
+from .probabilistic_semiring_solver import ProbSemiringSolver
 from .shattering import shatter_easy_probfacts
 
 LOG = logging.getLogger(__name__)
