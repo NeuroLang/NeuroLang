@@ -48,7 +48,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
-from ..utils import log_performance
+from ..utils import log_performance, OrderedSet
 from .containment import is_contained
 from .dichotomy_theorem_based_solver import (
     RAQueryOptimiser,
@@ -56,6 +56,7 @@ from .dichotomy_theorem_based_solver import (
     shatter_easy_probfacts
 )
 from .probabilistic_ra_utils import (
+    DeterministicFactSet,
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
@@ -80,7 +81,14 @@ PED = PushExistentialsDown()
 RTO = RemoveTrivialOperations()
 
 
-def dalvi_suciu_lift(rule):
+def is_deterministic(atom, symbol_table):
+    return isinstance(
+        symbol_table.get(atom.functor, None),
+        DeterministicFactSet
+    )
+
+
+def dalvi_suciu_lift(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
     to a safe plan according to [1]_. Non-liftable segments are identified
@@ -92,27 +100,33 @@ def dalvi_suciu_lift(rule):
     if isinstance(rule, Implication):
         rule = convert_rule_to_ucq(rule)
     rule = RTO.walk(rule)
-    if isinstance(rule, FunctionApplication):
+    if (
+        isinstance(rule, FunctionApplication) or
+        all(
+            is_deterministic(atom, symbol_table)
+            for atom in extract_logic_atoms(rule)
+        )
+    ):
         return TranslateToNamedRA().walk(rule)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
-        return components_plan(connected_components, rap.NaturalJoin)
+        return components_plan(connected_components, rap.NaturalJoin, symbol_table)
     elif len(rule_cnf.formulas) > 1:
-        return inclusion_exclusion_conjunction(rule_cnf)
+        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     rule_dnf = minimize_ucq_in_dnf(rule)
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
-        return components_plan(connected_components, rap.Union)
-    elif has_separator_variables(rule_dnf):
-        return separator_variable_plan(rule_dnf)
+        return components_plan(connected_components, rap.Union, symbol_table)
+    elif has_separator_variables(rule_dnf, symbol_table):
+        return separator_variable_plan(rule_dnf, symbol_table)
 
     return NonLiftable(rule)
 
 
-def has_separator_variables(query):
+def has_separator_variables(query, symbol_table):
     '''
     Returns true if `query` has a separator variable.
 
@@ -136,7 +150,7 @@ def has_separator_variables(query):
     19–31 (ACM, 2020).
     '''
 
-    return len(find_separator_variables(query)[0]) > 0
+    return len(find_separator_variables(query, symbol_table)[0]) > 0
 
 
 class NonLiftable(RelationalAlgebraOperation):
@@ -183,8 +197,7 @@ def powerset(iterable):
     return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
 
 
-@lru_cache
-def find_separator_variables(query):
+def find_separator_variables(query, symbol_table):
     '''
     According to Dalvi and Suciu [1]_ if `query` is rewritten in prenex
     normal form (PNF) with a DNF matrix, then a variable z is called a
@@ -211,20 +224,8 @@ def find_separator_variables(query):
     else:
         formulas = [query]
 
-    candidates = None
-    all_atoms = set()
-    for formula in formulas:
-        atoms = extract_logic_atoms(formula)
-        all_atoms |= atoms
-        root_variables = reduce(
-            lambda y, x: set(x.args) & y,
-            atoms[1:],
-            set(atoms[0].args)
-        )
-        if candidates is None:
-            candidates = root_variables
-        else:
-            candidates &= root_variables
+    candidates = extract_probabilistic_root_variables(formulas, symbol_table)
+    all_atoms = extract_logic_atoms(query)
 
     separator_variables = set()
     for var in candidates:
@@ -242,6 +243,30 @@ def find_separator_variables(query):
             separator_variables.add(var)
 
     return separator_variables - exclude_variables, query
+
+
+def extract_probabilistic_root_variables(formulas, symbol_table):
+    candidates = None
+    for formula in formulas:
+        atoms = OrderedSet(
+            atom
+            for atom in extract_logic_atoms(formula)
+            if not is_deterministic(atom, symbol_table)
+        )
+        if len(atoms) == 0:
+            continue
+        root_variables = reduce(
+            lambda y, x: set(x.args) & y,
+            atoms[1:],
+            set(atoms[0].args)
+        )
+        if candidates is None:
+            candidates = root_variables
+        else:
+            candidates &= root_variables
+    if candidates is None:
+        candidates = set()
+    return candidates
 
 
 class IsPureLiftedPlan(PatternWalker):
@@ -276,9 +301,9 @@ def is_pure_lifted_plan(query):
     return IsPureLiftedPlan().walk(query)
 
 
-def separator_variable_plan(expression):
+def separator_variable_plan(expression, symbol_table):
     variables_to_project = extract_logic_free_variables(expression)
-    svs, expression = find_separator_variables(expression)
+    svs, expression = find_separator_variables(expression, symbol_table)
     expression = MakeExistentialsImplicit().walk(expression)
     existentials_to_add = (
         extract_logic_free_variables(expression) -
@@ -289,7 +314,7 @@ def separator_variable_plan(expression):
         expression = ExistentialPredicate(v, expression)
     return rap.Projection(
         rap.Projection(
-            dalvi_suciu_lift(expression),
+            dalvi_suciu_lift(expression, symbol_table),
             tuple(
                 str2columnstr_constant(v.name)
                 for v in (variables_to_project | svs)
@@ -344,14 +369,14 @@ def symbol_co_occurence_graph(expression):
     return c_matrix
 
 
-def components_plan(components, operation):
+def components_plan(components, operation, symbol_table):
     formulas = []
     for component in components:
-        formulas.append(dalvi_suciu_lift(component))
+        formulas.append(dalvi_suciu_lift(component, symbol_table))
     return reduce(operation, formulas[1:], formulas[0])
 
 
-def inclusion_exclusion_conjunction(expression):
+def inclusion_exclusion_conjunction(expression, symbol_table):
     formula_powerset = []
     for formula in powerset(expression.formulas):
         if len(formula) == 0:
@@ -362,7 +387,7 @@ def inclusion_exclusion_conjunction(expression):
             formula_powerset.append(Disjunction(tuple(formula)))
     formulas_weights = _formulas_weights(formula_powerset)
     new_formulas, weights = zip(*(
-        (dalvi_suciu_lift(formula), weight)
+        (dalvi_suciu_lift(formula, symbol_table), weight)
         for formula, weight in formulas_weights.items()
         if weight != 0
     ))
@@ -439,7 +464,7 @@ def solve_succ_query(query, cpl_program):
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
         shattered_query = symbolic_shattering(unified_query, symbol_table)
-        ra_query = dalvi_suciu_lift(shattered_query)
+        ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
                 "Query not liftable %s",
