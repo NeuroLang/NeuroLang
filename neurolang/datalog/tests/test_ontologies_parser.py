@@ -2,7 +2,7 @@
 import io
 
 from ...frontend import NeurolangPDL
-from ...expressions import Symbol
+from ...expressions import Constant, Symbol
 from ..constraints_representation import RightImplication
 from ..expressions import Implication
 from ..ontologies_parser import OntologyParser
@@ -45,14 +45,16 @@ def test_1():
     </rdf:RDF>'''
 
     x = Symbol.fresh()
-    Employee = Symbol('employee')
-    AdministrativeStaff = Symbol('administrativestaff')
-    Publication = Symbol('publication')
-    Article = Symbol('article')
-    Professor = Symbol('professor')
-    AssistantProfessor = Symbol('assistantprofessor')
-    AssociateProfessor = Symbol('associateprofessor')
-    Book = Symbol('book')
+    Employee = Symbol('Employee')
+    AdministrativeStaff = Symbol('AdministrativeStaff')
+    Publication = Symbol('Publication')
+    Article = Symbol('Article')
+    Professor = Symbol('Professor')
+    AssistantProfessor = Symbol('AssistantProfessor')
+    AssociateProfessor = Symbol('AssociateProfessor')
+    Book = Symbol('Book')
+    
+    label = Symbol('label')
 
     imp1 = Implication(Employee(x), AdministrativeStaff(x))
     imp2 = Implication(Publication(x), Article(x))
@@ -60,19 +62,17 @@ def test_1():
     imp4 = Implication(Professor(x), AssociateProfessor(x))
     imp5 = Implication(Publication(x), Book(x))
 
-
-    AdministrativeStaff_label = Symbol('administrative_staff_worker')
-    AssistantProfessor_label = Symbol('assistant_professor')
-    AssociateProfessor_label = Symbol('associate_professor')
     
-    imp_label1 = Implication(AdministrativeStaff(x), AdministrativeStaff_label(x))
-    imp_label2 = Implication(AssistantProfessor(x), AssistantProfessor_label(x))
-    imp_label3 = Implication(AssociateProfessor(x), AssociateProfessor_label(x))
+    imp_label1 = Implication(AdministrativeStaff(x), label(x, Constant('administrative staff worker')))
+    imp_label2 = Implication(AssistantProfessor(x), label(x, Constant('assistant professor')))
+    imp_label3 = Implication(AssociateProfessor(x), label(x, Constant('associate professor')))
+    imp_label4 = Implication(Book(x), label(x, Constant('book')))
+    imp_label5 = Implication(Article(x), label(x, Constant('article')))
 
     onto = OntologyParser(io.StringIO(owl))
     rules = onto.parse_ontology()
 
-    assert len(rules) == 8
+    assert len(rules) == 10
 
     assert isinstance(rules[0], Implication)
     assert len(rules[0].antecedent.args) == 1
@@ -163,14 +163,15 @@ def test_2():
     </rdf:RDF>'''
 
     x = Symbol('x')
-    ClericalStaff = Symbol('clericalstaff')
-    AdministrativeStaff = Symbol('administrativestaff')
-    College = Symbol('college')
-    Organization = Symbol('organization')
-    ConferencePaper = Symbol('conferencepaper')
-    Article = Symbol('article')
-    Course = Symbol('course')
-    Work = Symbol('work')
+    ClericalStaff = Symbol('ClericalStaff')
+    AdministrativeStaff = Symbol('AdministrativeStaff')
+    College = Symbol('College')
+    Organization = Symbol('Organization')
+    ConferencePaper = Symbol('ConferencePaper')
+    Article = Symbol('Article')
+    Course = Symbol('Course')
+    Work = Symbol('Work')
+    label = Symbol('ĺabel')
 
     imp1 = Implication(AdministrativeStaff(x), ClericalStaff(x))
     imp2 = Implication(Organization(x), College(x))
@@ -178,16 +179,16 @@ def test_2():
     imp4 = Implication(Work(x), Course(x))
 
 
-    ClericalStaff_label = Symbol('clerical_staff_worker')
-    College_label = Symbol('school')
-    ConferencePaper_label = Symbol('conference_paper')
-    Course_label = Symbol('teaching_course')
+    ClericalStaff_label = Constant('clerical staff worker')
+    College_label = Constant('school')
+    ConferencePaper_label = Constant('conference paper')
+    Course_label = Constant('teaching course')
 
     
-    imp_label1 = Implication(ClericalStaff(x), ClericalStaff_label(x))
-    imp_label2 = Implication(College(x), College_label(x))
-    imp_label3 = Implication(ConferencePaper(x), ConferencePaper_label(x))
-    imp_label4 = Implication(Course(x), Course_label(x))
+    imp_label1 = Implication(ClericalStaff(x), label(x, ClericalStaff_label))
+    imp_label2 = Implication(College(x), label(x, College_label))
+    imp_label3 = Implication(ConferencePaper(x), label(x, ConferencePaper_label))
+    imp_label4 = Implication(Course(x), label(x, Course_label))
 
     onto = OntologyParser(io.StringIO(owl))
     rules = onto.parse_ontology()
@@ -290,58 +291,86 @@ def test_3():
     '''
 
 
-    x = Symbol('x')
-    y = Symbol('y')
-    Professor = Symbol('professor')
-    Chair = Symbol('chair')
-    supportChair = Symbol.fresh()
-    headOf = Symbol('headof')
-    Department = Symbol('department')
-    Person = Symbol('person')
+
+    Professor = Symbol('Professor')
+    Chair = Symbol('Chair')
+    headOf = Symbol('headOf')
+    Department = Symbol('Department')
+    Person = Symbol('Person')
+
+    onto = OntologyParser(io.StringIO(owl))
+    constraints = onto.parse_ontology()
+
+    
+    assert len(constraints) == 5
+
+    for c in constraints:
+        if c.antecedent.functor.is_fresh:
+            supportChair = c.antecedent.functor
+            x = c.antecedent.args[0]
+            y = c.antecedent.args[1]
+            break
 
     imp1 = RightImplication(supportChair(x, y), Person(x))
     imp2 = RightImplication(Chair(x), supportChair(x, y))
     imp3 = RightImplication(supportChair(x, y), headOf(x, y))
     imp4 = RightImplication(supportChair(x, y), Department(y))
-    imp5 = Implication(Professor(x), Chair(x))
+    imp5 = RightImplication(Professor(x), Chair(x))
 
-    onto = OntologyParser(io.StringIO(owl))
-    rules, constraints = onto.parse_ontology()
+    index = constraints.index(imp4)
+    # RightImplication(supportChair(x, y), Department(y))
+    assert isinstance(constraints[index], RightImplication)
+    assert len(constraints[index].antecedent.args) == 2
+    assert len(constraints[index].consequent.args) == 1
+    assert constraints[index].antecedent.args[1] == constraints[index].consequent.args[0]
+    assert constraints[index].consequent.functor == imp4.consequent.functor
 
+    index = constraints.index(imp3)
+    # RightImplication(supportChair(x, y), headOf(x, y))
+    assert isinstance(constraints[index], RightImplication)
+    assert len(constraints[index].antecedent.args) == 2
+    assert len(constraints[index].consequent.args) == 2
+    assert constraints[index].antecedent.args == constraints[index].consequent.args
+    assert constraints[index].consequent.functor == imp3.consequent.functor
+
+    for n, c in enumerate(constraints):
+        if (
+            c.antecedent.functor == Professor and 
+            c.consequent.functor == Chair
+        ):
+            index = n
+            imp = c
+            break
+
+    # RightImplication(Professor(x), Chair(x))
+    assert isinstance(constraints[index], RightImplication)
+    assert len(constraints[index].antecedent.args) == 1
+    assert len(constraints[index].consequent.args) == 1
+    assert constraints[index].antecedent.args == constraints[index].consequent.args
+    assert constraints[index].consequent.functor == imp.consequent.functor
     
-    assert len(constraints) == 4
-    assert len(rules) == 1
+    index = constraints.index(imp2)
+    # RightImplication(Chair(x), supportChair(x, y))
+    assert isinstance(constraints[index], RightImplication)
+    assert len(constraints[index].antecedent.args) == 1
+    assert len(constraints[index].consequent.args) == 2
+    assert constraints[index].antecedent.args[0] == constraints[index].consequent.args[0]
+    assert constraints[index].antecedent.functor == imp2.antecedent.functor
 
-    assert isinstance(constraints[0], RightImplication)
-    assert len(constraints[0].antecedent.args) == 2
-    assert len(constraints[0].consequent.args) == 1
-    assert constraints[0].antecedent.args[0] == constraints[0].consequent.args[0]
-    assert constraints[0].consequent.functor == imp1.consequent.functor
-
-    assert isinstance(constraints[1], RightImplication)
-    assert len(constraints[1].antecedent.args) == 2
-    assert len(constraints[1].consequent.args) == 1
-    assert constraints[1].antecedent.args[1] == constraints[1].consequent.args[0]
-    assert constraints[1].consequent.functor == imp4.consequent.functor
-
-    assert isinstance(constraints[2], RightImplication)
-    assert len(constraints[2].antecedent.args) == 1
-    assert len(constraints[2].consequent.args) == 2
-    assert constraints[2].antecedent.args[0] == constraints[2].consequent.args[0]
-    assert constraints[2].antecedent.functor == imp2.antecedent.functor
-
-    assert isinstance(constraints[3], RightImplication)
-    assert len(constraints[3].antecedent.args) == 2
-    assert len(constraints[3].consequent.args) == 2
-    assert constraints[3].antecedent.args[0] == constraints[3].consequent.args[0]
-    assert constraints[3].consequent.functor == imp3.consequent.functor
-    
-    assert isinstance(rules[0], Implication)
-    assert len(rules[0].antecedent.args) == 1
-    assert len(rules[0].consequent.args) == 1
-    assert rules[0].antecedent.args[0] == rules[0].consequent.args[0]
-    assert rules[0].antecedent.functor == imp5.antecedent.functor
-    assert rules[0].consequent.functor == imp5.consequent.functor
+    for n, c in enumerate(constraints):
+        if (
+            c.antecedent.functor.is_fresh and 
+            c.consequent.functor == Person
+        ):
+            index = n
+            imp = c
+            break
+    # RightImplication(supportChair(x, y), Person(x))
+    assert isinstance(constraints[index], RightImplication)
+    assert len(constraints[index].antecedent.args) == 2
+    assert len(constraints[index].consequent.args) == 1
+    assert constraints[index].antecedent.args[0] == constraints[index].consequent.args[0]
+    assert constraints[index].consequent.functor == imp.consequent.functor
 
 
 def test_4():
@@ -381,14 +410,23 @@ def test_4():
     Person(X) :- supportDean(X,Y).
     '''
 
-    x = Symbol('x')
-    y = Symbol('y')
-    Professor = Symbol('professor')
-    Dean = Symbol('dean')
-    supportDean = Symbol.fresh()
-    headOf = Symbol('headof')
-    College = Symbol('college')
-    Person = Symbol('person')
+    Professor = Symbol('Professor')
+    Dean = Symbol('Dean')
+    headOf = Symbol('headOf')
+    College = Symbol('College')
+    Person = Symbol('Person')
+
+    onto = OntologyParser(io.StringIO(owl))
+    constraints = onto.parse_ontology()
+
+    assert len(constraints) == 5
+    
+    for c in constraints:
+        if c.antecedent.functor.is_fresh:
+            supportDean = c.antecedent.functor
+            x = c.antecedent.args[0]
+            y = c.antecedent.args[1]
+            break
 
     imp1 = RightImplication(supportDean(x, y), Person(x))
     imp2 = RightImplication(Dean(x), supportDean(x, y))
@@ -396,43 +434,56 @@ def test_4():
     imp4 = RightImplication(supportDean(x, y), College(y))
     imp5 = Implication(Professor(x), Dean(x))
 
-    onto = OntologyParser(io.StringIO(owl))
-    rules, constraints = onto.parse_ontology()
+    index = constraints.index(imp4)
+    assert isinstance(constraints[index], RightImplication)
+    assert len(constraints[index].antecedent.args) == 2
+    assert len(constraints[index].consequent.args) == 1
+    assert constraints[index].antecedent.args[1] == constraints[index].consequent.args[0]
+    assert constraints[index].consequent.functor == imp4.consequent.functor
 
+    index = constraints.index(imp3)
+    assert isinstance(constraints[index], RightImplication)
+    assert len(constraints[index].antecedent.args) == 2
+    assert len(constraints[index].consequent.args) == 2
+    assert constraints[index].antecedent.args == constraints[index].consequent.args
+    assert constraints[index].consequent.functor == imp3.consequent.functor
+
+    for n, c in enumerate(constraints):
+        if (
+            c.antecedent.functor == Professor and 
+            c.consequent.functor == Dean
+        ):
+            index = n
+            imp = c
+            break
+
+    assert isinstance(constraints[index], RightImplication)
+    assert len(constraints[index].antecedent.args) == 1
+    assert len(constraints[index].consequent.args) == 1
+    assert constraints[index].antecedent.args == constraints[index].consequent.args
+    assert constraints[index].consequent.functor == imp.consequent.functor
     
-    assert len(constraints) == 4
-    assert len(rules) == 1
+    index = constraints.index(imp2)
+    assert isinstance(constraints[index], RightImplication)
+    assert len(constraints[index].antecedent.args) == 1
+    assert len(constraints[index].consequent.args) == 2
+    assert constraints[index].antecedent.args[0] == constraints[index].consequent.args[0]
+    assert constraints[index].antecedent.functor == imp2.antecedent.functor
 
-    assert isinstance(constraints[0], RightImplication)
-    assert len(constraints[0].antecedent.args) == 2
-    assert len(constraints[0].consequent.args) == 1
-    assert constraints[0].antecedent.args[0] == constraints[0].consequent.args[0]
-    assert constraints[0].consequent.functor == imp1.consequent.functor
+    for n, c in enumerate(constraints):
+        if (
+            c.antecedent.functor.is_fresh and 
+            c.consequent.functor == Person
+        ):
+            index = n
+            imp = c
+            break
+    assert isinstance(constraints[index], RightImplication)
+    assert len(constraints[index].antecedent.args) == 2
+    assert len(constraints[index].consequent.args) == 1
+    assert constraints[index].antecedent.args[0] == constraints[index].consequent.args[0]
+    assert constraints[index].consequent.functor == imp.consequent.functor
 
-    assert isinstance(constraints[1], RightImplication)
-    assert len(constraints[1].antecedent.args) == 2
-    assert len(constraints[1].consequent.args) == 1
-    assert constraints[1].antecedent.args[1] == constraints[1].consequent.args[0]
-    assert constraints[1].consequent.functor == imp4.consequent.functor
-
-    assert isinstance(constraints[2], RightImplication)
-    assert len(constraints[2].antecedent.args) == 1
-    assert len(constraints[2].consequent.args) == 2
-    assert constraints[2].antecedent.args[0] == constraints[2].consequent.args[0]
-    assert constraints[2].antecedent.functor == imp2.antecedent.functor
-
-    assert isinstance(constraints[3], RightImplication)
-    assert len(constraints[3].antecedent.args) == 2
-    assert len(constraints[3].consequent.args) == 2
-    assert constraints[3].antecedent.args[0] == constraints[3].consequent.args[0]
-    assert constraints[3].consequent.functor == imp3.consequent.functor
-    
-    assert isinstance(rules[0], Implication)
-    assert len(rules[0].antecedent.args) == 1
-    assert len(rules[0].consequent.args) == 1
-    assert rules[0].antecedent.args[0] == rules[0].consequent.args[0]
-    assert rules[0].antecedent.functor == imp5.antecedent.functor
-    assert rules[0].consequent.functor == imp5.consequent.functor
 
 
 def test_open_world_example():
@@ -485,15 +536,15 @@ def test_open_world_example():
     nl = NeurolangPDL()
     nl.load_ontology(io.StringIO(owl))
 
-    nl.add_tuple_set([('Juan',), ('Manuel',)], name='dean')
-    nl.add_tuple_set([('Miguel',), ('Alberto',)], name='chair')
-    nl.add_tuple_set([('College A',), ('College B',)], name='college')
-    nl.add_tuple_set([('Department A',), ('Department B',)], name='department')
+    nl.add_tuple_set([('Juan',), ('Manuel',)], name='Dean')
+    nl.add_tuple_set([('Miguel',), ('Alberto',)], name='Chair')
+    nl.add_tuple_set([('College A',), ('College B',)], name='College')
+    nl.add_tuple_set([('Department A',), ('Department B',)], name='Department')
 
     with nl.scope as e:
         e.answer[e.a] = (
-            e.headof[e.a, e.b] &
-            e.college[e.b]
+            e.headOf[e.a, e.b] &
+            e.College[e.b]
         )
 
         f_term = nl.solve_all()
@@ -509,19 +560,21 @@ def test_cogat():
     import nibabel as nib
 
     cogAt = datasets.utils._fetch_files(
-        datasets.utils._get_dataset_dir('CogAt'),
+        datasets.utils._get_dataset_dir('ontology'),
         [
             (
-                'cogat.xml',
-                'http://data.bioontology.org/ontologies/COGAT/download?'
-                'apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb&download_format=rdf',
-                {'move': 'cogat.xml'}
+                'cogat_old.xml',
+                'https://data.bioontology.org/ontologies/COGAT/submissions/7/download?'
+                'apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb',
+                {'move': 'cogat_old.xml'}
             )
         ]
     )[0]
 
-    mni_t1 = nib.load(datasets.fetch_icbm152_2009()['t1'])
-    mni_t1_4mm = image.resample_img(mni_t1, np.eye(3) * 4)
+    mni_mask = image.resample_img(
+        nib.load(datasets.fetch_icbm152_2009()["gm"]),
+        np.eye(3) * 2
+    )
 
     ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
         datasets.utils._get_dataset_dir('neurosynth'),
@@ -539,38 +592,41 @@ def test_cogat():
         ]
     )
 
-    ns_database = pd.read_csv(ns_database_fn, sep=f'\t')
-    ijk_positions = (
-        nib.affines.apply_affine(
-            np.linalg.inv(mni_t1_4mm.affine),
-            ns_database[['x', 'y', 'z']]
-        ).astype(int)
-    )
-    ns_database['i'] = ijk_positions[:, 0]
-    ns_database['j'] = ijk_positions[:, 1]
-    ns_database['k'] = ijk_positions[:, 2]
+    ns_database = pd.read_csv(ns_database_fn, sep="\t")
+    ns_database = ns_database[["x", "y", "z", "id"]]
 
-    ns_features = pd.read_csv(ns_features_fn, sep=f'\t')
-    ns_terms = (
-        pd.melt(
-                ns_features,
-                var_name='term', id_vars='pmid', value_name='TfIdf'
-        )
-        .query('TfIdf > 1e-3')[['pmid', 'term']]
-    )
-    ns_docs = ns_features[['pmid']].drop_duplicates()
+    ns_features = pd.read_csv(ns_features_fn, sep="\t")
+    ns_docs = ns_features[["pmid"]].drop_duplicates()
+    ns_terms = pd.melt(
+        ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
+    ).query("TfIdf > 1e-3")[["term", "pmid"]]
 
     import rdflib
     from rdflib import RDFS
     g = rdflib.Graph()
     g.load(cogAt)
 
+    from rdflib import BNode
+
     onto_dic = {}
-    for a in g.subjects():
-        for b in g.triples((a, RDFS.label, None)):
-            ent = a.split('#')[1]
+    for obj in g.subjects():
+        if isinstance(obj, BNode):
+            continue
+        for b in g.triples((obj, RDFS.label, None)):
             label = b[2].lower().replace(' ', '_')
-            onto_dic[label] = ent
+            obj_split = obj.split('#')
+            if len(obj_split) == 2:
+                name = obj_split[1]
+                namespace = obj_split[0].split('/')[-1]
+                if name[0] != '' and namespace != '':
+                    res = namespace + ':' + name
+                else:
+                    res = name
+            else:
+                obj_split = obj.split('/')
+                res = obj_split[-1]
+
+            onto_dic[label] = res
 
     group_terms = ns_terms.groupby('term')
     dic_term_pmid = {}
@@ -578,7 +634,7 @@ def test_cogat():
     for term, ids in group_terms:
         term = term.lower().replace(' ', '_')
         dic_term_pmid[term] = ids
-        
+
     merge_dic = {}
     for k, v in onto_dic.items():
         if k in dic_term_pmid.keys():
@@ -589,13 +645,40 @@ def test_cogat():
     nl.load_ontology(cogAt)
 
     for k, v in dic_term_pmid.items():
-        nl.add_tuple_set(v.pmid.values, name=k)  
+        if k in onto_dic.keys():
+            cogat_key = onto_dic[k]
+            nl.add_tuple_set(v.pmid.values, name=cogat_key)
+
+    SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
+        ns_docs, name="SelectedStudy"
+    )
+
+    TermInStudy = nl.add_tuple_set(ns_terms, name="TermInStudy")
+    FocusReported = nl.add_tuple_set(ns_database, name="FocusReported")
+    Voxel = nl.add_tuple_set(
+        nib.affines.apply_affine(
+            mni_mask.affine,
+            np.transpose(mni_mask.get_fdata().nonzero())
+        ),
+        name='Voxel'
+    )
+
+    part_of = nl.new_symbol(name='ro.owl:part_of')
+    label = nl.new_symbol(name='rdf-schema:label')
+    perception = nl.new_symbol(name='cogat.owl:CAO_00418')
+    attention = nl.new_symbol(name='cogat.owl:CAO_00141')
+    listening = nl.new_symbol(name='cogat.owl:CAO_00370')
+    auditory_attention = nl.new_symbol(name='cogat.owl:CAO_00149')
+    spatial_attention = nl.new_symbol(name='cogat.owl:CAO_00507')
+    visual_attention = nl.new_symbol(name='cogat.owl:CAO_00541')
+    consciousness = nl.new_symbol(name='cogat.owl:CAO_00216')
+    attention_capacity = nl.new_symbol(name='cogat.owl:CAO_00142')
+    autonoesis = nl.new_symbol(name='cogat.owl:CAO_00693')
+    episodic_memory = nl.new_symbol(name='cogat.owl:CAO_00277') 
 
     with nl.scope as e:
         e.answer[e.a] = (
-            e.part_of[e.a, e.b] &
-            e.cao_00418[e.b] #perception 
-            
+            perception[e.a]   
         )
 
         f_term = nl.solve_all()

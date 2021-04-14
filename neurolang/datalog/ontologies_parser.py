@@ -1,238 +1,313 @@
-import io
-import xml.etree.ElementTree as ET
-from ..logic import Implication, Symbol, Conjunction
+import warnings
+
+import rdflib
+from rdflib import BNode, Literal
+from rdflib.namespace import OWL,RDF, RDFS, SKOS
+
+from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
+from ..expressions import Constant, Symbol
+from ..logic import Conjunction
 from .constraints_representation import RightImplication
-
-
-#TODO 
-# 1) Refactor
-# 2) DONE: Change symbol names (x, y, ...) and rewrite asserts in test 
-# 3) Solve the temporary trick in __init__ 
-# 4) Discuss how we should process names
 
 class OntologyParser:
     """
     This class is in charge of generating the rules that can be derived
     from an ontology, both at entity and constraint levels.
     """
-    OBJECT_PROPERTY = '{http://www.w3.org/2002/07/owl#}ObjectProperty'
-    CLASS = '{http://www.w3.org/2002/07/owl#}Class'
-    RESTRICTION = '{http://www.w3.org/2002/07/owl#}Restriction'
 
-    def __init__(self, path):
 
-        if isinstance(path, io.StringIO):
-            '''This is a temporary trick to be able to use StringIO in the 
-                tests. A more elegant solution should be found:
-                    - Restart the iterator.
-                    - Parse the namespaces from ET.parse(...)
-            '''
-            data = io.StringIO(path.getvalue())
-            self.namespace = dict([node for _, node in ET.iterparse(data, events=['start-ns'])])
-        else:
-            self.namespace = dict([node for _, node in ET.iterparse(path, events=['start-ns'])])
-        onto = ET.parse(path)
-        self.root = onto.getroot()
+    def __init__(self, paths, load_format="xml"):
+            #self.namespaces_dic = None
+            #self.owl_dic = None
+            if isinstance(paths, list):
+                self._load_ontology(paths, load_format)
+            else:
+                self._load_ontology([paths], [load_format])
+
+            self.parsed_constraints = []
+
+    def _load_ontology(self, paths, load_format):
+        rdfGraph = rdflib.Graph()
+        for counter, path in enumerate(paths):
+            rdfGraph.load(path, format=load_format[counter])
+
+        self.rdfGraph = rdfGraph
 
     def parse_ontology(self):
-        props = self._parse_object_properties()
-        constraints = self._parse_classes()
+        self._parse_classes()
 
-        return props + constraints
-        
-    def _parse_object_properties(self):
-        props = []
-        for obj in self.root.findall(self.OBJECT_PROPERTY):
-            prop = self._cut_name_from_item(obj)
-            domain = self._cut_name_from_item(obj.find('rdfs:domain', self.namespace))
-            rng = self._cut_name_from_item(obj.find('rdfs:range', self.namespace))
-            
-            if domain is not None and rng is not None:
-                x = Symbol.fresh()
-                y = Symbol.fresh()
-                sym_dom = Symbol(domain)(x)
-                sym_rng = Symbol(rng)(y)
-                sym_prop = Symbol(prop)(x, y)
-                imp_dom = RightImplication(sym_prop, sym_dom)
-                imp_rng = RightImplication(sym_prop, sym_rng)
-
-                props = props + [imp_dom, imp_rng]
-
-        return props
+        return self.parsed_constraints
 
     def _parse_classes(self):
+        _all_classes = self._get_all_classes()
+
+        for class_name in list(_all_classes):
+            for entity, prop, value in self.rdfGraph.triples((class_name, None, None)):
+                
+                if prop == RDF.type and value == OWL.Class:
+                    # The triple used to index the class must be skipped.
+                    continue
+                
+                elif prop == RDFS.subClassOf:
+                    self._parseSubClass(entity, value)
+                
+                elif prop == RDFS.label:
+                    self._parseLabel(entity, prop, value)
+                    
+                elif prop == OWL.equivalentClass:
+                    self._parseEquivalentClass(entity, prop,  value)
+                    
+                elif prop == OWL.EnumeratedClass:
+                    self._parseEnumeratedClass(entity, prop, value)
+
+                elif prop == OWL.DisjointClass:
+                    self._parseDisjointClass(entity, prop, value)
+                
+                elif prop == SKOS.prefLabel:
+                    self._parsePrefLabel(entity, prop, value)
+
+                elif prop == SKOS.hasTopConcept:
+                    self._parseHasTopConcept(entity, prop, value)
+
+                elif prop == SKOS.altLabel:
+                    self._parseAltLabel(entity, prop, value) 
+                else:
+                    if not isinstance(value, BNode):
+                        self._parseProperty(entity, prop, value)
+                    else:
+                        raise NeuroLangNotImplementedError
+
+
+    def _get_all_classes(self):
+        classes = set()
+        for s, _, _ in self.rdfGraph.triples((None, RDF.type , OWL.Class)):
+            if not isinstance(s, BNode):
+                classes.add(s)
+        for s, _, _ in self.rdfGraph.triples((None, RDF.type , RDFS.Class)):
+            if not isinstance(s, BNode):
+                classes.add(s)
+
+        return classes
+
+    def _parseSubClass(self, entity, val):
+        res = []
+        if isinstance(val, BNode):
+            bnode_triples = list(self.rdfGraph.triples((val, None, None)))
+            restriction_dic = {b:c for _, b, c in bnode_triples}
+            if OWL.Restriction in restriction_dic.values():
+                res = self._parse_restriction(entity, restriction_dic)
+                self.parsed_constraints = self.parsed_constraints + res
+            elif OWL.intersectionOf in restriction_dic.keys():
+                c = restriction_dic[OWL.intersectionOf]
+                int_triples = list(self.rdfGraph.triples((c, None, None)))
+                inter_entity = [a[2] for a in int_triples if not isinstance(a[2], BNode)]
+                inter_BNode = [a[2] for a in int_triples if isinstance(a[2], BNode)]
+                if len(inter_entity) == 1 and len(inter_BNode) == 1:
+                        self._parse_BNode_intersection(entity, inter_BNode[0], inter_entity[0])
+                else:
+                    warnings.warn('Complex intersectionOf are not implemented yet')
+                
+            elif OWL.unionOf in restriction_dic.keys():
+                warnings.warn('Not implemented yet: unionOf')
+            elif OWL.complementOf in restriction_dic.keys():
+                warnings.warn('Not implemented yet: complementOf')
+            else:
+                raise NotImplementedError(f'Something went wrong: {restriction_dic}')
+        else:
+            cons = Symbol(self._parse_name(entity))
+            ant = Symbol(self._parse_name(val))
+            x = Symbol.fresh()
+            imp = RightImplication(ant(x), cons(x))
+            self.parsed_constraints.append(imp)
+
+        return res
+
+
+    def _parse_BNode_intersection(self, entity, node, inter_entity):
+        triple_restriction = list(self.rdfGraph.triples((node, None, None)))
+        nil = [a[2] for a in triple_restriction if not isinstance(a[2], BNode)]
+        bnode = [a[2] for a in triple_restriction if isinstance(a[2], BNode)]
+        support_prop = Symbol.fresh()
+        if nil[0] == RDF.nil:
+            bnode_triples = list(self.rdfGraph.triples((bnode[0], None, None)))
+            restriction_dic = {b:c for _, b, c in bnode_triples}
+            if OWL.Restriction in restriction_dic.values():
+                res = self._parse_restriction(entity, restriction_dic, support_prop)
+                self.parsed_constraints = self.parsed_constraints + res
+
+            con = Symbol(self._parse_name(inter_entity))
+            x = Symbol.fresh()
+            y = Symbol.fresh()
+            imp = RightImplication(support_prop(x, y), con(x))
+            self.parsed_constraints.append(imp)
+        else:
+            warnings.warn('Complex intersectionOf are not implemented yet')
+
+    def _parse_name(self, obj):
+        if isinstance(obj, Literal):
+            return str(obj)
+
+        obj_split = obj.split('#')
+        if len(obj_split) == 2:
+            name = obj_split[1]
+            namespace = obj_split[0].split('/')[-1]
+            if name[0] != '' and namespace != '':
+                res = namespace + ':' + name
+            else:
+                res = name
+        else:
+            obj_split = obj.split('/')
+            res = obj_split[-1]
+
+        return res 
+                
+    def _parse_restriction(self, entity, restriction_dic, support_prop=None):
+        cons = []
+        prop = restriction_dic[OWL.onProperty]
+        
+        if OWL.someValuesFrom in restriction_dic.keys():
+            node = restriction_dic[OWL.someValuesFrom]
+            if isinstance(node, BNode):
+                node = self._solve_BNode(node)
+            else:
+                node = [node]
+            cons = self._parse_someValuesFrom(entity, prop, node, support_prop=support_prop)
+        
+        elif OWL.allValuesFrom in restriction_dic.keys():
+            node = restriction_dic[OWL.allValuesFrom]
+            if isinstance(node, BNode):
+                node = self._solve_BNode(node)
+            else:
+                node = [node]
+            cons = self._parse_allValuesFrom(entity, prop, node)
+        
+        elif OWL.hasValue in restriction_dic.keys():
+            node = restriction_dic[OWL.hasValue]
+            if isinstance(node, BNode):
+                node = self._solve_BNode(node)
+            else:
+                node = [node]
+            cons = self._parse_hasValue(entity, prop, node)
+        
+        elif OWL.minCardinality in restriction_dic.keys():
+            warnings.warn('minCardinality constraints cannot be implemented in Datalog syntax')
+        elif OWL.maxCardinality in restriction_dic.keys():
+            warnings.warn('maxCardinality constraints cannot be implemented in Datalog syntax')
+        else:
+            raise NeuroLangException('This restriction does not correspond to an OWL DL constraint:', restriction_dic.keys())
+
+        return cons
+
+    def _parse_someValuesFrom(self, entity, prop, nodes, support_prop=None):
         constraints = []
-        for obj in self.root.findall(self.CLASS):
-            prop = self._cut_name_from_item(obj)
-            #thing = Symbol(name='thing')
-            #x = Symbol.fresh()
-            #imp_label = RightImplication(Symbol(prop)(x), thing(x))
-            #constraints.append(imp_label)
-            cons = self._parse_subclass_and_restriction(obj.findall('rdfs:subClassOf', self.namespace), prop)
-            constraints = constraints + cons
+        if support_prop is None:
+            support_prop = Symbol.fresh()
+        x = Symbol.fresh()
+        y = Symbol.fresh()
+        onProp = Symbol(self._parse_name(prop))
+        entity = Symbol(self._parse_name(entity))
+        for value in nodes:
+            value = self._parse_name(value)
+            constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
+        prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
+        exists_imp = RightImplication(entity(x), support_prop(x, y))
+        
+        constraints.append(exists_imp)
+        constraints.append(prop_imp)
 
         return constraints
 
-
-    def _cut_name_from_item(self, obj):    
-        if obj is None:
-            return None
-        
-        items = obj.items()
-        if not items:
-            return None
-
-        if len(items) > 1:
-            raise Exception(f'More than 1 element, check: {items}')
-        split = items[0][1].split('#')
-        if len(split) == 1:
-            name = split[0].split('/')[-1]
-        else:
-            name = split[1]
-            
-        return name.lower()
-
-    def _get_name_from_text_atribute(self, obj):
-        if hasattr(obj, 'text'):
-            label = obj.text.lower()
-        else:
-            label = None
-
-        return label
-
-    def _parse_subclass_and_restriction(self, list_of_subclasses, prop):
-        parsed_constraints = []
-
-        for subClassOf in list_of_subclasses:
-            #If the inner class is defined, there is an intersection
-            inner_classes = subClassOf.findall('owl:Class', self.namespace)
-            
-            if not inner_classes:
-                #If there is no inner class, there may be a restriction
-                restrictions = subClassOf.findall('owl:Restriction', self.namespace)
-                if not restrictions:
-                    #If there is no inner class and no restriction, 
-                    #then there is only a subclass definition.
-                    cons = Symbol(self._cut_name_from_item(subClassOf))
-                    ant = Symbol(prop)
-                    x = Symbol.fresh()
-                    imp = RightImplication(ant(x), cons(x))
-                    parsed_constraints.append(imp)
-                else:
-                    for res in restrictions:
-                        onProperty = res.find('owl:onProperty', self.namespace)
-                        type_of_restriction, names = self._parse_restriction(res)
-
-                        x = Symbol.fresh()
-                        y = Symbol.fresh()
-                        support_prop = Symbol.fresh()
-                        if type_of_restriction == 'someValuesFrom' and names:
-                            for value in names:
-                                parsed_constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
-                            onProp = Symbol(self._cut_name_from_item(onProperty))
-                            prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
-                            exists_imp = RightImplication(Symbol(prop)(x), support_prop(x, y))
-                        
-                            parsed_constraints.append(exists_imp)
-                            parsed_constraints.append(prop_imp)
-
-                        if type_of_restriction == 'allValuesFrom' and names:
-                            ant = Symbol(prop)
-                            onProp = Symbol(self._cut_name_from_item(onProperty))
-                            conj = Conjunction((ant(x), onProp(x, y)))
-                            for value in names:
-                                parsed_constraints.append(RightImplication(conj, Symbol(value)(y)))
-                        
-            else:
-                p_constraints = self._parse_inner_classes(inner_classes, prop)
-                parsed_constraints = parsed_constraints + p_constraints
-                
-        return parsed_constraints
-                    
-    def _parse_inner_classes(self, inner_classes, prop):
+    def _parse_allValuesFrom(self, entity, prop, nodes):
+        constraints = []
         x = Symbol.fresh()
         y = Symbol.fresh()
-        parsed_constraints = []
-        for _class in inner_classes:
-            intersection = _class.findall('owl:intersectionOf', self.namespace)
-            if not intersection:
-                cons = Symbol(self._cut_name_from_item(_class))
-                ant = Symbol(prop)
-                imp = RightImplication(ant(x), cons(x))
-                parsed_constraints.append(imp)
-            else:
-                for inter in intersection:
-                    support_prop = Symbol.fresh()
-                    for child in inter.getchildren():
+        ant = Symbol(self._parse_name(entity))
+        onProp = Symbol(self._parse_name(prop))
+        conj = Conjunction((ant(x), onProp(x, y)))
+        for value in nodes:
+            value = self._parse_name(value)
+            constraints.append(RightImplication(conj, Symbol(value)(y)))
 
-                        if child.tag == self.RESTRICTION:
-                            onProperty = child.find('owl:onProperty', self.namespace)
-                            type_of_restriction, names = self._parse_restriction(child)
-                            
-                            if type_of_restriction == 'someValuesFrom' and names:
-                                for value in names:
-                                    parsed_constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
-                                onProp = Symbol(self._cut_name_from_item(onProperty))
-                                prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
-                                exists_imp = RightImplication(Symbol(prop)(x), support_prop(x, y))
-                        
-                                parsed_constraints.append(exists_imp)
-                                parsed_constraints.append(prop_imp)
-
-                            #allValuesFrom inside intersection?
-                            if type_of_restriction == 'allValuesFrom' and names:
-                                ant = Symbol(prop)
-                                onProp = Symbol(self._cut_name_from_item(onProperty))
-                                conj = Conjunction((prop(x), onProp(x, y)))
-                                for value in names:
-                                    parsed_constraints.append(RightImplication(conj, Symbol(value)(y)))
-                        
-                        if child.tag == self.CLASS:
-                            cons = Symbol(self._cut_name_from_item(child))
-                            imp = RightImplication(support_prop(x, y), cons(x))
-                            parsed_constraints.append(imp)
-
-        return parsed_constraints
-
-
-    def _parse_restriction(self, subClassOf):
-        names = []
-        someValuesFrom = subClassOf.find('owl:someValuesFrom', self.namespace)
-        if someValuesFrom is not None:
-            inner_class = someValuesFrom.findall('owl:Class', self.namespace)
-            if inner_class:
-                for _class in inner_class:
-                    name = self._cut_name_from_item(_class)
-                    names.append(name)
-            else:
-                names = [self._cut_name_from_item(someValuesFrom)]
-
-            return 'someValuesFrom', names
-
-        allValuesFrom = subClassOf.find('owl:allValuesFrom', self.namespace)
-        if allValuesFrom is not None:
-            inner_class = allValuesFrom.findall('owl:Class', self.namespace)
-            if inner_class:
-                for _class in inner_class:
-                    unionOf = _class.findall('owl:unionOf', self.namespace)
-                    if unionOf:
-                        for union in unionOf:
-                            for u in union.getchildren():
-                                name = self._cut_name_from_item(u)
-                                names.append(name)
-                    else:
-                        name = self._cut_name_from_item(_class)
-                        names.append(name)
-            else:
-                names = [self._cut_name_from_item(allValuesFrom)]
-
-            return 'allValuesFrom', names
-
-        hasValue = subClassOf.find('owl:hasValue', self.namespace)
-        if hasValue is not None:
-            return 'hasValue', []
-
-        if allValuesFrom is None and someValuesFrom is None and hasValue is None:
-            raise Exception(f'Restriction not parsed: {subClassOf}')         
+        return constraints
         
+    def _parse_hasValue(self, entity, prop, nodes):
+        warnings.warn('Not implemented yet: complementOf')
+        return []
+            
+    def _solve_BNode(self, initial_node):
+        list_node = RDF.nil
+        values = []
+        for node_triples in self.rdfGraph.triples((initial_node, None, None)):
+            if OWL.unionOf == node_triples[1]:
+                list_node = node_triples[2]
+
+        while list_node != RDF.nil and list_node is not None:
+            list_iter = self.rdfGraph.triples((list_node, None, None))
+            list_iter = list(list_iter)
+            values.append(self._get_list_first_value(list_iter))
+            list_node = self._get_list_rest_value(list_iter)
+
+        return values
         
+    def _get_list_first_value(self, list_iter):
+        for triple in list_iter:
+            if RDF.first == triple[1]:
+                return triple[2]
+            
+    def _get_list_rest_value(self, list_iter):
+        for triple in list_iter:
+            if RDF.rest == triple[1]:
+                return triple[2]
+            
+    def _parseLabel(self, entity, prop, value):
+        entity = Symbol(self._parse_name(entity))
+        entity_name = Constant(self._parse_name(value))
+        x = Symbol.fresh()
+        ant = entity(x)
+        label = Symbol(self._parse_name(prop))
+        con = label(x, entity_name)
+
+        self.parsed_constraints.append(RightImplication(ant, con))
+        
+    def _parsePrefLabel(self, entity, prop, value):
+        entity = Symbol(self._parse_name(entity))
+        entity_name = Constant(self._parse_name(value))
+        x = Symbol.fresh()
+        ant = entity(x)
+        label = Symbol(self._parse_name(prop))
+        con = label(x, entity_name)
+        self.parsed_constraints.append(RightImplication(ant, con))
+        
+    def _parseAltLabel(self, entity, prop, value):
+        entity = Symbol(self._parse_name(entity))
+        entity_name = Constant(self._parse_name(value))
+        x = Symbol.fresh()
+        ant = entity(x)
+        label = Symbol(self._parse_name(prop))
+        con = label(x, entity_name)
+
+        self.parsed_constraints.append(RightImplication(ant, con))
+        
+    def _parseHasTopConcept(self, entity, prop, value):
+        entity = Symbol(self._parse_name(entity))
+        entity_name = Constant(self._parse_name(value))
+        x = Symbol.fresh()
+        ant = entity(x)
+        topConcept = Symbol(self._parse_name(prop))
+        con = topConcept(x, entity_name)
+
+        self.parsed_constraints.append(RightImplication(ant, con))
+        
+    def _parseEnumeratedClass(self, entity, prop, value):
+        warnings.warn('Not implemented yet: EnumeratedClass')
+        
+    def _parseEquivalentClass(self, entity, prop, value):
+        # No se puede implementar en DL?, <->?
+        warnings.warn('Not implemented yet: EquivalentClass')
+
+    def _parseDisjointClass(self, entity, prop, value):
+        # inconsistent(C, D) :− disjointWith(C, D), type(X, C), type(X, D).
+        warnings.warn('Not implemented yet: DisjointClass')
+        
+    def _parseProperty(self, entity, prop, value):
+        pass
