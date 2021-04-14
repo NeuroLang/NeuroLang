@@ -270,17 +270,17 @@ def find_separator_variables(query, symbol_table):
 def extract_probabilistic_root_variables(formulas, symbol_table):
     candidates = None
     for formula in formulas:
-        atoms = OrderedSet(
+        probabilistic_atoms = OrderedSet(
             atom
             for atom in extract_logic_atoms(formula)
             if not is_deterministic(atom, symbol_table)
         )
-        if len(atoms) == 0:
+        if len(probabilistic_atoms) == 0:
             continue
         root_variables = reduce(
             lambda y, x: set(x.args) & y,
-            atoms[1:],
-            set(atoms[0].args)
+            probabilistic_atoms[1:],
+            set(probabilistic_atoms[0].args)
         )
         if candidates is None:
             candidates = root_variables
