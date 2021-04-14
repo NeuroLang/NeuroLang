@@ -1,10 +1,9 @@
 import logging
+from collections import namedtuple
 from functools import lru_cache, reduce
 from itertools import chain, combinations
 
 import numpy as np
-
-from neurolang.exceptions import NeuroLangException
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
@@ -13,6 +12,7 @@ from ..datalog.expression_processing import (
     flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
+from ..exceptions import NeuroLangException, NonLiftableException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
@@ -48,13 +48,14 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
-from ..utils import log_performance, OrderedSet
+from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .dichotomy_theorem_based_solver import (
     RAQueryOptimiser,
     lift_optimization_for_choice_predicates,
     shatter_easy_probfacts
 )
+from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticFactSet,
@@ -112,7 +113,9 @@ def dalvi_suciu_lift(rule, symbol_table):
     rule_cnf = minimize_ucq_in_cnf(rule)
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
-        return components_plan(connected_components, rap.NaturalJoin, symbol_table)
+        return components_plan(
+            connected_components, rap.NaturalJoin, symbol_table
+        )
     elif len(rule_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
@@ -463,15 +466,19 @@ def solve_succ_query(query, cpl_program):
             cpl_program, flat_query_body
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
-        shattered_query = symbolic_shattering(unified_query, symbol_table)
+        try:
+            shattered_query = symbolic_shattering(unified_query, symbol_table)
+        except NotEasilyShatterableError:
+            shattered_query = unified_query
         ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
                 "Query not liftable %s",
                 shattered_query
             )
-            raise NeuroLangException(
-                "Query not hierarchical, algorithm can't be applied"
+            raise NonLiftableException(
+                "Query %s not liftable, algorithm can't be applied",
+                query
             )
         ra_query = RAQueryOptimiser().walk(ra_query)
 
