@@ -10,11 +10,13 @@ from . import (
     TRUE,
     Conjunction,
     Disjunction,
+    ExistentialPredicate,
     Implication,
     LogicOperator,
+    NaryLogicOperator,
     Negation,
     Quantifier,
-    Union,
+    Union
 )
 
 
@@ -323,3 +325,46 @@ def extract_logic_atoms(expression):
     """
     edp = ExtractLogicAtoms()
     return edp.walk(expression)
+
+
+def has_existential_quantifiers(query):
+    """Check if the logic expression has
+    existentially-quantified variables
+
+    Parameters
+    ----------
+    query : LogicExpression
+        Logic expression to check wether existential
+        quantifiers exists inside.
+
+    Returns
+    -------
+    bool
+        True if and only if there is an existentially-quantified variable
+        in the expression.
+    """
+    return HasExistentialPredicates().walk(query)
+
+
+class HasExistentialPredicates(PatternWalker):
+    @add_match(FunctionApplication)
+    def function_application(self, expression):
+        return False
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, expression):
+        return True
+
+    @add_match(NaryLogicOperator)
+    def nary(self, expression):
+        return any(
+            self.walk(f)
+            for f in expression.formulas
+        )
+
+    @add_match(LogicOperator)
+    def operator(self, expression):
+        return any(
+            self.walk(f)
+            for f in expression.unapply()
+        )
