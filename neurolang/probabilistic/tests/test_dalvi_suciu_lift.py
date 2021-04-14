@@ -80,7 +80,7 @@ def test_has_separator_variable_existential():
         Disjunction((B(x, y), Conjunction((A(y), B(x, y))), C(y)))
     )
 
-    sv, _ = dalvi_suciu_lift.find_separator_variables(expression)
+    sv, _ = dalvi_suciu_lift.find_separator_variables(expression, {})
     assert sv == {y}
 
     expression = ExistentialPredicate(
@@ -88,12 +88,12 @@ def test_has_separator_variable_existential():
         Disjunction((B(x, y), Conjunction((A(y), B(y, x))), C(y)))
     )
 
-    sv, _ = dalvi_suciu_lift.find_separator_variables(expression)
+    sv, _ = dalvi_suciu_lift.find_separator_variables(expression, {})
     assert sv == set()
 
     expression = Disjunction((B(x, y), Conjunction((A(y), B(x, y))), C(y)))
 
-    sv, _ = dalvi_suciu_lift.find_separator_variables(expression)
+    sv, _ = dalvi_suciu_lift.find_separator_variables(expression, {})
     assert sv == set()
 
     R = Symbol('R')
@@ -115,8 +115,8 @@ def test_has_separator_variable_existential():
         ))
     ))
 
-    assert dalvi_suciu_lift.has_separator_variables(expression)
-    assert dalvi_suciu_lift.find_separator_variables(expression)[0] & {x1, x2}
+    assert dalvi_suciu_lift.has_separator_variables(expression, {})
+    assert dalvi_suciu_lift.find_separator_variables(expression, {})[0] & {x1, x2}
 
 
 def test_lifted_bcq_fig_4_():
@@ -134,7 +134,7 @@ def test_lifted_bcq_fig_4_():
          R(z, x1), S(x1, y1), T(z, x2), S(x2, y2)
     )))
 
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq)
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -146,7 +146,7 @@ def test_lifed_separator_variable():
     z = Symbol('z')
 
     cq = Implication(Q(z), R(x1, z))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq)
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -161,7 +161,7 @@ def test_lifted_join():
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x1, x2), T(x1, z))))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq)
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -175,7 +175,7 @@ def test_another_liftable_join():
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x1, x2), S(x1, z))))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq)
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -189,7 +189,7 @@ def test_non_liftable_join():
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x2, x1), S(x1, z))))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq)
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert not res
 
@@ -210,7 +210,7 @@ def test_lifted_bcq_fig_4_4():
          R(z, x1), S(x1, y1), T(z, x2), U(x2, y2)
     )))
 
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq)
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -234,7 +234,7 @@ def test_lifted_cq_fig_4_5():
         Conjunction((R(z, x3), T(z, y3))),
     )))
 
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq)
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -438,7 +438,7 @@ def test_intractable_queries():
         )
     )
     for h in (h0, h1, h2, h3):
-        plan = dalvi_suciu_lift.dalvi_suciu_lift(h)
+        plan = dalvi_suciu_lift.dalvi_suciu_lift(h, {})
         assert not dalvi_suciu_lift.is_pure_lifted_plan(plan)
 
 
@@ -476,7 +476,7 @@ def test_example_4_6_a_really_simple_query():
         ),
         tuple(),
     )
-    resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query)
+    resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
     assert resulting_plan == expected_plan
 
 
@@ -583,5 +583,5 @@ def test_example_4_7_a_query_with_self_joins():
         ),
         (1, 1, 1),
     )
-    resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query)
+    resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
     assert resulting_plan == expected_plan
