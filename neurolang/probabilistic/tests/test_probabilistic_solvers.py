@@ -12,16 +12,20 @@ from ...relational_algebra import (
     FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     RenameColumn,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
-from .. import dichotomy_theorem_based_solver, weighted_model_counting
+from .. import (
+    dalvi_suciu_lift,
+    dichotomy_theorem_based_solver,
+    weighted_model_counting
+)
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
 from ..dichotomy_theorem_based_solver import ProbSemiringSolver
 from ..exceptions import (
     NotEasilyShatterableError,
-    NotHierarchicalQueryException,
+    NotHierarchicalQueryException
 )
 
 try:
@@ -52,8 +56,11 @@ c = Constant("c")
 
 
 @pytest.fixture(
-    params=((weighted_model_counting, dichotomy_theorem_based_solver)),
-    ids=["SDD-WMC", "dichotomy-Safe query"],
+    params=((
+        weighted_model_counting, dichotomy_theorem_based_solver,
+        dalvi_suciu_lift
+    )),
+    ids=["SDD-WMC", "dichotomy-Safe query", "dalvi-suciu"],
 )
 def solver(request):
     return request.param

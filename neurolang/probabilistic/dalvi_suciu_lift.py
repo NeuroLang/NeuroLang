@@ -4,6 +4,8 @@ from itertools import chain, combinations
 
 import numpy as np
 
+from neurolang.exceptions import NeuroLangException
+
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
@@ -11,9 +13,15 @@ from ..datalog.expression_processing import (
     flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import PatternWalker, add_match
-from ..expressions import FunctionApplication
+from ..expression_walker import (
+    PatternWalker,
+    ReplaceExpressionWalker,
+    add_match
+)
+from ..expressions import FunctionApplication, Symbol
 from ..logic import (
+    FALSE,
+    Conjunction,
     Disjunction,
     ExistentialPredicate,
     Implication,
@@ -32,13 +40,26 @@ from ..logic.transformations import (
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
+    ColumnStr,
+    NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     RelationalAlgebraOperation,
-    UnaryRelationalAlgebraOperation
+    UnaryRelationalAlgebraOperation,
+    str2columnstr_constant
 )
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import log_performance
 from .containment import is_contained
-from .dichotomy_theorem_based_solver import ProbSemiringSolver
+from .dichotomy_theorem_based_solver import (
+    RAQueryOptimiser,
+    lift_optimization_for_choice_predicates,
+    shatter_easy_probfacts
+)
+from .probabilistic_ra_utils import (
+    ProbabilisticFactSet,
+    generate_probabilistic_symbol_table_for_query
+)
+from .probabilistic_semiring_solver import ProbSemiringSolver
 from .transforms import (
     convert_rule_to_ucq,
     minimize_ucq_in_cnf,
@@ -269,9 +290,15 @@ def separator_variable_plan(expression):
     return rap.Projection(
         rap.Projection(
             dalvi_suciu_lift(expression),
-            tuple(variables_to_project | svs)
+            tuple(
+                str2columnstr_constant(v.name)
+                for v in (variables_to_project | svs)
+            )
         ),
-        tuple(variables_to_project)
+        tuple(
+            str2columnstr_constant(v.name)
+            for v in variables_to_project
+        )
     )
 
 
@@ -411,24 +438,14 @@ def solve_succ_query(query, cpl_program):
             cpl_program, flat_query_body
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
-        shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
-        shattered_query_probabilistic_body = Conjunction(
-            tuple(
-                atom
-                for atom in extract_logic_atoms(shattered_query.antecedent)
-                if isinstance(
-                    atom.functor,
-                    (ProbabilisticChoiceSet, ProbabilisticFactSet),
-                )
-            )
-        )
+        shattered_query = symbolic_shattering(unified_query, symbol_table)
         ra_query = dalvi_suciu_lift(shattered_query)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
                 "Query not liftable %s",
-                shattered_query_probabilistic_body.formulas,
+                shattered_query
             )
-            raise NotHierarchicalQueryException(
+            raise NeuroLangException(
                 "Query not hierarchical, algorithm can't be applied"
             )
         ra_query = RAQueryOptimiser().walk(ra_query)
@@ -438,3 +455,21 @@ def solve_succ_query(query, cpl_program):
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result
+
+
+def symbolic_shattering(unified_query, symbol_table):
+    shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
+    inverted_symbol_table = {v: k for k, v in symbol_table.items()}
+    for atom in extract_logic_atoms(shattered_query):
+        functor = atom.functor
+        if isinstance(functor, ProbabilisticFactSet):
+            if functor not in inverted_symbol_table:
+                s = Symbol.fresh()
+                inverted_symbol_table[functor] = s
+                symbol_table[s] = functor
+
+    shattered_query = (
+            ReplaceExpressionWalker(inverted_symbol_table)
+            .walk(shattered_query)
+    )
+    return shattered_query
