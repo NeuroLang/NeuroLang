@@ -126,9 +126,8 @@ class NonLiftable(RelationalAlgebraOperation):
 
 
 def minimize_rule_in_cnf(query):
-    query = convert_to_cnf_rule(query)
+    query = convert_to_cnf_e_query(query)
     head_variables = extract_logic_free_variables(query)
-    query = MakeExistentialsImplicit().walk(query)
     cq_d_min = Conjunction(tuple(
         minimize_component_disjunction(c)
         for c in query.formulas
@@ -141,16 +140,13 @@ def minimize_rule_in_cnf(query):
     )
 
     cq_min = minimize_component_conjunction(cq_d_min)
-
-    for v in extract_logic_free_variables(cq_min) - head_variables:
-        cq_min = ExistentialPredicate(v, cq_min)
+    cq_min = add_existentials_except(cq_min, head_variables)
     return simplify.walk(cq_min)
 
 
 def minimize_rule_in_dnf(query):
-    query = convert_to_dnf_rule(query)
+    query = convert_to_dnf_e_query(query)
     head_variables = extract_logic_free_variables(query)
-    query = MakeExistentialsImplicit().walk(query)
     cq_d_min = Disjunction(tuple(
         minimize_component_conjunction(c)
         for c in query.formulas
@@ -163,8 +159,7 @@ def minimize_rule_in_dnf(query):
     )
 
     cq_min = minimize_component_disjunction(cq_d_min)
-    for v in extract_logic_free_variables(cq_min) - head_variables:
-        cq_min = ExistentialPredicate(v, cq_min)
+    cq_min = add_existentials_except(cq_min, head_variables)
     return simplify.walk(cq_min)
 
 
@@ -197,6 +192,19 @@ def mobius_function(formula, formula_containments, known_weights=None):
 
 
 def convert_rule_to_e_query(implication):
+    """Convert datalog rule to logic ∃ query.
+
+    Parameters
+    ----------
+    expression : Implication
+        Datalog rule.
+
+    Returns
+    -------
+    LogicExpression
+       ∃ query with the same ground set as the
+       input datalog rule.
+    """
     implication = RTO.walk(implication)
     consequent, antecedent = implication.unapply()
     head_vars = set(consequent.args)
@@ -209,7 +217,20 @@ def convert_rule_to_e_query(implication):
     return RTO.walk(PED.walk(antecedent))
 
 
-def convert_to_cnf_rule(expression):
+def convert_to_cnf_e_query(expression):
+    """Convert logic ∃ query to
+    conjunctive normal from (CNF).
+
+    Parameters
+    ----------
+    expression : LogicExpression
+        ∃ query.
+
+    Returns
+    -------
+    LogicExpression
+       equivalent ∃ query in CNF form.
+    """
     expression = RTO.walk(expression)
     expression = Conjunction((expression,))
     c = ChainedWalker(
@@ -221,7 +242,20 @@ def convert_to_cnf_rule(expression):
     return c.walk(expression)
 
 
-def convert_to_dnf_rule(expression):
+def convert_to_dnf_e_query(expression):
+    """Convert logic ∃ query to
+    disjunctive normal from (DNF).
+
+    Parameters
+    ----------
+    expression : LogicExpression
+        ∃ query.
+
+    Returns
+    -------
+    LogicExpression
+       equivalent ∃ query in DNF form.
+    """
     expression = RTO.walk(expression)
     expression = Disjunction((expression,))
     c = ChainedWalker(
@@ -300,31 +334,26 @@ def powerset(iterable):
 @lru_cache
 def find_separator_variables(query):
     '''
-    According to Dalvi and Suciu [1]_ if `query` is in DNF,
-    a variable z is called a separator variable if Q starts with ∃z,
-    that is, Q = ∃z.Q1, for some query expression Q1, and (a) z
-    is a root variable (i.e. it appears in every atom),
-    (b) for every relation symbol R, there exists an attribute (R, iR)
-    such that every atom with symbol R has z in position iR. This is
-    equivalent, in datalog syntax, to Q ≡ Q0←∃z.Q1.
-
-    Also, according to Suciu [2]_ the dual is also true,
-    if `query` is in CNF i.e. the separation variable z needs to
-    be universally quantified, that is Q = ∀x.Q1.
+    According to Dalvi and Suciu [1]_ if `query` is rewritten in prenex
+    normal form (PNF) with a DNF matrix, then a variable z is called a
+    separator variable if Q starts with ∃z that is, Q = ∃z.Q1, for some
+    query expression Q1, and:
+      a. z is a root variable (i.e. it appears in every atom); and
+      b. for every relation symbol R in Q1, there exists an attribute (R, iR)
+      such that every atom with symbol R has z in position iR.
 
     This algorithm assumes that Q1 can't be splitted into independent
     formulas.
 
-    [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
+    .. [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
-    [2] Suciu, D. Probabilistic Databases for All. in Proceedings of the
+    .. [2] Suciu, D. Probabilistic Databases for All. in Proceedings of the
     39th ACM SIGMOD-SIGACT-SIGAI Symposium on Principles of Database Systems
     19–31 (ACM, 2020).
     '''
     exclude_variables = extract_logic_free_variables(query)
     query = convert_to_pnf_with_dnf_matrix(query)
     query = _unify_existential_variables(query)
-    query = MakeExistentialsImplicit().walk(query)
 
     if isinstance(query, NaryLogicOperator):
         formulas = query.formulas

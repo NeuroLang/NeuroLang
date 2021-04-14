@@ -138,6 +138,18 @@ def test_lifted_bcq_fig_4_():
     assert res
 
 
+def test_lifed_separator_variable():
+    Q = Symbol('Q')
+    R = Symbol('R')
+    x1 = Symbol('x1')
+    z = Symbol('z')
+
+    cq = Implication(Q(z), R(x1, z))
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq)
+    res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
+    assert res
+
+
 def test_lifted_join():
     Q = Symbol('Q')
     R = Symbol('R')
