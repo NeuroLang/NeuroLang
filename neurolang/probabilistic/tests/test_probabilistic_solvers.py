@@ -1,3 +1,4 @@
+from neurolang.exceptions import NonLiftableException
 import operator
 
 import numpy as np
@@ -508,6 +509,8 @@ def test_repeated_antecedent_predicate_symbol(solver):
 
     if solver is dichotomy_theorem_based_solver:
         context = pytest.raises(NotEasilyShatterableError)
+    elif solver is dalvi_suciu_lift:
+        context = pytest.raises(NonLiftableException)
     else:
         context = nullcontext()
 
