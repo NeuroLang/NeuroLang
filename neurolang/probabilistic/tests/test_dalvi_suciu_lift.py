@@ -12,60 +12,8 @@ from ...relational_algebra import (
     Projection, NameColumns, NaturalJoin, ColumnInt, ColumnStr, Union
 )
 from ...relational_algebra_provenance import WeightedNaturalJoin
-from pytest import mark
 
 TNRA = TranslateToNamedRA()
-
-
-class SymbolFactory:
-    def __getattribute__(self, name):
-        return Symbol(name)
-
-
-S = SymbolFactory()
-
-
-@mark.skip
-def test_sort_independent_splits_trivial():
-    A = Symbol('A')
-    B = Symbol('B')
-    C = Symbol('C')
-    x = Symbol('x')
-
-    for expression in (
-        Disjunction((A(x), B(x), C(x))),
-        Disjunction((Conjunction((A(x), B(x))), C(x)))
-    ):
-        res, splittable = \
-            dalvi_suciu_lift.compute_syntactically_independent_splits_if_possible(
-                expression,
-                Disjunction
-            )
-        assert splittable
-        assert res == expression
-
-
-@mark.skip
-def test_sort_independent_splits():
-    A = Symbol('A')
-    B = Symbol('B')
-    C = Symbol('C')
-    x = Symbol('x')
-
-    expression = Disjunction((A(x), Conjunction((A(x), B(x))), C(x)))
-    res, splittable = \
-        dalvi_suciu_lift.compute_syntactically_independent_splits_if_possible(
-            expression,
-            Disjunction
-        )
-    assert splittable
-    assert (
-        set(res.formulas) ==
-        set((
-            Disjunction((A(x), Conjunction((A(x), B(x))))),
-            C(x)
-        ))
-    )
 
 
 def test_has_separator_variable_existential():
