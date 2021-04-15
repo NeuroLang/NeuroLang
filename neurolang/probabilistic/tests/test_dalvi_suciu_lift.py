@@ -537,3 +537,55 @@ def test_example_4_7_a_query_with_self_joins():
     )
     resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
     assert ra_exp_commutative_equal(resulting_plan, expected_plan)
+
+
+def test_example_4_8_tractable_query_intractable_subquery():
+    """
+    We test the query
+
+        R(x1), S(x1, y1) ∨ S(x2, y2), T(y2) ∨ R(x3), T(y3)
+
+    whose first two disjuncts correspond to the hard H1 query, but the third
+    disjunct makes the query tractable by using distributivity and logical
+    equivalence.
+
+    """
+    R = Symbol("R")
+    S = Symbol("S")
+    T = Symbol("T")
+    x1 = Symbol("x1")
+    x2 = Symbol("x2")
+    x3 = Symbol("x3")
+    y1 = Symbol("y1")
+    y2 = Symbol("y2")
+    y3 = Symbol("y3")
+    query = Disjunction(
+        (
+            ExistentialPredicate(
+                x1,
+                Conjunction(
+                    (
+                        R(x1),
+                        ExistentialPredicate(y1, S(x1, y1)),
+                    )
+                ),
+            ),
+            ExistentialPredicate(
+                y2,
+                Conjunction(
+                    (
+                        ExistentialPredicate(x2, S(x2, y2)),
+                        T(y2),
+                    )
+                ),
+            ),
+            Conjunction(
+                (
+                    ExistentialPredicate(x3, R(x3)),
+                    ExistentialPredicate(y3, T(y3)),
+                )
+            ),
+        )
+    )
+    resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
+    assert dalvi_suciu_lift.is_pure_lifted_plan(resulting_plan)
