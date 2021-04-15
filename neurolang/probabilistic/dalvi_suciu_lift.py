@@ -355,19 +355,7 @@ def symbol_connected_components(expression):
             "for n-ary logic operators."
         )
     c_matrix = symbol_co_occurence_graph(expression)
-    formula_idxs = set(range(len(expression.formulas)))
-    components = []
-    while formula_idxs:
-        idx = formula_idxs.pop()
-        component = {idx}
-        component_follow = [idx]
-        while component_follow:
-            idx = component_follow.pop()
-            idxs = set(c_matrix[idx].nonzero()[0]) - component
-            component |= idxs
-            component_follow += idxs
-        components.append(component)
-        formula_idxs -= component
+    components = connected_components(c_matrix)
 
     operation = type(expression)
     return [
@@ -376,7 +364,52 @@ def symbol_connected_components(expression):
     ]
 
 
+def connected_components(adjacency_matrix):
+    """Connected components of an undirected graph.
+
+    Parameters
+    ----------
+    adjacency_matrix : numpy.ndarray
+        squared array representing the adjacency
+        matrix of an undirected graph.
+
+    Returns
+    -------
+    list of integer sets
+        connected components of the graph.
+    """
+    node_idxs = set(range(adjacency_matrix.shape[0]))
+    components = []
+    while node_idxs:
+        idx = node_idxs.pop()
+        component = {idx}
+        component_follow = [idx]
+        while component_follow:
+            idx = component_follow.pop()
+            idxs = set(adjacency_matrix[idx].nonzero()[0]) - component
+            component |= idxs
+            component_follow += idxs
+        components.append(component)
+        node_idxs -= component
+    return components
+
+
 def symbol_co_occurence_graph(expression):
+    """Symbol co-ocurrence graph expressed as
+    an adjacency matrix.
+
+    Parameters
+    ----------
+    expression : NAryLogicExpression
+        logic expression for which the adjacency matrix is computed.
+
+    Returns
+    -------
+    numpy.ndarray
+        squared binary array where a component is 1 if there is a
+        shared predicate symbol between two subformulas of the
+        logic expression.
+    """
     c_matrix = np.zeros((len(expression.formulas),) * 2)
     for i, formula in enumerate(expression.formulas):
         atom_symbols = set(a.functor for a in extract_logic_atoms(formula))
@@ -385,6 +418,32 @@ def symbol_co_occurence_graph(expression):
                 a.functor for a in extract_logic_atoms(formula_)
             )
             if not atom_symbols.isdisjoint(atom_symbols_):
+                c_matrix[i, i + 1 + j] = 1
+                c_matrix[i + 1 + j, i] = 1
+    return c_matrix
+
+
+def variable_co_occurrence_graph(expression):
+    """Free variable co-ocurrence graph expressed as
+    an adjacency matrix.
+
+    Parameters
+    ----------
+    expression : NAryLogicExpression
+        logic expression for which the adjacency matrixis computed.
+
+    Returns
+    -------
+    numpy.ndarray
+        squared binary array where a component is 1 if there is a
+        shared free variable between two subformulas of the logic expression.
+    """
+    c_matrix = np.zeros((len(expression.formulas),) * 2)
+    for i, formula in enumerate(expression.formulas):
+        free_variables = extract_logic_free_variables(formula)
+        for j, formula_ in enumerate(expression.formulas[i + 1:]):
+            free_variables_ = extract_logic_free_variables(formula_)
+            if not free_variables.isdisjoint(free_variables_):
                 c_matrix[i, i + 1 + j] = 1
                 c_matrix[i + 1 + j, i] = 1
     return c_matrix
