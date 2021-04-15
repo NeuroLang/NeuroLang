@@ -12,6 +12,7 @@ from ...relational_algebra import (
     Projection, NameColumns, NaturalJoin, ColumnInt, ColumnStr, Union
 )
 from ...relational_algebra_provenance import WeightedNaturalJoin
+from ...utils.testing.ra import ra_exp_commutative_equal
 
 TNRA = TranslateToNamedRA()
 
@@ -428,7 +429,7 @@ def test_example_4_6_a_really_simple_query():
         tuple(),
     )
     resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
-    assert resulting_plan == expected_plan
+    assert ra_exp_commutative_equal(expected_plan, resulting_plan)
 
 
 def test_example_4_7_a_query_with_self_joins():
@@ -474,13 +475,13 @@ def test_example_4_7_a_query_with_self_joins():
                                     ),
                                     (col_x2, col_y2),
                                 ),
-                                (x2, y2),
+                                (col_x2, col_y2),
                             ),
-                            (x2,)
+                            (col_x2,)
                         ),
                         NameColumns(Projection(T, (col_0,)), (col_x2,)),
                     ),
-                    (x2,),
+                    (col_x2,),
                 ),
                 tuple(),
             ),
@@ -496,13 +497,13 @@ def test_example_4_7_a_query_with_self_joins():
                                     ),
                                     (col_x1, col_y1),
                                 ),
-                                (x1, y1),
+                                (col_x1, col_y1),
                             ),
-                            (x1,)
+                            (col_x1,)
                         ),
                         NameColumns(Projection(R, (col_0,)), (col_x1,)),
                     ),
-                    (x1,),
+                    (col_x1,),
                 ),
                 tuple(),
             ),
@@ -516,18 +517,18 @@ def test_example_4_7_a_query_with_self_joins():
                                         S,
                                         (col_0, col_1),
                                     ),
-                                    (col_x1, col_y1),
+                                    (col_x2, col_y2),
                                 ),
-                                (x1, y1),
+                                (col_x2, col_y2),
                             ),
-                            (x1,)
+                            (col_x2,)
                         ),
                         Union(
-                            NameColumns(Projection(T, (col_0,)), (col_x1,)),
-                            NameColumns(Projection(R, (col_0,)), (col_x1,)),
+                            NameColumns(Projection(T, (col_0,)), (col_x2,)),
+                            NameColumns(Projection(R, (col_0,)), (col_x2,)),
                         ),
                     ),
-                    (x1,),
+                    (col_x2,),
                 ),
                 tuple(),
             ),
@@ -535,4 +536,4 @@ def test_example_4_7_a_query_with_self_joins():
         (1, 1, 1),
     )
     resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
-    assert resulting_plan == expected_plan
+    assert ra_exp_commutative_equal(resulting_plan, expected_plan)
