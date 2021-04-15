@@ -415,16 +415,16 @@ def test_example_4_6_a_really_simple_query():
                             Projection(S, (col_0, col_1)),
                             (col_x, col_y),
                         ),
-                        (x, y),
+                        (col_x, col_y),
                     ),
-                    (x,),
+                    (col_x,),
                 ),
                 NameColumns(
                     Projection(R, (col_0,)),
                     (col_x,)
                 )
             ),
-            (x,),
+            (col_x,),
         ),
         tuple(),
     )
