@@ -31,10 +31,7 @@ from ..logic.expression_processing import (
     extract_logic_free_variables
 )
 from ..logic.transformations import (
-    GuaranteeConjunction,
-    GuaranteeDisjunction,
     MakeExistentialsImplicit,
-    PushExistentialsDown,
     RemoveTrivialOperations
 )
 from ..relational_algebra import (
@@ -42,7 +39,6 @@ from ..relational_algebra import (
     ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
-    RelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
@@ -57,6 +53,7 @@ from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticFactSet,
+    NonLiftable,
     generate_probabilistic_symbol_table_for_query
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
@@ -73,19 +70,78 @@ LOG = logging.getLogger(__name__)
 
 __all__ = [
     "dalvi_suciu_lift",
+    "solve_succ_query"
 ]
 
-GC = GuaranteeConjunction()
-GD = GuaranteeDisjunction()
-PED = PushExistentialsDown()
 RTO = RemoveTrivialOperations()
 
 
-def is_deterministic(atom, symbol_table):
-    return isinstance(
-        symbol_table.get(atom.functor, None),
-        DeterministicFactSet
-    )
+def solve_succ_query(query, cpl_program):
+    """
+    Solve a SUCC query on a CP-Logic program.
+
+    Parameters
+    ----------
+    query : Implication
+        SUCC query of the form `ans(x) :- P(x)`.
+    cpl_program : CPLogicProgram
+        CP-Logic program on which the query should be solved.
+
+    Returns
+    -------
+    ProvenanceAlgebraSet
+        Provenance set labelled with probabilities for each tuple in the result
+        set.
+
+    """
+    with log_performance(
+        LOG,
+        "Preparing query %s",
+        init_args=(query.consequent.functor.name,),
+    ):
+        flat_query_body = flatten_query(query.antecedent, cpl_program)
+
+    if flat_query_body == FALSE or (
+        isinstance(flat_query_body, Conjunction)
+        and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
+    ):
+        return ProvenanceAlgebraSet(
+            NamedRelationalAlgebraFrozenSet(("_p_",)),
+            ColumnStr("_p_"),
+        )
+
+    with log_performance(LOG, "Translation and lifted optimisation"):
+        flat_query_body = enforce_conjunction(
+            lift_optimization_for_choice_predicates(
+                flat_query_body, cpl_program
+            )
+        )
+        flat_query = Implication(query.consequent, flat_query_body)
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl_program, flat_query_body
+        )
+        unified_query = UnifyVariableEqualities().walk(flat_query)
+        try:
+            shattered_query = symbolic_shattering(unified_query, symbol_table)
+        except NotEasilyShatterableError:
+            shattered_query = unified_query
+        ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
+        if not is_pure_lifted_plan(ra_query):
+            LOG.info(
+                "Query not liftable %s",
+                shattered_query
+            )
+            raise NonLiftableException(
+                "Query %s not liftable, algorithm can't be applied",
+                query
+            )
+        ra_query = RAQueryOptimiser().walk(ra_query)
+
+    with log_performance(LOG, "Run RAP query"):
+        solver = ProbSemiringSolver(symbol_table)
+        prob_set_result = solver.walk(ra_query)
+
+    return prob_set_result
 
 
 def dalvi_suciu_lift(rule, symbol_table):
@@ -103,7 +159,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     if (
         isinstance(rule, FunctionApplication) or
         all(
-            is_deterministic(atom, symbol_table)
+            is_atom_a_deterministic_relation(atom, symbol_table)
             for atom in extract_logic_atoms(rule)
         )
     ):
@@ -169,54 +225,10 @@ def has_separator_variables(query, symbol_table):
     svs, expression = find_separator_variables(query, symbol_table)
     if len(svs) > 0:
         return True, separator_variable_plan(
-            svs, expression, symbol_table
+            expression, svs, symbol_table
         )
     else:
         return False, None
-
-
-class NonLiftable(RelationalAlgebraOperation):
-    def __init__(self, non_liftable_query):
-        self.non_liftable_query = non_liftable_query
-
-    def __repr__(self):
-        return (
-            "NonLiftable"
-            f"({self.non_liftable_query})"
-        )
-
-
-def mobius_weights(formula_containments):
-    _mobius_weights = {}
-    for formula in formula_containments:
-        _mobius_weights[formula] = mobius_function(
-            formula, formula_containments, _mobius_weights
-        )
-    return _mobius_weights
-
-
-def mobius_function(formula, formula_containments, known_weights=None):
-    if known_weights is None:
-        known_weights = dict()
-    if formula in known_weights:
-        return known_weights[formula]
-    res = -sum(
-        (
-            known_weights.setdefault(
-                f,
-                mobius_function(f, formula_containments)
-            )
-            for f in formula_containments[formula]
-            if f != formula
-        ),
-        -1
-    )
-    return res
-
-
-def powerset(iterable):
-    s = list(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
 
 
 def find_separator_variables(query, symbol_table):
@@ -273,7 +285,7 @@ def extract_probabilistic_root_variables(formulas, symbol_table):
         probabilistic_atoms = OrderedSet(
             atom
             for atom in extract_logic_atoms(formula)
-            if not is_deterministic(atom, symbol_table)
+            if not is_atom_a_deterministic_relation(atom, symbol_table)
         )
         if len(probabilistic_atoms) == 0:
             continue
@@ -323,7 +335,25 @@ def is_pure_lifted_plan(query):
     return IsPureLiftedPlan().walk(query)
 
 
-def separator_variable_plan(separator_variables, expression, symbol_table):
+def separator_variable_plan(expression, separator_variables, symbol_table):
+    """Generate RAP plan for the logic query expression assuming it has
+    the given separator varialbes.
+
+    Parameters
+    ----------
+    expression : LogicExpression
+        expression to generate the plan for.
+    separator_variables : Set[Symbol]
+        separator variables for expression.
+    symbol_table : mapping of symbol to probabilistic table.
+        mapping used to figure out specific strategies according to
+        the probabilistic table type.
+
+    Returns
+    -------
+    RelationalAlgebraOperation
+        plan for the logic expression.
+    """
     variables_to_project = extract_logic_free_variables(expression)
     expression = MakeExistentialsImplicit().walk(expression)
     existentials_to_add = (
@@ -457,6 +487,22 @@ def components_plan(components, operation, symbol_table):
 
 
 def inclusion_exclusion_conjunction(expression, symbol_table):
+    """Produce a RAP query plan for the conjunction logic query
+    based on the inclusion exclusion formula.
+
+    Parameters
+    ----------
+    expression : Conjunction
+        logic expression to produce a plan for.
+    symbol_table : mapping of symbol to probabilistic table.
+        mapping used to figure out specific strategies according to
+        the probabilistic table type.
+
+    Returns
+    -------
+    RelationalAlgebraOperation
+        plan for the logic expression.
+    """
     formula_powerset = []
     for formula in powerset(expression.formulas):
         if len(formula) == 0:
@@ -498,72 +544,37 @@ def _formulas_weights(formula_powerset):
     return formulas_weights
 
 
-def solve_succ_query(query, cpl_program):
-    """
-    Solve a SUCC query on a CP-Logic program.
-
-    Parameters
-    ----------
-    query : Implication
-        SUCC query of the form `ans(x) :- P(x)`.
-    cpl_program : CPLogicProgram
-        CP-Logic program on which the query should be solved.
-
-    Returns
-    -------
-    ProvenanceAlgebraSet
-        Provenance set labelled with probabilities for each tuple in the result
-        set.
-
-    """
-    with log_performance(
-        LOG,
-        "Preparing query %s",
-        init_args=(query.consequent.functor.name,),
-    ):
-        flat_query_body = flatten_query(query.antecedent, cpl_program)
-
-    if flat_query_body == FALSE or (
-        isinstance(flat_query_body, Conjunction)
-        and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
-    ):
-        return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(("_p_",)),
-            ColumnStr("_p_"),
+def mobius_weights(formula_containments):
+    _mobius_weights = {}
+    for formula in formula_containments:
+        _mobius_weights[formula] = mobius_function(
+            formula, formula_containments, _mobius_weights
         )
+    return _mobius_weights
 
-    with log_performance(LOG, "Translation and lifted optimisation"):
-        flat_query_body = enforce_conjunction(
-            lift_optimization_for_choice_predicates(
-                flat_query_body, cpl_program
-            )
-        )
-        flat_query = Implication(query.consequent, flat_query_body)
-        symbol_table = generate_probabilistic_symbol_table_for_query(
-            cpl_program, flat_query_body
-        )
-        unified_query = UnifyVariableEqualities().walk(flat_query)
-        try:
-            shattered_query = symbolic_shattering(unified_query, symbol_table)
-        except NotEasilyShatterableError:
-            shattered_query = unified_query
-        ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
-        if not is_pure_lifted_plan(ra_query):
-            LOG.info(
-                "Query not liftable %s",
-                shattered_query
-            )
-            raise NonLiftableException(
-                "Query %s not liftable, algorithm can't be applied",
-                query
-            )
-        ra_query = RAQueryOptimiser().walk(ra_query)
 
-    with log_performance(LOG, "Run RAP query"):
-        solver = ProbSemiringSolver(symbol_table)
-        prob_set_result = solver.walk(ra_query)
+def mobius_function(formula, formula_containments, known_weights=None):
+    if known_weights is None:
+        known_weights = dict()
+    if formula in known_weights:
+        return known_weights[formula]
+    res = -sum(
+        (
+            known_weights.setdefault(
+                f,
+                mobius_function(f, formula_containments)
+            )
+            for f in formula_containments[formula]
+            if f != formula
+        ),
+        -1
+    )
+    return res
 
-    return prob_set_result
+
+def powerset(iterable):
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
 
 
 def symbolic_shattering(unified_query, symbol_table):
@@ -582,3 +593,10 @@ def symbolic_shattering(unified_query, symbol_table):
             .walk(shattered_query)
     )
     return shattered_query
+
+
+def is_atom_a_deterministic_relation(atom, symbol_table):
+    return isinstance(
+        symbol_table.get(atom.functor, None),
+        DeterministicFactSet
+    )
