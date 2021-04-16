@@ -12,7 +12,6 @@ from ...relational_algebra import (
     Projection, NameColumns, NaturalJoin, ColumnInt, ColumnStr, Union
 )
 from ...relational_algebra_provenance import WeightedNaturalJoin
-from ...utils.testing.ra import ra_exp_commutative_equal
 
 TNRA = TranslateToNamedRA()
 
@@ -406,30 +405,8 @@ def test_example_4_6_a_really_simple_query():
     query = ExistentialPredicate(
         x, Conjunction((R(x), ExistentialPredicate(y, S(x, y))))
     )
-    expected_plan = Projection(
-        Projection(
-            NaturalJoin(
-                Projection(
-                    Projection(
-                        NameColumns(
-                            Projection(S, (col_0, col_1)),
-                            (col_x, col_y),
-                        ),
-                        (col_x, col_y),
-                    ),
-                    (col_x,),
-                ),
-                NameColumns(
-                    Projection(R, (col_0,)),
-                    (col_x,)
-                )
-            ),
-            (col_x,),
-        ),
-        tuple(),
-    )
     resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
-    assert ra_exp_commutative_equal(expected_plan, resulting_plan)
+    assert dalvi_suciu_lift.is_pure_lifted_plan(resulting_plan)
 
 
 def test_example_4_7_a_query_with_self_joins():
@@ -461,82 +438,8 @@ def test_example_4_7_a_query_with_self_joins():
         ),
     )
     query = Conjunction((Q1, Q2))
-    expected_plan = WeightedNaturalJoin(
-        (
-            Projection(
-                Projection(
-                    NaturalJoin(
-                        Projection(
-                            Projection(
-                                NameColumns(
-                                    Projection(
-                                        S,
-                                        (col_0, col_1),
-                                    ),
-                                    (col_x2, col_y2),
-                                ),
-                                (col_x2, col_y2),
-                            ),
-                            (col_x2,)
-                        ),
-                        NameColumns(Projection(T, (col_0,)), (col_x2,)),
-                    ),
-                    (col_x2,),
-                ),
-                tuple(),
-            ),
-            Projection(
-                Projection(
-                    NaturalJoin(
-                        Projection(
-                            Projection(
-                                NameColumns(
-                                    Projection(
-                                        S,
-                                        (col_0, col_1),
-                                    ),
-                                    (col_x1, col_y1),
-                                ),
-                                (col_x1, col_y1),
-                            ),
-                            (col_x1,)
-                        ),
-                        NameColumns(Projection(R, (col_0,)), (col_x1,)),
-                    ),
-                    (col_x1,),
-                ),
-                tuple(),
-            ),
-            Projection(
-                Projection(
-                    NaturalJoin(
-                        Projection(
-                            Projection(
-                                NameColumns(
-                                    Projection(
-                                        S,
-                                        (col_0, col_1),
-                                    ),
-                                    (col_x2, col_y2),
-                                ),
-                                (col_x2, col_y2),
-                            ),
-                            (col_x2,)
-                        ),
-                        Union(
-                            NameColumns(Projection(T, (col_0,)), (col_x2,)),
-                            NameColumns(Projection(R, (col_0,)), (col_x2,)),
-                        ),
-                    ),
-                    (col_x2,),
-                ),
-                tuple(),
-            ),
-        ),
-        (1, 1, 1),
-    )
     resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
-    assert ra_exp_commutative_equal(resulting_plan, expected_plan)
+    assert dalvi_suciu_lift.is_pure_lifted_plan(resulting_plan)
 
 
 def test_example_4_8_tractable_query_intractable_subquery():
