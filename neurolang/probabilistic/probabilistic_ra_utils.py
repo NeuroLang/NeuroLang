@@ -1,7 +1,9 @@
+from collections import defaultdict
 from typing import AbstractSet
-from ..expressions import Constant, Symbol
-from ..relational_algebra import RelationalAlgebraOperation, ColumnInt
+
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
+from ..expressions import Constant, Symbol
+from ..relational_algebra import ColumnInt, RelationalAlgebraOperation
 
 
 class ProbabilisticFactSet(RelationalAlgebraOperation):
@@ -32,6 +34,7 @@ class NonLiftable(RelationalAlgebraOperation):
         return (
             "NonLiftable"
             f"({self.non_liftable_query})"
+        )
 
 
 def generate_probabilistic_symbol_table_for_query(
