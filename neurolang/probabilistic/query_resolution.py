@@ -152,7 +152,7 @@ def compute_probabilistic_solution(
     marg_prob_solver,
 ):
     solution = MapInstance()
-    cpl = _build_probabilistic_program(
+    cpl, prob_idb = _build_probabilistic_program(
         det_edb, pfact_db, pchoice_edb, prob_idb
     )
     for rule in prob_idb.formulas:
@@ -269,5 +269,4 @@ def _build_probabilistic_program(det_edb, pfact_db, pchoice_edb, prob_idb):
     # solution of their probability and antecedent
     prob_idb = _discard_query_based_probfacts(prob_idb)
     cpl.walk(prob_idb)
-    return cpl
-    return cpl
+    return cpl, prob_idb

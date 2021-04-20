@@ -169,6 +169,7 @@ def dalvi_suciu_lift(rule, symbol_table):
             for atom in extract_logic_atoms(rule)
         )
     ):
+        rule = MakeExistentialsImplicit().walk(rule)
         return TranslateToNamedRA().walk(rule)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
