@@ -335,5 +335,4 @@ def _build_probabilistic_program(
     # solution of their probability and antecedent
     prob_idb = _discard_query_based_probfacts(prob_idb)
     cpl.walk(prob_idb)
-    return cpl
-    return cpl
+    return cpl, prob_idb
