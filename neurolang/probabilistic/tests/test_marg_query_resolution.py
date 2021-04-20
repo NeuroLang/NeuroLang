@@ -4,7 +4,11 @@ from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication
 from ...relational_algebra import ColumnStr, NamedRelationalAlgebraFrozenSet
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
-from .. import dichotomy_theorem_based_solver, weighted_model_counting
+from .. import (
+    dalvi_suciu_lift,
+    dichotomy_theorem_based_solver,
+    weighted_model_counting,
+)
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
 from ..expressions import PROB, Condition, ProbabilisticQuery
@@ -28,8 +32,14 @@ c = Constant("c")
 
 
 @pytest.fixture(
-    params=((weighted_model_counting, dichotomy_theorem_based_solver)),
-    ids=["SDD-WMC", "dichotomy-Safe query"],
+    params=(
+        (
+            weighted_model_counting,
+            dichotomy_theorem_based_solver,
+            dalvi_suciu_lift,
+        )
+    ),
+    ids=["SDD-WMC", "dichotomy-Safe query", "dalvi_suciu_lift"],
 )
 def solver(request):
     return request.param
