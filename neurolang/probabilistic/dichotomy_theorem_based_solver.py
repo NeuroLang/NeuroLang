@@ -62,6 +62,7 @@ from .probabilistic_ra_utils import (
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
 from .shattering import shatter_easy_probfacts
+from .query_resolution import lift_solve_marg_query
 
 LOG = logging.getLogger(__name__)
 
@@ -376,53 +377,4 @@ def _maybe_reintroduce_head_variables(ra_query, flat_query, unified_query):
 
 
 def solve_marg_query(rule, cpl):
-    """
-    Solve a MARG query on a CP-Logic program.
-
-    Parameters
-    ----------
-    query : Implication
-        Consequent must be of type `Condition`.
-        MARG query of the form `ans(x) :- P(x)`.
-    cpl_program : CPLogicProgram
-        CP-Logic program on which the query should be solved.
-
-    Returns
-    -------
-    ProvenanceAlgebraSet
-        Provenance set labelled with probabilities for each tuple in the result
-        set.
-
-    """
-    res_args = tuple(s for s in rule.consequent.args if isinstance(s, Symbol))
-
-    joint_antecedent = Conjunction(
-        tuple(
-            extract_logic_predicates(rule.antecedent.conditioned)
-            | extract_logic_predicates(rule.antecedent.conditioning)
-        )
-    )
-    joint_logic_variables = (
-        extract_logic_free_variables(joint_antecedent) & res_args
-    )
-    joint_rule = Implication(
-        Symbol.fresh()(*joint_logic_variables), joint_antecedent
-    )
-    joint_provset = solve_succ_query(joint_rule, cpl)
-
-    denominator_antecedent = rule.antecedent.conditioning
-    denominator_logic_variables = (
-        extract_logic_free_variables(denominator_antecedent) & res_args
-    )
-    denominator_rule = Implication(
-        Symbol.fresh()(*denominator_logic_variables), denominator_antecedent
-    )
-    denominator_provset = solve_succ_query(denominator_rule, cpl)
-    rapcs = RelationalAlgebraProvenanceCountingSolver()
-    provset = rapcs.walk(
-        Projection(
-            NaturalJoinInverse(joint_provset, denominator_provset),
-            tuple(str2columnstr_constant(s.name) for s in res_args),
-        )
-    )
-    return provset
+    return lift_solve_marg_query(rule, cpl, solve_succ_query)

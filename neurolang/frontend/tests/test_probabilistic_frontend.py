@@ -13,6 +13,7 @@ from ...exceptions import (
     UnsupportedQueryError,
     UnsupportedSolverError,
 )
+from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
     RepeatedTuplesInProbabilisticRelationError,
@@ -23,11 +24,7 @@ from ...utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
 )
-from ..probabilistic_frontend import (
-    NeurolangPDL,
-    lifted_solve_marg_query,
-    lifted_solve_succ_query,
-)
+from ..probabilistic_frontend import NeurolangPDL
 
 
 def assert_almost_equal(set_a, set_b):
@@ -881,8 +878,8 @@ def test_query_without_safe_plan():
 
 def test_query_without_safe_fails():
     nl = NeurolangPDL(
-        probabilistic_solvers=(lifted_solve_succ_query,),
-        probabilistic_marg_solvers=(lifted_solve_marg_query,),
+        probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
+        probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
     )
     nl.add_probabilistic_facts_from_tuples(
         [

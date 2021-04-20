@@ -49,6 +49,7 @@ from .dichotomy_theorem_based_solver import (
     RAQueryOptimiser,
     lift_optimization_for_choice_predicates
 )
+from .query_resolution import lift_solve_marg_query
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
@@ -70,7 +71,8 @@ LOG = logging.getLogger(__name__)
 
 __all__ = [
     "dalvi_suciu_lift",
-    "solve_succ_query"
+    "solve_succ_query",
+    "solve_marg_query",
 ]
 
 RTO = RemoveTrivialOperations()
@@ -142,6 +144,10 @@ def solve_succ_query(query, cpl_program):
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result
+
+
+def solve_marg_query(rule, cpl):
+    return lift_solve_marg_query(rule, cpl, solve_succ_query)
 
 
 def dalvi_suciu_lift(rule, symbol_table):
