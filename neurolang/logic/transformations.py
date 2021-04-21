@@ -149,10 +149,16 @@ class MoveQuantifiersUp(LogicExpressionWalker):
             self.walk(formula)
             for formula in expression.formulas
         ))
-        quantifiers = []
         formulas = []
+        quantifiers = []
+        variables = set()
         for f in expression.formulas:
             if isinstance(f, Quantifier):
+                if f.head in variables:
+                    f = ReplaceSymbolWalker(
+                        {f.head: Symbol[f.type].fresh()}
+                    ).walk(f)
+                variables.add(f.head)
                 quantifiers.append(f)
                 formulas.append(f.body)
             else:
@@ -173,8 +179,14 @@ class MoveQuantifiersUp(LogicExpressionWalker):
         ))
         quantifiers = []
         formulas = []
+        variables = set()
         for f in expression.formulas:
             if isinstance(f, Quantifier):
+                if f.head in variables:
+                    f = ReplaceSymbolWalker(
+                        {f.head: Symbol[f.type].fresh()}
+                    ).walk(f)
+                variables.add(f.head)
                 quantifiers.append(f)
                 formulas.append(f.body)
             else:
