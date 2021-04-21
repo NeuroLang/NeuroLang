@@ -337,14 +337,13 @@ def test_simple_existential(solver):
     """
     We define the following program
 
-        P(a, a) : 0.2 v P(a, b) : 0.8 <- T
-                           Q(x) <- ∃y, P(x, y)
+        P(a, a) : 0.2 v P(a, b) : 0.7 v P(c, c) : 0.1 <- T
+        Q(x) <- ∃y, P(x, y)
 
     We expect the following to hold
 
-        - Pr[P(a, a)] = 0.2
-        - Pr[P(a, b)] = 0.8
-        - Pr[Q(a)] = 1.0
+        - Pr[Q(a)] = 0.9
+        - Pr[Q(c)] = 0.1
 
     """
     pchoice_as_sets = {P: {(0.2, "a", "a"), (0.7, "a", "b"), (0.1, "c", "c")}}

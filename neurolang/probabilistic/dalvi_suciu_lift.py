@@ -17,7 +17,7 @@ from ..expression_walker import (
     ReplaceExpressionWalker,
     add_match
 )
-from ..expressions import FunctionApplication, Symbol
+from ..expressions import FunctionApplication, Symbol, Constant
 from ..logic import (
     FALSE,
     Conjunction,
@@ -28,11 +28,13 @@ from ..logic import (
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
-    extract_logic_free_variables
+    extract_logic_free_variables,
 )
 from ..logic.transformations import (
     MakeExistentialsImplicit,
-    RemoveTrivialOperations
+    RemoveTrivialOperations,
+    CollapseConjunctions,
+    CollapseDisjunctions,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -54,6 +56,7 @@ from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticFactSet,
+    ProbabilisticChoiceSet,
     NonLiftable,
     generate_probabilistic_symbol_table_for_query
 )
@@ -63,7 +66,8 @@ from .transforms import (
     convert_rule_to_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
-    unify_existential_variables
+    unify_existential_variables,
+    add_existentials_except,
 )
 
 LOG = logging.getLogger(__name__)
@@ -189,8 +193,120 @@ def dalvi_suciu_lift(rule, symbol_table):
         has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
         if has_svs:
             return plan
+        else:
+            plan = disjoint_project(rule_dnf, symbol_table)
+            if plan is not None:
+                return plan
 
     return NonLiftable(rule)
+
+
+def disjoint_project(rule_dnf, symbol_table):
+    # a query in DNF with only one disjunct is a query in CNF
+    if len(rule_dnf.formulas) == 1:
+        return disjoint_project_cnf(rule_dnf.formulas[0], symbol_table)
+    return disjoint_project_dnf(rule_dnf, symbol_table)
+
+
+def disjoint_project_cnf(cnf_query, symbol_table):
+    """
+    First variant of the disjoint project on a CQ in CNF.
+
+    A disjoint project operator is applied whenever any of the atoms in the CQ
+    has only constants in its key positions and has at least one variable in a
+    non-key position.
+
+    Note: as variables are removed through shattering, this only applies to
+    all probabilistic choice variables.
+
+    """
+    free_variables = extract_logic_free_variables(cnf_query)
+    query = MakeExistentialsImplicit().walk(cnf_query)
+    query = CollapseConjunctions().walk(query)
+    atoms_with_constants_in_all_key_positions = set(
+        atom
+        for atom in query.formulas
+        if is_probabilistic_atom_with_constants_in_all_key_positions(
+            atom, symbol_table
+        )
+    )
+    if not atoms_with_constants_in_all_key_positions:
+        return
+    nonkey_variables = set.union(
+        *(
+            extract_nonkey_variables(atom, symbol_table)
+            for atom in atoms_with_constants_in_all_key_positions
+        )
+    )
+    query = Conjunction(
+        tuple(
+            atom for atom in query.formulas
+            if atom not in atoms_with_constants_in_all_key_positions
+        )
+    )
+    cnf_query = add_existentials_except(
+        query, free_variables - nonkey_variables
+    )
+    plan = dalvi_suciu_lift(cnf_query, symbol_table)
+    attributes = tuple(str2columnstr_constant(v) for v in nonkey_variables)
+    plan = rap.DisjointProjection(plan, attributes)
+    return plan
+
+
+def disjoint_project_dnf(dnf_query, symbol_table):
+    """
+    Second variant of the disjoint project on a UCQ in DNF.
+
+    This rule applies whenever the given query Q can be written as Q = Q1 v Q',
+    where the conjunctive query Q1 has an atom where all key attribute are
+    constants, and Q' is any other UCQ.
+
+    Then we return P(Q) = P(Q1) + P(Q') - P(Q1 ∧ Q') with subsequent recursive
+    calls to the resolution algorithms. Note that a disjoint project should be
+    applied during the calculation of P(Q1) and P(Q1 ∧ Q').
+
+    """
+    free_variables = extract_logic_free_variables(dnf_query)
+    for disjunct in dnf_query.formulas:
+        disjunct = MakeExistentialsImplicit().walk(disjunct)
+        disjunct = CollapseDisjunctions().walk(disjunct)
+        atoms_with_constants_in_all_key_positions = set(
+            atom
+            for atom in disjunct.formulas
+            if is_probabilistic_atom_with_constants_in_all_key_positions(
+                atom, symbol_table
+            )
+        )
+        if atoms_with_constants_in_all_key_positions:
+            break
+    else:
+        return
+    first = add_existentials_except(disjunct, free_variables)
+    second = add_existentials_except(
+        Conjunction(tuple(f for f in dnf_query.formulas if f != first)),
+        free_variables,
+    )
+    third = add_existentials_except(
+        Conjunction((first,) + second.formulas),
+        free_variables,
+    )
+    formulas = tuple(dalvi_suciu_lift(f) for f in (first, second, third))
+    return rap.WeightedNaturalJoin(formulas, (1, 1, -1))
+
+
+def extract_nonkey_variables(atom, symbol_table):
+    """
+    Get all variables in the atom that occur on non-key attributes.
+
+    Makes the assumption that the atom is probabilistic.
+
+    As we only support probabilistic choices and not all BID tables, this can
+    only be a variable occurring in a probabilistic choice.
+
+    """
+    if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
+        return {arg for arg in atom.args if isinstance(arg, Symbol)}
+    return set()
 
 
 def has_separator_variables(query, symbol_table):
@@ -301,6 +417,18 @@ def extract_probabilistic_root_variables(formulas, symbol_table):
             probabilistic_atoms[1:],
             set(probabilistic_atoms[0].args)
         )
+        pchoice_atoms = OrderedSet(
+            atom
+            for atom in probabilistic_atoms
+            if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+        )
+        # all variables occurring in probabilistic choices cannot occur in key
+        # positions, as probabilistic choice relations have no key attribute
+        # (making their respective tuples mutually exclusive)
+        nonkey_variables = set().union(*(set(a.args) for a in pchoice_atoms))
+        # variables occurring in non-key positions cannot be root variables
+        # because root variables must occur in every atom in a key position
+        root_variables -= nonkey_variables
         if candidates is None:
             candidates = root_variables
         else:
@@ -537,7 +665,7 @@ def _formulas_weights(formula_powerset):
         for f1 in formula_powerset[i + 1:]:
             for c0, c1 in ((f0, f1), (f1, f0)):
                 if (
-                    (c1 not in formula_containments[f0]) &
+                    (c1 not in formula_containments[f0]) and
                     is_contained(c0, c1)
                 ):
                     formula_containments[c0].add(c1)
@@ -606,4 +734,29 @@ def is_atom_a_deterministic_relation(atom, symbol_table):
     return isinstance(
         symbol_table.get(atom.functor, None),
         DeterministicFactSet
+    )
+
+
+def is_atom_a_probabilistic_choice_relation(atom, symbol_table):
+    return isinstance(symbol_table.get(atom.functor), ProbabilisticChoiceSet)
+
+
+def is_probabilistic_atom_with_constants_in_all_key_positions(
+    atom, symbol_table
+):
+    """
+    As we only handle probabilistic choice relations (and not more general BID
+    tables), which are relations with no key attribute, there are only two
+    cases:
+    (1) if the atom is a probabilistic choice, then it validates the
+    requirement of having constants in all key positions (it has no key
+    attribute), or
+    (2) if the atom is a tuple-independent relation, all its attributes are key
+    attributes, and so all its terms must be constants for the requirement to
+    be validated.
+
+    """
+    return is_atom_a_probabilistic_choice_relation(atom, symbol_table) or (
+        not is_atom_a_deterministic_relation(atom, symbol_table)
+        and all(isinstance(arg, Constant) for arg in atom.args)
     )
