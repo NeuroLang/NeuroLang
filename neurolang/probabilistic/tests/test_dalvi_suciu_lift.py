@@ -1,3 +1,5 @@
+from typing import AbstractSet
+
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
 from ...expressions import Symbol, Constant
 from ...logic import (
@@ -9,9 +11,15 @@ from ...logic import (
 from .. import transforms
 from .. import dalvi_suciu_lift
 from ...relational_algebra import (
-    Projection, NameColumns, NaturalJoin, ColumnInt, ColumnStr, Union
+    Projection, NameColumns, NaturalJoin, ColumnInt, ColumnStr, Union,
+    str2columnstr_constant,
 )
 from ...relational_algebra_provenance import WeightedNaturalJoin
+from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from ..probabilistic_ra_utils import (
+    ProbabilisticChoiceSet,
+    ProbabilisticFactSet,
+)
 
 TNRA = TranslateToNamedRA()
 
@@ -492,3 +500,26 @@ def test_example_4_8_tractable_query_intractable_subquery():
     )
     resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
     assert dalvi_suciu_lift.is_pure_lifted_plan(resulting_plan)
+
+
+def test_single_disjoint_project():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    pchoice_relation = NamedRelationalAlgebraFrozenSet(
+        iterable=[
+            (0.2, "a"),
+            (0.7, "b"),
+            (0.1, "c"),
+        ],
+        columns=("_p_", "x"),
+    )
+    symbol_table = {
+        P: ProbabilisticChoiceSet(
+            Constant[AbstractSet](pchoice_relation),
+            str2columnstr_constant("_p_"),
+        ),
+    }
+    query = ExistentialPredicate(x, P(x))
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert isinstance(plan, DisjointProjection)

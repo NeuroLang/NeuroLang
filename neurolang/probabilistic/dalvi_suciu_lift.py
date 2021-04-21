@@ -223,6 +223,7 @@ def disjoint_project_cnf(cnf_query, symbol_table):
     free_variables = extract_logic_free_variables(cnf_query)
     query = MakeExistentialsImplicit().walk(cnf_query)
     query = CollapseConjunctions().walk(query)
+    query = enforce_conjunction(query)
     atoms_with_constants_in_all_key_positions = set(
         atom
         for atom in query.formulas
