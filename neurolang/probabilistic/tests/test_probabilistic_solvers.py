@@ -56,10 +56,14 @@ c = Constant("c")
 
 
 @pytest.fixture(
-    params=((
-        dalvi_suciu_lift,
-    )),
-    ids=["dalvi-suciu"],
+    params=(
+        (
+            weighted_model_counting,
+            dichotomy_theorem_based_solver,
+            dalvi_suciu_lift,
+        )
+    ),
+    ids=["SDD-WMC", "dichotomy-Safe query", "dalvi_suciu_lift"],
 )
 def solver(request):
     return request.param
