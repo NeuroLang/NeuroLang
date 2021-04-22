@@ -14,7 +14,10 @@ from ...relational_algebra import (
     Projection, NameColumns, NaturalJoin, ColumnInt, ColumnStr, Union,
     str2columnstr_constant,
 )
-from ...relational_algebra_provenance import WeightedNaturalJoin
+from ...relational_algebra_provenance import (
+    WeightedNaturalJoin,
+    DisjointProjection,
+)
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..probabilistic_ra_utils import (
     ProbabilisticChoiceSet,
@@ -502,9 +505,8 @@ def test_example_4_8_tractable_query_intractable_subquery():
     assert dalvi_suciu_lift.is_pure_lifted_plan(resulting_plan)
 
 
-def test_single_disjoint_project():
+def test_single_disjoint_project_one_variable():
     P = Symbol("P")
-    Q = Symbol("Q")
     x = Symbol("x")
     pchoice_relation = NamedRelationalAlgebraFrozenSet(
         iterable=[
@@ -521,5 +523,28 @@ def test_single_disjoint_project():
         ),
     }
     query = ExistentialPredicate(x, P(x))
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert isinstance(plan, DisjointProjection)
+
+
+def test_single_disjoint_project_two_variables():
+    P = Symbol("P")
+    x = Symbol("x")
+    y = Symbol("y")
+    pchoice_relation = NamedRelationalAlgebraFrozenSet(
+        iterable=[
+            (0.2, "a", "b"),
+            (0.7, "b", "b"),
+            (0.1, "b", "c"),
+        ],
+        columns=("_p_", "x", "y"),
+    )
+    symbol_table = {
+        P: ProbabilisticChoiceSet(
+            Constant[AbstractSet](pchoice_relation),
+            str2columnstr_constant("_p_"),
+        ),
+    }
+    query = ExistentialPredicate(y, P(x, y))
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
     assert isinstance(plan, DisjointProjection)
