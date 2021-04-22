@@ -2,50 +2,54 @@ from typing import Tuple
 
 import numpy as np
 import pandas as pd
-from pytest import mark
+from pytest import mark, fixture
 
 from ..expressions import Constant
-from ..wrapped_collections import (NamedRelationalAlgebraFrozenSet,
-                                   RelationalAlgebraFrozenSet,
-                                   WrappedNamedRelationalAlgebraFrozenSet, WrappedRelationalAlgebraFrozenSet,
-                                   WrappedRelationalAlgebraSet)
-
-R1 = WrappedRelationalAlgebraSet([
-    (i, i * 2)
-    for i in range(10)
-])
-
-R2 = WrappedRelationalAlgebraSet([
-    (i * 2, i * 3)
-    for i in range(10)
-])
-
-R3 = WrappedNamedRelationalAlgebraFrozenSet(
-    columns=('x', 'y'),
-    iterable=[
-        (i * 2, str(i * 3))
-        for i in range(10)
-    ]
+from ..wrapped_collections import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+    WrappedNamedRelationalAlgebraFrozenSet,
+    WrappedRelationalAlgebraFrozenSet,
+    WrappedRelationalAlgebraSet,
 )
 
 C_ = Constant
 
 
-@mark.xfail(reason="Need to implement type mappings between RA sets and python")
-def test_row_types():
+@fixture
+def R1():
+    return WrappedRelationalAlgebraSet([(i, i * 2) for i in range(10)])
+
+
+@fixture
+def R2():
+    return WrappedRelationalAlgebraSet([(i * 2, i * 3) for i in range(10)])
+
+
+@fixture
+def R3():
+    return WrappedNamedRelationalAlgebraFrozenSet(
+        columns=("x", "y"), iterable=[(i * 2, str(i * 3)) for i in range(10)]
+    )
+
+
+@mark.xfail(
+    reason="Need to implement type mappings between RA sets and python"
+)
+def test_row_types(R2, R3):
     assert R2.row_type == Tuple[int, int]
-    assert R3.columns == ('x', 'y')
+    assert R3.columns == ("x", "y")
     assert R3.row_type == Tuple[int, str]
 
 
-def test_init_from_wrapped():
+def test_init_from_wrapped(R1):
     r1 = WrappedRelationalAlgebraSet(R1)
 
     assert r1.row_type == R1.row_type
     assert set(r1) == set(R1)
 
 
-def test_init_named_from_wrapped():
+def test_init_named_from_wrapped(R3):
     r3 = WrappedNamedRelationalAlgebraFrozenSet(iterable=R3)
     assert r3.row_type == R3.row_type
     assert r3.columns == R3.columns
@@ -67,7 +71,7 @@ def test_init_named_from_iterator_and_collection():
     assert set(r.unwrap()) == set(col)
 
 
-def test_unwrap():
+def test_unwrap(R2, R3):
     r2_u = R2.unwrap()
     r3_u = R3.unwrap()
 
@@ -78,26 +82,19 @@ def test_unwrap():
     assert not isinstance(r3_u, WrappedNamedRelationalAlgebraFrozenSet)
     assert isinstance(r3_u, NamedRelationalAlgebraFrozenSet)
     r3_u_expected = NamedRelationalAlgebraFrozenSet(
-        columns=('x', 'y'),
-        iterable=[
-            (i * 2, str(i * 3))
-            for i in range(10)
-        ]
+        columns=("x", "y"), iterable=[(i * 2, str(i * 3)) for i in range(10)]
     )
     assert r3_u == r3_u_expected
     assert r3_u.columns == r3_u_expected.columns
 
 
-def test_contains():
+def test_contains(R1):
     assert C_((0, 0)) in R1
-    assert not(C_((-1, -1)) in R1)
+    assert not (C_((-1, -1)) in R1)
 
 
-def test_equal():
-    r1_ = WrappedRelationalAlgebraSet([
-        (i, i * 2)
-        for i in range(10)
-    ])
+def test_equal(R1, R2):
+    r1_ = WrappedRelationalAlgebraSet([(i, i * 2) for i in range(10)])
     r1__ = {C_((i, i * 2)) for i in range(10)}
     assert R1 == r1_
     assert not (R1 == R2)
@@ -134,7 +131,7 @@ def test_create_from_array():
 
 
 def test_create_from_dataframe():
-    df = pd.DataFrame([[0, 's', .1], [1, 'p', .3]])
+    df = pd.DataFrame([[0, "s", 0.1], [1, "p", 0.3]])
     r1 = WrappedRelationalAlgebraFrozenSet(df)
 
     assert len(r1) == 2

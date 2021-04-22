@@ -11,7 +11,7 @@ from ...logic import ExistentialPredicate, Implication, Union
 from .. import DatalogProgram, Fact
 from ..basic_representation import UnionOfConjunctiveQueries
 from ..expressions import TranslateToLogic
-from ...utils.relational_algebra_set.pandas import RelationalAlgebraFrozenSet
+from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from ..wrapped_collections import WrappedNamedRelationalAlgebraFrozenSet, WrappedRelationalAlgebraFrozenSet
 
 
