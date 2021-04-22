@@ -1,6 +1,17 @@
 from abc import abstractmethod, abstractproperty
 from collections.abc import MutableSet, Set
 
+class RelationalAlgebraColumn:
+    pass
+
+
+class RelationalAlgebraColumnInt(int, RelationalAlgebraColumn):
+    pass
+
+
+class RelationalAlgebraColumnStr(str, RelationalAlgebraColumn):
+    pass
+
 
 class RelationalAlgebraFrozenSet(Set):
     def __init__(self, columns):
@@ -23,16 +34,10 @@ class RelationalAlgebraFrozenSet(Set):
         pass
 
     def is_dum(self):
-        return (
-            self.arity == 0 and
-            self.is_empty()
-        )
+        return self.arity == 0 and self.is_empty()
 
     def is_dee(self):
-        return (
-            self.arity == 0 and
-            not self.is_empty()
-        )
+        return self.arity == 0 and not self.is_empty()
 
     @abstractmethod
     def __contains__(self, element):
@@ -188,6 +193,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def to_unnamed(self):
         pass
 
+    @abstractmethod
+    def projection_to_unnamed(self, *columns):
+        pass
+
     def __lt__(self, other):
         raise NotImplementedError()
 
@@ -202,7 +211,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
 
 class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
-
     @abstractmethod
     def add(self, value):
         pass

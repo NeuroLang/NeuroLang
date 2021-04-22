@@ -12,18 +12,6 @@ class RelationalAlgebraStringExpression(str):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
-class RelationalAlgebraColumn:
-    pass
-
-
-class RelationalAlgebraColumnInt(int, RelationalAlgebraColumn):
-    pass
-
-
-class RelationalAlgebraColumnStr(str, RelationalAlgebraColumn):
-    pass
-
-
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     """
     RelationalAlgebraFrozenSet implementation using in-memory pandas.DataFrame
@@ -48,7 +36,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         >>> a = [(i % 2, i, i * 2) for i in range(5)]
         >>> ras = RelationalAlgebraFrozenSet(a)
         >>> ras
-          0  1  2
+           0  1  2
         0  0  0  0
         1  1  1  2
         2  0  2  4
@@ -231,7 +219,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         if callable(select_criteria):
             ix = self._container.apply(select_criteria, axis=1)
-        elif isinstance(select_criteria, RelationalAlgebraStringExpression):
+        elif isinstance(
+            select_criteria, RelationalAlgebraStringExpression
+        ):
             ix = self._container.eval(select_criteria)
         else:
             ix = self._selection_dict(select_criteria)
@@ -362,7 +352,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 self.arity > 0 and other.arity > 0
             ) and self.arity != other.arity:
                 raise ValueError(
-                    "Difference only defined for sets with the same arity"
+                    "Relational algebra set operators can only"
+                    " be used on sets with same columns."
                 )
             if self.is_empty() or other.is_empty():
                 return self.copy()
@@ -663,7 +654,7 @@ class NamedRelationalAlgebraFrozenSet(
             raise ValueError(f"{dst} cannot be in the columns")
         src_idx = self._columns.index(src)
         new_columns = (
-            self._columns[:src_idx] + (dst,) + self._columns[src_idx + 1:]
+            self._columns[:src_idx] + (dst,) + self._columns[src_idx + 1 :]
         )
         new_container = self._container.rename(columns={src: dst})
         return self._light_init_same_structure(
@@ -736,12 +727,7 @@ class NamedRelationalAlgebraFrozenSet(
             new_containers.append(groups.agg(**aggs))
 
         for dst, fun in aggs_multi_column.items():
-            new_col = (
-                groups
-                .apply(fun)
-                .rename(dst)
-                .to_frame()
-            )
+            new_col = groups.apply(fun).rename(dst).to_frame()
             new_containers.append(new_col)
 
         new_container = pd.concat(new_containers, axis=1)
@@ -823,7 +809,7 @@ class NamedRelationalAlgebraFrozenSet(
                         "{}={}".format(str(dst_column), str(operation)),
                         engine="python",
                     )
-            elif isinstance(operation, RelationalAlgebraColumn):
+            elif isinstance(operation, abc.RelationalAlgebraColumn):
                 new_container[dst_column] = new_container[operation]
             elif callable(operation):
                 new_container[dst_column] = new_container.apply(
