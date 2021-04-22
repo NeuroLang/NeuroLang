@@ -189,8 +189,7 @@ class IdentityWalker(PatternWalker):
 
 
 class ExpressionWalker(PatternWalker):
-    """Walks through an expression and each of its arguments
-    """
+    """Walks through an expression and each of its arguments"""
 
     @add_match(Expression)
     def process_expression(self, expression):
@@ -522,4 +521,12 @@ class FunctionApplicationToPythonLambda(PatternWalker):
         gs = globals()
         ls = locals()
         gs.update(arg_dict)
-        return eval(str_eval, gs, ls), param_sym
+        lambda_f = eval(str_eval, gs, ls)
+        if (
+            hasattr(e.functor.value, "__annotations__")
+            and "return" in e.functor.value.__annotations__
+        ):
+            lambda_f.__annotations__[
+                "return"
+            ] = e.functor.value.__annotations__["return"]
+        return lambda_f, param_sym

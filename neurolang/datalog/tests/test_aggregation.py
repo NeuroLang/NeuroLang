@@ -2,6 +2,7 @@ from neurolang.exceptions import ForbiddenUnstratifiedAggregation
 from typing import AbstractSet
 
 import pytest
+import numpy as np
 
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import (Constant, ExpressionBlock, NeuroLangException,
@@ -34,7 +35,7 @@ class Datalog(
     def function_sum2(self, x: AbstractSet, y: AbstractSet) -> Unknown:
         return sum(v + w for v, w in zip(x, y))
 
-    def function_set_create(self, x: AbstractSet) -> Unknown:
+    def function_set_create(self, x: AbstractSet) -> np.object_:
         return frozenset(x)
 
 
