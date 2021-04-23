@@ -394,7 +394,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
     ------
     SymbolNotFoundError
         If there is a predicate in the antecedent of a rule which
-        is not a constant or an extension/intensional predicate
+        is not a constant or an extensional/intensional predicate.
 
     """
 
