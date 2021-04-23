@@ -169,8 +169,9 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             tags = [Symbol.fresh() for _ in range(len(df))]
             probs = [1.0 for _ in range(len(df))]
             tag_set = list(zip(tags, probs))
+            prob_column = Symbol.fresh().name
             return self._build_tag_and_prov_sets(
-                relation, relation_symbol, df, -1, tag_set, tags
+                relation, relation_symbol, df, prob_column, tag_set, tags
             )
 
     @add_match(ProbabilisticFactSet(Symbol, Constant))
@@ -233,8 +234,7 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         self.tagged_sets.append(tag_set)
         tagged_df = df.copy()
         new_columns = tuple(f"col_{c}" for c in relation.value.columns)
-        if prob_column == -1:
-            prob_column = Symbol.fresh().name
+        if prob_column not in relation.value.columns:
             new_columns = new_columns + (f"col_{prob_column}",)
         tagged_df[prob_column] = prov_column
         tagged_ras_set = NamedRelationalAlgebraFrozenSet(
