@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from .utils import config
 from neurolang.frontend import (
     ExplicitVBR,
     ExplicitVBROverlay,
@@ -29,4 +30,5 @@ __all__ = [
     "ExplicitVBR",
     "ExplicitVBROverlay",
     "exceptions",
+    "config",
 ]
