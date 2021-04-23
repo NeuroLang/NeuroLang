@@ -435,7 +435,7 @@ def _get_evaluatable_operations_and_string_translations():
 EVAL_OP_TO_STR = _get_evaluatable_operations_and_string_translations()
 
 
-def is_translatable_numpy_operation(exp):
+def is_translatable_operation(exp):
     return (
         isinstance(exp, FunctionApplication)
         and isinstance(exp.functor, Constant)
@@ -488,7 +488,7 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     @ew.add_match(
         FunctionApplication(Constant, ...),
-        is_translatable_numpy_operation,
+        is_translatable_operation,
     )
     def translatable_numpy_operation(self, fa):
         return Constant[RelationalAlgebraStringExpression](

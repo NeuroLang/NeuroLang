@@ -958,7 +958,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
     @staticmethod
     def _check_no_agg_var_replaced_by_const(old_csqt, new_csqt) -> None:
         for old_arg, new_arg in zip(old_csqt.args, new_csqt.args):
-            if isinstance(old_arg, FunctionApplication) and any(
+            if isinstance(old_arg, AggregationApplication) and any(
                 isinstance(a1, Symbol) and isinstance(a2, Constant)
                 for a1, a2 in zip(old_arg.args, new_arg.args)
             ):
