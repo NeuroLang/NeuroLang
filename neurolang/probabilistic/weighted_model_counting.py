@@ -14,14 +14,18 @@ from ..datalog.expression_processing import (
     flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ExpressionWalker, PatternWalker, add_match
+from ..expression_walker import (
+    ExpressionWalker,
+    PatternWalker,
+    add_match
+)
 from ..exceptions import NeuroLangException
 from ..expressions import (
     Constant,
     ExpressionBlock,
     FunctionApplication,
     Symbol,
-    sure_is_not_pattern,
+    sure_is_not_pattern
 )
 from ..logic import Conjunction, Implication
 from ..logic.expression_processing import (
@@ -35,24 +39,25 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraPushInSelections,
     RelationalAlgebraStringExpression,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
-    RelationalAlgebraProvenanceExpressionSemringSolver,
+    RelationalAlgebraProvenanceExpressionSemringSolver
 )
-from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from ..utils import log_performance
-from ..utils import config
+from ..utils.relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet
+)
+from ..utils import (log_performance, config)
 
 from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query,
+    generate_probabilistic_symbol_table_for_query
 )
 
 
@@ -97,7 +102,10 @@ class SemiRingRAPToSDD(PatternWalker):
         exp = self.manager.true()
         while len(args) > 0:
             arg = args.pop()
-            if isinstance(arg, FunctionApplication) and arg.functor == MUL:
+            if (
+                isinstance(arg, FunctionApplication) and
+                arg.functor == MUL
+            ):
                 args += arg.args
             else:
                 arg = self.walk(arg)
@@ -111,7 +119,10 @@ class SemiRingRAPToSDD(PatternWalker):
         exp = self.manager.false()
         while len(args) > 0:
             arg = args.pop()
-            if isinstance(arg, FunctionApplication) and arg.functor == ADD:
+            if (
+                isinstance(arg, FunctionApplication) and
+                arg.functor == ADD
+            ):
                 args += arg.args
             else:
                 arg = self.walk(arg)
@@ -136,7 +147,10 @@ class SemiRingRAPToSDD(PatternWalker):
 
     @add_match(ExpressionBlock)
     def expression_block(self, expression):
-        res = tuple(exp for exp in self.walk(expression.expressions))
+        res = tuple(
+            exp
+            for exp in self.walk(expression.expressions)
+        )
         for s in res:
             s.ref()
         return res
@@ -286,8 +300,8 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                 (
                     DeterministicFactSet,
                     ProbabilisticFactSet,
-                    ProbabilisticChoiceSet,
-                ),
+                    ProbabilisticChoiceSet
+                )
             ):
                 continue
             symbol = v.relation
@@ -297,7 +311,8 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             self.var_count += n
             symbols_seen.add(symbol)
         self.manager = sdd.SddManager(
-            var_count=self.var_count, auto_gc_and_minimize=False
+            var_count=self.var_count,
+            auto_gc_and_minimize=False
         )
         self.symbols_to_literals = dict()
         self.literals_to_symbos = dict()
@@ -309,7 +324,10 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         if len(self.positive_weights) != self.var_count:
             raise NeuroLangException("Not all SDD variables have been used")
         pos_weights = np.array(self.positive_weights)
-        return np.r_[1 - pos_weights[::-1], pos_weights]
+        return np.r_[
+            1 - pos_weights[::-1],
+            pos_weights
+        ]
 
     def get_new_bernoulli_variable(self, probability):
         literal = self.manager.literal(self._current_var)
@@ -327,7 +345,10 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         return sum_
 
     def _semiring_mul(self, left, right):
-        return FunctionApplication(Constant(self._internal_mul), (left, right))
+        return FunctionApplication(
+            Constant(self._internal_mul),
+            (left, right)
+        )
 
     @staticmethod
     def _internal_mul(left, right):
@@ -348,11 +369,11 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                 (
                     DeterministicFactSet,
                     ProbabilisticFactSet,
-                    ProbabilisticChoiceSet,
-                ),
+                    ProbabilisticChoiceSet
+                )
             )
             # and (len(exp.attributes) == len(exp.relation.relation.columns))
-        ),
+        )
     )
     def eliminate_superfluous_projection(self, expression):
         return self.walk(expression.relation)
@@ -367,7 +388,8 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         rap_column = Symbol.fresh().name
 
         new_columns = tuple(
-            str2columnstr_constant(str(i)) for i in relation.value.columns
+            str2columnstr_constant(str(i))
+            for i in relation.value.columns
         )
 
         relation = NameColumns(relation, new_columns)
@@ -377,25 +399,26 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             ExtendedProjectionListMember(
                 Constant[RelationalAlgebraStringExpression](
                     RelationalAlgebraStringExpression(c.value),
-                    verify_type=False,
+                    verify_type=False
                 ),
-                c,
+                c
             )
             for c in new_columns
         ]
         deterministic_tag_function = FunctionApplication(
-            Constant(lambda: self.get_new_bernoulli_variable(1.0)), tuple()
+            Constant(lambda: self.get_new_bernoulli_variable(1.)),
+            tuple()
         )
 
         tagged_relation = self.walk(
             ExtendedProjection(
                 relation,
-                projection_list
-                + [
+                projection_list + [
                     ExtendedProjectionListMember(
-                        deterministic_tag_function, rap_column
+                        deterministic_tag_function,
+                        rap_column
                     )
-                ],
+                ]
             )
         )
         self.tagged_sets.append(tagged_relation)
@@ -418,42 +441,43 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         ):
             relation = self.walk(relation_symbol)
             named_columns = tuple(
-                str2columnstr_constant(f"col_{i}")
+                str2columnstr_constant(f'col_{i}')
                 for i in relation.value.columns
             )
             new_columns = tuple(
-                c
-                for i, c in enumerate(named_columns)
+                c for i, c in enumerate(named_columns)
                 if i != prob_fact_set.probability_column.value
             )
 
-            relation = NameColumns(relation, named_columns)
+            relation = NameColumns(
+                relation, named_columns
+            )
 
             rap_column = str2columnstr_constant(Symbol.fresh().name)
             projection_list = [
                 ExtendedProjectionListMember(
                     Constant[RelationalAlgebraStringExpression](
                         RelationalAlgebraStringExpression(c.value),
-                        verify_type=False,
+                        verify_type=False
                     ),
-                    c,
+                    c
                 )
                 for c in new_columns
             ]
             probfact_tag_function = FunctionApplication(
                 Constant(self.get_new_bernoulli_variable),
-                (named_columns[prob_fact_set.probability_column.value],),
+                (named_columns[prob_fact_set.probability_column.value],)
             )
 
             tagged_relation = self.walk(
                 ExtendedProjection(
                     relation,
-                    projection_list
-                    + [
+                    projection_list + [
                         ExtendedProjectionListMember(
-                            probfact_tag_function, rap_column
+                            probfact_tag_function,
+                            rap_column
                         )
-                    ],
+                    ]
                 )
             )
             self.tagged_sets.append(tagged_relation)
@@ -489,12 +513,13 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
             tagged_df = df.copy()
             tagged_df[prob_column] = tag_expressions
-            new_columns = tuple(f"col_{c}" for c in relation.value.columns)
+            new_columns = tuple(f'col_{c}' for c in relation.value.columns)
             tagged_ras_set = NamedRelationalAlgebraFrozenSet(
                 new_columns, tagged_df
             )
         return ProvenanceAlgebraSet(
-            tagged_ras_set, ColumnStr(f"col_{prob_column}")
+            tagged_ras_set,
+            ColumnStr(f'col_{prob_column}')
         )
 
     def generate_sdd_expression(
@@ -516,13 +541,16 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
 def generate_weights(symbol_probs, literals_to_symbols, extras=0):
     ixs = pd.Series(literals_to_symbols)
-    probs = symbol_probs.loc[ixs, "prob"].values
-    nprobs = symbol_probs.loc[ixs, "nprob"].values
+    probs = symbol_probs.loc[ixs, 'prob'].values
+    nprobs = symbol_probs.loc[ixs, 'nprob'].values
     probs = np.r_[nprobs[::-1], [0] * extras, [1] * extras, probs]
     return probs
 
 
-class RAQueryOptimiser(RelationalAlgebraPushInSelections, ExpressionWalker):
+class RAQueryOptimiser(
+    RelationalAlgebraPushInSelections,
+    ExpressionWalker
+):
     pass
 
 
@@ -534,7 +562,7 @@ def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
 
         SUCC[ P(x) ]
     """
-    with log_performance(LOG, "Preparing query"):
+    with log_performance(LOG, 'Preparing query'):
         conjunctive_query, variables_to_project = prepare_initial_query(
             query_predicate
         )
@@ -564,16 +592,18 @@ def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
             prob_set_result, solver
         )
 
-    return ProvenanceAlgebraSet(res, ColumnStr(provenance_column))
+    return ProvenanceAlgebraSet(
+        res, ColumnStr(provenance_column)
+    )
 
 
 def sdd_compilation_and_wmc(prob_set_result, solver):
-    sdd_compiler, sdd_program, prob_set_program = sdd_compilation(
-        prob_set_result
-    )
+    sdd_compiler, sdd_program, prob_set_program = \
+        sdd_compilation(prob_set_result)
 
     res, provenance_column = perform_wmc(
-        solver, sdd_compiler, sdd_program, prob_set_program, prob_set_result
+        solver, sdd_compiler, sdd_program,
+        prob_set_program, prob_set_result
     )
 
     return res, provenance_column
@@ -589,7 +619,7 @@ def solve_succ_query_sdd_direct(
 
         SUCC[ P(x) ]
     """
-    with log_performance(LOG, "Preparing query"):
+    with log_performance(LOG, 'Preparing query'):
         conjunctive_query, variables_to_project = prepare_initial_query(
             query_predicate
         )
@@ -625,18 +655,21 @@ def solve_succ_query_sdd_direct(
 
     df[prob_set_result.provenance_column] = probabilities
     return ProvenanceAlgebraSet(
-        type(prob_set_result.relations)(prob_set_result.relations.columns, df),
-        prob_set_result.provenance_column,
+        type(prob_set_result.relations)(
+            prob_set_result.relations.columns,
+            df
+        ),
+        prob_set_result.provenance_column
     )
 
 
 def sdd_solver_global_model(solver, set_probabilities):
     with log_performance(LOG, "Build global SAT problem"):
-        (
-            rows,
-            exclusive_clause,
-            initial_var_count,
-        ) = build_global_sdd_model_rows(solver, set_probabilities)
+        rows, exclusive_clause, initial_var_count = \
+            build_global_sdd_model_rows(
+                solver,
+                set_probabilities
+            )
 
         while len(rows) > 1:
             new_rows = []
@@ -650,7 +683,7 @@ def sdd_solver_global_model(solver, set_probabilities):
                 rows[i].deref()
                 rows[i + 1].deref()
                 new_rows[-1].ref()
-            new_rows += rows[i + 2 :]
+            new_rows += rows[i + 2:]
             rows = new_rows
         model = rows[0].conjoin(exclusive_clause)
     with log_performance(LOG, "Minimize manager"):
@@ -696,9 +729,9 @@ def prepare_initial_query(query_predicate):
         variables_to_project = tuple(
             str2columnstr_constant(s.name)
             for s in query_predicate._symbols
-            if s
-            not in (
-                p.functor for p in extract_logic_predicates(query_predicate)
+            if s not in (
+                p.functor for p in
+                extract_logic_predicates(query_predicate)
             )
         )
     return conjunctive_query, variables_to_project
@@ -711,10 +744,17 @@ def model_count_and_per_row_probability(model, solver, initial_var_count, n):
         solver.positive_weights,
     ]
     extra_ones = np.ones(solver.manager.var_count() - initial_var_count)
-    weights = np.r_[extra_ones, 1 - pos_weights[::-1], pos_weights, extra_ones]
+    weights = np.r_[
+        extra_ones,
+        1 - pos_weights[::-1],
+        pos_weights,
+        extra_ones
+    ]
     wmc.set_literal_weights_from_array(weights)
     for i in range(len(probabilities)):
-        lit = solver.manager.literal(initial_var_count + i + 1)
+        lit = solver.manager.literal(
+            initial_var_count + i + 1
+        )
         probabilities[i] = wmc.literal_derivative(lit)
 
     return probabilities
@@ -744,9 +784,9 @@ def build_global_sdd_model_rows(solver, literal_probabilities):
 def sdd_compilation(prob_set_result):
     prob_set_program = ExpressionBlock(
         tuple(
-            prob_set_result.relations.projection(
-                prob_set_result.provenance_column
-            )
+            prob_set_result
+            .relations
+            .projection(prob_set_result.provenance_column)
             .as_pandas_dataframe()
             .iloc[:, 0]
         )
@@ -757,12 +797,14 @@ def sdd_compilation(prob_set_result):
 
 
 def perform_wmc(
-    solver, sdd_compiler, sdd_program, prob_set_program, prob_set_result
+    solver, sdd_compiler, sdd_program,
+    prob_set_program, prob_set_result
 ):
     ids_with_probs = generate_probability_table(solver)
 
     weights = generate_weights(
-        ids_with_probs, sdd_compiler.literals_to_symbols
+        ids_with_probs,
+        sdd_compiler.literals_to_symbols
     )
 
     probs = dict()
@@ -772,9 +814,9 @@ def perform_wmc(
         prob = wmc.propagate()
         probs[prob_set_program.expressions[i]] = prob
 
-    provenance_column = "prob"
+    provenance_column = 'prob'
     while provenance_column in prob_set_result.value.columns:
-        provenance_column += "_"
+        provenance_column += '_'
 
     res = prob_set_result.value.extended_projection(
         dict(
@@ -782,13 +824,11 @@ def perform_wmc(
                 (c, RelationalAlgebraStringExpression(c))
                 for c in prob_set_result.value.columns
                 if c != prob_set_result.provenance_column
-            ]
-            + [
-                (
-                    provenance_column,
-                    lambda x: probs[x[prob_set_result.provenance_column]],
-                )
-            ]
+            ] +
+            [(
+                provenance_column,
+                lambda x: probs[x[prob_set_result.provenance_column]]
+            )]
         )
     )
     return res, provenance_column
@@ -798,10 +838,10 @@ def generate_probability_table(solver):
     ids_with_probs = []
     for ts in solver.tagged_sets:
         ts = ts.value.as_pandas_dataframe()
-        if "nprob" not in ts:
-            ts = ts.eval("nprob = 1 - prob")
+        if 'nprob' not in ts:
+            ts = ts.eval('nprob = 1 - prob')
         ids_with_probs.append(ts)
-    ids_with_probs = pd.concat(ids_with_probs, axis=0).set_index("id")
+    ids_with_probs = pd.concat(ids_with_probs, axis=0).set_index('id')
     return ids_with_probs
 
 
@@ -830,35 +870,40 @@ def solve_marg_query(rule, cpl):
         set.
 
     """
-    res_args = tuple(s for s in rule.consequent.args if isinstance(s, Symbol))
+    res_args = tuple(
+        s
+        for s in rule.consequent.args
+        if isinstance(s, Symbol)
+    )
 
     joint_antecedent = Conjunction(
         tuple(
-            extract_logic_predicates(rule.antecedent.conditioned)
-            | extract_logic_predicates(rule.antecedent.conditioning)
+            extract_logic_predicates(rule.antecedent.conditioned) |
+            extract_logic_predicates(rule.antecedent.conditioning)
         )
     )
-    joint_logic_variables = (
-        extract_logic_free_variables(joint_antecedent) & res_args
-    )
+    joint_logic_variables = extract_logic_free_variables(
+        joint_antecedent
+    ) & res_args
     joint_rule = Implication(
         Symbol.fresh()(*joint_logic_variables), joint_antecedent
     )
     joint_provset = solve_succ_query(joint_rule, cpl)
 
     denominator_antecedent = rule.antecedent.conditioning
-    denominator_logic_variables = (
-        extract_logic_free_variables(denominator_antecedent) & res_args
-    )
+    denominator_logic_variables = extract_logic_free_variables(
+        denominator_antecedent
+    ) & res_args
     denominator_rule = Implication(
-        Symbol.fresh()(*denominator_logic_variables), denominator_antecedent
+        Symbol.fresh()(*denominator_logic_variables),
+        denominator_antecedent
     )
     denominator_provset = solve_succ_query(denominator_rule, cpl)
     rapcs = RelationalAlgebraProvenanceCountingSolver()
     provset = rapcs.walk(
         Projection(
             NaturalJoinInverse(joint_provset, denominator_provset),
-            tuple(str2columnstr_constant(s.name) for s in res_args),
+            tuple(str2columnstr_constant(s.name) for s in res_args)
         )
     )
     return provset
