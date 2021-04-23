@@ -250,7 +250,7 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         self.tagged_sets.append(tag_set)
         tagged_df = df.copy()
         new_columns = tuple(f"col_{c}" for c in relation.value.columns)
-        if prob_column not in relation.value.columns:
+        if prob_column not in df.columns:
             new_columns = new_columns + (f"col_{prob_column}",)
         tagged_df[prob_column] = prov_column
         tagged_ras_set = NamedRelationalAlgebraFrozenSet(
