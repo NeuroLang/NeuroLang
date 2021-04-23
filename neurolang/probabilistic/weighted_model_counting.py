@@ -21,6 +21,7 @@ from ..expressions import (
     ExpressionBlock,
     FunctionApplication,
     Symbol,
+    sure_is_not_pattern,
 )
 from ..logic import Conjunction, Implication
 from ..logic.expression_processing import (
@@ -209,12 +210,13 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             previous_probability = 0
             prov_column = []
             tag_set = []
-            for probability in df[prob_column]:
-                adjusted_probability = probability / (1 - previous_probability)
-                previous_probability += probability
-                previous = self._generate_tag_choice_expression(
-                    previous, adjusted_probability, prov_column, tag_set
-                )
+            with sure_is_not_pattern():
+                for probability in df[prob_column]:
+                    adjusted_probability = probability / (1 - previous_probability)
+                    previous_probability += probability
+                    previous = self._generate_tag_choice_expression(
+                        previous, adjusted_probability, prov_column, tag_set
+                    )
 
             return self._build_tag_and_prov_sets(
                 relation,
