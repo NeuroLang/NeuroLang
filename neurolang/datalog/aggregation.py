@@ -9,6 +9,9 @@ in the set ``Q``.
    Datalog and Recursive Query Processing.
    FNT in Databases. 5, 105–195 (2012).
 """
+import typing
+
+import numpy
 
 from ..exceptions import ForbiddenUnstratifiedAggregation, NeuroLangException
 from ..expression_walker import (
@@ -31,9 +34,27 @@ from .expression_processing import (
     is_aggregation_predicate,
     is_aggregation_rule,
 )
-from .expressions import TranslateToLogic, AggregationApplication
+from .expressions import AggregationApplication, TranslateToLogic
 
 FA2L = FunctionApplicationToPythonLambda()
+
+AGG_MAX = Symbol("max")
+AGG_MEAN = Symbol("mean")
+AGG_COUNT = Symbol("count")
+AGG_SUM = Symbol("sum")
+
+
+def is_builtin_aggregation_functor(functor):
+    return functor in (AGG_MAX, AGG_MEAN, AGG_COUNT, AGG_SUM)
+
+
+class BuiltinAggregationMixin:
+    constant_max = Constant(numpy.max)
+    constant_mean = Constant(numpy.mean)
+    constant_sum = Constant(sum)
+
+    def function_count(self, *iterables: typing.Iterable) -> int:
+        return len(next(iter(iterables)))
 
 
 class TranslateToLogicWithAggregation(TranslateToLogic):
