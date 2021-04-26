@@ -442,7 +442,7 @@ class Symbol(NonConstant):
         return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
 
     def __getstate__(self):
-        # Pickle a tuple instead of a set for _symbols to avoid calling hash 
+        # Pickle a tuple instead of a set for _symbols to avoid calling hash
         # upon deserialization
         state = self.__dict__.copy()
         state["_symbols"] = tuple(self._symbols)
