@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from functools import WRAPPER_ASSIGNMENTS, lru_cache, wraps
 from itertools import chain
 from warnings import warn
+import warnings
 
 from .exceptions import NeuroLangException
 from .type_system import NeuroLangTypeException, Unknown
@@ -385,6 +386,12 @@ class Expression(metaclass=ExpressionMeta):
         int
             Always -1
         """
+        warnings.warn(
+            "You are comparing together Expressions. "
+            "Comparison of Expressions is not implemented properly and you"
+            " should not expect it to work.",
+            SyntaxWarning,
+        )
         return -1
 
 
