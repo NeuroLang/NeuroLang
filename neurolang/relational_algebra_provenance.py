@@ -604,7 +604,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         args = tuple(x)
         if len(args) == 1:
             r = args[0]
-        if isinstance(args[0], Expression):
+        elif isinstance(args[0], Expression):
             r = FunctionApplication(
                 ADD, args, validate_arguments=False, verify_type=False
             )

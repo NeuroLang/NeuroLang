@@ -238,6 +238,11 @@ class ChaseAggregationMixin:
             ls = locals()
             gs['fun_'] = fun_
             fun = eval(fun_str, gs, ls)
+            if (
+                hasattr(fun_, "__annotations__")
+                and "return" in fun_.__annotations__
+            ):
+                fun.__annotations__["return"] = fun_.__annotations__["return"]
         return aggregation_args, fun
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
