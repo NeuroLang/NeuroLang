@@ -13,6 +13,9 @@ class NeuroLangNotImplementedError(NeuroLangException):
 
 
 class ForbiddenExpressionError(NeuroLangException):
+    """
+    Generic exception specifying an error in the program.
+    """
     pass
 
 
@@ -29,12 +32,20 @@ class RelationalAlgebraError(NeuroLangException):
 
 
 class ProjectionOverMissingColumnsError(RelationalAlgebraError):
+    """
+    One of the predicates in the program has wrong arguments.
+    See `WrongArgumentsInPredicateError`
+    """
     pass
 
 
 class RelationalAlgebraNotImplementedError(
     RelationalAlgebraError, NotImplementedError
 ):
+    """
+    Neurolang was unable to match one of the relational algebra operations
+    defined in the program. This is probably due to an malformed query.
+    """
     pass
 
 
@@ -70,22 +81,74 @@ class UnsupportedSolverError(NeuroLangException):
 
 
 class ProtectedKeywordError(NeuroLangException):
+    """
+    One of the predicates in the program uses a reserved keyword.
+    Reserved keywords include : {PROB}
+    """
     pass
 
 
 class ForbiddenRecursivityError(UnsupportedProgramError):
+    """
+    The given program cannot be stratified due to recursivity. A query can
+    be solved through stratification if the probabilistic and deterministic
+    parts are well separated. In case there exists one within-language
+    probabilistic query dependency, no probabilistic predicate should appear
+    in the stratum that depends on the query.
+
+    Examples
+    --------
+    B(x) :- A(x), C(x),
+    A(x) :- B(x)
+    """
     pass
 
 
 class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
     """
-    The given Datalog program is not valid for aggregation.
+    The given Datalog program is not valid for aggregation. Support for
+    aggregation is done according to section 2.4.1 of [1]_.
+    
+    A program is valid for aggregation if it can be stratified into
+    strata P1, . . . , Pn such that, if A :- ...,B,... is a rule in P such
+    that A contains an aggregate term, and A is in stratum Pi while B is in
+    stratum Pj, **then i > j**.
 
+    In other terms, all the predicates in the body of a rule containing an 
+    aggregate function must be computed in a previous stratum. Recursion
+    through aggregation is therefore not allowed in the same stratum.
+
+    Examples
+    --------
+    The following datalog program is invalid for stratified aggregation
+    p(X) :- q(X).
+    p(sum<X>) :- p(X).
+
+
+    .. [1] T. J. Green, S. S. Huang, B. T. Loo, W. Zhou,
+       Datalog and Recursive Query Processing.
+       FNT in Databases. 5, 105–195 (2012).
     """
     pass
 
 
 class WrongArgumentsInPredicateError(NeuroLangException):
+    """
+    One of the predicates in the query has the wrong number of arguments.
+
+    Examples
+    --------
+    NetworkReported is defined with two variables but used with three
+    in the second rule: 
+
+    e.NetworkReported[e.n, e.s] = e.RegionReported(
+        e.r, e.s
+    ) & e.RegionInNetwork(e.r, e.n)
+    e.StudyMatchingNetworkQuery[e.s, e.n] = (
+        e.RegionReported("VWFA", e.s)
+        & e.NetworkReported(e.n, e.s, e.r)
+    )
+    """
     pass
 
 
