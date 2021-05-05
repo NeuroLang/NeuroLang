@@ -1,18 +1,20 @@
 import operator
 from typing import AbstractSet, Tuple
 
-import pytest
 import numpy
+import pytest
 
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
 from ..exceptions import NeuroLangException
-from ..expressions import Constant, Symbol
 from ..expression_walker import ExpressionWalker
+from ..expressions import Constant, Symbol
 from ..relational_algebra import (
+    EVAL_OP_TO_STR,
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
     Destroy,
+    EliminateTrivialProjections,
     EquiJoin,
     ExtendedProjection,
     ExtendedProjectionListMember,
@@ -22,19 +24,18 @@ from ..relational_algebra import (
     Product,
     Projection,
     RelationalAlgebraOptimiser,
-    RelationalAlgebraSolver,
-    EliminateTrivialProjections,
     RelationalAlgebraPushInSelections,
+    RelationalAlgebraSolver,
     RenameColumn,
     RenameColumns,
     Selection,
-    str2columnstr_constant,
     Union,
-    eq_,
     _const_relation_type_is_known,
-    _sort_typed_const_named_relation_tuple_type_args,
-    _infer_relation_type,
     _get_const_relation_type,
+    _infer_relation_type,
+    _sort_typed_const_named_relation_tuple_type_args,
+    eq_,
+    str2columnstr_constant,
 )
 from ..utils import (
     NamedRelationalAlgebraFrozenSet,
@@ -42,7 +43,6 @@ from ..utils import (
     RelationalAlgebraSet,
 )
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
-
 
 R1 = WrappedRelationalAlgebraSet([
     (i, i * 2)
@@ -904,3 +904,28 @@ def test_numpy_log():
         )
     )
     assert result == expected
+
+
+def test_aggregation_translation():
+    x = Constant(ColumnStr("x"))
+    np_max = Constant(numpy.max, auto_infer_type=False)
+    np_exp = Constant(numpy.exp, auto_infer_type=False)
+    fun_exp = np_max(np_exp(x + Constant(2)))
+    solver = RelationalAlgebraSolver()
+    result = solver._saw.walk(fun_exp)
+    expected = Constant(RelationalAlgebraStringExpression("max(exp((x + 2)))"))
+    assert result == expected
+
+
+def test_evaluatable_function_applications():
+    x = Constant(ColumnStr("x"))
+    for fun in EVAL_OP_TO_STR:
+        fun_exp = Constant(fun)(x + Constant(2))
+        solver = RelationalAlgebraSolver()
+        result = solver._saw.walk(fun_exp)
+        expected = Constant(
+            RelationalAlgebraStringExpression(
+                "{}((x + 2))".format(EVAL_OP_TO_STR[fun])
+            )
+        )
+        assert result == expected

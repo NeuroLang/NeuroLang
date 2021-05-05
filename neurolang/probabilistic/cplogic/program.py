@@ -130,7 +130,8 @@ class CPLogicMixin(PatternWalker):
             symbol, self.pfact_pred_symb_set_symb
         )
         type_, iterable = self.infer_iterable_type(iterable)
-        self._check_iterable_prob_type(type_)
+        if not hasattr(iterable, '__len__') or len(iterable) > 0:
+            self._check_iterable_prob_type(type_)
         constant = Constant[typing.AbstractSet[type_]](
             self.new_set(iterable), auto_infer_type=False, verify_type=False
         )

@@ -15,6 +15,7 @@ from ...exceptions import (
 )
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
+    RepeatedTuplesInProbabilisticRelationError,
     UnsupportedProbabilisticQueryError,
 )
 from ...regions import SphericalVolume
@@ -529,6 +530,16 @@ def test_empty_boolean_query_result():
     assert not res
 
 
+def test_trivial_probability_query_result():
+    nl = NeurolangPDL()
+    b = set(((0.4, "a"), (0.5, "b")))
+    B = nl.add_probabilistic_facts_from_tuples(b, name='B')
+    with nl.scope as e:
+        e.D[e.x, e.PROB[e.x]] = B[e.x]
+        res = nl.query((e.p, e.x), e.D[e.x, e.p])
+    assert set(res) == b
+
+
 def test_equality():
     nl = NeurolangPDL()
     r1 = nl.add_tuple_set([(i,) for i in range(5)], name="r1")
@@ -756,6 +767,26 @@ def test_query_based_pfact():
     assert_almost_equal(result, expected)
 
 
+def test_query_based_pfact_empty():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [
+            (2, 0.2),
+            (7, 0.8),
+            (4, 0.4),
+        ],
+        name="A",
+    )
+    with nl.environment as e:
+        (e.B @ (e.p / 2))[e.x] = e.A[e.x, e.p] & (e.p > 0.8)
+        e.Query[e.PROB[e.x], e.x] = e.B[e.x]
+        result = nl.query((e.x, e.p), e.Query[e.p, e.x])
+    expected = RelationalAlgebraFrozenSet(
+        []
+    )
+    assert_almost_equal(result, expected)
+
+
 def test_query_based_pfact_region_volume():
     nl = NeurolangPDL()
 
@@ -941,7 +972,9 @@ def test_query_based_spatial_prior():
     )
     exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
     with nl.environment as e:
-        (e.VoxelReported @ exp(-(e.d ** 2) / 5.0))[e.i1, e.j1, e.k1, e.s] = (
+        (e.VoxelReported @ e.max(exp(-(e.d ** 2) / 5.0)))[
+            e.i1, e.j1, e.k1, e.s
+        ] = (
             e.FocusReported(e.i2, e.j2, e.k2, e.s)
             & e.Voxel(e.i1, e.j1, e.k1)
             & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
@@ -975,8 +1008,8 @@ def test_query_based_spatial_prior():
             (10, 9, 10, np.exp(-1 / 5) / 2),
             (10, 9, 11, np.exp(-1 / 5) / 2),
             (10, 10, 9, np.exp(-1 / 5) / 2),
-            (10, 10, 10, 0.5 + np.exp(-1 / 5) / 2),
-            (10, 10, 11, 0.5 + np.exp(-1 / 5) / 2),
+            (10, 10, 10, 0.5),
+            (10, 10, 11, 0.5),
             (10, 10, 12, np.exp(-1 / 5) / 2),
             (10, 11, 10, np.exp(-1 / 5) / 2),
             (10, 11, 11, np.exp(-1 / 5) / 2),
@@ -1021,12 +1054,10 @@ def test_postprob_conjunct_with_wlq_result():
         name="TIS",
     )
 
-    nl.add_symbol(len, name="agg_count")
-
     with nl.environment as e:
         e.TheWLQ[e.t, e.PROB(e.t)] = e.SS(e.s) & e.TIS(e.t, e.s)
-        e.P[e.t, e.agg_count(e.s)] = e.TIS(e.t, e.s)
-        e.Q[e.agg_count(e.s)] = e.S(e.s)
+        e.P[e.t, e.count(e.s)] = e.TIS(e.t, e.s)
+        e.Q[e.count(e.s)] = e.S(e.s)
         e.TheQuery[e.t, e.N, e.m, e.p] = (
             e.TheWLQ(e.t, e.p) & e.P(e.t, e.m) & e.Q(e.N)
         )
@@ -1035,4 +1066,33 @@ def test_postprob_conjunct_with_wlq_result():
         ("t1", 2, 2, 1.0),
         ("t2", 2, 1, 0.5),
     }
+    assert_almost_equal(sol, expected)
+
+
+def test_no_tuple_unicity_qbased_pfact():
+    nl = NeurolangPDL(check_qbased_pfact_tuple_unicity=True)
+    nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
+    with nl.environment as e:
+        (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
+        e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
+        with pytest.raises(RepeatedTuplesInProbabilisticRelationError):
+            nl.query((e.x, e.p), e.Query(e.x, e.p))
+    nl = NeurolangPDL(check_qbased_pfact_tuple_unicity=False)
+    nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
+    with nl.environment as e:
+        (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
+        e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
+        result = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    expected = {("a", 0.2), ("b", 0.5), ("a", 0.9)}
+    assert_almost_equal(result, expected)
+
+
+def test_qbased_pfact_max_prob():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
+    with nl.environment as e:
+        (e.Q @ e.max(e.p))[e.x] = e.P(e.p, e.x)
+        e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
+        sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    expected = {("a", 0.9), ("b", 0.5)}
     assert_almost_equal(sol, expected)
