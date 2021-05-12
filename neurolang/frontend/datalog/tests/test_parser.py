@@ -1,3 +1,4 @@
+from neurolang.logic import ExistentialPredicate
 from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
@@ -232,6 +233,38 @@ def test_condition():
         Implication(
             C(x),
             Condition(A(x), Conjunction((A(x), B(x))))
+        ),
+    ))
+
+    assert res == expected
+
+
+def test_existential():
+    A = Symbol('A')
+    B = Symbol('B')
+    C = Symbol('C')
+    x = Symbol('x')
+    s1 = Symbol('s1')
+    s2 = Symbol('s2')
+
+    res = parser('C(x) :- B(x), exists(s1; A(s1))')
+    expected = Union((
+        Implication(
+            C(x),
+            Conjunction((B(x), ExistentialPredicate(s1, A(s1))))
+        ),
+    ))
+    assert res == expected
+    
+    res = parser('C(x) :- B(x), ∃(s1 st A(s1))')
+    assert res == expected
+
+    res = parser('C(x) :- B(x), exists(s1, s2; (A(s1), A(s2)))')
+
+    expected = Union((
+        Implication(
+            C(x),
+            Conjunction((B(x), ExistentialPredicate(s2, ExistentialPredicate(s1, Conjunction((A(s1), A(s2))))), ))
         ),
     ))
 

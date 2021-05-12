@@ -1,3 +1,4 @@
+from neurolang.logic import ExistentialPredicate
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
@@ -30,6 +31,10 @@ GRAMMAR = u"""
     conjunction = ( conjunction_symbol ).{ predicate } ;
     composite_predicate = '(' @:conjunction ')'
                         | predicate ;
+    exists = 'exists' | '\u2203' | 'EXISTS';
+    such_that = 'st' | ';' ;
+    reserved_words = exists 
+                   | 'st' ;
 
     conjunction_symbol = ',' | '&' | '\N{LOGICAL AND}' ;
     implication = ':-' | '\N{LEFTWARDS ARROW}' ;
@@ -37,6 +42,7 @@ GRAMMAR = u"""
     head_predicate = identifier'(' [ arguments ] ')' ;
     predicate = int_ext_identifier'(' [ arguments ] ')'
               | negated_predicate
+              | existential_predicate
               | comparison
               | logical_constant
               | '(' @:predicate ')';
@@ -44,6 +50,9 @@ GRAMMAR = u"""
     constant_predicate = identifier'(' ','.{ literal } ')' ;
 
     negated_predicate = ('~' | '\u00AC' ) predicate ;
+    existential_body = arguments such_that composite_predicate;
+    existential_predicate = \
+        exists '(' @:existential_body ')' ;
 
     comparison = argument comparison_operator argument ;
 
@@ -74,7 +83,7 @@ GRAMMAR = u"""
             | text
             | ext_identifier ;
 
-    identifier = /[a-zA-Z_][a-zA-Z0-9_]*/
+    identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/
                | '`'@:?"[0-9a-zA-Z/#%._:-]+"'`';
 
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
@@ -195,6 +204,15 @@ class DatalogSemantics:
 
     def negated_predicate(self, ast):
         return Negation(ast[1])
+
+    def existential_predicate(self, ast):
+        exp = ast[2]
+        if isinstance(exp, list):
+            exp = Conjunction(tuple(exp))
+
+        for arg in ast[0]:
+            exp = ExistentialPredicate(arg, exp)
+        return exp
 
     def comparison(self, ast):
         operator = Constant(OPERATOR[ast[1]])
