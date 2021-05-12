@@ -3,7 +3,7 @@ from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....probabilistic.expressions import Condition, ProbabilisticPredicate
-from ....expressions import Constant, Symbol, FunctionApplication
+from ....expressions import Constant, Query, Symbol, FunctionApplication
 from ..standard_syntax import ExternalSymbol, parser
 
 
@@ -282,3 +282,14 @@ def test_existential():
     )
 
     assert res == expected
+
+def test_query():
+    ans = Symbol("ans")
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("ans(x) :- B(x, y), C(3, y)")
+    assert res == Union(
+        (Query(ans(x), Conjunction((B(x, y), C(Constant(3), y)))),)
+    )
