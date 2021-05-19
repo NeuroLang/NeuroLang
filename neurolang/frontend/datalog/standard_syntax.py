@@ -41,7 +41,7 @@ GRAMMAR = u"""
     implication = ':-' | '\N{LEFTWARDS ARROW}' ;
     right_implication = '-:' | '\N{RIGHTWARDS ARROW}' ;
     head_predicate = identifier'(' [ arguments ] ')' ;
-    query = 'ans(' @:arguments ')' ;
+    query = 'ans(' [ @:arguments ] ')' ;
     predicate = int_ext_identifier'(' [ arguments ] ')'
               | negated_predicate
               | existential_predicate
@@ -204,6 +204,8 @@ class DatalogSemantics:
         return ast
 
     def query(self, ast):
+        if ast == ("ans(", ")"):
+            return Symbol("ans")()
         return Symbol("ans")(*ast)
 
     def predicate(self, ast):

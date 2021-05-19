@@ -25,7 +25,7 @@ def test_facts():
     assert res == Union((
         Fact(Symbol('A')(Constant('x'), Constant(3))),
         Fact(Symbol('http://uri#test-fact')(Constant('x'))),
-        Implication(
+        Query(
             Symbol('ans')(),
             Conjunction((
                 Symbol('A')(Symbol('x'), Symbol('y')),
