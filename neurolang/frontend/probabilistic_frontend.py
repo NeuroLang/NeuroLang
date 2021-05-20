@@ -166,9 +166,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.onto = OntologyParser(paths)
         constraints, rules = self.onto.parse_ontology()
         self.program_ir.walk(Union(rules))
-        self.program_ir.walk(Union(constraints))
+        #self.program_ir.walk(Union(constraints))
         
-        #self.program_ir.set_constraints(constraints)
+        self.program_ir.set_constraints(constraints)
 
     @property
     def current_program(self) -> List[fe.Expression]:
