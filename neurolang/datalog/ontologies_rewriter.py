@@ -35,8 +35,6 @@ class OntologyRewriter:
         for t in self.query.formulas:
             Q_rew.add((t, "r", "u"))
 
-        #categorized = self._categorize_constraints()
-
         Q_temp = set({})
         Q_explored = set({})
         while Q_rew != Q_temp:

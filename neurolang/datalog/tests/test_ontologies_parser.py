@@ -553,6 +553,127 @@ def test_open_world_example():
     assert (res == [['Juan'], ['Manuel']]).all()
 
 
+def test_iobc():
+    from nilearn import datasets, image
+    import nibabel
+    import numpy as np
+    import pandas as pd
+    from neurolang.frontend import NeurolangPDL, ExplicitVBR, ExplicitVBROverlay
+    from typing import Callable, Iterable
+
+    iobc = datasets.utils._fetch_files(
+        datasets.utils._get_dataset_dir('ontology'),
+        [
+            (
+                'iobc.xrdf',
+                'http://data.bioontology.org/ontologies/IOBC/download?'
+                'apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb&download_format=rdf',
+                {'move': 'iobc.xrdf'}
+            )
+        ]
+    )[0]
+
+    nl = NeurolangPDL()
+    nl.load_ontology(iobc)
+
+    mni_mask = image.resample_img(
+        nibabel.load(datasets.fetch_icbm152_2009()["gm"]),
+        np.eye(3) * 2
+    )
+
+    ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
+        "neurolang",
+        [
+            (
+                "database.txt",
+                "https://github.com/neurosynth/neurosynth-data"
+                "/raw/master/current_data.tar.gz",
+                {"uncompress": True},
+            ),
+            (
+                "features.txt",
+                "https://github.com/neurosynth/neurosynth-data"
+                "/raw/master/current_data.tar.gz",
+                {"uncompress": True},
+            ),
+        ],
+    )
+
+    ns_database = pd.read_csv(ns_database_fn, sep="\t")
+    ns_database = ns_database[["x", "y", "z", "id"]]
+
+    ns_features = pd.read_csv(ns_features_fn, sep="\t")
+    ns_docs = ns_features[["pmid"]].drop_duplicates()
+    ns_terms = pd.melt(
+        ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
+    ).query("TfIdf > 1e-3")[["term", "pmid"]]
+
+
+    terms_det = nl.add_tuple_set(
+            ns_terms.term.unique(), name='terms_det'
+    )
+
+    label = nl.new_symbol(name='rdf-schema:label')
+    related = nl.new_symbol(name='core:related')
+    altLabel = nl.new_symbol(name='core:altLabel')
+
+    @nl.add_symbol
+    def word_lower(name: str) -> str:
+        return name.lower()
+
+    @nl.add_symbol
+    def agg_create_region_overlay_MNI(
+        x: Iterable, y: Iterable, z: Iterable, p: Iterable
+    ) -> ExplicitVBR:
+        voxels = nibabel.affines.apply_affine(
+            np.linalg.inv(mni_mask.affine),
+            np.c_[x, y, z]
+        )
+        return ExplicitVBROverlay(
+            voxels, mni_mask.affine, p, image_dim=mni_mask.shape
+        )
+
+    @nl.add_symbol
+    def mean(iterable: Iterable) -> float:
+        return np.mean(iterable)
+
+
+    @nl.add_symbol
+    def std(iterable: Iterable) -> float:
+        return np.std(iterable)
+
+    with nl.scope as e:
+        e.ontology_related[e.ne, e.l] = (
+            label(e.e, e.ne) &
+            related(e.e, e.r) &
+            label(e.r, e.nr) &
+            (e.l == word_lower[e.nr])
+        )
+        
+        #e.ontology_synonym[e.ne, e.l] = (
+        #    label(e.e, e.ne) &
+        #    altLabel(e.e, e.r) &
+        #    (e.l == word_lower[e.r])
+        #)
+        
+        e.res[e.entity, e.relation, e.term] = (
+            e.ontology_related[e.entity, e.term] &
+            e.terms_det[e.entity] &
+            e.terms_det[e.term] &
+            (e.relation == 'related')
+        )
+        
+        #e.res[e.entity, e.relation, e.term] = (
+        #    e.ontology_synonym[e.entity, e.term] &
+        #    e.terms_det[e.entity] &
+        #    e.terms_det[e.term] &
+        #    (e.relation == 'synonym')
+        #)
+        
+        #res = nl.solve_all()
+        r = nl.query((e.entity, e.relation, e.term), e.res[e.entity, e.relation, e.term])
+    a = 1
+
 def test_cogat():
     from nilearn import datasets, image
     import pandas as pd
@@ -571,97 +692,101 @@ def test_cogat():
         ]
     )[0]
 
-    mni_mask = image.resample_img(
-        nib.load(datasets.fetch_icbm152_2009()["gm"]),
-        np.eye(3) * 2
-    )
+    #mni_mask = image.resample_img(
+    #    nib.load(datasets.fetch_icbm152_2009()["gm"]),
+    #    np.eye(3) * 2
+    #)
 
-    ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
-        datasets.utils._get_dataset_dir('neurosynth'),
-        [
-            (
-                'database.txt',
-                'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
-                {'uncompress': True}
-            ),
-            (
-                'features.txt',
-                'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
-                {'uncompress': True}
-            ),
-        ]
-    )
+    #ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
+    #    datasets.utils._get_dataset_dir('neurosynth'),
+    #    [
+    #        (
+    #            'database.txt',
+    #            'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
+    #            {'uncompress': True}
+    #        ),
+    #        (
+    #            'features.txt',
+    #            'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
+    #            {'uncompress': True}
+    #        ),
+    #    ]
+    #)
 
-    ns_database = pd.read_csv(ns_database_fn, sep="\t")
-    ns_database = ns_database[["x", "y", "z", "id"]]
+    #ns_database = pd.read_csv(ns_database_fn, sep="\t")
+    #ns_database = ns_database[["x", "y", "z", "id"]]
 
-    ns_features = pd.read_csv(ns_features_fn, sep="\t")
-    ns_docs = ns_features[["pmid"]].drop_duplicates()
-    ns_terms = pd.melt(
-        ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
-    ).query("TfIdf > 1e-3")[["term", "pmid"]]
+    #ns_features = pd.read_csv(ns_features_fn, sep="\t")
+    #ns_docs = ns_features[["pmid"]].drop_duplicates()
+    #ns_terms = pd.melt(
+    #    ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
+    #).query("TfIdf > 1e-3")[["term", "pmid"]]
 
     import rdflib
     from rdflib import RDFS
-    g = rdflib.Graph()
-    g.load(cogAt)
+    #g = rdflib.Graph()
+    #g.load(cogAt)
 
     from rdflib import BNode
 
-    onto_dic = {}
-    for obj in g.subjects():
-        if isinstance(obj, BNode):
-            continue
-        for b in g.triples((obj, RDFS.label, None)):
-            label = b[2].lower().replace(' ', '_')
-            obj_split = obj.split('#')
-            if len(obj_split) == 2:
-                name = obj_split[1]
-                namespace = obj_split[0].split('/')[-1]
-                if name[0] != '' and namespace != '':
-                    res = namespace + ':' + name
-                else:
-                    res = name
-            else:
-                obj_split = obj.split('/')
-                res = obj_split[-1]
+    #onto_dic = {}
+    #for obj in g.subjects():
+    #    if isinstance(obj, BNode):
+    #        continue
+    #    for b in g.triples((obj, RDFS.label, None)):
+    #        label = b[2].lower().replace(' ', '_')
+    #        obj_split = obj.split('#')
+    #        if len(obj_split) == 2:
+    #            name = obj_split[1]
+    #            namespace = obj_split[0].split('/')[-1]
+    #            if name[0] != '' and namespace != '':
+    #                res = namespace + ':' + name
+    #            else:
+    #                res = name
+    #        else:
+    #            obj_split = obj.split('/')
+    #            res = obj_split[-1]
 
-            onto_dic[label] = res
+    #        onto_dic[label] = res
 
-    group_terms = ns_terms.groupby('term')
-    dic_term_pmid = {}
+    #group_terms = ns_terms.groupby('term')
+    #dic_term_pmid = {}
 
-    for term, ids in group_terms:
-        term = term.lower().replace(' ', '_')
-        dic_term_pmid[term] = ids
+    #for term, ids in group_terms:
+    #    term = term.lower().replace(' ', '_')
+    #    dic_term_pmid[term] = ids
 
-    merge_dic = {}
-    for k, v in onto_dic.items():
-        if k in dic_term_pmid.keys():
-            vl = v.lower()
-            merge_dic[vl] = dic_term_pmid[k]
+    #merge_dic = {}
+    #for k, v in onto_dic.items():
+    #    if k in dic_term_pmid.keys():
+    #        vl = v.lower()
+    #        merge_dic[vl] = dic_term_pmid[k]
 
     nl = NeurolangPDL()
     nl.load_ontology(cogAt)
 
-    for k, v in dic_term_pmid.items():
-        if k in onto_dic.keys():
-            cogat_key = onto_dic[k]
-            nl.add_tuple_set(v.pmid.values, name=cogat_key)
+    #for k, v in dic_term_pmid.items():
+    #    if k in onto_dic.keys():
+    #        cogat_key = onto_dic[k]
+    #        nl.add_tuple_set(tuple(v.pmid.values), name=cogat_key)
 
-    SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
-        ns_docs, name="SelectedStudy"
-    )
+    #SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
+    #    ns_docs, name="SelectedStudy"
+    #)
 
-    TermInStudy = nl.add_tuple_set(ns_terms, name="TermInStudy")
-    FocusReported = nl.add_tuple_set(ns_database, name="FocusReported")
-    Voxel = nl.add_tuple_set(
-        nib.affines.apply_affine(
-            mni_mask.affine,
-            np.transpose(mni_mask.get_fdata().nonzero())
-        ),
-        name='Voxel'
-    )
+    #TermInStudy = nl.add_tuple_set(ns_terms, name="TermInStudy")
+    #FocusReported = nl.add_tuple_set(ns_database, name="FocusReported")
+    #Voxel = nl.add_tuple_set(
+    #    nib.affines.apply_affine(
+    #        mni_mask.affine,
+    #        np.transpose(mni_mask.get_fdata().nonzero())
+    #    ),
+    #    name='Voxel'
+    #)
+
+    @nl.add_symbol
+    def word_lower(name: str) -> str:
+        return name.lower()
 
     part_of = nl.new_symbol(name='ro.owl:part_of')
     label = nl.new_symbol(name='rdf-schema:label')
@@ -676,11 +801,19 @@ def test_cogat():
     autonoesis = nl.new_symbol(name='cogat.owl:CAO_00693')
     episodic_memory = nl.new_symbol(name='cogat.owl:CAO_00277') 
 
+    altLabel = nl.new_symbol(name='core:altLabel')
+
     with nl.scope as e:
-        e.answer[e.a] = (
-            perception[e.a]   
+        #e.answer[e.a] = (
+        #    perception[e.a]   
+        #)
+
+        e.ontology_synonym[e.ne, e.l] = (
+            label(e.e, e.ne) &
+            altLabel(e.e, e.r) &
+            (e.l == word_lower[e.r])
         )
 
-        f_term = nl.solve_all()
+        f_term = nl.query((e.ne, e.l), e.ontology_synonym(e.ne, e.l))
 
     a = 1 
