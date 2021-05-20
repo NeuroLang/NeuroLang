@@ -32,7 +32,6 @@ from ..logic.expression_processing import (
     extract_logic_free_variables,
 )
 from ..relational_algebra import (
-    ColumnInt,
     ColumnStr,
     ExtendedProjection,
     ExtendedProjectionListMember,
@@ -40,7 +39,6 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraPushInSelections,
     RelationalAlgebraStringExpression,
-    RenameColumns,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
@@ -49,10 +47,10 @@ from ..relational_algebra_provenance import (
     RelationalAlgebraProvenanceCountingSolver,
     RelationalAlgebraProvenanceExpressionSemringSolver
 )
-from ..utils.relational_algebra_set.pandas import (
+from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet
 )
-from ..utils import log_performance
+from ..utils import (log_performance, config)
 
 from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
@@ -164,55 +162,51 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         self.translated_probfact_sets = dict()
         self.tagged_sets = []
 
+    def _semiring_mul(self, left, right):
+        return FunctionApplication(Constant(self._internal_mul), (left, right))
+
+    @staticmethod
+    def _internal_mul(left, right):
+        r = left * right
+        return r
+
     @add_match(DeterministicFactSet(Symbol))
     def deterministic_fact_set(self, deterministic_set):
         relation_symbol = deterministic_set.relation
         if relation_symbol in self.translated_probfact_sets:
             return self.translated_probfact_sets[relation_symbol]
 
-        relation = self.walk(relation_symbol)
-        tagged_relation, rap_column = self._add_tag_column(relation)
-
-        self.tagged_sets.append(self.walk(
-            ExtendedProjection(
-                tagged_relation,
-                [
-                    ExtendedProjectionListMember(
-                        rap_column, str2columnstr_constant('id')
-                    ),
-                    ExtendedProjectionListMember(
-                        Constant[float](1.), str2columnstr_constant('prob')
-                    )
-                ]
+        with log_performance(
+            LOG, f"Build deterministic fact set {relation_symbol}"
+        ):
+            relation = self.walk(relation_symbol)
+            df = relation.value.as_pandas_dataframe()
+            tags = [Symbol.fresh() for _ in range(len(df))]
+            probs = [1.0 for _ in range(len(df))]
+            tag_set = list(zip(tags, probs))
+            prob_column = Symbol.fresh().name
+            return self._build_tag_and_prov_sets(
+                relation, relation_symbol, df, prob_column, tag_set, tags
             )
-        ))
-
-        prov_set = self._generate_provenance_set(
-            tagged_relation, Constant[int](-1), rap_column
-        )
-
-        self.translated_probfact_sets[relation_symbol] = prov_set
-        return prov_set
 
     @add_match(ProbabilisticFactSet(Symbol, Constant))
     def probabilistic_fact_set(self, prob_fact_set):
         relation_symbol = prob_fact_set.relation
+        prob_column = prob_fact_set.probability_column.value
         if relation_symbol in self.translated_probfact_sets:
             return self.translated_probfact_sets[relation_symbol]
 
-        relation = self.walk(relation_symbol)
-        tagged_relation, rap_column = self._add_tag_column(relation)
-
-        self._generate_tag_probability_set(
-            rap_column, prob_fact_set, tagged_relation
-        )
-
-        prov_set = self._generate_provenance_set(
-            tagged_relation, prob_fact_set.probability_column, rap_column
-        )
-
-        self.translated_probfact_sets[relation_symbol] = prov_set
-        return prov_set
+        with log_performance(
+            LOG, f"Build probabilistic fact set {relation_symbol}"
+        ):
+            relation = self.walk(relation_symbol)
+            df = relation.value.as_pandas_dataframe()
+            tags = [Symbol.fresh() for _ in range(len(df))]
+            probs = df[prob_column]
+            tag_set = list(zip(tags, probs))
+            return self._build_tag_and_prov_sets(
+                relation, relation_symbol, df, prob_column, tag_set, tags
+            )
 
     @add_match(ProbabilisticChoiceSet(Symbol, Constant))
     def probabilistic_choice_set(self, prob_choice_set):
@@ -221,64 +215,56 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         if relation_symbol in self.translated_probfact_sets:
             return self.translated_probfact_sets[relation_symbol]
 
-        with log_performance(LOG, "building probabilistic choice set"):
+        with log_performance(
+            LOG, f"Build Probabilistic choice set {relation_symbol}"
+        ):
             relation = self.walk(relation_symbol)
-            df, prov_column = self._generate_tag_choice_set(
-                relation, prob_column
+            df = relation.value.as_pandas_dataframe()
+            previous = tuple()
+            previous_probability = 0
+            prov_column = []
+            tag_set = []
+            with sure_is_not_pattern():
+                for probability in df[prob_column]:
+                    adjusted_probability = probability / (1 - previous_probability)
+                    previous_probability += probability
+                    previous = self._generate_tag_choice_expression(
+                        previous, adjusted_probability, prov_column, tag_set
+                    )
+
+            return self._build_tag_and_prov_sets(
+                relation,
+                relation_symbol,
+                df,
+                prob_column,
+                tag_set,
+                prov_column,
             )
 
-            prov_set = self._generate_choice_provenance_set(
-                relation, prob_column, df, prov_column
-            )
-
+    def _build_tag_and_prov_sets(
+        self, relation, relation_symbol, df, prob_column, tag_set, prov_column
+    ):
+        tag_set = self._build_relation_constant(
+            NamedRelationalAlgebraFrozenSet(("id", "prob"), tag_set)
+        )
+        self.tagged_sets.append(tag_set)
+        tagged_df = df.copy()
+        new_columns = tuple(f"col_{c}" for c in relation.value.columns)
+        if prob_column not in df.columns:
+            new_columns = new_columns + (f"col_{prob_column}",)
+        tagged_df[prob_column] = prov_column
+        tagged_ras_set = NamedRelationalAlgebraFrozenSet(
+            new_columns, tagged_df
+        )
+        prov_set = ProvenanceAlgebraSet(
+            tagged_ras_set, ColumnStr(f"col_{prob_column}")
+        )
         self.translated_probfact_sets[relation_symbol] = prov_set
         return prov_set
 
-    def _generate_choice_provenance_set(
-        self, relation, prob_column, df, prov_column
+    def _generate_tag_choice_expression(
+        self, previous, adjusted_probability, prov_column, tag_set
     ):
-        out_columns = tuple(
-            c
-            for c in relation.value.columns
-            if int(c) != prob_column
-        )
-        prov_set = df[list(out_columns)]
-        prov_column_name = Symbol.fresh().name
-        prov_set[prov_column_name] = prov_column
-        renamed_out_columns = tuple(
-            range(len(out_columns))
-        ) + (prov_column_name,)
-        prov_set.columns = renamed_out_columns
-        prov_set = NamedRelationalAlgebraFrozenSet(
-            renamed_out_columns, prov_set
-        )
-        prov_set = ProvenanceAlgebraSet(prov_set, ColumnStr(prov_column_name))
-        return prov_set
-
-    def _generate_tag_choice_set(self, relation, prob_column):
-        previous = tuple()
-        previous_probability = 0
-        df = relation.value.as_pandas_dataframe()
-        prov_column = []
-        tag_set = []
-        with sure_is_not_pattern():
-            for probability in df.iloc[:, prob_column]:
-                tag_expression, symbol, previous = \
-                    self._generate_tag_choice_expression(previous)
-
-                adjusted_probability = probability / (1 - previous_probability)
-                previous_probability += probability
-
-                prov_column.append(tag_expression)
-                tag_set.append((symbol, adjusted_probability))
-
-        tag_set = self._build_relation_constant(
-            NamedRelationalAlgebraFrozenSet(('id', 'prob'), tag_set)
-        )
-        self.tagged_sets.append(tag_set)
-        return df, prov_column
-
-    def _generate_tag_choice_expression(self, previous):
         symbol = Symbol.fresh()
         neg_symbol = FunctionApplication(
             NEG, (symbol,), validate_arguments=False
@@ -292,107 +278,9 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                 MUL, args, validate_arguments=False
             )
         previous = (neg_symbol,) + previous
-        return tag_expression, symbol, previous
-
-    def _generate_tag_probability_set(
-        self, rap_column, prob_fact_set, tagged_relation
-    ):
-        columns_for_tagged_set = (
-            rap_column,
-            Constant[ColumnInt](ColumnInt(
-                prob_fact_set.probability_column.value
-            ))
-        )
-
-        self.tagged_sets.append(self.walk(
-            ExtendedProjection(
-                tagged_relation,
-                [
-                    ExtendedProjectionListMember(
-                        rap_column, str2columnstr_constant('id')
-                    ),
-                    ExtendedProjectionListMember(
-                        columns_for_tagged_set[1],
-                        str2columnstr_constant('prob')
-                    ),
-                ]
-            )
-        ))
-
-    def _generate_provenance_set(
-        self, tagged_relation,
-        prob_column, rap_column
-    ):
-        out_columns = tuple(
-            Constant[ColumnInt](ColumnInt(c))
-            for c in tagged_relation.value.columns
-            if (
-                c != rap_column and
-                int(c) != prob_column.value
-            )
-
-        ) + (rap_column,)
-
-        prov_set = (
-            RenameColumns(
-                Projection(tagged_relation, out_columns),
-                tuple(
-                    (c, Constant[ColumnInt](ColumnInt(i)))
-                    for i, c in enumerate(out_columns[:-1])
-                )
-            )
-        )
-        prov_set = ProvenanceAlgebraSet(
-            self.walk(prov_set).value,
-            rap_column.value
-        )
-        return prov_set
-
-    def _add_tag_column(self, relation):
-        new_columns = tuple(
-            str2columnstr_constant(str(i))
-            for i in relation.value.columns
-        )
-
-        relation = NameColumns(relation, new_columns)
-
-        def get_fresh_symbol():
-            s = Symbol.fresh()
-            return s
-
-        get_fresh_symbol_functor = Constant(get_fresh_symbol)
-
-        rap_column = str2columnstr_constant(Symbol.fresh().name)
-        projection_list = [
-            ExtendedProjectionListMember(
-                Constant[RelationalAlgebraStringExpression](
-                    RelationalAlgebraStringExpression(c.value),
-                    verify_type=False
-                ),
-                c
-            )
-            for c in new_columns
-        ] + [
-            ExtendedProjectionListMember(
-                FunctionApplication(
-                    get_fresh_symbol_functor,
-                    tuple()
-                ),
-                rap_column
-            )
-        ]
-        expression = RenameColumns(
-            ExtendedProjection(
-                relation, projection_list
-            ),
-            tuple(
-                (c, Constant[ColumnInt](ColumnInt(c.value)))
-                for i, c in enumerate(new_columns)
-            )
-        )
-
-        res = self.walk(expression)
-        return res, rap_column
+        prov_column.append(tag_expression)
+        tag_set.append((symbol, adjusted_probability))
+        return previous
 
     @add_match(ProbabilisticFactSet)
     def probabilistic_fact_set_invalid(self, prob_fact_set):
@@ -957,7 +845,10 @@ def generate_probability_table(solver):
     return ids_with_probs
 
 
-solve_succ_query = solve_succ_query_sdd_direct
+if config["RAS"].get("Backend", "pandas") == "dask":
+    solve_succ_query = solve_succ_query_boolean_diagram
+else:
+    solve_succ_query = solve_succ_query_sdd_direct
 
 
 def solve_marg_query(rule, cpl):

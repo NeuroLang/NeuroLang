@@ -2,6 +2,7 @@ import inspect
 import operator as op
 from typing import AbstractSet, Callable, Mapping, Sequence, Tuple
 
+import pickle
 import pytest
 import numpy
 
@@ -47,6 +48,19 @@ def test_build_constants():
     assert len(b.value) == 1
     assert C_('a') in b.value
     assert C_(1) in b.value.values()
+
+
+def test_pickle_constants():
+    a = C_('ab')
+    assert pickle.loads(pickle.dumps(a)) == a
+    b = C_(['a'])
+    assert pickle.loads(pickle.dumps(b)) == b
+    c = C_(('a', 1))
+    assert pickle.loads(pickle.dumps(c)) == c
+    d = C_({'a'})
+    assert pickle.loads(pickle.dumps(d)) == d
+    e = C_({'a': 1})
+    assert pickle.loads(pickle.dumps(e)) == e
 
 
 def test_fresh_symbol():

@@ -5,6 +5,7 @@ Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
+from neurolang.exceptions import UnsupportedProgramError
 from typing import (
     AbstractSet,
     Dict,
@@ -21,6 +22,7 @@ import pandas as pd
 
 from .. import datalog
 from .. import expressions as ir
+from .. import logic
 from ..datalog.chase import Chase
 from ..datalog.constraints_representation import RightImplication
 from ..datalog.expression_processing import (
@@ -194,17 +196,68 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.program_ir.walk(rule)
         return rule
 
-    def execute_datalog_program(self, code: str) -> None:
+    def execute_datalog_program(
+        self, code: str
+    ) -> Union[None, bool, RelationalAlgebraFrozenSet]:
         """
-        Execute a Datalog program in classical syntax
+        Execute a Datalog program in classical syntax.
+        If the program contains a query, in the form `ans(x) :- R(x)`,
+        then this query is executed against the program and the result is
+        returned. Otherwise returns None.
 
         Parameters
         ----------
         code : string
             Datalog program.
+
+        Examples
+        --------
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
+        >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
+        l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
+        >>> prog = '''
+        ...        l2(x, y) :- l(x, y), (x == y)
+        ...        ans(x) :- l2(x, y)
+        ...        '''
+        >>> with nl.environment as e:
+        ...     q = nl.execute_datalog_program(prog)
+        >>> q
+        ... q: typing.AbstractSet[typing.Tuple[int]] = [(2,)]
         """
         intermediate_representation = self.datalog_parser(code)
-        self.program_ir.walk(intermediate_representation)
+        queries = [
+            rule
+            for rule in intermediate_representation.formulas
+            if isinstance(rule, ir.Query)
+        ]
+        if len(queries) == 0:
+            self.program_ir.walk(intermediate_representation)
+            return
+        elif len(queries) == 1:
+            query = self.frontend_translator.walk(queries[0])
+            program = logic.Union(
+                [
+                    rule
+                    for rule in intermediate_representation.formulas
+                    if not isinstance(rule, ir.Query)
+                ]
+            )
+            self.program_ir.walk(program)
+            return self.query(query.head.arguments, query.body)
+        else:
+            raise UnsupportedProgramError(
+                "Only one query, in the form of ans(...) :- R(...) is "
+                "supported. Datalog program has more than one query rule: "
+                "{}".format(
+                    "\n".join(
+                        [
+                            str(self.frontend_translator.walk(q))
+                            for q in queries
+                        ]
+                    )
+                )
+            )
 
     def execute_nat_datalog_program(self, code: str) -> None:
         """Execute a natural language Datalog program in classical syntax
