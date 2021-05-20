@@ -35,7 +35,7 @@ class OntologyRewriter:
         for t in self.query.formulas:
             Q_rew.add((t, "r", "u"))
 
-        sigma_free_vars = self._extract_free_variables()
+        #categorized = self._categorize_constraints()
 
         Q_temp = set({})
         Q_explored = set({})
@@ -43,7 +43,7 @@ class OntologyRewriter:
             Q_temp = Q_rew.copy()
             for q in Q_temp:
                 q0 = q[0]
-                selected_sigmas = self._get_related_sigmas(q0, sigma_free_vars)
+                selected_sigmas = self._get_related_sigmas(q0, self.union_of_constraints)
                 for sigma in selected_sigmas:
                     list_q0 = self.rewriting_step(q0, sigma, rename_count)
                     for new_q0 in list_q0:
@@ -59,28 +59,16 @@ class OntologyRewriter:
 
         return Q_explored
 
-    def _extract_free_variables(self):
+    def _categorize_constraints(self):
         sigma_free_vars = {}
         for sigma in self.union_of_constraints.formulas:
-            if isinstance(sigma, RightImplication):
-                sigma_free_vars = self._add_new_free_var(
-                    sigma, 
-                    sigma_free_vars
-                )
-
-
-        return sigma_free_vars
-
-    def _add_new_free_var(self, sigma, sigma_free_vars):
-        efvw = ExtractFreeVariablesRightImplicationWalker()
-        free_vars = efvw.walk(sigma) 
-        if sigma.consequent.functor in sigma_free_vars.keys():
-            cons_list = sigma_free_vars[sigma.consequent.functor]
-            if (sigma, free_vars) not in cons_list:
-                cons_list.append((sigma, free_vars))
-            sigma_free_vars[sigma.consequent.functor] = cons_list
-        else:
-            sigma_free_vars[sigma.consequent.functor] = [(sigma, free_vars)]
+            if sigma.consequent.functor in sigma_free_vars:
+                cons_list = sigma_free_vars[sigma.consequent.functor]
+                if sigma not in cons_list:
+                    cons_list.append(sigma)
+                    sigma_free_vars[sigma.consequent.functor] = cons_list
+            else:
+                sigma_free_vars[sigma.consequent.functor] = [sigma]
 
         return sigma_free_vars
 
@@ -102,7 +90,7 @@ class OntologyRewriter:
         list_q0 = []
         for S in S_applicable:
             rename_count += 1
-            sigma_i = self._rename(sigma[0], rename_count)
+            sigma_i = self._rename(sigma, rename_count)
             qS = most_general_unifier(sigma_i.consequent, S)
             if qS:
                 new_q0 = self._combine_rewriting(q0, qS, S, sigma_i)
@@ -149,9 +137,12 @@ class OntologyRewriter:
 
     def _get_factorizable(self, sigma, q):
         factorizable = []
-        for free_var in sigma[1]._list:
-            pos = self._get_position_existential(sigma[0].consequent, free_var)
-            S = self._get_term(q, sigma[0].consequent)
+        efvw = ExtractFreeVariablesRightImplicationWalker()
+        free_vars = efvw.walk(sigma)
+        for fv in free_vars:
+        #for free_var in sigma[1]._list:
+            pos = self._get_position_existential(sigma.consequent, fv)
+            S = self._get_term(q, sigma.consequent)
             if (
                 S
                 and self._is_factorizable(S, pos)
@@ -204,7 +195,7 @@ class OntologyRewriter:
             )
 
     def _get_applicable(self, sigma, q):
-        S = self._get_term(q, sigma[0].consequent)
+        S = self._get_term(q, sigma.consequent)
         if self._is_applicable(sigma, q, S):
             return S
 
@@ -226,7 +217,7 @@ class OntologyRewriter:
 
     def _is_applicable(self, sigma, q, S):
         return self._unifies(
-            S, sigma[0].consequent
+            S, sigma.consequent
         ) and self._not_in_existential(q, S, sigma)
 
     def _is_factorizable(self, S, pos):
@@ -236,9 +227,11 @@ class OntologyRewriter:
         return all(most_general_unifier(term, sigma) for term in S)
 
     def _not_in_existential(self, q, S, sigma):
-        for free_var in sigma[1]._list:
+        efvw = ExtractFreeVariablesRightImplicationWalker()
+        free_vars = efvw.walk(sigma)
+        for fv in free_vars:
             existential_position = self._get_position_existential(
-                sigma[0].consequent, free_var
+                sigma.consequent, fv
             )
             if self._position_shared_or_constant(q, S, existential_position):
                 return False

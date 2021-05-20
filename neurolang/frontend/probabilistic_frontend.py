@@ -164,8 +164,11 @@ class NeurolangPDL(QueryBuilderDatalog):
             storage format, by default "xml"
         """
         self.onto = OntologyParser(paths)
-        constraints = self.onto.parse_ontology()
+        constraints, rules = self.onto.parse_ontology()
+        self.program_ir.walk(Union(rules))
         self.program_ir.walk(Union(constraints))
+        
+        #self.program_ir.set_constraints(constraints)
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -446,7 +449,7 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
             deterministic_program, 
-            self.program_ir.constraints(),
+            self.program_ir.get_constraints(),
         )
         rewrite = orw.Xrewrite()
 
