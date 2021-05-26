@@ -53,7 +53,7 @@ class OntologyRewriter:
                             Q_rew.add((new_q0, "f", "u"))
 
                 Q_rew.remove(q)
-                Q_explored.add((q[0], q[1], "e"))
+                Q_explored.add(q[0])
 
         return Q_explored
 
@@ -75,10 +75,10 @@ class OntologyRewriter:
         if isinstance(q0.antecedent, NaryLogicOperator):
             for formula in q0.antecedent.formulas:
                 if formula.functor in sigma_free_vars.keys():
-                    new_sigmas = new_sigmas + sigma_free_vars[formula.functor]
+                    new_sigmas = new_sigmas + list(sigma_free_vars[formula.functor])
         else:
             if q0.antecedent.functor in sigma_free_vars.keys():
-                    new_sigmas = new_sigmas + sigma_free_vars[q0.antecedent.functor]
+                    new_sigmas = new_sigmas + list(sigma_free_vars[q0.antecedent.functor])
 
         return new_sigmas
 

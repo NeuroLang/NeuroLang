@@ -1,8 +1,10 @@
 
 import io
 
-from ...frontend import NeurolangPDL
+from neurolang.datalog import constraints_representation
+
 from ...expressions import Constant, Symbol
+from ...frontend import NeurolangPDL
 from ..constraints_representation import RightImplication
 from ..expressions import Implication
 from ..ontologies_parser import OntologyParser
@@ -54,81 +56,91 @@ def test_1():
     AssociateProfessor = Symbol('AssociateProfessor')
     Book = Symbol('Book')
     
-    label = Symbol('label')
+    label = Symbol('rdf-schema:label')
 
-    imp1 = Implication(Employee(x), AdministrativeStaff(x))
-    imp2 = Implication(Publication(x), Article(x))
-    imp3 = Implication(Professor(x), AssistantProfessor(x))
-    imp4 = Implication(Professor(x), AssociateProfessor(x))
-    imp5 = Implication(Publication(x), Book(x))
+    imp1 = RightImplication(AdministrativeStaff(x), Employee(x))
+    imp2 = RightImplication(Article(x), Publication(x))
+    imp3 = RightImplication(AssistantProfessor(x), Professor(x))
+    imp4 = RightImplication(AssociateProfessor(x), Professor(x))
+    imp5 = RightImplication(Book(x), Publication(x))
 
     
-    imp_label1 = Implication(AdministrativeStaff(x), label(x, Constant('administrative staff worker')))
-    imp_label2 = Implication(AssistantProfessor(x), label(x, Constant('assistant professor')))
-    imp_label3 = Implication(AssociateProfessor(x), label(x, Constant('associate professor')))
-    imp_label4 = Implication(Book(x), label(x, Constant('book')))
-    imp_label5 = Implication(Article(x), label(x, Constant('article')))
+    imp_label1 = Implication(label(x, Constant('administrative staff worker')), AdministrativeStaff(x))
+    imp_label2 = Implication(label(x, Constant('assistant professor')), AssistantProfessor(x))
+    imp_label3 = Implication(label(x, Constant('associate professor')), AssociateProfessor(x))
+    imp_label4 = Implication(label(x, Constant('book')), Book(x))
+    imp_label5 = Implication(label(x, Constant('article')), Article(x),)
 
     onto = OntologyParser(io.StringIO(owl))
-    rules = onto.parse_ontology()
+    constraints, rules = onto.parse_ontology()
 
-    assert len(rules) == 10
+    assert set(constraints.keys()) == set(['Employee', 'Publication', 'Professor'])
+    assert set(rules.keys()) == set(['rdf-schema:label'])
 
-    assert isinstance(rules[0], Implication)
-    assert len(rules[0].antecedent.args) == 1
-    assert len(rules[0].consequent.args) == 1
-    assert rules[0].antecedent.args[0] == rules[0].consequent.args[0]
-    assert rules[0].antecedent.functor == imp_label1.antecedent.functor
-    assert rules[0].consequent.functor == imp_label1.consequent.functor
+    AdminConstraint = constraints['Employee']
+    assert len(AdminConstraint) == 1 and isinstance(AdminConstraint, set)
+    AdminConstraint = next(iter(AdminConstraint))
+    assert isinstance(AdminConstraint, RightImplication)
+    assert len(AdminConstraint.antecedent.args) == 1
+    assert len(AdminConstraint.consequent.args) == 1
+    assert AdminConstraint.antecedent.args[0] == AdminConstraint.consequent.args[0]
+    assert AdminConstraint.antecedent.functor == imp1.antecedent.functor
+    assert AdminConstraint.consequent.functor == imp1.consequent.functor
 
-    assert isinstance(rules[1], Implication)
-    assert len(rules[1].antecedent.args) == 1
-    assert len(rules[1].consequent.args) == 1
-    assert rules[1].antecedent.args[0] == rules[1].consequent.args[0]
-    assert rules[1].antecedent.functor == imp1.antecedent.functor
-    assert rules[1].consequent.functor == imp1.consequent.functor
+    PublicationConstraint = constraints['Publication']
+    assert len(PublicationConstraint) == 2 and isinstance(PublicationConstraint, set)
+    for pc in PublicationConstraint:
+        assert isinstance(pc, RightImplication)
+        assert len(pc.antecedent.args) == 1
+        assert len(pc.consequent.args) == 1
+        assert pc.antecedent.args[0] == pc.consequent.args[0]
+        if pc.antecedent.functor == Article:
+            assert pc.antecedent.functor == imp2.antecedent.functor
+            assert pc.consequent.functor == imp2.consequent.functor
+        elif pc.antecedent.functor == Book:
+            assert pc.antecedent.functor == imp5.antecedent.functor
+            assert pc.consequent.functor == imp5.consequent.functor
+        else:
+            assert False
 
-    assert isinstance(rules[2], Implication)
-    assert len(rules[2].antecedent.args) == 1
-    assert len(rules[2].consequent.args) == 1
-    assert rules[2].antecedent.args[0] == rules[2].consequent.args[0]
-    assert rules[2].antecedent.functor == imp2.antecedent.functor
-    assert rules[2].consequent.functor == imp2.consequent.functor
+    ProfessorConstraint = constraints['Professor']
+    assert len(ProfessorConstraint) == 2 and isinstance(ProfessorConstraint, set)
+    for pc in ProfessorConstraint:
+        assert isinstance(pc, RightImplication)
+        assert len(pc.antecedent.args) == 1
+        assert len(pc.consequent.args) == 1
+        assert pc.antecedent.args[0] == pc.consequent.args[0]
+        if pc.antecedent.functor == AssistantProfessor:
+            assert pc.antecedent.functor == imp3.antecedent.functor
+            assert pc.consequent.functor == imp3.consequent.functor
+        elif pc.antecedent.functor == AssociateProfessor:
+            assert pc.antecedent.functor == imp4.antecedent.functor
+            assert pc.consequent.functor == imp4.consequent.functor
+        else:
+            assert False
 
-    assert isinstance(rules[3], Implication)
-    assert len(rules[3].antecedent.args) == 1
-    assert len(rules[3].consequent.args) == 1
-    assert rules[3].antecedent.args[0] == rules[3].consequent.args[0]
-    assert rules[3].antecedent.functor == imp_label2.antecedent.functor
-    assert rules[3].consequent.functor == imp_label2.consequent.functor
-
-    assert isinstance(rules[4], Implication)
-    assert len(rules[4].antecedent.args) == 1
-    assert len(rules[4].consequent.args) == 1
-    assert rules[4].antecedent.args[0] == rules[4].consequent.args[0]
-    assert rules[4].antecedent.functor == imp3.antecedent.functor
-    assert rules[4].consequent.functor == imp3.consequent.functor
-    
-    assert isinstance(rules[5], Implication)
-    assert len(rules[5].antecedent.args) == 1
-    assert len(rules[5].consequent.args) == 1
-    assert rules[5].antecedent.args[0] == rules[5].consequent.args[0]
-    assert rules[5].antecedent.functor == imp_label3.antecedent.functor
-    assert rules[5].consequent.functor == imp_label3.consequent.functor
-
-    assert isinstance(rules[6], Implication)
-    assert len(rules[6].antecedent.args) == 1
-    assert len(rules[6].consequent.args) == 1
-    assert rules[6].antecedent.args[0] == rules[6].consequent.args[0]
-    assert rules[6].antecedent.functor == imp4.antecedent.functor
-    assert rules[6].consequent.functor == imp4.consequent.functor
-
-    assert isinstance(rules[7], Implication)
-    assert len(rules[7].antecedent.args) == 1
-    assert len(rules[7].consequent.args) == 1
-    assert rules[7].antecedent.args[0] == rules[7].consequent.args[0]
-    assert rules[7].antecedent.functor == imp5.antecedent.functor
-    assert rules[7].consequent.functor == imp5.consequent.functor
+    Labels = rules['rdf-schema:label']
+    assert len(Labels) == 5 and isinstance(Labels, set)
+    for l in Labels:
+        assert isinstance(l, Implication)
+        assert len(l.antecedent.args) == 1
+        assert len(l.consequent.args) == 2
+        assert l.antecedent.args[0] == l.consequent.args[0]
+        assert isinstance(l.consequent.args[1], Constant)
+        assert l.consequent.functor == label
+        if l.antecedent.functor == AdministrativeStaff:
+            assert l.consequent.args[1] == imp_label1.consequent.args[1]
+        elif l.antecedent.functor == AssistantProfessor:
+            assert l.consequent.args[1] == imp_label2.consequent.args[1]
+        elif l.antecedent.functor == AssociateProfessor:
+            assert l.consequent.args[1] == imp_label3.consequent.args[1]
+        elif l.antecedent.functor == Book:
+            assert l.consequent.args[1] == imp_label4.consequent.args[1]
+        elif l.antecedent.functor == Article:
+            assert l.consequent.args[1] == imp_label5.consequent.args[1]
+        else:
+            assert False
+        
 
 
 def test_2():
@@ -171,86 +183,85 @@ def test_2():
     Article = Symbol('Article')
     Course = Symbol('Course')
     Work = Symbol('Work')
-    label = Symbol('ĺabel')
+    label = Symbol('rdf-schema:label')
 
-    imp1 = Implication(AdministrativeStaff(x), ClericalStaff(x))
-    imp2 = Implication(Organization(x), College(x))
-    imp3 = Implication(Article(x), ConferencePaper(x))
-    imp4 = Implication(Work(x), Course(x))
-
-
-    ClericalStaff_label = Constant('clerical staff worker')
-    College_label = Constant('school')
-    ConferencePaper_label = Constant('conference paper')
-    Course_label = Constant('teaching course')
+    imp1 = RightImplication(ClericalStaff(x), AdministrativeStaff(x))
+    imp2 = RightImplication(College(x), Organization(x))
+    imp3 = RightImplication(ConferencePaper(x), Article(x))
+    imp4 = RightImplication(Course(x), Work(x))
 
     
-    imp_label1 = Implication(ClericalStaff(x), label(x, ClericalStaff_label))
-    imp_label2 = Implication(College(x), label(x, College_label))
-    imp_label3 = Implication(ConferencePaper(x), label(x, ConferencePaper_label))
-    imp_label4 = Implication(Course(x), label(x, Course_label))
+    imp_label1 = Implication(label(x, Constant('clerical staff worker')), ClericalStaff(x))
+    imp_label2 = Implication(label(x, Constant('school')), College(x))
+    imp_label3 = Implication(label(x, Constant('conference paper')), ConferencePaper(x))
+    imp_label4 = Implication(label(x, Constant('teaching course')), Course(x),)
 
     onto = OntologyParser(io.StringIO(owl))
-    rules = onto.parse_ontology()
+    constraints, rules = onto.parse_ontology()
 
-    assert len(rules) == 8
+    assert set(constraints.keys()) == set(['AdministrativeStaff', 'Organization', 'Article', 'Work'])
+    assert set(rules.keys()) == set(['rdf-schema:label'])
 
-    assert isinstance(rules[0], Implication)
-    assert len(rules[0].antecedent.args) == 1
-    assert len(rules[0].consequent.args) == 1
-    assert rules[0].antecedent.args[0] == rules[0].consequent.args[0]
-    assert rules[0].antecedent.functor == imp_label1.antecedent.functor
-    assert rules[0].consequent.functor == imp_label1.consequent.functor
+    AdminConstraint = constraints['AdministrativeStaff']
+    assert len(AdminConstraint) == 1 and isinstance(AdminConstraint, set)
+    AdminConstraint = next(iter(AdminConstraint))
+    assert isinstance(AdminConstraint, RightImplication)
+    assert len(AdminConstraint.antecedent.args) == 1
+    assert len(AdminConstraint.consequent.args) == 1
+    assert AdminConstraint.antecedent.args[0] == AdminConstraint.consequent.args[0]
+    assert AdminConstraint.antecedent.functor == imp1.antecedent.functor
+    assert AdminConstraint.consequent.functor == imp1.consequent.functor
 
-    assert isinstance(rules[1], Implication)
-    assert len(rules[1].antecedent.args) == 1
-    assert len(rules[1].consequent.args) == 1
-    assert rules[1].antecedent.args[0] == rules[1].consequent.args[0]
-    assert rules[1].antecedent.functor == imp1.antecedent.functor
-    assert rules[1].consequent.functor == imp1.consequent.functor
+    OrganizationConstraint = constraints['Organization']
+    assert len(OrganizationConstraint) == 1 and isinstance(OrganizationConstraint, set)
+    OrganizationConstraint = next(iter(OrganizationConstraint))
+    assert isinstance(OrganizationConstraint, RightImplication)
+    assert len(OrganizationConstraint.antecedent.args) == 1
+    assert len(OrganizationConstraint.consequent.args) == 1
+    assert OrganizationConstraint.antecedent.args[0] == OrganizationConstraint.consequent.args[0]
+    assert OrganizationConstraint.antecedent.functor == imp2.antecedent.functor
+    assert OrganizationConstraint.consequent.functor == imp2.consequent.functor
 
-    assert isinstance(rules[2], Implication)
-    assert len(rules[2].antecedent.args) == 1
-    assert len(rules[2].consequent.args) == 1
-    assert rules[2].antecedent.args[0] == rules[2].consequent.args[0]
-    assert rules[2].antecedent.functor == imp_label2.antecedent.functor
-    assert rules[2].consequent.functor == imp_label2.consequent.functor
+    ArticleConstraint = constraints['Article']
+    assert len(ArticleConstraint) == 1 and isinstance(ArticleConstraint, set)
+    ArticleConstraint = next(iter(ArticleConstraint))
+    assert isinstance(ArticleConstraint, RightImplication)
+    assert len(ArticleConstraint.antecedent.args) == 1
+    assert len(ArticleConstraint.consequent.args) == 1
+    assert ArticleConstraint.antecedent.args[0] == ArticleConstraint.consequent.args[0]
+    assert ArticleConstraint.antecedent.functor == imp3.antecedent.functor
+    assert ArticleConstraint.consequent.functor == imp3.consequent.functor
 
-    assert isinstance(rules[3], Implication)
-    assert len(rules[3].antecedent.args) == 1
-    assert len(rules[3].consequent.args) == 1
-    assert rules[3].antecedent.args[0] == rules[3].consequent.args[0]
-    assert rules[3].antecedent.functor == imp2.antecedent.functor
-    assert rules[3].consequent.functor == imp2.consequent.functor
+    WorkConstraint = constraints['Work']
+    assert len(WorkConstraint) == 1 and isinstance(WorkConstraint, set)
+    WorkConstraint = next(iter(WorkConstraint))
+    assert isinstance(WorkConstraint, RightImplication)
+    assert len(WorkConstraint.antecedent.args) == 1
+    assert len(WorkConstraint.consequent.args) == 1
+    assert WorkConstraint.antecedent.args[0] == WorkConstraint.consequent.args[0]
+    assert WorkConstraint.antecedent.functor == imp4.antecedent.functor
+    assert WorkConstraint.consequent.functor == imp4.consequent.functor
 
-    assert isinstance(rules[4], Implication)
-    assert len(rules[4].antecedent.args) == 1
-    assert len(rules[4].consequent.args) == 1
-    assert rules[4].antecedent.args[0] == rules[4].consequent.args[0]
-    assert rules[4].antecedent.functor == imp_label3.antecedent.functor
-    assert rules[4].consequent.functor == imp_label3.consequent.functor
-    
-    assert isinstance(rules[5], Implication)
-    assert len(rules[5].antecedent.args) == 1
-    assert len(rules[5].consequent.args) == 1
-    assert rules[5].antecedent.args[0] == rules[5].consequent.args[0]
-    assert rules[5].antecedent.functor == imp3.antecedent.functor
-    assert rules[5].consequent.functor == imp3.consequent.functor
 
-    assert isinstance(rules[6], Implication)
-    assert len(rules[6].antecedent.args) == 1
-    assert len(rules[6].consequent.args) == 1
-    assert rules[6].antecedent.args[0] == rules[6].consequent.args[0]
-    assert rules[6].antecedent.functor == imp_label4.antecedent.functor
-    assert rules[6].consequent.functor == imp_label4.consequent.functor
-
-    assert isinstance(rules[7], Implication)
-    assert len(rules[7].antecedent.args) == 1
-    assert len(rules[7].consequent.args) == 1
-    assert rules[7].antecedent.args[0] == rules[7].consequent.args[0]
-    assert rules[7].antecedent.functor == imp4.antecedent.functor
-    assert rules[7].consequent.functor == imp4.consequent.functor
-
+    Labels = rules['rdf-schema:label']
+    assert len(Labels) == 4 and isinstance(Labels, set)
+    for l in Labels:
+        assert isinstance(l, Implication)
+        assert len(l.antecedent.args) == 1
+        assert len(l.consequent.args) == 2
+        assert l.antecedent.args[0] == l.consequent.args[0]
+        assert isinstance(l.consequent.args[1], Constant)
+        assert l.consequent.functor == label
+        if l.antecedent.functor == ClericalStaff:
+            assert l.consequent.args[1] == imp_label1.consequent.args[1]
+        elif l.antecedent.functor == College:
+            assert l.consequent.args[1] == imp_label2.consequent.args[1]
+        elif l.antecedent.functor == ConferencePaper:
+            assert l.consequent.args[1] == imp_label3.consequent.args[1]
+        elif l.antecedent.functor == Course:
+            assert l.consequent.args[1] == imp_label4.consequent.args[1]
+        else:
+            assert False
 
 
 def test_3():
@@ -290,199 +301,99 @@ def test_3():
     Person(X) :- supportChair(X,Y). 
     '''
 
-
-
     Professor = Symbol('Professor')
     Chair = Symbol('Chair')
     headOf = Symbol('headOf')
     Department = Symbol('Department')
     Person = Symbol('Person')
 
-    onto = OntologyParser(io.StringIO(owl))
-    constraints = onto.parse_ontology()
+    label = Symbol('rdf-schema:label')
 
-    
-    assert len(constraints) == 5
+    onto = OntologyParser(io.StringIO(owl))
+    constraints, rules = onto.parse_ontology()
 
     for c in constraints:
-        if c.antecedent.functor.is_fresh:
-            supportChair = c.antecedent.functor
-            x = c.antecedent.args[0]
-            y = c.antecedent.args[1]
+        if c.startswith('fresh'):
+            support_rule = next(iter(constraints[c]))
+            supportChair = support_rule.consequent.functor
+            x = support_rule.consequent.args[0]
+            y = support_rule.consequent.args[1]
             break
+
+    assert set(constraints.keys()) == set(['Person', 'headOf', 'Department', 'Professor', c])
+    assert set(rules.keys()) == set(['rdf-schema:label'])
 
     imp1 = RightImplication(supportChair(x, y), Person(x))
     imp2 = RightImplication(Chair(x), supportChair(x, y))
     imp3 = RightImplication(supportChair(x, y), headOf(x, y))
     imp4 = RightImplication(supportChair(x, y), Department(y))
-    imp5 = RightImplication(Professor(x), Chair(x))
+    imp5 = RightImplication(Chair(x), Professor(x),)
 
-    index = constraints.index(imp4)
-    # RightImplication(supportChair(x, y), Department(y))
-    assert isinstance(constraints[index], RightImplication)
-    assert len(constraints[index].antecedent.args) == 2
-    assert len(constraints[index].consequent.args) == 1
-    assert constraints[index].antecedent.args[1] == constraints[index].consequent.args[0]
-    assert constraints[index].consequent.functor == imp4.consequent.functor
+    imp_label = Implication(label(x, Constant('chair')), Chair(x),)
 
-    index = constraints.index(imp3)
-    # RightImplication(supportChair(x, y), headOf(x, y))
-    assert isinstance(constraints[index], RightImplication)
-    assert len(constraints[index].antecedent.args) == 2
-    assert len(constraints[index].consequent.args) == 2
-    assert constraints[index].antecedent.args == constraints[index].consequent.args
-    assert constraints[index].consequent.functor == imp3.consequent.functor
+    PersonConstraint = constraints['Person']
+    assert len(PersonConstraint) == 1 and isinstance(PersonConstraint, set)
+    PersonConstraint = next(iter(PersonConstraint))
+    assert isinstance(PersonConstraint, RightImplication)
+    assert len(PersonConstraint.antecedent.args) == 2
+    assert len(PersonConstraint.consequent.args) == 1
+    assert PersonConstraint.antecedent.args[0] == PersonConstraint.consequent.args[0]
+    assert PersonConstraint.antecedent.functor == imp1.antecedent.functor
+    assert PersonConstraint.consequent.functor == imp1.consequent.functor
 
-    for n, c in enumerate(constraints):
-        if (
-            c.antecedent.functor == Professor and 
-            c.consequent.functor == Chair
-        ):
-            index = n
-            imp = c
-            break
+    SupportConstraint = constraints[c]
+    assert len(SupportConstraint) == 1 and isinstance(SupportConstraint, set)
+    SupportConstraint = next(iter(SupportConstraint))
+    assert isinstance(SupportConstraint, RightImplication)
+    assert len(SupportConstraint.antecedent.args) == 1
+    assert len(SupportConstraint.consequent.args) == 2
+    assert SupportConstraint.antecedent.args[0] == SupportConstraint.consequent.args[0]
+    assert SupportConstraint.antecedent.functor == imp2.antecedent.functor
+    assert SupportConstraint.consequent.functor == imp2.consequent.functor
 
-    # RightImplication(Professor(x), Chair(x))
-    assert isinstance(constraints[index], RightImplication)
-    assert len(constraints[index].antecedent.args) == 1
-    assert len(constraints[index].consequent.args) == 1
-    assert constraints[index].antecedent.args == constraints[index].consequent.args
-    assert constraints[index].consequent.functor == imp.consequent.functor
-    
-    index = constraints.index(imp2)
-    # RightImplication(Chair(x), supportChair(x, y))
-    assert isinstance(constraints[index], RightImplication)
-    assert len(constraints[index].antecedent.args) == 1
-    assert len(constraints[index].consequent.args) == 2
-    assert constraints[index].antecedent.args[0] == constraints[index].consequent.args[0]
-    assert constraints[index].antecedent.functor == imp2.antecedent.functor
+    headOfConstraint = constraints['headOf']
+    assert len(headOfConstraint) == 1 and isinstance(headOfConstraint, set)
+    headOfConstraint = next(iter(headOfConstraint))
+    assert isinstance(headOfConstraint, RightImplication)
+    assert len(headOfConstraint.antecedent.args) == 2
+    assert len(headOfConstraint.consequent.args) == 2
+    assert headOfConstraint.antecedent.args == headOfConstraint.consequent.args
+    assert headOfConstraint.antecedent.functor == imp3.antecedent.functor
+    assert headOfConstraint.consequent.functor == imp3.consequent.functor
 
-    for n, c in enumerate(constraints):
-        if (
-            c.antecedent.functor.is_fresh and 
-            c.consequent.functor == Person
-        ):
-            index = n
-            imp = c
-            break
-    # RightImplication(supportChair(x, y), Person(x))
-    assert isinstance(constraints[index], RightImplication)
-    assert len(constraints[index].antecedent.args) == 2
-    assert len(constraints[index].consequent.args) == 1
-    assert constraints[index].antecedent.args[0] == constraints[index].consequent.args[0]
-    assert constraints[index].consequent.functor == imp.consequent.functor
+    DepartmentConstraint = constraints['Department']
+    assert len(DepartmentConstraint) == 1 and isinstance(DepartmentConstraint, set)
+    DepartmentConstraint = next(iter(DepartmentConstraint))
+    assert isinstance(DepartmentConstraint, RightImplication)
+    assert len(DepartmentConstraint.antecedent.args) == 2
+    assert len(DepartmentConstraint.consequent.args) == 1
+    assert DepartmentConstraint.antecedent.args[1] == DepartmentConstraint.consequent.args[0]
+    assert DepartmentConstraint.antecedent.functor == imp4.antecedent.functor
+    assert DepartmentConstraint.consequent.functor == imp4.consequent.functor
 
+    ProfessorConstraint = constraints['Professor']
+    assert len(ProfessorConstraint) == 1 and isinstance(ProfessorConstraint, set)
+    ProfessorConstraint = next(iter(ProfessorConstraint))
+    assert isinstance(ProfessorConstraint, RightImplication)
+    assert len(ProfessorConstraint.antecedent.args) == 1
+    assert len(ProfessorConstraint.consequent.args) == 1
+    assert ProfessorConstraint.antecedent.args[0] == ProfessorConstraint.consequent.args[0]
+    assert ProfessorConstraint.antecedent.functor == imp5.antecedent.functor
+    assert ProfessorConstraint.consequent.functor == imp5.consequent.functor
 
-def test_4():
-    owl = '''<?xml version="1.0"?>
-    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
-        xmlns:owl="http://www.w3.org/2002/07/owl#"
-        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
-        <Ontology>
-            <versionInfo>0.3.1</versionInfo>
-        </Ontology>
-        
-        <owl:Class rdf:ID="Dean">
-            <rdfs:label>dean</rdfs:label>
-            <rdfs:subClassOf>
-                <owl:Class>
-                    <owl:intersectionOf rdf:parseType="Collection">
-                        <owl:Class rdf:about="#Person" />
-                        <owl:Restriction>
-                            <owl:onProperty rdf:resource="#headOf" />
-                            <owl:someValuesFrom>
-                                <owl:Class rdf:about="#College" />
-                            </owl:someValuesFrom>
-                        </owl:Restriction>
-                    </owl:intersectionOf>
-                </owl:Class>
-            </rdfs:subClassOf>
-            <rdfs:subClassOf rdf:resource="#Professor" />
-        </owl:Class>
-    </rdf:RDF>'''
-
-    '''
-    Professor(X) :- Dean(X).
-    #exists{Y}supportDean(X,Y) :- Dean(X).
-    headOf(X,Y) :- supportDean(X,Y).
-    College(Y) :- supportDean(X,Y).
-    Person(X) :- supportDean(X,Y).
-    '''
-
-    Professor = Symbol('Professor')
-    Dean = Symbol('Dean')
-    headOf = Symbol('headOf')
-    College = Symbol('College')
-    Person = Symbol('Person')
-
-    onto = OntologyParser(io.StringIO(owl))
-    constraints = onto.parse_ontology()
-
-    assert len(constraints) == 5
-    
-    for c in constraints:
-        if c.antecedent.functor.is_fresh:
-            supportDean = c.antecedent.functor
-            x = c.antecedent.args[0]
-            y = c.antecedent.args[1]
-            break
-
-    imp1 = RightImplication(supportDean(x, y), Person(x))
-    imp2 = RightImplication(Dean(x), supportDean(x, y))
-    imp3 = RightImplication(supportDean(x, y), headOf(x, y))
-    imp4 = RightImplication(supportDean(x, y), College(y))
-    imp5 = Implication(Professor(x), Dean(x))
-
-    index = constraints.index(imp4)
-    assert isinstance(constraints[index], RightImplication)
-    assert len(constraints[index].antecedent.args) == 2
-    assert len(constraints[index].consequent.args) == 1
-    assert constraints[index].antecedent.args[1] == constraints[index].consequent.args[0]
-    assert constraints[index].consequent.functor == imp4.consequent.functor
-
-    index = constraints.index(imp3)
-    assert isinstance(constraints[index], RightImplication)
-    assert len(constraints[index].antecedent.args) == 2
-    assert len(constraints[index].consequent.args) == 2
-    assert constraints[index].antecedent.args == constraints[index].consequent.args
-    assert constraints[index].consequent.functor == imp3.consequent.functor
-
-    for n, c in enumerate(constraints):
-        if (
-            c.antecedent.functor == Professor and 
-            c.consequent.functor == Dean
-        ):
-            index = n
-            imp = c
-            break
-
-    assert isinstance(constraints[index], RightImplication)
-    assert len(constraints[index].antecedent.args) == 1
-    assert len(constraints[index].consequent.args) == 1
-    assert constraints[index].antecedent.args == constraints[index].consequent.args
-    assert constraints[index].consequent.functor == imp.consequent.functor
-    
-    index = constraints.index(imp2)
-    assert isinstance(constraints[index], RightImplication)
-    assert len(constraints[index].antecedent.args) == 1
-    assert len(constraints[index].consequent.args) == 2
-    assert constraints[index].antecedent.args[0] == constraints[index].consequent.args[0]
-    assert constraints[index].antecedent.functor == imp2.antecedent.functor
-
-    for n, c in enumerate(constraints):
-        if (
-            c.antecedent.functor.is_fresh and 
-            c.consequent.functor == Person
-        ):
-            index = n
-            imp = c
-            break
-    assert isinstance(constraints[index], RightImplication)
-    assert len(constraints[index].antecedent.args) == 2
-    assert len(constraints[index].consequent.args) == 1
-    assert constraints[index].antecedent.args[0] == constraints[index].consequent.args[0]
-    assert constraints[index].consequent.functor == imp.consequent.functor
+    Labels = rules['rdf-schema:label']
+    assert len(Labels) == 1 and isinstance(Labels, set)
+    l = Labels.pop()
+    assert isinstance(l, Implication)
+    assert len(l.antecedent.args) == 1
+    assert len(l.consequent.args) == 2
+    assert l.antecedent.args[0] == l.consequent.args[0]
+    assert isinstance(l.consequent.args[1], Constant)
+    assert l.consequent.functor == label
+    if l.antecedent.functor == Chair:
+        assert l.consequent.args[1] == imp_label.consequent.args[1]
+    else:
+        assert False
 
 
 
@@ -552,268 +463,3 @@ def test_open_world_example():
     res = f_term['answer'].as_pandas_dataframe().values
     assert (res == [['Juan'], ['Manuel']]).all()
 
-
-def test_iobc():
-    from nilearn import datasets, image
-    import nibabel
-    import numpy as np
-    import pandas as pd
-    from neurolang.frontend import NeurolangPDL, ExplicitVBR, ExplicitVBROverlay
-    from typing import Callable, Iterable
-
-    iobc = datasets.utils._fetch_files(
-        datasets.utils._get_dataset_dir('ontology'),
-        [
-            (
-                'iobc.xrdf',
-                'http://data.bioontology.org/ontologies/IOBC/download?'
-                'apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb&download_format=rdf',
-                {'move': 'iobc.xrdf'}
-            )
-        ]
-    )[0]
-
-    nl = NeurolangPDL()
-    nl.load_ontology(iobc)
-
-    mni_mask = image.resample_img(
-        nibabel.load(datasets.fetch_icbm152_2009()["gm"]),
-        np.eye(3) * 2
-    )
-
-    ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
-        "neurolang",
-        [
-            (
-                "database.txt",
-                "https://github.com/neurosynth/neurosynth-data"
-                "/raw/master/current_data.tar.gz",
-                {"uncompress": True},
-            ),
-            (
-                "features.txt",
-                "https://github.com/neurosynth/neurosynth-data"
-                "/raw/master/current_data.tar.gz",
-                {"uncompress": True},
-            ),
-        ],
-    )
-
-    ns_database = pd.read_csv(ns_database_fn, sep="\t")
-    ns_database = ns_database[["x", "y", "z", "id"]]
-
-    ns_features = pd.read_csv(ns_features_fn, sep="\t")
-    ns_docs = ns_features[["pmid"]].drop_duplicates()
-    ns_terms = pd.melt(
-        ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
-    ).query("TfIdf > 1e-3")[["term", "pmid"]]
-
-
-    terms_det = nl.add_tuple_set(
-            ns_terms.term.unique(), name='terms_det'
-    )
-
-    label = nl.new_symbol(name='rdf-schema:label')
-    related = nl.new_symbol(name='core:related')
-    altLabel = nl.new_symbol(name='core:altLabel')
-
-    @nl.add_symbol
-    def word_lower(name: str) -> str:
-        return name.lower()
-
-    @nl.add_symbol
-    def agg_create_region_overlay_MNI(
-        x: Iterable, y: Iterable, z: Iterable, p: Iterable
-    ) -> ExplicitVBR:
-        voxels = nibabel.affines.apply_affine(
-            np.linalg.inv(mni_mask.affine),
-            np.c_[x, y, z]
-        )
-        return ExplicitVBROverlay(
-            voxels, mni_mask.affine, p, image_dim=mni_mask.shape
-        )
-
-    @nl.add_symbol
-    def mean(iterable: Iterable) -> float:
-        return np.mean(iterable)
-
-
-    @nl.add_symbol
-    def std(iterable: Iterable) -> float:
-        return np.std(iterable)
-
-    with nl.scope as e:
-        e.ontology_related[e.ne, e.l] = (
-            label(e.e, e.ne) &
-            related(e.e, e.r) &
-            label(e.r, e.nr) &
-            (e.l == word_lower[e.nr])
-        )
-        
-        #e.ontology_synonym[e.ne, e.l] = (
-        #    label(e.e, e.ne) &
-        #    altLabel(e.e, e.r) &
-        #    (e.l == word_lower[e.r])
-        #)
-        
-        e.res[e.entity, e.relation, e.term] = (
-            e.ontology_related[e.entity, e.term] &
-            e.terms_det[e.entity] &
-            e.terms_det[e.term] &
-            (e.relation == 'related')
-        )
-        
-        #e.res[e.entity, e.relation, e.term] = (
-        #    e.ontology_synonym[e.entity, e.term] &
-        #    e.terms_det[e.entity] &
-        #    e.terms_det[e.term] &
-        #    (e.relation == 'synonym')
-        #)
-        
-        #res = nl.solve_all()
-        r = nl.query((e.entity, e.relation, e.term), e.res[e.entity, e.relation, e.term])
-    a = 1
-
-def test_cogat():
-    from nilearn import datasets, image
-    import pandas as pd
-    import numpy as np
-    import nibabel as nib
-
-    cogAt = datasets.utils._fetch_files(
-        datasets.utils._get_dataset_dir('ontology'),
-        [
-            (
-                'cogat_old.xml',
-                'https://data.bioontology.org/ontologies/COGAT/submissions/7/download?'
-                'apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb',
-                {'move': 'cogat_old.xml'}
-            )
-        ]
-    )[0]
-
-    #mni_mask = image.resample_img(
-    #    nib.load(datasets.fetch_icbm152_2009()["gm"]),
-    #    np.eye(3) * 2
-    #)
-
-    #ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
-    #    datasets.utils._get_dataset_dir('neurosynth'),
-    #    [
-    #        (
-    #            'database.txt',
-    #            'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
-    #            {'uncompress': True}
-    #        ),
-    #        (
-    #            'features.txt',
-    #            'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
-    #            {'uncompress': True}
-    #        ),
-    #    ]
-    #)
-
-    #ns_database = pd.read_csv(ns_database_fn, sep="\t")
-    #ns_database = ns_database[["x", "y", "z", "id"]]
-
-    #ns_features = pd.read_csv(ns_features_fn, sep="\t")
-    #ns_docs = ns_features[["pmid"]].drop_duplicates()
-    #ns_terms = pd.melt(
-    #    ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
-    #).query("TfIdf > 1e-3")[["term", "pmid"]]
-
-    import rdflib
-    from rdflib import RDFS
-    #g = rdflib.Graph()
-    #g.load(cogAt)
-
-    from rdflib import BNode
-
-    #onto_dic = {}
-    #for obj in g.subjects():
-    #    if isinstance(obj, BNode):
-    #        continue
-    #    for b in g.triples((obj, RDFS.label, None)):
-    #        label = b[2].lower().replace(' ', '_')
-    #        obj_split = obj.split('#')
-    #        if len(obj_split) == 2:
-    #            name = obj_split[1]
-    #            namespace = obj_split[0].split('/')[-1]
-    #            if name[0] != '' and namespace != '':
-    #                res = namespace + ':' + name
-    #            else:
-    #                res = name
-    #        else:
-    #            obj_split = obj.split('/')
-    #            res = obj_split[-1]
-
-    #        onto_dic[label] = res
-
-    #group_terms = ns_terms.groupby('term')
-    #dic_term_pmid = {}
-
-    #for term, ids in group_terms:
-    #    term = term.lower().replace(' ', '_')
-    #    dic_term_pmid[term] = ids
-
-    #merge_dic = {}
-    #for k, v in onto_dic.items():
-    #    if k in dic_term_pmid.keys():
-    #        vl = v.lower()
-    #        merge_dic[vl] = dic_term_pmid[k]
-
-    nl = NeurolangPDL()
-    nl.load_ontology(cogAt)
-
-    #for k, v in dic_term_pmid.items():
-    #    if k in onto_dic.keys():
-    #        cogat_key = onto_dic[k]
-    #        nl.add_tuple_set(tuple(v.pmid.values), name=cogat_key)
-
-    #SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
-    #    ns_docs, name="SelectedStudy"
-    #)
-
-    #TermInStudy = nl.add_tuple_set(ns_terms, name="TermInStudy")
-    #FocusReported = nl.add_tuple_set(ns_database, name="FocusReported")
-    #Voxel = nl.add_tuple_set(
-    #    nib.affines.apply_affine(
-    #        mni_mask.affine,
-    #        np.transpose(mni_mask.get_fdata().nonzero())
-    #    ),
-    #    name='Voxel'
-    #)
-
-    @nl.add_symbol
-    def word_lower(name: str) -> str:
-        return name.lower()
-
-    part_of = nl.new_symbol(name='ro.owl:part_of')
-    label = nl.new_symbol(name='rdf-schema:label')
-    perception = nl.new_symbol(name='cogat.owl:CAO_00418')
-    attention = nl.new_symbol(name='cogat.owl:CAO_00141')
-    listening = nl.new_symbol(name='cogat.owl:CAO_00370')
-    auditory_attention = nl.new_symbol(name='cogat.owl:CAO_00149')
-    spatial_attention = nl.new_symbol(name='cogat.owl:CAO_00507')
-    visual_attention = nl.new_symbol(name='cogat.owl:CAO_00541')
-    consciousness = nl.new_symbol(name='cogat.owl:CAO_00216')
-    attention_capacity = nl.new_symbol(name='cogat.owl:CAO_00142')
-    autonoesis = nl.new_symbol(name='cogat.owl:CAO_00693')
-    episodic_memory = nl.new_symbol(name='cogat.owl:CAO_00277') 
-
-    altLabel = nl.new_symbol(name='core:altLabel')
-
-    with nl.scope as e:
-        #e.answer[e.a] = (
-        #    perception[e.a]   
-        #)
-
-        e.ontology_synonym[e.ne, e.l] = (
-            label(e.e, e.ne) &
-            altLabel(e.e, e.r) &
-            (e.l == word_lower[e.r])
-        )
-
-        f_term = nl.query((e.ne, e.l), e.ontology_synonym(e.ne, e.l))
-
-    a = 1 

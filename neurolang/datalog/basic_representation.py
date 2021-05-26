@@ -221,6 +221,10 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             )
         }
 
+    def add_bulk_rules(self, symbol, rules):
+        symbol = symbol.cast(UnionOfConjunctiveQueries)
+        self.symbol_table[symbol] = Union(rules)
+
     def predicate_terms(self, predicate):
         try:
             pred_repr = self.symbol_table[predicate]

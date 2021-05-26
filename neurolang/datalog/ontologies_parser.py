@@ -24,7 +24,7 @@ class OntologyParser:
             self._load_ontology([paths], [load_format])
 
         self.parsed_constraints = {}
-        self.parsed_rules = []
+        self.parsed_rules = {}
 
     def _load_ontology(self, paths, load_format):
         rdfGraph = rdflib.Graph()
@@ -101,11 +101,11 @@ class OntologyParser:
             if OWL.Restriction in restriction_dic.values():
                 _type, res = self._parse_restriction(entity, restriction_dic)
                 #self.parsed_constraints = self.parsed_constraints + res
-                if _type == 'someValuesFrom':
-                    self._categorize_constraints(res)
-                else:
-                    for r in res:
-                        self.parsed_rules.append(r)
+                #if _type == 'someValuesFrom':
+                self._categorize_constraints(res)
+                #else:
+                #    for r in res:
+                #        self.parsed_rules.append(r)
             elif OWL.intersectionOf in restriction_dic.keys():
                 c = restriction_dic[OWL.intersectionOf]
                 int_triples = list(self.rdfGraph.triples((c, None, None)))
@@ -123,14 +123,13 @@ class OntologyParser:
             else:
                 raise NotImplementedError(f'Something went wrong: {restriction_dic}')
         else:
-            cons = Symbol(self._parse_name(entity))
-            ant = Symbol(self._parse_name(val))
+            ant = Symbol(self._parse_name(entity))
+            cons = Symbol(self._parse_name(val))
             x = Symbol.fresh()
-            #imp = Implication(ant(x), cons(x))
-            imp = Implication(cons(x), ant(x))
-            #self.parsed_constraints.append(imp)
-            #self._categorize_constraints([imp])
-            self.parsed_rules.append(imp)
+            imp = RightImplication(ant(x), cons(x))
+            #imp = Implication(cons(x), ant(x))
+            self._categorize_constraints([imp])
+            #self.parsed_rules.append(imp)
 
 
     def _parse_BNode_intersection(self, entity, node, inter_entity):
@@ -143,21 +142,15 @@ class OntologyParser:
             restriction_dic = {b:c for _, b, c in bnode_triples}
             if OWL.Restriction in restriction_dic.values():
                 _type, res = self._parse_restriction(entity, restriction_dic, support_prop)
-                #self.parsed_constraints = self.parsed_constraints + res
-                if _type == 'someValuesFrom':
-                    self._categorize_constraints(res)
-                else:
-                    for r in res:
-                        self.parsed_rules.append(r)
-
+                self._categorize_constraints(res)
             con = Symbol(self._parse_name(inter_entity))
             x = Symbol.fresh()
             y = Symbol.fresh()
             #imp = Implication(support_prop(x, y), con(x))
-            imp = Implication(con(x), support_prop(x, y))
+            imp = RightImplication(support_prop(x, y), con(x))
             #self.parsed_constraints.append(imp)
-            #self._categorize_constraints([imp])
-            self.parsed_rules.append(imp)
+            self._categorize_constraints([imp])
+            #self.parsed_rules.append(imp)
         else:
             warnings.warn('Complex intersectionOf are not implemented yet')
 
@@ -292,7 +285,8 @@ class OntologyParser:
         #self.parsed_constraints.append(RightImplication(ant, con))
         #self._categorize_constraints([RightImplication(ant, con)])
         #self.parsed_rules.append(Implication(ant, con))
-        self.parsed_rules.append(Implication(con, ant))
+        #self.parsed_rules.append(Implication(con, ant))
+        self._categorize_rules([Implication(con, ant)])
         
     def _parsePrefLabel(self, entity, prop, value):
         entity = Symbol(self._parse_name(entity))
@@ -305,7 +299,8 @@ class OntologyParser:
         #self.parsed_constraints.append(RightImplication(ant, con))
         #self._categorize_constraints([RightImplication(ant, con)])
         #self.parsed_rules.append(Implication(ant, con))
-        self.parsed_rules.append(Implication(con, ant))
+        #self.parsed_rules.append(Implication(con, ant))
+        self._categorize_rules([Implication(con, ant)])
         
     def _parseAltLabel(self, entity, prop, value):
         entity = Symbol(self._parse_name(entity))
@@ -318,7 +313,8 @@ class OntologyParser:
         #self.parsed_constraints.append(RightImplication(ant, con))
         #self._categorize_constraints([RightImplication(ant, con)])
         #self.parsed_rules.append(Implication(ant, con))
-        self.parsed_rules.append(Implication(con, ant))
+        #self.parsed_rules.append(Implication(con, ant))
+        self._categorize_rules([Implication(con, ant)])
         
     def _parseHasTopConcept(self, entity, prop, value):
         entity = Symbol(self._parse_name(entity))
@@ -331,7 +327,8 @@ class OntologyParser:
         #self.parsed_constraints.append(RightImplication(ant, con))
         #self._categorize_constraints([RightImplication(ant, con)])
         #self.parsed_rules.append(Implication(ant, con))
-        self.parsed_rules.append(Implication(con, ant))
+        #self.parsed_rules.append(Implication(con, ant))
+        self._categorize_rules([Implication(con, ant)])
 
     def _parseRelated(self, entity, prop, value):
         entity = Symbol(self._parse_name(entity))
@@ -344,7 +341,8 @@ class OntologyParser:
         #self.parsed_constraints.append(RightImplication(ant, con))
         #self._categorize_constraints([RightImplication(ant, con)])
         #self.parsed_rules.append(Implication(ant, con))
-        self.parsed_rules.append(Implication(con, ant))
+        #self.parsed_rules.append(Implication(con, ant))
+        self._categorize_rules([Implication(con, ant)])
         
     def _parseEnumeratedClass(self, entity, prop, value):
         warnings.warn('Not implemented yet: EnumeratedClass')
@@ -362,11 +360,22 @@ class OntologyParser:
 
     def _categorize_constraints(self, formulas):
         for sigma in formulas:
-            sigma_functor = str(sigma.consequent.functor)
+            sigma_functor = sigma.consequent.functor.name
             if sigma_functor in self.parsed_constraints:
-                cons_list = self.parsed_constraints[sigma_functor]
-                if sigma not in cons_list:
-                    cons_list.append(sigma)
-                    self.parsed_constraints[sigma.consequent.functor] = cons_list
+                cons_set = self.parsed_constraints[sigma_functor]
+                if sigma not in cons_set:
+                    cons_set.add(sigma)
+                    self.parsed_constraints[sigma_functor] = cons_set
             else:
-                self.parsed_constraints[sigma.consequent.functor] = [sigma]
+                self.parsed_constraints[sigma_functor] = set([sigma])
+
+    def _categorize_rules(self, formulas):
+        for sigma in formulas:
+            sigma_functor = sigma.consequent.functor
+            if sigma_functor in self.parsed_rules:
+                cons_set = self.parsed_rules[sigma_functor]
+                if sigma not in cons_set:
+                    cons_set.add(sigma)
+                    self.parsed_rules[sigma_functor] = cons_set
+            else:
+                self.parsed_rules[sigma_functor] = set([sigma])

@@ -30,6 +30,19 @@ class DatalogTranslator(
 ):
     pass
 
+def  _categorize_constraints(formulas):
+    parsed_constraints = {}
+    for sigma in formulas:
+        sigma_functor = sigma.consequent.functor.name
+        if sigma_functor in parsed_constraints:
+            cons_set = parsed_constraints[sigma_functor]
+            if sigma not in cons_set:
+                cons_set.add(sigma)
+                parsed_constraints[sigma_functor] = cons_set
+        else:
+            parsed_constraints[sigma_functor] = set([sigma])
+
+    return parsed_constraints
 
 def test_normal_rewriting_step():
     project = S_("project")
@@ -48,11 +61,11 @@ def test_normal_rewriting_step():
     q = I_(p(b), hasCollaborator(a, db, b))
 
     qB = EB_((q,))
-    sigmaB = EB_((sigma,))
 
     dt = DatalogTranslator()
     qB = dt.walk(qB)
-    sigmaB = dt.walk(sigmaB)
+
+    sigmaB = _categorize_constraints([sigma])
 
     orw = OntologyRewriter(qB, sigmaB)
     rewrite = orw.Xrewrite()
@@ -60,10 +73,9 @@ def test_normal_rewriting_step():
     assert len(rewrite) == 2
     imp1 = rewrite.pop()
     imp2 = rewrite.pop()
-    assert imp1[0] == q or imp2[0] == q
+    assert imp1 == q or imp2 == q
     q2 = I_(p(b), project(b) & inArea(b, db))
-    q2 = dt.walk(q2)
-    assert imp1[0] == q2 or imp2[0] == q2
+    assert imp1 == q2 or imp2 == q2
 
 
 def test_more_than_one_free_variable():
@@ -85,11 +97,11 @@ def test_more_than_one_free_variable():
     q = I_(p(b), hasCollaborator(c, a, db, b))
 
     qB = EB_((q,))
-    sigmaB = EB_((sigma,))
 
     dt = DatalogTranslator()
     qB = dt.walk(qB)
-    sigmaB = dt.walk(sigmaB)
+
+    sigmaB = _categorize_constraints([sigma])
 
     orw = OntologyRewriter(qB, sigmaB)
     rewrite = orw.Xrewrite()
@@ -97,10 +109,9 @@ def test_more_than_one_free_variable():
     assert len(rewrite) == 2
     imp1 = rewrite.pop()
     imp2 = rewrite.pop()
-    assert imp1[0] == q or imp2[0] == q
+    assert imp1 == q or imp2 == q
     q2 = I_(p(b), project(b) & inArea(b, db))
-    q2 = dt.walk(q2)
-    assert imp1[0] == q2 or imp2[0] == q2
+    assert imp1 == q2 or imp2 == q2
 
 
 def test_unsound_rewriting_step_constant():
@@ -120,18 +131,18 @@ def test_unsound_rewriting_step_constant():
     q = I_(p(b), hasCollaborator(c, db, b))
 
     qB = EB_((q,))
-    sigmaB = EB_((sigma,))
 
     dt = DatalogTranslator()
     qB = dt.walk(qB)
-    sigmaB = dt.walk(sigmaB)
+
+    sigmaB = _categorize_constraints([sigma])
 
     orw = OntologyRewriter(qB, sigmaB)
     rewrite = orw.Xrewrite()
 
     assert len(rewrite) == 1
     imp = rewrite.pop()
-    assert imp[0] == q
+    assert imp == q
 
 
 def test_unsound_rewriting_step_shared():
@@ -150,18 +161,18 @@ def test_unsound_rewriting_step_shared():
     q = I_(p(b), hasCollaborator(b, db, b))
 
     qB = EB_((q,))
-    sigmaB = EB_((sigma,))
 
     dt = DatalogTranslator()
     qB = dt.walk(qB)
-    sigmaB = dt.walk(sigmaB)
+
+    sigmaB = _categorize_constraints([sigma])
 
     orw = OntologyRewriter(qB, sigmaB)
     rewrite = orw.Xrewrite()
 
     assert len(rewrite) == 1
     imp = rewrite.pop()
-    assert imp[0] == q
+    assert imp == q
 
 
 def test_outside_variable():
@@ -183,18 +194,16 @@ def test_outside_variable():
     q2 = I_(p(a), s(c) & t(a, b, c) & t(a, e, c))
 
     qB = EB_((q2,))
-    sigmaB = EB_((sigma,))
 
     dt = DatalogTranslator()
     qB = dt.walk(qB)
-    sigmaB = dt.walk(sigmaB)
+
+    sigmaB = _categorize_constraints([sigma])
 
     orw = OntologyRewriter(qB, sigmaB)
     rewrite = orw.Xrewrite()
 
     assert len(rewrite) == 1
-    factorized = [x for x in rewrite if x[1] == "f"]
-    assert len(factorized) == 0
 
 
 def test_example_4_3():
@@ -217,11 +226,11 @@ def test_example_4_3():
     q = I_(p(b, c), hasCollaborator(a, b, c) & collaborator(a))
 
     qB = EB_((q,))
-    sigmaB = EB_((sigma1, sigma2))
 
     dt = DatalogTranslator()
     qB = dt.walk(qB)
-    sigmaB = dt.walk(sigmaB)
+
+    sigmaB = _categorize_constraints([sigma1, sigma2])
 
     orw = OntologyRewriter(qB, sigmaB)
     rewrite = orw.Xrewrite()
@@ -296,24 +305,21 @@ def test_empty_rewrite():
     p = Symbol('p')
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints = onto.parse_ontology()
+    constraints, _ = onto.parse_ontology()
 
     q = I_(p(x), book(x))
 
     qB = EB_((q,))
-    sigmaB = EB_(tuple(constraints))
 
     dt = DatalogTranslator()
     qB = dt.walk(qB)
-    sigmaB = dt.walk(sigmaB)
 
-    orw = OntologyRewriter(qB, sigmaB)
-    rewrite = orw.Xrewrite()
-
-    rewrited = [a[0] for a in rewrite]
+    orw = OntologyRewriter(qB, constraints)
+    rewrited = orw.Xrewrite()
 
     assert len(rewrited) == 1
-    assert rewrited[0] == q
+    imp = rewrited.pop()
+    assert imp == q
 
 
 def test_ontology_parsed_rewrite():
@@ -345,28 +351,26 @@ def test_ontology_parsed_rewrite():
         </owl:Class> 
     </rdf:RDF>'''
 
-    headof = Symbol('headof')
-    chair = Symbol('chair')
+    headof = Symbol('headOf')
+    chair = Symbol('Chair')
     x = Symbol('x')
     y = Symbol('y')
     p = Symbol('p')
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints = onto.parse_ontology()
+    constraints, _ = onto.parse_ontology()
 
     q = I_(p(x), headof(x, y))
 
     qB = EB_((q,))
-    sigmaB = EB_(tuple(constraints))
 
     dt = DatalogTranslator()
     qB = dt.walk(qB)
-    sigmaB = dt.walk(sigmaB)
 
-    orw = OntologyRewriter(qB, sigmaB)
-    rewrite = orw.Xrewrite()
+    orw = OntologyRewriter(qB, constraints)
+    rewrited = orw.Xrewrite()
 
-    rewrited = [a[0] for a in rewrite]
+    rewrited = list(rewrited)
 
     assert len(rewrited) == 3
     assert q in rewrited

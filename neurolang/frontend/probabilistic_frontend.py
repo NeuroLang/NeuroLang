@@ -171,8 +171,11 @@ class NeurolangPDL(QueryBuilderDatalog):
         """
         self.onto = OntologyParser(paths)
         constraints, rules = self.onto.parse_ontology()
-        self.program_ir.walk(Union(rules))
-        #self.program_ir.walk(Union(constraints))
+        #self.program_ir.walk(Union(rules))
+        
+        #self.program_ir.add_rules_bulk(rules)
+        for symbol, expressions in rules.items():
+            self.program_ir.add_bulk_rules(symbol, expressions)
         
         self.program_ir.set_constraints(constraints)
 
@@ -460,11 +463,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         rewrite = orw.Xrewrite()
 
-        eB = ()
-        for imp in rewrite:
-            eB += (imp[0],)
-
-        return Union(eB)
+        return Union(rewrite)
 
     def add_probabilistic_facts_from_tuples(
         self,
