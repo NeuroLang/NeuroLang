@@ -3,18 +3,13 @@ import io
 from ... import expression_walker as ew
 from ...expression_walker import ReplaceExpressionWalker
 from ...expressions import Constant, ExpressionBlock, Symbol
-from ...logic import (
-    Conjunction,
-    ExistentialPredicate,
-    FunctionApplication,
-    Implication,
-)
+from ...logic import (Conjunction, ExistentialPredicate, FunctionApplication,
+                      Implication)
 from ...logic.transformations import CollapseConjunctions
 from ..aggregation import DatalogWithAggregationMixin
 from ..expressions import TranslateToLogic
-from ..ontologies_parser import RightImplication
+from ..ontologies_parser import OntologyParser, RightImplication
 from ..ontologies_rewriter import OntologyRewriter
-from ..ontologies_parser import OntologyParser
 
 S_ = Symbol
 C_ = Constant

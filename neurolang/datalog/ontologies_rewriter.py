@@ -1,8 +1,4 @@
-from ..expression_walker import (
-    ReplaceExpressionWalker,
-    ReplaceSymbolWalker,
-    add_match,
-)
+from ..expression_walker import ReplaceExpressionWalker, ReplaceSymbolWalker, add_match
 from ..expressions import Symbol
 from ..logic import Constant, Implication, NaryLogicOperator
 from ..logic.expression_processing import ExtractFreeVariablesWalker
@@ -14,16 +10,13 @@ from .ontologies_parser import RightImplication
 class ExtractFreeVariablesRightImplicationWalker(ExtractFreeVariablesWalker):
     @add_match(RightImplication)
     def extract_variables_s(self, expression):
-        return self.walk(expression.consequent) - self.walk(
-            expression.antecedent
-        )
+        return self.walk(expression.consequent) - self.walk(expression.antecedent)
 
 
 class OntologyRewriter:
     def __init__(self, query, union_of_constraints):
         self.query = query
         self.union_of_constraints = union_of_constraints
-
 
     def Xrewrite(self):
         """Algorithm based on the one proposed in
@@ -41,7 +34,9 @@ class OntologyRewriter:
             Q_temp = Q_rew.copy()
             for q in Q_temp:
                 q0 = q[0]
-                selected_sigmas = self._get_related_sigmas(q0, self.union_of_constraints)
+                selected_sigmas = self._get_related_sigmas(
+                    q0, self.union_of_constraints
+                )
                 for sigma in selected_sigmas:
                     list_q0 = self.rewriting_step(q0, sigma, rename_count)
                     for new_q0 in list_q0:
@@ -65,7 +60,7 @@ class OntologyRewriter:
                     new_sigmas = new_sigmas + list(sigma_free_vars[formula.functor])
         else:
             if q0.antecedent.functor in sigma_free_vars.keys():
-                    new_sigmas = new_sigmas + list(sigma_free_vars[q0.antecedent.functor])
+                new_sigmas = new_sigmas + list(sigma_free_vars[q0.antecedent.functor])
 
         return new_sigmas
 
@@ -81,15 +76,10 @@ class OntologyRewriter:
                 new_q0 = self._combine_rewriting(q0, qS, S, sigma_i)
                 list_q0.append(new_q0)
 
-                
         return list_q0
 
     def _is_new_rewriting(self, new_q0, Q_rew, Q_explored):
-        return (new_q0, "r", "u") not in Q_rew and (
-            new_q0,
-            "r",
-            "e",
-        ) not in Q_explored
+        return (new_q0, "r", "u") not in Q_rew and (new_q0, "r", "e",) not in Q_explored
 
     def factorization_step(self, q0, sigma):
         body_q = q0.antecedent
@@ -100,7 +90,7 @@ class OntologyRewriter:
             if qS:
                 new_q0 = Implication(q0.consequent, qS)
                 list_q0.append(new_q0)
-                
+
         return list_q0
 
     def _is_new_factorization(self, new_q0, Q_rew, Q_explored):
@@ -157,8 +147,7 @@ class OntologyRewriter:
     def _free_var_other_term(self, free_var, q, S):
         if isinstance(q, NaryLogicOperator):
             return any(
-                formula not in S and free_var in formula.args
-                for formula in q.formulas
+                formula not in S and free_var in formula.args for formula in q.formulas
             )
         else:
             if q != S and free_var in q.args:
@@ -174,9 +163,7 @@ class OntologyRewriter:
                 for index, sub_arg in enumerate(formula.args)
             )
         else:
-            return any(
-                arg == free_var and i != pos for i, arg in enumerate(q.args)
-            )
+            return any(arg == free_var and i != pos for i, arg in enumerate(q.args))
 
     def _get_applicable(self, sigma, q):
         S = self._get_term(q, sigma.consequent)
@@ -200,9 +187,9 @@ class OntologyRewriter:
         return q_args
 
     def _is_applicable(self, sigma, q, S):
-        return self._unifies(
-            S, sigma.consequent
-        ) and self._not_in_existential(q, S, sigma)
+        return self._unifies(S, sigma.consequent) and self._not_in_existential(
+            q, S, sigma
+        )
 
     def _is_factorizable(self, S, pos):
         return all(most_general_unifier(term, S[0]) for term in S) or pos
@@ -214,23 +201,18 @@ class OntologyRewriter:
         efvw = ExtractFreeVariablesRightImplicationWalker()
         free_vars = efvw.walk(sigma)
         for fv in free_vars:
-            existential_position = self._get_position_existential(
-                sigma.consequent, fv
-            )
+            existential_position = self._get_position_existential(sigma.consequent, fv)
             if self._position_shared_or_constant(q, S, existential_position):
                 return False
 
         return True
 
     def _get_position_existential(self, sigma, free_var):
-        return [
-            pos for pos, symbol in enumerate(sigma.args) if symbol == free_var
-        ]
+        return [pos for pos, symbol in enumerate(sigma.args) if symbol == free_var]
 
     def _position_shared_or_constant(self, q, S, positions):
         return any(
-            isinstance(term.args[pos], Constant)
-            or self._is_shared(term.args[pos], q)
+            isinstance(term.args[pos], Constant) or self._is_shared(term.args[pos], q)
             for pos in positions
             for term in S
         )
@@ -272,7 +254,6 @@ class OntologyRewriter:
         rsw = ReplaceExpressionWalker(replace)
         sigma_ant = rsw.walk(q.antecedent)
         sigma_ant = CollapseConjunctions().walk(sigma_ant)
-        
+
         return Implication(q.consequent, sigma_ant)
 
-    

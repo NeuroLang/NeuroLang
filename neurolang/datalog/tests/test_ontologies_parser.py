@@ -1,8 +1,6 @@
 
 import io
 
-from neurolang.datalog import constraints_representation
-
 from ...expressions import Constant, Symbol
 from ...frontend import NeurolangPDL
 from ..constraints_representation import RightImplication
@@ -55,7 +53,7 @@ def test_1():
     AssistantProfessor = Symbol('AssistantProfessor')
     AssociateProfessor = Symbol('AssociateProfessor')
     Book = Symbol('Book')
-    
+
     label = Symbol('rdf-schema:label')
 
     imp1 = RightImplication(AdministrativeStaff(x), Employee(x))

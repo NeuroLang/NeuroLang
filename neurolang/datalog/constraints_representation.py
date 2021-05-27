@@ -6,7 +6,6 @@ the extensional, intensional, and builtin
 sets and has support for constraints.
 """
 
-from typing_inspect import get_constraints
 from ..expression_walker import ExpressionWalker, add_match
 from ..logic import LogicOperator, NaryLogicOperator, Union
 from .basic_representation import DatalogProgram
@@ -72,8 +71,8 @@ class DatalogConstraintsMixin(ExpressionWalker):
     def _categorize_constraints(self, sigma):
         sigma_functor = sigma.consequent.functor.name
         if (
-            self.categorized_constraints and 
-            sigma_functor in self.categorized_constraints
+            self.categorized_constraints
+            and sigma_functor in self.categorized_constraints
         ):
             cons_set = self.categorized_constraints[sigma_functor]
             if sigma not in cons_set:
@@ -81,7 +80,6 @@ class DatalogConstraintsMixin(ExpressionWalker):
                 self.categorized_constraints[sigma_functor] = cons_set
         else:
             self.categorized_constraints[sigma_functor] = set([sigma])
-        
 
 
 class DatalogConstraintsProgram(DatalogProgram, DatalogConstraintsMixin):

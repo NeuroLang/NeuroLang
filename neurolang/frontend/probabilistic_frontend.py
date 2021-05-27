@@ -170,7 +170,6 @@ class NeurolangPDL(QueryBuilderDatalog):
         constraints, rules = onto.parse_ontology()
         for symbol, expressions in rules.items():
             self.program_ir.add_bulk_rules(symbol, expressions)
-        
         self.program_ir.set_constraints(constraints)
 
     @property
@@ -452,7 +451,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
-            deterministic_program, 
+            deterministic_program,
             self.program_ir.get_constraints(),
         )
         rewrite = orw.Xrewrite()
