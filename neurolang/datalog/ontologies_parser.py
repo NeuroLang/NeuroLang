@@ -226,8 +226,11 @@ class OntologyParser:
         return constraints
 
     def _parse_hasValue(self, entity, prop, nodes):
-        warnings.warn("Not implemented yet: hasValue")
-        return []
+        x = Symbol.fresh()
+        ent = Symbol(self._parse_name(entity))
+        onProp = Symbol(self._parse_name(prop))
+        value = self._parse_name(nodes[0])
+        return [Implication(Symbol(onProp)(x, Constant(value)), Symbol(ent)(x))]
 
     def _solve_BNode(self, initial_node):
         list_node = RDF.nil
