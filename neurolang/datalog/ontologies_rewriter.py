@@ -57,19 +57,6 @@ class OntologyRewriter:
 
         return Q_explored
 
-    def _categorize_constraints(self):
-        sigma_free_vars = {}
-        for sigma in self.union_of_constraints.formulas:
-            if sigma.consequent.functor in sigma_free_vars:
-                cons_list = sigma_free_vars[sigma.consequent.functor]
-                if sigma not in cons_list:
-                    cons_list.append(sigma)
-                    sigma_free_vars[sigma.consequent.functor] = cons_list
-            else:
-                sigma_free_vars[sigma.consequent.functor] = [sigma]
-
-        return sigma_free_vars
-
     def _get_related_sigmas(self, q0, sigma_free_vars):
         new_sigmas = []
         if isinstance(q0.antecedent, NaryLogicOperator):
@@ -138,7 +125,6 @@ class OntologyRewriter:
         efvw = ExtractFreeVariablesRightImplicationWalker()
         free_vars = efvw.walk(sigma)
         for fv in free_vars:
-        #for free_var in sigma[1]._list:
             pos = self._get_position_existential(sigma.consequent, fv)
             S = self._get_term(q, sigma.consequent)
             if (

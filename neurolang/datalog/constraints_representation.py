@@ -32,6 +32,7 @@ class RightImplication(LogicOperator):
 
 class DatalogConstraintsMixin(ExpressionWalker):
     protected_keywords = {"__constraints__"}
+    categorized_constraints = {}
 
     @add_match(NaryLogicOperator)
     def add_nary_constraint(self, expression):
@@ -61,7 +62,25 @@ class DatalogConstraintsMixin(ExpressionWalker):
             self.categorized_constraints = categorized_constraints
 
     def get_constraints(self):
+        if not self.categorized_constraints:
+            constraints = self.symbol_table.get("__constraints__", Union(()))
+            for f in constraints.formulas:
+                self._categorize_constraints(f)
+
         return self.categorized_constraints
+
+    def _categorize_constraints(self, sigma):
+        sigma_functor = sigma.consequent.functor.name
+        if (
+            self.categorized_constraints and 
+            sigma_functor in self.categorized_constraints
+        ):
+            cons_set = self.categorized_constraints[sigma_functor]
+            if sigma not in cons_set:
+                cons_set.add(sigma)
+                self.categorized_constraints[sigma_functor] = cons_set
+        else:
+            self.categorized_constraints[sigma_functor] = set([sigma])
         
 
 

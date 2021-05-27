@@ -155,8 +155,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def load_ontology(
         self,
-        paths: typing.Union[str, List[str]],
-        load_format: typing.Union[str, List[str]] = "xml",
+        paths: typing.Union[str, List[str]]
     ) -> None:
         """
         Loads and parses ontology stored at the specified paths, and
@@ -166,14 +165,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         ----------
         paths : typing.Union[str, List[str]]
             where the ontology files are stored
-        load_format : typing.Union[str, List[str]], optional
-            storage format, by default "xml"
         """
-        self.onto = OntologyParser(paths)
-        constraints, rules = self.onto.parse_ontology()
-        #self.program_ir.walk(Union(rules))
-        
-        #self.program_ir.add_rules_bulk(rules)
+        onto = OntologyParser(paths)
+        constraints, rules = onto.parse_ontology()
         for symbol, expressions in rules.items():
             self.program_ir.add_bulk_rules(symbol, expressions)
         
