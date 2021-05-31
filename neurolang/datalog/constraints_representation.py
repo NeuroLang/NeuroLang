@@ -53,6 +53,10 @@ class DatalogConstraintsMixin(ExpressionWalker):
     def constraints(self):
         '''Function that returns the constraints contained
         in the Datalog program.
+
+        Returns
+        -------
+        Union of formulas containing all constraints loaded into the program.
         '''
         return self.symbol_table.get("__constraints__", Union(()))
 
@@ -79,6 +83,11 @@ class DatalogConstraintsMixin(ExpressionWalker):
     def get_constraints(self):
         '''Returns the contraints in a dictionary, where the key is the functor
         of the consequent of each of the rules.
+
+        Returns
+        -------
+        Dictionary containing all constraints loaded in the datalog program,
+        indexed according to the functor of the rule consequent.
         '''
         if not self.categorized_constraints:
             constraints = self.symbol_table.get("__constraints__", Union(()))
