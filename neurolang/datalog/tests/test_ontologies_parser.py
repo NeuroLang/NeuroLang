@@ -62,7 +62,7 @@ def test_1():
     imp4 = RightImplication(AssociateProfessor(x), Professor(x))
     imp5 = RightImplication(Book(x), Publication(x))
 
-    
+
     imp_label1 = Implication(label(x, Constant('administrative staff worker')), AdministrativeStaff(x))
     imp_label2 = Implication(label(x, Constant('assistant professor')), AssistantProfessor(x))
     imp_label3 = Implication(label(x, Constant('associate professor')), AssociateProfessor(x))
@@ -291,13 +291,13 @@ def test_3():
         </owl:Class> 
     </rdf:RDF>'''
 
-    '''
-    Professor(X) :- Chair(X).
-    #exists{Y}supportChair(X,Y) :- Chair(X).
-    headOf(X,Y) :- supportChair(X,Y).
-    Department(Y) :- supportChair(X,Y).
-    Person(X) :- supportChair(X,Y). 
-    '''
+    expected_results = '''
+        Professor(X) :- Chair(X).
+        #exists{Y}supportChair(X,Y) :- Chair(X).
+        headOf(X,Y) :- supportChair(X,Y).
+        Department(Y) :- supportChair(X,Y).
+        Person(X) :- supportChair(X,Y).
+        '''
 
     Professor = Symbol('Professor')
     Chair = Symbol('Chair')
