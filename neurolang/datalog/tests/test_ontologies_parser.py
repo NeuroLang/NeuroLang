@@ -186,7 +186,6 @@ def test_2():
     imp3 = RightImplication(ConferencePaper(x), Article(x))
     imp4 = RightImplication(Course(x), Work(x))
 
-    
     imp_label1 = Implication(label(x, Constant('clerical staff worker')), ClericalStaff(x))
     imp_label2 = Implication(label(x, Constant('school')), College(x))
     imp_label3 = Implication(label(x, Constant('conference paper')), ConferencePaper(x))
