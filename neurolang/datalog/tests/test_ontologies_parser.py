@@ -138,8 +138,6 @@ def test_1():
             assert l.consequent.args[1] == imp_label5.consequent.args[1]
         else:
             assert False
-        
-
 
 def test_2():
     owl = '''<?xml version="1.0"?>
@@ -290,14 +288,6 @@ def test_3():
             <rdfs:subClassOf rdf:resource="#Professor" />
         </owl:Class> 
     </rdf:RDF>'''
-
-    expected_results = '''
-        Professor(X) :- Chair(X).
-        #exists{Y}supportChair(X,Y) :- Chair(X).
-        headOf(X,Y) :- supportChair(X,Y).
-        Department(Y) :- supportChair(X,Y).
-        Person(X) :- supportChair(X,Y).
-        '''
 
     Professor = Symbol('Professor')
     Chair = Symbol('Chair')
