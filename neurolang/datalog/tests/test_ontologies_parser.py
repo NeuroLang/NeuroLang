@@ -446,7 +446,6 @@ def test_open_world_example():
         )
 
         f_term = nl.solve_all()
-    
+
     res = f_term['answer'].as_pandas_dataframe().values
     assert (res == [['Juan'], ['Manuel']]).all()
-
