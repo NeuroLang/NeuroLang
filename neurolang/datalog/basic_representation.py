@@ -235,7 +235,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         ----------
         symbol : Symbol
             symbol used to index the rules
-            in the symbol table.    
+            in the symbol table.
 
         rules : Iterable
             iterable containing all rules

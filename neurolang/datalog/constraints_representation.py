@@ -51,9 +51,25 @@ class DatalogConstraintsMixin(ExpressionWalker):
             self.symbol_table["__constraints__"] = Union((expression,))
 
     def constraints(self):
+        '''Function that returns the constraints contained
+        in the Datalog program.
+        '''
         return self.symbol_table.get("__constraints__", Union(()))
 
     def set_constraints(self, categorized_constraints):
+        '''This function receives a dictionary with the contraints organized
+        according to the functor of its consequent and is in charge of setting
+        it both in the symbol table and in the global variable
+        `categorized_contraints`, useful for XRewriter optimizations.
+
+        Parameters
+        ----------
+        categorized_constraints : dict
+            Dictionary of constraints where each key is
+            the functor of the consequent of the rules
+            and the values are lists of contraints with
+            each rule associated to the corresponding functor.
+        '''
         if isinstance(categorized_constraints, dict):
             cons = [b for a in list(categorized_constraints.values()) for b in a]
             self.symbol_table["__constraints__"] = Union(cons)
@@ -61,6 +77,9 @@ class DatalogConstraintsMixin(ExpressionWalker):
             self.categorized_constraints = categorized_constraints
 
     def get_constraints(self):
+        '''Returns the contraints in a dictionary, where the key is the functor
+        of the consequent of each of the rules.
+        '''
         if not self.categorized_constraints:
             constraints = self.symbol_table.get("__constraints__", Union(()))
             for f in constraints.formulas:
@@ -69,6 +88,17 @@ class DatalogConstraintsMixin(ExpressionWalker):
         return self.categorized_constraints
 
     def _categorize_constraints(self, sigma):
+        '''Function in charge of sorting the constraints in a dictionary
+        using the consequent functor as an index.
+
+        This categorization is useful to obtain the constraints in the
+        way they are needed for the rewriting algorithm.
+
+        Parameters
+        ----------
+        sigma : RightImplicationn
+            constraint to be categorized.
+        '''
         sigma_functor = sigma.consequent.functor.name
         if (
             self.categorized_constraints
