@@ -105,7 +105,7 @@ class DatalogConstraintsMixin(ExpressionWalker):
 
         Parameters
         ----------
-        sigma : RightImplicationn
+        sigma : RightImplication
             constraint to be categorized.
         '''
         sigma_functor = sigma.consequent.functor.name
