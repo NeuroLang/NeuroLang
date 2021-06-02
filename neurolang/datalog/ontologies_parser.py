@@ -33,6 +33,17 @@ class OntologyParser:
         self.rdfGraph = rdfGraph
 
     def parse_ontology(self):
+        '''
+        Main function to be called for ontology processing.
+
+        Returns
+        -------
+        Two dictionaries. One with contraints, for example, rules derived
+        from restrictions of type someValuesFrom. The other one, with the
+        implications derived from the rest of the ontological information,
+        for example, the label property. Both dictionaries index lists of
+        rules using the rule consequent functor.
+        '''
         self._parse_classes()
 
         return self.parsed_constraints, self.parsed_rules
@@ -65,6 +76,14 @@ class OntologyParser:
                         raise NeuroLangNotImplementedError
 
     def _get_all_classes(self):
+        '''
+        Function in charge of obtaining all the classes of the ontology 
+        to iterate through at the time of parsing.
+
+        Returns
+        -------
+        A set of URIs representing the classes that compose the ontology.
+        '''
         classes = set()
         for s, _, _ in self.rdfGraph.triples((None, RDF.type, OWL.Class)):
             if not isinstance(s, BNode):
@@ -130,6 +149,22 @@ class OntologyParser:
             warnings.warn("Complex intersectionOf are not implemented yet")
 
     def _parse_name(self, obj):
+        '''Function that transforms the names of the entities of the ontology 
+        while preserving the namespace to avoid conflicts.
+
+        Example: the URI `http://www.w3.org/2004/02/skos/core#altLabel`
+        becomes `core:altLabel`.
+
+
+        Parameters
+        ----------
+        obj : URIRef
+            entity to be renamed.
+
+        Returns
+        -------
+        A string representing the new entity name.
+        ''' 
         if isinstance(obj, Literal):
             return str(obj)
 
@@ -194,6 +229,10 @@ class OntologyParser:
         return cons
 
     def _parse_someValuesFrom(self, entity, prop, nodes, support_prop=None):
+        '''After the restriction is identified as of type `someValuesFrom`,
+        this function is in charge of parsing the information and returning it
+        in the form of rules that our Datalog program can interpret.
+        '''
         constraints = []
         if support_prop is None:
             support_prop = Symbol.fresh()
@@ -213,6 +252,10 @@ class OntologyParser:
         return constraints
 
     def _parse_allValuesFrom(self, entity, prop, nodes):
+        '''After the restriction is identified as of type `allValuesFrom`,
+        this function is in charge of parsing the information and returning it
+        in the form of rules that our Datalog program can interpret.
+        '''
         constraints = []
         x = Symbol.fresh()
         y = Symbol.fresh()
@@ -226,6 +269,10 @@ class OntologyParser:
         return constraints
 
     def _parse_hasValue(self, entity, prop, nodes):
+        '''After the constraint is identified as of type `hasValue`,
+        this function is in charge of parsing the information and returning it
+        in the form of rules that our Datalog program can interpret.
+        '''
         x = Symbol.fresh()
         ent = Symbol(self._parse_name(entity))
         onProp = Symbol(self._parse_name(prop))
@@ -258,6 +305,14 @@ class OntologyParser:
                 return triple[2]
 
     def _parseProperty(self, entity, prop, value):
+        '''Any rule that is not a restriction or a derivation on
+        classes(as the case of subClassOf or EnumeratedClass) is a
+        property that defines a field inside the entity with its
+        corresponding information. For example, the properties
+        label, altLabel, definition, etc.
+        
+        This function is in charge of parsing that information.
+        '''
         entity = Symbol(self._parse_name(entity))
         entity_name = Constant(self._parse_name(value))
         x = Symbol.fresh()
