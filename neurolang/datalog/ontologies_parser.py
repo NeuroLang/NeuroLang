@@ -49,6 +49,10 @@ class OntologyParser:
         return self.parsed_constraints, self.parsed_rules
 
     def _parse_classes(self):
+        '''This method obtains all the classes present in the ontology and
+        iterates over them, parsing them according to the properties
+        that compose them.
+        '''
         _all_classes = self._get_all_classes()
 
         for class_name in list(_all_classes):
@@ -95,6 +99,19 @@ class OntologyParser:
         return classes
 
     def _parseSubClass(self, entity, val):
+        '''Function in charge of identifying the type of constraint to be
+        parsed. At the moment it allows to parse subclasses, basic
+        constraints and a single level of intersections.
+        Nested intersections are not yet implemented.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        value : URIRef or BNode
+            value associated with the entity.
+        '''
         res = []
         if isinstance(val, BNode):
             bnode_triples = list(self.rdfGraph.triples((val, None, None)))
@@ -130,6 +147,22 @@ class OntologyParser:
             self._categorize_constraints([imp])
 
     def _parse_BNode_intersection(self, entity, node, inter_entity):
+        '''When the rules that compose a constraint are defined within an
+        intersection, it needs to be manipulated in a special way.
+        This is the method in charge of that behavior.
+
+        Parameters
+        ----------
+        entity : URIRef
+            the main entity containing the intersection.
+
+        node : URIRef
+            URI defining the intersection.
+
+        inter_entity : URIRef
+            the main entity defined within the intersection. 
+
+        '''
         triple_restriction = list(self.rdfGraph.triples((node, None, None)))
         nil = [a[2] for a in triple_restriction if not isinstance(a[2], BNode)]
         bnode = [a[2] for a in triple_restriction if isinstance(a[2], BNode)]
@@ -163,7 +196,7 @@ class OntologyParser:
 
         Returns
         -------
-        A string representing the new entity name.
+        String with the new name associated to the entity.
         ''' 
         if isinstance(obj, Literal):
             return str(obj)
@@ -183,6 +216,29 @@ class OntologyParser:
         return res
 
     def _parse_restriction(self, entity, restriction_dic, support_prop=None):
+        '''Method for the identification of the type of restriction.
+        Each of the possible available restrictions has its own
+        method in charge of information parsing. 
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+        
+        restriction_dic : dict
+            dictionary containing the information of the constraint
+            to be processed.
+
+        support_prop : Symbol, default None
+            Optional symbol. It is used to predefine the symbol used in
+            rules with existentials, when necessary
+            (mainly in nested definitions).
+
+        Returns
+        -------
+        A list of rules that compose the parsed constraint.
+
+        '''
         cons = []
         prop = restriction_dic[OWL.onProperty]
 
@@ -232,6 +288,22 @@ class OntologyParser:
         '''After the restriction is identified as of type `someValuesFrom`,
         this function is in charge of parsing the information and returning it
         in the form of rules that our Datalog program can interpret.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        prop : URIRef
+            propertie associated with the entity.
+
+        nodes : list
+            list of the values associated with the entity and the property.
+        
+        support_prop : Symbol, default None
+            Optional symbol. It's used to predefine the symbol used in
+            rules with existentials, when necessary
+            (mainly in nested definitions).
         '''
         constraints = []
         if support_prop is None:
@@ -255,6 +327,17 @@ class OntologyParser:
         '''After the restriction is identified as of type `allValuesFrom`,
         this function is in charge of parsing the information and returning it
         in the form of rules that our Datalog program can interpret.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        prop : URIRef
+            propertie associated with the entity.
+
+        nodes : list
+            list of the values associated with the entity and the property.
         '''
         constraints = []
         x = Symbol.fresh()
@@ -272,6 +355,17 @@ class OntologyParser:
         '''After the constraint is identified as of type `hasValue`,
         this function is in charge of parsing the information and returning it
         in the form of rules that our Datalog program can interpret.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        prop : URIRef
+            propertie associated with the entity.
+
+        nodes : list
+            list of the values associated with the entity and the property.
         '''
         x = Symbol.fresh()
         ent = Symbol(self._parse_name(entity))
@@ -324,6 +418,17 @@ class OntologyParser:
         label, altLabel, definition, etc.
 
         This function is in charge of parsing that information.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        prop : URIRef
+            propertie associated with the entity.
+
+        nodes : URIRef
+            value associated with the entity and the property.
         '''
         entity = Symbol(self._parse_name(entity))
         entity_name = Constant(self._parse_name(value))
