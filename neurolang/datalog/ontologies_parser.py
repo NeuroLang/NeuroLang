@@ -280,6 +280,18 @@ class OntologyParser:
         return [Implication(Symbol(onProp)(x, Constant(value)), Symbol(ent)(x))]
 
     def _solve_BNode(self, initial_node):
+        '''Once a BNode is identified, this function iterates over each of the pointers
+         that compose it and returns a list with those values.
+         
+         Parameters
+        ----------
+        initial_node : BNode
+            pointer to the first item in the list
+
+        Returns
+        -------
+        A list of all the values that arise from traversing the list of BNodes.
+         '''
         list_node = RDF.nil
         values = []
         for node_triples in self.rdfGraph.triples((initial_node, None, None)):
@@ -310,7 +322,7 @@ class OntologyParser:
         property that defines a field inside the entity with its
         corresponding information. For example, the properties
         label, altLabel, definition, etc.
-        
+
         This function is in charge of parsing that information.
         '''
         entity = Symbol(self._parse_name(entity))
