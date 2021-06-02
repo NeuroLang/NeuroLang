@@ -364,6 +364,21 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     def _solve_deterministic_stratum(self, det_idb):
+        '''Resolution of the deterministic stratum. In case there
+        are entries in the symbol table under the key __constraints__,
+        a rewrite is performed and the resulting program is assigned
+        to the variable `current_program_rewrited` to provide a way
+        to access this information.
+
+        Parameters
+        ----------
+        det_idb : typing.Union
+            union of rules composing the deterministic stratum.
+
+        Returns
+        -------
+        Result obtained after resolution of the deterministic stratum
+        '''
         if "__constraints__" in self.symbol_table:
             det_idb = self._rewrite_program_with_ontology(det_idb)
             self.current_program_rewrited = det_idb
