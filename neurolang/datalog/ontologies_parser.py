@@ -81,7 +81,7 @@ class OntologyParser:
 
     def _get_all_classes(self):
         '''
-        Function in charge of obtaining all the classes of the ontology 
+        Function in charge of obtaining all the classes of the ontology
         to iterate through at the time of parsing.
 
         Returns
@@ -160,7 +160,7 @@ class OntologyParser:
             URI defining the intersection.
 
         inter_entity : URIRef
-            the main entity defined within the intersection. 
+            the main entity defined within the intersection.
 
         '''
         triple_restriction = list(self.rdfGraph.triples((node, None, None)))
@@ -182,7 +182,7 @@ class OntologyParser:
             warnings.warn("Complex intersectionOf are not implemented yet")
 
     def _parse_name(self, obj):
-        '''Function that transforms the names of the entities of the ontology 
+        '''Function that transforms the names of the entities of the ontology
         while preserving the namespace to avoid conflicts.
 
         Example: the URI `http://www.w3.org/2004/02/skos/core#altLabel`
@@ -197,7 +197,7 @@ class OntologyParser:
         Returns
         -------
         String with the new name associated to the entity.
-        ''' 
+        '''
         if isinstance(obj, Literal):
             return str(obj)
 
@@ -218,13 +218,13 @@ class OntologyParser:
     def _parse_restriction(self, entity, restriction_dic, support_prop=None):
         '''Method for the identification of the type of restriction.
         Each of the possible available restrictions has its own
-        method in charge of information parsing. 
+        method in charge of information parsing.
 
         Parameters
         ----------
         entity : URIRef
             entity to be parsed.
-        
+
         restriction_dic : dict
             dictionary containing the information of the constraint
             to be processed.
@@ -299,7 +299,7 @@ class OntologyParser:
 
         nodes : list
             list of the values associated with the entity and the property.
-        
+
         support_prop : Symbol, default None
             Optional symbol. It's used to predefine the symbol used in
             rules with existentials, when necessary
@@ -376,7 +376,7 @@ class OntologyParser:
     def _solve_BNode(self, initial_node):
         '''Once a BNode is identified, this function iterates over each of the pointers
          that compose it and returns a list with those values.
-         
+
          Parameters
         ----------
         initial_node : BNode
