@@ -23,11 +23,12 @@ from uuid import uuid1
 import pandas as pd
 
 from .. import expressions as ir
-from ..datalog.chase import Chase
 from ..datalog.aggregation import (
+    BuiltinAggregationMixin,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
 )
+from ..datalog.chase import Chase
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
@@ -58,7 +59,7 @@ from ..probabilistic.weighted_model_counting import (
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression,
+    RelationalAlgebraColumnStr,
 )
 from . import query_resolution_expressions as fe
 from .datalog.sugar import (
@@ -68,6 +69,11 @@ from .datalog.sugar import (
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
+from neurolang.type_system import (
+    get_args,
+    get_origin,
+    replace_type_variable_fix_python36_37,
+)
 
 
 class RegionFrontendCPLogicSolver(
@@ -81,6 +87,7 @@ class RegionFrontendCPLogicSolver(
     RegionSolver,
     CPLogicMixin,
     DatalogWithAggregationMixin,
+    BuiltinAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
     ExpressionBasicEvaluator,
@@ -106,6 +113,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             dalvi_suciu_lift.solve_marg_query,
             wmc_solve_marg_query,
         ),
+        check_qbased_pfact_tuple_unicity=False,
     ) -> "NeurolangPDL":
         """
         Query builder with probabilistic capabilities
@@ -141,6 +149,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
         self.ontology_loaded = False
+        self.check_qbased_pfact_tuple_unicity = (
+            check_qbased_pfact_tuple_unicity
+        )
 
     def load_ontology(
         self,
@@ -381,6 +392,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                     prob_idb,
                     succ_solver,
                     marg_solver,
+                    self.check_qbased_pfact_tuple_unicity,
                 )
             except UnsupportedSolverError:
                 if i == len(self.probabilistic_solvers) - 1:
@@ -433,6 +445,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                 NamedRelationalAlgebraFrozenSet.dum()
             )
         query_solution = solution[pred_symb].value.unwrap()
+        query_row_type = solution[pred_symb].value.row_type
         cols = list(
             arg.name
             for arg in predicate.expression.args
@@ -441,6 +454,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
             *(symb.name for symb in head_symbols)
+        )
+        type_args = get_args(query_row_type)
+        proj_row_type = tuple(
+            type_args[cols.index(symb.name)] for symb in head_symbols
+        )
+        origin = get_origin(query_row_type)
+        query_solution.row_type = replace_type_variable_fix_python36_37(
+            query_row_type, origin, proj_row_type
         )
         return ir.Constant[AbstractSet](query_solution)
 
@@ -660,7 +681,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         projections = collections.OrderedDict()
         projections[prob_col] = probability
         for col in columns:
-            projections[col] = RelationalAlgebraStringExpression(col)
+            projections[col] = RelationalAlgebraColumnStr(col)
         ra_set = ra_set.extended_projection(projections)
         self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return fe.Symbol(self, name)
