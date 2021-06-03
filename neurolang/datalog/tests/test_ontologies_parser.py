@@ -148,22 +148,22 @@ def test_2():
         <Ontology>
             <versionInfo>0.3.1</versionInfo>
         </Ontology>
-        
+
         <owl:Class rdf:ID="ClericalStaff">
             <rdfs:label>clerical staff worker</rdfs:label>
             <rdfs:subClassOf rdf:resource="#AdministrativeStaff"/>
         </owl:Class>
-        
+
         <owl:Class rdf:ID="College">
             <rdfs:label>school</rdfs:label>
             <rdfs:subClassOf rdf:resource="#Organization"/>
         </owl:Class>
-        
+
         <owl:Class rdf:ID="ConferencePaper">
             <rdfs:label>conference paper</rdfs:label>
             <rdfs:subClassOf rdf:resource="#Article"/>
         </owl:Class>
-        
+
         <owl:Class rdf:ID="Course">
             <rdfs:label>teaching course</rdfs:label>
             <rdfs:subClassOf rdf:resource="#Work"/>
@@ -268,7 +268,7 @@ def test_3():
         <Ontology>
             <versionInfo>0.3.1</versionInfo>
         </Ontology>
-        
+
         <owl:Class rdf:ID="Chair">
             <rdfs:label>chair</rdfs:label>
             <rdfs:subClassOf>
@@ -285,7 +285,7 @@ def test_3():
                 </owl:Class>
             </rdfs:subClassOf>
             <rdfs:subClassOf rdf:resource="#Professor" />
-        </owl:Class> 
+        </owl:Class>
     </rdf:RDF>'''
 
     Professor = Symbol('Professor')
@@ -393,7 +393,7 @@ def test_open_world_example():
         <Ontology>
             <versionInfo>0.3.1</versionInfo>
         </Ontology>
-        
+
         <owl:Class rdf:ID="Dean">
             <rdfs:label>dean</rdfs:label>
             <rdfs:subClassOf>
@@ -410,7 +410,7 @@ def test_open_world_example():
                 </owl:Class>
             </rdfs:subClassOf>
             <rdfs:subClassOf rdf:resource="#Professor" />
-        </owl:Class> 
+        </owl:Class>
 
         <owl:Class rdf:ID="Chair">
             <rdfs:label>chair</rdfs:label>
@@ -443,6 +443,74 @@ def test_open_world_example():
         e.answer[e.a] = (
             e.headOf[e.a, e.b] &
             e.College[e.b]
+        )
+
+        f_term = nl.solve_all()
+
+    res = f_term['answer'].as_pandas_dataframe().values
+    assert (res == [['Juan'], ['Manuel']]).all()
+
+
+def test_retrieve_property():
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <Ontology>
+            <versionInfo>0.3.1</versionInfo>
+        </Ontology>
+
+        <owl:Class rdf:ID="Dean">
+            <rdfs:label>dean</rdfs:label>
+            <rdfs:subClassOf>
+                <owl:Class>
+                    <owl:intersectionOf rdf:parseType="Collection">
+                        <owl:Class rdf:about="#Person" />
+                        <owl:Restriction>
+                            <owl:onProperty rdf:resource="#headOf" />
+                            <owl:someValuesFrom>
+                                <owl:Class rdf:about="#College" />
+                            </owl:someValuesFrom>
+                        </owl:Restriction>
+                    </owl:intersectionOf>
+                </owl:Class>
+            </rdfs:subClassOf>
+            <rdfs:subClassOf rdf:resource="#Professor" />
+        </owl:Class>
+
+        <owl:Class rdf:ID="Chair">
+            <rdfs:label>chair</rdfs:label>
+            <rdfs:subClassOf>
+                <owl:Class>
+                    <owl:intersectionOf rdf:parseType="Collection">
+                        <owl:Class rdf:about="#Person" />
+                        <owl:Restriction>
+                            <owl:onProperty rdf:resource="#headOf" />
+                            <owl:someValuesFrom>
+                                <owl:Class rdf:about="#Department" />
+                            </owl:someValuesFrom>
+                        </owl:Restriction>
+                    </owl:intersectionOf>
+                </owl:Class>
+            </rdfs:subClassOf>
+            <rdfs:subClassOf rdf:resource="#Professor" />
+        </owl:Class>
+    </rdf:RDF>'''
+
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(owl))
+
+    nl.add_tuple_set([('Juan',), ('Manuel',)], name='Dean')
+    nl.add_tuple_set([('Miguel',), ('Alberto',)], name='Chair')
+    nl.add_tuple_set([('College A',), ('College B',)], name='College')
+    nl.add_tuple_set([('Department A',), ('Department B',)], name='Department')
+
+    label = nl.new_symbol(name='rdf-schema:label')
+
+    with nl.scope as e:
+        e.answer[e.a] = (
+            label[e.a, 'dean']
         )
 
         f_term = nl.solve_all()
