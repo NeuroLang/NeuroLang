@@ -28,9 +28,10 @@ from ..datalog.expression_processing import (
     enforce_conjunction,
     extract_logic_atoms,
     extract_logic_predicates,
-    flatten_query
+    flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
+from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, Symbol
 from ..logic import FALSE, Conjunction, Implication
@@ -43,12 +44,13 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     Projection,
     RelationalAlgebraPushInSelections,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceCountingSolver
+    RelationalAlgebraProvenanceCountingSolver,
+    RelationalAlgebraProvenanceExpressionSemringSolver,
 )
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
@@ -57,11 +59,12 @@ from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query
+    generate_probabilistic_symbol_table_for_query,
+    DeterministicFactSet,
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
-from .shattering import shatter_easy_probfacts
 from .query_resolution import lift_solve_marg_query
+from .shattering import shatter_easy_probfacts
 
 LOG = logging.getLogger(__name__)
 
