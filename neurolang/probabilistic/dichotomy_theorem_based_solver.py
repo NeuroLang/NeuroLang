@@ -20,6 +20,7 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 """
 
 import logging
+import typing
 from collections import defaultdict
 
 from ..datalog.expression_processing import (
@@ -41,9 +42,11 @@ from ..relational_algebra import (
     EliminateTrivialProjections,
     ExtendedProjection,
     ExtendedProjectionListMember,
+    NameColumns,
     NamedRelationalAlgebraFrozenSet,
     Projection,
     RelationalAlgebraPushInSelections,
+    RelationalAlgebraStringExpression,
     str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
@@ -57,10 +60,10 @@ from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
 from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
+    DeterministicFactSet,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query,
-    DeterministicFactSet,
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
 from .query_resolution import lift_solve_marg_query
