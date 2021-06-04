@@ -24,6 +24,7 @@ class OntologyParser:
 
         self.parsed_constraints = {}
         self.parsed_rules = {}
+        self.estructural_knowledge = {}
 
     def _load_ontology(self, paths, load_format):
         rdfGraph = rdflib.Graph()
@@ -46,7 +47,7 @@ class OntologyParser:
         '''
         self._parse_classes()
 
-        return self.parsed_constraints, self.parsed_rules
+        return self.parsed_constraints, self.parsed_rules, self.estructural_knowledge
 
     def _parse_classes(self):
         '''This method obtains all the classes present in the ontology and
@@ -145,6 +146,10 @@ class OntologyParser:
             x = Symbol.fresh()
             imp = RightImplication(ant(x), cons(x))
             self._categorize_constraints([imp])
+
+            neurolang_subclassof = Symbol('neurolang:subClassOf')
+            est = neurolang_subclassof(Constant(ant.name), Constant(cons.name))
+            self._categorize_structural_knowledge([est])
 
     def _parse_BNode_intersection(self, entity, node, inter_entity):
         '''When the rules that compose a constraint are defined within an
@@ -439,6 +444,11 @@ class OntologyParser:
 
         self._categorize_rules([Implication(con, ant)])
 
+        prop_name = label.name.split(':')[-1]
+        neurolang_prop = Symbol('neurolang:'+prop_name)
+        est = neurolang_prop(Constant(entity.name), entity_name)
+        self._categorize_structural_knowledge([est])
+
     def _parseEnumeratedClass(self, entity, prop, value):
         warnings.warn("Not implemented yet: EnumeratedClass")
 
@@ -471,3 +481,14 @@ class OntologyParser:
                     self.parsed_rules[sigma_functor] = cons_set
             else:
                 self.parsed_rules[sigma_functor] = set([sigma])
+
+    def _categorize_structural_knowledge(self, formulas):
+        for sigma in formulas:
+            sigma_functor = sigma.functor
+            if sigma_functor in self.parsed_rules:
+                cons_set = self.estructural_knowledge[sigma_functor]
+                if sigma not in cons_set:
+                    cons_set.add(sigma)
+                    self.estructural_knowledge[sigma_functor] = cons_set
+            else:
+                self.estructural_knowledge[sigma_functor] = set([sigma])

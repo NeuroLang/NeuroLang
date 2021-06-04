@@ -70,7 +70,7 @@ def test_1():
     imp_label5 = Implication(label(x, Constant('article')), Article(x),)
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, rules = onto.parse_ontology()
+    constraints, rules, est_knowledge = onto.parse_ontology()
 
     assert set(constraints.keys()) == set(['Employee', 'Publication', 'Professor'])
     assert set(rules.keys()) == set(['rdf-schema:label'])
@@ -192,7 +192,7 @@ def test_2():
     imp_label4 = Implication(label(x, Constant('teaching course')), Course(x),)
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, rules = onto.parse_ontology()
+    constraints, rules, est_knowledge = onto.parse_ontology()
 
     assert set(constraints.keys()) == set(['AdministrativeStaff', 'Organization', 'Article', 'Work'])
     assert set(rules.keys()) == set(['rdf-schema:label'])
@@ -297,7 +297,7 @@ def test_3():
     label = Symbol('rdf-schema:label')
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, rules = onto.parse_ontology()
+    constraints, rules, est_knowledge = onto.parse_ontology()
 
     for c in constraints:
         if c.startswith('fresh'):
@@ -513,7 +513,7 @@ def test_retrieve_property():
             label[e.a, 'dean']
         )
 
-        f_term = nl.solve_all()
+        f_term = nl.query((e.a,), e.answer[e.a])
 
     res = f_term['answer'].as_pandas_dataframe().values
     assert (res == [['Juan'], ['Manuel']]).all()
@@ -578,7 +578,98 @@ def test_retrieve_subclass():
             e.Professor[e.a]
         )
 
-        f_term = nl.solve_all()
+        f_term = nl.query((e.a,), e.answer[e.a])
 
-    res = f_term['answer'].as_pandas_dataframe().values
+    res = f_term.as_pandas_dataframe().values
     assert (res == [['Juan'], ['Manuel'], ['Miguel'], ['Alberto']]).all()
+
+
+def test_knowledge_subclassof():
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <Ontology>
+            <versionInfo>0.3.1</versionInfo>
+        </Ontology>
+
+        <owl:Class rdf:ID="Chair">
+            <rdfs:label>chair</rdfs:label>
+            <rdfs:subClassOf>
+                <owl:Class>
+                    <owl:intersectionOf rdf:parseType="Collection">
+                        <owl:Class rdf:about="#Person" />
+                        <owl:Restriction>
+                            <owl:onProperty rdf:resource="#headOf" />
+                            <owl:someValuesFrom>
+                                <owl:Class rdf:about="#Department" />
+                            </owl:someValuesFrom>
+                        </owl:Restriction>
+                    </owl:intersectionOf>
+                </owl:Class>
+            </rdfs:subClassOf>
+            <rdfs:subClassOf rdf:resource="#Professor" />
+        </owl:Class>
+    </rdf:RDF>'''
+
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(owl))
+
+    subClassOf = nl.new_symbol(name='neurolang:subClassOf')
+    with nl.scope as e:
+        e.answer[e.a] = (
+            subClassOf[e.a, 'Professor']
+        )
+
+        f_term = nl.query((e.a,), e.answer(e.a))
+
+    res = f_term.as_pandas_dataframe().values
+    assert (res == [['Chair']]).all()
+
+def test_knowledge_property():
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <Ontology>
+            <versionInfo>0.3.1</versionInfo>
+        </Ontology>
+
+        <owl:Class rdf:ID="Chair">
+            <rdfs:label>chair</rdfs:label>
+            <rdfs:subClassOf>
+                <owl:Class>
+                    <owl:intersectionOf rdf:parseType="Collection">
+                        <owl:Class rdf:about="#Person" />
+                        <owl:Restriction>
+                            <owl:onProperty rdf:resource="#headOf" />
+                            <owl:someValuesFrom>
+                                <owl:Class rdf:about="#Department" />
+                            </owl:someValuesFrom>
+                        </owl:Restriction>
+                    </owl:intersectionOf>
+                </owl:Class>
+            </rdfs:subClassOf>
+            <rdfs:subClassOf rdf:resource="#Professor" />
+        </owl:Class>
+    </rdf:RDF>'''
+
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(owl))
+
+    label = nl.new_symbol(name='neurolang:label')
+    with nl.scope as e:
+        e.answer[e.a] = (
+            label[e.a, 'chair']
+        )
+
+        f_term = nl.query((e.a,), e.answer[e.a])
+        # TODO Not working with solve_all()
+        #f_term = nl.solve_all()
+
+    #res = f_term['answer'].as_pandas_dataframe().values
+    res = f_term.as_pandas_dataframe().values
+    assert (res == [['Chair']]).all()
+
