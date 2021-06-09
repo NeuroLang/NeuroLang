@@ -16,6 +16,8 @@ class OntologyParser:
     from an ontology, both at entity and constraint levels.
     """
 
+    STRUCTURAL_KNOWLEDGE_NAMESPACE = 'neurolang:'
+
     def __init__(self, paths, load_format="xml"):
         if isinstance(paths, list):
             self._load_ontology(paths, load_format)
@@ -26,7 +28,9 @@ class OntologyParser:
         self.parsed_rules = {}
         self.estructural_knowledge = {}
 
-    def _load_ontology(self, paths, load_format):
+    def _load_ontology(self, paths, load_format, structural_knowledge='no'):
+        if structural_knowledge not in ['no', 'yes', 'only']:
+            raise NeuroLangException("structural_knowledge param can be 'no', 'yes' or 'only'")
         rdfGraph = rdflib.Graph()
         for counter, path in enumerate(paths):
             rdfGraph.load(path, format=load_format[counter])
@@ -147,7 +151,7 @@ class OntologyParser:
             imp = RightImplication(ant(x), cons(x))
             self._categorize_constraints([imp])
 
-            neurolang_subclassof = Symbol('neurolang:subClassOf')
+            neurolang_subclassof = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+'subClassOf')
             est = neurolang_subclassof(Constant(ant.name), Constant(cons.name))
             self._categorize_structural_knowledge([est])
 
@@ -445,7 +449,7 @@ class OntologyParser:
         self._categorize_rules([Implication(con, ant)])
 
         prop_name = label.name.split(':')[-1]
-        neurolang_prop = Symbol('neurolang:'+prop_name)
+        neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)
         est = neurolang_prop(Constant(entity.name), entity_name)
         self._categorize_structural_knowledge([est])
 
@@ -465,9 +469,8 @@ class OntologyParser:
             sigma_functor = sigma.consequent.functor.name
             if sigma_functor in self.parsed_constraints:
                 cons_set = self.parsed_constraints[sigma_functor]
-                if sigma not in cons_set:
-                    cons_set.add(sigma)
-                    self.parsed_constraints[sigma_functor] = cons_set
+                cons_set.add(sigma)
+                self.parsed_constraints[sigma_functor] = cons_set
             else:
                 self.parsed_constraints[sigma_functor] = set([sigma])
 
@@ -476,19 +479,17 @@ class OntologyParser:
             sigma_functor = sigma.consequent.functor
             if sigma_functor in self.parsed_rules:
                 cons_set = self.parsed_rules[sigma_functor]
-                if sigma not in cons_set:
-                    cons_set.add(sigma)
-                    self.parsed_rules[sigma_functor] = cons_set
+                cons_set.add(sigma)
+                self.parsed_rules[sigma_functor] = cons_set
             else:
                 self.parsed_rules[sigma_functor] = set([sigma])
 
     def _categorize_structural_knowledge(self, formulas):
         for sigma in formulas:
             sigma_functor = sigma.functor
-            if sigma_functor in self.parsed_rules:
+            if sigma_functor in self.estructural_knowledge:
                 cons_set = self.estructural_knowledge[sigma_functor]
-                if sigma not in cons_set:
-                    cons_set.add(sigma)
-                    self.estructural_knowledge[sigma_functor] = cons_set
+                cons_set.add(sigma)
+                self.estructural_knowledge[sigma_functor] = cons_set
             else:
                 self.estructural_knowledge[sigma_functor] = set([sigma])
