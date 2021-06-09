@@ -240,11 +240,6 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         rules : Iterable
             iterable containing all rules
             to be added for the corresponding symbol.
-
-        Returns
-        -------
-        type, iterable
-            the inferred type and the iterable.
         '''
         symbol = symbol.cast(UnionOfConjunctiveQueries)
         self.symbol_table[symbol] = Union(rules)
