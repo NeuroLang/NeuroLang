@@ -446,7 +446,8 @@ class OntologyParser:
         label = Symbol(self._parse_name(prop))
         con = label(x, entity_name)
 
-        self._categorize_rules([Implication(con, ant)])
+        #self._categorize_rules([Implication(con, ant)])
+        self._categorize_constraints([RightImplication(ant, con)])
 
         prop_name = label.name.split(':')[-1]
         neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)
