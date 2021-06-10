@@ -579,6 +579,9 @@ def test_retrieve_subclass():
 
         f_term = nl.solve_all()
 
-    res = np.sort(f_term['answer'].as_pandas_dataframe().values)
-    expected = np.sort([['Miguel'], ['Alberto'], ['Juan'], ['Manuel']])
-    assert (res == expected).all()
+    res = f_term['answer'].as_pandas_dataframe().values
+    assert ['Miguel'] in res
+    assert ['Alberto'] in res
+    assert ['Juan'] in res
+    assert ['Manuel'] in res
+    assert len(res) == 4
