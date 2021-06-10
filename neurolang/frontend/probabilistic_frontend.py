@@ -167,9 +167,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             where the ontology files are stored
         """
         onto = OntologyParser(paths)
-        constraints, rules = onto.parse_ontology()
-        for symbol, expressions in rules.items():
-            self.program_ir.add_bulk_rules(symbol, expressions)
+        constraints = onto.parse_ontology()
         self.program_ir.set_constraints(constraints)
 
     @property
@@ -367,7 +365,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         '''Resolution of the deterministic stratum. In case there
         are entries in the symbol table under the key __constraints__,
         a rewrite is performed and the resulting program is assigned
-        to the variable `current_program_rewrited` to provide a way
+        to the variable `current_program_rewritten` to provide a way
         to access this information.
 
         Parameters
