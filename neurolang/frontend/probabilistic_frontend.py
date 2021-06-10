@@ -148,7 +148,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
-        self.current_program_rewrited = None
+        self.current_program_rewritten = None
         self.check_qbased_pfact_tuple_unicity = (
             check_qbased_pfact_tuple_unicity
         )
@@ -381,7 +381,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         '''
         if "__constraints__" in self.symbol_table:
             det_idb = self._rewrite_program_with_ontology(det_idb)
-            self.current_program_rewrited = det_idb
+            self.current_program_rewritten = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
         return solution
