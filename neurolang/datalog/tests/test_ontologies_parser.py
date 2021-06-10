@@ -1,12 +1,9 @@
 
 import io
 
-import numpy as np
-
 from ...expressions import Constant, Symbol
 from ...frontend import NeurolangPDL
 from ..constraints_representation import RightImplication
-from ..expressions import Implication
 from ..ontologies_parser import OntologyParser
 
 
