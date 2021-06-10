@@ -437,7 +437,7 @@ class OntologyParser:
         label = Symbol(self._parse_name(prop))
         con = label(x, entity_name)
 
-        self._categorize_rules([Implication(con, ant)])
+        self._categorize_constraints([RightImplication(ant, con)])
 
     def _parseEnumeratedClass(self, entity, prop, value):
         warnings.warn("Not implemented yet: EnumeratedClass")
@@ -455,9 +455,8 @@ class OntologyParser:
             sigma_functor = sigma.consequent.functor.name
             if sigma_functor in self.parsed_constraints:
                 cons_set = self.parsed_constraints[sigma_functor]
-                if sigma not in cons_set:
-                    cons_set.add(sigma)
-                    self.parsed_constraints[sigma_functor] = cons_set
+                cons_set.add(sigma)
+                self.parsed_constraints[sigma_functor] = cons_set
             else:
                 self.parsed_constraints[sigma_functor] = set([sigma])
 
@@ -466,8 +465,7 @@ class OntologyParser:
             sigma_functor = sigma.consequent.functor
             if sigma_functor in self.parsed_rules:
                 cons_set = self.parsed_rules[sigma_functor]
-                if sigma not in cons_set:
-                    cons_set.add(sigma)
-                    self.parsed_rules[sigma_functor] = cons_set
+                cons_set.add(sigma)
+                self.parsed_rules[sigma_functor] = cons_set
             else:
                 self.parsed_rules[sigma_functor] = set([sigma])

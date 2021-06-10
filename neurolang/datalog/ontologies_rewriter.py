@@ -1,6 +1,6 @@
 from ..expression_walker import ReplaceExpressionWalker, ReplaceSymbolWalker, add_match
 from ..expressions import Symbol
-from ..logic import Constant, Implication, NaryLogicOperator
+from ..logic import Constant, Implication, NaryLogicOperator, Negation
 from ..logic.expression_processing import ExtractFreeVariablesWalker
 from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import apply_substitution, most_general_unifier
@@ -55,9 +55,11 @@ class OntologyRewriter:
     def _get_related_sigmas(self, q0, sigma_free_vars):
         new_sigmas = []
         if isinstance(q0.antecedent, NaryLogicOperator):
-            for formula in q0.antecedent.formulas:
-                if formula.functor in sigma_free_vars.keys():
-                    new_sigmas = new_sigmas + list(sigma_free_vars[formula.functor])
+            for f in q0.antecedent.formulas:
+                if isinstance(f, Negation):
+                    continue
+                if f.functor in sigma_free_vars.keys():
+                    new_sigmas = new_sigmas + list(sigma_free_vars[f.functor])
         else:
             if q0.antecedent.functor in sigma_free_vars.keys():
                 new_sigmas = new_sigmas + list(sigma_free_vars[q0.antecedent.functor])
