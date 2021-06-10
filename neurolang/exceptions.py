@@ -20,6 +20,24 @@ class ForbiddenExpressionError(NeuroLangException):
 
 
 class ForbiddenDisjunctionError(ForbiddenExpressionError):
+    """
+    Probabilistic queries do not support disjunctions.
+
+    A probabilistic choice can be added for a predicate symbol by using the
+    `add_probabilistic_choice_from_tuples` method of a probabilistic Neurolang
+    engine. But you cannot add multiple probabilistic facts or rule for the
+    same
+    predicate.
+
+    Examples
+    ----------
+    ProbActivation(r, PROB(r)) :- RegionReported(r, s) & SelectedStudy(s)
+    ProbActivation(r, PROB(r)) :- ~RegionReported(r, s) & SelectedStudy(s)
+
+    This example program adds a disjunction of probabilistic queries which is
+    not allowed.
+    """
+
     pass
 
 
@@ -28,6 +46,58 @@ class ForbiddenExistentialError(ForbiddenExpressionError):
 
 
 class RelationalAlgebraError(NeuroLangException):
+    """
+    Base class for Relational Algebra provenance exceptions.
+    """
+
+    pass
+
+
+class NotConjunctiveExpression(NeuroLangException):
+    """
+    This expression is not conjunctive. In this case, an expression is
+    conjunctive if it is a conjunction of
+      - Constant
+      - A function or predicate of constants
+    """
+
+    pass
+
+
+class NotConjunctiveExpressionNegation(NotConjunctiveExpression):
+    """
+    This expression is not conjunctive. In this case, an expression is
+    conjunctive if it is a conjunction of
+      - Constant
+      - A function or predicate of conjunctive arguments
+      - A negated predicate of conjunctive arguments
+    """
+
+    pass
+
+
+class NotConjunctiveExpressionNestedPredicates(NotConjunctiveExpression):
+    """
+    This expression is not conjunctive. In this case, an expression is
+    conjunctive if it is a conjunction of
+      - Constant
+      - A function or predicate of conjunctive arguments
+      - A quantifier of conjunctive arguments
+
+    Note that in this case, negated predicates are not valid (negation and
+    aggregation cannot be used in the same rule).
+
+    Examples
+    --------
+    StudyMatchingRegionSegregationQuery(count(s), r) :-
+        RegionReported(r, s) & ~RegionReported(r2, s)
+        & RegionLabel(r2) & (r2 != r)
+
+    The above expression is not conjunctive since it uses an aggregate
+    function `count` in combination with a negated predicate
+    `~RegionReported`.
+    """
+
     pass
 
 
@@ -36,6 +106,7 @@ class ProjectionOverMissingColumnsError(RelationalAlgebraError):
     One of the predicates in the program has wrong arguments.
     See `WrongArgumentsInPredicateError`
     """
+
     pass
 
 
@@ -44,8 +115,9 @@ class RelationalAlgebraNotImplementedError(
 ):
     """
     Neurolang was unable to match one of the relational algebra operations
-    defined in the program. This is probably due to an malformed query.
+    defined in the program. This is probably due to a malformed query.
     """
+
     pass
 
 
@@ -58,6 +130,11 @@ class NeuroLangFrontendException(NeuroLangException):
 
 
 class SymbolNotFoundError(NeuroLangException):
+    """
+    A symbol is being used in a rule without having been previously
+    defined.
+    """
+
     pass
 
 
@@ -73,6 +150,14 @@ class UnsupportedProgramError(NeuroLangException):
 
 
 class UnsupportedQueryError(NeuroLangException):
+    """
+    Queries on probabilistic predicates are unsupported.
+
+    Examples
+    ----------
+    NeuroLangException : [type]
+        [description]
+    """
     pass
 
 
@@ -83,8 +168,9 @@ class UnsupportedSolverError(NeuroLangException):
 class ProtectedKeywordError(NeuroLangException):
     """
     One of the predicates in the program uses a reserved keyword.
-    Reserved keywords include : {PROB}
+    Reserved keywords include : {PROB, with, exists}
     """
+
     pass
 
 
@@ -101,6 +187,7 @@ class ForbiddenRecursivityError(UnsupportedProgramError):
     B(x) :- A(x), C(x),
     A(x) :- B(x)
     """
+
     pass
 
 
@@ -108,13 +195,13 @@ class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
     """
     The given Datalog program is not valid for aggregation. Support for
     aggregation is done according to section 2.4.1 of [1]_.
-    
+
     A program is valid for aggregation if it can be stratified into
     strata P1, . . . , Pn such that, if A :- ...,B,... is a rule in P such
     that A contains an aggregate term, and A is in stratum Pi while B is in
     stratum Pj, **then i > j**.
 
-    In other terms, all the predicates in the body of a rule containing an 
+    In other terms, all the predicates in the body of a rule containing an
     aggregate function must be computed in a previous stratum. Recursion
     through aggregation is therefore not allowed in the same stratum.
 
@@ -129,6 +216,7 @@ class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
        Datalog and Recursive Query Processing.
        FNT in Databases. 5, 105–195 (2012).
     """
+
     pass
 
 
@@ -139,16 +227,17 @@ class WrongArgumentsInPredicateError(NeuroLangException):
     Examples
     --------
     NetworkReported is defined with two variables but used with three
-    in the second rule: 
+    in the second rule:
 
-    e.NetworkReported[e.n, e.s] = e.RegionReported(
-        e.r, e.s
-    ) & e.RegionInNetwork(e.r, e.n)
-    e.StudyMatchingNetworkQuery[e.s, e.n] = (
-        e.RegionReported("VWFA", e.s)
-        & e.NetworkReported(e.n, e.s, e.r)
+    NetworkReported(e.n, e.s) :- RegionReported(
+        r, s
+    ) & RegionInNetwork(r, n)
+    StudyMatchingNetworkQuery(s, n) :- (
+        RegionReported("VWFA", s)
+        & NetworkReported(e.n, e.s, e.r)
     )
     """
+
     pass
 
 
@@ -156,6 +245,7 @@ class TranslateToNamedRAException(NeuroLangException):
     """
     Base class for `tranlate_to_named_ra.py`.
     """
+
     pass
 
 
@@ -163,16 +253,17 @@ class NoValidChaseClassForStratumException(NeuroLangException):
     """
     Neurolang implements stratified datalog which splits a datalog program
     into several independent strata that can each be solved by a specific
-    chase algorithm based on the properties of the rules in the stratum 
+    chase algorithm based on the properties of the rules in the stratum
     (using negation, aggregation and/or recursion).
 
-    This exception is raised if there is no valid algorithm available to 
+    This exception is raised if there is no valid algorithm available to
     solve a specific stratum; e.g. no recursive compatible algorithm was
     provided to solve a recursive stratum.
 
     See `neurolang.datalog.chase.__init__.py` for available chase
     implementations.
     """
+
     pass
 
 
@@ -195,6 +286,7 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
     .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
         (Addison Wesley, 1995), Addison-Wesley.
     """
+
     def __init__(self, output):
         super().__init__(f"Could not translate conjunction: {output}")
         self.output = output
@@ -204,33 +296,34 @@ class NegativeFormulaNotSafeRangeException(TranslateToNamedRAException):
     """
     This rule is not *range restricted* and cannot be solved in
     *nonrecursive datalog with negation*. One of the variables in this rule
-    appears in a negated literal without also appearing in a non-negated 
+    appears in a negated literal without also appearing in a non-negated
     literal.
 
-    A datalog rule composed of literals of the form R(v) or ¬R(v) is 
+    A datalog rule composed of literals of the form R(v) or ¬R(v) is
     *range restricted* if each variable x occurring in the rule occurs in at
     least one literal of the form R(v) (non-negated literal) in the rule body.
     See 5.2 from [1]_.
 
     Examples
     --------
-    e.StudyNotMatchingSegregationQuery[e.s, e.n] = (
-        ~e.StudyMatchingNetworkQuery(e.s, e.n)
-        & e.Network(e.n)
+    StudyNotMatchingSegregationQuery(s, n) :- (
+        ~StudyMatchingNetworkQuery(s, n)
+        & Network(n)
     )
 
-    Variable `e.s` is present in the negated `e.StudyMatchingNetworkQuery`
+    Variable `s` is present in the negated `StudyMatchingNetworkQuery`
     literal but is not present in a non-negated literal. A valid query body
     would be :
 
-    e.StudyNotMatchingSegregationQuery[e.s, e.n] = (
-        ~e.StudyMatchingNetworkQuery(e.s, e.n)
-        & e.Study(e.s) & e.Network(e.n)
+    StudyNotMatchingSegregationQuery(s, n) :- (
+        ~StudyMatchingNetworkQuery(s, n)
+        & Study(s) & Network(n)
     )
 
     .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
         (Addison Wesley, 1995), Addison-Wesley.
     """
+
     def __init__(self, formula):
         super().__init__(f"Negative predicate {formula} is not safe range")
         self.formula = formula
@@ -243,9 +336,10 @@ class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
 
     Examples
     --------
-    t[x, y] = r(x, y) & q(y, z)
-    s[x, y, prob(x, y)] = ~t(x, x) & q(x, y)
+    t(x, y) :- r(x, y) & q(y, z)
+    s(x, y, prob(x, y)) :- ~t(x, x) & q(x, y)
     """
+
     def __init__(self, formula):
         super().__init__(f"Negative formula {formula} is not a named relation")
         self.formula = formula
