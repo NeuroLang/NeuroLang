@@ -9,7 +9,7 @@ import pytest
 
 from ... import expressions as exp, frontend
 from ...datalog import DatalogProgram, Fact, Implication
-from ...exceptions import NeuroLangException, WrongArgumentsInPredicateError
+from ...exceptions import NeuroLangException, UnsupportedProgramError, WrongArgumentsInPredicateError
 from ...expression_walker import ExpressionBasicEvaluator
 from ...regions import ExplicitVBR, SphericalVolume
 from ...type_system import Unknown
@@ -470,6 +470,30 @@ def test_neurolang_dl_datalog_code():
     assert res["D"].to_unnamed() == {
         ("x",),
     }
+
+
+def test_neurolang_dl_datalog_code_with_query():
+    prog = """
+        A(4, 5)
+        A(5, 6)
+        A(6, 5)
+        B(x,y) :- A(x, y)
+        B(x,y) :- B(x, z), A(z, y)
+        """
+
+    neurolang = frontend.NeurolangDL()
+    res = neurolang.execute_datalog_program(
+        prog + "\nans(x) :- B(x, y), y == 5"
+    )
+    assert res.to_unnamed() == {(4,), (5,), (6,)}
+
+    res = neurolang.execute_datalog_program(prog + "\nans() :- B(x, y)")
+    assert res == True
+
+    with pytest.raises(UnsupportedProgramError):
+        neurolang.execute_datalog_program(
+            "ans(x) :- A(x, 5)\n" + prog + "\nans(x) :- B(x, y), y == 5"
+        )
 
 
 def test_neurolang_dl_aggregation():

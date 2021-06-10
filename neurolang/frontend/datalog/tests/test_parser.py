@@ -1,8 +1,9 @@
+from neurolang.logic import ExistentialPredicate
 from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....probabilistic.expressions import Condition, ProbabilisticPredicate
-from ....expressions import Constant, Symbol, FunctionApplication
+from ....expressions import Constant, Query, Symbol, FunctionApplication
 from ..standard_syntax import ExternalSymbol, parser
 
 
@@ -24,7 +25,7 @@ def test_facts():
     assert res == Union((
         Fact(Symbol('A')(Constant('x'), Constant(3))),
         Fact(Symbol('http://uri#test-fact')(Constant('x'))),
-        Implication(
+        Query(
             Symbol('ans')(),
             Conjunction((
                 Symbol('A')(Symbol('x'), Symbol('y')),
@@ -236,3 +237,59 @@ def test_condition():
     ))
 
     assert res == expected
+
+
+def test_existential():
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    s1 = Symbol("s1")
+    s2 = Symbol("s2")
+
+    res = parser("C(x) :- B(x), exists(s1; A(s1))")
+    expected = Union(
+        (
+            Implication(
+                C(x), Conjunction((B(x), ExistentialPredicate(s1, A(s1))))
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser("C(x) :- B(x), ∃(s1 st A(s1))")
+    assert res == expected
+
+    res = parser("C(x) :- B(x), exists(s1, s2; (A(s1), A(s2)))")
+
+    expected = Union(
+        (
+            Implication(
+                C(x),
+                Conjunction(
+                    (
+                        B(x),
+                        ExistentialPredicate(
+                            s2,
+                            ExistentialPredicate(
+                                s1, Conjunction((A(s1), A(s2)))
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+    )
+
+    assert res == expected
+
+def test_query():
+    ans = Symbol("ans")
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("ans(x) :- B(x, y), C(3, y)")
+    assert res == Union(
+        (Query(ans(x), Conjunction((B(x, y), C(Constant(3), y)))),)
+    )
