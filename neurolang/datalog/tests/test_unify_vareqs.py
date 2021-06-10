@@ -4,6 +4,7 @@ import typing
 import pytest
 
 from ...datalog.aggregation import (
+    AggregationApplication,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
 )
@@ -189,13 +190,36 @@ class DatalogWithVariableEqualityUnificationAndAggregation(
         return sum(v + w for v, w in zip(x, y))
 
 
-def test_aggregation():
+def test_aggregation_symb_to_symb_eq():
     rule = Implication(
-        P(x, Constant(sum)(y, z)),
+        P(x, Constant(sum)(y)),
         Conjunction(
             (
                 R(x, y, z),
-                EQ(z, a),
+                EQ(y, z),
+            )
+        ),
+    )
+    program = DatalogWithVariableEqualityUnificationAndAggregation()
+    program.walk(rule)
+    expected = Union(
+        (
+            Implication(
+                P(x, AggregationApplication(Constant(sum), (z,))), R(x, z, z)
+            ),
+        )
+    )
+    result = program.intensional_database()[P]
+    assert logic_exp_commutative_equal(result, expected)
+
+
+def test_aggregation_symb_to_const_eq():
+    rule = Implication(
+        P(x, Constant(sum)(y)),
+        Conjunction(
+            (
+                R(x, y, z),
+                EQ(y, a),
             )
         ),
     )

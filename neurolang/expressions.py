@@ -839,26 +839,40 @@ class TypedSymbolTableMixin:
             symbol_table = TypedSymbolTable()
         self.symbol_table = symbol_table
         self.simplify_mode = False
-        self.add_functions_to_symbol_table()
+        self.add_included_constants_and_functions_to_symbol_table()
 
     @property
     def included_functions(self):
-        function_constants = dict()
-        for attribute in dir(self):
-            if attribute.startswith('function_'):
-                c = Constant(getattr(self, attribute))
-                function_constants[attribute[len('function_'):]] = c
-        return function_constants
+        return self._get_included_symbol_definitions_with_prefix("function_")
 
-    def add_functions_to_symbol_table(self):
+    @property
+    def included_constants(self):
+        return self._get_included_symbol_definitions_with_prefix("constant_")
+
+    def add_included_constants_and_functions_to_symbol_table(self) -> None:
+        included = self.included_functions
+        included.update(self.included_constants)
         keyword_symbol_table = TypedSymbolTable()
-        for k, v in self.included_functions.items():
+        for k, v in included.items():
             keyword_symbol_table[Symbol[v.type](k)] = v
         keyword_symbol_table.set_readonly(True)
         top_scope = self.symbol_table
         while top_scope.enclosing_scope is not None:
             top_scope = top_scope.enclosing_scope
         top_scope.enclosing_scope = keyword_symbol_table
+
+    def _get_included_symbol_definitions_with_prefix(
+        self,
+        prefix: str,
+    ) -> typing.Dict[str, Constant]:
+        constants = dict()
+        for attribute in dir(self):
+            if attribute.startswith(prefix):
+                c = getattr(self, attribute)
+                if not isinstance(c, Constant):
+                    c = Constant(c)
+                constants[attribute[len(prefix):]] = c
+        return constants
 
     def push_scope(self):
         self.symbol_table = self.symbol_table.create_scope()

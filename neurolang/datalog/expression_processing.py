@@ -41,6 +41,7 @@ from ..logic import (
 from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import most_general_unifier
+from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
 
 EQ = Constant(operator.eq)
@@ -393,7 +394,8 @@ def dependency_matrix(datalog, rules=None, instance=None):
     ------
     SymbolNotFoundError
         If there is a predicate in the antecedent of a rule which
-        is not a constant or an extensiona/intensional predicate.
+        is not a constant or an extensional/intensional predicate.
+
     """
 
     if rules is None:
@@ -854,6 +856,10 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         Implication(FunctionApplication(Symbol, ...), ...),
         lambda implication: all(
             isinstance(arg, (Symbol, Constant))
+            or (
+                isinstance(arg, FunctionApplication)
+                and all(isinstance(a, (Symbol, Constant)) for a in arg.args)
+            )
             for arg in implication.consequent.args
         )
         and any(
@@ -878,21 +884,11 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         else:
             antecedent = remove_conjunction_duplicates(antecedent)
         consequent = replacer.walk(implication.consequent)
+        self._check_no_agg_var_replaced_by_const(
+            implication.consequent, consequent
+        )
         new_implication = Implication(consequent, antecedent)
         return self.walk(new_implication)
-
-    @add_match(
-        Implication(FunctionApplication(Symbol, ...), ...),
-        lambda implication: is_aggregation_rule(implication)
-        and any(
-            is_var_equality_to_var_or_const(formula)
-            for formula in extract_logic_predicates(implication.antecedent)
-        ),
-    )
-    def unsupported_unification_for_aggregation(self, rule_with_aggregation):
-        raise ForbiddenExpressionError(
-            "Unification of rules with aggregation not supported"
-        )
 
     @staticmethod
     def build_substitutions_from_equalities(eq_sets):
@@ -958,6 +954,29 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
                 found_eq_set = True
         if not found_eq_set:
             eq_sets.append({first, second})
+
+    @staticmethod
+    def _check_no_agg_var_replaced_by_const(old_csqt, new_csqt) -> None:
+        for old_arg, new_arg in zip(old_csqt.args, new_csqt.args):
+            if isinstance(old_arg, AggregationApplication) and any(
+                isinstance(a1, Symbol) and isinstance(a2, Constant)
+                for a1, a2 in zip(old_arg.args, new_arg.args)
+            ):
+                problematic_replacements = set(
+                    (a1, a2)
+                    for a1, a2 in zip(old_arg.args, new_arg.args)
+                    if isinstance(a1, Symbol) and isinstance(a2, Constant)
+                )
+                raise AggregatedVariableReplacedByConstantError(
+                    "Variable equalities cannot lead to aggregation variables "
+                    "to be replaced by a constant. Problematic replacements "
+                    "that were found are {}".format(
+                        ", ".join(
+                            f"{a1} / {a2}"
+                            for a1, a2 in problematic_replacements
+                        )
+                    )
+                )
 
 
 class UnifyVariableEqualities(UnifyVariableEqualitiesMixin, ExpressionWalker):

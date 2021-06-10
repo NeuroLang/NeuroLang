@@ -1,6 +1,7 @@
 import typing
 from typing import AbstractSet
 
+from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import (
     EQ,
     conjunct_formulas,
@@ -12,11 +13,13 @@ from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
-from ..relational_algebra_provenance import (
-    RelationalAlgebraProvenanceCountingSolver, NaturalJoinInverse
-)
 from ..relational_algebra import Projection, str2columnstr_constant
+from ..relational_algebra_provenance import (
+    NaturalJoinInverse,
+    RelationalAlgebraProvenanceCountingSolver,
+)
 from .cplogic.program import CPLogicProgram
+from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
     construct_within_language_succ_result,
     is_query_based_probfact,
@@ -103,15 +106,41 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     def _query_based_probabilistic_fact_to_det_and_prob_rules(impl):
         prob_symb = Symbol.fresh()
         det_pred_symb = Symbol.fresh()
-        eq_formula = EQ(prob_symb, impl.consequent.probability)
+        agg_functor = QueryBasedProbFactToDetRule._get_agg_functor(impl)
+        if agg_functor is None:
+            eq_formula = EQ(prob_symb, impl.consequent.probability)
+            det_consequent = det_pred_symb(
+                prob_symb, *impl.consequent.body.args
+            )
+            prob_antecedent = det_consequent
+        else:
+            assert len(impl.consequent.probability.args) == 1
+            eq_formula = EQ(prob_symb, impl.consequent.probability.args[0])
+            det_consequent = det_pred_symb(
+                agg_functor(prob_symb), *impl.consequent.body.args
+            )
+            prob_antecedent = det_pred_symb(
+                prob_symb, *impl.consequent.body.args
+            )
         det_antecedent = conjunct_formulas(impl.antecedent, eq_formula)
-        det_consequent = det_pred_symb(prob_symb, *impl.consequent.body.args)
         det_rule = Implication(det_consequent, det_antecedent)
         prob_consequent = ProbabilisticPredicate(
             prob_symb, impl.consequent.body
         )
-        prob_rule = Implication(prob_consequent, det_consequent)
+        prob_rule = Implication(prob_consequent, prob_antecedent)
         return det_rule, prob_rule
+
+    @staticmethod
+    def _get_agg_functor(
+        impl: Implication,
+    ) -> typing.Union[None, typing.Callable]:
+        if not isinstance(
+            impl.consequent.probability, FunctionApplication
+        ) or not is_builtin_aggregation_functor(
+            impl.consequent.probability.functor
+        ):
+            return
+        return impl.consequent.probability.functor
 
 
 def _solve_within_language_prob_query(
@@ -150,10 +179,12 @@ def compute_probabilistic_solution(
     prob_idb,
     succ_prob_solver,
     marg_prob_solver,
+    check_qbased_pfact_tuple_unicity=False,
 ):
     solution = MapInstance()
     cpl, prob_idb = _build_probabilistic_program(
         det_edb, pfact_db, pchoice_edb, prob_idb
+        check_qbased_pfact_tuple_unicity,
     )
     for rule in prob_idb.formulas:
         if is_within_language_prob_query(rule):
@@ -236,7 +267,13 @@ def _discard_query_based_probfacts(prob_idb):
     )
 
 
-def _add_to_probabilistic_program(add_fun, pred_symb, expr, det_edb):
+def _add_to_probabilistic_program(
+    add_fun,
+    pred_symb,
+    expr,
+    det_edb,
+    check_qbased_pfact_tuple_unicity=False,
+):
     # handle set-based probabilistic tables
     if isinstance(expr, Constant[typing.AbstractSet]):
         ra_set = expr.value
@@ -249,12 +286,38 @@ def _add_to_probabilistic_program(add_fun, pred_symb, expr, det_edb):
         # so the values can be retrieved from the EDB
         if impl.antecedent.functor in det_edb:
             ra_set = det_edb[impl.antecedent.functor].value
+            if check_qbased_pfact_tuple_unicity:
+                _check_tuple_prob_unicity(ra_set)
         else:
             ra_set = WrappedRelationalAlgebraFrozenSet.dum()
     add_fun(pred_symb, ra_set.unwrap())
 
 
-def _build_probabilistic_program(det_edb, pfact_db, pchoice_edb, prob_idb):
+def _check_tuple_prob_unicity(ra_set: Constant[AbstractSet]) -> None:
+    length = len(ra_set)
+    proj_cols = list(ra_set.columns)[1:]
+    length_without_probs = len(ra_set.projection(*proj_cols))
+    if length_without_probs != length:
+        n_repeated_tuples = length - length_without_probs
+        raise RepeatedTuplesInProbabilisticRelationError(
+            n_repeated_tuples,
+            length,
+            "Some tuples have multiple probability labels. "
+            f"Found {n_repeated_tuples} tuple repetitions, out of "
+            f"{length} total tuples. If your query-based probabilistic fact "
+            "leads to multiple probabilities for the same tuple, you might "
+            "want to consider aggregating these probabilities by taking their "
+            "maximum or average.",
+        )
+
+
+def _build_probabilistic_program(
+    det_edb,
+    pfact_db,
+    pchoice_edb,
+    prob_idb,
+    check_qbased_pfact_tuple_unicity=False,
+):
     cpl = CPLogicProgram()
     db_to_add_fun = [
         (det_edb, cpl.add_extensional_predicate_from_tuples),
@@ -263,7 +326,13 @@ def _build_probabilistic_program(det_edb, pfact_db, pchoice_edb, prob_idb):
     ]
     for database, add_fun in db_to_add_fun:
         for pred_symb, expr in database.items():
-            _add_to_probabilistic_program(add_fun, pred_symb, expr, det_edb)
+            _add_to_probabilistic_program(
+                add_fun,
+                pred_symb,
+                expr,
+                det_edb,
+                check_qbased_pfact_tuple_unicity,
+            )
     # remove query-based probabilistic facts that have already been processed
     # and transformed into probabilistic tables based on the deterministic
     # solution of their probability and antecedent
