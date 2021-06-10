@@ -183,7 +183,10 @@ def compute_probabilistic_solution(
 ):
     solution = MapInstance()
     cpl, prob_idb = _build_probabilistic_program(
-        det_edb, pfact_db, pchoice_edb, prob_idb
+        det_edb,
+        pfact_db,
+        pchoice_edb,
+        prob_idb,
         check_qbased_pfact_tuple_unicity,
     )
     for rule in prob_idb.formulas:
