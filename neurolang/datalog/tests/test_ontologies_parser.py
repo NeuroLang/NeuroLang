@@ -1,6 +1,8 @@
 
 import io
 
+import numpy as np
+
 from ...expressions import Constant, Symbol
 from ...frontend import NeurolangPDL
 from ..constraints_representation import RightImplication
@@ -577,5 +579,6 @@ def test_retrieve_subclass():
 
         f_term = nl.solve_all()
 
-    res = f_term['answer'].as_pandas_dataframe().values
-    assert (res == [['Miguel'], ['Alberto'], ['Juan'], ['Manuel']]).all()
+    res = np.sort(f_term['answer'].as_pandas_dataframe().values)
+    expected = np.sort([['Miguel'], ['Alberto'], ['Juan'], ['Manuel']])
+    assert (res == expected).all()
