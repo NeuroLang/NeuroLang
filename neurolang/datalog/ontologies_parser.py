@@ -25,7 +25,6 @@ class OntologyParser:
             self._load_ontology([paths], [load_format])
 
         self.parsed_constraints = {}
-        self.parsed_rules = {}
         self.estructural_knowledge = {}
 
     def _load_ontology(self, paths, load_format, structural_knowledge='no'):
@@ -51,7 +50,7 @@ class OntologyParser:
         '''
         self._parse_classes()
 
-        return self.parsed_constraints, self.parsed_rules, self.estructural_knowledge
+        return self.parsed_constraints, self.estructural_knowledge
 
     def _parse_classes(self):
         '''This method obtains all the classes present in the ontology and
@@ -474,16 +473,6 @@ class OntologyParser:
                 self.parsed_constraints[sigma_functor] = cons_set
             else:
                 self.parsed_constraints[sigma_functor] = set([sigma])
-
-    def _categorize_rules(self, formulas):
-        for sigma in formulas:
-            sigma_functor = sigma.consequent.functor
-            if sigma_functor in self.parsed_rules:
-                cons_set = self.parsed_rules[sigma_functor]
-                cons_set.add(sigma)
-                self.parsed_rules[sigma_functor] = cons_set
-            else:
-                self.parsed_rules[sigma_functor] = set([sigma])
 
     def _categorize_structural_knowledge(self, formulas):
         for sigma in formulas:

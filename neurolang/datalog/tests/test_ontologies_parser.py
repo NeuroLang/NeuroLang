@@ -4,7 +4,6 @@ import io
 from ...expressions import Constant, Symbol
 from ...frontend import NeurolangPDL
 from ..constraints_representation import RightImplication
-from ..expressions import Implication
 from ..ontologies_parser import OntologyParser
 
 
@@ -63,17 +62,16 @@ def test_1():
     imp5 = RightImplication(Book(x), Publication(x))
 
 
-    imp_label1 = Implication(label(x, Constant('administrative staff worker')), AdministrativeStaff(x))
-    imp_label2 = Implication(label(x, Constant('assistant professor')), AssistantProfessor(x))
-    imp_label3 = Implication(label(x, Constant('associate professor')), AssociateProfessor(x))
-    imp_label4 = Implication(label(x, Constant('book')), Book(x))
-    imp_label5 = Implication(label(x, Constant('article')), Article(x),)
+    imp_label1 = RightImplication(AdministrativeStaff(x), label(x, Constant('administrative staff worker')))
+    imp_label2 = RightImplication(AssistantProfessor(x), label(x, Constant('assistant professor')))
+    imp_label3 = RightImplication(AssociateProfessor(x), label(x, Constant('associate professor')))
+    imp_label4 = RightImplication(Book(x), label(x, Constant('book')))
+    imp_label5 = RightImplication(Article(x), label(x, Constant('article')))
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, rules, est_knowledge = onto.parse_ontology()
+    constraints, _ = onto.parse_ontology()
 
-    assert set(constraints.keys()) == set(['Employee', 'Publication', 'Professor'])
-    assert set(rules.keys()) == set(['rdf-schema:label'])
+    assert set(constraints.keys()) == set(['Employee', 'Publication', 'Professor', 'rdf-schema:label'])
 
     AdminConstraint = constraints['Employee']
     assert len(AdminConstraint) == 1 and isinstance(AdminConstraint, set)
@@ -117,10 +115,10 @@ def test_1():
         else:
             assert False
 
-    Labels = rules['rdf-schema:label']
+    Labels = constraints['rdf-schema:label']
     assert len(Labels) == 5 and isinstance(Labels, set)
     for l in Labels:
-        assert isinstance(l, Implication)
+        assert isinstance(l, RightImplication)
         assert len(l.antecedent.args) == 1
         assert len(l.consequent.args) == 2
         assert l.antecedent.args[0] == l.consequent.args[0]
@@ -186,16 +184,15 @@ def test_2():
     imp3 = RightImplication(ConferencePaper(x), Article(x))
     imp4 = RightImplication(Course(x), Work(x))
 
-    imp_label1 = Implication(label(x, Constant('clerical staff worker')), ClericalStaff(x))
-    imp_label2 = Implication(label(x, Constant('school')), College(x))
-    imp_label3 = Implication(label(x, Constant('conference paper')), ConferencePaper(x))
-    imp_label4 = Implication(label(x, Constant('teaching course')), Course(x),)
+    imp_label1 = RightImplication(ClericalStaff(x), label(x, Constant('clerical staff worker')))
+    imp_label2 = RightImplication(College(x), label(x, Constant('school')),)
+    imp_label3 = RightImplication(ConferencePaper(x), label(x, Constant('conference paper')))
+    imp_label4 = RightImplication(Course(x), label(x, Constant('teaching course')))
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, rules, est_knowledge = onto.parse_ontology()
+    constraints, _ = onto.parse_ontology()
 
-    assert set(constraints.keys()) == set(['AdministrativeStaff', 'Organization', 'Article', 'Work'])
-    assert set(rules.keys()) == set(['rdf-schema:label'])
+    assert set(constraints.keys()) == set(['AdministrativeStaff', 'Organization', 'Article', 'Work', 'rdf-schema:label'])
 
     AdminConstraint = constraints['AdministrativeStaff']
     assert len(AdminConstraint) == 1 and isinstance(AdminConstraint, set)
@@ -238,10 +235,10 @@ def test_2():
     assert WorkConstraint.consequent.functor == imp4.consequent.functor
 
 
-    Labels = rules['rdf-schema:label']
+    Labels = constraints['rdf-schema:label']
     assert len(Labels) == 4 and isinstance(Labels, set)
     for l in Labels:
-        assert isinstance(l, Implication)
+        assert isinstance(l, RightImplication)
         assert len(l.antecedent.args) == 1
         assert len(l.consequent.args) == 2
         assert l.antecedent.args[0] == l.consequent.args[0]
@@ -297,7 +294,7 @@ def test_3():
     label = Symbol('rdf-schema:label')
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, rules, est_knowledge = onto.parse_ontology()
+    constraints, _ = onto.parse_ontology()
 
     for c in constraints:
         if c.startswith('fresh'):
@@ -307,8 +304,7 @@ def test_3():
             y = support_rule.consequent.args[1]
             break
 
-    assert set(constraints.keys()) == set(['Person', 'headOf', 'Department', 'Professor', c])
-    assert set(rules.keys()) == set(['rdf-schema:label'])
+    assert set(constraints.keys()) == set(['Person', 'headOf', 'Department', 'Professor', 'rdf-schema:label', c])
 
     imp1 = RightImplication(supportChair(x, y), Person(x))
     imp2 = RightImplication(Chair(x), supportChair(x, y))
@@ -316,7 +312,7 @@ def test_3():
     imp4 = RightImplication(supportChair(x, y), Department(y))
     imp5 = RightImplication(Chair(x), Professor(x),)
 
-    imp_label = Implication(label(x, Constant('chair')), Chair(x),)
+    imp_label = RightImplication(Chair(x), label(x, Constant('chair')))
 
     PersonConstraint = constraints['Person']
     assert len(PersonConstraint) == 1 and isinstance(PersonConstraint, set)
@@ -368,10 +364,10 @@ def test_3():
     assert ProfessorConstraint.antecedent.functor == imp5.antecedent.functor
     assert ProfessorConstraint.consequent.functor == imp5.consequent.functor
 
-    Labels = rules['rdf-schema:label']
+    Labels = constraints['rdf-schema:label']
     assert len(Labels) == 1 and isinstance(Labels, set)
     l = Labels.pop()
-    assert isinstance(l, Implication)
+    assert isinstance(l, RightImplication)
     assert len(l.antecedent.args) == 1
     assert len(l.consequent.args) == 2
     assert l.antecedent.args[0] == l.consequent.args[0]
@@ -513,7 +509,7 @@ def test_retrieve_property():
             label[e.a, 'dean']
         )
 
-        f_term = nl.query((e.a,), e.answer[e.a])
+        f_term = nl.solve_all()
 
     res = f_term['answer'].as_pandas_dataframe().values
     assert (res == [['Juan'], ['Manuel']]).all()
@@ -578,10 +574,14 @@ def test_retrieve_subclass():
             e.Professor[e.a]
         )
 
-        f_term = nl.query((e.a,), e.answer[e.a])
+        f_term = nl.solve_all()
 
-    res = f_term.as_pandas_dataframe().values
-    assert (res == [['Juan'], ['Manuel'], ['Miguel'], ['Alberto']]).all()
+    res = f_term['answer'].as_pandas_dataframe().values
+    assert ['Miguel'] in res
+    assert ['Alberto'] in res
+    assert ['Juan'] in res
+    assert ['Manuel'] in res
+    assert len(res) == 4
 
 
 def test_knowledge_subclassof():

@@ -326,7 +326,7 @@ def test_ontology_parsed_rewrite():
         <Ontology>
             <versionInfo>0.3.1</versionInfo>
         </Ontology>
-        
+
         <owl:Class rdf:ID="Chair">
             <rdfs:label>chair</rdfs:label>
             <rdfs:subClassOf>
@@ -343,7 +343,7 @@ def test_ontology_parsed_rewrite():
                 </owl:Class>
             </rdfs:subClassOf>
             <rdfs:subClassOf rdf:resource="#Professor" />
-        </owl:Class> 
+        </owl:Class>
     </rdf:RDF>'''
 
     headof = Symbol('headOf')
