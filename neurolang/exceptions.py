@@ -170,22 +170,32 @@ class ProtectedKeywordError(NeuroLangException):
     One of the predicates in the program uses a reserved keyword.
     Reserved keywords include : {PROB, with, exists}
     """
-
     pass
 
 
 class ForbiddenRecursivityError(UnsupportedProgramError):
     """
-    The given program cannot be stratified due to recursivity. A query can
+    The given program cannot be stratified due to recursivity. 
+    
+    When using probabilistic queries, a query can
     be solved through stratification if the probabilistic and deterministic
     parts are well separated. In case there exists one within-language
     probabilistic query dependency, no probabilistic predicate should appear
     in the stratum that depends on the query.
+    The same holds for aggregate or negated queries. If a rule contains an
+    aggregate or negated term, all the predicates in the body of the rule
+    must be computed in a previous stratum.
 
     Examples
     --------
-    B(x) :- A(x), C(x),
+    B(x) :- A(x), C(x)
     A(x) :- B(x)
+
+    This program cannot be stratified because it contains a loop in
+    the dependencies of each rule. Rule `B(x) :- A(x), C(x)` depends
+    on the second rule through its occurence of the predicate `A(x)`.
+    But rule `A(x) :- B(x)` in turn depends on the first rule through
+    the `B(x)` predicate.
     """
 
     pass
@@ -270,17 +280,32 @@ class NoValidChaseClassForStratumException(NeuroLangException):
 class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
     """
     This conjunctive formula could not be translated into an equivalent
-    named relational algebra representation. This is probably because the
+    relational algebra representation. This is probably because the
     formula is not in *modified relational algebra normal form*.
+
+    Generaly speaking, the formula must be expressed in *conjunctive normal
+    form* (CNF) or *disjunctive normal form* (DNF): as either a conjunction of
+    disjunctions or disjunction of conjunctions.
 
     See 5.4.7 from [1]_.
 
     Examples
     --------
-    e.PositiveReverseInferenceSegregationQuery[
-        e.t, e.n, e.PROB(e.t, e.n)
-    ] = (e.TopicAssociation(e.t, e.s) // e.SelectedStudy(e.s)) // (
-        e.StudyMatchingNetworkQuery(e.s, e.n) & e.SelectedStudy(e.s)
+    PositiveReverseInferenceSegregationQuery(
+        t, n, PROB(t, n)
+    ) :- (TopicAssociation(t, s) // SelectedStudy(s)) // (
+        StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
+    )
+
+    This formula is not in DNF since it is a disjunction of a disjunction
+    (TopicAssociation(t, s) // SelectedStudy(s)) and a conjunction 
+    (StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)).
+    A valid query would be :
+
+    PositiveReverseInferenceSegregationQuery(
+        t, n, PROB(t, n)
+    ) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (
+        StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
     )
 
     .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
