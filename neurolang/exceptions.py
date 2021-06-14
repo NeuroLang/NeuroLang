@@ -152,11 +152,6 @@ class UnsupportedProgramError(NeuroLangException):
 class UnsupportedQueryError(NeuroLangException):
     """
     Queries on probabilistic predicates are unsupported.
-
-    Examples
-    ----------
-    NeuroLangException : [type]
-        [description]
     """
     pass
 
@@ -239,12 +234,12 @@ class WrongArgumentsInPredicateError(NeuroLangException):
     NetworkReported is defined with two variables but used with three
     in the second rule:
 
-    NetworkReported(e.n, e.s) :- RegionReported(
+    NetworkReported(n, s) :- RegionReported(
         r, s
     ) & RegionInNetwork(r, n)
     StudyMatchingNetworkQuery(s, n) :- (
         RegionReported("VWFA", s)
-        & NetworkReported(e.n, e.s, e.r)
+        & NetworkReported(n, s, r)
     )
     """
 
