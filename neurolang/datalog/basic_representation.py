@@ -221,29 +221,6 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             )
         }
 
-    def add_bulk_rules(self, symbol, rules):
-        '''Adds a new set of rules to the
-        symbol table for a specific symbol.
-
-        Useful for inserting large numbers of
-        rules into the symbol table when the walk operation is time consuming.
-
-        This function should be used only internally, since it does not perform
-        any validation on the rules it adds to the symbol table.
-
-        Parameters
-        ----------
-        symbol : Symbol
-            symbol used to index the rules
-            in the symbol table.
-
-        rules : Iterable
-            iterable containing all rules
-            to be added for the corresponding symbol.
-        '''
-        symbol = symbol.cast(UnionOfConjunctiveQueries)
-        self.symbol_table[symbol] = Union(rules)
-
     def predicate_terms(self, predicate):
         try:
             pred_repr = self.symbol_table[predicate]
