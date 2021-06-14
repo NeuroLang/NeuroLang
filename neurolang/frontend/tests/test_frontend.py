@@ -328,8 +328,9 @@ def test_neurolang_dl_query():
 
     dataset = {(i, i * 2) for i in range(10)}
     q = neurolang.add_tuple_set(dataset, name="q")
-    sol = neurolang.query((x, y), q(x, y)).to_unnamed()
-    assert sol == dataset
+    sol = neurolang.query((x, y), q(x, y))
+    assert sol.to_unnamed() == dataset
+    assert sol.row_type == Tuple[int, int]
 
     sol = neurolang.query(tuple(), q(x, x))
     assert sol
@@ -486,6 +487,7 @@ def test_neurolang_dl_datalog_code_with_query():
         prog + "\nans(x) :- B(x, y), y == 5"
     )
     assert res.to_unnamed() == {(4,), (5,), (6,)}
+    assert res.row_type == Tuple[int, ]
 
     res = neurolang.execute_datalog_program(prog + "\nans() :- B(x, y)")
     assert res == True
