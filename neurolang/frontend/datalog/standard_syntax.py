@@ -20,7 +20,7 @@ GRAMMAR = u"""
     expressions = ( newline ).{ probabilistic_expression | expression };
 
 
-    probabilistic_expression = (float | int_ext_identifier ) '::' expression ;
+    probabilistic_expression = ( arithmetic_operation | int_ext_identifier ) '::' expression ;
     expression = rule | constraint | fact;
     fact = constant_predicate ;
     rule = (head | query) implication (condition | body) ;
