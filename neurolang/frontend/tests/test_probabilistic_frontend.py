@@ -217,7 +217,9 @@ def test_solve_query():
         ]
     )
     assert_almost_equal(res, expected)
+    assert res.row_type == Tuple[str, float]
     assert_almost_equal(res_2, expected.projection(1))
+    assert res_2.row_type == Tuple[float]
 
 
 def test_solve_query_prob_col_not_last():

@@ -74,6 +74,11 @@ from .datalog.sugar import (
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
+from neurolang.type_system import (
+    get_args,
+    get_origin,
+    replace_type_variable_fix_python36_37,
+)
 
 
 class RegionFrontendCPLogicSolver(
@@ -451,6 +456,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                 NamedRelationalAlgebraFrozenSet.dum()
             )
         query_solution = solution[pred_symb].value.unwrap()
+        query_row_type = solution[pred_symb].value.row_type
         cols = list(
             arg.name
             for arg in predicate.expression.args
@@ -459,6 +465,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
             *(symb.name for symb in head_symbols)
+        )
+        type_args = get_args(query_row_type)
+        proj_row_type = tuple(
+            type_args[cols.index(symb.name)] for symb in head_symbols
+        )
+        origin = get_origin(query_row_type)
+        query_solution.row_type = replace_type_variable_fix_python36_37(
+            query_row_type, origin, proj_row_type
         )
         return ir.Constant[AbstractSet](query_solution)
 
