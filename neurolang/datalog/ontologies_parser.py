@@ -27,9 +27,7 @@ class OntologyParser:
         self.parsed_constraints = {}
         self.estructural_knowledge = {}
 
-    def _load_ontology(self, paths, load_format, structural_knowledge='no'):
-        if structural_knowledge not in ['no', 'yes', 'only']:
-            raise NeuroLangException("structural_knowledge param can be 'no', 'yes' or 'only'")
+    def _load_ontology(self, paths, load_format):
         rdfGraph = rdflib.Graph()
         for counter, path in enumerate(paths):
             rdfGraph.load(path, format=load_format[counter])
@@ -322,9 +320,9 @@ class OntologyParser:
         entity = Symbol(self._parse_name(entity))
         for value in nodes:
             value = self._parse_name(value)
-            constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
+            constraints.append(RightImplication(Symbol(value)(y), support_prop(x, y)))
         prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
-        exists_imp = RightImplication(entity(x), support_prop(x, y))
+        exists_imp = RightImplication(support_prop(x, y), entity(x))
 
         constraints.append(exists_imp)
         constraints.append(prop_imp)
@@ -355,7 +353,7 @@ class OntologyParser:
         conj = Conjunction((ant(x), onProp(x, y)))
         for value in nodes:
             value = self._parse_name(value)
-            constraints.append(Implication(Symbol(value)(y), conj))
+            constraints.append(RightImplication(conj, Symbol(value)(y)))
 
         return constraints
 
@@ -379,7 +377,7 @@ class OntologyParser:
         ent = Symbol(self._parse_name(entity))
         onProp = Symbol(self._parse_name(prop))
         value = self._parse_name(nodes[0])
-        return [Implication(Symbol(onProp)(x, Constant(value)), Symbol(ent)(x))]
+        return [RightImplication(Symbol(ent)(x), Symbol(onProp)(x, Constant(value)))]
 
     def _solve_BNode(self, initial_node):
         '''Once a BNode is identified, this function iterates over each of the pointers
