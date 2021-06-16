@@ -428,10 +428,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.program_ir.symbol_table = self.symbol_table.enclosing_scope
 
         if isinstance(head, tuple):
+            row_type = solution_set.value.row_type
             solution_set = NamedRelationalAlgebraFrozenSet(
                     tuple(s.expression.name for s in head),
                     solution_set.value.unwrap()
                 )
+            solution_set.row_type = row_type
         return solution_set, functor_orig
 
     def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:

@@ -300,7 +300,7 @@ def test_empty_rewrite():
     p = Symbol('p')
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, _ = onto.parse_ontology()
+    constraints = onto.parse_ontology()
 
     q = I_(p(x), book(x))
 
@@ -353,7 +353,7 @@ def test_ontology_parsed_rewrite():
     p = Symbol('p')
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, _ = onto.parse_ontology()
+    constraints = onto.parse_ontology()
 
     q = I_(p(x), headof(x, y))
 

@@ -385,7 +385,7 @@ class OntologyParser:
         '''Once a BNode is identified, this function iterates over each of the pointers
          that compose it and returns a list with those values.
 
-         Parameters
+        Parameters
         ----------
         initial_node : BNode
             pointer to the first item in the list
@@ -409,11 +409,35 @@ class OntologyParser:
         return values
 
     def _get_list_first_value(self, list_iter):
+        '''Used to iterate between pointers in triples, this function takes
+        care of finding the pointed value and returning it.
+
+        Parameters
+        ----------
+        list_iter : list
+            list of triples
+
+        Returns
+        -------
+            see description.
+        '''
         for triple in list_iter:
             if RDF.first == triple[1]:
                 return triple[2]
 
     def _get_list_rest_value(self, list_iter):
+        '''Used to iterate between pointers in triples, this function takes
+        care of finding the pointer to the next element and returning it.
+
+        Parameters
+        ----------
+        list_iter : list
+            list of triples
+
+        Returns
+        -------
+            see description.
+        '''
         for triple in list_iter:
             if RDF.rest == triple[1]:
                 return triple[2]

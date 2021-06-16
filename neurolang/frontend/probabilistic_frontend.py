@@ -74,6 +74,11 @@ from .datalog.sugar import (
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
+from neurolang.type_system import (
+    get_args,
+    get_origin,
+    replace_type_variable_fix_python36_37,
+)
 
 
 class RegionFrontendCPLogicSolver(
@@ -148,7 +153,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
-        self.current_program_rewrited = None
+        self.current_program_rewritten = None
         self.check_qbased_pfact_tuple_unicity = (
             check_qbased_pfact_tuple_unicity
         )
@@ -174,8 +179,6 @@ class NeurolangPDL(QueryBuilderDatalog):
             self.program_ir.add_extensional_predicate_from_tuples(
                 symbol, iterable
             )
-
-
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -372,7 +375,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         '''Resolution of the deterministic stratum. In case there
         are entries in the symbol table under the key __constraints__,
         a rewrite is performed and the resulting program is assigned
-        to the variable `current_program_rewrited` to provide a way
+        to the variable `current_program_rewritten` to provide a way
         to access this information.
 
         Parameters
@@ -386,7 +389,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         '''
         if "__constraints__" in self.symbol_table:
             det_idb = self._rewrite_program_with_ontology(det_idb)
-            self.current_program_rewrited = det_idb
+            self.current_program_rewritten = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
         return solution
@@ -458,6 +461,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                 NamedRelationalAlgebraFrozenSet.dum()
             )
         query_solution = solution[pred_symb].value.unwrap()
+        query_row_type = solution[pred_symb].value.row_type
         cols = list(
             arg.name
             for arg in predicate.expression.args
@@ -466,6 +470,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
             *(symb.name for symb in head_symbols)
+        )
+        type_args = get_args(query_row_type)
+        proj_row_type = tuple(
+            type_args[cols.index(symb.name)] for symb in head_symbols
+        )
+        origin = get_origin(query_row_type)
+        query_solution.row_type = replace_type_variable_fix_python36_37(
+            query_row_type, origin, proj_row_type
         )
         return ir.Constant[AbstractSet](query_solution)
 
