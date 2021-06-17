@@ -2,7 +2,7 @@ import warnings
 
 import rdflib
 from rdflib import BNode, Literal
-from rdflib.namespace import OWL, RDF, RDFS
+from rdflib.namespace import OWL, RDF, RDFS, SKOS
 
 from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
 from ..expressions import Constant, Symbol
@@ -47,6 +47,7 @@ class OntologyParser:
         rules using the rule consequent functor.
         '''
         self._parse_classes()
+        self._parse_related_individuals()
 
         return self.parsed_constraints, self.estructural_knowledge
 
@@ -77,7 +78,7 @@ class OntologyParser:
                     self._parseDisjointClass(entity, prop, value)
                 else:
                     if not isinstance(value, BNode):
-                        self._parseProperty(entity, prop, value)
+                        self._parse_property(entity, prop, value)
                     else:
                         raise NeuroLangNotImplementedError
 
@@ -99,6 +100,28 @@ class OntologyParser:
                 classes.add(s)
 
         return classes
+
+    def _get_all_named_individual(self):
+        individuals = set()
+        for s, _, _ in self.rdfGraph.triples((None, RDF.type, OWL.NamedIndividual)):
+            individuals.add(s)
+
+        return individuals
+
+    def _parse_related_individuals(self):
+        _all_individuals = self._get_all_named_individual()
+
+        for individual_name in list(_all_individuals):
+            for entity, prop, value in self.rdfGraph.triples((individual_name, None, None)):
+
+                if prop == RDF.type and value == OWL.NamedIndividual:
+                    # The triple used to index the individual must be skipped.
+                    continue
+
+                if prop == SKOS.related:
+                    self._parse_individual_related(entity, prop, value)
+
+
 
     def _parseSubClass(self, entity, val):
         '''Function in charge of identifying the type of constraint to be
@@ -440,7 +463,7 @@ class OntologyParser:
             if RDF.rest == triple[1]:
                 return triple[2]
 
-    def _parseProperty(self, entity, prop, value):
+    def _parse_property(self, entity, prop, value):
         '''Any rule that is not a restriction or a derivation on
         classes(as the case of subClassOf or EnumeratedClass) is a
         property that defines a field inside the entity with its
@@ -467,13 +490,23 @@ class OntologyParser:
         label = Symbol(self._parse_name(prop))
         con = label(x, entity_name)
 
-        #self._categorize_rules([Implication(con, ant)])
         self._categorize_constraints([RightImplication(ant, con)])
 
         prop_name = label.name.split(':')[-1]
         neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)
         est = neurolang_prop(Constant(entity.name), entity_name)
         self._categorize_structural_knowledge([est])
+
+    def _parse_individual_related(self, entity, prop, value):
+        entity = Symbol(self._parse_name(entity))
+        entity_name = Constant(self._parse_name(value))
+        label = Symbol(self._parse_name(prop))
+
+        prop_name = label.name.split(':')[-1]
+        neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)
+        est = neurolang_prop(Constant(entity.name), entity_name)
+        self._categorize_structural_knowledge([est])
+
 
     def _parseEnumeratedClass(self, entity, prop, value):
         warnings.warn("Not implemented yet: EnumeratedClass")
