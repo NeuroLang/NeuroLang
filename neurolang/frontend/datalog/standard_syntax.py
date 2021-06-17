@@ -1,10 +1,11 @@
+from neurolang.logic import ExistentialPredicate
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
-from ...expressions import Constant, Expression, FunctionApplication, Symbol
+from ...expressions import Constant, Expression, FunctionApplication, Query, Symbol
 from ...probabilistic.expressions import Condition, ProbabilisticPredicate
 
 
@@ -22,7 +23,7 @@ GRAMMAR = u"""
     probabilistic_expression = (float | int_ext_identifier ) '::' expression ;
     expression = rule | constraint | fact;
     fact = constant_predicate ;
-    rule = head implication (condition | body) ;
+    rule = (head | query) implication (condition | body) ;
     constraint = body right_implication head ;
     head = head_predicate ;
     body = conjunction ;
@@ -30,13 +31,20 @@ GRAMMAR = u"""
     conjunction = ( conjunction_symbol ).{ predicate } ;
     composite_predicate = '(' @:conjunction ')'
                         | predicate ;
+    exists = 'exists' | '\u2203' | 'EXISTS';
+    such_that = 'st' | ';' ;
+    reserved_words = exists 
+                   | 'st' 
+                   | 'ans' ;
 
     conjunction_symbol = ',' | '&' | '\N{LOGICAL AND}' ;
     implication = ':-' | '\N{LEFTWARDS ARROW}' ;
     right_implication = '-:' | '\N{RIGHTWARDS ARROW}' ;
     head_predicate = identifier'(' [ arguments ] ')' ;
+    query = 'ans(' [ arguments ] ')' ;
     predicate = int_ext_identifier'(' [ arguments ] ')'
               | negated_predicate
+              | existential_predicate
               | comparison
               | logical_constant
               | '(' @:predicate ')';
@@ -44,6 +52,9 @@ GRAMMAR = u"""
     constant_predicate = identifier'(' ','.{ literal } ')' ;
 
     negated_predicate = ('~' | '\u00AC' ) predicate ;
+    existential_body = arguments such_that composite_predicate;
+    existential_predicate = \
+        exists '(' @:existential_body ')' ;
 
     comparison = argument comparison_operator argument ;
 
@@ -74,7 +85,7 @@ GRAMMAR = u"""
             | text
             | ext_identifier ;
 
-    identifier = /[a-zA-Z_][a-zA-Z0-9_]*/
+    identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/
                | '`'@:?"[0-9a-zA-Z/#%._:-]+"'`';
 
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
@@ -156,7 +167,11 @@ class DatalogSemantics:
         return ast[0](*ast[2])
 
     def rule(self, ast):
-        return Implication(ast[0], ast[2])
+        head = ast[0]
+        if isinstance(head, Expression) and head.functor == Symbol("ans"):
+            return Query(ast[0], ast[2])
+        else:
+            return Implication(ast[0], ast[2])
 
     def constraint(self, ast):
         return RightImplication(ast[0], ast[2])
@@ -188,6 +203,15 @@ class DatalogSemantics:
                 ast = ast[0]()
         return ast
 
+    def query(self, ast):
+        if len(ast) == 3:
+            # Query head has arguments
+            arguments = ast[1]
+            return Symbol("ans")(*arguments)
+        else :
+            # Query head has no arguments
+            return Symbol("ans")()
+
     def predicate(self, ast):
         if not isinstance(ast, Expression):
             ast = ast[0](*ast[2])
@@ -195,6 +219,15 @@ class DatalogSemantics:
 
     def negated_predicate(self, ast):
         return Negation(ast[1])
+
+    def existential_predicate(self, ast):
+        exp = ast[2]
+        if isinstance(exp, list):
+            exp = Conjunction(tuple(exp))
+
+        for arg in ast[0]:
+            exp = ExistentialPredicate(arg, exp)
+        return exp
 
     def comparison(self, ast):
         operator = Constant(OPERATOR[ast[1]])

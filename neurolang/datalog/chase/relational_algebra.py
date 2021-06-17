@@ -360,7 +360,6 @@ class ChaseNamedRelationalAlgebraMixin:
                     if arg in substitutions.columns
                 )
             )
-            new_tuples = WrappedRelationalAlgebraSet(new_tuples)
         else:
             tuples = [
                 tuple(

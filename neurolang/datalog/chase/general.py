@@ -374,9 +374,11 @@ class ChaseGeneral():
     def compute_instance_update(
         self, rule, new_tuples, instance, restriction_instance
     ):
-        instance_update = MapInstance({rule.consequent.functor: new_tuples})
-        instance_update -= instance
-        instance_update -= restriction_instance
+        instance_update = (
+            MapInstance({rule.consequent.functor: new_tuples})
+            - instance
+            - restriction_instance
+        )
         return instance_update
 
     def build_chase_tree(self, chase_set=chase_step):
@@ -401,7 +403,7 @@ class ChaseGeneral():
 
     def build_nodes_from_rules(self, node, rule):
         instance_update = self.chase_step(node.instance, rule)
-        if len(instance_update) > 0:
+        if not instance_update.is_empty():
             new_instance = node.instance | instance_update
             new_node = ChaseNode(new_instance, dict())
             node.children[rule] = new_node
@@ -442,7 +444,7 @@ class ChaseNonRecursive:
             rules_seen.add(functor)
 
             with log_performance(LOG, 'Evaluating rule %s', (rule,)):
-                instance_update |= self.chase_step(
+                instance_update = instance_update | self.chase_step(
                     instance, rule, restriction_instance=instance_update
                 )
         return instance_update
@@ -464,15 +466,15 @@ class ChaseNaive:
     """Chase implementation using the naive algorithm.
     """
     def execute_chase(self, rules, instance_update, instance):
-        while len(instance_update) > 0:
-            instance |= instance_update
+        while not instance_update.is_empty():
+            instance = instance | instance_update
             new_update = MapInstance()
             for rule in rules:
                 with log_performance(LOG, 'Evaluating rule %s', (rule,)):
                     upd = self.chase_step(
                         instance | instance_update, rule,
                     )
-                new_update |= upd
+                new_update = new_update | upd
             instance_update = new_update
         return instance
 
@@ -483,9 +485,9 @@ class ChaseSemiNaive:
     """
 
     def execute_chase(self, rules, instance_update, instance):
-        continue_chase = len(instance_update) > 0
+        continue_chase = not instance_update.is_empty()
         while continue_chase:
-            instance |= instance_update
+            instance = instance | instance_update
             instance_update = MapInstance()
             continue_chase = False
             for rule in rules:
@@ -493,15 +495,14 @@ class ChaseSemiNaive:
                     instance_update = self.per_rule_update(
                         rule, instance, instance_update
                     )
-                continue_chase |= len(instance_update) > 0
+                continue_chase |= not instance_update.is_empty()
         return instance
 
     def per_rule_update(self, rule, instance, instance_update):
         new_instance_update = self.chase_step(
             instance, rule, restriction_instance=instance_update
         )
-        if len(new_instance_update) > 0:
-            instance_update |= new_instance_update
+        instance_update = instance_update | new_instance_update
         return instance_update
 
     def check_constraints(self, instance_update):

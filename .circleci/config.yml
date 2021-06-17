@@ -150,7 +150,7 @@ jobs:
       - install
       - restore_cache:
           keys:
-            - v1-docs-{{ .Branch }}--
+            - v2-docs-{{ .Branch }}--
       - run:
           name: Install Texlive and dvipng
           command: 'sudo apt update && sudo apt install texlive texlive-xetex texlive-fonts-extra texlive-latex-extra texlive-plain-extra dvipng'

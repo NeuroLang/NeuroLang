@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from functools import WRAPPER_ASSIGNMENTS, lru_cache, wraps
 from itertools import chain
 from warnings import warn
+import warnings
 
 from .exceptions import NeuroLangException
 from .type_system import NeuroLangTypeException, Unknown
@@ -373,6 +374,26 @@ class Expression(metaclass=ExpressionMeta):
     def __hash__(self):
         return hash(tuple(getattr(self, c) for c in self.__children__))
 
+    def __lt__(self, other):
+        """
+        You shouldn't have to compare Expressions, but need it when
+        using Dask RAS because we use the "first" aggregate function to get
+        a single value for each grouped_by column and this function uses
+        sort (on only one value, but still).
+
+        Returns
+        -------
+        int
+            Always -1
+        """
+        warnings.warn(
+            "You are comparing together Expressions. "
+            "Comparison of Expressions is not implemented properly and you"
+            " should not expect it to work.",
+            SyntaxWarning,
+        )
+        return -1
+
 
 class ExpressionBlock(Expression):
     def __init__(self, expressions):
@@ -420,6 +441,18 @@ class Symbol(NonConstant):
     def __repr__(self):
         return f'S{{{self.name}}}'
         # return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
+
+    def __getstate__(self):
+        # Pickle a tuple instead of a set for _symbols to avoid calling hash
+        # upon deserialization
+        state = self.__dict__.copy()
+        state["_symbols"] = tuple(self._symbols)
+        return state
+
+    def __setstate__(self, state: dict):
+        symbols = state.pop("_symbols")
+        self.__dict__ = state
+        self._symbols = set(symbols)
 
     @staticmethod
     def _fresh_generator():
@@ -566,6 +599,13 @@ class Constant(Expression):
                 "The value %s does not correspond to the type %s" %
                 (self.value, self.type)
             )
+
+    def __reduce__(self):
+        """
+        Make Constants pickable.
+        See https://docs.python.org/3/library/pickle.html#object.__reduce__
+        """
+        return (Constant, (self.value, ))
 
 
 class Lambda(Definition):

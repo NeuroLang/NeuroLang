@@ -1,6 +1,7 @@
 from typing import AbstractSet
 
 import pytest
+import numpy as np
 
 from neurolang.exceptions import ForbiddenUnstratifiedAggregation
 
@@ -45,7 +46,7 @@ class Datalog(
     def function_sum2(self, x: AbstractSet, y: AbstractSet) -> Unknown:
         return sum(v + w for v, w in zip(x, y))
 
-    def function_set_create(self, x: AbstractSet) -> Unknown:
+    def function_set_create(self, x: AbstractSet) -> np.object_:
         return frozenset(x)
 
 
