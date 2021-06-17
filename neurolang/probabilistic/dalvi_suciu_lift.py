@@ -526,13 +526,14 @@ def _formulas_weights(formula_powerset):
         formula: set()
         for formula in formula_powerset
     }
+    # temporary fix for key not in dict issue
+    tmp_fix_dict_get = lambda k: next(
+        v for f, v in formula_containments.items() if f == k
+    )
     for i, f0 in enumerate(formula_powerset):
         for f1 in formula_powerset[i + 1:]:
             for c0, c1 in ((f0, f1), (f1, f0)):
-                if (
-                    (c1 not in formula_containments[f0]) &
-                    is_contained(c0, c1)
-                ):
+                if c1 not in tmp_fix_dict_get(f0) and is_contained(c0, c1):
                     formula_containments[c0].add(c1)
                     formula_containments[c0] |= (
                         formula_containments[c1] -
@@ -558,13 +559,17 @@ def mobius_function(formula, formula_containments, known_weights=None):
         known_weights = dict()
     if formula in known_weights:
         return known_weights[formula]
+    # temporary fix for key not in dict issue
+    tmp_fix_dict_get = lambda k: next(
+        v for f, v in formula_containments.items() if f == k
+    )
     res = -sum(
         (
             known_weights.setdefault(
                 f,
                 mobius_function(f, formula_containments)
             )
-            for f in formula_containments[formula]
+            for f in tmp_fix_dict_get(formula)
             if f != formula
         ),
         -1
