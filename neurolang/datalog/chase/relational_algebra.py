@@ -191,7 +191,7 @@ class ChaseNamedRelationalAlgebraMixin:
             )
         except ProjectionOverMissingColumnsError:
             raise WrongArgumentsInPredicateError(
-                "There is a preducate in the query with the "
+                "There is a predicate in the query with the "
                 "wrong number of arguments."
             )
 
@@ -360,7 +360,6 @@ class ChaseNamedRelationalAlgebraMixin:
                     if arg in substitutions.columns
                 )
             )
-            new_tuples = WrappedRelationalAlgebraSet(new_tuples)
         else:
             tuples = [
                 tuple(

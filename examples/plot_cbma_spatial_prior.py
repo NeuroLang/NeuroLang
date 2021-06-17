@@ -42,6 +42,7 @@ nl = NeurolangPDL()
 # Adding new aggregation function to build a region overlay
 # ----------------------------------
 
+
 @nl.add_symbol
 def agg_create_region_overlay(
     i: Iterable, j: Iterable, k: Iterable, p: Iterable
@@ -116,7 +117,7 @@ Voxel = nl.add_tuple_set(
 nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
 
 with nl.environment as e:
-    (e.VoxelReported @ e.exp(-e.d / 5.0))[e.i1, e.j1, e.k1, e.s] = (
+    (e.VoxelReported @ e.max(e.exp(-e.d / 5.0)))[e.i1, e.j1, e.k1, e.s] = (
         e.FocusReported(e.i2, e.j2, e.k2, e.s)
         & e.Voxel(e.i1, e.j1, e.k1)
         & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))

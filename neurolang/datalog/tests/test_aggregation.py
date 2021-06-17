@@ -1,17 +1,29 @@
-from neurolang.exceptions import ForbiddenUnstratifiedAggregation
 from typing import AbstractSet
 
 import pytest
+import numpy as np
+
+from neurolang.exceptions import ForbiddenUnstratifiedAggregation
 
 from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import (Constant, ExpressionBlock, NeuroLangException,
-                            Symbol)
+from ...expressions import (
+    Constant,
+    ExpressionBlock,
+    NeuroLangException,
+    Symbol,
+)
 from ...type_system import Unknown
 from .. import DatalogProgram, Fact, Implication
+from ..aggregation import (
+    AGG_COUNT,
+    AGG_MAX,
+    AGG_MEAN,
+    AggregationApplication,
+    BuiltinAggregationMixin,
+    DatalogWithAggregationMixin,
+    TranslateToLogicWithAggregation,
+)
 from ..chase import Chase, ChaseAggregationSN
-from ..aggregation import (AggregationApplication,
-                           DatalogWithAggregationMixin,
-                           TranslateToLogicWithAggregation)
 from ..expressions import Union
 
 S_ = Symbol
@@ -34,7 +46,7 @@ class Datalog(
     def function_sum2(self, x: AbstractSet, y: AbstractSet) -> Unknown:
         return sum(v + w for v, w in zip(x, y))
 
-    def function_set_create(self, x: AbstractSet) -> Unknown:
+    def function_set_create(self, x: AbstractSet) -> np.object_:
         return frozenset(x)
 
 
@@ -283,3 +295,32 @@ def test_aggregation_emptyset():
     solution = chase.build_chase_solution()
 
     assert Q not in solution or solution[Q] == set()
+
+
+def test_builtin_aggregations():
+    class DatalogWithBuiltinAggregation(
+        BuiltinAggregationMixin,
+        DatalogWithAggregationMixin,
+        DatalogProgram,
+        ExpressionBasicEvaluator,
+    ):
+        pass
+
+    dl = DatalogWithBuiltinAggregation()
+    assert AGG_MAX in dl.symbol_table
+    assert AGG_MEAN in dl.symbol_table
+    assert AGG_COUNT in dl.symbol_table
+
+    P = S_('P')
+    Q = S_('Q')
+    x = S_('x')
+    edb = Eb_(tuple(F_(P(C_(i))) for i in range(10)))
+    dl.walk(edb)
+    agg_rule = Imp_(Q(Fa_(S_('count'), (x,))), P(x))
+    dl.walk(agg_rule)
+    chase = Chase(dl)
+    solution = chase.build_chase_solution()
+    assert Q in solution
+    result = solution[Q]
+    expected = Constant[AbstractSet]({(10,)})
+    assert result == expected
