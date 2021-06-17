@@ -1,19 +1,14 @@
 import pytest
 
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
-from ...expressions import Symbol, Constant
+from ...expressions import Symbol
 from ...logic import (
     Conjunction,
     Disjunction,
     ExistentialPredicate,
-    Implication
+    Implication,
 )
-from .. import transforms
-from .. import dalvi_suciu_lift
-from ...relational_algebra import (
-    Projection, NameColumns, NaturalJoin, ColumnInt, ColumnStr, Union
-)
-from ...relational_algebra_provenance import WeightedNaturalJoin
+from .. import dalvi_suciu_lift, transforms
 
 TNRA = TranslateToNamedRA()
 
@@ -400,10 +395,6 @@ def test_example_4_6_a_really_simple_query():
     S = Symbol("S")
     x = Symbol("x")
     y = Symbol("y")
-    col_0 = Constant(ColumnInt(0))
-    col_1 = Constant(ColumnInt(1))
-    col_x = Constant(ColumnStr("x"))
-    col_y = Constant(ColumnStr("y"))
     query = ExistentialPredicate(
         x, Conjunction((R(x), ExistentialPredicate(y, S(x, y))))
     )
@@ -419,12 +410,6 @@ def test_example_4_7_a_query_with_self_joins():
     x2 = Symbol("x2")
     y1 = Symbol("y1")
     y2 = Symbol("y2")
-    col_0 = Constant(ColumnInt(0))
-    col_1 = Constant(ColumnInt(1))
-    col_x1 = Constant(ColumnStr("x1"))
-    col_y1 = Constant(ColumnStr("y1"))
-    col_x2 = Constant(ColumnStr("x2"))
-    col_y2 = Constant(ColumnStr("y2"))
     Q1 = ExistentialPredicate(
         x1,
         ExistentialPredicate(
