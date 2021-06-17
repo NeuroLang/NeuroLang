@@ -1,3 +1,5 @@
+import pytest
+
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
 from ...expressions import Symbol, Constant
 from ...logic import (
@@ -442,6 +444,7 @@ def test_example_4_7_a_query_with_self_joins():
     assert dalvi_suciu_lift.is_pure_lifted_plan(resulting_plan)
 
 
+@pytest.mark.skip
 def test_example_4_8_tractable_query_intractable_subquery():
     """
     We test the query
