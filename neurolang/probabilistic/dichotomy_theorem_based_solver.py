@@ -236,4 +236,19 @@ def _maybe_reintroduce_head_variables(ra_query, flat_query, unified_query):
 
 
 def solve_marg_query(rule, cpl):
+    """
+    Solve a MARG query on a CP-Logic program.
+    Parameters
+    ----------
+    query : Implication
+        Consequent must be of type `Condition`.
+        MARG query of the form `ans(x) :- P(x)`.
+    cpl_program : CPLogicProgram
+        CP-Logic program on which the query should be solved.
+    Returns
+    -------
+    ProvenanceAlgebraSet
+        Provenance set labelled with probabilities for each tuple in the result
+        set.
+    """
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
