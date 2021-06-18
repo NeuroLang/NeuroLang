@@ -125,8 +125,6 @@ def test_marg_query_two_vars_conditioning(solver):
 
 
 def test_marg_query_conjunctive_conditioned_and_conditioning(solver):
-    if solver != small_dichotomy_theorem_based_solver:
-        return
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         R,
