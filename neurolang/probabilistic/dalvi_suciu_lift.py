@@ -8,62 +8,63 @@ from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     enforce_conjunction,
-    flatten_query
+    flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NonLiftableException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
-    add_match
+    add_match,
 )
-from ..expressions import FunctionApplication, Symbol
+from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import (
     FALSE,
     Conjunction,
     Disjunction,
     ExistentialPredicate,
     Implication,
-    NaryLogicOperator
+    NaryLogicOperator,
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
-    extract_logic_free_variables
+    extract_logic_free_variables,
 )
 from ..logic.transformations import (
     MakeExistentialsImplicit,
-    RemoveTrivialOperations
+    RemoveTrivialOperations,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
+    Projection,
     UnaryRelationalAlgebraOperation,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .dichotomy_theorem_based_solver import (
     RAQueryOptimiser,
-    lift_optimization_for_choice_predicates
+    lift_optimization_for_choice_predicates,
 )
-from .query_resolution import lift_solve_marg_query
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
-    ProbabilisticFactSet,
     NonLiftable,
-    generate_probabilistic_symbol_table_for_query
+    ProbabilisticFactSet,
+    generate_probabilistic_symbol_table_for_query,
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
+from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
 from .transforms import (
     convert_rule_to_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
-    unify_existential_variables
+    unify_existential_variables,
 )
 
 LOG = logging.getLogger(__name__)
@@ -169,7 +170,11 @@ def dalvi_suciu_lift(rule, symbol_table):
             for atom in extract_logic_atoms(rule)
         )
     ):
-        return TranslateToNamedRA().walk(rule)
+        free_vars = extract_logic_free_variables(rule)
+        rule = MakeExistentialsImplicit().walk(rule)
+        result = TranslateToNamedRA().walk(rule)
+        proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
+        return Projection(result, proj_cols)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
     connected_components = symbol_connected_components(rule_cnf)

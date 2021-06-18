@@ -503,4 +503,4 @@ def test_simple_existential_query_plan():
     symbol_table = {R: DeterministicFactSet(relation)}
     query = ExistentialPredicate(x, R(x, y))
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
-    breakpoint()
+    assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
