@@ -11,7 +11,6 @@ from ...exceptions import (
     NegativeFormulaNotSafeRangeException,
     UnsupportedProgramError,
     UnsupportedQueryError,
-    UnsupportedSolverError,
 )
 from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
@@ -390,6 +389,7 @@ def test_neurolange_dl_probabilistic_negation():
     result = neurolang.solve_all()["s"].to_unnamed()
     expected = {(i, j, 1 - p) for (p, i, j) in dataset}
     assert_almost_equal(result, expected)
+
 
 @pytest.mark.skip
 def test_neurolange_dl_probabilistic_negation_not_safe():
@@ -869,7 +869,7 @@ def test_query_without_safe_plan():
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
 
     with pytest.raises(dalvi_suciu_lift.NonLiftableException):
-        res = nl.solve_all()
+        nl.solve_all()
 
 
 def test_query_without_safe_fails():
