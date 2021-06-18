@@ -21,6 +21,11 @@ from typing import (
 from uuid import uuid1
 
 import pandas as pd
+from neurolang.type_system import (
+    get_args,
+    get_origin,
+    replace_type_variable_fix_python36_37,
+)
 
 from .. import expressions as ir
 from ..datalog.aggregation import (
@@ -39,8 +44,11 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError, UnsupportedSolverError
 from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
+from ..probabilistic import (
+    dalvi_suciu_lift,
+    small_dichotomy_theorem_based_solver,
+)
 from ..probabilistic.cplogic.program import CPLogicMixin
-from ..probabilistic import dichotomy_theorem_based_solver, dalvi_suciu_lift
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
@@ -69,11 +77,6 @@ from .datalog.sugar import (
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
-from neurolang.type_system import (
-    get_args,
-    get_origin,
-    replace_type_variable_fix_python36_37,
-)
 
 
 class RegionFrontendCPLogicSolver(

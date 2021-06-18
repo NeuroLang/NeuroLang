@@ -46,7 +46,7 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
-from .dichotomy_theorem_based_solver import (
+from .small_dichotomy_theorem_based_solver import (
     RAQueryOptimiser,
     lift_optimization_for_choice_predicates,
 )
