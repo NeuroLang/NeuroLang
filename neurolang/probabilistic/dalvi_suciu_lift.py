@@ -594,6 +594,7 @@ def powerset(iterable):
 
 
 def symbolic_shattering(unified_query, symbol_table):
+    breakpoint()
     shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
     inverted_symbol_table = {v: k for k, v in symbol_table.items()}
     for atom in extract_logic_atoms(shattered_query):

@@ -4,7 +4,6 @@ import operator
 import pytest
 
 from ...datalog.expression_processing import UnifyVariableEqualitiesMixin
-from ...exceptions import UnexpectedExpressionError
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Conjunction, Implication
 from ..cplogic.program import CPLogicProgram
