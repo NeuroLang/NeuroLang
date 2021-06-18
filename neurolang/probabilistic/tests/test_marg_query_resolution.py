@@ -6,7 +6,7 @@ from ...relational_algebra import ColumnStr, NamedRelationalAlgebraFrozenSet
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
-    dichotomy_theorem_based_solver,
+    small_dichotomy_theorem_based_solver,
     weighted_model_counting,
 )
 from ..cplogic import testing
@@ -35,7 +35,7 @@ c = Constant("c")
     params=(
         (
             weighted_model_counting,
-            dichotomy_theorem_based_solver,
+            small_dichotomy_theorem_based_solver,
             dalvi_suciu_lift,
         )
     ),
@@ -125,7 +125,7 @@ def test_marg_query_two_vars_conditioning(solver):
 
 
 def test_marg_query_conjunctive_conditioned_and_conditioning(solver):
-    if solver != dichotomy_theorem_based_solver:
+    if solver != small_dichotomy_theorem_based_solver:
         return
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(

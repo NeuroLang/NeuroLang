@@ -18,12 +18,11 @@ from ...relational_algebra import (
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
-    dichotomy_theorem_based_solver,
+    small_dichotomy_theorem_based_solver,
     weighted_model_counting
 )
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
-from ..dichotomy_theorem_based_solver import ProbSemiringSolver
 from ..exceptions import (
     NotEasilyShatterableError,
     NotHierarchicalQueryException
@@ -58,10 +57,11 @@ c = Constant("c")
 
 @pytest.fixture(
     params=((
-        weighted_model_counting, dichotomy_theorem_based_solver,
-        dalvi_suciu_lift
+        weighted_model_counting,
+        small_dichotomy_theorem_based_solver,
+        dalvi_suciu_lift,
     )),
-    ids=["SDD-WMC", "dichotomy-Safe query", "dalvi-suciu"],
+    ids=["SDD-WMC", "small-dichotomy", "dalvi-suciu"],
 )
 def solver(request):
     return request.param
@@ -455,7 +455,7 @@ def test_multilevel_existential(solver):
 
     query = Implication(ans(z), B(z))
 
-    if solver is dichotomy_theorem_based_solver:
+    if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(NotHierarchicalQueryException)
     else:
         context = nullcontext()
@@ -507,7 +507,7 @@ def test_repeated_antecedent_predicate_symbol(solver):
     cpl_program.walk(code)
     query = Implication(ans(x, y), Q(x, y))
 
-    if solver is dichotomy_theorem_based_solver:
+    if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(NotEasilyShatterableError)
     elif solver is dalvi_suciu_lift:
         context = pytest.raises(NonLiftableException)
@@ -662,7 +662,7 @@ def test_shatterable_query_2(solver):
 
 
 def test_program_with_variable_equality(solver):
-    if solver is not dichotomy_theorem_based_solver:
+    if solver is not small_dichotomy_theorem_based_solver:
         pytest.skip()
     pfact_sets = {
         Q: {(0.2, "a"), (0.3, "b"), (0.4, "c")},
@@ -693,7 +693,7 @@ def test_program_with_variable_equality(solver):
 
 
 def test_repeated_variable_probabilistic_rule(solver):
-    if solver is not dichotomy_theorem_based_solver:
+    if solver is not small_dichotomy_theorem_based_solver:
         pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
@@ -707,7 +707,7 @@ def test_repeated_variable_probabilistic_rule(solver):
 
 
 def test_repeated_variable_with_constant_in_head(solver):
-    if solver is not dichotomy_theorem_based_solver:
+    if solver is not small_dichotomy_theorem_based_solver:
         pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
@@ -726,7 +726,7 @@ def test_repeated_variable_with_constant_in_head(solver):
 
 
 def test_empty_result_program(solver):
-    if solver is not dichotomy_theorem_based_solver:
+    if solver is not small_dichotomy_theorem_based_solver:
         pytest.skip()
     rule = Implication(R(Constant(2), Constant(3)), Conjunction((Q(x),)))
     cpl = CPLogicProgram()
@@ -742,7 +742,7 @@ def test_empty_result_program(solver):
 
 
 def test_program_with_probchoice_selfjoin(solver):
-    if solver is not dichotomy_theorem_based_solver:
+    if solver is not small_dichotomy_theorem_based_solver:
         pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
@@ -764,7 +764,7 @@ def test_program_with_probchoice_selfjoin(solver):
 
 
 def test_probchoice_selfjoin_multiple_variables(solver):
-    if solver is not dichotomy_theorem_based_solver:
+    if solver is not small_dichotomy_theorem_based_solver:
         pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
@@ -787,7 +787,7 @@ def test_probchoice_selfjoin_multiple_variables(solver):
 
 
 def test_probchoice_selfjoin_multiple_variables_shared_var(solver):
-    if solver is not dichotomy_theorem_based_solver:
+    if solver is not small_dichotomy_theorem_based_solver:
         pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
@@ -833,7 +833,7 @@ def test_probsemiring_extended_proj():
         ),
     ]
     proj = ExtendedProjection(provset, proj_list)
-    solver = ProbSemiringSolver()
+    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
     result = solver.walk(proj)
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
@@ -870,7 +870,7 @@ def test_probsemiring_forbidden_extended_proj_missing_nonprov_cols():
         ),
     ]
     proj = ExtendedProjection(provset, proj_list)
-    solver = ProbSemiringSolver()
+    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
     with pytest.raises(ValueError):
         solver.walk(proj)
 
@@ -899,6 +899,6 @@ def test_probsemiring_forbidden_extended_proj_on_provcol():
         ),
     ]
     proj = ExtendedProjection(provset, proj_list)
-    solver = ProbSemiringSolver()
+    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
     with pytest.raises(ValueError):
         solver.walk(proj)
