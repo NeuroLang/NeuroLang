@@ -1,14 +1,18 @@
+from typing import AbstractSet
+
 import pytest
 
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
-from ...expressions import Symbol
+from ...expressions import Constant, Symbol
 from ...logic import (
     Conjunction,
     Disjunction,
     ExistentialPredicate,
     Implication,
 )
+from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
+from ..probabilistic_ra_utils import DeterministicFactSet
 
 TNRA = TranslateToNamedRA()
 
@@ -480,3 +484,23 @@ def test_example_4_8_tractable_query_intractable_subquery():
     )
     resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
     assert dalvi_suciu_lift.is_pure_lifted_plan(resulting_plan)
+
+
+def test_simple_existential_query_plan():
+    R = Symbol("R")
+    x = Symbol("x")
+    y = Symbol("y")
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[
+                ("a", "b"),
+                ("b", "a"),
+                ("c", "a"),
+            ],
+            columns=("x", "y"),
+        )
+    )
+    symbol_table = {R: DeterministicFactSet(relation)}
+    query = ExistentialPredicate(x, R(x, y))
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    breakpoint()
