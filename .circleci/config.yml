@@ -16,7 +16,9 @@ commands:
             wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
               -O miniconda.sh
             chmod +x miniconda.sh && ./miniconda.sh -b -p $MINICONDA_PATH
-            export PATH="$MINICONDA_PATH/bin:$PATH"
+            # set env variables
+            echo 'export MINICONDA_PATH=$HOME/miniconda' >> $BASH_ENV
+            echo 'export PATH=$MINICONDA_PATH/bin:$PATH' >> $BASH_ENV
       
       - run:
           name: create env
