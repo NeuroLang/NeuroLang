@@ -6,7 +6,7 @@ version: 2.1
 
 commands:
   setup_miniconda:
-    description: "deactivate circleci virtualenv and setup a miniconda env instead"
+    description: "download and setup miniconda"
     steps:
       - run:
           name: setup miniconda
