@@ -2,7 +2,7 @@ from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....datalog.aggregation import AggregationApplication
-from ....expressions import Constant, Symbol
+from ....expressions import Constant, Query, Symbol
 from ..standard_syntax import ExternalSymbol
 from ..natural_syntax import parser
 from ....probabilistic.expressions import ProbabilisticPredicate
@@ -24,7 +24,7 @@ def test_facts():
     )
     assert res == Union((
         Fact(Symbol('A')(Constant('x'), Constant(3.))),
-        Implication(
+        Query(
             Symbol('ans')(),
             Conjunction((
                 Symbol('A')(Symbol('x'), Symbol('y')),
