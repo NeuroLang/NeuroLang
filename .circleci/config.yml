@@ -8,25 +8,22 @@ commands:
   setup_miniconda:
     description: "deactivate circleci virtualenv and setup a miniconda env instead"
     steps:
-      -run:
-        name: setup miniconda
-        command: |
-          if [[ `type -t deactivate` ]]; then
-            deactivate
-          fi
-          MINICONDA_PATH=$HOME/miniconda
-          # Install dependencies with miniconda
-          wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-            -O miniconda.sh
-          chmod +x miniconda.sh && ./miniconda.sh -b -p $MINICONDA_PATH
-          export PATH="$MINICONDA_PATH/bin:$PATH"
+      - run:
+          name: setup miniconda
+          command: |
+            MINICONDA_PATH=$HOME/miniconda
+            # Install dependencies with miniconda
+            wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+              -O miniconda.sh
+            chmod +x miniconda.sh && ./miniconda.sh -b -p $MINICONDA_PATH
+            export PATH="$MINICONDA_PATH/bin:$PATH"
       
-      -run:
-        name: create env
-        command: |
-          conda create -n testenv --yes --quiet \
-            python="${PYTHON_VERSION:-*}" \
-            maven
+      - run:
+          name: create env
+          command: |
+            conda create -n testenv --yes --quiet \
+              python="${PYTHON_VERSION:-*}" \
+              maven
 
   install:
     description: "Installs the necessary packages"
