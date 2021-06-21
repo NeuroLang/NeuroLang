@@ -5,6 +5,29 @@
 version: 2.1
 
 commands:
+  setup_miniconda:
+    description: "deactivate circleci virtualenv and setup a miniconda env instead"
+    steps:
+      -run:
+        name: setup miniconda
+        command: |
+          if [[ `type -t deactivate` ]]; then
+            deactivate
+          fi
+          MINICONDA_PATH=$HOME/miniconda
+          # Install dependencies with miniconda
+          wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+            -O miniconda.sh
+          chmod +x miniconda.sh && ./miniconda.sh -b -p $MINICONDA_PATH
+          export PATH="$MINICONDA_PATH/bin:$PATH"
+      
+      -run:
+        name: create env
+        command: |
+          conda create -n testenv --yes --quiet \
+            python="${PYTHON_VERSION:-*}" \
+            maven
+
   install:
     description: "Installs the necessary packages"
     steps:
@@ -18,11 +41,8 @@ commands:
       - run:
           name: install dependencies
           command: |
-            python -m venv venv
-            . venv/bin/activate
-            pip install --upgrade pip
+            source activate testenv
 
-            pip install setuptools_scm
             pip install importlib_metadata
             
             python setup.py egg_info
@@ -45,13 +65,12 @@ commands:
       - run:
           name: Setup codacy reporter
           command: |
-            python -m venv venv
-            . venv/bin/activate
+            source activate testenv
             pip install codacy-coverage
 
       - save_cache:
           paths:
-            - ./venv
+            - ~/miniconda/envs/testenv
             - cc-test-reporter
           key: v1-dependencies-{{ checksum "setup.cfg" }}
 
@@ -61,7 +80,7 @@ commands:
       - run:
           name: run tests
           command: |
-            . venv/bin/activate
+            source activate testenv
             export CODACY_PROJECT_TOKEN=3114b2d4ada742608ad962641f1c7e7a
             export CC_TEST_REPORTER_ID=8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
             ./cc-test-reporter before-build
@@ -91,6 +110,7 @@ jobs:
     working_directory: ~/repo
     steps:
       - checkout
+      - setup_miniconda
       - install
       - test
 
@@ -102,6 +122,7 @@ jobs:
 
     steps:
       - checkout
+      - setup_miniconda
       - install
       - test
 
@@ -113,11 +134,12 @@ jobs:
 
     steps:
       - checkout
+      - setup_miniconda
       - install
       - run:
           name: Install ASV & run benchmark
           command: |
-            . venv/bin/activate
+            source activate testenv
             asv machine --yes
             if 
               [ "${CIRCLE_BRANCH}" = "master" ]
@@ -147,6 +169,7 @@ jobs:
 
     steps:
       - checkout
+      - setup_miniconda
       - install
       - restore_cache:
           keys:
@@ -157,7 +180,7 @@ jobs:
       - run:
           name: Install extra packages & build documentation
           command: |
-            . venv/bin/activate
+            source activate testenv
             pip install -e .
             cd doc
             make api
@@ -166,7 +189,7 @@ jobs:
 
       - save_cache:
           paths:
-            - ./venv
+            - ~/miniconda/envs/testenv
             - docs/auto_examples
             - docs/_build
           key: v1-docs-{{ .Branch }}--
