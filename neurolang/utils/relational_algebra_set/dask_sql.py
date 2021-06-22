@@ -17,7 +17,6 @@ from sqlalchemy import (
     literal,
     literal_column,
     select,
-    table,
     text,
 )
 from sqlalchemy.sql import FromClause, except_, intersect, table, union

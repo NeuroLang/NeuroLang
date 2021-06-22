@@ -22,7 +22,7 @@ def test_dask_context_manager_is_singleton():
         match=r"Can't instantiate abstract class DaskContextManager"
         " with abstract methods _do_not_instantiate_singleton_class",
     ):
-        manager1 = DaskContextManager()
+        DaskContextManager()
     ctx1 = DaskContextManager.get_context()
     from neurolang.utils.relational_algebra_set.dask_helpers import (
         DaskContextManager as DCM,

@@ -76,7 +76,7 @@ class DaskContextManager(ABC):
     _id_generator_ = _id_generator()
 
     @abstractmethod
-    def _do_not_instantiate_singleton_class():
+    def _do_not_instantiate_singleton_class(self):
         pass
 
     @classmethod
