@@ -170,8 +170,8 @@ class ProtectedKeywordError(NeuroLangException):
 
 class ForbiddenRecursivityError(UnsupportedProgramError):
     """
-    The given program cannot be stratified due to recursivity. 
-    
+    The given program cannot be stratified due to recursivity.
+
     When using probabilistic queries, a query can
     be solved through stratification if the probabilistic and deterministic
     parts are well separated. In case there exists one within-language
@@ -293,7 +293,7 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
     )
 
     This formula is not in DNF since it is a disjunction of a disjunction
-    (TopicAssociation(t, s) // SelectedStudy(s)) and a conjunction 
+    (TopicAssociation(t, s) // SelectedStudy(s)) and a conjunction
     (StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)).
     A valid query would be :
 
