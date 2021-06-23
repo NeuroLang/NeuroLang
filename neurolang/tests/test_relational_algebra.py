@@ -7,8 +7,9 @@ import pytest
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
 from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionWalker
-from ..expressions import Constant, Symbol
+from ..expressions import Constant, FunctionApplication, Symbol
 from ..relational_algebra import (
+    AggregateFunctionListMember,
     EVAL_OP_TO_STR,
     ColumnInt,
     ColumnStr,
@@ -18,6 +19,7 @@ from ..relational_algebra import (
     EquiJoin,
     ExtendedProjection,
     ExtendedProjectionListMember,
+    GroupByAggregation,
     Intersection,
     NameColumns,
     NaturalJoin,
@@ -621,6 +623,63 @@ def test_extended_projection_other_relation_length():
     )
     solver = RelationalAlgebraSolver()
     result = solver.walk(extended_proj_op)
+    assert result == expected
+
+
+def test_groupby_aggregate_sum():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y", "z"),
+            iterable=[(10, 20, 30), (10, 20, 50), (1, 2, 3)],
+        )
+    )
+    agg_op = GroupByAggregation(
+        relation,
+        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        [
+            AggregateFunctionListMember(
+                FunctionApplication(Constant(sum), ("z",), verify_type=False),
+                Constant(ColumnStr("z_sum")),
+            )
+        ],
+    )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y", "z_sum"), iterable=[(10, 20, 80), (1, 2, 3)]
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(agg_op)
+    assert result == expected
+
+
+def test_groupby_aggregate_lambda():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y", "z"),
+            iterable=[(10, 20, 30), (10, 20, 50), (10, 2, 50)],
+        )
+    )
+    custom_lambda = lambda y: min(y) - 2
+    agg_op = GroupByAggregation(
+        relation,
+        (Constant(ColumnStr("x")), Constant(ColumnStr("z"))),
+        [
+            AggregateFunctionListMember(
+                FunctionApplication(
+                    Constant(custom_lambda), ("y"), verify_type=False
+                ),
+                Constant(ColumnStr("y_min")),
+            )
+        ],
+    )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "z", "y_min"), iterable=[(10, 30, 18), (10, 50, 0)]
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(agg_op)
     assert result == expected
 
 
