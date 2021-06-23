@@ -211,16 +211,26 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def prov_projection(self, projection):
         prov_set = self.walk(projection.relation)
         prov_col = prov_set.provenance_column
-        relation = prov_set.value
+        group_columns = projection.attributes
+
         # aggregate the provenance column grouped by the projection columns
-        group_columns = [col.value for col in projection.attributes]
-        agg_relation = relation.aggregate(group_columns, {prov_col: sum})
-        # project the provenance column and the desired projection columns
-        proj_columns = [prov_col] + group_columns
-        projected_relation = agg_relation.projection(*proj_columns)
-        return ProvenanceAlgebraSet(
-            projected_relation, prov_set.provenance_column
+        aggregate_functions = [
+            AggregateFunctionListMember(
+                FunctionApplication(
+                    Constant(sum),
+                    (prov_col,),
+                    validate_arguments=False,
+                    verify_type=False,
+                ),
+                str2columnstr_constant(prov_col),
+            )
+        ]
+        operation = GroupByAggregation(
+            Constant[AbstractSet](prov_set.value),
+            group_columns,
+            aggregate_functions,
         )
+        return ProvenanceAlgebraSet(self.walk(operation).value, prov_col)        
 
     @add_match(EquiJoin(ProvenanceAlgebraSet, ..., ProvenanceAlgebraSet, ...))
     def prov_equijoin(self, equijoin):
