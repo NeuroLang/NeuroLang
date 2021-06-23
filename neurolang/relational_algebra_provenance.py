@@ -230,7 +230,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             group_columns,
             aggregate_functions,
         )
-        return ProvenanceAlgebraSet(self.walk(operation).value, prov_col)        
+        return ProvenanceAlgebraSet(self.walk(operation).value, prov_col)
 
     @add_match(EquiJoin(ProvenanceAlgebraSet, ..., ProvenanceAlgebraSet, ...))
     def prov_equijoin(self, equijoin):
