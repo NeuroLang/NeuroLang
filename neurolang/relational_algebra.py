@@ -179,7 +179,6 @@ class NameColumns(RelationalAlgebraOperation):
     All columns must be named at once. Each column name must either be a
     `Constant[ColumnStr]` or a `Symbol[ColumnStr]` pointing to a symbolic
     column name resolved when the expression is compiled.
-
     """
 
     def __init__(self, relation, column_names):
@@ -235,6 +234,56 @@ class RenameColumns(RelationalAlgebraOperation):
             )
             + f"({self.relation})"
         )
+
+
+class GroupByAggregation(RelationalAlgebraOperation):
+    """
+    General representation of a groupby operation with aggregate functions.
+
+    Attributes
+    ----------
+    relation : Expression[AbstractSet]
+        Relation on which the groupby is applied.
+    groupby : List[`Constant[ColumnStr]` or `Symbol[ColumnStr]`]
+        The list of columns on which to group
+    aggregate_functions : Tuple[AggregateFunctionListMember]
+        List of aggregate functions to apply.
+
+    """
+
+    def __init__(self, relation, groupby, aggregate_functions):
+        self.relation = relation
+        self.groupby = groupby
+        self.aggregate_functions = aggregate_functions
+
+    def __repr__(self):
+        join_str = "," if len(self.aggregate_functions) < 2 else ",\n"
+        return "γ_[{}]({})".format(
+            join_str.join(
+                [repr(member) for member in self.aggregate_functions]
+            ),
+            repr(self.relation),
+        )
+
+
+class AggregateFunctionListMember(Definition):
+    """
+    Member of a groupby aggregate function list.
+
+    Attributes
+    ----------
+    fun_exp : `FunctionApplication`
+        FunctionApplication representation of the aggregate function operation.
+    dst_column : `Constant[ColumnStr]` or `Symbol[ColumnStr]`
+        Constant column string of the destination column.
+    """
+
+    def __init__(self, fun_exp, dst_column):
+        self.fun_exp = fun_exp
+        self.dst_column = dst_column
+
+    def __repr__(self):
+        return "{}({})".format(repr(self.fun_exp), self.dst_column)
 
 
 class ExtendedProjection(RelationalAlgebraOperation):
@@ -765,6 +814,28 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             return RelationalAlgebraColumnStr(fun_exp.value)
         else:
             return fun_exp.value
+
+    @ew.add_match(GroupByAggregation(Constant, ..., ...))
+    def aggregate(self, agg_op):
+        relation = agg_op.relation
+        groupby = (c.value for c in agg_op.groupby)
+        aggregate_functions = []
+        for member in agg_op.aggregate_functions:
+            fun_args = (
+                member.fun_exp.args
+                if len(member.fun_exp.args) > 1
+                else member.fun_exp.args[0]
+            )
+            aggregate_functions.append(
+                (
+                    member.dst_column.value,
+                    fun_args,
+                    member.fun_exp.functor.value,
+                )
+            )
+        with sure_is_not_pattern():
+            result = relation.value.aggregate(groupby, aggregate_functions)
+        return self._build_relation_constant(result)
 
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):

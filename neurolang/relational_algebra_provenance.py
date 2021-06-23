@@ -15,6 +15,7 @@ from .expressions import (
     sure_is_not_pattern
 )
 from .relational_algebra import (
+    AggregateFunctionListMember,
     Column,
     ColumnInt,
     ColumnStr,
@@ -23,6 +24,7 @@ from .relational_algebra import (
     ExtendedProjection,
     ExtendedProjectionListMember,
     Difference,
+    GroupByAggregation,
     LeftNaturalJoin,
     NameColumns,
     NaturalJoin,
@@ -579,38 +581,40 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     def projection_rap(self, projection):
         cols = tuple(v.value for v in projection.attributes)
         if projection.relation.relations.is_dum() or (
-            cols == tuple(
-                c for c in projection.relation.relations.columns
+            cols
+            == tuple(
+                c
+                for c in projection.relation.relations.columns
                 if c != projection.relation.provenance_column
             )
         ):
             return projection.relation
 
-        with sure_is_not_pattern():
-            projected_relation = projection.relation.relations.aggregate(
-                cols,
-                {
-                    projection.relation.provenance_column:
-                    self._semiring_agg_sum
-                }
+        aggregate_functions = [
+            AggregateFunctionListMember(
+                self._semiring_agg_sum(
+                    (projection.relation.provenance_column,)
+                ),
+                str2columnstr_constant(projection.relation.provenance_column),
             )
-        return ProvenanceAlgebraSet(
-            projected_relation,
-            projection.relation.provenance_column
+        ]
+        operation = GroupByAggregation(
+            self._build_relation_constant(projection.relation.relations),
+            projection.attributes,
+            aggregate_functions,
         )
 
-    @staticmethod
-    def _semiring_agg_sum(x):
-        args = tuple(x)
-        if len(args) == 1:
-            r = args[0]
-        elif isinstance(args[0], Expression):
-            r = FunctionApplication(
-                ADD, args, validate_arguments=False, verify_type=False
+        with sure_is_not_pattern():
+            res = ProvenanceAlgebraSet(
+                self.walk(operation).value,
+                projection.relation.provenance_column,
             )
-        else:
-            r = sum(args)
-        return r
+        return res
+
+    def _semiring_agg_sum(self, args):
+        return FunctionApplication(
+            Constant(sum), args, validate_arguments=False, verify_type=False
+        )
 
     @add_match(RenameColumn(ProvenanceAlgebraSet, ..., ...))
     def rename_column_rap(self, expression):

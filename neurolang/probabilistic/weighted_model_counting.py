@@ -335,7 +335,15 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         self.positive_weights.append(probability)
         return literal
 
-    def _semiring_agg_sum(self, x):
+    def _semiring_agg_sum(self, args):
+        return FunctionApplication(
+            Constant(self._internal_sum),
+            args,
+            validate_arguments=False,
+            verify_type=False,
+        )
+
+    def _internal_sum(self, x):
         sum_ = self.manager.false()
         for el in x:
             el.ref()
