@@ -666,10 +666,6 @@ def test_knowledge_property():
         )
 
         f_term = nl.query((e.a,), e.answer[e.a])
-        # TODO Not working with solve_all()
-        #f_term = nl.solve_all()
 
-    #res = f_term['answer'].as_pandas_dataframe().values
     res = f_term.as_pandas_dataframe().values
     assert (res == [['Chair']]).all()
-
