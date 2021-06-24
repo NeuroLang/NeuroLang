@@ -259,6 +259,36 @@ def test_infinite_walker():
     assert sigma_rep == expected
 
 
+def test_distinguished_variables():
+    project = S_("project")
+    inArea = S_("inArea")
+    hasCollaborator = S_("hasCollaborator")
+    p = S_("p")
+
+    x = S_("x")
+    y = S_("y")
+    z = S_("z")
+    a = S_("a")
+    b = S_("b")
+    db = C_("db")
+
+    sigma = RI_(project(x), hasCollaborator(y, x))
+    q = I_(p(a), hasCollaborator(a, b) & inArea(b))
+
+    qB = EB_((q,))
+
+    dt = DatalogTranslator()
+    qB = dt.walk(qB)
+
+    sigmaB = _categorize_constraints([sigma])
+
+    orw = OntologyRewriter(qB, sigmaB)
+    rewrite = orw.Xrewrite()
+
+    assert len(rewrite) == 1
+    imp1 = rewrite.pop()
+    assert imp1 == qB.formulas[0]
+
 def test_empty_rewrite():
     owl = '''<?xml version="1.0"?>
     <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
