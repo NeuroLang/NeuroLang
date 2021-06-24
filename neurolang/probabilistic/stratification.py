@@ -143,6 +143,10 @@ def _get_program_deterministic_symbols(program):
             formula.consequent.functor
             for formula in program.constraints().formulas
         )
+
+        det_symbs |= set(
+            rule.functor for rule in program.existential_rules.keys()
+        )
     return det_symbs
 
 

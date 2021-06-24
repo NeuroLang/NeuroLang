@@ -428,8 +428,12 @@ def dependency_matrix(datalog, rules=None, instance=None):
             formula.consequent.functor
             for formula in datalog.constraints().formulas
         )
+        existential_symbols = set(
+            rule.functor for rule in datalog.existential_rules.keys()
+        )
     else:
         constraint_symbols = set()
+        existential_symbols = set()
 
     dependency_matrix = np.zeros(
         (len(idb_symbols), len(idb_symbols)), dtype=int
@@ -441,7 +445,10 @@ def dependency_matrix(datalog, rules=None, instance=None):
         ix_head = idb_symbols.index(head_functor)
         for predicate in extract_logic_atoms(rule.antecedent):
             functor = predicate.functor
-            if functor in edb or functor in constraint_symbols:
+            if (
+                functor in edb or functor in constraint_symbols
+                or functor in existential_symbols
+            ):
                 continue
             elif functor in idb_symbols:
                 ix_functor = idb_symbols.index(functor)
