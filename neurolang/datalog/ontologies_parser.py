@@ -313,9 +313,9 @@ class OntologyParser:
         entity = Symbol(self._parse_name(entity))
         for value in nodes:
             value = self._parse_name(value)
-            constraints.append(RightImplication(support_prop(x, y), Symbol(value)(y)))
+            constraints.append(RightImplication(Symbol(value)(y), support_prop(x, y)))
         prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
-        exists_imp = RightImplication(entity(x), support_prop(x, y))
+        exists_imp = RightImplication(support_prop(x, y), entity(x))
 
         constraints.append(exists_imp)
         constraints.append(prop_imp)
