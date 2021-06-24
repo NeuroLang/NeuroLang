@@ -7,7 +7,7 @@ sets and has support for constraints.
 """
 
 from ..expression_walker import ExpressionWalker, add_match
-from ..logic import LogicOperator, NaryLogicOperator, Union
+from ..logic import LogicOperator, NaryLogicOperator, Union, Symbol
 from .basic_representation import DatalogProgram
 
 
@@ -40,15 +40,16 @@ class DatalogConstraintsMixin(ExpressionWalker):
 
     @add_match(LogicOperator)
     def add_logic_constraint(self, expression):
+        sym_constraints = Symbol("__constraints__")
         if (
             isinstance(expression, RightImplication)
-            and "__constraints__" in self.symbol_table
+            and sym_constraints in self.symbol_table
         ):
-            constrains = self.symbol_table["__constraints__"]
+            constrains = self.symbol_table[sym_constraints]
             constrains = Union((constrains.formulas + (expression,)))
-            self.symbol_table["__constraints__"] = constrains
+            self.symbol_table[sym_constraints] = constrains
         elif isinstance(expression, RightImplication):
-            self.symbol_table["__constraints__"] = Union((expression,))
+            self.symbol_table[sym_constraints] = Union((expression,))
 
     def constraints(self):
         '''Function that returns the constraints contained
@@ -58,7 +59,8 @@ class DatalogConstraintsMixin(ExpressionWalker):
         -------
         Union of formulas containing all constraints loaded into the program.
         '''
-        return self.symbol_table.get("__constraints__", Union(()))
+        sym_constraints = Symbol("__constraints__")
+        return self.symbol_table.get(sym_constraints, Union(()))
 
     def set_constraints(self, categorized_constraints):
         '''This function receives a dictionary with the contraints organized
@@ -74,9 +76,10 @@ class DatalogConstraintsMixin(ExpressionWalker):
             and the values are lists of contraints with
             each rule associated to the corresponding functor.
         '''
+        sym_constraints = Symbol("__constraints__")
         if isinstance(categorized_constraints, dict):
             cons = [b for a in list(categorized_constraints.values()) for b in a]
-            self.symbol_table["__constraints__"] = Union(cons)
+            self.symbol_table[sym_constraints] = Union(cons)
 
             self.categorized_constraints = categorized_constraints
 
@@ -89,8 +92,9 @@ class DatalogConstraintsMixin(ExpressionWalker):
         Dictionary containing all constraints loaded in the datalog program,
         indexed according to the functor of the rule consequent.
         '''
+        sym_constraints = Symbol("__constraints__")
         if not self.categorized_constraints:
-            constraints = self.symbol_table.get("__constraints__", Union(()))
+            constraints = self.symbol_table.get(sym_constraints, Union(()))
             for f in constraints.formulas:
                 self._categorize_constraints(f)
 

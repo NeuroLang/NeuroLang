@@ -346,7 +346,8 @@ class OntologyParser:
         conj = Conjunction((ant(x), onProp(x, y)))
         for value in nodes:
             value = self._parse_name(value)
-            constraints.append(Implication(Symbol(value)(y), conj))
+            # constraints.append(Implication(Symbol(value)(y), conj))
+            constraints.append(RightImplication(conj, Symbol(value)(y)))
 
         return constraints
 
@@ -370,7 +371,8 @@ class OntologyParser:
         ent = Symbol(self._parse_name(entity))
         onProp = Symbol(self._parse_name(prop))
         value = self._parse_name(nodes[0])
-        return [Implication(Symbol(onProp)(x, Constant(value)), Symbol(ent)(x))]
+        #return [Implication(Symbol(onProp)(x, Constant(value)), Symbol(ent)(x))]
+        return [RightImplication(Symbol(ent)(x), Symbol(onProp)(x, Constant(value)))]
 
     def _solve_BNode(self, initial_node):
         '''Once a BNode is identified, this function iterates over each of the pointers
