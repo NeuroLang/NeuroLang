@@ -34,6 +34,9 @@ class OntologyRewriter:
             Q_temp = Q_rew.copy()
             for q in Q_temp:
                 q0 = q[0]
+                if q0 in Q_explored:
+                    Q_rew.remove(q)
+                    continue
                 selected_sigmas = self._get_related_sigmas(
                     q0, self.union_of_constraints
                 )
@@ -67,8 +70,7 @@ class OntologyRewriter:
         return new_sigmas
 
     def rewriting_step(self, q0, sigma, rename_count):
-        body_q = q0.antecedent
-        S_applicable = self._get_applicable(sigma, body_q)
+        S_applicable = self._get_applicable(sigma, q0)
         list_q0 = []
         for S in S_applicable:
             rename_count += 1
@@ -168,7 +170,7 @@ class OntologyRewriter:
             return any(arg == free_var and i != pos for i, arg in enumerate(q.args))
 
     def _get_applicable(self, sigma, q):
-        S = self._get_term(q, sigma.consequent)
+        S = self._get_term(q.antecedent, sigma.consequent)
         if self._is_applicable(sigma, q, S):
             return S
 
@@ -214,10 +216,15 @@ class OntologyRewriter:
 
     def _position_shared_or_constant(self, q, S, positions):
         return any(
-            isinstance(term.args[pos], Constant) or self._is_shared(term.args[pos], q)
-            for pos in positions
-            for term in S
+            isinstance(term.args[pos], Constant) or self._is_shared(term.args[pos], q.antecedent)
+            or self._is_distinguished(term.args[pos], q) for pos in positions for term in S
         )
+
+    def _is_distinguished(self, var, q):
+        if var in q.consequent.args:
+            return True
+
+        return False
 
     def _is_shared(self, a, q):
         if isinstance(q, NaryLogicOperator):
