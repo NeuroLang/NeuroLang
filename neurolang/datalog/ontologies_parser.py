@@ -318,9 +318,11 @@ class OntologyParser:
             value = self._parse_name(value)
             ext_rule = RightImplication(entity(x), support_prop(x, y))
             constraints.append(ext_rule)
-            self.existential_rules[entity(x)] = ext_rule
+            self._add_existential_rule(entity(x), ext_rule)
         prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
         exists_imp = RightImplication(support_prop(x, y), Symbol(value)(y))
+        # prop_imp = Implication(onProp(x, y), support_prop(x, y))
+        # exists_imp = Implication(Symbol(value)(y), support_prop(x, y))
 
         constraints.append(exists_imp)
         constraints.append(prop_imp)
@@ -499,3 +501,11 @@ class OntologyParser:
                     self.parsed_rules[sigma_functor] = cons_set
                 else:
                     self.parsed_rules[sigma_functor] = set([sigma])
+
+    def _add_existential_rule(self, entity, rule):
+        if entity not in self.existential_rules:
+            self.existential_rules[entity] = [rule]
+        else:
+            rules = self.existential_rules[entity]
+            rules.append(rule)
+            self.existential_rules[entity] = rules
