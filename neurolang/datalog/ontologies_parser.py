@@ -26,6 +26,8 @@ class OntologyParser:
 
         self.parsed_constraints = {}
         self.estructural_knowledge = {}
+        self.parsed_rules = {}
+        self.existential_rules = {}
 
     def _load_ontology(self, paths, load_format):
         rdfGraph = rdflib.Graph()
@@ -49,7 +51,7 @@ class OntologyParser:
         self._parse_classes()
         self._parse_related_individuals()
 
-        return self.parsed_constraints, self.estructural_knowledge
+        return self.parsed_constraints, self.parsed_rules, self.estructural_knowledge
 
     def _parse_classes(self):
         '''This method obtains all the classes present in the ontology and
@@ -168,7 +170,8 @@ class OntologyParser:
             ant = Symbol(self._parse_name(entity))
             cons = Symbol(self._parse_name(val))
             x = Symbol.fresh()
-            imp = RightImplication(ant(x), cons(x))
+            #imp = RightImplication(ant(x), cons(x))
+            imp = Implication(cons(x), ant(x))
             self._categorize_constraints([imp])
 
             neurolang_subclassof = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+'subClassOf')
@@ -343,9 +346,13 @@ class OntologyParser:
         entity = Symbol(self._parse_name(entity))
         for value in nodes:
             value = self._parse_name(value)
-            constraints.append(RightImplication(entity(x), support_prop(x, y)))
+            ext_rule = RightImplication(entity(x), support_prop(x, y))
+            constraints.append(ext_rule)
+            self._add_existential_rule(entity(x), ext_rule)
         prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
         exists_imp = RightImplication(support_prop(x, y), Symbol(value)(y))
+        # prop_imp = Implication(onProp(x, y), support_prop(x, y))
+        # exists_imp = Implication(Symbol(value)(y), support_prop(x, y))
 
         constraints.append(exists_imp)
         constraints.append(prop_imp)
@@ -376,7 +383,8 @@ class OntologyParser:
         conj = Conjunction((ant(x), onProp(x, y)))
         for value in nodes:
             value = self._parse_name(value)
-            constraints.append(RightImplication(conj, Symbol(value)(y)))
+            constraints.append(Implication(Symbol(value)(y), conj))
+            # constraints.append(RightImplication(conj, Symbol(value)(y)))
 
         return constraints
 
@@ -400,7 +408,8 @@ class OntologyParser:
         ent = Symbol(self._parse_name(entity))
         onProp = Symbol(self._parse_name(prop))
         value = self._parse_name(nodes[0])
-        return [RightImplication(Symbol(ent)(x), Symbol(onProp)(x, Constant(value)))]
+        return [Implication(Symbol(onProp)(x, Constant(value)), Symbol(ent)(x))]
+        #return [RightImplication(Symbol(ent)(x), Symbol(onProp)(x, Constant(value)))]
 
     def _solve_BNode(self, initial_node):
         '''Once a BNode is identified, this function iterates over each of the pointers
@@ -490,7 +499,8 @@ class OntologyParser:
         label = Symbol(self._parse_name(prop))
         con = label(x, entity_name)
 
-        self._categorize_constraints([RightImplication(ant, con)])
+        #self._categorize_constraints([RightImplication(ant, con)])
+        self._categorize_constraints([Implication(con, ant)])
 
         prop_name = label.name.split(':')[-1]
         neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)
@@ -521,13 +531,23 @@ class OntologyParser:
 
     def _categorize_constraints(self, formulas):
         for sigma in formulas:
-            sigma_functor = sigma.consequent.functor.name
-            if sigma_functor in self.parsed_constraints:
-                cons_set = self.parsed_constraints[sigma_functor]
-                cons_set.add(sigma)
-                self.parsed_constraints[sigma_functor] = cons_set
+            if isinstance(sigma, RightImplication):
+                sigma_functor = sigma.consequent.functor.name
+                if sigma_functor in self.parsed_constraints:
+                    cons_set = self.parsed_constraints[sigma_functor]
+                    cons_set.add(sigma)
+                    self.parsed_constraints[sigma_functor] = cons_set
+                else:
+                    self.parsed_constraints[sigma_functor] = set([sigma])
+
             else:
-                self.parsed_constraints[sigma_functor] = set([sigma])
+                sigma_functor = Symbol(sigma.consequent.functor.name)
+                if sigma_functor in self.parsed_rules:
+                    cons_set = self.parsed_rules[sigma_functor]
+                    cons_set.add(sigma)
+                    self.parsed_rules[sigma_functor] = cons_set
+                else:
+                    self.parsed_rules[sigma_functor] = set([sigma])
 
     def _categorize_structural_knowledge(self, formulas):
         for sigma in formulas:
@@ -538,3 +558,12 @@ class OntologyParser:
                 self.estructural_knowledge[sigma_functor] = cons_set
             else:
                 self.estructural_knowledge[sigma_functor] = set([sigma])
+
+
+    def _add_existential_rule(self, entity, rule):
+        if entity not in self.existential_rules:
+            self.existential_rules[entity] = [rule]
+        else:
+            rules = self.existential_rules[entity]
+            rules.append(rule)
+            self.existential_rules[entity] = rules

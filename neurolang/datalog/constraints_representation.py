@@ -32,6 +32,7 @@ class RightImplication(LogicOperator):
 class DatalogConstraintsMixin(ExpressionWalker):
     protected_keywords = {"__constraints__"}
     categorized_constraints = {}
+    existential_rules = {}
 
     @add_match(NaryLogicOperator)
     def add_nary_constraint(self, expression):
@@ -99,6 +100,9 @@ class DatalogConstraintsMixin(ExpressionWalker):
                 self._categorize_constraints(f)
 
         return self.categorized_constraints
+
+    def add_existential_rules(self, rules):
+        self.existential_rules = rules
 
     def _categorize_constraints(self, sigma):
         '''Function in charge of sorting the constraints in a dictionary

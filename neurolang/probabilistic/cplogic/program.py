@@ -68,7 +68,7 @@ class CPLogicMixin(PatternWalker):
         return {
             pred_symb: union.formulas[0]
             for pred_symb, union in self.intensional_database().items()
-            if len(union.formulas) == 1
+            if not isinstance(union, Constant) and len(union.formulas) == 1
             and is_within_language_prob_query(union.formulas[0])
         }
 
