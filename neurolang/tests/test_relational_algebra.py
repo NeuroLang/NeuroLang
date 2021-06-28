@@ -9,7 +9,6 @@ from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..relational_algebra import (
-    AggregateFunctionListMember,
     EVAL_OP_TO_STR,
     ColumnInt,
     ColumnStr,
@@ -18,7 +17,7 @@ from ..relational_algebra import (
     EliminateTrivialProjections,
     EquiJoin,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     GroupByAggregation,
     Intersection,
     NameColumns,
@@ -529,7 +528,7 @@ def test_extended_projection_divide_columns():
         )
     )
     dst_column = Constant(ColumnStr('z'))
-    proj = ExtendedProjectionListMember(
+    proj = FunctionApplicationListMember(
         Constant(ColumnStr('y')) / Constant(ColumnStr('x')),
         dst_column
     )
@@ -554,10 +553,10 @@ def test_extended_projection_lambda_function():
     extended_proj_op = ExtendedProjection(
         relation,
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(lambda_fun), Constant(ColumnStr("z"))
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(RelationalAlgebraStringExpression("x")),
                 Constant(ColumnStr("pomme_de_terre"))
             )
@@ -583,7 +582,7 @@ def test_extended_projection_numeric_named_columns():
     extended_proj_op = ExtendedProjection(
         relation,
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(ColumnInt(1)),
                 Constant(ColumnStr("pomme_de_terre"))
             ),
@@ -612,7 +611,7 @@ def test_extended_projection_other_relation_length():
             columns=("hello",), iterable=[(i,) for i in range(length)]
         )
     )
-    proj = ExtendedProjectionListMember(
+    proj = FunctionApplicationListMember(
         Constant(ColumnStr("y")) / Constant(len)(r2), Constant(ColumnStr("y"))
     )
     extended_proj_op = ExtendedProjection(r1, (proj, ))
@@ -637,7 +636,7 @@ def test_groupby_aggregate_sum():
         relation,
         (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
         [
-            AggregateFunctionListMember(
+            FunctionApplicationListMember(
                 FunctionApplication(Constant(sum), ("z",), verify_type=False),
                 Constant(ColumnStr("z_sum")),
             )
@@ -665,7 +664,7 @@ def test_groupby_aggregate_lambda():
         relation,
         (Constant(ColumnStr("x")), Constant(ColumnStr("z"))),
         [
-            AggregateFunctionListMember(
+            FunctionApplicationListMember(
                 FunctionApplication(
                     Constant(custom_lambda), ("y"), verify_type=False
                 ),
@@ -941,11 +940,11 @@ def test_numpy_log():
         )
     )
     projlist = (
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             fun_exp=Constant(RelationalAlgebraStringExpression("x")),
             dst_column=Constant(ColumnStr("x")),
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             fun_exp=Constant(numpy.log)(Constant(ColumnStr("y"))),
             dst_column=Constant(ColumnStr("z")),
         ),

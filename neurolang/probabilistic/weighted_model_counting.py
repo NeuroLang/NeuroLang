@@ -34,7 +34,7 @@ from ..logic.expression_processing import (
 from ..relational_algebra import (
     ColumnStr,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NameColumns,
     Projection,
     RelationalAlgebraPushInSelections,
@@ -404,7 +404,7 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
         rap_column = str2columnstr_constant(Symbol.fresh().name)
         projection_list = [
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant[RelationalAlgebraStringExpression](
                     RelationalAlgebraStringExpression(c.value),
                     verify_type=False
@@ -422,7 +422,7 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             ExtendedProjection(
                 relation,
                 projection_list + [
-                    ExtendedProjectionListMember(
+                    FunctionApplicationListMember(
                         deterministic_tag_function,
                         rap_column
                     )
@@ -463,7 +463,7 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
             rap_column = str2columnstr_constant(Symbol.fresh().name)
             projection_list = [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     Constant[RelationalAlgebraStringExpression](
                         RelationalAlgebraStringExpression(c.value),
                         verify_type=False
@@ -481,7 +481,7 @@ class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                 ExtendedProjection(
                     relation,
                     projection_list + [
-                        ExtendedProjectionListMember(
+                        FunctionApplicationListMember(
                             probfact_tag_function,
                             rap_column
                         )

@@ -15,14 +15,13 @@ from .expressions import (
     sure_is_not_pattern
 )
 from .relational_algebra import (
-    AggregateFunctionListMember,
     Column,
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
     EquiJoin,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     Difference,
     GroupByAggregation,
     LeftNaturalJoin,
@@ -215,7 +214,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
         # aggregate the provenance column grouped by the projection columns
         aggregate_functions = [
-            AggregateFunctionListMember(
+            FunctionApplicationListMember(
                 FunctionApplication(
                     Constant(sum),
                     (prov_col,),
@@ -290,7 +289,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             )
         )
         new_proj_list = extended_proj.projection_list + (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 fun_exp=new_prov_col, dst_column=new_prov_col
             ),
         )
@@ -341,7 +340,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=MUL(
                         tmp_left_prov_col,
                         SUB(
@@ -353,7 +352,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 ),
             )
             + tuple(
-                ExtendedProjectionListMember(fun_exp=col, dst_column=col)
+                FunctionApplicationListMember(fun_exp=col, dst_column=col)
                 for col in set(res_columns) - {res_prov_col}
             ),
         )
@@ -423,13 +422,13 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=prov_binary_op(tmp_left_col, tmp_right_col),
                     dst_column=res_prov_col,
                 ),
             )
             + tuple(
-                ExtendedProjectionListMember(fun_exp=col, dst_column=col)
+                FunctionApplicationListMember(fun_exp=col, dst_column=col)
                 for col in set(res_columns) - {res_prov_col}
             ),
         )
@@ -493,7 +492,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         rap_right_pc = str2columnstr_constant(rap_right.provenance_column)
 
         cols_to_keep = [
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant(c), str2columnstr_constant(c)
             )
             for c in (rap_left.relations.columns + rap_right.relations.columns)
@@ -516,7 +515,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
                 rap_right_r
             ),
             cols_to_keep + [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     self._semiring_mul(
                         str2columnstr_constant(rap_left.provenance_column),
                         rap_right_pc
@@ -601,7 +600,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             return projection.relation
 
         aggregate_functions = [
-            AggregateFunctionListMember(
+            FunctionApplicationListMember(
                 self._semiring_agg_sum(
                     (projection.relation.provenance_column,)
                 ),
@@ -752,7 +751,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=MUL(
                         tmp_left_prov_col,
                         SUB(Constant(1), isnan(tmp_right_prov_col)),
@@ -761,7 +760,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
                 ),
             )
             + tuple(
-                ExtendedProjectionListMember(fun_exp=col, dst_column=col)
+                FunctionApplicationListMember(fun_exp=col, dst_column=col)
                 for col in set(res_columns) - {res_prov_col}
             ),
         )

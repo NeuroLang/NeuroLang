@@ -246,7 +246,7 @@ class GroupByAggregation(RelationalAlgebraOperation):
         Relation on which the groupby is applied.
     groupby : List[`Constant[ColumnStr]` or `Symbol[ColumnStr]`]
         The list of columns on which to group
-    aggregate_functions : Tuple[AggregateFunctionListMember]
+    aggregate_functions : Tuple[FunctionApplicationListMember]
         List of aggregate functions to apply.
 
     """
@@ -266,26 +266,6 @@ class GroupByAggregation(RelationalAlgebraOperation):
         )
 
 
-class AggregateFunctionListMember(Definition):
-    """
-    Member of a groupby aggregate function list.
-
-    Attributes
-    ----------
-    fun_exp : `FunctionApplication`
-        FunctionApplication representation of the aggregate function operation.
-    dst_column : `Constant[ColumnStr]` or `Symbol[ColumnStr]`
-        Constant column string of the destination column.
-    """
-
-    def __init__(self, fun_exp, dst_column):
-        self.fun_exp = fun_exp
-        self.dst_column = dst_column
-
-    def __repr__(self):
-        return "{}({})".format(repr(self.fun_exp), self.dst_column)
-
-
 class ExtendedProjection(RelationalAlgebraOperation):
     """
     General operation defining string-based relational algebra projections
@@ -295,7 +275,7 @@ class ExtendedProjection(RelationalAlgebraOperation):
     ----------
     relation : Expression[AbstractSet]
         Relation on which the projections are applied.
-    projection_list : Tuple[ExtendedProjectionListMember]
+    projection_list : Tuple[FunctionApplicationListMember]
         List of projections to apply.
 
     Notes
@@ -336,20 +316,25 @@ class ExtendedProjection(RelationalAlgebraOperation):
         )
 
 
-class ExtendedProjectionListMember(Definition):
+class FunctionApplicationListMember(Definition):
     """
-    Member of a projection list.
+    Representation of a function application to a column. Can be used to
+    represent either the application of an extended projection, or the
+    application of an aggregate function, to a column.
+    
 
     Attributes
     ----------
-    fun_exp : `Constant[str]`
-        Constant string representation of the extended projection operation.
+    fun_exp : `Union[Constant[str], FunctionApplication]`
+        Constant string representation of an extended projection operation,
+        or `FunctionApplication` representation of an aggregate function.
     dst_column : `Constant[ColumnStr]` or `Symbol[ColumnStr]`
         Constant column string of the destination column.
 
     Notes
     -----
-    As described in [1]_, a projection list member can either be
+    In the case of an extended projection operation, as described in [1]_,
+    a function application list member can either be
         - a single attribute (column) name in the relation, resulting in a
           normal non-extended projection,
         - an expression `x -> y` where `x` and `y` are both attribute (column)
@@ -775,12 +760,12 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                 column, auto_infer_type=False, verify_type=False
             )
             ext_proj_list_members.append(
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=cst_column, dst_column=cst_column,
                 )
             )
         ext_proj_list_members.append(
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 fun_exp=new_column_value, dst_column=new_column
             )
         )
