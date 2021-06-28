@@ -248,7 +248,7 @@ class WrongArgumentsInPredicateError(NeuroLangException):
 
 class TranslateToNamedRAException(NeuroLangException):
     """
-    Base class for `tranlate_to_named_ra.py`.
+    Base exception for errors translating Datalog to Named Relational Algebra.
     """
 
     pass
