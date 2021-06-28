@@ -138,6 +138,17 @@ def test_flatten_with_2nd_level_disjunction():
 
 
 def test_flatten_recursive():
+    """
+    Note: for some unknown reason, pytest sets the recursionlimit to 10000
+    when running the tests, which is causing some issues 
+    (`Segmentation fault`) when the flatten_query function raises a 
+    RecursionError as is the case in this test.
+    To avoid that, we set the recursionlimit to 1000 (the default value
+    in python) manually for this test.
+    """
+    import sys
+    sys.setrecursionlimit(1000)
+
     code = Union(
         (
             Implication(R(x, y), Conjunction((Z(y), Z(x)))),
