@@ -9,7 +9,7 @@ from ...logic import Conjunction, Implication, Union
 from ...relational_algebra import (
     ColumnStr,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     RenameColumn,
     str2columnstr_constant,
@@ -812,13 +812,13 @@ def test_probsemiring_extended_proj():
         ColumnStr("_p_"),
     )
     proj_list = [
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             str2columnstr_constant("x"), str2columnstr_constant("x")
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             str2columnstr_constant("y"), str2columnstr_constant("y")
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             Constant("d"), str2columnstr_constant("z")
         ),
     ]
@@ -852,10 +852,10 @@ def test_probsemiring_forbidden_extended_proj_missing_nonprov_cols():
         ColumnStr("_p_"),
     )
     proj_list = [
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             str2columnstr_constant("x"), str2columnstr_constant("x")
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             Constant("d"), str2columnstr_constant("z")
         ),
     ]
@@ -878,13 +878,13 @@ def test_probsemiring_forbidden_extended_proj_on_provcol():
         ColumnStr("_p_"),
     )
     proj_list = [
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             str2columnstr_constant("x"), str2columnstr_constant("x")
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             str2columnstr_constant("y"), str2columnstr_constant("y")
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             Constant("d"), str2columnstr_constant("_p_")
         ),
     ]

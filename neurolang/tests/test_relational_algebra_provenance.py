@@ -23,7 +23,7 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import (
     ConcatenateConstantColumn,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NaturalJoinInverse,
     Projection,
     ProvenanceAlgebraSet,
@@ -135,7 +135,7 @@ def test_naturaljoin():
         ProvenanceAlgebraSet(RnjR, ColumnStr("__provenance__1")),
         tuple(
             [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=Constant(ColumnStr("__provenance__1"))
                     * Constant(ColumnStr("__provenance__2")),
                     dst_column=Constant(ColumnStr("__provenance__")),
@@ -216,7 +216,7 @@ def test_product():
         ProvenanceAlgebraSet(RnjR, ColumnStr("__provenance__1")),
         tuple(
             [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=Constant(ColumnStr("__provenance__1"))
                     * Constant(ColumnStr("__provenance__2")),
                     dst_column=Constant(ColumnStr("__provenance__")),
@@ -378,7 +378,7 @@ def test_extended_projection():
         relation,
         tuple(
             [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=Constant(ColumnStr("x"))
                     + Constant(ColumnStr("y")),
                     dst_column=Constant(ColumnStr("sum")),
