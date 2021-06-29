@@ -217,7 +217,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             FunctionApplicationListMember(
                 FunctionApplication(
                     Constant(sum),
-                    (prov_col,),
+                    (str2columnstr_constant(prov_col),),
                     validate_arguments=False,
                     verify_type=False,
                 ),
@@ -602,7 +602,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         aggregate_functions = [
             FunctionApplicationListMember(
                 self._semiring_agg_sum(
-                    (projection.relation.provenance_column,)
+                    (str2columnstr_constant(projection.relation.provenance_column),)
                 ),
                 str2columnstr_constant(projection.relation.provenance_column),
             )

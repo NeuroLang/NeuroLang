@@ -244,7 +244,7 @@ class GroupByAggregation(RelationalAlgebraOperation):
     ----------
     relation : Expression[AbstractSet]
         Relation on which the groupby is applied.
-    groupby : `List[Union[Constant[ColumnStr], Symbol[ColumnStr]]]`
+    groupby : `Tuple[Union[Constant[ColumnStr], Symbol[ColumnStr]]]`
         The list of columns on which to group.
     aggregate_functions : Tuple[FunctionApplicationListMember]
         List of aggregate functions to apply.
@@ -806,11 +806,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         groupby = (c.value for c in agg_op.groupby)
         aggregate_functions = []
         for member in agg_op.aggregate_functions:
-            fun_args = (
-                member.fun_exp.args
-                if len(member.fun_exp.args) > 1
-                else member.fun_exp.args[0]
-            )
+            fun_args = [arg.value for arg in member.fun_exp.args]
+            if len(fun_args) == 1:
+                fun_args = fun_args[0]
             aggregate_functions.append(
                 (
                     member.dst_column.value,

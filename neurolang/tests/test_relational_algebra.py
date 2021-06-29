@@ -637,7 +637,7 @@ def test_groupby_aggregate_sum():
         (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
         [
             FunctionApplicationListMember(
-                FunctionApplication(Constant(sum), ("z",), verify_type=False),
+                FunctionApplication(Constant(sum), (Constant(ColumnStr("z")),), verify_type=False),
                 Constant(ColumnStr("z_sum")),
             )
         ],
@@ -666,7 +666,7 @@ def test_groupby_aggregate_lambda():
         [
             FunctionApplicationListMember(
                 FunctionApplication(
-                    Constant(custom_lambda), ("y"), verify_type=False
+                    Constant(custom_lambda), (Constant(ColumnStr("y")),), verify_type=False
                 ),
                 Constant(ColumnStr("y_min")),
             )
