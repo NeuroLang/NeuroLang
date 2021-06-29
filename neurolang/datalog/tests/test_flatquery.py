@@ -16,6 +16,26 @@ from ...logic import (
 from ..basic_representation import DatalogProgram
 from ..expression_processing import extract_logic_predicates, flatten_query
 
+
+@pytest.fixture
+def recursion_limit():
+    """
+    For some unknown reason, pytest sets the recursionlimit to 10000
+    when running the tests, which is causing some issues
+    (`Segmentation fault`) when the flatten_query function raises a
+    RecursionError as is the case in `test_flatten_recursive`.
+    To avoid issues, we set the recursionlimit to 1000 (the default value
+    in python) with this fixture.
+    """
+    import sys
+
+    previous_limit = sys.getrecursionlimit()
+    recursion_limit = 1000
+    sys.setrecursionlimit(recursion_limit)
+    yield recursion_limit
+    sys.setrecursionlimit(previous_limit)
+
+
 EQ = Constant(operator.eq)
 
 P = Symbol("P")
@@ -137,18 +157,7 @@ def test_flatten_with_2nd_level_disjunction():
     assert Z(z) == result.formulas[0] or Z(z) == result.formulas[1]
 
 
-def test_flatten_recursive():
-    """
-    Note: for some unknown reason, pytest sets the recursionlimit to 10000
-    when running the tests, which is causing some issues 
-    (`Segmentation fault`) when the flatten_query function raises a 
-    RecursionError as is the case in this test.
-    To avoid that, we set the recursionlimit to 1000 (the default value
-    in python) manually for this test.
-    """
-    import sys
-    sys.setrecursionlimit(1000)
-
+def test_flatten_recursive(recursion_limit):
     code = Union(
         (
             Implication(R(x, y), Conjunction((Z(y), Z(x)))),
