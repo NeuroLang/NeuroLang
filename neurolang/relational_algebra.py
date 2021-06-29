@@ -244,8 +244,8 @@ class GroupByAggregation(RelationalAlgebraOperation):
     ----------
     relation : Expression[AbstractSet]
         Relation on which the groupby is applied.
-    groupby : List[`Constant[ColumnStr]` or `Symbol[ColumnStr]`]
-        The list of columns on which to group
+    groupby : `List[Union[Constant[ColumnStr], Symbol[ColumnStr]]]`
+        The list of columns on which to group.
     aggregate_functions : Tuple[FunctionApplicationListMember]
         List of aggregate functions to apply.
 
@@ -321,7 +321,7 @@ class FunctionApplicationListMember(Definition):
     Representation of a function application to a column. Can be used to
     represent either the application of an extended projection, or the
     application of an aggregate function, to a column.
-    
+
 
     Attributes
     ----------
