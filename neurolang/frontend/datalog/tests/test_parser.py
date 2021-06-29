@@ -1,5 +1,5 @@
 from neurolang.logic import ExistentialPredicate
-from operator import add, eq, mul, pow, sub, truediv
+from operator import add, eq, lt, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....probabilistic.expressions import Condition, ProbabilisticPredicate
@@ -198,6 +198,31 @@ def test_probabilistic_fact():
             Constant(True)
         ),
     ))
+
+    exp = Symbol("exp")
+    d = Symbol("d")
+    x = Symbol("x")
+    B = Symbol("B")
+    res = parser("exp((-1 * d) / 5.0) :: B(x) :- A(x, d) & (d < 0.8)")
+    expected = Union(
+        (
+            Implication(
+                ProbabilisticPredicate(
+                    FunctionApplication(
+                        exp,
+                        (
+                            Constant(truediv)(
+                                Constant(mul)(Constant(-1), d), Constant(5.0)
+                            ),
+                        ),
+                    ),
+                    B(x),
+                ),
+                Conjunction((A(x, d), Constant(lt)(d, Constant(0.8)))),
+            ),
+        )
+    )
+    assert res == expected
 
 
 def test_condition():
