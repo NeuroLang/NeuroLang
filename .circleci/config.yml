@@ -5,28 +5,6 @@
 version: 2.1
 
 commands:
-  setup_miniconda:
-    description: "download and setup miniconda"
-    steps:
-      - run:
-          name: setup miniconda
-          command: |
-            MINICONDA_PATH=$HOME/miniconda
-            # Install dependencies with miniconda
-            wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-              -O miniconda.sh
-            chmod +x miniconda.sh && ./miniconda.sh -b -p $MINICONDA_PATH
-            # set env variables
-            echo 'export MINICONDA_PATH=$HOME/miniconda' >> $BASH_ENV
-            echo 'export PATH=$MINICONDA_PATH/bin:$PATH' >> $BASH_ENV
-      
-      - run:
-          name: create env
-          command: |
-            conda create -n testenv --yes --quiet \
-              python="${PYTHON_VERSION:-*}" \
-              maven
-
   install:
     description: "Installs the necessary packages"
     steps:
@@ -38,10 +16,17 @@ commands:
             - v1-dependencies-
 
       - run:
+          name: Install maven
+          command: 'sudo apt update && sudo apt install maven'
+
+      - run:
           name: install dependencies
           command: |
-            source activate testenv
+            python -m venv venv
+            . venv/bin/activate
+            pip install --upgrade pip
 
+            pip install setuptools_scm
             pip install importlib_metadata
             
             python setup.py egg_info
@@ -64,12 +49,13 @@ commands:
       - run:
           name: Setup codacy reporter
           command: |
-            source activate testenv
+            python -m venv venv
+            . venv/bin/activate
             pip install codacy-coverage
 
       - save_cache:
           paths:
-            - ~/miniconda/envs/testenv
+            - ./venv
             - cc-test-reporter
           key: v1-dependencies-{{ checksum "setup.cfg" }}
 
@@ -79,7 +65,7 @@ commands:
       - run:
           name: run tests
           command: |
-            source activate testenv
+            . venv/bin/activate
             export CODACY_PROJECT_TOKEN=3114b2d4ada742608ad962641f1c7e7a
             export CC_TEST_REPORTER_ID=8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
             ./cc-test-reporter before-build
@@ -105,43 +91,37 @@ jobs:
   py36:
     docker:
       - image: circleci/python:3.6
-    environment:
-      - PYTHON_VERSION: 3.6
+
     working_directory: ~/repo
     steps:
       - checkout
-      - setup_miniconda
       - install
       - test
 
   py37:
     docker:
       - image: circleci/python:3.7
-    environment:
-      - PYTHON_VERSION: 3.7
+
     working_directory: ~/repo
 
     steps:
       - checkout
-      - setup_miniconda
       - install
       - test
 
   benchmark:
     docker:
       - image: circleci/python:3.7
-    environment:
-      - PYTHON_VERSION: 3.7
+
     working_directory: ~/repo
 
     steps:
       - checkout
-      - setup_miniconda
       - install
       - run:
           name: Install ASV & run benchmark
           command: |
-            source activate testenv
+            . venv/bin/activate
             asv machine --yes
             if 
               [ "${CIRCLE_BRANCH}" = "master" ]
@@ -166,13 +146,11 @@ jobs:
   docs:
     docker:
       - image: circleci/python:3.7
-    environment:
-      - PYTHON_VERSION: 3.7
+
     working_directory: ~/repo
 
     steps:
       - checkout
-      - setup_miniconda
       - install
       - restore_cache:
           keys:
@@ -183,7 +161,7 @@ jobs:
       - run:
           name: Install extra packages & build documentation
           command: |
-            source activate testenv
+            . venv/bin/activate
             pip install -e .
             cd doc
             make api
@@ -192,7 +170,7 @@ jobs:
 
       - save_cache:
           paths:
-            - ~/miniconda/envs/testenv
+            - ./venv
             - docs/auto_examples
             - docs/_build
           key: v1-docs-{{ .Branch }}--
@@ -211,8 +189,6 @@ jobs:
   deploy_docs:
     docker:
       - image: circleci/python:3.7
-    environment:
-      - PYTHON_VERSION: 3.7
     steps:
       - attach_workspace:
           at: /tmp/build
@@ -294,4 +270,3 @@ workflows:
         #      - benchmark:
         #  requires:
         #    - py37
-
