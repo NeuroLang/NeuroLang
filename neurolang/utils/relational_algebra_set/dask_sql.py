@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from .dask_helpers import (
     DaskContextManager,
     convert_type_to_pandas_dtype,
@@ -283,7 +281,7 @@ class DaskRelationalAlgebraBaseSet:
         query: FromClause,
         row_types: pd.Series = None,
         is_empty: bool = None,
-    ) -> DaskRelationalAlgebraBaseSet:
+    ):
         """
         This method is called to create a new set whenever a relational
         algebra operation is performed on this set.
@@ -301,7 +299,7 @@ class DaskRelationalAlgebraBaseSet:
         Returns
         -------
         DaskRelationalAlgebraBaseSet
-            [description]
+            A new set corresponding to the query
         """
         output = type(self)()
         output._table = query.subquery()
