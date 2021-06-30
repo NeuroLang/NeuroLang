@@ -105,7 +105,8 @@ jobs:
   py36:
     docker:
       - image: circleci/python:3.6
-
+    environment:
+      - PYTHON_VERSION: 3.6
     working_directory: ~/repo
     steps:
       - checkout
@@ -116,7 +117,8 @@ jobs:
   py37:
     docker:
       - image: circleci/python:3.7
-
+    environment:
+      - PYTHON_VERSION: 3.7
     working_directory: ~/repo
 
     steps:
@@ -128,7 +130,8 @@ jobs:
   benchmark:
     docker:
       - image: circleci/python:3.7
-
+    environment:
+      - PYTHON_VERSION: 3.7
     working_directory: ~/repo
 
     steps:
@@ -163,7 +166,8 @@ jobs:
   docs:
     docker:
       - image: circleci/python:3.7
-
+    environment:
+      - PYTHON_VERSION: 3.7
     working_directory: ~/repo
 
     steps:
@@ -207,6 +211,8 @@ jobs:
   deploy_docs:
     docker:
       - image: circleci/python:3.7
+    environment:
+      - PYTHON_VERSION: 3.7
     steps:
       - attach_workspace:
           at: /tmp/build
