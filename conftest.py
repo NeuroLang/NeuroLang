@@ -1,4 +1,19 @@
+"""
+Pytest configuration file.
+
+NOTE: Do not remove the unused dask_sql import !
+
+The dask_sql library uses jpype to start a JVM and access Java objects
+from python. This JVM needs to be started before we import neurolang,
+otherwise it can cause major side-effects which are hard to track. See
+https://github.com/jpype-project/jpype/issues/933 for reference.
+"""
 import pytest
+import dask_sql
+from neurolang import config
+from neurolang.utils.relational_algebra_set.dask_helpers import (
+    DaskContextManager,
+)
 
 
 def pytest_addoption(parser):
@@ -21,7 +36,29 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_slow)
 
 
-@pytest.fixture(autouse=True)
+def pytest_sessionstart(session: pytest.Session):
+    """
+    Hook called after the pytest Session object has been created and
+    before performing collection and entering the run test loop.
+
+    The dask-sql library uses the jpype library which starts a JVM and allows
+    us to use Java classes from Python. But the JVM will trigger a
+    segmentation fault when starting and when interrupting threads and Pythons
+    fault handler can intercept these operations and interpret these as
+    real faults. So we need to disable faulthandlers which pytest starts
+    otherwise we get segmentation faults when running the tests.
+    See (https://jpype.readthedocs.io/en/latest/userguide.html#errors-reported-by-python-fault-handler)
+    """
+    try:
+        import faulthandler
+
+        faulthandler.enable()
+        faulthandler.disable()
+    except:
+        pass
+
+
+@pytest.fixture(autouse=config["RAS"].get("Backend", "pandas") == "dask")
 def clear_dask_context_after_test_module():
     """
     We use only one DaskContextManager for the application and its context gets
@@ -29,10 +66,5 @@ def clear_dask_context_after_test_module():
     the context after each test function.
     """
     yield 0
-    # For some unknown reason importing DaskContextManager at the top of the
-    # file creates an error when running the tests so we import it here instead.
-    from neurolang.utils.relational_algebra_set.dask_helpers import (
-        DaskContextManager,
-    )
 
     DaskContextManager._context = None

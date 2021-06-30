@@ -1,3 +1,12 @@
+from ...utils import config
+if config["RAS"].getboolean("Synchronous", False):
+    import dask
+
+    dask.config.set(scheduler="single-threaded")
+
+from dask_sql import Context
+from dask_sql.mappings import sql_to_python_type
+
 import ast
 import inspect
 import logging
@@ -9,29 +18,15 @@ from collections import namedtuple
 from typing import Type, Union
 
 import numpy as np
-from neurolang.type_system import (
-    Unknown,
-    get_args,
-    infer_type_builtins,
-    typing_callable_from_annotated_function,
-)
+from dask.distributed import Client
+from neurolang.type_system import (Unknown, get_args, infer_type_builtins,
+                                   typing_callable_from_annotated_function)
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import functions
 
 import pandas as pd
 from pandas.api.types import pandas_dtype
 
-from ...utils import config
-
-if config["RAS"].getboolean("Synchronous", False):
-    import dask
-
-    dask.config.set(scheduler="single-threaded")
-
-from dask.distributed import Client
-
-from dask_sql import Context
-from dask_sql.mappings import sql_to_python_type
 
 LOG = logging.getLogger(__name__)
 
