@@ -818,7 +818,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(GroupByAggregation(Constant, ..., ...))
     def aggregate(self, agg_op):
         relation = agg_op.relation
-        groupby = (c.value for c in agg_op.groupby)
+        groupby = list(c.value for c in agg_op.groupby)
         aggregate_functions = []
         for member in agg_op.aggregate_functions:
             fun_args = [arg.value for arg in member.fun_exp.args]
