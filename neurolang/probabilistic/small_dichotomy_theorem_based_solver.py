@@ -83,7 +83,7 @@ def is_hierarchical_without_self_joins(query):
     variables = list(atom_set)
     for i, v in enumerate(variables):
         at_v = atom_set[v]
-        for v2 in variables[i + 1 :]:
+        for v2 in variables[i + 1:]:
             at_v2 = atom_set[v2]
             if not (at_v <= at_v2 or at_v2 <= at_v or at_v.isdisjoint(at_v2)):
                 LOG.info(

@@ -9,7 +9,6 @@ from .exceptions import (
 from .expression_walker import ExpressionWalker, PatternWalker, add_match
 from .expressions import (
     Constant,
-    Expression,
     FunctionApplication,
     Symbol,
     sure_is_not_pattern
@@ -520,13 +519,13 @@ class RelationalAlgebraProvenanceCountingSolver(
         relations = [
             ExtendedProjection(
                 Constant[AbstractSet](relation.relations),
-                (ExtendedProjectionListMember(
+                (FunctionApplicationListMember(
                     weight * str2columnstr_constant(
                         relation.provenance_column
                     ),
                     prov_column
                 ),) + tuple(
-                    ExtendedProjectionListMember(
+                    FunctionApplicationListMember(
                         str2columnstr_constant(c), str2columnstr_constant(c)
                     )
                     for c in relation.non_provenance_columns
@@ -544,11 +543,11 @@ class RelationalAlgebraProvenanceCountingSolver(
         dst_prov_expr = sum(prov_columns[1:], prov_columns[0])
         relation = ExtendedProjection(
             relation,
-            (ExtendedProjectionListMember(
+            (FunctionApplicationListMember(
                 dst_prov_expr,
                 prov_col
             ),) + tuple(
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     str2columnstr_constant(c), str2columnstr_constant(c)
                 )
                 for c in dst_columns

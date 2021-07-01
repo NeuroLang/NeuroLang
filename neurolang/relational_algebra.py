@@ -1,6 +1,6 @@
 import math
 import operator
-from typing import AbstractSet, Callable, Tuple
+from typing import AbstractSet, Tuple
 
 import numpy
 import pandas.core.computation.ops
@@ -84,6 +84,7 @@ class BinaryRelationalAlgebraOperation(RelationalAlgebraOperation):
 class UnaryRelationalAlgebraOperation(RelationalAlgebraOperation):
     pass
 
+
 class Selection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, formula):
         self.relation = relation
@@ -151,7 +152,7 @@ class Product(NAryRelationalAlgebraOperation):
     def __repr__(self):
         return (
             "["
-            + f"\N{n-ary times operator}".join(repr(r) for r in self.relations)
+            + "\N{n-ary times operator}".join(repr(r) for r in self.relations)
             + "]"
         )
 
@@ -236,7 +237,7 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
 
     def __repr__(self):
         return (
-            f"\N{GREEK SMALL LETTER DELTA}"
+            "\N{GREEK SMALL LETTER DELTA}"
             + "_({})".format(
                 ", ".join(
                     "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)
@@ -440,6 +441,7 @@ OPERATOR_STRING = {
     operator.le: "<=",
     operator.pow: "**",
 }
+
 
 def _get_evaluatable_operations_and_string_translations():
     """
