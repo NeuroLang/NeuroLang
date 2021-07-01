@@ -13,7 +13,7 @@ import typing
 
 import numpy
 
-from ..exceptions import ForbiddenUnstratifiedAggregation, NeuroLangException
+from ..exceptions import ForbiddenUnstratifiedAggregation, NeuroLangException, NotConjunctiveExpressionNestedPredicates
 from ..expression_walker import (
     FunctionApplicationToPythonLambda,
     PatternWalker,
@@ -139,7 +139,7 @@ class DatalogWithAggregationMixin(PatternWalker):
             )
 
         if not is_conjunctive_expression_with_nested_predicates(antecedent):
-            raise NeuroLangException(
+            raise NotConjunctiveExpressionNestedPredicates(
                 f'Expression {antecedent} is not conjunctive'
             )
 
