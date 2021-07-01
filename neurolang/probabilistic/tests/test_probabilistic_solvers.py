@@ -727,7 +727,7 @@ def test_repeated_variable_with_constant_in_head(solver):
 
 def test_empty_result_program(solver):
     if solver is weighted_model_counting:
-        pytest.skip()
+        pytest.xfail("WMC issue to be resolved")
     rule = Implication(R(Constant(2), Constant(3)), Conjunction((Q(x),)))
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
@@ -743,7 +743,7 @@ def test_empty_result_program(solver):
 
 def test_program_with_probchoice_selfjoin(solver):
     if solver is weighted_model_counting:
-        pytest.skip()
+        pytest.xfail("WMC issue to be resolved")
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
         P,
@@ -765,7 +765,7 @@ def test_program_with_probchoice_selfjoin(solver):
 
 def test_probchoice_selfjoin_multiple_variables(solver):
     if solver is weighted_model_counting:
-        pytest.skip()
+        pytest.xfail("WMC issue to be resolved")
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
         P,
@@ -788,7 +788,7 @@ def test_probchoice_selfjoin_multiple_variables(solver):
 
 def test_probchoice_selfjoin_multiple_variables_shared_var(solver):
     if solver is weighted_model_counting:
-        pytest.skip()
+        pytest.xfail("WMC issue to be resolved")
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
         P,
