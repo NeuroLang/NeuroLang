@@ -6,7 +6,7 @@ from .exceptions import (
     RelationalAlgebraError,
     RelationalAlgebraNotImplementedError
 )
-from .expression_walker import ExpressionWalker, add_match
+from .expression_walker import ExpressionWalker, PatternWalker, add_match
 from .expressions import (
     Constant,
     Expression,
@@ -113,7 +113,56 @@ class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
         )
 
 
-class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
+class ProvenanceExtendedProjectionMixin(PatternWalker):
+    """
+    Mixin that implements specific cases of extended projections on provenance
+    sets for which the semantics are not modified.
+
+    An extended projection on a provenance set is allowed if all the
+    non-provenance columns `c` are projected _as is_ (i.e. `c -> c`), which
+    ensures the number of tuples is going to be exactly the same in the
+    resulting provenance set, and the provenance label is still going to be
+    semantically valid. This is useful in particular for projecting a constant
+    column, which can happen when dealing with rules with constant terms or
+    variable equalities.
+
+    """
+    @add_match(ExtendedProjection, is_provenance_operation)
+    def prov_extended_projection(self, extended_proj):
+        relation = self.walk(extended_proj.relation)
+        if any(
+            proj_list_member.dst_column == relation.provenance_column
+            for proj_list_member in extended_proj.projection_list
+        ):
+            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
+        else:
+            new_prov_col = str2columnstr_constant(relation.provenance_column)
+        relation = self.walk(
+            RenameColumn(
+                relation,
+                str2columnstr_constant(relation.provenance_column),
+                new_prov_col
+            )
+        )
+        new_proj_list = extended_proj.projection_list + (
+            ExtendedProjectionListMember(
+                fun_exp=new_prov_col, dst_column=new_prov_col
+            ),
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(
+                ExtendedProjection(
+                    Constant[AbstractSet](relation.value), new_proj_list,
+                )
+            ).value,
+            new_prov_col.value,
+        )
+
+
+class RelationalAlgebraProvenanceCountingSolver(
+    ProvenanceExtendedProjectionMixin,
+    ExpressionWalker,
+):
     """
     Mixing that walks through relational algebra expressions and
     executes the operations and provenance calculations.

@@ -66,6 +66,10 @@ from .transforms import (
     minimize_ucq_in_dnf,
     unify_existential_variables,
 )
+from .small_dichotomy_theorem_based_solver import (
+    _project_on_query_head,
+    _maybe_reintroduce_head_variables,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -138,6 +142,12 @@ def solve_succ_query(query, cpl_program):
                 "Query %s not liftable, algorithm can't be applied",
                 query
             )
+        # project on query's head variables
+        ra_query = _project_on_query_head(ra_query, shattered_query)
+        # re-introduce head variables potentially removed by unification
+        ra_query = _maybe_reintroduce_head_variables(
+            ra_query, flat_query, unified_query
+        )
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
@@ -594,7 +604,6 @@ def powerset(iterable):
 
 
 def symbolic_shattering(unified_query, symbol_table):
-    breakpoint()
     shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
     inverted_symbol_table = {v: k for k, v in symbol_table.items()}
     for atom in extract_logic_atoms(shattered_query):
