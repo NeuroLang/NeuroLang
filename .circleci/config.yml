@@ -163,6 +163,7 @@ jobs:
 
     steps:
       - run:
+          name: Log memory usage
           command: |
             while true; do
               sleep 5
