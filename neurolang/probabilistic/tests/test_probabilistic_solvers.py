@@ -304,7 +304,6 @@ def test_multiple_probchoices_mutual_exclusivity(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-@pytest.mark.slow
 def test_large_probabilistic_choice(solver):
     n = int(10000)
     with testing.temp_seed(42):
@@ -727,99 +726,87 @@ def test_repeated_variable_with_constant_in_head(solver):
 
 
 def test_empty_result_program(solver):
-    if solver is small_dichotomy_theorem_based_solver:
-        context = pytest.raises(NotHierarchicalQueryException)
-    else:
-        context = nullcontext()
-    with context:
-        rule = Implication(R(Constant(2), Constant(3)), Conjunction((Q(x),)))
-        cpl = CPLogicProgram()
-        cpl.add_probabilistic_facts_from_tuples(
-            Q,
-            [(0.2, 7)],
-        )
-        cpl.walk(rule)
-        query = Implication(ans(x), R(x, x))
-        result = solver.solve_succ_query(query, cpl)
-        expected = testing.make_prov_set([], ("_p_",))
-        assert testing.eq_prov_relations(result, expected)
+    if solver is weighted_model_counting:
+        pytest.skip()
+    rule = Implication(R(Constant(2), Constant(3)), Conjunction((Q(x),)))
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.2, 7)],
+    )
+    cpl.walk(rule)
+    query = Implication(ans(x), R(x, x))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set([], ("_p_",))
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_program_with_probchoice_selfjoin(solver):
-    if solver is small_dichotomy_theorem_based_solver:
-        context = pytest.raises(NotHierarchicalQueryException)
-    else:
-        context = nullcontext()
-    with context:
-        cpl = CPLogicProgram()
-        cpl.add_probabilistic_choice_from_tuples(
-            P,
-            [(0.2, "a"), (0.8, "b")],
-        )
-        cpl.add_probabilistic_facts_from_tuples(
-            Q,
-            [(0.6, "a"), (0.8, "b")],
-        )
-        rule = Implication(R(x, y), Conjunction((Q(x), P(x), P(y))))
-        cpl.walk(rule)
-        query = Implication(ans(x, y), R(x, y))
-        result = solver.solve_succ_query(query, cpl)
-        expected = testing.make_prov_set(
-            [(0.2 * 0.6, "a", "a"), (0.8 * 0.8, "b", "b")], ("_p_", "x", "y")
-        )
-        assert testing.eq_prov_relations(result, expected)
+    if solver is weighted_model_counting:
+        pytest.skip()
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        P,
+        [(0.2, "a"), (0.8, "b")],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.6, "a"), (0.8, "b")],
+    )
+    rule = Implication(R(x, y), Conjunction((Q(x), P(x), P(y))))
+    cpl.walk(rule)
+    query = Implication(ans(x, y), R(x, y))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [(0.2 * 0.6, "a", "a"), (0.8 * 0.8, "b", "b")], ("_p_", "x", "y")
+    )
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_probchoice_selfjoin_multiple_variables(solver):
-    if solver is small_dichotomy_theorem_based_solver:
-        context = pytest.raises(NotHierarchicalQueryException)
-    else:
-        context = nullcontext()
-    with context:
-        cpl = CPLogicProgram()
-        cpl.add_probabilistic_choice_from_tuples(
-            P,
-            [(0.2, "a", "b"), (0.8, "b", "c")],
-        )
-        cpl.add_probabilistic_facts_from_tuples(
-            Q,
-            [(0.6, "a"), (0.8, "b")],
-        )
-        rule = Implication(R(x, y, z, w), Conjunction((Q(x), P(x, y), P(z, w))))
-        cpl.walk(rule)
-        query = Implication(ans(x, y, z, w), R(x, y, z, w))
-        result = solver.solve_succ_query(query, cpl)
-        expected = testing.make_prov_set(
-            [(0.2 * 0.6, "a", "b", "a", "b"), (0.8 * 0.8, "b", "c", "b", "c")],
-            ("_p_", "x", "y", "z", "w"),
-        )
-        assert testing.eq_prov_relations(result, expected)
+    if solver is weighted_model_counting:
+        pytest.skip()
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        P,
+        [(0.2, "a", "b"), (0.8, "b", "c")],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.6, "a"), (0.8, "b")],
+    )
+    rule = Implication(R(x, y, z, w), Conjunction((Q(x), P(x, y), P(z, w))))
+    cpl.walk(rule)
+    query = Implication(ans(x, y, z, w), R(x, y, z, w))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [(0.2 * 0.6, "a", "b", "a", "b"), (0.8 * 0.8, "b", "c", "b", "c")],
+        ("_p_", "x", "y", "z", "w"),
+    )
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_probchoice_selfjoin_multiple_variables_shared_var(solver):
-    if solver is small_dichotomy_theorem_based_solver:
-        context = pytest.raises(NotHierarchicalQueryException)
-    else:
-        context = nullcontext()
-    with context:
-        cpl = CPLogicProgram()
-        cpl.add_probabilistic_choice_from_tuples(
-            P,
-            [(0.2, "a", "b"), (0.8, "b", "b")],
-        )
-        cpl.add_probabilistic_facts_from_tuples(
-            Q,
-            [(0.6, "a", "b"), (0.8, "b", "a"), (0.2, "b", "b")],
-        )
-        rule = Implication(R(x, y, z), Conjunction((Q(x, y), P(x, y), P(z, x))))
-        cpl.walk(rule)
-        query = Implication(ans(x, y, z), R(x, y, z))
-        result = solver.solve_succ_query(query, cpl)
-        expected = testing.make_prov_set(
-            [(0.2 * 0.8, "b", "b", "b")],
-            ("_p_", "x", "y", "z"),
-        )
-        assert testing.eq_prov_relations(result, expected)
+    if solver is weighted_model_counting:
+        pytest.skip()
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        P,
+        [(0.2, "a", "b"), (0.8, "b", "b")],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.6, "a", "b"), (0.8, "b", "a"), (0.2, "b", "b")],
+    )
+    rule = Implication(R(x, y, z), Conjunction((Q(x, y), P(x, y), P(z, x))))
+    cpl.walk(rule)
+    query = Implication(ans(x, y, z), R(x, y, z))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [(0.2 * 0.8, "b", "b", "b")],
+        ("_p_", "x", "y", "z"),
+    )
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_probsemiring_extended_proj():
