@@ -7,6 +7,10 @@ version: 2.1
 commands:
   install:
     description: "Installs the necessary packages"
+    parameters:
+      dask:
+        type: boolean
+        default: false
     steps:
       # Download and cache dependencies
       - restore_cache:
@@ -40,6 +44,10 @@ commands:
               [ ${CIRCLE_JOB} == "docs" ]
             then
               pip install -e .[doc]
+            elif
+              [ parameters.dask ]
+            then
+              pip install -e .[dev,dask] --install-option="--dask"
             else
               pip install -e .[dev]
             fi
@@ -119,6 +127,18 @@ jobs:
     steps:
       - checkout
       - install
+      - test
+
+  py37dask:
+    docker:
+      - image: circleci/python:3.7
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - install
+          dask: true
       - test
 
   benchmark:

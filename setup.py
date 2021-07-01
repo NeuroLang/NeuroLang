@@ -24,6 +24,7 @@ def update_config_file():
     config = configparser.ConfigParser(
         allow_no_value=True, comment_prefixes="//"
     )
+    config.optionxform = str
     config.read(config_file)
     config["RAS"]["backend"] = "dask"
     with open(config_file, "w") as configfile:
