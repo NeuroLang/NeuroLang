@@ -1,11 +1,16 @@
 from ...utils import config
-if config["RAS"].getboolean("Synchronous", False):
-    import dask
+try:
+    if config["RAS"].getboolean("Synchronous", False):
+        import dask
 
-    dask.config.set(scheduler="single-threaded")
+        dask.config.set(scheduler="single-threaded")
 
-from dask_sql import Context
-from dask_sql.mappings import sql_to_python_type
+    from dask_sql import Context
+    from dask_sql.mappings import sql_to_python_type
+except ModuleNotFoundError as e:
+    raise ModuleNotFoundError("Unable to use the dask backend because dask"
+     " has not been installed. Make sure to install with"
+     " `pip install neurolang[dask]` to enable the dask backend.") from e
 
 import ast
 import inspect

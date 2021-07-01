@@ -17,7 +17,14 @@ commands:
 
       - run:
           name: Install maven
-          command: 'sudo apt update && sudo apt install maven'
+          command: |
+            if
+              [ ${CIRCLE_JOB} == "docs" ]
+            then
+              echo "Not installing maven for docs jobs."
+            else
+              sudo apt update && sudo apt install maven
+            fi
 
       - run:
           name: install dependencies
@@ -29,9 +36,14 @@ commands:
             pip install setuptools_scm
             pip install importlib_metadata
             
-            python setup.py egg_info
-            cat *.egg-info/requires.txt | egrep -v '^\[' > requires.txt
-            pip install -U -r requires.txt
+            if
+              [ ${CIRCLE_JOB} == "docs" ]
+            then
+              pip install -e .[doc]
+            else
+              pip install -e .[dev]
+            fi
+
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
@@ -162,7 +174,6 @@ jobs:
           name: Install extra packages & build documentation
           command: |
             . venv/bin/activate
-            pip install -e .
             cd doc
             make api
             make html
