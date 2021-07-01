@@ -34,7 +34,7 @@ from ..logic.expression_processing import (
 from ..relational_algebra import (
     ColumnStr,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NameColumns,
     Projection,
     RelationalAlgebraPushInSelections,
@@ -342,7 +342,15 @@ class SDDWMCSemiRingSolver(
         self.positive_weights.append(probability)
         return literal
 
-    def _semiring_agg_sum(self, x):
+    def _semiring_agg_sum(self, args):
+        return FunctionApplication(
+            Constant(self._internal_sum),
+            args,
+            validate_arguments=False,
+            verify_type=False,
+        )
+
+    def _internal_sum(self, x):
         sum_ = self.manager.false()
         for el in x:
             el.ref()
@@ -403,7 +411,7 @@ class SDDWMCSemiRingSolver(
 
         rap_column = str2columnstr_constant(Symbol.fresh().name)
         projection_list = [
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant[RelationalAlgebraStringExpression](
                     RelationalAlgebraStringExpression(c.value),
                     verify_type=False
@@ -421,7 +429,7 @@ class SDDWMCSemiRingSolver(
             ExtendedProjection(
                 relation,
                 projection_list + [
-                    ExtendedProjectionListMember(
+                    FunctionApplicationListMember(
                         deterministic_tag_function,
                         rap_column
                     )
@@ -462,7 +470,7 @@ class SDDWMCSemiRingSolver(
 
             rap_column = str2columnstr_constant(Symbol.fresh().name)
             projection_list = [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     Constant[RelationalAlgebraStringExpression](
                         RelationalAlgebraStringExpression(c.value),
                         verify_type=False
@@ -480,7 +488,7 @@ class SDDWMCSemiRingSolver(
                 ExtendedProjection(
                     relation,
                     projection_list + [
-                        ExtendedProjectionListMember(
+                        FunctionApplicationListMember(
                             probfact_tag_function,
                             rap_column
                         )

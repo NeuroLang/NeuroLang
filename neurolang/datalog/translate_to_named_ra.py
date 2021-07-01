@@ -21,7 +21,7 @@ from ..relational_algebra import (
     Destroy,
     Difference,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NameColumns,
     NaturalJoin,
     Projection,
@@ -425,7 +425,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     ):
         named_columns = classified_formulas["named_columns"]
         extended_projections = tuple(
-            ExtendedProjectionListMember(c, c) for c in named_columns
+            FunctionApplicationListMember(c, c) for c in named_columns
         )
         stack = list(classified_formulas["eq_formulas"])
         if len(stack) == 0:
@@ -451,7 +451,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             else:
                 stack.insert(0, formula)
                 continue
-            extended_projections += (ExtendedProjectionListMember(src, dst),)
+            extended_projections += (FunctionApplicationListMember(src, dst),)
             named_columns.add(dst)
             seen_counts = collections.defaultdict(int)
         new_output = ExtendedProjection(output, extended_projections)
@@ -478,7 +478,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             cols_for_fun_exp = get_expression_columns(fun_exp)
             if cols_for_fun_exp.issubset(named_columns):
                 extended_projections.append(
-                    ExtendedProjectionListMember(fun_exp, dst_column)
+                    FunctionApplicationListMember(fun_exp, dst_column)
                 )
                 dst_columns.add(dst_column)
             else:
@@ -486,7 +486,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         if len(extended_projections) > 0:
             for column in classified_formulas["named_columns"]:
                 extended_projections.append(
-                    ExtendedProjectionListMember(column, column)
+                    FunctionApplicationListMember(column, column)
                 )
             output = ExtendedProjection(output, extended_projections)
 
