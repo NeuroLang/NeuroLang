@@ -39,7 +39,7 @@ from ..relational_algebra import (
     ColumnStr,
     EliminateTrivialProjections,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     Projection,
     RelationalAlgebraPushInSelections,
@@ -81,7 +81,7 @@ def is_hierarchical_without_self_joins(query):
     variables = list(atom_set)
     for i, v in enumerate(variables):
         at_v = atom_set[v]
-        for v2 in variables[i + 1 :]:
+        for v2 in variables[i + 1:]:
             at_v2 = atom_set[v2]
             if not (at_v <= at_v2 or at_v2 <= at_v or at_v.isdisjoint(at_v2)):
                 LOG.info(
@@ -229,7 +229,7 @@ def _maybe_reintroduce_head_variables(ra_query, flat_query, unified_query):
                     f"Unexpected argument {new}. "
                     "Expected symbol or constant"
                 )
-        member = ExtendedProjectionListMember(fun_exp, dst_column)
+        member = FunctionApplicationListMember(fun_exp, dst_column)
         proj_list.append(member)
     return ExtendedProjection(ra_query, tuple(proj_list))
 

@@ -1,3 +1,4 @@
+from neurolang.exceptions import NotConjunctiveExpressionNegation
 from typing import AbstractSet, Callable, Tuple
 
 from ..expression_walker import add_match, PatternWalker
@@ -83,7 +84,7 @@ class DatalogProgramNegationMixin(PatternWalker):
             )
 
         if not is_conjunctive_negation(antecedent):
-            raise NeuroLangException(
+            raise NotConjunctiveExpressionNegation(
                 f'Expression {antecedent} is not conjunctive'
             )
 

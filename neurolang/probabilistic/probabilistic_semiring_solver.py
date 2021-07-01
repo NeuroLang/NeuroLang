@@ -5,7 +5,7 @@ from ..expressions import Constant, Symbol
 from ..relational_algebra import (
     ColumnStr,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NameColumns,
     Projection,
     RelationalAlgebraStringExpression,
@@ -54,7 +54,7 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             str2columnstr_constant(f"col_{i}") for i in relation.value.columns
         )
         projection_list = [
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant[RelationalAlgebraStringExpression](
                     RelationalAlgebraStringExpression(c.value),
                     verify_type=False,
@@ -70,7 +70,7 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                 NameColumns(relation, named_columns),
                 tuple(projection_list)
                 + (
-                    ExtendedProjectionListMember(
+                    FunctionApplicationListMember(
                         Constant[float](1.0),
                         str2columnstr_constant(prov_column),
                     ),
@@ -126,7 +126,7 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         prov_col = str2columnstr_constant(provset.provenance_column)
         new_prov_col = str2columnstr_constant(Symbol.fresh().name)
         proj_list_with_prov_col = proj_op.projection_list + (
-            ExtendedProjectionListMember(prov_col, new_prov_col),
+            FunctionApplicationListMember(prov_col, new_prov_col),
         )
         ra_op = ExtendedProjection(relation, proj_list_with_prov_col)
         new_relation = self.walk(ra_op)
