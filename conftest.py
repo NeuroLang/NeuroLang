@@ -58,7 +58,7 @@ def pytest_sessionstart(session: pytest.Session):
         pass
 
 
-@pytest.fixture(autouse=config["RAS"].get("Backend", "pandas") == "dask")
+@pytest.fixture(autouse=config["RAS"].get("backend", "pandas") == "dask")
 def clear_dask_context_after_test_module():
     """
     We use only one DaskContextManager for the application and its context gets

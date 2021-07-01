@@ -53,7 +53,7 @@ class SetType(frozenset):
 
 
 @pytest.mark.skipif(
-    config["RAS"].get("Backend") == "dask",
+    config["RAS"].get("backend") == "dask",
     reason="multiplication of sets not yet implemented in dask backend",
 )
 def test_set_type_semiring():
@@ -100,7 +100,7 @@ class StringTestType:
         return hash(self.value)
 
 @pytest.mark.skipif(
-    config["RAS"].get("Backend") == "dask",
+    config["RAS"].get("backend") == "dask",
     reason="multiplication of strings not yet implemented in dask backend",
 )
 def test_string_semiring():

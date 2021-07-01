@@ -1,6 +1,6 @@
 from ...utils import config
 try:
-    if config["RAS"].getboolean("Synchronous", False):
+    if config["RAS"].getboolean("synchronous", False):
         import dask
 
         dask.config.set(scheduler="single-threaded")
@@ -87,7 +87,7 @@ class DaskContextManager(ABC):
     @classmethod
     def get_context(cls, new=False):
         if cls._context is None or new:
-            if not config["RAS"].getboolean("Synchronous", False):
+            if not config["RAS"].getboolean("synchronous", False):
                 cls._create_client()
             cls._context = Context()
             # We register an aggregate function called len which applies to string columns

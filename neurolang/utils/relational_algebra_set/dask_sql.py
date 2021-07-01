@@ -87,7 +87,7 @@ class RelationalAlgebraStringExpression(str):
 
 
 def _new_name(prefix="table_"):
-    if config["RAS"].get("TableIds", "uuid") == "uuid":
+    if config["RAS"].get("tableIds", "uuid") == "uuid":
         return prefix + str(uuid.uuid4()).replace("-", "_")
     else:
         return prefix + next(DaskContextManager._id_generator_)

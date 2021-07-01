@@ -1,7 +1,7 @@
 from ...utils import config
 from .abstract import RelationalAlgebraColumnInt, RelationalAlgebraColumnStr
 
-if config["RAS"].get("Backend", "pandas") == "dask":
+if config["RAS"].get("backend") == "dask":
     from .dask_sql import (
         NamedRelationalAlgebraFrozenSet,
         RelationalAlgebraFrozenSet,

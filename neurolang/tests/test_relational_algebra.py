@@ -535,7 +535,7 @@ def test_extended_projection_divide_columns():
         dst_column
     )
     extended_proj_op = ExtendedProjection(relation, (proj, ))
-    if config["RAS"].get("Backend", "pandas") == "dask":
+    if config["RAS"].get("backend") == "dask":
         expected = Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 columns=("z",),
