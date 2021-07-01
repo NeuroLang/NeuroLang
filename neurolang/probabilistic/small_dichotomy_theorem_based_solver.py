@@ -138,6 +138,11 @@ def solve_succ_query(query, cpl_program):
         set.
 
     """
+
+    head_var_names = tuple(
+        term.name for term in query.consequent.args
+        if isinstance(term, Symbol)
+    )
     with log_performance(
         LOG,
         "Preparing query %s",
@@ -150,7 +155,7 @@ def solve_succ_query(query, cpl_program):
         and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
     ):
         return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(("_p_",)),
+            NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names),
             ColumnStr("_p_"),
         )
 
