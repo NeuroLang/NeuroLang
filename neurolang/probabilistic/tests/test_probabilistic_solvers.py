@@ -739,6 +739,13 @@ def test_empty_result_program(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
 def test_simple_negation(solver):
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
