@@ -72,7 +72,7 @@ class RelationalAlgebraFrozenSet(Set):
         pass
 
     @abstractmethod
-    def equijoin(self, other, join_indices, return_mappings=False):
+    def equijoin(self, other, join_indices):
         pass
 
     @abstractmethod

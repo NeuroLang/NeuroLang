@@ -290,7 +290,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         output._container = new_container
         return output
 
-    def equijoin(self, other, join_indices, return_mappings=False):
+    def equijoin(self, other, join_indices):
         res = self._dee_dum_product(other)
         if res is not None:
             return res
@@ -568,7 +568,7 @@ class NamedRelationalAlgebraFrozenSet(
         columns = tuple(named_columns.index(c) for c in columns)
         return unnamed_self.projection(*columns)
 
-    def equijoin(self, other, join_indices, return_mappings=False):
+    def equijoin(self, other, join_indices):
         raise NotImplementedError()
 
     def naturaljoin(self, other):

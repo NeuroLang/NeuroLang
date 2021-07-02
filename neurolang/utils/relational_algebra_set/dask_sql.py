@@ -355,25 +355,21 @@ class DaskRelationalAlgebraBaseSet:
         if self.is_dee():
             return iter([tuple()])
         else:
-            return iter(
-                self._fetchall(False).itertuples(name=None, index=False)
-            )
+            return iter(self._fetchall().itertuples(name=None, index=False))
 
     def __iter__(self, named=False):
         if self.is_dee():
             return iter([tuple()])
         if named:
             try:
-                return self._fetchall(True).itertuples(
-                    name="tuple", index=False
-                )
+                return self._fetchall().itertuples(name="tuple", index=False)
             except ValueError:
                 # Invalid column names for namedtuple, just return unnamed tuples
                 pass
-        return self._fetchall(True).itertuples(name=None, index=False)
+        return self._fetchall().itertuples(name=None, index=False)
 
     def as_numpy_array(self):
-        return self._fetchall(False).to_numpy()
+        return self._fetchall().to_numpy()
 
     def as_pandas_dataframe(self):
         df = self._fetchall()
@@ -383,21 +379,13 @@ class DaskRelationalAlgebraBaseSet:
             pass
         return df
 
-    def _fetchall(self, drop_duplicates=False, cast_columns_to_int=True):
-        """
-        drop_duplicates is ignored as dask-sql RAS are built to be real sets
-        without duplicates (we drop_duplicates when creating a new set
-        and we call distinct() on the few algebra operations which might
-        create duplicates).
-        """
+    def _fetchall(self):
         if self.container is None:
             if self._count == 1:
                 return pd.DataFrame([()])
             else:
                 return pd.DataFrame([])
         df = self.container.compute()
-        # if drop_duplicates:
-        #     df = df.drop_duplicates()
         return df
 
     def fetch_one(self, named=False):
@@ -556,17 +544,14 @@ class RelationalAlgebraFrozenSet(
     def cross_product(self, other):
         return self.equijoin(other)
 
-    def groupby(self, columns, named=False):
+    def groupby(self, columns):
         if self.container is not None:
             if isinstance(columns, str) or not isinstance(columns, Iterable):
                 columns = [columns]
             columns = list(map(str, columns))
             df = self.container.compute()
             for g_id, group in df.groupby(by=columns):
-                if named:
-                    group_set = type(self)(iterable=group, columns=columns)
-                else:
-                    group_set = type(self)(iterable=group)
+                group_set = type(self)(iterable=group)
                 yield g_id, group_set
 
     def projection(self, *columns, reindex=True):
@@ -780,7 +765,7 @@ class NamedRelationalAlgebraFrozenSet(
             projections[col] = None
         return self.extended_projection(projections)
 
-    def equijoin(self, other, join_indices, return_mappings=False):
+    def equijoin(self, other, join_indices):
         raise NotImplementedError()
 
     def rename_column(self, src, dst):
