@@ -876,7 +876,7 @@ def generate_probability_table(solver):
     return ids_with_probs
 
 
-if config["RAS"].get("Backend", "pandas") == "dask":
+if config["RAS"].get("backend", "pandas") == "dask":
     solve_succ_query = solve_succ_query_boolean_diagram
 else:
     solve_succ_query = solve_succ_query_sdd_direct
