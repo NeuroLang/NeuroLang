@@ -935,7 +935,6 @@ def test_probsemiring_forbidden_extended_proj_on_provcol():
         solver.walk(proj)
 
 
-
 def test_simple_boolean_query(solver):
     pchoice_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
     cpl_program = CPLogicProgram()
