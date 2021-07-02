@@ -22,7 +22,6 @@ from .relational_algebra import (
     EquiJoin,
     ExtendedProjection,
     FunctionApplicationListMember,
-    Difference,
     GroupByAggregation,
     LeftNaturalJoin,
     NameColumns,
@@ -144,7 +143,7 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
             )
         )
         new_proj_list = extended_proj.projection_list + (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 fun_exp=new_prov_col, dst_column=new_prov_col
             ),
         )
@@ -331,37 +330,6 @@ class RelationalAlgebraProvenanceCountingSolver(
                 )
             ).value,
             new_prov_col,
-        )
-
-    @add_match(ExtendedProjection)
-    def prov_extended_projection(self, extended_proj):
-        relation = self.walk(extended_proj.relation)
-        if any(
-            proj_list_member.dst_column == relation.provenance_column
-            for proj_list_member in extended_proj.projection_list
-        ):
-            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
-        else:
-            new_prov_col = str2columnstr_constant(relation.provenance_column)
-        relation = self.walk(
-            RenameColumn(
-                relation,
-                str2columnstr_constant(relation.provenance_column),
-                new_prov_col
-            )
-        )
-        new_proj_list = extended_proj.projection_list + (
-            FunctionApplicationListMember(
-                fun_exp=new_prov_col, dst_column=new_prov_col
-            ),
-        )
-        return ProvenanceAlgebraSet(
-            self.walk(
-                ExtendedProjection(
-                    Constant[AbstractSet](relation.value), new_proj_list,
-                )
-            ).value,
-            new_prov_col.value,
         )
 
     @add_match(Difference(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
@@ -725,7 +693,9 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         aggregate_functions = [
             FunctionApplicationListMember(
                 self._semiring_agg_sum(
-                    (str2columnstr_constant(projection.relation.provenance_column),)
+                    (str2columnstr_constant(
+                        projection.relation.provenance_column
+                    ),)
                 ),
                 str2columnstr_constant(projection.relation.provenance_column),
             )

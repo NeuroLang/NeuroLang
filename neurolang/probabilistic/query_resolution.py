@@ -2,16 +2,22 @@ import typing
 from typing import AbstractSet
 
 from ..datalog.aggregation import is_builtin_aggregation_functor
-from ..datalog.expression_processing import EQ, conjunct_formulas
+from ..datalog.expression_processing import (
+    EQ,
+    conjunct_formulas,
+    extract_logic_free_variables,
+    extract_logic_predicates,
+)
 from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
-from ..relational_algebra_provenance import (
-    RelationalAlgebraProvenanceCountingSolver, NaturalJoinInverse
-)
 from ..relational_algebra import Projection, str2columnstr_constant
+from ..relational_algebra_provenance import (
+    NaturalJoinInverse,
+    RelationalAlgebraProvenanceCountingSolver,
+)
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
@@ -176,7 +182,7 @@ def compute_probabilistic_solution(
     check_qbased_pfact_tuple_unicity=False,
 ):
     solution = MapInstance()
-    cpl = _build_probabilistic_program(
+    cpl, prob_idb = _build_probabilistic_program(
         det_edb,
         pfact_db,
         pchoice_edb,
