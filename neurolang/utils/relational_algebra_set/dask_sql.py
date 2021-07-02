@@ -897,10 +897,21 @@ class NamedRelationalAlgebraFrozenSet(
                 f_ = getattr(func, lambda_name)
             elif isinstance(f, str):
                 if f == "first":
-                    # first is registered as a postgresql function which behaves differently
-                    # from pandas first. Use single_value instead.
+                    # first is registered as a postgresql function which
+                    # behaves differently from pandas first.
+                    # Use single_value instead.
                     f_ = getattr(func, "single_value")
                     rtype = self.row_types[src]
+                elif f == "sum":
+                    # sum is problematic since sqlalchemy has it return
+                    # NullType so we force the return type to be the that
+                    # of the src col.
+                    f_ = getattr(func, f)
+                    rtype = (
+                        self.row_types[src]
+                        if self.row_types is not None
+                        else Unknown
+                    )
                 else:
                     f_ = getattr(func, f)
                     rtype = try_to_infer_type_of_operation(f, self.row_types)

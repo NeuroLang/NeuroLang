@@ -95,6 +95,12 @@ class DaskContextManager(ABC):
             cls._context.register_aggregation(
                 len, "len", [("x", pd.StringDtype())], np.int32
             )
+            # We also register a sum which applies to objects (i.e `Symbol` or sets)
+            # since by default sum applies only to numbers in SQL and Calcite will
+            # try to cast objects to float before applying the default sum op.
+            cls._context.register_aggregation(
+                sum, "sum", [("x", np.object_)], np.object_
+            )
         return cls._context
 
     @classmethod
