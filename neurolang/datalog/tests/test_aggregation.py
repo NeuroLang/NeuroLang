@@ -5,8 +5,6 @@ import numpy as np
 
 from neurolang.exceptions import ForbiddenUnstratifiedAggregation
 
-from neurolang.exceptions import ForbiddenUnstratifiedAggregation
-
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import (
     Constant,
