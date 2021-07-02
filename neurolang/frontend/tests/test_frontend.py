@@ -639,7 +639,7 @@ def test_neurolang_dl_attribute_access():
     q = res["q"]
     r = res["r"]
     assert len(q) == 1
-    el = next(iter(q))[0]
+    el = next(q.to_unnamed().itervalues())[0]
     assert el == one_element
     assert r.to_unnamed() == {(one_element.x,)}
 

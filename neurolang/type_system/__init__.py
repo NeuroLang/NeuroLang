@@ -289,17 +289,14 @@ def infer_type(value, deep=False, recursive_callback=None):
 
 def infer_type_iterables(value, deep=True, recursive_callback=infer_type):
     inner_type = Unknown
-    if hasattr(value, "set_row_type"):
-        inner_type = value.set_row_type
-    else:
-        it = iter(value)
-        if not deep:
-            it = islice(it, 1)
+    it = iter(value)
+    if not deep:
+        it = islice(it, 1)
 
-        for element in it:
-            inner_type = unify_types(
-                recursive_callback(element), inner_type
-            )
+    for element in it:
+        inner_type = unify_types(
+            recursive_callback(element), inner_type
+        )
     if isinstance(value, AbstractSet):
         return AbstractSet[inner_type]
     elif isinstance(value, Sequence):

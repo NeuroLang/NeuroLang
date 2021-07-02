@@ -139,7 +139,7 @@ class EasyQueryShatterer(ExpressionWalker):
         non_prob_columns = tuple(
             c
             for c in new_relation.columns
-            if str(c) != str(shatter.functor.probability_column.value)
+            if c != shatter.functor.probability_column.value
         )
         proj_cols = (shatter.functor.probability_column.value,) + tuple(
             non_prob_columns[i]

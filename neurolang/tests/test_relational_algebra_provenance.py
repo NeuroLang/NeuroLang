@@ -37,21 +37,14 @@ from ..utils import (
 C_ = Constant
 S_ = Symbol
 
-
-@pytest.fixture
-def R1():
-    return NamedRelationalAlgebraFrozenSet(
-        columns=("col1", "col2", "__provenance__"),
-        iterable=[(i, i * 2, i) for i in range(10)],
-    )
+R1 = NamedRelationalAlgebraFrozenSet(
+    columns=("col1", "col2", "__provenance__"),
+    iterable=[(i, i * 2, i) for i in range(10)],
+)
+provenance_set_r1 = ProvenanceAlgebraSet(R1, ColumnStr("__provenance__"))
 
 
-@pytest.fixture
-def provenance_set_r1(R1):
-    return ProvenanceAlgebraSet(R1, ColumnStr("__provenance__"))
-
-
-def test_selection(R1, provenance_set_r1):
+def test_selection():
     s = Selection(provenance_set_r1, eq_(C_(ColumnStr("col1")), C_(4)))
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
 
@@ -59,7 +52,7 @@ def test_selection(R1, provenance_set_r1):
     assert "__provenance__" in sol.columns
 
 
-def test_selection_columns(R1, provenance_set_r1):
+def test_selection_columns():
     s = Selection(
         provenance_set_r1, eq_(C_(ColumnStr("col1")), C_(ColumnStr("col2")))
     )
@@ -70,7 +63,7 @@ def test_selection_columns(R1, provenance_set_r1):
     assert "__provenance__" in sol.columns
 
 
-def test_valid_rename(R1, provenance_set_r1):
+def test_valid_rename():
     s = RenameColumn(
         provenance_set_r1, C_(ColumnStr("col1")), C_(ColumnStr("renamed"))
     )
@@ -83,7 +76,7 @@ def test_valid_rename(R1, provenance_set_r1):
     assert R1.projection("__provenance__") == sol.projection("__provenance__")
 
 
-def test_provenance_rename(R1, provenance_set_r1):
+def test_provenance_rename():
     s = RenameColumn(
         provenance_set_r1,
         C_(ColumnStr("__provenance__")),
@@ -352,7 +345,7 @@ def test_projection():
     assert result == expected
 
 
-def test_concatenate_constant(provenance_set_r1):
+def test_concatenate_constant():
     s = ConcatenateConstantColumn(
         provenance_set_r1, C_(ColumnStr("new_col")), C_(9)
     )
@@ -378,7 +371,7 @@ def test_extended_projection():
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             iterable=[(6, 1), (8, 2), (10, 2), (4, 1), (3, 1),],
-            columns=["sum_", "__provenance__"],
+            columns=["sum", "__provenance__"],
         ),
         ColumnStr("__provenance__"),
     )
@@ -390,7 +383,7 @@ def test_extended_projection():
                 FunctionApplicationListMember(
                     fun_exp=Constant(ColumnStr("x"))
                     + Constant(ColumnStr("y")),
-                    dst_column=Constant(ColumnStr("sum_")),
+                    dst_column=Constant(ColumnStr("sum")),
                 )
             ]
         ),
