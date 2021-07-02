@@ -27,14 +27,12 @@ from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     enforce_conjunction,
     extract_logic_atoms,
-    extract_logic_predicates,
     flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, Symbol
 from ..logic import FALSE, Conjunction, Implication
-from ..logic.expression_processing import extract_logic_free_variables
 from ..relational_algebra import (
     ColumnStr,
     EliminateTrivialProjections,
@@ -46,9 +44,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
-    NaturalJoinInverse,
     ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceCountingSolver
 )
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
