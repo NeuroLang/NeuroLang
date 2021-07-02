@@ -357,7 +357,10 @@ class DaskRelationalAlgebraBaseSet:
         else:
             return iter(self._fetchall().itertuples(name=None, index=False))
 
-    def __iter__(self, named=False):
+    def __iter__(self):
+        return self._do__iter__(named=False)
+
+    def _do__iter__(self, named=False):
         if self.is_dee():
             return iter([tuple()])
         if named:
@@ -388,7 +391,10 @@ class DaskRelationalAlgebraBaseSet:
         df = self.container.compute()
         return df
 
-    def fetch_one(self, named=False):
+    def fetch_one(self):
+        return self._fetch_one(named=False)
+
+    def _fetch_one(self, named=False):
         if self.container is None:
             if self._count == 1:
                 return tuple()
@@ -554,7 +560,10 @@ class RelationalAlgebraFrozenSet(
                 group_set = type(self)(iterable=group)
                 yield g_id, group_set
 
-    def projection(self, *columns, reindex=True):
+    def projection(self, *columns):
+        return self._do_projection(*columns, reindex=True)
+
+    def _do_projection(self, *columns, reindex=True):
         if len(columns) == 0 or self.arity == 0:
             new = type(self)()
             if len(self) > 0:
@@ -658,13 +667,13 @@ class NamedRelationalAlgebraFrozenSet(
         return tuple(super().columns)
 
     def fetch_one(self):
-        return super().fetch_one(named=True)
+        return super()._fetch_one(named=True)
 
     def __iter__(self):
-        return super().__iter__(named=True)
+        return super()._do__iter__(named=True)
 
     def projection(self, *columns):
-        return super().projection(*columns, reindex=False)
+        return super()._do_projection(*columns, reindex=False)
 
     def cross_product(self, other):
         res = self._dee_dum_product(other)

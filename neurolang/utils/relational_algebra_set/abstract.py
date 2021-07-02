@@ -146,7 +146,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def projection(self, *columns):
         pass
 
-    def equijoin(self, other, join_indices, return_mappings=False):
+    def equijoin(self, other, join_indices):
         raise NotImplementedError()
 
     @abstractmethod
