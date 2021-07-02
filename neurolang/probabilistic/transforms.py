@@ -1,7 +1,7 @@
 from functools import reduce
 
 from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
-from ..logic import Conjunction, Disjunction, ExistentialPredicate
+from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables
@@ -211,10 +211,17 @@ def minimize_component_conjunction(conjunction):
     """
     if not isinstance(conjunction, Conjunction):
         return conjunction
+    positive_formulas = []
+    negative_formulas = []
+    for formula in conjunction.formulas:
+        if isinstance(formula, Negation):
+            negative_formulas.append(formula)
+        else:
+            positive_formulas.append(formula)
     keep = minimise_formulas_containment(
-        conjunction.formulas,
+        positive_formulas,
         lambda x, y: is_contained(y, x)
-    )
+    ) + tuple(negative_formulas)
 
     return GC.walk(RTO.walk(Conjunction(keep)))
 

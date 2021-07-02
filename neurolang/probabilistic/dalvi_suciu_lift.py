@@ -25,6 +25,7 @@ from ..logic import (
     ExistentialPredicate,
     Implication,
     NaryLogicOperator,
+    Negation,
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
@@ -194,7 +195,8 @@ def dalvi_suciu_lift(rule, symbol_table):
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
         return components_plan(
-            connected_components, rap.NaturalJoin, symbol_table
+            connected_components, rap.NaturalJoin, symbol_table,
+            negative_operation=rap.Difference
         )
     elif len(rule_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
@@ -504,11 +506,31 @@ def variable_co_occurrence_graph(expression):
     return c_matrix
 
 
-def components_plan(components, operation, symbol_table):
-    formulas = []
+def components_plan(
+    components, operation, symbol_table,
+    negative_operation=None
+):
+    positive_formulas = []
+    negative_formulas = []
     for component in components:
-        formulas.append(dalvi_suciu_lift(component, symbol_table))
-    return reduce(operation, formulas[1:], formulas[0])
+        component = RTO.walk(component)
+        if isinstance(component, Negation):
+            formula = dalvi_suciu_lift(component.formula, symbol_table)
+            negative_formulas.append(formula)
+        else:
+
+            formula = dalvi_suciu_lift(component, symbol_table)
+            positive_formulas.append(formula)
+    output = reduce(operation, positive_formulas[1:], positive_formulas[0])
+
+    if len(negative_formulas) > 0 and negative_operation is None:
+        raise ValueError(
+            "If negative components are included,"
+            " a negative operation should be provided"
+        )
+    output = reduce(negative_operation, negative_formulas, output)
+
+    return output
 
 
 def inclusion_exclusion_conjunction(expression, symbol_table):
