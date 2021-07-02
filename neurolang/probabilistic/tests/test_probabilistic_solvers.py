@@ -6,7 +6,7 @@ import pytest
 
 from ...datalog import Fact
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Implication, Union
+from ...logic import Conjunction, Implication, Negation, Union
 from ...relational_algebra import (
     ColumnStr,
     ExtendedProjection,
@@ -736,6 +736,24 @@ def test_empty_result_program(solver):
     query = Implication(ans(x), R(x, x))
     result = solver.solve_succ_query(query, cpl)
     expected = testing.make_prov_set([], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_simple_negation(solver):
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.2, 'a'), (0.1, 'b')]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [(0.1, 'a'), (0.3, 'c')]
+    )
+    rule = Implication(P(x), Conjunction((Q(x), Negation(R(x)))))
+    cpl.walk(rule)
+    query = Implication(ans(x), P(x))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set([(.18, 'a'), (.10, 'b')], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
 
