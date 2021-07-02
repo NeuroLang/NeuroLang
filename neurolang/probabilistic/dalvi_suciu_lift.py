@@ -8,6 +8,7 @@ from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     enforce_conjunction,
+    extract_logic_predicates,
     flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
@@ -122,6 +123,8 @@ def solve_succ_query(query, cpl_program):
             ColumnStr("_p_"),
         )
 
+    _verify_that_the_query_is_unate(flat_query_body)
+
     with log_performance(LOG, "Translation and lifted optimisation"):
         flat_query_body = enforce_conjunction(
             lift_optimization_for_choice_predicates(
@@ -160,6 +163,22 @@ def solve_succ_query(query, cpl_program):
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result
+
+
+def _verify_that_the_query_is_unate(query):
+    positive_relational_symbols = set()
+    negative_relational_symbols = set()
+
+    for predicate in extract_logic_predicates(query):
+        if isinstance(predicate, Negation):
+            while isinstance(predicate, Negation):
+                predicate = predicate.formula
+            negative_relational_symbols.add(predicate.functor)
+        else:
+            positive_relational_symbols.add(predicate.functor)
+
+    if not positive_relational_symbols.isdisjoint(negative_relational_symbols):
+        raise NonLiftableException(f"Query {query} is not unate")
 
 
 def solve_marg_query(rule, cpl):
