@@ -565,3 +565,32 @@ def test_simple_existential_query_plan():
     query = ExistentialPredicate(x, R(x, y))
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
     assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+def test_extract_probabilistic_root_variables_no_probabilistic_atom():
+    res = dalvi_suciu_lift.extract_probabilistic_root_variables(set(), dict())
+    assert len(res) == 0
+
+    P = Symbol("P")
+    x = Symbol("x")
+    y = Symbol("y")
+    formulas = [
+        P(x, y),
+    ]
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[
+                ("a", "b"),
+                ("b", "a"),
+                ("c", "a"),
+            ],
+            columns=("x", "y"),
+        )
+    )
+    symbol_table = {
+        P: DeterministicFactSet(relation)
+    }
+    res = dalvi_suciu_lift.extract_probabilistic_root_variables(
+        formulas, symbol_table
+    )
+    assert len(res) == 0
