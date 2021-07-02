@@ -85,7 +85,6 @@ def test_rule_with_negation_to_ucq():
     T = Symbol('T')
     x = Symbol('x')
     y = Symbol('y')
-    z = Symbol('z')
 
     rule = Implication(R(x), Conjunction((S(x, y), Negation(T(y)))))
 
