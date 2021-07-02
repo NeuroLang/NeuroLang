@@ -27,7 +27,7 @@ from ..expressions import (
     Symbol,
     sure_is_not_pattern
 )
-from ..logic import Conjunction, Implication
+from ..logic import Conjunction, Implication, FALSE
 from ..logic.expression_processing import (
     extract_logic_free_variables,
 )
@@ -45,7 +45,8 @@ from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
-    RelationalAlgebraProvenanceExpressionSemringSolver
+    RelationalAlgebraProvenanceExpressionSemringSolver,
+    ProvenanceExtendedProjectionMixin,
 )
 from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet
@@ -156,7 +157,10 @@ class SemiRingRAPToSDD(PatternWalker):
         return res
 
 
-class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
+class WMCSemiRingSolver(
+    ProvenanceExtendedProjectionMixin,
+    RelationalAlgebraProvenanceExpressionSemringSolver,
+):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.translated_probfact_sets = dict()
@@ -287,7 +291,10 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         raise NotImplementedError()
 
 
-class SDDWMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
+class SDDWMCSemiRingSolver(
+    ProvenanceExtendedProjectionMixin,
+    RelationalAlgebraProvenanceExpressionSemringSolver,
+):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.translated_probfact_sets = dict()
@@ -562,6 +569,16 @@ class RAQueryOptimiser(
     pass
 
 
+def _build_empty_result_set(variables_to_project):
+    cols = tuple(v.value for v in variables_to_project)
+    prov_col = ColumnStr(Symbol.fresh().name)
+    cols += (prov_col,)
+    return ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=cols),
+        prov_col,
+    )
+
+
 def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
     """
     Obtain the solution of a SUCC query on a CP-Logic program.
@@ -582,6 +599,9 @@ def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
             flat_query = lift_optimization_for_choice_predicates(
                 flat_query, cpl_program
             )
+
+        if flat_query == FALSE:
+            return _build_empty_result_set(variables_to_project)
 
         ra_query = TranslateToNamedRA().walk(flat_query)
         ra_query = Projection(ra_query, variables_to_project)
@@ -639,6 +659,9 @@ def solve_succ_query_sdd_direct(
             flat_query = lift_optimization_for_choice_predicates(
                 flat_query, cpl_program
             )
+
+        if flat_query == FALSE:
+            return _build_empty_result_set(variables_to_project)
 
         ra_query = TranslateToNamedRA().walk(flat_query)
         ra_query = Projection(ra_query, variables_to_project)
