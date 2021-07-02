@@ -40,8 +40,8 @@ def freeze_atom(atom):
     the symbol.
     '''
     args = (
-        Constant(s.name)
-        for s in atom.args
+        Constant(arg.name) if isinstance(arg, Symbol) else arg
+        for arg in atom.args
     )
     return atom.functor(*args)
 

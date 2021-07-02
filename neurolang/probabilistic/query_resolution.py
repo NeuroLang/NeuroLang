@@ -2,12 +2,22 @@ import typing
 from typing import AbstractSet
 
 from ..datalog.aggregation import is_builtin_aggregation_functor
-from ..datalog.expression_processing import EQ, conjunct_formulas
+from ..datalog.expression_processing import (
+    EQ,
+    conjunct_formulas,
+    extract_logic_free_variables,
+    extract_logic_predicates,
+)
 from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
+from ..relational_algebra import Projection, str2columnstr_constant
+from ..relational_algebra_provenance import (
+    NaturalJoinInverse,
+    RelationalAlgebraProvenanceCountingSolver,
+)
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
@@ -172,7 +182,7 @@ def compute_probabilistic_solution(
     check_qbased_pfact_tuple_unicity=False,
 ):
     solution = MapInstance()
-    cpl = _build_probabilistic_program(
+    cpl, prob_idb = _build_probabilistic_program(
         det_edb,
         pfact_db,
         pchoice_edb,
@@ -192,6 +202,57 @@ def compute_probabilistic_solution(
             relation.value.to_unnamed()
         )
     return solution
+
+
+def lift_solve_marg_query(rule, cpl, succ_solver):
+    """
+    Solve a MARG query on a CP-Logic program.
+
+    Parameters
+    ----------
+    query : Implication
+        Consequent must be of type `Condition`.
+        MARG query of the form `ans(x) :- P(x)`.
+    cpl_program : CPLogicProgram
+        CP-Logic program on which the query should be solved.
+
+    Returns
+    -------
+    ProvenanceAlgebraSet
+        Provenance set labelled with probabilities for each tuple in the result
+        set.
+
+    """
+    res_args = tuple(s for s in rule.consequent.args if isinstance(s, Symbol))
+
+    joint_antecedent = Conjunction(
+        tuple(
+            extract_logic_predicates(rule.antecedent.conditioned)
+            | extract_logic_predicates(rule.antecedent.conditioning)
+        )
+    )
+    joint_logic_variables = set(res_args)
+    joint_rule = Implication(
+        Symbol.fresh()(*joint_logic_variables), joint_antecedent
+    )
+    joint_provset = succ_solver(joint_rule, cpl)
+
+    denominator_antecedent = rule.antecedent.conditioning
+    denominator_logic_variables = (
+        extract_logic_free_variables(denominator_antecedent) & res_args
+    )
+    denominator_rule = Implication(
+        Symbol.fresh()(*denominator_logic_variables), denominator_antecedent
+    )
+    denominator_provset = succ_solver(denominator_rule, cpl)
+    rapcs = RelationalAlgebraProvenanceCountingSolver()
+    provset = rapcs.walk(
+        Projection(
+            NaturalJoinInverse(joint_provset, denominator_provset),
+            tuple(str2columnstr_constant(s.name) for s in res_args),
+        )
+    )
+    return provset
 
 
 def _discard_query_based_probfacts(prob_idb):
@@ -278,4 +339,4 @@ def _build_probabilistic_program(
     # solution of their probability and antecedent
     prob_idb = _discard_query_based_probfacts(prob_idb)
     cpl.walk(prob_idb)
-    return cpl
+    return cpl, prob_idb

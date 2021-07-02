@@ -3,7 +3,9 @@ import typing
 from ...datalog.expression_processing import EQ
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction
-from ..dichotomy_theorem_based_solver import is_hierarchical_without_self_joins
+from ..small_dichotomy_theorem_based_solver import (
+    is_hierarchical_without_self_joins,
+)
 
 Q = Symbol("Q")
 R = Symbol("R")

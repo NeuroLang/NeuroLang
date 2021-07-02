@@ -21,6 +21,11 @@ from typing import (
 from uuid import uuid1
 
 import pandas as pd
+from neurolang.type_system import (
+    get_args,
+    get_origin,
+    replace_type_variable_fix_python36_37,
+)
 
 from .. import expressions as ir
 from ..datalog.aggregation import (
@@ -39,13 +44,11 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError, UnsupportedSolverError
 from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
+from ..probabilistic import (
+    dalvi_suciu_lift,
+    small_dichotomy_theorem_based_solver,
+)
 from ..probabilistic.cplogic.program import CPLogicMixin
-from ..probabilistic.dichotomy_theorem_based_solver import (
-    solve_marg_query as lifted_solve_marg_query,
-)
-from ..probabilistic.dichotomy_theorem_based_solver import (
-    solve_succ_query as lifted_solve_succ_query,
-)
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
@@ -74,11 +77,6 @@ from .datalog.sugar import (
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
-from neurolang.type_system import (
-    get_args,
-    get_origin,
-    replace_type_variable_fix_python36_37,
-)
 
 
 class RegionFrontendCPLogicSolver(
@@ -111,11 +109,11 @@ class NeurolangPDL(QueryBuilderDatalog):
         self,
         chase_class: Type[Chase] = Chase,
         probabilistic_solvers: Tuple[Callable] = (
-            lifted_solve_succ_query,
+            dalvi_suciu_lift.solve_succ_query,
             wmc_solve_succ_query,
         ),
         probabilistic_marg_solvers: Tuple[Callable] = (
-            lifted_solve_marg_query,
+            dalvi_suciu_lift.solve_marg_query,
             wmc_solve_marg_query,
         ),
         check_qbased_pfact_tuple_unicity=False,
