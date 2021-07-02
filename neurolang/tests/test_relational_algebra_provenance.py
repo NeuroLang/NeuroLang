@@ -8,17 +8,15 @@ from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
-    ColumnStr,
     ColumnInt,
-    Difference,
-    LeftNaturalJoin,
+    ColumnStr,
     NaturalJoin,
     Product,
     RenameColumn,
     RenameColumns,
     Selection,
     eq_,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
     ConcatenateConstantColumn,
@@ -29,8 +27,12 @@ from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     Union,
+    WeightedNaturalJoin
 )
-from ..utils import NamedRelationalAlgebraFrozenSet
+from ..utils import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraStringExpression
+)
 
 C_ = Constant
 S_ = Symbol
@@ -540,3 +542,32 @@ def test_selection_between_columnints():
         ColumnStr("_p_"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_weightednaturaljoin_provenance_name():
+    RA1 = NamedRelationalAlgebraFrozenSet(
+        columns=("col1", "__provenance__1"),
+        iterable=[(i * 2, i) for i in range(10)],
+    )
+    pset_r1 = ProvenanceAlgebraSet(RA1, ColumnStr("__provenance__1"))
+
+    RA2 = NamedRelationalAlgebraFrozenSet(
+        columns=("col1", "colA", "__provenance__2"),
+        iterable=[(i % 5, i * 3, i) for i in range(20)],
+    )
+    pset_r2 = ProvenanceAlgebraSet(RA2, ColumnStr("__provenance__2"))
+
+    s = WeightedNaturalJoin((pset_r1, pset_r2), (Constant(1), Constant(-1)))
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
+
+    expected = RA1.naturaljoin(RA2).extended_projection(
+        {
+            sol.provenance_column: RelationalAlgebraStringExpression(
+                '__provenance__1 - __provenance__2'
+            ),
+            'col1': RelationalAlgebraStringExpression('col1'),
+            'colA': RelationalAlgebraStringExpression('colA')
+        }
+    )
+
+    assert sol.relations == expected
