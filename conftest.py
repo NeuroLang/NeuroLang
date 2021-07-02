@@ -8,6 +8,7 @@ from python. This JVM needs to be started before we import neurolang,
 otherwise it can cause major side-effects which are hard to track. See
 https://github.com/jpype-project/jpype/issues/933 for reference.
 """
+import warnings
 import pytest
 import dask_sql
 from neurolang import config
@@ -54,8 +55,8 @@ def pytest_sessionstart(session: pytest.Session):
 
         faulthandler.enable()
         faulthandler.disable()
-    except:
-        pass
+    except ImportError:
+        warnings.warn("Faulthandler lib not available.")
 
 
 @pytest.fixture(autouse=config["RAS"].get("backend", "pandas") == "dask")
