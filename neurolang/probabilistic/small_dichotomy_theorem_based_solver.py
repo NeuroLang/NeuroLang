@@ -27,12 +27,13 @@ from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     enforce_conjunction,
     extract_logic_atoms,
+    extract_logic_predicates,
     flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, Symbol
-from ..logic import FALSE, Conjunction, Implication
+from ..logic import FALSE, Conjunction, Implication, Negation
 from ..relational_algebra import (
     ColumnStr,
     EliminateTrivialProjections,
@@ -167,16 +168,20 @@ def solve_succ_query(query, cpl_program):
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
         shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
+        probabilistic_predicates = []
+        for predicate in extract_logic_predicates(shattered_query.antecedent):
+            atom = predicate
+            while isinstance(atom, Negation):
+                atom = atom.formula
+            if isinstance(
+                atom.functor,
+                (ProbabilisticChoiceSet, ProbabilisticFactSet)
+            ):
+                probabilistic_predicates.append(predicate)
         shattered_query_probabilistic_body = Conjunction(
-            tuple(
-                atom
-                for atom in extract_logic_atoms(shattered_query.antecedent)
-                if isinstance(
-                    atom.functor,
-                    (ProbabilisticChoiceSet, ProbabilisticFactSet),
-                )
-            )
+            tuple(probabilistic_predicates)
         )
+
         if not is_hierarchical_without_self_joins(
             shattered_query_probabilistic_body
         ):
