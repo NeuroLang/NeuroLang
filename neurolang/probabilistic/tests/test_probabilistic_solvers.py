@@ -933,3 +933,17 @@ def test_probsemiring_forbidden_extended_proj_on_provcol():
     solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
     with pytest.raises(ValueError):
         solver.walk(proj)
+
+
+
+def test_simple_boolean_query(solver):
+    pchoice_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    query = Implication(ans(), Z(x))
+    result = solver.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set([(1.0,)], ("_p_",))
+    assert testing.eq_prov_relations(result, expected)
