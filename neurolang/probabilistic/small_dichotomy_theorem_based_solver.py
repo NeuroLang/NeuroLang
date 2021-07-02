@@ -168,16 +168,8 @@ def solve_succ_query(query, cpl_program):
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
         shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
-        probabilistic_predicates = []
-        for predicate in extract_logic_predicates(shattered_query.antecedent):
-            atom = predicate
-            while isinstance(atom, Negation):
-                atom = atom.formula
-            if isinstance(
-                atom.functor,
-                (ProbabilisticChoiceSet, ProbabilisticFactSet)
-            ):
-                probabilistic_predicates.append(predicate)
+        probabilistic_predicates = \
+            _extract_antecedent_probabilistic_predicates(shattered_query)
         shattered_query_probabilistic_body = Conjunction(
             tuple(probabilistic_predicates)
         )
@@ -206,6 +198,20 @@ def solve_succ_query(query, cpl_program):
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result
+
+
+def _extract_antecedent_probabilistic_predicates(datalog_rule):
+    probabilistic_predicates = []
+    for predicate in extract_logic_predicates(datalog_rule.antecedent):
+        atom = predicate
+        while isinstance(atom, Negation):
+            atom = atom.formula
+        if isinstance(
+            atom.functor,
+            (ProbabilisticChoiceSet, ProbabilisticFactSet)
+        ):
+            probabilistic_predicates.append(predicate)
+    return probabilistic_predicates
 
 
 def _project_on_query_head(provset, query):

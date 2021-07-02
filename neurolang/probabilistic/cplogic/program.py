@@ -360,5 +360,8 @@ class CPLogicMixin(PatternWalker):
             )
 
 
-class CPLogicProgram(CPLogicMixin, DatalogProgramNegationMixin, DatalogProgram, ExpressionWalker):
+class CPLogicProgram(
+    CPLogicMixin, DatalogProgramNegationMixin,
+    DatalogProgram, ExpressionWalker
+):
     pass
