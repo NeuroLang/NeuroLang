@@ -299,6 +299,7 @@ workflows:
     jobs:
       - py36
       - py37
+      - py37dask
       - docs:
          requires:
           - py37
