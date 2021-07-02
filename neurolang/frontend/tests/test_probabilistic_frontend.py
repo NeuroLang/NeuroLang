@@ -195,7 +195,7 @@ def test_ontology_query():
         e.answer[e.x, e.y] = p2[e.x, e.y]
         solution_instance = nl.solve_all()
 
-    resp = list(iter(solution_instance["answer"]))
+    resp = list(solution_instance["answer"].itervalues())
     assert (
         "http://www.w3.org/2002/03owlt/hasValue/premises001#i",
         "true",
@@ -574,15 +574,15 @@ def test_equality2():
     )
 
     @nl.add_symbol
-    def word_lower(word: str) -> str:
-        return str(word).lower()
+    def word_lower(name: str) -> str:
+        return str(name).lower()
 
     with nl.scope as e:
-        e.low[e.lower_] = e.test_var[e.word, "var"] & (
-            e.lower_ == word_lower(e.word)
+        e.low[e.lower] = e.test_var[e.name, "var"] & (
+            e.lower == word_lower(e.name)
         )
 
-        query = nl.query((e.lower_,), e.low[e.lower_])
+        query = nl.query((e.lower,), e.low[e.lower])
 
     assert set(query) == set((("hola",), ("bonjour",)))
 

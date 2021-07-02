@@ -1,5 +1,4 @@
 import operator
-import pytest
 
 from ..expressions import Constant
 from ..probabilistic.cplogic import testing
@@ -20,7 +19,6 @@ from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolver,
 )
-from ..utils import config
 
 EQ = Constant(operator.eq)
 
@@ -52,10 +50,6 @@ class SetType(frozenset):
         return self.union(other)
 
 
-@pytest.mark.skipif(
-    config["RAS"].get("backend") == "dask",
-    reason="multiplication of sets not yet implemented in dask backend",
-)
 def test_set_type_semiring():
     r1 = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
@@ -99,10 +93,7 @@ class StringTestType:
     def __hash__(self):
         return hash(self.value)
 
-@pytest.mark.skipif(
-    config["RAS"].get("backend") == "dask",
-    reason="multiplication of strings not yet implemented in dask backend",
-)
+
 def test_string_semiring():
     r1 = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(

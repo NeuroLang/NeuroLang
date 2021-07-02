@@ -120,18 +120,18 @@ def principal_direction(s: ExplicitVBR, direction: str, eps=1e-6) -> bool:
 # declared ones.
 
 with nl.environment as e:
-    e.left_sulcus[e.name_, e.region] = e.destrieux(
-        e.name_, e.region
-    ) & startswith("L S", e.name_)
+    e.left_sulcus[e.name, e.region] = e.destrieux(
+        e.name, e.region
+    ) & startswith("L S", e.name)
 
-    e.left_primary_sulcus[e.name_, e.region] = e.destrieux(e.name_, e.region) & (
-        (e.name_ == "L S_central")
-        | (e.name_ == "L Lat_Fis-post")
-        | (e.name_ == "L S_pericallosal")
-        | (e.name_ == "L S_parieto_occipital")
-        | (e.name_ == "L S_calcarine")
-        | (e.name_ == "L Lat_Fis-ant-Vertical")
-        | (e.name_ == "L Lat_Fis-ant-Horizont")
+    e.left_primary_sulcus[e.name, e.region] = e.destrieux(e.name, e.region) & (
+        (e.name == "L S_central")
+        | (e.name == "L Lat_Fis-post")
+        | (e.name == "L S_pericallosal")
+        | (e.name == "L S_parieto_occipital")
+        | (e.name == "L S_calcarine")
+        | (e.name == "L Lat_Fis-ant-Vertical")
+        | (e.name == "L Lat_Fis-ant-Horizont")
     )
     e.left_frontal_lobe_sulcus[e.region] = (
         e.left_sulcus(..., e.region)
@@ -168,7 +168,7 @@ with nl.scope as e:
         )
     )
 
-    res = nl.query((e.name_, e.region), e.named_sulcus(e.name_, e.region))
+    res = nl.query((e.name, e.region), e.named_sulcus(e.name, e.region))
 
 for name, region in res:
     subplots = plt.subplots(nrows=2, ncols=1, figsize=(10, 5))[1]
@@ -207,7 +207,7 @@ with nl.scope as e:
         )
     )
 
-    res = nl.query((e.name_, e.region), e.named_sulcus(e.name_, e.region))
+    res = nl.query((e.name, e.region), e.named_sulcus(e.name, e.region))
 
 for name, region in res:
     subplots = plt.subplots(nrows=2, ncols=1, figsize=(10, 5))[1]

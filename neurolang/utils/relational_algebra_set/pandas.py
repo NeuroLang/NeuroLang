@@ -12,6 +12,18 @@ class RelationalAlgebraStringExpression(str):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
+class RelationalAlgebraColumn:
+    pass
+
+
+class RelationalAlgebraColumnInt(int, RelationalAlgebraColumn):
+    pass
+
+
+class RelationalAlgebraColumnStr(str, RelationalAlgebraColumn):
+    pass
+
+
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     """
     RelationalAlgebraFrozenSet implementation using in-memory pandas.DataFrame
@@ -36,7 +48,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         >>> a = [(i % 2, i, i * 2) for i in range(5)]
         >>> ras = RelationalAlgebraFrozenSet(a)
         >>> ras
-           0  1  2
+          0  1  2
         0  0  0  0
         1  1  1  2
         2  0  2  4
@@ -219,9 +231,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         if callable(select_criteria):
             ix = self._container.apply(select_criteria, axis=1)
-        elif isinstance(
-            select_criteria, RelationalAlgebraStringExpression
-        ):
+        elif isinstance(select_criteria, RelationalAlgebraStringExpression):
             ix = self._container.eval(select_criteria)
         else:
             ix = self._selection_dict(select_criteria)
@@ -290,7 +300,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         output._container = new_container
         return output
 
-    def equijoin(self, other, join_indices):
+    def equijoin(self, other, join_indices, return_mappings=False):
         res = self._dee_dum_product(other)
         if res is not None:
             return res
@@ -352,8 +362,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 self.arity > 0 and other.arity > 0
             ) and self.arity != other.arity:
                 raise ValueError(
-                    "Relational algebra set operators can only"
-                    " be used on sets with same columns."
+                    "Difference only defined for sets with the same arity"
                 )
             if self.is_empty() or other.is_empty():
                 return self.copy()
@@ -568,7 +577,7 @@ class NamedRelationalAlgebraFrozenSet(
         columns = tuple(named_columns.index(c) for c in columns)
         return unnamed_self.projection(*columns)
 
-    def equijoin(self, other, join_indices):
+    def equijoin(self, other, join_indices, return_mappings=False):
         raise NotImplementedError()
 
     def naturaljoin(self, other):
@@ -654,7 +663,7 @@ class NamedRelationalAlgebraFrozenSet(
             raise ValueError(f"{dst} cannot be in the columns")
         src_idx = self._columns.index(src)
         new_columns = (
-            self._columns[:src_idx] + (dst,) + self._columns[src_idx + 1 :]
+            self._columns[:src_idx] + (dst,) + self._columns[src_idx + 1:]
         )
         new_container = self._container.rename(columns={src: dst})
         return self._light_init_same_structure(
@@ -814,7 +823,7 @@ class NamedRelationalAlgebraFrozenSet(
                         "{}={}".format(str(dst_column), str(operation)),
                         engine="python",
                     )
-            elif isinstance(operation, abc.RelationalAlgebraColumn):
+            elif isinstance(operation, RelationalAlgebraColumn):
                 new_container[dst_column] = new_container[operation]
             elif callable(operation):
                 new_container[dst_column] = new_container.apply(
