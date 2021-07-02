@@ -1,6 +1,6 @@
 import math
 import operator
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Tuple, Callable
 
 import numpy
 import pandas.core.computation.ops
