@@ -1,6 +1,6 @@
 import math
 import operator
-from typing import AbstractSet, Callable, Tuple
+from typing import AbstractSet, Tuple
 
 import numpy
 import pandas.core.computation.ops
@@ -84,6 +84,7 @@ class BinaryRelationalAlgebraOperation(RelationalAlgebraOperation):
 class UnaryRelationalAlgebraOperation(RelationalAlgebraOperation):
     pass
 
+
 class Selection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, formula):
         self.relation = relation
@@ -151,7 +152,7 @@ class Product(NAryRelationalAlgebraOperation):
     def __repr__(self):
         return (
             "["
-            + f"\N{n-ary times operator}".join(repr(r) for r in self.relations)
+            + "\N{n-ary times operator}".join(repr(r) for r in self.relations)
             + "]"
         )
 
@@ -190,7 +191,6 @@ class NameColumns(UnaryRelationalAlgebraOperation):
     All columns must be named at once. Each column name must either be a
     `Constant[ColumnStr]` or a `Symbol[ColumnStr]` pointing to a symbolic
     column name resolved when the expression is compiled.
-
     """
 
     def __init__(self, relation, column_names):
@@ -237,7 +237,7 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
 
     def __repr__(self):
         return (
-            f"\N{GREEK SMALL LETTER DELTA}"
+            "\N{GREEK SMALL LETTER DELTA}"
             + "_({})".format(
                 ", ".join(
                     "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)
@@ -248,7 +248,37 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
         )
 
 
-class ExtendedProjection(UnaryRelationalAlgebraOperation):
+class GroupByAggregation(RelationalAlgebraOperation):
+    """
+    General representation of a groupby operation with aggregate functions.
+
+    Attributes
+    ----------
+    relation : Expression[AbstractSet]
+        Relation on which the groupby is applied.
+    groupby : `Tuple[Union[Constant[ColumnStr], Symbol[ColumnStr]]]`
+        The list of columns on which to group.
+    aggregate_functions : Tuple[FunctionApplicationListMember]
+        List of aggregate functions to apply.
+
+    """
+
+    def __init__(self, relation, groupby, aggregate_functions):
+        self.relation = relation
+        self.groupby = groupby
+        self.aggregate_functions = aggregate_functions
+
+    def __repr__(self):
+        join_str = "," if len(self.aggregate_functions) < 2 else ",\n"
+        return "γ_[{}]({})".format(
+            join_str.join(
+                [repr(member) for member in self.aggregate_functions]
+            ),
+            repr(self.relation),
+        )
+
+
+class ExtendedProjection(RelationalAlgebraOperation):
     """
     General operation defining string-based relational algebra projections
     allowing flexible computations on a relation's columns.
@@ -257,7 +287,7 @@ class ExtendedProjection(UnaryRelationalAlgebraOperation):
     ----------
     relation : Expression[AbstractSet]
         Relation on which the projections are applied.
-    projection_list : Tuple[ExtendedProjectionListMember]
+    projection_list : Tuple[FunctionApplicationListMember]
         List of projections to apply.
 
     Notes
@@ -298,20 +328,25 @@ class ExtendedProjection(UnaryRelationalAlgebraOperation):
         )
 
 
-class ExtendedProjectionListMember(Definition):
+class FunctionApplicationListMember(Definition):
     """
-    Member of a projection list.
+    Representation of a function application to a column. Can be used to
+    represent either the application of an extended projection, or the
+    application of an aggregate function, to a column.
+
 
     Attributes
     ----------
-    fun_exp : `Constant[str]`
-        Constant string representation of the extended projection operation.
+    fun_exp : `Union[Constant[str], FunctionApplication]`
+        Constant string representation of an extended projection operation,
+        or `FunctionApplication` representation of an aggregate function.
     dst_column : `Constant[ColumnStr]` or `Symbol[ColumnStr]`
         Constant column string of the destination column.
 
     Notes
     -----
-    As described in [1]_, a projection list member can either be
+    In the case of an extended projection operation, as described in [1]_,
+    a function application list member can either be
         - a single attribute (column) name in the relation, resulting in a
           normal non-extended projection,
         - an expression `x -> y` where `x` and `y` are both attribute (column)
@@ -406,6 +441,7 @@ OPERATOR_STRING = {
     operator.le: "<=",
     operator.pow: "**",
 }
+
 
 def _get_evaluatable_operations_and_string_translations():
     """
@@ -737,12 +773,12 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                 column, auto_infer_type=False, verify_type=False
             )
             ext_proj_list_members.append(
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=cst_column, dst_column=cst_column,
                 )
             )
         ext_proj_list_members.append(
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 fun_exp=new_column_value, dst_column=new_column
             )
         )
@@ -776,6 +812,26 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             return RelationalAlgebraColumnStr(fun_exp.value)
         else:
             return fun_exp.value
+
+    @ew.add_match(GroupByAggregation(Constant, ..., ...))
+    def aggregate(self, agg_op):
+        relation = agg_op.relation
+        groupby = (c.value for c in agg_op.groupby)
+        aggregate_functions = []
+        for member in agg_op.aggregate_functions:
+            fun_args = [arg.value for arg in member.fun_exp.args]
+            if len(fun_args) == 1:
+                fun_args = fun_args[0]
+            aggregate_functions.append(
+                (
+                    member.dst_column.value,
+                    fun_args,
+                    member.fun_exp.functor.value,
+                )
+            )
+        with sure_is_not_pattern():
+            result = relation.value.aggregate(groupby, aggregate_functions)
+        return self._build_relation_constant(result)
 
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):

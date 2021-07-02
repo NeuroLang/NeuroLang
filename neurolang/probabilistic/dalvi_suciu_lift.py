@@ -1,6 +1,7 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
+from typing import AbstractSet, Iterable
 
 import numpy as np
 
@@ -8,66 +9,73 @@ from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     enforce_conjunction,
-    flatten_query
+    flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NonLiftableException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
-    add_match
+    add_match,
 )
-from ..expressions import FunctionApplication, Symbol, Constant
+from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import (
     FALSE,
     Conjunction,
     Disjunction,
     ExistentialPredicate,
     Implication,
-    NaryLogicOperator
+    NaryLogicOperator,
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
 )
 from ..logic.transformations import (
-    MakeExistentialsImplicit,
-    RemoveTrivialOperations,
     CollapseConjunctions,
     CollapseDisjunctions,
+    MakeExistentialsImplicit,
+    RemoveTrivialOperations,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
+    FunctionApplicationListMember,
+    GroupByAggregation,
+    ExtendedProjection,
+    RelationalAlgebraStringExpression,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
+    Projection,
     UnaryRelationalAlgebraOperation,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
-from .dichotomy_theorem_based_solver import (
-    RAQueryOptimiser,
-    lift_optimization_for_choice_predicates
-)
-from .query_resolution import lift_solve_marg_query
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
-    ProbabilisticFactSet,
-    ProbabilisticChoiceSet,
     NonLiftable,
-    generate_probabilistic_symbol_table_for_query
+    ProbabilisticChoiceSet,
+    ProbabilisticFactSet,
+    generate_probabilistic_symbol_table_for_query,
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
+from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
+from .small_dichotomy_theorem_based_solver import (
+    RAQueryOptimiser,
+    _maybe_reintroduce_head_variables,
+    _project_on_query_head,
+    lift_optimization_for_choice_predicates,
+)
 from .transforms import (
+    add_existentials_except,
     convert_rule_to_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables,
-    add_existentials_except,
 )
 
 LOG = logging.getLogger(__name__)
@@ -80,6 +88,40 @@ __all__ = [
 ]
 
 RTO = RemoveTrivialOperations()
+
+
+class IndependentProjection(Projection):
+    pass
+
+
+class DisjointProjection(Projection):
+    pass
+
+
+class DisjointProjectSemiringSolver(ProbSemiringSolver):
+    @add_match(IndependentProjection)
+    def independent_projection(self, proj_op):
+        prov_set = self.walk(proj_op.relation)  # type: ProvenanceAlgebraSet
+        prov_col = str2columnstr_constant(prov_set.provenance_column)
+        result = Constant[AbstractSet](prov_set.value)
+        proj_list = [
+            FunctionApplicationListMember(
+                str2columnstr_constant(col),
+                str2columnstr_constant(col),
+            )
+            for col in prov_set.non_provenance_columns
+        ]
+        proj_list.append(
+            FunctionApplicationListMember(
+                Constant(RelationalAlgebraStringExpression(
+                    "log(1 - {})".format(prov_col.value)
+                )),
+                prov_col,
+            )
+        )
+        result = ExtendedProjection(result, proj_list)
+        relation = self.walk(result)
+        return ProvenanceAlgebraSet(relation, prov_col.value)
 
 
 def solve_succ_query(query, cpl_program):
@@ -111,8 +153,12 @@ def solve_succ_query(query, cpl_program):
         isinstance(flat_query_body, Conjunction)
         and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
     ):
+        head_var_names = tuple(
+            term.name for term in query.consequent.args
+            if isinstance(term, Symbol)
+        )
         return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(("_p_",)),
+            NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names),
             ColumnStr("_p_"),
         )
 
@@ -141,10 +187,16 @@ def solve_succ_query(query, cpl_program):
                 "Query %s not liftable, algorithm can't be applied",
                 query
             )
+        # project on query's head variables
+        ra_query = _project_on_query_head(ra_query, shattered_query)
+        # re-introduce head variables potentially removed by unification
+        ra_query = _maybe_reintroduce_head_variables(
+            ra_query, flat_query, unified_query
+        )
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
-        solver = ProbSemiringSolver(symbol_table)
+        solver = DisjointProjectSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result
@@ -173,8 +225,11 @@ def dalvi_suciu_lift(rule, symbol_table):
             for atom in extract_logic_atoms(rule)
         )
     ):
+        free_vars = extract_logic_free_variables(rule)
         rule = MakeExistentialsImplicit().walk(rule)
-        return TranslateToNamedRA().walk(rule)
+        result = TranslateToNamedRA().walk(rule)
+        proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
+        return IndependentProjection(result, proj_cols)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
     connected_components = symbol_connected_components(rule_cnf)
@@ -253,7 +308,7 @@ def disjoint_project_cnf(cnf_query, symbol_table):
         str2columnstr_constant(v.name)
         for v in free_variables
     )
-    plan = rap.DisjointProjection(plan, attributes)
+    plan = DisjointProjection(plan, attributes)
     return plan
 
 
@@ -504,8 +559,8 @@ def separator_variable_plan(expression, separator_variables, symbol_table):
     )
     for v in existentials_to_add:
         expression = ExistentialPredicate(v, expression)
-    return rap.Projection(
-        rap.Projection(
+    return IndependentProjection(
+        IndependentProjection(
             dalvi_suciu_lift(expression, symbol_table),
             tuple(
                 str2columnstr_constant(v.name)

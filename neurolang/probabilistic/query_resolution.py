@@ -231,9 +231,7 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
             | extract_logic_predicates(rule.antecedent.conditioning)
         )
     )
-    joint_logic_variables = (
-        extract_logic_free_variables(joint_antecedent) & res_args
-    )
+    joint_logic_variables = set(res_args)
     joint_rule = Implication(
         Symbol.fresh()(*joint_logic_variables), joint_antecedent
     )

@@ -21,7 +21,7 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import (
     ConcatenateConstantColumn,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NaturalJoinInverse,
     Projection,
     ProvenanceAlgebraSet,
@@ -137,7 +137,7 @@ def test_naturaljoin():
         ProvenanceAlgebraSet(RnjR, ColumnStr("__provenance__1")),
         tuple(
             [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=Constant(ColumnStr("__provenance__1"))
                     * Constant(ColumnStr("__provenance__2")),
                     dst_column=Constant(ColumnStr("__provenance__")),
@@ -218,7 +218,7 @@ def test_product():
         ProvenanceAlgebraSet(RnjR, ColumnStr("__provenance__1")),
         tuple(
             [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=Constant(ColumnStr("__provenance__1"))
                     * Constant(ColumnStr("__provenance__2")),
                     dst_column=Constant(ColumnStr("__provenance__")),
@@ -259,9 +259,11 @@ def test_union():
     relation1 = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
-                ("a", "b", 0.1),
-                ("b", "a", 0.2),
-                ("c", "a", 0.2),
+                ("a", "b", 1),
+                ("b", "a", 2),
+                ("c", "a", 2),
+                ("c", "a", 1),
+                ("b", "a", 1),
             ],
             columns=["x", "y", "__provenance__"],
         ),
@@ -270,42 +272,33 @@ def test_union():
     relation2 = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
-                ("a", "b", 0.1),
-                ("b", "a", 0.3),
-                ("c", "a", 0.4),
-                ("d", "a", 0.7),
+                ("a", "b", 1),
+                ("b", "a", 2),
+                ("d", "a", 2),
+                ("c", "a", 1),
+                ("b", "a", 1),
             ],
             columns=["x", "y", "__provenance__"],
         ),
         ColumnStr("__provenance__"),
     )
-    expected = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            iterable=[
-                ("a", "b", 1 - 0.9 * 0.9),
-                ("b", "a", 1 - 0.8 * 0.7),
-                ("c", "a", 1 - 0.8 * 0.6),
-                ("d", "a", 0.7)
-            ],
-            columns=["x", "y", "__provenance__"],
-        ),
-        provenance_column=ColumnStr("__provenance__"),
+
+    expected = NamedRelationalAlgebraFrozenSet(
+        iterable=[("a", "b", 2), ("b", "a", 6), ("c", "a", 4), ("d", "a", 2)],
+        columns=["x", "y", "__provenance__"],
     )
-    expression = Union(relation1, relation2)
-    result = RelationalAlgebraProvenanceCountingSolver().walk(expression)
-    assert testing.eq_prov_relations(result, expected)
+
+    s = Union(relation1, relation2)
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
+
+    assert sol == expected
 
 
 def test_union_different_prov_col_names():
     r1 = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p1_", "x"))
     r2 = testing.make_prov_set([(0.5, "a"), (0.9, "c")], ("_p2_", "x"))
     expected = testing.make_prov_set(
-        [
-            (1 - 0.9 * 0.5, "a"),
-            (1 - 0.8, "b"),
-            (1 - 0.1, "c")
-        ],
-        ("_whatever_", "x"),
+        [(0.6, "a"), (0.2, "b"), (0.9, "c")], ("_whatever_", "x"),
     )
     operation = Union(r1, r2)
     solver = RelationalAlgebraProvenanceCountingSolver()
@@ -326,11 +319,11 @@ def test_projection():
     relation = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
-                ("a", "b", 0.1),
-                ("b", "a", 0.2),
-                ("c", "a", 0.2),
-                ("c", "a", 0.1),
-                ("b", "a", 0.1),
+                ("a", "b", 1),
+                ("b", "a", 2),
+                ("c", "a", 2),
+                ("c", "a", 1),
+                ("b", "a", 1),
             ],
             columns=["x", "y", "__provenance__"],
         ),
@@ -338,11 +331,7 @@ def test_projection():
     )
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            iterable=[
-                ("a", "b", 0.1),
-                ("b", "a", 1 - 0.9 * 0.8),
-                ("c", "a", 1 - 0.9 * 0.8)
-            ],
+            iterable=[("a", "b", 1), ("b", "a", 3), ("c", "a", 3)],
             columns=["x", "y", "__provenance__"],
         ),
         ColumnStr("__provenance__"),
@@ -352,7 +341,8 @@ def test_projection():
     )
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(sum_agg_op)
-    assert testing.eq_prov_relations(result, expected)
+
+    assert result == expected
 
 
 def test_concatenate_constant():
@@ -390,7 +380,7 @@ def test_extended_projection():
         relation,
         tuple(
             [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=Constant(ColumnStr("x"))
                     + Constant(ColumnStr("y")),
                     dst_column=Constant(ColumnStr("sum")),
@@ -419,17 +409,13 @@ def test_provenance_projection():
     projection = Projection(relation, (Constant(ColumnStr("x")),))
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(projection)
-    expected = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            iterable=[
-                (1 - 0.2 * 0.8, "a"),
-                (1 - 0.3 * 0.9, "b")
-            ],
-            columns=("_p_", "x"),
-        ),
-        ColumnStr("_p_"),
-    )
-    assert testing.eq_prov_relations(result, expected)
+    assert len(result.value) == 2
+    for exp_prob, exp_x in [(1.0, "a"), (0.8, "b")]:
+        for tupl in result.value:
+            if tupl.x == exp_x:
+                assert np.isclose(
+                    exp_prob, getattr(tupl, result.provenance_column)
+                )
 
 
 def test_provenance_product_with_shared_non_prov_col_should_fail():

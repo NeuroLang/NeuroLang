@@ -10,23 +10,23 @@ from ...logic import Conjunction, Implication, Union
 from ...relational_algebra import (
     ColumnStr,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     str2columnstr_constant
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
-    dichotomy_theorem_based_solver,
+    small_dichotomy_theorem_based_solver,
     weighted_model_counting
 )
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
-from ..dichotomy_theorem_based_solver import ProbSemiringSolver
 from ..exceptions import (
     NotEasilyShatterableError,
     NotHierarchicalQueryException
 )
+from ..probabilistic_semiring_solver import ProbSemiringSolver
 
 try:
     from contextlib import nullcontext
@@ -57,13 +57,11 @@ c = Constant("c")
 
 @pytest.fixture(
     params=(
-        (
-            weighted_model_counting,
-            dichotomy_theorem_based_solver,
-            dalvi_suciu_lift,
-        )
+        weighted_model_counting,
+        small_dichotomy_theorem_based_solver,
+        dalvi_suciu_lift,
     ),
-    ids=["SDD-WMC", "dichotomy-Safe query", "dalvi_suciu_lift"],
+    ids=["SDD-WMC", "small-dichotomy", "dalvi-suciu"],
 )
 def solver(request):
     return request.param
@@ -263,7 +261,13 @@ def test_simple_probchoice(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-@pytest.mark.skip
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
 def test_mutual_exclusivity(solver):
     pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
     pfact_sets = {Q: {(0.5, "a", "b")}}
@@ -455,7 +459,7 @@ def test_multilevel_existential(solver):
 
     query = Implication(ans(z), B(z))
 
-    if solver is dichotomy_theorem_based_solver:
+    if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(NotHierarchicalQueryException)
     else:
         context = nullcontext()
@@ -507,7 +511,7 @@ def test_repeated_antecedent_predicate_symbol(solver):
     cpl_program.walk(code)
     query = Implication(ans(x, y), Q(x, y))
 
-    if solver is dichotomy_theorem_based_solver:
+    if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(NotEasilyShatterableError)
     elif solver is dalvi_suciu_lift:
         context = pytest.raises(NonLiftableException)
@@ -662,8 +666,6 @@ def test_shatterable_query_2(solver):
 
 
 def test_program_with_variable_equality(solver):
-    if solver is not dichotomy_theorem_based_solver:
-        pytest.skip()
     pfact_sets = {
         Q: {(0.2, "a"), (0.3, "b"), (0.4, "c")},
     }
@@ -675,7 +677,9 @@ def test_program_with_variable_equality(solver):
     )
     cpl_program = CPLogicProgram()
     for pred_symb, pfact_set in pfact_sets.items():
-        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_set
+        )
     for pred_symb, pchoice_as_set in pchoice_as_sets.items():
         cpl_program.add_probabilistic_choice_from_tuples(
             pred_symb, pchoice_as_set
@@ -693,8 +697,6 @@ def test_program_with_variable_equality(solver):
 
 
 def test_repeated_variable_probabilistic_rule(solver):
-    if solver is not dichotomy_theorem_based_solver:
-        pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         Q, [(0.2, 7, 7, 2), (0.5, 7, 8, 4)]
@@ -707,8 +709,6 @@ def test_repeated_variable_probabilistic_rule(solver):
 
 
 def test_repeated_variable_with_constant_in_head(solver):
-    if solver is not dichotomy_theorem_based_solver:
-        pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         Q,
@@ -718,16 +718,19 @@ def test_repeated_variable_with_constant_in_head(solver):
         P,
         [(0.4, 8), (0.6, 9)],
     )
-    cpl.walk(Implication(R(Constant[int](8), x), Conjunction((Q(x, x), P(x)))))
+    cpl.walk(
+        Implication(R(Constant(8), x), Conjunction((Q(x, x), P(x))))
+    )
     query = Implication(ans(x, y), R(x, y))
     result = solver.solve_succ_query(query, cpl)
-    expected = testing.make_prov_set([(0.4 * 0.9, 8, 8)], ("_p_", "x", "y"))
+    expected = testing.make_prov_set(
+        [(0.4 * 0.9, 8, 8)],
+        ("_p_", "x", "y"),
+    )
     assert testing.eq_prov_relations(result, expected)
 
 
 def test_empty_result_program(solver):
-    if solver is not dichotomy_theorem_based_solver:
-        pytest.skip()
     rule = Implication(R(Constant(2), Constant(3)), Conjunction((Q(x),)))
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
@@ -737,13 +740,18 @@ def test_empty_result_program(solver):
     cpl.walk(rule)
     query = Implication(ans(x), R(x, x))
     result = solver.solve_succ_query(query, cpl)
-    expected = testing.make_prov_set([], ("_p_",))
+    expected = testing.make_prov_set([], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
 def test_program_with_probchoice_selfjoin(solver):
-    if solver is not dichotomy_theorem_based_solver:
-        pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
         P,
@@ -763,9 +771,14 @@ def test_program_with_probchoice_selfjoin(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
 def test_probchoice_selfjoin_multiple_variables(solver):
-    if solver is not dichotomy_theorem_based_solver:
-        pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
         P,
@@ -786,9 +799,14 @@ def test_probchoice_selfjoin_multiple_variables(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
 def test_probchoice_selfjoin_multiple_variables_shared_var(solver):
-    if solver is not dichotomy_theorem_based_solver:
-        pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
         P,
@@ -822,13 +840,13 @@ def test_probsemiring_extended_proj():
         ColumnStr("_p_"),
     )
     proj_list = [
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             str2columnstr_constant("x"), str2columnstr_constant("x")
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             str2columnstr_constant("y"), str2columnstr_constant("y")
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             Constant("d"), str2columnstr_constant("z")
         ),
     ]
@@ -862,10 +880,10 @@ def test_probsemiring_forbidden_extended_proj_missing_nonprov_cols():
         ColumnStr("_p_"),
     )
     proj_list = [
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             str2columnstr_constant("x"), str2columnstr_constant("x")
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             Constant("d"), str2columnstr_constant("z")
         ),
     ]
@@ -888,13 +906,13 @@ def test_probsemiring_forbidden_extended_proj_on_provcol():
         ColumnStr("_p_"),
     )
     proj_list = [
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             str2columnstr_constant("x"), str2columnstr_constant("x")
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             str2columnstr_constant("y"), str2columnstr_constant("y")
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             Constant("d"), str2columnstr_constant("_p_")
         ),
     ]
