@@ -44,11 +44,13 @@ commands:
               [ ${CIRCLE_JOB} == "docs" ]
             then
               pip install -e .[doc]
-            elif << parameters.dask >>
-            then
-              pip install -e .[dev,dask] --install-option="--dask"
             else
               pip install -e .[dev]
+            fi
+
+            if << parameters.dask >>
+            then
+              pip install -e . --install-option="--dask"
             fi
 
             if
