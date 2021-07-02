@@ -99,7 +99,7 @@ class DisjointProjection(Projection):
 
 
 class DisjointProjectSemiringSolver(ProbSemiringSolver):
-    @add_match(IndependentProjection)
+    @add_match(IndependentProjection(ProvenanceAlgebraSet, ...))
     def independent_projection(self, proj_op):
         prov_set = self.walk(proj_op.relation)  # type: ProvenanceAlgebraSet
         prov_col = str2columnstr_constant(prov_set.provenance_column)
@@ -122,6 +122,10 @@ class DisjointProjectSemiringSolver(ProbSemiringSolver):
         result = ExtendedProjection(result, proj_list)
         relation = self.walk(result)
         return ProvenanceAlgebraSet(relation, prov_col.value)
+
+    @add_match(DisjointProjection(ProvenanceAlgebraSet, ...))
+    def disjoint_projection(self, proj_op):
+        return self.projection_rap(proj_op)
 
 
 def solve_succ_query(query, cpl_program):
