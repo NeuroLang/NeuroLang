@@ -1,3 +1,4 @@
+from sqlalchemy.sql.expression import join
 from .dask_helpers import (
     DaskContextManager,
     convert_type_to_pandas_dtype,
@@ -512,7 +513,7 @@ class RelationalAlgebraFrozenSet(
             )
         return self._create_view_from_query(query)
 
-    def equijoin(self, other, join_indices=None):
+    def equijoin(self, other, join_indices):
         res = self._dee_dum_product(other)
         if res is not None:
             return res
@@ -548,7 +549,7 @@ class RelationalAlgebraFrozenSet(
         return self._create_view_from_query(query, row_types=row_types)
 
     def cross_product(self, other):
-        return self.equijoin(other)
+        return self.equijoin(other, join_indices=None)
 
     def groupby(self, columns):
         if self.container is not None:
