@@ -187,3 +187,55 @@ type in the following line:**
       In [1]: import neurolang
 
 If no error occurs, you have installed neurolang correctly.
+
+Installing alternative backends for Neurolang
+---------------------------------------------
+
+By default, Neurolang uses the pandas library to manage its data.
+It is however possible to use an alternative backend which relies
+on `dask-sql <https://github.com/NeuroLang/dask-sql>`__.
+
+Using the dask-sql backend allows Neurolang to benefit from some
+query optimizations based on SQL syntax, as well as parallelism in
+computation by using dask instead of pandas. In other words, using
+the dask-sql backend might help improve the performance of specific
+queries which are slow to resolve with the default installation of
+Neurolang. It is not however guaranteed to be faster, as query
+optimizations are very case specific...
+
+To install Neurolang with the dask-sql backend, **it is required to
+first install a version of the maven library along with a running
+java installation with version >= 8** (dask-sql needs Java for
+parsing the SQL queries). There are two ways to install maven along
+with java:
+
+On a linux machine, run the following command in your shell terminal:
+
+.. container:: code
+
+   ::
+
+      sudo apt update && sudo apt install maven
+
+Or, if you're using conda to manage your python environments, you can
+run the following command in your active python environment:
+
+.. container:: code
+
+   ::
+
+      conda install -c conda-forge maven
+
+Once you've setup your machine with a working version of java and maven,
+you can install Neurolang with the dask-sql backend by running the 
+following command in your active python environment from a local copy of
+the Neurolang repository:
+
+.. container:: code
+
+   ::
+
+      pip install -e .[dask]
+
+Finally, to enable the dask-sql backend for Neurolang, you need to edit
+Neurolang's configuration file located in `neurolang/utils/config/config.ini`.
