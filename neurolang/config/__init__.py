@@ -7,14 +7,15 @@ LOG = logging.getLogger(__name__)
 
 
 class NeurolangConfigParser(configparser.ConfigParser):
-    def set_backend(self, backend):
+    def set_query_backend(self, backend):
         """
         Convenience method to set the backend used by Neurolang.
         """
         valid_backends = {"pandas", "dask"}
-        assert (
-            backend in valid_backends
-        ), f"The backend option should be one of {valid_backends}"
+        if backend not in valid_backends:
+            raise ValueError(
+                f"The query backend option should be one of {valid_backends}"
+            )
         self["RAS"]["backend"] = backend
 
 

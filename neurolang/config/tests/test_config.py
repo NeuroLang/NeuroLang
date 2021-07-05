@@ -7,12 +7,12 @@ def clean_config_fixture():
     yield
     config["RAS"]["backend"] = backend
 
-def test_config_set_backend(clean_config_fixture):
-    with pytest.raises(AssertionError):
-        config.set_backend("hello")
+def test_config_set_query_backend(clean_config_fixture):
+    with pytest.raises(ValueError):
+        config.set_query_backend("hello")
 
-    config.set_backend("dask")
+    config.set_query_backend("dask")
     assert config["RAS"]["backend"] == "dask"
 
-    config.set_backend("pandas")
+    config.set_query_backend("pandas")
     assert config["RAS"]["backend"] == "pandas"
