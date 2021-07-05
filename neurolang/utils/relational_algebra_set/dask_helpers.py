@@ -1,4 +1,4 @@
-from ...utils import config
+from ...config import config
 
 try:
     if config["RAS"].getboolean("synchronous", False):

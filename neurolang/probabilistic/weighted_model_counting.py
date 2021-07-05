@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from pysdd import sdd
 
+from ..config import config
 from ..datalog.expression_processing import (
     extract_logic_predicates,
     flatten_query,
@@ -51,7 +52,7 @@ from ..relational_algebra_provenance import (
 from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet
 )
-from ..utils import (log_performance, config)
+from ..utils import log_performance
 
 from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (

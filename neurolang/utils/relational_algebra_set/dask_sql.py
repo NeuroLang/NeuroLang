@@ -29,7 +29,7 @@ from sqlalchemy.sql import FromClause, except_, intersect, table, union
 
 import pandas as pd
 
-from ...utils import config
+from ...config import config
 from . import abstract as abc
 
 LOG = logging.getLogger(__name__)

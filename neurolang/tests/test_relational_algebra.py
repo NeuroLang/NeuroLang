@@ -5,6 +5,7 @@ import numpy
 import pandas as pd
 import pytest
 
+from ..config import config
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
 from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionWalker
@@ -43,7 +44,6 @@ from ..utils import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
     RelationalAlgebraSet,
-    config
 )
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 

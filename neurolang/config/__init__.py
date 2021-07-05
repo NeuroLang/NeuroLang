@@ -5,6 +5,17 @@ import sys
 
 LOG = logging.getLogger(__name__)
 
+
+class NeurolangConfigParser(configparser.ConfigParser):
+
+    def set_backend(self, backend):
+        """
+        Convenience method to set the backend used by Neurolang.
+        """
+        assert backend in {"pandas", "dask"}
+        self["RAS"].set("backend", backend)
+
+
 config = configparser.ConfigParser()
 
 config_dirs = [os.path.join(sys.prefix, 'config'), os.path.dirname(os.path.realpath(__file__))]

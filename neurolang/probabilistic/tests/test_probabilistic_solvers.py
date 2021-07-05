@@ -27,7 +27,7 @@ from ..exceptions import (
     NotEasilyShatterableError,
     NotHierarchicalQueryException
 )
-from ...utils import config
+from ...config import config
 
 try:
     from contextlib import nullcontext
