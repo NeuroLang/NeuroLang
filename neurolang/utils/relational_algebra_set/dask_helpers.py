@@ -1,4 +1,5 @@
 from ...utils import config
+
 try:
     if config["RAS"].getboolean("synchronous", False):
         import dask
@@ -7,10 +8,14 @@ try:
 
     from dask_sql import Context
     from dask_sql.mappings import sql_to_python_type
+    from dask.distributed import Client
+    import dask.dataframe as dd
 except ModuleNotFoundError as e:
-    raise ModuleNotFoundError("Unable to use the dask backend because dask"
-     " has not been installed. Make sure to install with"
-     " `pip install neurolang[dask]` to enable the dask backend.") from e
+    raise ModuleNotFoundError(
+        "Unable to use the dask backend because dask"
+        " has not been installed. Make sure to install with"
+        " `pip install neurolang[dask]` to enable the dask backend."
+    ) from e
 
 import ast
 import inspect
@@ -23,9 +28,12 @@ from collections import namedtuple
 from typing import Type, Union
 
 import numpy as np
-from dask.distributed import Client
-from neurolang.type_system import (Unknown, get_args, infer_type_builtins,
-                                   typing_callable_from_annotated_function)
+from neurolang.type_system import (
+    Unknown,
+    get_args,
+    infer_type_builtins,
+    typing_callable_from_annotated_function,
+)
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import functions
 
@@ -186,8 +194,15 @@ class DaskContextManager(ABC):
 
         def wrapped_custom_function(*values):
             s0 = values[0]
-            s0.name = pnames[0]
-            ddf = values[0].to_frame()
+            if not isinstance(s0, dd.Series):
+                # Sometimes the Calcite optimizer will push a constant into
+                # the params of a call so we need to turn it into a Series.
+                s0 = dd.from_pandas(
+                    pd.Series([s0], name=pnames[0]), npartitions=1, sort=False
+                )
+            else:
+                s0.name = pnames[0]
+            ddf = s0.to_frame()
             for name, col in zip(pnames[1:], values[1:]):
                 ddf[name] = col
             return ddf.apply(f_, axis=1, meta=(None, return_type))
