@@ -349,6 +349,8 @@ def reachable_code(query, datalog):
         p = to_reach.pop()
         reached.add(p)
         rules = idb[p]
+        if isinstance(rules, Constant):
+            continue
         for rule in rules.formulas:
             if rule in seen_rules:
                 continue

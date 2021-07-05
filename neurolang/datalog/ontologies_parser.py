@@ -170,8 +170,8 @@ class OntologyParser:
             ant = Symbol(self._parse_name(entity))
             cons = Symbol(self._parse_name(val))
             x = Symbol.fresh()
-            #imp = RightImplication(ant(x), cons(x))
-            imp = Implication(cons(x), ant(x))
+            imp = RightImplication(ant(x), cons(x))
+            #imp = Implication(cons(x), ant(x))
             self._categorize_constraints([imp])
 
             neurolang_subclassof = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+'subClassOf')
@@ -351,8 +351,8 @@ class OntologyParser:
             self._add_existential_rule(entity(x), ext_rule)
         prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
         exists_imp = RightImplication(support_prop(x, y), Symbol(value)(y))
-        # prop_imp = Implication(onProp(x, y), support_prop(x, y))
-        # exists_imp = Implication(Symbol(value)(y), support_prop(x, y))
+        #prop_imp = Implication(onProp(x, y), support_prop(x, y))
+        #exists_imp = Implication(Symbol(value)(y), support_prop(x, y))
 
         constraints.append(exists_imp)
         constraints.append(prop_imp)
@@ -383,8 +383,8 @@ class OntologyParser:
         conj = Conjunction((ant(x), onProp(x, y)))
         for value in nodes:
             value = self._parse_name(value)
-            constraints.append(Implication(Symbol(value)(y), conj))
-            # constraints.append(RightImplication(conj, Symbol(value)(y)))
+            # constraints.append(Implication(Symbol(value)(y), conj))
+            constraints.append(RightImplication(conj, Symbol(value)(y)))
 
         return constraints
 
@@ -408,8 +408,8 @@ class OntologyParser:
         ent = Symbol(self._parse_name(entity))
         onProp = Symbol(self._parse_name(prop))
         value = self._parse_name(nodes[0])
-        return [Implication(Symbol(onProp)(x, Constant(value)), Symbol(ent)(x))]
-        #return [RightImplication(Symbol(ent)(x), Symbol(onProp)(x, Constant(value)))]
+        #return [Implication(Symbol(onProp)(x, Constant(value)), Symbol(ent)(x))]
+        return [RightImplication(Symbol(ent)(x), Symbol(onProp)(x, Constant(value)))]
 
     def _solve_BNode(self, initial_node):
         '''Once a BNode is identified, this function iterates over each of the pointers
@@ -499,8 +499,8 @@ class OntologyParser:
         label = Symbol(self._parse_name(prop))
         con = label(x, entity_name)
 
-        #self._categorize_constraints([RightImplication(ant, con)])
-        self._categorize_constraints([Implication(con, ant)])
+        self._categorize_constraints([RightImplication(ant, con)])
+        #self._categorize_constraints([Implication(con, ant)])
 
         prop_name = label.name.split(':')[-1]
         neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)

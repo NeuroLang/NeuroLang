@@ -375,6 +375,10 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
             or pred_symb not in program.intensional_database()
         ):
             continue
+
+        if isinstance(program.symbol_table[pred_symb], Constant):
+            continue
+
         for rule in program.symbol_table[pred_symb].formulas:
             stack += [
                 apred.functor

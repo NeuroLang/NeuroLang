@@ -487,7 +487,7 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
             deterministic_program,
-            self.program_ir.get_constraints(),
+            self.program_ir.get_constraints()
         )
         rewrite = orw.Xrewrite()
 
