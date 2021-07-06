@@ -235,7 +235,20 @@ the Neurolang repository:
 
    ::
 
-      pip install -e .[dask]
+      pip install -U --user neurolang[dask]
 
-Finally, to enable the dask-sql backend for Neurolang, you need to edit
-Neurolang's configuration file located in `neurolang/utils/config/config.ini`.
+Finally, to enable the dask-sql backend for Neurolang, you can either
+edit Neurolang's configuration file located in your python environment
+path under `config/config.ini`, or you can call
+
+.. container:: code
+
+   ::
+
+      from neurolang.config import config
+      config.set_query_backend("dask")
+
+from your python shell.
+
+**Note**: you need to call the `set_query_backend` method at the top
+of your script, before you import other modules from Neurolang.
