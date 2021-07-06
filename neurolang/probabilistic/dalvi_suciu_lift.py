@@ -123,8 +123,6 @@ def solve_succ_query(query, cpl_program):
             ColumnStr("_p_"),
         )
 
-    _verify_that_the_query_is_unate(flat_query_body)
-
     with log_performance(LOG, "Translation and lifted optimisation"):
         flat_query_body = enforce_conjunction(
             lift_optimization_for_choice_predicates(
@@ -132,6 +130,7 @@ def solve_succ_query(query, cpl_program):
             )
         )
         flat_query = Implication(query.consequent, flat_query_body)
+        _verify_that_the_query_is_unate(flat_query)
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
         )
@@ -168,6 +167,8 @@ def solve_succ_query(query, cpl_program):
 def _verify_that_the_query_is_unate(query):
     positive_relational_symbols = set()
     negative_relational_symbols = set()
+
+    query = convert_rule_to_ucq(query)
 
     for predicate in extract_logic_predicates(query):
         if isinstance(predicate, Negation):
