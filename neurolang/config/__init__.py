@@ -2,6 +2,7 @@ import configparser
 import logging
 import os
 import sys
+from importlib import reload
 
 LOG = logging.getLogger(__name__)
 
@@ -16,7 +17,28 @@ class NeurolangConfigParser(configparser.ConfigParser):
             raise ValueError(
                 f"The query backend option should be one of {valid_backends}"
             )
+        LOG.info(f"Setting new query backend : {backend}")
         self["RAS"]["backend"] = backend
+        self.switch_backend()
+
+    def switch_backend(self):
+        """
+        Changing the backend value in the config object is not enough to
+        switch the backends since this config value is evaluated at import
+        time in some modules to figure out which classes to import.
+        So we need to reimport these modules after changing the backend value
+        in the config.
+        """
+        modules = [
+            "neurolang.probabilistic.weighted_model_counting",
+            "neurolang.utils.relational_algebra_set",
+            "neurolang.utils",
+        ]
+        for module in modules:
+            module = sys.modules.get(module)
+            if module is not None:
+                reload(module)
+                LOG.debug(f"Reloading module : {module}")
 
 
 config = NeurolangConfigParser()
