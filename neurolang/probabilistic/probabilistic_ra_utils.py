@@ -1,7 +1,9 @@
 from collections import defaultdict
 from typing import AbstractSet
 
-from ..datalog.wrapped_collections import WrappedNamedRelationalAlgebraFrozenSet, WrappedRelationalAlgebraFrozenSet
+from ..datalog.wrapped_collections import (
+    WrappedNamedRelationalAlgebraFrozenSet
+)
 from ..expressions import Constant, Symbol
 from ..relational_algebra import ColumnInt, RelationalAlgebraOperation
 
