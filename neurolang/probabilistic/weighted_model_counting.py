@@ -32,6 +32,7 @@ from ..logic.expression_processing import (
     extract_logic_free_variables,
 )
 from ..relational_algebra import (
+    ColumnInt,
     ColumnStr,
     ExtendedProjection,
     FunctionApplicationListMember,
@@ -387,11 +388,23 @@ class SDDWMCSemiRingSolver(
                     ProbabilisticChoiceSet
                 )
             )
-            # and (len(exp.attributes) == len(exp.relation.relation.columns))
+            and all(att.type is ColumnInt for att in exp.attributes)
         )
     )
     def eliminate_superfluous_projection(self, expression):
-        return self.walk(expression.relation)
+        relation = self.walk(expression.relation)
+        return relation
+
+    @add_match(
+        DeterministicFactSet(Constant),
+        lambda e: e.relation.value.is_empty()
+    )
+    def deterministic_fact_set_constant(self, deterministic_set):
+        rap_column = ColumnStr(Symbol.fresh().name)
+        return ProvenanceAlgebraSet(
+            deterministic_set.relation.value,
+            rap_column
+        )
 
     @add_match(DeterministicFactSet(Symbol))
     def deterministic_fact_set(self, deterministic_set):

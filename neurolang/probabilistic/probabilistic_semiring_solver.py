@@ -159,6 +159,8 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
     @staticmethod
     def _check_all_non_prov_cols_in_proj_list(provset, proj_list):
+        if provset.value.is_empty():
+            return
         non_prov_cols = set(provset.non_provenance_columns)
         found_cols = set(
             member.dst_column.value

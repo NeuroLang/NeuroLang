@@ -115,6 +115,24 @@ def test_deterministic_conjunction_varying_arity(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_deterministic_conjunction_varying_arity_empty(solver):
+    code = Union(
+        (
+            Fact(P(a)),
+            Fact(P(b)),
+            Implication(
+                Z(x, y),
+                Conjunction((Q(x, y), P(x), P(y)))
+            ),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(code)
+    query = Implication(ans(x, y), Z(x, y))
+    result = solver.solve_succ_query(query, cpl_program)
+    assert result.value.is_empty()
+
+
 def test_simple_bernoulli(solver):
     """
     We define the program
