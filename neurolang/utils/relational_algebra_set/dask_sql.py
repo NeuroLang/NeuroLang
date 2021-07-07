@@ -828,13 +828,13 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def aggregate(self, group_columns, aggregate_function):
-        if isinstance(group_columns, str) or not isinstance(
-            group_columns, Iterable
-        ):
-            group_columns = (group_columns,)
+        group_columns = list(group_columns)
         if len(set(group_columns)) < len(group_columns):
             raise ValueError("Cannot group on repeated columns")
-
+        if self.is_dee():
+            raise ValueError(
+                "Aggregation on non-empty sets with arity == 0 is unsupported."
+            )
         distinct_sub_query = select(self._table).subquery()
         agg_cols, agg_types = self._build_aggregate_functions(
             group_columns, aggregate_function, distinct_sub_query
