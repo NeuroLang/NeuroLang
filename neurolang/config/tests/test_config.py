@@ -5,8 +5,10 @@ from neurolang.utils.relational_algebra_set import pandas, dask_sql
 @pytest.fixture
 def clean_config_fixture():
     backend = config["RAS"]["backend"]
-    yield
-    config["RAS"]["backend"] = backend
+    try:
+        yield
+    finally:
+        config.set_query_backend(backend)
 
 def test_config_set_query_backend(clean_config_fixture):
     with pytest.raises(ValueError):
