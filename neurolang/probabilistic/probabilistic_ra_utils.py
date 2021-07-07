@@ -1,7 +1,9 @@
 from collections import defaultdict
 from typing import AbstractSet
 
-from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
+from ..datalog.wrapped_collections import (
+    WrappedNamedRelationalAlgebraFrozenSet
+)
 from ..expressions import Constant, Symbol
 from ..relational_algebra import ColumnInt, RelationalAlgebraOperation
 
@@ -61,7 +63,13 @@ def generate_probabilistic_symbol_table_for_query(
         relational algebra representations as values
     """
     symbol_table = defaultdict(
-        lambda: Constant[AbstractSet](WrappedRelationalAlgebraFrozenSet())
+        lambda: DeterministicFactSet(
+            Constant[AbstractSet](
+                WrappedNamedRelationalAlgebraFrozenSet(
+                    columns=tuple()
+                )
+            )
+        )
     )
     classify_and_wrap_symbols(
         cpl_program.probabilistic_facts(), query_predicate,
