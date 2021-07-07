@@ -113,4 +113,9 @@ if __name__ == "__main__":
             "install": InstallCommand,
             "develop": DevelopCommand,
         },
+        entry_points={
+            "console_scripts": [
+                "neuro-server=neurolang.utils.server.app:main",
+            ]
+        },
     )
