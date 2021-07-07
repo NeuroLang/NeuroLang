@@ -347,7 +347,7 @@ def lift_optimization_for_choice_predicates(query, program):
     if len(pchoice_eqs) == 0:
         return query
     eq_conj = Conjunction(tuple(EQ(x, y) for x, y in pchoice_eqs))
-    grpd_preds = group_preds_by_functor(extract_logic_atoms(query))
+    grpd_preds = group_preds_by_functor(extract_logic_predicates(query))
     new_formulas = set(eq_conj.formulas)
     for functor, preds in grpd_preds.items():
         if functor not in program.pchoice_pred_symbs:
