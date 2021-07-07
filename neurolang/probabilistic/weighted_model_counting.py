@@ -175,6 +175,35 @@ class WMCSemiRingSolver(
         r = left * right
         return r
 
+    @add_match(
+        Projection,
+        lambda exp: (
+            isinstance(
+                exp.relation,
+                (
+                    DeterministicFactSet,
+                    ProbabilisticFactSet,
+                    ProbabilisticChoiceSet
+                )
+            )
+            and all(att.type is ColumnInt for att in exp.attributes)
+        )
+    )
+    def eliminate_superfluous_projection(self, expression):
+        relation = self.walk(expression.relation)
+        return relation
+
+    @add_match(
+        DeterministicFactSet(Constant),
+        lambda e: e.relation.value.is_empty()
+    )
+    def deterministic_fact_set_constant(self, deterministic_set):
+        rap_column = ColumnStr(Symbol.fresh().name)
+        return ProvenanceAlgebraSet(
+            deterministic_set.relation.value,
+            rap_column
+        )
+
     @add_match(DeterministicFactSet(Symbol))
     def deterministic_fact_set(self, deterministic_set):
         relation_symbol = deterministic_set.relation
@@ -642,10 +671,16 @@ def sdd_compilation_and_wmc(prob_set_result, solver):
     sdd_compiler, sdd_program, prob_set_program = \
         sdd_compilation(prob_set_result)
 
-    res, provenance_column = perform_wmc(
-        solver, sdd_compiler, sdd_program,
-        prob_set_program, prob_set_result
-    )
+    if len(prob_set_program._symbols) > 0:
+        res, provenance_column = perform_wmc(
+            solver, sdd_compiler, sdd_program,
+            prob_set_program, prob_set_result
+        )
+    else:
+        provenance_column = ColumnStr('prob')
+        res = NamedRelationalAlgebraFrozenSet(
+            columns=(str(provenance_column),)
+        )
 
     return res, provenance_column
 
@@ -826,17 +861,27 @@ def build_global_sdd_model_rows(solver, literal_probabilities):
 
 
 def sdd_compilation(prob_set_result):
-    prob_set_program = ExpressionBlock(
-        tuple(
-            prob_set_result
-            .relations
-            .projection(prob_set_result.provenance_column)
-            .as_pandas_dataframe()
+    result_symbols = (
+        prob_set_result
+        .relations
+        .projection(prob_set_result.provenance_column)
+    )
+    if result_symbols.is_empty():
+        result_symbols = tuple()
+    else:
+        result_symbols = tuple(
+            result_symbols.
+            as_pandas_dataframe()
             .iloc[:, 0]
         )
-    )
-    sdd_compiler = SemiRingRAPToSDD(len(prob_set_program._symbols))
-    sdd_program = sdd_compiler.walk(prob_set_program)
+
+    prob_set_program = ExpressionBlock(result_symbols)
+    if len(prob_set_program._symbols) > 0:
+        sdd_compiler = SemiRingRAPToSDD(len(prob_set_program._symbols))
+        sdd_program = sdd_compiler.walk(prob_set_program)
+    else:
+        sdd_compiler = None
+        sdd_program = None
     return sdd_compiler, sdd_program, prob_set_program
 
 
