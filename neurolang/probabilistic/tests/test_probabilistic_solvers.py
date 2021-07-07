@@ -27,6 +27,7 @@ from ..exceptions import (
     NotEasilyShatterableError,
     NotHierarchicalQueryException
 )
+from ...utils import config
 
 try:
     from contextlib import nullcontext
@@ -305,7 +306,12 @@ def test_multiple_probchoices_mutual_exclusivity(solver):
 
 
 def test_large_probabilistic_choice(solver):
-    n = int(10000)
+    if config["RAS"].get("backend", "pandas") == "dask":
+        # dask backend uses `weighted_model_counting.solve_succ_query_boolean_diagram`
+        # which does not handle too big prob sets.
+        n = int(1000)
+    else:
+        n = int(10000)
     with testing.temp_seed(42):
         probs = np.random.rand(n)
     probs = probs / probs.sum()
