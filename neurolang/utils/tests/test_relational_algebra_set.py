@@ -909,6 +909,26 @@ def test_aggregate_with_pandas_builtin_functions(ra_module):
     assert agg_set == expected_set
 
 
+def test_aggregate_with_empty_sets(ra_module):
+    expected_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=("x", "y")
+    )
+    agg_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=("x", "y")
+    ).aggregate(("x",), [("y", "y", sum)])
+    assert agg_set == expected_set
+
+    agg_set = ra_module.NamedRelationalAlgebraFrozenSet.dum().aggregate(
+        ("x",), [("y", "y", sum)]
+    )
+    assert agg_set == expected_set
+
+    with pytest.raises(ValueError):
+        agg_set = ra_module.NamedRelationalAlgebraFrozenSet.dee().aggregate(
+            ("x",), [("y", "y", sum)]
+        )
+
+
 def test_relational_algebra_set_python_type_support(ra_module):
     data = [
         (5, "dog", frozenset({(1, 2), (5, 6)})),
