@@ -1,6 +1,6 @@
 import math
 import operator
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Tuple, Callable
 
 import numpy
 import pandas.core.computation.ops
@@ -550,6 +550,21 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     @ew.add_match(
         FunctionApplication(Constant, ...),
+        lambda fa: (
+            isinstance(fa.functor.value, Callable)
+            and sum is fa.functor.value
+        ),
+    )
+    def operation_sum(self, fa):
+        return Constant[RelationalAlgebraStringExpression](
+            RelationalAlgebraStringExpression(
+                "sum({})".format(self.walk(fa.args[0]).value)
+            ),
+            auto_infer_type=False,
+        )
+
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
         lambda fa: fa.functor.value == operator.neg,
     )
     def negative_value(self, fa):
@@ -804,7 +819,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             except NeuroLangPatternMatchingNoMatch:
                 fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
                 return lambda t: fun(
-                    **{arg: t[arg] for arg in args}
+                    **{arg: getattr(t, arg) for arg in args}
                 )
         elif isinstance(fun_exp, Constant[ColumnInt]):
             return RelationalAlgebraColumnInt(fun_exp.value)
@@ -1265,6 +1280,8 @@ def _infer_relation_type(relation):
     Infer the type of the tuples in the relation based on its first tuple. If
     the relation is empty, just return `Abstract[Tuple]`.
     """
+    if hasattr(relation, "set_row_type"):
+        return AbstractSet[relation.set_row_type]
     if relation.is_empty() or relation.arity == 0:
         return AbstractSet[Tuple]
     if hasattr(relation, "row_type"):
@@ -1289,8 +1306,11 @@ class EliminateTrivialProjections(ew.PatternWalker):
     @ew.add_match(Projection(Constant, ...))
     def eliminate_trivial_projection(self, expression):
         if (
-            tuple(c.value for c in expression.attributes) ==
-            tuple(c for c in expression.relation.value.columns)
+            tuple(c.value for c in expression.attributes)
+            == tuple(c for c in expression.relation.value.columns)
+        ) or (
+            tuple(str(c.value) for c in expression.attributes)
+            == tuple(c for c in expression.relation.value.columns)
         ):
             return expression.relation
         else:
