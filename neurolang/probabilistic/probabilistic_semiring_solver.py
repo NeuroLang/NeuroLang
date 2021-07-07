@@ -43,6 +43,17 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
     def eliminate_superfluous_projection(self, expression):
         return self.walk(expression.relation)
 
+    @add_match(
+        DeterministicFactSet(Constant),
+        lambda e: e.relation.value.is_empty()
+    )
+    def empty_deterministic_fact_set(self, deterministic_set):
+        provenance_column = ColumnStr(Symbol.fresh().name)
+        return ProvenanceAlgebraSet(
+            deterministic_set.relation.value,
+            provenance_column
+        )
+
     @add_match(DeterministicFactSet(Symbol))
     def deterministic_fact_set(self, deterministic_set):
         relation_symbol = deterministic_set.relation
