@@ -53,11 +53,13 @@ def sure_is_not_pattern():
     with _lock:
         n = _sure_is_not_pattern.get(thread_id, 0)
         _sure_is_not_pattern[thread_id] = n + 1
-    yield
-    with _lock:
-        _sure_is_not_pattern[thread_id] -= 1
-        if _sure_is_not_pattern[thread_id] == 0:
-            del _sure_is_not_pattern[thread_id]
+    try:
+        yield
+    finally:
+        with _lock:
+            _sure_is_not_pattern[thread_id] -= 1
+            if _sure_is_not_pattern[thread_id] == 0:
+                del _sure_is_not_pattern[thread_id]
 
 
 @contextmanager
@@ -68,9 +70,11 @@ def sure_is_not_pattern_():
 
     with _lock:
         _sure_is_not_pattern[thread_id] = True
-    yield
-    with _lock:
-        del _sure_is_not_pattern[thread_id]
+    try:
+        yield
+    finally:
+        with _lock:
+            del _sure_is_not_pattern[thread_id]
 
 
 def type_validation_value(value, type_):
@@ -439,7 +443,8 @@ class Symbol(NonConstant):
         return hash(self.name)
 
     def __repr__(self):
-        return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
+        return f'S{{{self.name}}}'
+        # return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
 
     def __getstate__(self):
         # Pickle a tuple instead of a set for _symbols to avoid calling hash
@@ -705,7 +710,7 @@ class FunctionApplication(Definition):
         return self.functor
 
     def __repr__(self):
-        r = u'\u03BB{{{}: {}}}'.format(self.functor, self.__type_repr__)
+        r = u'\u03BB{{{}}}'.format(self.functor)
         if self.args is ...:
             r += '(...)'
         elif self.args is not None:

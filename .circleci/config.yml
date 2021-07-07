@@ -7,6 +7,10 @@ version: 2.1
 commands:
   install:
     description: "Installs the necessary packages"
+    parameters:
+      dask:
+        type: boolean
+        default: false
     steps:
       # Download and cache dependencies
       - restore_cache:
@@ -14,6 +18,17 @@ commands:
             - v1-dependencies-{{ checksum "setup.cfg" }}
             # fallback to using the latest cache if no exact match is found
             - v1-dependencies-
+
+      - run:
+          name: Install maven
+          command: |
+            if
+              [ ${CIRCLE_JOB} == "docs" ]
+            then
+              echo "Not installing maven for docs jobs."
+            else
+              sudo apt update && sudo apt install maven
+            fi
 
       - run:
           name: install dependencies
@@ -25,9 +40,19 @@ commands:
             pip install setuptools_scm
             pip install importlib_metadata
             
-            python setup.py egg_info
-            cat *.egg-info/requires.txt | egrep -v '^\[' > requires.txt
-            pip install -U -r requires.txt
+            if
+              [ ${CIRCLE_JOB} == "docs" ]
+            then
+              pip install -e .[doc]
+            else
+              pip install -e .[dev]
+            fi
+
+            if << parameters.dask >>
+            then
+              pip install -e . --install-option="--dask"
+            fi
+
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
@@ -105,6 +130,18 @@ jobs:
       - install
       - test
 
+  py37dask:
+    docker:
+      - image: circleci/python:3.7
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - install:
+          dask: true
+      - test
+
   benchmark:
     docker:
       - image: circleci/python:3.7
@@ -146,11 +183,20 @@ jobs:
     working_directory: ~/repo
 
     steps:
+      - run:
+          name: Log memory usage
+          command: |
+            while true; do
+              sleep 5
+              ps auxwwf
+              echo "======"
+            done
+          background: true
       - checkout
       - install
       - restore_cache:
           keys:
-            - v2-docs-{{ .Branch }}--
+            - v1-docs-{{ .Branch }}--
       - run:
           name: Install Texlive and dvipng
           command: 'sudo apt update && sudo apt install texlive texlive-xetex texlive-fonts-extra texlive-latex-extra texlive-plain-extra dvipng'
@@ -158,7 +204,6 @@ jobs:
           name: Install extra packages & build documentation
           command: |
             . venv/bin/activate
-            pip install -e .
             cd doc
             make api
             make html
@@ -256,6 +301,7 @@ workflows:
     jobs:
       - py36
       - py37
+      - py37dask
       - docs:
          requires:
           - py37
@@ -266,4 +312,3 @@ workflows:
         #      - benchmark:
         #  requires:
         #    - py37
-

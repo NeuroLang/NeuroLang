@@ -11,7 +11,7 @@ from typing import AbstractSet, Any, Callable, Tuple
 from warnings import warn
 
 from ..expression_walker import PatternWalker, add_match
-from ..exceptions import ProtectedKeywordError
+from ..exceptions import NotConjunctiveExpression, NotConjunctiveExpressionNestedPredicates, ProtectedKeywordError
 from ..expressions import (Constant, Expression, FunctionApplication,
                            NeuroLangException, Symbol, TypedSymbolTableMixin,
                            is_leq_informative)
@@ -195,12 +195,12 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             )
 
         if not is_conjunctive_expression(consequent):
-            raise NeuroLangException(
+            raise NotConjunctiveExpression(
                 f'Expression {consequent} is not conjunctive'
             )
 
         if not is_conjunctive_expression_with_nested_predicates(antecedent):
-            raise NeuroLangException(
+            raise NotConjunctiveExpressionNestedPredicates(
                 f'Expression {antecedent} is not conjunctive'
             )
 
