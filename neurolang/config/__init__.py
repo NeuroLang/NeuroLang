@@ -30,9 +30,9 @@ class NeurolangConfigParser(configparser.ConfigParser):
         in the config.
         """
         modules = [
-            "neurolang.probabilistic.weighted_model_counting",
             "neurolang.utils.relational_algebra_set",
             "neurolang.utils",
+            "neurolang.probabilistic.weighted_model_counting",
         ]
         for module in modules:
             module = sys.modules.get(module)
