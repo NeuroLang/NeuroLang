@@ -1,6 +1,6 @@
 import typing
 
-from ..expression_walker import add_match
+from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, Symbol
 from ..relational_algebra import (
     ColumnStr,
@@ -9,28 +9,21 @@ from ..relational_algebra import (
     NameColumns,
     Projection,
     RelationalAlgebraStringExpression,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceExpressionSemringSolver,
     ProvenanceExtendedProjectionMixin,
+    RelationalAlgebraProvenanceExpressionSemringSolver,
 )
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
-    ProbabilisticFactSet
+    ProbabilisticFactSet,
 )
 
 
-class ProbSemiringSolver(
-    ProvenanceExtendedProjectionMixin,
-    RelationalAlgebraProvenanceExpressionSemringSolver,
-):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.translated_probfact_sets = dict()
-
+class RemoveSuperfluousProjectionMixin(PatternWalker):
     @add_match(
         Projection,
         lambda exp: (
@@ -46,6 +39,25 @@ class ProbSemiringSolver(
     )
     def eliminate_superfluous_projection(self, expression):
         return self.walk(expression.relation)
+
+    @add_match(
+        Projection(ProvenanceAlgebraSet, ...),
+        lambda projection: (
+            set(projection.relation.non_provenance_columns)
+            == set(col.value for col in projection.attributes)
+        )
+    )
+    def projection_on_all_non_provenance_columns(self, proj_op):
+        return self.walk(proj_op.relation)
+
+
+class ProbSemiringSolver(
+    ProvenanceExtendedProjectionMixin,
+    RelationalAlgebraProvenanceExpressionSemringSolver,
+):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.translated_probfact_sets = dict()
 
     @add_match(DeterministicFactSet(Symbol))
     def deterministic_fact_set(self, deterministic_set):

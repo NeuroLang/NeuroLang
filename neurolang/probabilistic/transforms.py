@@ -181,8 +181,8 @@ def minimize_component_disjunction(disjunction):
 
     Returns
     -------
-    Conjunction
-        Minimised conjunction.
+    Disjunction
+        Minimised disjunction.
     """
     if not isinstance(disjunction, Disjunction):
         return disjunction

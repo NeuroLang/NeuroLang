@@ -1,7 +1,7 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
-from typing import AbstractSet, Iterable
+from typing import AbstractSet
 
 import numpy as np
 
@@ -40,13 +40,13 @@ from ..logic.transformations import (
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
+    ExtendedProjection,
     FunctionApplicationListMember,
     GroupByAggregation,
-    ExtendedProjection,
-    RelationalAlgebraStringExpression,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     Projection,
+    RelationalAlgebraStringExpression,
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant,
 )
@@ -61,7 +61,10 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query,
 )
-from .probabilistic_semiring_solver import ProbSemiringSolver
+from .probabilistic_semiring_solver import (
+    ProbSemiringSolver,
+    RemoveSuperfluousProjectionMixin,
+)
 from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
 from .small_dichotomy_theorem_based_solver import (
@@ -98,12 +101,11 @@ class DisjointProjection(Projection):
     pass
 
 
-class DisjointProjectSemiringSolver(ProbSemiringSolver):
+class DisjointProjectMixin(PatternWalker):
     @add_match(IndependentProjection(ProvenanceAlgebraSet, ...))
     def independent_projection(self, proj_op):
         prov_set = self.walk(proj_op.relation)  # type: ProvenanceAlgebraSet
         prov_col = str2columnstr_constant(prov_set.provenance_column)
-        result = Constant[AbstractSet](prov_set.value)
         proj_list = [
             FunctionApplicationListMember(
                 str2columnstr_constant(col),
@@ -113,19 +115,55 @@ class DisjointProjectSemiringSolver(ProbSemiringSolver):
         ]
         proj_list.append(
             FunctionApplicationListMember(
-                Constant(RelationalAlgebraStringExpression(
-                    "log(1 - {})".format(prov_col.value)
-                )),
+                Constant(
+                    RelationalAlgebraStringExpression(
+                        "log(1 - {})".format(prov_col.value)
+                    )
+                ),
                 prov_col,
             )
         )
-        result = ExtendedProjection(result, proj_list)
-        relation = self.walk(result)
-        return ProvenanceAlgebraSet(relation, prov_col.value)
+        relation = Constant[AbstractSet](prov_set.value)
+        relation = ExtendedProjection(relation, proj_list)
+        relation = GroupByAggregation(
+            relation,
+            groupby=proj_op.attributes,
+            aggregate_functions=(
+                FunctionApplicationListMember(
+                    FunctionApplication(Constant(sum), (prov_col,)),
+                    prov_col,
+                ),
+            ),
+        )
+        proj_list = [
+            FunctionApplicationListMember(col, col)
+            for col in proj_op.attributes
+        ]
+        proj_list.append(
+            FunctionApplicationListMember(
+                Constant(
+                    RelationalAlgebraStringExpression(
+                        "1 - exp({})".format(prov_col.value)
+                    )
+                ),
+                prov_col,
+            )
+        )
+        relation = ExtendedProjection(relation, proj_list)
+        relation = self.walk(relation)
+        return ProvenanceAlgebraSet(relation.value, prov_col.value)
 
     @add_match(DisjointProjection(ProvenanceAlgebraSet, ...))
     def disjoint_projection(self, proj_op):
         return self.projection_rap(proj_op)
+
+
+class LiftedQueryProcessingSemiringSolver(
+    RemoveSuperfluousProjectionMixin,
+    DisjointProjectMixin,
+    ProbSemiringSolver,
+):
+    pass
 
 
 def solve_succ_query(query, cpl_program):
@@ -200,7 +238,7 @@ def solve_succ_query(query, cpl_program):
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
-        solver = DisjointProjectSemiringSolver(symbol_table)
+        solver = LiftedQueryProcessingSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result

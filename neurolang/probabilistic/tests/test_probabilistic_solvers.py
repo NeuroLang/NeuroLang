@@ -307,7 +307,6 @@ def test_multiple_probchoices_mutual_exclusivity(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-@pytest.mark.slow
 def test_large_probabilistic_choice(solver):
     n = int(10000)
     with testing.temp_seed(42):
@@ -719,7 +718,7 @@ def test_repeated_variable_with_constant_in_head(solver):
         [(0.4, 8), (0.6, 9)],
     )
     cpl.walk(
-        Implication(R(Constant(8), x), Conjunction((Q(x, x), P(x))))
+        Implication(R(Constant[int](8), x), Conjunction((Q(x, x), P(x))))
     )
     query = Implication(ans(x, y), R(x, y))
     result = solver.solve_succ_query(query, cpl)
@@ -851,7 +850,7 @@ def test_probsemiring_extended_proj():
         ),
     ]
     proj = ExtendedProjection(provset, proj_list)
-    solver = ProbSemiringSolver()
+    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
     result = solver.walk(proj)
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
@@ -888,7 +887,7 @@ def test_probsemiring_forbidden_extended_proj_missing_nonprov_cols():
         ),
     ]
     proj = ExtendedProjection(provset, proj_list)
-    solver = ProbSemiringSolver()
+    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
     with pytest.raises(ValueError):
         solver.walk(proj)
 
@@ -917,6 +916,20 @@ def test_probsemiring_forbidden_extended_proj_on_provcol():
         ),
     ]
     proj = ExtendedProjection(provset, proj_list)
-    solver = ProbSemiringSolver()
+    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
     with pytest.raises(ValueError):
         solver.walk(proj)
+
+
+
+def test_simple_boolean_query(solver):
+    pchoice_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    query = Implication(ans(), Z(x))
+    result = solver.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set([(1.0,)], ("_p_",))
+    assert testing.eq_prov_relations(result, expected)

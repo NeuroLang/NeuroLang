@@ -19,9 +19,7 @@ from ...relational_algebra import (
     Union,
     str2columnstr_constant,
 )
-from ...relational_algebra_provenance import (
-    WeightedNaturalJoin,
-)
+from ...relational_algebra_provenance import WeightedNaturalJoin
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
 from ..probabilistic_ra_utils import (
