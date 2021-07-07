@@ -1,10 +1,10 @@
-from neurolang.exceptions import NonLiftableException
 import operator
 
 import numpy as np
 import pytest
 
 from ...datalog import Fact
+from ...exceptions import NonLiftableException
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
 from ...relational_algebra import (
@@ -16,6 +16,7 @@ from ...relational_algebra import (
     str2columnstr_constant
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
+from ...utils import config
 from .. import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -27,7 +28,6 @@ from ..exceptions import (
     NotEasilyShatterableError,
     NotHierarchicalQueryException
 )
-from ...utils import config
 
 try:
     from contextlib import nullcontext
