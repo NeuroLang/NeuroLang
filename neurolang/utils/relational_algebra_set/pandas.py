@@ -712,6 +712,18 @@ class NamedRelationalAlgebraFrozenSet(
         group_columns = list(group_columns)
         if len(set(group_columns)) < len(group_columns):
             raise ValueError("Cannot group on repeated columns")
+        if self.is_dee():
+            raise ValueError(
+                "Aggregation on non-empty sets with arity == 0 is unsupported."
+            )
+        if self.is_empty():
+            if isinstance(aggregate_function, dict):
+                agg_columns = list(aggregate_function.keys())
+            elif isinstance(aggregate_function, (tuple, list)):
+                agg_columns = list(col for col, _, _ in aggregate_function)
+            return NamedRelationalAlgebraFrozenSet(
+                columns=group_columns + agg_columns
+            )
         self._drop_duplicates_if_needed()
         if len(group_columns) > 0:
             groups = self._container.groupby(group_columns)
