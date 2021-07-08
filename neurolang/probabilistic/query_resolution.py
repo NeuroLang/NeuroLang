@@ -13,11 +13,7 @@ from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
-from ..relational_algebra import (
-    NamedRelationalAlgebraFrozenSet,
-    Projection,
-    str2columnstr_constant,
-)
+from ..relational_algebra import Projection, str2columnstr_constant
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     RelationalAlgebraProvenanceCountingSolver,
@@ -294,12 +290,7 @@ def _add_to_probabilistic_program(
             if check_qbased_pfact_tuple_unicity:
                 _check_tuple_prob_unicity(ra_set)
         else:
-            arity = len(impl.consequent.body.args)
-            ra_set = WrappedRelationalAlgebraFrozenSet(
-                NamedRelationalAlgebraFrozenSet(
-                    columns=tuple(range(arity + 1))
-                ).to_unnamed()
-            )
+            ra_set = WrappedRelationalAlgebraFrozenSet.dum()
     add_fun(pred_symb, ra_set.unwrap())
 
 

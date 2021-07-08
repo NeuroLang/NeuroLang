@@ -1,6 +1,6 @@
 import typing
 
-from ..expression_walker import PatternWalker, add_match
+from ..expression_walker import add_match
 from ..expressions import Constant, Symbol
 from ..relational_algebra import (
     ColumnStr,
@@ -9,21 +9,24 @@ from ..relational_algebra import (
     NameColumns,
     Projection,
     RelationalAlgebraStringExpression,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
-    ProvenanceExtendedProjectionMixin,
-    RelationalAlgebraProvenanceExpressionSemringSolver,
+    RelationalAlgebraProvenanceExpressionSemringSolver
 )
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
-    ProbabilisticFactSet,
+    ProbabilisticFactSet
 )
 
 
-class EliminateTrivialProjections(PatternWalker):
+class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.translated_probfact_sets = dict()
+
     @add_match(
         Projection,
         lambda exp: (
@@ -37,30 +40,8 @@ class EliminateTrivialProjections(PatternWalker):
             )
         ),
     )
-    def eliminate_projection_on_sets(self, expression):
+    def eliminate_superfluous_projection(self, expression):
         return self.walk(expression.relation)
-
-    @add_match(
-        Projection(ProvenanceAlgebraSet, ...),
-        lambda projection: (
-            set(projection.relation.non_provenance_columns)
-            == set(col.value for col in projection.attributes)
-        )
-    )
-    def projection_on_all_non_provenance_columns(self, proj_op):
-        """
-        This projection does not change tuples nor their probability label.
-        """
-        return self.walk(proj_op.relation)
-
-
-class ProbSemiringSolver(
-    ProvenanceExtendedProjectionMixin,
-    RelationalAlgebraProvenanceExpressionSemringSolver,
-):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.translated_probfact_sets = dict()
 
     @add_match(
         DeterministicFactSet(Constant),
@@ -144,3 +125,51 @@ class ProbSemiringSolver(
     @add_match(ProbabilisticFactSet)
     def probabilistic_fact_set_invalid(self, prob_fact_set):
         raise NotImplementedError()
+
+    @add_match(ExtendedProjection(ProvenanceAlgebraSet, ...))
+    def extended_projection(self, proj_op):
+        provset = self.walk(proj_op.relation)
+        self._check_prov_col_not_in_proj_list(provset, proj_op.projection_list)
+        self._check_all_non_prov_cols_in_proj_list(
+            provset, proj_op.projection_list
+        )
+        relation = Constant[typing.AbstractSet](provset.relations)
+        prov_col = str2columnstr_constant(provset.provenance_column)
+        new_prov_col = str2columnstr_constant(Symbol.fresh().name)
+        proj_list_with_prov_col = proj_op.projection_list + (
+            FunctionApplicationListMember(prov_col, new_prov_col),
+        )
+        ra_op = ExtendedProjection(relation, proj_list_with_prov_col)
+        new_relation = self.walk(ra_op)
+        new_provset = ProvenanceAlgebraSet(
+            new_relation.value, new_prov_col.value
+        )
+        return new_provset
+
+    @staticmethod
+    def _check_prov_col_not_in_proj_list(provset, proj_list):
+        if any(
+            member.dst_column.value == provset.provenance_column
+            for member in proj_list
+        ):
+            raise ValueError(
+                "Cannot project on provenance column: "
+                f"{provset.provenance_column}"
+            )
+
+    @staticmethod
+    def _check_all_non_prov_cols_in_proj_list(provset, proj_list):
+        if provset.value.is_empty():
+            return
+        non_prov_cols = set(provset.non_provenance_columns)
+        found_cols = set(
+            member.dst_column.value
+            for member in proj_list
+            if member.dst_column.value in non_prov_cols
+            and member.fun_exp == member.dst_column
+        )
+        if non_prov_cols.symmetric_difference(found_cols):
+            raise ValueError(
+                "All non-provenance columns must be part of the extended "
+                "projection as {c: c} projection list member."
+            )
