@@ -126,50 +126,35 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
 
     """
     @add_match(ExtendedProjection, is_provenance_operation)
-    def prov_extended_projection(self, proj_op):
-        provset = self.walk(proj_op.relation)
-        self._check_prov_col_not_in_proj_list(provset, proj_op.projection_list)
-        self._check_all_non_prov_cols_in_proj_list(
-            provset, proj_op.projection_list
-        )
-        relation = Constant[AbstractSet](provset.relations)
-        prov_col = str2columnstr_constant(provset.provenance_column)
-        new_prov_col = str2columnstr_constant(Symbol.fresh().name)
-        proj_list_with_prov_col = proj_op.projection_list + (
-            FunctionApplicationListMember(prov_col, new_prov_col),
-        )
-        ra_op = ExtendedProjection(relation, proj_list_with_prov_col)
-        new_relation = self.walk(ra_op)
-        new_provset = ProvenanceAlgebraSet(
-            new_relation.value, new_prov_col.value
-        )
-        return new_provset
-
-    @staticmethod
-    def _check_prov_col_not_in_proj_list(provset, proj_list):
+    def prov_extended_projection(self, extended_proj):
+        relation = self.walk(extended_proj.relation)
         if any(
-            member.dst_column.value == provset.provenance_column
-            for member in proj_list
+            proj_list_member.dst_column == relation.provenance_column
+            for proj_list_member in extended_proj.projection_list
         ):
-            raise ValueError(
-                "Cannot project on provenance column: "
-                f"{provset.provenance_column}"
+            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
+        else:
+            new_prov_col = str2columnstr_constant(relation.provenance_column)
+        relation = self.walk(
+            RenameColumn(
+                relation,
+                str2columnstr_constant(relation.provenance_column),
+                new_prov_col
             )
-
-    @staticmethod
-    def _check_all_non_prov_cols_in_proj_list(provset, proj_list):
-        non_prov_cols = set(provset.non_provenance_columns)
-        found_cols = set(
-            member.dst_column.value
-            for member in proj_list
-            if member.dst_column.value in non_prov_cols
-            and member.fun_exp == member.dst_column
         )
-        if non_prov_cols.symmetric_difference(found_cols):
-            raise ValueError(
-                "All non-provenance columns must be part of the extended "
-                "projection as {c: c} projection list member."
-            )
+        new_proj_list = extended_proj.projection_list + (
+            FunctionApplicationListMember(
+                fun_exp=new_prov_col, dst_column=new_prov_col
+            ),
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(
+                ExtendedProjection(
+                    Constant[AbstractSet](relation.value), new_proj_list,
+                )
+            ).value,
+            new_prov_col.value,
+        )
 
 
 class RelationalAlgebraProvenanceCountingSolver(
@@ -649,18 +634,6 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     )
     def projection_rap_columnint(self, projection):
         columns = projection.relation.non_provenance_columns
-        if (
-            max(att.value for att in projection.attributes)
-            >= projection.relation.relations.arity
-        ):
-            arity = projection.relation.relations.arity
-            oor = list(
-                att.value for att in projection.attributes
-                if att.value > arity
-            )
-            raise IndexError(
-                f"ColumnInt {oor} out of range for relation with arity {arity}"
-            )
         new_attributes = tuple()
         for att in projection.attributes:
             if issubclass(att.type, ColumnInt):
@@ -769,25 +742,17 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
 
     @add_match(NameColumns(ProvenanceAlgebraSet, ...))
     def name_columns_rap(self, expression):
-        prov_set = expression.relation
-        if (
-            len(prov_set.non_provenance_columns)
-            != len(expression.column_names)
-        ):
-            arity = len(prov_set.non_provenance_columns)
-            raise RelationalAlgebraError(
-                "The number of column names does not match the number of "
-                "non-provenance columns. Arity of the provenance relation "
-                f"is {arity}, "
-                f"while the column names are {expression.column_names}"
-            )
-        relation = self._build_relation_constant(prov_set.relations)
+        relation = self._build_relation_constant(expression.relation.relations)
+        columns_to_name = tuple(
+            c for c in relation.value.columns
+            if c != expression.relation.provenance_column
+        )
         ne = RenameColumns(
             relation,
             tuple(
                 (Constant(src), dst)
                 for src, dst in zip(
-                    prov_set.non_provenance_columns, expression.column_names
+                    columns_to_name, expression.column_names
                 )
             )
         )
