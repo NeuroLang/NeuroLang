@@ -10,19 +10,6 @@ The probability is defined based on how far from the focus that voxel happens
 to be.
 
 """
-
-import logging
-logger = logging.getLogger('neurolang.probabilistic')
-logger.setLevel(logging.INFO)
-
-logger = logging.getLogger('neurolang.datalog.chase.relational_algebra')
-logger.setLevel(logging.INFO)
-
-# create console handler and set level to debug
-# ch = logging.StreamHandler()
-# ch.setLevel(logging.INFO)
-
-
 from typing import Callable, Iterable
 
 import nibabel
@@ -108,7 +95,6 @@ ns_terms = pd.melt(
 
 TermInStudy = nl.add_tuple_set(ns_terms, name="TermInStudy")
 FocusReported = nl.add_tuple_set(ns_database, name="FocusReported")
-StudyIds = nl.add_tuple_set(ns_docs, name="StudyIds")
 SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
     ns_docs, name="SelectedStudy"
 )
@@ -124,41 +110,31 @@ Voxel = nl.add_tuple_set(
     name="Voxel",
 )
 
-# %%
 # ##############################################################################
 # Probabilistic program and querying
 # ----------------------------------
 
 nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
 
-with nl.scope as e:
+with nl.environment as e:
     (e.VoxelReported @ e.max(e.exp(-e.d / 5.0)))[e.i1, e.j1, e.k1, e.s] = (
         e.FocusReported(e.i2, e.j2, e.k2, e.s)
         & e.Voxel(e.i1, e.j1, e.k1)
         & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
         & (e.d < 1)
     )
-    e.TermAssociation[e.t, e.s] = e.StudyIds[e.s] & e.TermInStudy[e.t, e.s] & (
-        (e.t == "emotion")
-        # & ~nl.exists(
-        #    e.t_,
-        #    e.TermInStudy[e.t_, e.s] &
-        #    (e.t_ != "emotion")
-        # )
-    )
+    e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]
     e.Activation[e.i, e.j, e.k] = (
         e.SelectedStudy[e.s] & e.VoxelReported[e.i, e.j, e.k, e.s]
     )
     e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
         e.Activation[e.i, e.j, e.k]
-    ) // (~e.TermAssociation["emotion", e.s] & e.StudyIds[e.s] & e.SelectedStudy[e.s])
-
+    ) // e.TermAssociation["emotion"]
     e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
         e.i, e.j, e.k, e.p
     ]
     img_query = nl.query((e.x,), e.img[e.x])
 
-# %%
 # ##############################################################################
 # Plotting results
 # --------------------------------------------
@@ -169,5 +145,3 @@ plot = nilearn.plotting.plot_stat_map(
     result_image, threshold=np.percentile(img[img > 0], 95)
 )
 nilearn.plotting.show()
-
-# %%
