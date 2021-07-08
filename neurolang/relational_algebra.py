@@ -1313,18 +1313,26 @@ class EliminateTrivialProjections(ew.PatternWalker):
 
     @ew.add_match(
         Projection(Projection, ...),
-        lambda e: set(e.attributes) <= set(e.relation.attributes)
+        lambda e: (
+            type(e) is type(e.relation)
+            and set(e.attributes) <= set(e.relation.attributes)
+        )
     )
     def eliminate_trivial_nested_projection(self, expression):
         return self.walk(
-            Projection(expression.relation.relation, expression.attributes)
+            expression.apply(
+                expression.relation.relation,
+                expression.attributes,
+            )
         )
 
     @ew.add_match(Projection(ExtendedProjection, ...))
     def try_simplify_projection_extended_projection(self, expression):
         new_relation = self.walk(expression.relation)
         if new_relation is not expression.relation:
-            return self.walk(Projection(new_relation, expression.attributes))
+            return self.walk(
+                expression.apply(new_relation, expression.attributes)
+            )
         else:
             return expression
 

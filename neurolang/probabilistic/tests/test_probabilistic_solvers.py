@@ -28,7 +28,6 @@ from ..exceptions import (
     NotHierarchicalQueryException
 )
 from ..probabilistic_semiring_solver import ProbSemiringSolver
-from ...utils import config
 
 try:
     from contextlib import nullcontext
@@ -58,12 +57,12 @@ c = Constant("c")
 
 
 @pytest.fixture(
-    params=(
-        weighted_model_counting,
-        small_dichotomy_theorem_based_solver,
+    params=((
+        # weighted_model_counting,
+        # small_dichotomy_theorem_based_solver,
         dalvi_suciu_lift,
-    ),
-    ids=["SDD-WMC", "small-dichotomy", "dalvi-suciu"],
+    )),
+    # ids=["SDD-WMC", "small-dichotomy", "dalvi-suciu"],
 )
 def solver(request):
     return request.param
@@ -282,10 +281,10 @@ def test_simple_probchoice(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
-    small_dichotomy_theorem_based_solver,
+    # pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        # reason="WMC issue to be resolved"
+    # )),
+    # small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
 def test_mutual_exclusivity(solver):
@@ -329,7 +328,8 @@ def test_multiple_probchoices_mutual_exclusivity(solver):
 
 def test_large_probabilistic_choice(solver):
     if config["RAS"].get("backend", "pandas") == "dask":
-        # dask backend uses `weighted_model_counting.solve_succ_query_boolean_diagram`
+        # dask backend uses
+        # weighted_model_counting.solve_succ_query_boolean_diagram
         # which does not handle too big prob sets.
         n = int(1000)
     else:
@@ -875,7 +875,7 @@ def test_probsemiring_extended_proj():
         ),
     ]
     proj = ExtendedProjection(provset, proj_list)
-    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
+    solver = ProbSemiringSolver()
     result = solver.walk(proj)
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
@@ -912,7 +912,7 @@ def test_probsemiring_forbidden_extended_proj_missing_nonprov_cols():
         ),
     ]
     proj = ExtendedProjection(provset, proj_list)
-    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
+    solver = ProbSemiringSolver()
     with pytest.raises(ValueError):
         solver.walk(proj)
 
@@ -941,10 +941,9 @@ def test_probsemiring_forbidden_extended_proj_on_provcol():
         ),
     ]
     proj = ExtendedProjection(provset, proj_list)
-    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
+    solver = ProbSemiringSolver()
     with pytest.raises(ValueError):
         solver.walk(proj)
-
 
 
 def test_simple_boolean_query(solver):

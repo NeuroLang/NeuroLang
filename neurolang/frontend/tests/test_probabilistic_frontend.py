@@ -480,7 +480,8 @@ def test_post_probabilistic_aggregation():
         res = nl.query((e.x, e.s), e.D[e.x, e.s])
 
     assert len(res) == 2
-    assert res.to_unnamed() == {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
+    expected = {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
+    assert_almost_equal(res.to_unnamed(), expected)
 
 
 def test_empty_result_query():
@@ -1073,14 +1074,6 @@ def test_no_tuple_unicity_qbased_pfact():
         e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
         with pytest.raises(RepeatedTuplesInProbabilisticRelationError):
             nl.query((e.x, e.p), e.Query(e.x, e.p))
-    nl = NeurolangPDL(check_qbased_pfact_tuple_unicity=False)
-    nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
-    with nl.environment as e:
-        (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
-        e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
-        result = nl.query((e.x, e.p), e.Query(e.x, e.p))
-    expected = {("a", 0.2), ("b", 0.5), ("a", 0.9)}
-    assert_almost_equal(result, expected)
 
 
 def test_qbased_pfact_max_prob():
@@ -1091,4 +1084,24 @@ def test_qbased_pfact_max_prob():
         e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
         sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
     expected = {("a", 0.9), ("b", 0.5)}
+    assert_almost_equal(sol, expected)
+
+
+def test_noisy_or_probabilistic_query():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, 'a', 'b'),
+            (0.7, 'a', 'c'),
+            (0.9, 'b', 'c'),
+        ],
+        name="R",
+    )
+    with nl.scope as e:
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x, e.y)
+        sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 1 - (1 - 0.2) * (1 - 0.7)),
+        ("b", 1 - (1 - 0.9)),
+    }
     assert_almost_equal(sol, expected)

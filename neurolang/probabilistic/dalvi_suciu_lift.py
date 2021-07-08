@@ -12,7 +12,7 @@ from ..datalog.expression_processing import (
     flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..exceptions import NonLiftableException
+from ..exceptions import NonLiftableException, NeuroLangException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
@@ -63,7 +63,6 @@ from .probabilistic_ra_utils import (
 )
 from .probabilistic_semiring_solver import (
     ProbSemiringSolver,
-    EliminateTrivialProjections,
 )
 from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
@@ -101,6 +100,34 @@ class DisjointProjection(Projection):
     pass
 
 
+class DisjointProjectRAQueryOptimiser(RAQueryOptimiser):
+    @add_match(
+        Projection(ProvenanceAlgebraSet, ...),
+        lambda proj_op: (
+            set(attr.value for attr in proj_op.attributes)
+            == set(proj_op.relation.non_provenance_columns)
+        )
+    )
+    def eliminate_trivial_projection_on_all_non_provenance_columns(
+        self, proj_op
+    ):
+        return proj_op.relation
+
+    @add_match(
+        ExtendedProjection,
+        lambda e: all(
+            isinstance(p.fun_exp, Constant[ColumnStr]) and
+            (p.fun_exp == p.dst_column)
+            for p in e.projection_list
+        )
+    )
+    def convert_extended_projection_2_projection(self, expression):
+        return self.walk(IndependentProjection(
+            expression.relation,
+            tuple(p.dst_column for p in expression.projection_list)
+        ))
+
+
 class DisjointProjectMixin(PatternWalker):
     @add_match(IndependentProjection(ProvenanceAlgebraSet, ...))
     def independent_projection(self, proj_op):
@@ -125,9 +152,16 @@ class DisjointProjectMixin(PatternWalker):
         )
         relation = Constant[AbstractSet](prov_set.value)
         relation = ExtendedProjection(relation, proj_list)
+        group_cols = tuple(
+            proj_col if isinstance(proj_col.value, ColumnStr)
+            else Constant(
+                ColumnStr(prov_set.non_provenance_columns[proj_col.value])
+            )
+            for proj_col in proj_op.attributes
+        )
         relation = GroupByAggregation(
             relation,
-            groupby=proj_op.attributes,
+            groupby=group_cols,
             aggregate_functions=(
                 FunctionApplicationListMember(
                     FunctionApplication(Constant(sum), (prov_col,)),
@@ -137,7 +171,7 @@ class DisjointProjectMixin(PatternWalker):
         )
         proj_list = [
             FunctionApplicationListMember(col, col)
-            for col in proj_op.attributes
+            for col in group_cols
         ]
         proj_list.append(
             FunctionApplicationListMember(
@@ -157,9 +191,12 @@ class DisjointProjectMixin(PatternWalker):
     def disjoint_projection(self, proj_op):
         return self.projection_rap(proj_op)
 
+    @add_match(Projection(ProvenanceAlgebraSet, ...))
+    def unlabeled_projection(self, proj_op):
+        return IndependentProjection.apply(*proj_op.unapply())
+
 
 class LiftedQueryProcessingSemiringSolver(
-    EliminateTrivialProjections,
     DisjointProjectMixin,
     ProbSemiringSolver,
 ):
@@ -229,13 +266,11 @@ def solve_succ_query(query, cpl_program):
                 "Query %s not liftable, algorithm can't be applied",
                 query
             )
-        # project on query's head variables
-        ra_query = _project_on_query_head(ra_query, shattered_query)
         # re-introduce head variables potentially removed by unification
         ra_query = _maybe_reintroduce_head_variables(
             ra_query, flat_query, unified_query
         )
-        ra_query = RAQueryOptimiser().walk(ra_query)
+        ra_query = DisjointProjectRAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
         solver = LiftedQueryProcessingSemiringSolver(symbol_table)
