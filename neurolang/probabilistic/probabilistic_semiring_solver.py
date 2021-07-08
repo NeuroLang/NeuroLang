@@ -23,7 +23,7 @@ from .probabilistic_ra_utils import (
 )
 
 
-class RemoveSuperfluousProjectionMixin(PatternWalker):
+class EliminateTrivialProjections(PatternWalker):
     @add_match(
         Projection,
         lambda exp: (
@@ -37,7 +37,7 @@ class RemoveSuperfluousProjectionMixin(PatternWalker):
             )
         ),
     )
-    def eliminate_superfluous_projection(self, expression):
+    def eliminate_projection_on_sets(self, expression):
         return self.walk(expression.relation)
 
     @add_match(
