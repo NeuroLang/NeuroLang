@@ -1,4 +1,4 @@
-from ...utils import config
+from neurolang.config import config
 from .abstract import RelationalAlgebraColumnInt, RelationalAlgebraColumnStr
 
 if config["RAS"].get("backend") == "dask":

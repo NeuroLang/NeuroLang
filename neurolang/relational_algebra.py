@@ -1311,6 +1311,37 @@ class EliminateTrivialProjections(ew.PatternWalker):
         else:
             return expression
 
+    @ew.add_match(
+        Projection(Projection, ...),
+        lambda e: set(e.attributes) <= set(e.relation.attributes)
+    )
+    def eliminate_trivial_nested_projection(self, expression):
+        return self.walk(
+            Projection(expression.relation.relation, expression.attributes)
+        )
+
+    @ew.add_match(Projection(ExtendedProjection, ...))
+    def try_simplify_projection_extended_projection(self, expression):
+        new_relation = self.walk(expression.relation)
+        if new_relation is not expression.relation:
+            return self.walk(Projection(new_relation, expression.attributes))
+        else:
+            return expression
+
+    @ew.add_match(
+        ExtendedProjection,
+        lambda e: all(
+            isinstance(p.fun_exp, Constant[ColumnStr]) and
+            (p.fun_exp == p.dst_column)
+            for p in e.projection_list
+        )
+    )
+    def convert_extended_projection_2_projection(self, expression):
+        return self.walk(Projection(
+            expression.relation,
+            tuple(p.dst_column for p in expression.projection_list)
+        ))
+
 
 class RelationalAlgebraPushInSelections(ew.PatternWalker):
     @ew.add_match(
