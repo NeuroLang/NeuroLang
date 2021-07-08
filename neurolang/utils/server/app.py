@@ -5,8 +5,7 @@ from neurolang.utils.relational_algebra_set import (
 )
 import os.path
 from concurrent.futures import Future, ThreadPoolExecutor
-from multiprocessing import Value
-from threading import BoundedSemaphore, get_ident
+from threading import get_ident, RLock
 from typing import Dict
 from uuid import uuid4
 
@@ -14,7 +13,11 @@ import tornado.ioloop
 import tornado.options
 import tornado.web
 import tornado.websocket
-from neurolang.utils.server.engines import init_frontend, load_neurosynth_data
+from neurolang.utils.server.engines import (
+    NeurolangEngineConfiguration,
+    NeurolangEngineSet,
+    NeurosynthEngineConf,
+)
 from neurolang.utils.server.responses import (
     CustomQueryResultsEncoder,
     QueryResults,
@@ -26,12 +29,13 @@ define("port", default=8888, help="run on the given port", type=int)
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
-ch.setLevel(logging.ERROR)
+ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter(
     "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 ch.setFormatter(formatter)
 LOG.addHandler(ch)
+LOG.propagate = False
 
 logger = logging.getLogger("neurolang")
 logger.propagate = False
@@ -43,12 +47,13 @@ class NeurolangQueryManager:
     """
 
     executor = None
-    engines = set()
-    created_engines = Value("i", 0)
-    engines_sema = None
+    engines = {}
+    _lock = RLock()
     results_cache = {}
 
-    def __init__(self, nb_engines: int, engine_create_func: callable) -> None:
+    def __init__(
+        self, options: Dict[NeurolangEngineConfiguration, int]
+    ) -> None:
         """
         By default, the query manager has nb_engines workers, but no engines.
         It will call the _init_engines to create `nb_engines` engines
@@ -56,17 +61,16 @@ class NeurolangQueryManager:
 
         Parameters
         ----------
-        nb_engines : int
-            the nb of engines to create. Also the number of workers.
-        engine_create_func : callable
-            a function to create a new engine. Should return a Neurolang instance.
+        options : Dict[NeurolangEngineConfiguration, int]
+            a dictionnary defining the types of engines and the number of each
+            type to create.
         """
+        nb_engines = sum(options.values())
         LOG.debug(f"Creating query manager with {nb_engines} engines.")
-        self.engines_sema = BoundedSemaphore(value=0)
         self.executor = ThreadPoolExecutor(max_workers=nb_engines)
-        self._init_engines(nb_engines, engine_create_func)
+        self._init_engines(options)
 
-    def _init_engines(self, nb_engines: int, engine_create_func: callable):
+    def _init_engines(self, options: Dict[NeurolangEngineConfiguration, int]):
         """
         Dispatch a series of tasks to create `nb_engines` engines using the
         `engine_create_func` function.
@@ -78,10 +82,17 @@ class NeurolangQueryManager:
         engine_create_func : callable
             a function to create a new engine. Should return a Neurolang instance.
         """
+
+        def create_wrapper(config: NeurolangEngineConfiguration):
+            engine = config.create()
+            return (config.key, engine)
+
         # Dispatch the engine create tasks to the workers
-        for _ in range(nb_engines):
-            future = self.executor.submit(engine_create_func)
-            future.add_done_callback(self._engine_created)
+        for config, nb in options.items():
+            LOG.debug(f"Starting creation of {nb} {config.key} engines...")
+            for _ in range(nb):
+                future = self.executor.submit(create_wrapper, config)
+                future.add_done_callback(self._engine_created)
 
     def _engine_created(self, future: Future):
         """
@@ -92,20 +103,20 @@ class NeurolangQueryManager:
         future : concurrent.futures.Future
             the future holding the result of the engine creation task.
         """
-        engine = future.result()
-        with self.created_engines.get_lock():
-            self.engines.add(engine)
-            self.created_engines.value += 1
+        key, engine = future.result()
+        with self._lock:
+            engine_set = self.engines.get(key, None)
+            if engine_set is None:
+                engine_set = NeurolangEngineSet(engine)
+                self.engines[key] = engine_set
+            else:
+                engine_set.add_engine(engine)
             LOG.debug(
-                f"Added a created engine, got {self.created_engines.value}."
-            )
-            # Create semaphore with len(self.engines) tokens
-            self.engines_sema = BoundedSemaphore(
-                value=self.created_engines.value
+                f"Added a created engine of type {key}, got {engine_set.counter} of this type."
             )
 
     def _execute_neurolang_query(
-        self, query: str
+        self, query: str, engine_type: str
     ) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Function executed on a ThreadPoolExecutor worker to execute a query
@@ -123,9 +134,12 @@ class NeurolangQueryManager:
         """
         LOG.debug(f"[Thread - {get_ident()}] - Executing query...")
         LOG.debug(f"[Thread - {get_ident()}] - Query : {query}")
-        with self.engines_sema:
-            engine = self.engines.pop()
-            LOG.debug(f"[Thread - {get_ident()}] - Engine acquired.")
+        engine_set = self.engines[engine_type]
+        with engine_set.sema:
+            engine = engine_set.pop()
+            LOG.debug(
+                f"[Thread - {get_ident()}] - Engine of type {engine_type} acquired."
+            )
             try:
                 with engine.scope:
                     LOG.debug(f"[Thread - {get_ident()}] - Solving query...")
@@ -142,10 +156,12 @@ class NeurolangQueryManager:
                 )
                 raise e
             finally:
-                self.engines.add(engine)
-                LOG.debug(f"[Thread - {get_ident()}] - Engine released.")
+                engine_set.add(engine)
+                LOG.debug(
+                    f"[Thread - {get_ident()}] - Engine of type {engine_type} released."
+                )
 
-    def submit_query(self, uuid: str, query: str) -> Future:
+    def submit_query(self, uuid: str, query: str, engine_type: str) -> Future:
         """
         Submit the query to one of the available engines / workers.
 
@@ -155,14 +171,20 @@ class NeurolangQueryManager:
             the uuid for the query.
         query : str
             the datalog query to execute.
+        engine_type : str
+            the type of engine to use for solving the query.
 
         Returns
         -------
         Future
             a future result for the query execution.
         """
-        LOG.debug(f"Submitting query with uuid {uuid} to executor pool.")
-        future_res = self.executor.submit(self._execute_neurolang_query, query)
+        LOG.debug(
+            f"Submitting query with uuid {uuid} to executor pool of {engine_type} engines."
+        )
+        future_res = self.executor.submit(
+            self._execute_neurolang_query, query, engine_type
+        )
         self.results_cache[uuid] = future_res
         return future_res
 
@@ -274,21 +296,17 @@ class QueryHandler(JSONRequestHandler):
     """
 
     async def post(self):
-        query = self.get_argument("body")
+        query = self.get_argument("query")
+        engine = self.get_argument("engine", "neurosynth")
         uuid = str(uuid4())
         LOG.debug(f"Submitting query with uuid {uuid}.")
-        self.application.njm.submit_query(uuid, query)
+        self.application.njm.submit_query(uuid, query, engine)
         return self.write_json_reponse({"query": query, "uuid": uuid})
 
 
-def create_neurosynth_engine():
-    nl = init_frontend()
-    load_neurosynth_data(nl)
-    return nl
-
-
 def main():
-    njm = NeurolangQueryManager(2, create_neurosynth_engine)
+    opts = {NeurosynthEngineConf(): 2}
+    njm = NeurolangQueryManager(opts)
 
     tornado.options.parse_command_line()
     print(f"Tornado application starting on port {options.port}")

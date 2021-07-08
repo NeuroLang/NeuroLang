@@ -1,10 +1,65 @@
+from multiprocessing import BoundedSemaphore
 from pathlib import Path
-from typing import Iterable
-from neurolang.frontend import NeurolangPDL
+from typing import Iterable, Union
+from neurolang.frontend import NeurolangPDL, NeurolangDL
 import nibabel as nib
 import numpy as np
 import pandas as pd
 from nilearn import datasets, image
+from abc import abstractproperty, abstractstaticmethod
+
+
+class NeurolangEngineSet:
+    def __init__(self, engine: Union[NeurolangDL, NeurolangPDL]) -> None:
+        self.engines = set((engine,))
+        self.counter = 1
+        self.sema = BoundedSemaphore(value=1)
+
+    def add_engine(self, engine: Union[NeurolangDL, NeurolangPDL]) -> None:
+        self.engines.add(engine)
+        self.counter += 1
+        self.sema = BoundedSemaphore(value=self.counter)
+
+    def add(self, engine: Union[NeurolangDL, NeurolangPDL]) -> None:
+        self.engines.add(engine)
+
+    def pop(self) -> Union[NeurolangDL, NeurolangPDL]:
+        return self.engines.pop()
+
+
+class NeurolangEngineConfiguration:
+    """
+    A NeurolangEngineConfiguration is a combination of an id key and
+    a method which returns a Neurolang instance.
+    """
+
+    @abstractproperty
+    def key(self):
+        pass
+
+    @abstractstaticmethod
+    def create() -> Union[NeurolangDL, NeurolangPDL]:
+        pass
+
+
+class NeurosynthEngineConf(NeurolangEngineConfiguration):
+    @property
+    def key(self):
+        return "neurosynth"
+
+    @staticmethod
+    def create() -> NeurolangPDL:
+        nl = init_frontend()
+        load_neurosynth_data(nl)
+        return nl
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, NeurolangEngineConfiguration):
+            return super().__eq__(other)
+        return self.key == other.key
+
+    def __hash__(self) -> int:
+        return hash(self.key)
 
 
 def load_neurosynth_data(nl):
