@@ -651,9 +651,9 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         columns = projection.relation.non_provenance_columns
         if (
             max(att.value for att in projection.attributes)
-            >= projection.relation.arity
+            >= projection.relation.relations.arity
         ):
-            arity = projection.relation.arity
+            arity = projection.relation.relations.arity
             oor = list(
                 att.value for att in projection.attributes
                 if att.value > arity
