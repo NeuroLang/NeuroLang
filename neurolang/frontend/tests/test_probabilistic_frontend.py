@@ -782,7 +782,9 @@ def test_query_based_pfact_empty():
         (e.B @ (e.p / 2))[e.x] = e.A[e.x, e.p] & (e.p > 0.8)
         e.Query[e.PROB[e.x], e.x] = e.B[e.x]
         result = nl.query((e.x, e.p), e.Query[e.p, e.x])
-    expected = RelationalAlgebraFrozenSet(set())
+    expected = RelationalAlgebraFrozenSet(
+        []
+    )
     assert_almost_equal(result, expected)
 
 
