@@ -58,11 +58,11 @@ c = Constant("c")
 
 @pytest.fixture(
     params=((
-        # weighted_model_counting,
-        # small_dichotomy_theorem_based_solver,
+        weighted_model_counting,
+        small_dichotomy_theorem_based_solver,
         dalvi_suciu_lift,
     )),
-    # ids=["SDD-WMC", "small-dichotomy", "dalvi-suciu"],
+    ids=["SDD-WMC", "small-dichotomy", "dalvi-suciu"],
 )
 def solver(request):
     return request.param
@@ -281,10 +281,10 @@ def test_simple_probchoice(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    # pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        # reason="WMC issue to be resolved"
-    # )),
-    # small_dichotomy_theorem_based_solver,
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
 def test_mutual_exclusivity(solver):

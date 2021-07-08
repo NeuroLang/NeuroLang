@@ -12,7 +12,7 @@ from ..datalog.expression_processing import (
     flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..exceptions import NonLiftableException, NeuroLangException
+from ..exceptions import NonLiftableException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
@@ -69,7 +69,6 @@ from .shattering import shatter_easy_probfacts
 from .small_dichotomy_theorem_based_solver import (
     RAQueryOptimiser,
     _maybe_reintroduce_head_variables,
-    _project_on_query_head,
     lift_optimization_for_choice_predicates,
 )
 from .transforms import (

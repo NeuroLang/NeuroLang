@@ -11,21 +11,13 @@ from ...logic import (
     Implication,
 )
 from ...relational_algebra import (
-    ColumnInt,
-    ColumnStr,
-    NameColumns,
-    NaturalJoin,
-    Projection,
-    Union,
     str2columnstr_constant,
 )
-from ...relational_algebra_provenance import WeightedNaturalJoin
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
 from ..probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
-    ProbabilisticFactSet,
 )
 
 TNRA = TranslateToNamedRA()
