@@ -649,6 +649,18 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     )
     def projection_rap_columnint(self, projection):
         columns = projection.relation.non_provenance_columns
+        if (
+            max(att.value for att in projection.attributes)
+            >= projection.relation.arity
+        ):
+            arity = projection.relation.arity
+            oor = list(
+                att.value for att in projection.attributes
+                if att.value > arity
+            )
+            raise IndexError(
+                f"ColumnInt {oor} out of range for relation with arity {arity}"
+            )
         new_attributes = tuple()
         for att in projection.attributes:
             if issubclass(att.type, ColumnInt):
