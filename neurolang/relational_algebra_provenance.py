@@ -641,7 +641,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             arity = projection.relation.relations.arity
             columnint_out_of_range = list(
                 att.value for att in projection.attributes
-                if att.value > arity
+                if att.value >= arity
             )
             raise IndexError(
                 f"ColumnInt {columnint_out_of_range} out of range for "
