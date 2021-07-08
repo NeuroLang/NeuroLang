@@ -1,10 +1,10 @@
-from neurolang.exceptions import NonLiftableException
 import operator
 
 import numpy as np
 import pytest
 
 from ...datalog import Fact
+from ...exceptions import NonLiftableException
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
 from ...relational_algebra import (
@@ -15,6 +15,7 @@ from ...relational_algebra import (
     str2columnstr_constant
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
+from ...utils import config
 from .. import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -113,6 +114,24 @@ def test_deterministic_conjunction_varying_arity(solver):
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0, "a", "b")], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_deterministic_conjunction_varying_arity_empty(solver):
+    code = Union(
+        (
+            Fact(P(a)),
+            Fact(P(b)),
+            Implication(
+                Z(x, y),
+                Conjunction((Q(x, y), P(x), P(y)))
+            ),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(code)
+    query = Implication(ans(x, y), Z(x, y))
+    result = solver.solve_succ_query(query, cpl_program)
+    assert result.value.is_empty()
 
 
 def test_simple_bernoulli(solver):
