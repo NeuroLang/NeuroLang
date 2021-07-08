@@ -832,6 +832,11 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     def aggregate(self, agg_op):
         relation = agg_op.relation
         groupby = list(c.value for c in agg_op.groupby)
+        if any(c not in relation.value.columns for c in groupby):
+            missing = set(
+                c for c in groupby if c not in relation.value.columns
+            )
+            raise NeuroLangException(f"Missing group columns: {missing}")
         aggregate_functions = []
         for member in agg_op.aggregate_functions:
             fun_args = [arg.value for arg in member.fun_exp.args]

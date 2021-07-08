@@ -997,3 +997,25 @@ def test_evaluatable_function_applications():
             )
         )
         assert result == expected
+
+
+def test_aggregation_missing_group_column():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"),
+            iterable=[(42, 21), (10, 20), (1, 2)],
+        )
+    )
+    agg_op = GroupByAggregation(
+        relation,
+        (Constant(ColumnStr("z")), Constant(ColumnStr("y"))),
+        [
+            FunctionApplicationListMember(
+                FunctionApplication(Constant(sum), (Constant(ColumnStr("z")),), verify_type=False),
+                Constant(ColumnStr("z_sum")),
+            )
+        ],
+    )
+    solver = RelationalAlgebraSolver()
+    with pytest.raises(NeuroLangException):
+        result = solver.walk(agg_op)
