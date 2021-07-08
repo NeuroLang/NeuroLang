@@ -48,6 +48,9 @@ class EliminateTrivialProjections(PatternWalker):
         )
     )
     def projection_on_all_non_provenance_columns(self, proj_op):
+        """
+        This projection does not change tuples nor their probability label.
+        """
         return self.walk(proj_op.relation)
 
 

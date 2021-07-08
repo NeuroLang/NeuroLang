@@ -63,7 +63,7 @@ from .probabilistic_ra_utils import (
 )
 from .probabilistic_semiring_solver import (
     ProbSemiringSolver,
-    RemoveSuperfluousProjectionMixin,
+    EliminateTrivialProjections,
 )
 from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
@@ -159,7 +159,7 @@ class DisjointProjectMixin(PatternWalker):
 
 
 class LiftedQueryProcessingSemiringSolver(
-    RemoveSuperfluousProjectionMixin,
+    EliminateTrivialProjections,
     DisjointProjectMixin,
     ProbSemiringSolver,
 ):
