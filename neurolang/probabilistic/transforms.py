@@ -170,19 +170,19 @@ def convert_to_dnf_ucq(expression):
 
 
 def minimize_component_disjunction(disjunction):
-    """Given a disjunction of queries Q1  ∨ ... ∨ Qn
+    """Given a conjunction of queries Q1  ∨ ... ∨ Qn
     remove each query Qi such that exists Qj and
     Qi → Qj.
 
     Parameters
     ----------
-    disjunction : Disjunction
-        Disjunction of logical formulas to minimise.
+    conjunction : Conjunction
+        conjunction of logical formulas to minimise.
 
     Returns
     -------
-    Disjunction
-        Minimised disjunction.
+    Conjunction
+        minimised conjunction.
     """
     if not isinstance(disjunction, Disjunction):
         return disjunction
