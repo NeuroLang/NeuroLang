@@ -957,6 +957,10 @@ def test_eliminate_trivial_projections_optimiser(R1):
     res = opt.walk(exp)
     assert res == Projection(r0, (a, b))
 
+    exp = Projection(exp, (a,))
+    res = opt.walk(exp)
+    assert res == Projection(r0, (a,))
+
 
 def test_numpy_log():
     r = Constant[AbstractSet[Tuple[str, float]]](
