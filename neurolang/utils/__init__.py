@@ -1,4 +1,3 @@
-from .config import config
 from .orderedset import OrderedSet
 from .relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
@@ -15,5 +14,4 @@ __all__ = [
     "NamedRelationalAlgebraFrozenSet",
     "RelationalAlgebraStringExpression",
     "log_performance",
-    "config",
 ]

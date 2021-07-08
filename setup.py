@@ -20,7 +20,7 @@ def update_config_file():
     This config file will then be copied during install as a
     setuptools data_files.
     """
-    config_file = Path("neurolang/utils/config/config.ini")
+    config_file = Path("neurolang/config/config.ini")
     config = configparser.ConfigParser(
         allow_no_value=True, comment_prefixes="//"
     )
