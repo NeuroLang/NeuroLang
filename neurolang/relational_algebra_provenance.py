@@ -634,6 +634,19 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     )
     def projection_rap_columnint(self, projection):
         columns = projection.relation.non_provenance_columns
+        if (
+            max(att.value for att in projection.attributes)
+            >= projection.relation.relations.arity
+        ):
+            arity = projection.relation.relations.arity
+            columnint_out_of_range = list(
+                att.value for att in projection.attributes
+                if att.value > arity
+            )
+            raise IndexError(
+                f"ColumnInt {columnint_out_of_range} out of range for "
+                f"relation with arity {arity}"
+            )
         new_attributes = tuple()
         for att in projection.attributes:
             if issubclass(att.type, ColumnInt):
@@ -742,17 +755,26 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
 
     @add_match(NameColumns(ProvenanceAlgebraSet, ...))
     def name_columns_rap(self, expression):
-        relation = self._build_relation_constant(expression.relation.relations)
-        columns_to_name = tuple(
-            c for c in relation.value.columns
-            if c != expression.relation.provenance_column
-        )
+        prov_set = expression.relation
+        if (
+            len(prov_set.non_provenance_columns)
+            != len(expression.column_names)
+        ):
+            arity = len(prov_set.non_provenance_columns)
+            raise RelationalAlgebraError(
+                "The number of column names does not match the number of "
+                "non-provenance columns. Arity of the provenance relation "
+                f"is {arity}, "
+                f"while the column names are {expression.column_names}"
+            )
+        relation = self._build_relation_constant(prov_set.relations)
         ne = RenameColumns(
             relation,
             tuple(
                 (Constant(src), dst)
                 for src, dst in zip(
-                    columns_to_name, expression.column_names
+                    prov_set.non_provenance_columns,
+                    expression.column_names,
                 )
             )
         )

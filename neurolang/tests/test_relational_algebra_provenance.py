@@ -14,6 +14,7 @@ from ..relational_algebra import (
     Product,
     RenameColumn,
     RenameColumns,
+    NameColumns,
     Selection,
     eq_,
     str2columnstr_constant
@@ -578,3 +579,27 @@ def test_weightednaturaljoin_provenance_name():
     )
 
     assert sol.relations == expected
+
+
+def test_name_columns_emptyset():
+    relation = NamedRelationalAlgebraFrozenSet(
+        columns=("_p_",),
+        iterable=set(),
+    )
+    pset = ProvenanceAlgebraSet(relation, ColumnStr("_p_"))
+    op = NameColumns(pset, (Constant(ColumnStr("x")),))
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    with pytest.raises(NeuroLangException):
+        solver.walk(op)
+
+
+def test_projection_columnint_emptyset():
+    relation = NamedRelationalAlgebraFrozenSet(
+        columns=("_p_",),
+        iterable=set(),
+    )
+    pset = ProvenanceAlgebraSet(relation, ColumnStr("_p_"))
+    op = Projection(pset, (Constant(ColumnInt(0)),))
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    with pytest.raises(NeuroLangException):
+        solver.walk(op)
