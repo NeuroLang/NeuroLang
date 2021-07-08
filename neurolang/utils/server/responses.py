@@ -1,6 +1,9 @@
 from concurrent.futures import Future
 import json
-from typing import Any
+from neurolang.utils.relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+)
+from typing import Any, Dict
 
 
 class CustomQueryResultsEncoder(json.JSONEncoder):
@@ -34,5 +37,17 @@ class QueryResults:
             else:
                 results = future.result()
                 if results is not None:
-                    self.columns = self.get_column_description(results)
-                    self.data = self.get_data_description(results)
+                    self.results = {}
+                    for key, ras in results.items():
+                        result = self.get_result_item_values(ras)
+                        self.results[key] = result
+
+    def get_result_item_values(
+        self, ras: NamedRelationalAlgebraFrozenSet
+    ) -> Dict:
+        result = {}
+        result["row_type"] = str(ras.row_type)
+        result["columns"] = ras.columns
+        df = ras.as_pandas_dataframe()
+        result["size"] = df.shape[0]
+        return result
