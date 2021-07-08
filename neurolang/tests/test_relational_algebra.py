@@ -1018,4 +1018,4 @@ def test_aggregation_missing_group_column():
     )
     solver = RelationalAlgebraSolver()
     with pytest.raises(NeuroLangException):
-        result = solver.walk(agg_op)
+        solver.walk(agg_op)
