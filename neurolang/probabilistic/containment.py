@@ -1,4 +1,5 @@
-from ..datalog import DatalogProgram, Fact, chase
+from ..datalog import Fact, chase
+from ..datalog.negation import DatalogProgramNegation
 from ..expressions import Constant, Symbol
 from ..logic import Disjunction, Implication, Union
 from ..logic.expression_processing import (
@@ -60,7 +61,7 @@ def is_contained_rule(q1, q2):
         s(*q2.consequent.args), q2.antecedent
     )
     d_q2, frozen_head = canonical_database_program(q2)
-    dp = DatalogProgram()
+    dp = DatalogProgramNegation()
     for f in d_q2.formulas:
         dp.walk(f)
     dp.walk(q1)
