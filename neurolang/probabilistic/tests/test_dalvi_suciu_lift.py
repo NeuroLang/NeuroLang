@@ -10,9 +10,7 @@ from ...logic import (
     ExistentialPredicate,
     Implication,
 )
-from ...relational_algebra import (
-    str2columnstr_constant,
-)
+from ...relational_algebra import str2columnstr_constant
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
 from ..probabilistic_ra_utils import (
