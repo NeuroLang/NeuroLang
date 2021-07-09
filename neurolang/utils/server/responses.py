@@ -83,7 +83,7 @@ class QueryResults:
     ) -> Dict:
         result = {}
         result["row_type"] = str(ras.row_type)
-        result["columns"] = ras.columns
+        result["columns"] = list(ras.columns)
         result["size"] = df.shape[0]
         return result
 
