@@ -50,7 +50,10 @@ from ..relational_algebra import (
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant,
 )
-from ..relational_algebra_provenance import ProvenanceAlgebraSet
+from ..relational_algebra_provenance import (
+    ProvenanceAlgebraSet,
+    is_provenance_operation,
+)
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .exceptions import NotEasilyShatterableError
@@ -99,36 +102,8 @@ class DisjointProjection(Projection):
     pass
 
 
-class DisjointProjectRAQueryOptimiser(RAQueryOptimiser):
-    @add_match(
-        Projection(ProvenanceAlgebraSet, ...),
-        lambda proj_op: (
-            set(attr.value for attr in proj_op.attributes)
-            == set(proj_op.relation.non_provenance_columns)
-        )
-    )
-    def eliminate_trivial_projection_on_all_non_provenance_columns(
-        self, proj_op
-    ):
-        return proj_op.relation
-
-    @add_match(
-        ExtendedProjection,
-        lambda e: all(
-            isinstance(p.fun_exp, Constant[ColumnStr]) and
-            (p.fun_exp == p.dst_column)
-            for p in e.projection_list
-        )
-    )
-    def convert_extended_projection_2_projection(self, expression):
-        return self.walk(IndependentProjection(
-            expression.relation,
-            tuple(p.dst_column for p in expression.projection_list)
-        ))
-
-
 class DisjointProjectMixin(PatternWalker):
-    @add_match(IndependentProjection(ProvenanceAlgebraSet, ...))
+    @add_match(IndependentProjection)
     def independent_projection(self, proj_op):
         prov_set = self.walk(proj_op.relation)  # type: ProvenanceAlgebraSet
         prov_col = str2columnstr_constant(prov_set.provenance_column)
@@ -186,13 +161,13 @@ class DisjointProjectMixin(PatternWalker):
         relation = self.walk(relation)
         return ProvenanceAlgebraSet(relation.value, prov_col.value)
 
-    @add_match(DisjointProjection(ProvenanceAlgebraSet, ...))
+    @add_match(DisjointProjection)
     def disjoint_projection(self, proj_op):
         return self.projection_rap(proj_op)
 
-    @add_match(Projection(ProvenanceAlgebraSet, ...))
+    @add_match(Projection, is_provenance_operation)
     def unlabeled_projection(self, proj_op):
-        return IndependentProjection.apply(*proj_op.unapply())
+        return self.walk(IndependentProjection.apply(*proj_op.unapply()))
 
 
 class LiftedQueryProcessingSemiringSolver(
@@ -220,6 +195,7 @@ def solve_succ_query(query, cpl_program):
         set.
 
     """
+    breakpoint()
     with log_performance(
         LOG,
         "Preparing query %s",
@@ -267,7 +243,7 @@ def solve_succ_query(query, cpl_program):
         ra_query = _maybe_reintroduce_head_variables(
             ra_query, flat_query, unified_query
         )
-        ra_query = DisjointProjectRAQueryOptimiser().walk(ra_query)
+        ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
         solver = LiftedQueryProcessingSemiringSolver(symbol_table)
