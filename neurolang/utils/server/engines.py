@@ -7,24 +7,56 @@ import numpy as np
 import pandas as pd
 from nilearn import datasets, image
 from abc import abstractproperty, abstractstaticmethod
+from contextlib import contextmanager
 
 
 class NeurolangEngineSet:
+    """
+    Utility class to hold a set of Neurolang engines (either NeurolangDL
+    or NeurolangPDL). It keeps track of the total number of engines added
+    to the set, as well as a semaphore to manage acquiring and releasing the
+    engines in a safe concurrent manner.
+    """
+
     def __init__(self, engine: Union[NeurolangDL, NeurolangPDL]) -> None:
         self.engines = set((engine,))
         self.counter = 1
         self.sema = BoundedSemaphore(value=1)
 
     def add_engine(self, engine: Union[NeurolangDL, NeurolangPDL]) -> None:
+        """
+        Add an engine to the set and increase the total number of engines
+        in the set.
+
+        Parameters
+        ----------
+        engine : Union[NeurolangDL, NeurolangPDL]
+            the engine to add.
+        """
         self.engines.add(engine)
         self.counter += 1
         self.sema = BoundedSemaphore(value=self.counter)
 
-    def add(self, engine: Union[NeurolangDL, NeurolangPDL]) -> None:
-        self.engines.add(engine)
+    @contextmanager
+    def engine(self):
+        """
+        ContextManager to safely acquire an engine from the set.
+        This method will block on the semaphore until an engine can be
+        safely used from this set, and then yield it.
+        At the end, the engine is put back in the set and the semaphore
+        value is released.
 
-    def pop(self) -> Union[NeurolangDL, NeurolangPDL]:
-        return self.engines.pop()
+        Yields
+        -------
+        Union[NeurolangDL, NeurolangPDL]
+            an engine.
+        """
+        with self.sema:
+            engine = self.engines.pop()
+            try:
+                yield engine
+            finally:
+                self.engines.add(engine)
 
 
 class NeurolangEngineConfiguration:

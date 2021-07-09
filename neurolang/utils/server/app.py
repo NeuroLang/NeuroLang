@@ -44,6 +44,14 @@ logger.propagate = False
 class NeurolangQueryManager:
     """
     Class to manage execution of queries and keep track of results.
+
+    This class is initialized with a dict of `NeurolangEngineConfiguration`
+    which define which Neurolang engine to creates and how many.
+    The NeurolangQueryManager creates a pool of thread workers (as many as
+    there are engines) to execute the queries which are submited.
+
+    It also keeps track of results in memory, in a results_cache which is a
+    dict of uuid -> Future.
     """
 
     executor = None
@@ -55,9 +63,9 @@ class NeurolangQueryManager:
         self, options: Dict[NeurolangEngineConfiguration, int]
     ) -> None:
         """
-        By default, the query manager has nb_engines workers, but no engines.
-        It will call the _init_engines to create `nb_engines` engines
-        asynchronously.
+        By default the `NeurolangQueryManager` creates
+        `nb_engines = sum(options.values())` workers, but no engines. It will
+        call the `_init_engines` method to create the engines asynchronously.
 
         Parameters
         ----------
@@ -66,21 +74,22 @@ class NeurolangQueryManager:
             type to create.
         """
         nb_engines = sum(options.values())
-        LOG.debug(f"Creating query manager with {nb_engines} engines.")
+        LOG.debug(f"Creating query manager with {nb_engines} workers.")
         self.executor = ThreadPoolExecutor(max_workers=nb_engines)
         self._init_engines(options)
 
-    def _init_engines(self, options: Dict[NeurolangEngineConfiguration, int]):
+    def _init_engines(
+        self, options: Dict[NeurolangEngineConfiguration, int]
+    ) -> None:
         """
         Dispatch a series of tasks to create `nb_engines` engines using the
-        `engine_create_func` function.
+        `NeurolangEngineConfiguration.create` function.
 
         Parameters
         ----------
-        nb_engines : int
-            the nb of engines to create. Also the number of workers.
-        engine_create_func : callable
-            a function to create a new engine. Should return a Neurolang instance.
+        options : Dict[NeurolangEngineConfiguration, int]
+            a dictionnary defining the types of engines and the number of each
+            type to create.
         """
 
         def create_wrapper(config: NeurolangEngineConfiguration):
@@ -94,13 +103,13 @@ class NeurolangQueryManager:
                 future = self.executor.submit(create_wrapper, config)
                 future.add_done_callback(self._engine_created)
 
-    def _engine_created(self, future: Future):
+    def _engine_created(self, future: Future) -> None:
         """
         Callback called when an engine creation task has finished.
 
         Parameters
         ----------
-        future : concurrent.futures.Future
+        future : Future
             the future holding the result of the engine creation task.
         """
         key, engine = future.result()
@@ -126,6 +135,8 @@ class NeurolangQueryManager:
         ----------
         query : str
             the query to execute
+        engine_type : str
+            the type of engine on which to execute the query
 
         Returns
         -------
@@ -133,10 +144,9 @@ class NeurolangQueryManager:
             the result of the query execution
         """
         LOG.debug(f"[Thread - {get_ident()}] - Executing query...")
-        LOG.debug(f"[Thread - {get_ident()}] - Query : {query}")
+        LOG.debug(f"[Thread - {get_ident()}] - Query :\n{query}")
         engine_set = self.engines[engine_type]
-        with engine_set.sema:
-            engine = engine_set.pop()
+        with engine_set.engine() as engine:
             LOG.debug(
                 f"[Thread - {get_ident()}] - Engine of type {engine_type} acquired."
             )
@@ -156,14 +166,13 @@ class NeurolangQueryManager:
                 )
                 raise e
             finally:
-                engine_set.add(engine)
                 LOG.debug(
                     f"[Thread - {get_ident()}] - Engine of type {engine_type} released."
                 )
 
     def submit_query(self, uuid: str, query: str, engine_type: str) -> Future:
         """
-        Submit the query to one of the available engines / workers.
+        Submit a query to one of the available engines / workers.
 
         Parameters
         ----------
@@ -189,6 +198,19 @@ class NeurolangQueryManager:
         return future_res
 
     def get_result(self, uuid: str) -> Future:
+        """
+        Fetch the results for a query execution.
+
+        Parameters
+        ----------
+        uuid : str
+            the query id
+
+        Returns
+        -------
+        Future
+            the Future results of the execution task.
+        """
         return self.results_cache[uuid]
 
 
