@@ -103,7 +103,7 @@ class DisjointProjection(Projection):
 
 
 class DisjointProjectMixin(PatternWalker):
-    @add_match(IndependentProjection)
+    @add_match(IndependentProjection(ProvenanceAlgebraSet, ...))
     def independent_projection(self, proj_op):
         prov_set = self.walk(proj_op.relation)  # type: ProvenanceAlgebraSet
         prov_col = str2columnstr_constant(prov_set.provenance_column)
@@ -163,7 +163,12 @@ class DisjointProjectMixin(PatternWalker):
 
     @add_match(DisjointProjection)
     def disjoint_projection(self, proj_op):
-        return self.projection_rap(proj_op)
+        return self.projection_rap(
+            Projection(
+                self.walk(proj_op.relation),
+                proj_op.attributes
+            )
+        )
 
     @add_match(Projection, is_provenance_operation)
     def unlabeled_projection(self, proj_op):
@@ -195,7 +200,6 @@ def solve_succ_query(query, cpl_program):
         set.
 
     """
-    breakpoint()
     with log_performance(
         LOG,
         "Preparing query %s",
