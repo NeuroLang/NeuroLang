@@ -1,13 +1,14 @@
+from abc import abstractproperty, abstractstaticmethod
+from contextlib import contextmanager
 from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import Iterable, Union
-from neurolang.frontend import NeurolangPDL, NeurolangDL
+
 import nibabel as nib
 import numpy as np
 import pandas as pd
+from neurolang.frontend import NeurolangDL, NeurolangPDL
 from nilearn import datasets, image
-from abc import abstractproperty, abstractstaticmethod
-from contextlib import contextmanager
 
 
 class NeurolangEngineSet:
@@ -38,7 +39,7 @@ class NeurolangEngineSet:
         self.sema = BoundedSemaphore(value=self.counter)
 
     @contextmanager
-    def engine(self):
+    def engine(self, timeout: int = None):
         """
         ContextManager to safely acquire an engine from the set.
         This method will block on the semaphore until an engine can be
@@ -46,17 +47,27 @@ class NeurolangEngineSet:
         At the end, the engine is put back in the set and the semaphore
         value is released.
 
+        Parameters
+        ----------
+        timout : int
+            When invoked with a timeout other than None, it will block for
+            at most timeout seconds.
+
         Yields
         -------
         Union[NeurolangDL, NeurolangPDL]
             an engine.
         """
-        with self.sema:
-            engine = self.engines.pop()
+        lock = self.sema.acquire(timeout=timeout)
+        if lock:
             try:
+                engine = self.engines.pop()
                 yield engine
             finally:
                 self.engines.add(engine)
+                self.sema.release()
+        else:
+            yield None
 
 
 class NeurolangEngineConfiguration:
