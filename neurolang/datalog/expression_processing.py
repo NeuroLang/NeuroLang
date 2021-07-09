@@ -651,9 +651,7 @@ class FreshenFreeVariables(PatternWalker):
 
 def flatten_query(query, program):
     """
-    Construct the conjunction corresponding to a query on a program.
-
-    TODO: currently this only handles programs without conjunctions.
+    Given a query, construct the UCQ on the probabilistic database.
 
     Parameters
     ----------

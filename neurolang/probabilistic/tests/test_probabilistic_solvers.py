@@ -327,10 +327,10 @@ def test_multiple_probchoices_mutual_exclusivity(solver):
 
 
 def test_large_probabilistic_choice(solver):
-    if config["RAS"].get("backend", "pandas") == "dask":
-        # dask backend uses
-        # weighted_model_counting.solve_succ_query_boolean_diagram
-        # which does not handle too big prob sets.
+    if (
+        config["RAS"].get("backend", "pandas") == "dask"
+        or solver is weighted_model_counting
+    ):
         n = int(1000)
     else:
         n = int(10000)

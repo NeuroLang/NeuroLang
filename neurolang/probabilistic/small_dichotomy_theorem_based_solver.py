@@ -27,7 +27,8 @@ from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     enforce_conjunction,
     extract_logic_atoms,
-    flatten_query
+    flatten_query,
+    remove_conjunction_duplicates,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker
@@ -154,6 +155,9 @@ def solve_succ_query(query, cpl_program):
             NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names),
             ColumnStr("_p_"),
         )
+
+    if isinstance(flat_query_body, Conjunction):
+        flat_query_body = remove_conjunction_duplicates(flat_query_body)
 
     with log_performance(LOG, "Translation and lifted optimisation"):
         flat_query_body = enforce_conjunction(

@@ -6,10 +6,12 @@ from typing import AbstractSet
 from ..datalog.expression_processing import (
     enforce_conjunctive_antecedent,
     extract_logic_predicates,
+    remove_conjunction_duplicates,
 )
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
+from ..logic import Conjunction, Implication
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 
@@ -167,7 +169,8 @@ class EasyProbfactShatterer(
 
 
 def query_to_tagged_set_representation(query, symbol_table):
-    query = enforce_conjunctive_antecedent(query)
+    if isinstance(query, FunctionApplication):
+        query = enforce_conjunctive_antecedent(query)
     new_antecedent = ReplaceExpressionWalker(symbol_table).walk(
         query.antecedent
     )
@@ -213,7 +216,12 @@ def shatter_easy_probfacts(query, symbol_table):
         An equivalent conjunctive query without constants.
 
     """
-    query = enforce_conjunctive_antecedent(query)
+    if isinstance(query.antecedent, FunctionApplication):
+        query = enforce_conjunctive_antecedent(query)
+    if isinstance(query.antecedent, Conjunction):
+        query = Implication(
+            query.consequent, remove_conjunction_duplicates(query.antecedent)
+        )
     tagged_query = query_to_tagged_set_representation(query, symbol_table)
     shatterer = EasyProbfactShatterer(symbol_table)
     shattered_query = shatterer.walk(tagged_query)

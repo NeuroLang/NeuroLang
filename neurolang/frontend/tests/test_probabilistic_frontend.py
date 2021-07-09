@@ -535,7 +535,7 @@ def test_empty_boolean_query_result():
 def test_trivial_probability_query_result():
     nl = NeurolangPDL()
     b = set(((0.4, "a"), (0.5, "b")))
-    B = nl.add_probabilistic_facts_from_tuples(b, name='B')
+    B = nl.add_probabilistic_facts_from_tuples(b, name="B")
     with nl.scope as e:
         e.D[e.x, e.PROB[e.x]] = B[e.x]
         res = nl.query((e.p, e.x), e.D[e.x, e.p])
@@ -783,9 +783,7 @@ def test_query_based_pfact_empty():
         (e.B @ (e.p / 2))[e.x] = e.A[e.x, e.p] & (e.p > 0.8)
         e.Query[e.PROB[e.x], e.x] = e.B[e.x]
         result = nl.query((e.x, e.p), e.Query[e.p, e.x])
-    expected = RelationalAlgebraFrozenSet(
-        []
-    )
+    expected = RelationalAlgebraFrozenSet([])
     assert_almost_equal(result, expected)
 
 
@@ -1091,9 +1089,9 @@ def test_noisy_or_probabilistic_query():
     nl = NeurolangPDL()
     nl.add_probabilistic_facts_from_tuples(
         [
-            (0.2, 'a', 'b'),
-            (0.7, 'a', 'c'),
-            (0.9, 'b', 'c'),
+            (0.2, "a", "b"),
+            (0.7, "a", "c"),
+            (0.9, "b", "c"),
         ],
         name="R",
     )
@@ -1103,5 +1101,35 @@ def test_noisy_or_probabilistic_query():
     expected = {
         ("a", 1 - (1 - 0.2) * (1 - 0.7)),
         ("b", 1 - (1 - 0.9)),
+    }
+    assert_almost_equal(sol, expected)
+
+
+def test_disjunctive_probfact_rule():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.7, "a"),
+            (0.1, "b"),
+            (0.8, "c"),
+        ],
+        name="P",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.4, "a"),
+            (0.8, "b"),
+        ],
+        name="Q",
+    )
+    with nl.scope as e:
+        e.Z[e.x] = e.P(e.x)
+        e.Z[e.x] = e.Q(e.x)
+        e.Query[e.x, e.PROB(e.x)] = e.Z(e.x)
+        sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 1 - (1 - 0.7) * (1 - 0.4)),
+        ("b", 1 - (1 - 0.1) * (1 - 0.8)),
+        ("c", 0.8),
     }
     assert_almost_equal(sol, expected)

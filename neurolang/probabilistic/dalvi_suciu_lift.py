@@ -241,10 +241,8 @@ def solve_succ_query(query, cpl_program):
         )
 
     with log_performance(LOG, "Translation and lifted optimisation"):
-        flat_query_body = enforce_conjunction(
-            lift_optimization_for_choice_predicates(
-                flat_query_body, cpl_program
-            )
+        flat_query_body = lift_optimization_for_choice_predicates(
+            flat_query_body, cpl_program
         )
         flat_query = Implication(query.consequent, flat_query_body)
         symbol_table = generate_probabilistic_symbol_table_for_query(
@@ -427,7 +425,10 @@ def disjoint_project_dnf(dnf_query, symbol_table):
         Conjunction((first,) + second.formulas),
         free_variables,
     )
-    formulas = tuple(dalvi_suciu_lift(f) for f in (first, second, third))
+    formulas = tuple(
+        dalvi_suciu_lift(f, symbol_table)
+        for f in (first, second, third)
+    )
     return rap.WeightedNaturalJoin(formulas, (1, 1, -1))
 
 
