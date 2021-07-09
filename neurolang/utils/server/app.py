@@ -54,11 +54,6 @@ class NeurolangQueryManager:
     dict of uuid -> Future.
     """
 
-    executor = None
-    engines = {}
-    _lock = RLock()
-    results_cache = {}
-
     def __init__(
         self, options: Dict[NeurolangEngineConfiguration, int]
     ) -> None:
@@ -73,6 +68,10 @@ class NeurolangQueryManager:
             a dictionnary defining the types of engines and the number of each
             type to create.
         """
+        self.engines = {}
+        self._lock = RLock()
+        self.results_cache = {}
+        
         nb_engines = sum(options.values())
         LOG.debug(f"Creating query manager with {nb_engines} workers.")
         self.executor = ThreadPoolExecutor(max_workers=nb_engines)
@@ -340,7 +339,9 @@ class StatusHandler(JSONRequestHandler):
         symbol = self.get_argument("symbol", None)
         page = int(self.get_argument("page", 0))
         limit = int(self.get_argument("limit", 50))
-        return self.write_json_reponse(QueryResults(uuid, future, page, limit, symbol))
+        return self.write_json_reponse(
+            QueryResults(uuid, future, page, limit, symbol)
+        )
 
 
 class QueryHandler(JSONRequestHandler):
