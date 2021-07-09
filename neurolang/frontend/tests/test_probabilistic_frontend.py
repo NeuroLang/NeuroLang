@@ -1069,11 +1069,24 @@ def test_postprob_conjunct_with_wlq_result():
 def test_no_tuple_unicity_qbased_pfact():
     nl = NeurolangPDL(check_qbased_pfact_tuple_unicity=True)
     nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
-    with nl.environment as e:
+    with nl.scope as e:
         (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
         e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
         with pytest.raises(RepeatedTuplesInProbabilisticRelationError):
             nl.query((e.x, e.p), e.Query(e.x, e.p))
+    nl = NeurolangPDL(check_qbased_pfact_tuple_unicity=False)
+    nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
+    with nl.scope as e:
+        (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
+        e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
+        try:
+            nl.query((e.x, e.p), e.Query(e.x, e.p))
+        except:
+            pytest.fail(
+                "Expected this test not to raise an exception as "
+                "the tuple unicity check on query-based probabilistic tables "
+                "is disabled"
+            )
 
 
 def test_qbased_pfact_max_prob():
