@@ -163,7 +163,7 @@ class DisjointProjectMixin(PatternWalker):
 
     @add_match(DisjointProjection)
     def disjoint_projection(self, proj_op):
-        return self.projection_rap(
+        return self.walk(
             Projection(
                 self.walk(proj_op.relation),
                 proj_op.attributes
@@ -303,8 +303,8 @@ def dalvi_suciu_lift(rule, symbol_table):
         if has_svs:
             return plan
         else:
-            plan = disjoint_project(rule_dnf, symbol_table)
-            if plan is not None:
+            has_safe_plan, plan = disjoint_project(rule_dnf, symbol_table)
+            if has_safe_plan:
                 return plan
 
     return NonLiftable(rule)
@@ -340,7 +340,7 @@ def disjoint_project_cnf(cnf_query, symbol_table):
         )
     )
     if not atoms_with_constants_in_all_key_positions:
-        return
+        return False, None
     nonkey_variables = set.union(
         *(
             extract_nonkey_variables(atom, symbol_table)
@@ -363,7 +363,7 @@ def disjoint_project_cnf(cnf_query, symbol_table):
         for v in free_variables
     )
     plan = DisjointProjection(plan, attributes)
-    return plan
+    return True, plan
 
 
 def disjoint_project_dnf(dnf_query, symbol_table):
@@ -395,7 +395,7 @@ def disjoint_project_dnf(dnf_query, symbol_table):
             break
     else:
         # did not find a CQ with a valid atom, so we cannot apply the rule
-        return
+        return False, None
     first = add_existentials_except(disjunct, free_variables)
     second = add_existentials_except(
         Conjunction(tuple(f for f in dnf_query.formulas if f != first)),
@@ -409,7 +409,7 @@ def disjoint_project_dnf(dnf_query, symbol_table):
         dalvi_suciu_lift(f, symbol_table)
         for f in (first, second, third)
     )
-    return rap.WeightedNaturalJoin(formulas, (1, 1, -1))
+    return True, rap.WeightedNaturalJoin(formulas, (1, 1, -1))
 
 
 def extract_nonkey_variables(atom, symbol_table):
