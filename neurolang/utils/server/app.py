@@ -213,6 +213,25 @@ class NeurolangQueryManager:
         """
         return self.results_cache[uuid]
 
+    def cancel(self, uuid: str) -> bool:
+        """
+        Attempt to cancel the execution. If the call is currently being
+        executed or finished running and cannot be cancelled then the method
+        will return False, otherwise the call will be cancelled and the
+        method will return True.
+
+        Parameters
+        ----------
+        uuid : str
+            the task execution id
+
+        Returns
+        -------
+        bool
+            True if cancelled
+        """
+        return self.results_cache[uuid].cancel()
+
 
 class Application(tornado.web.Application):
     """
@@ -225,8 +244,8 @@ class Application(tornado.web.Application):
         the query manager
     """
 
-    def __init__(self, njm):
-        self.njm = njm
+    def __init__(self, nqm: NeurolangQueryManager):
+        self.nqm = nqm
         uuid_pattern = (
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
         )
@@ -277,15 +296,20 @@ class EmptyHandler(tornado.web.RequestHandler):
 
 class CancelHandler(tornado.web.RequestHandler):
     """
-    Cancel an already running computation
+    Cancel an already running computation.
     """
 
     def delete(self, uuid: str):
-        LOG.debug(f"Canceling the request with uuid {uuid}")
-        return self.write({"status": "ok"})
+        LOG.debug(f"Canceling the request with uuid {uuid}.")
+        result = self.application.nqm.cancel(uuid)
+        return self.write_json_reponse({"cancelled": result})
 
 
 class JSONRequestHandler(tornado.web.RequestHandler):
+    """
+    Base Handler for writing JSON responses.
+    """
+
     def set_default_headers(self):
         self.set_header("Content-Type", "application/json")
 
@@ -304,7 +328,7 @@ class StatusHandler(JSONRequestHandler):
     async def get(self, uuid: str):
         LOG.debug(f"Accessing status for request {uuid}.")
         try:
-            future = self.application.njm.get_result(uuid)
+            future = self.application.nqm.get_result(uuid)
         except KeyError:
             raise tornado.web.HTTPError(
                 status_code=404, log_message="uuid not found"
@@ -322,17 +346,19 @@ class QueryHandler(JSONRequestHandler):
         engine = self.get_argument("engine", "neurosynth")
         uuid = str(uuid4())
         LOG.debug(f"Submitting query with uuid {uuid}.")
-        self.application.njm.submit_query(uuid, query, engine)
+        self.application.nqm.submit_query(uuid, query, engine)
         return self.write_json_reponse({"query": query, "uuid": uuid})
 
 
 def main():
     opts = {NeurosynthEngineConf(): 2}
-    njm = NeurolangQueryManager(opts)
+    nqm = NeurolangQueryManager(opts)
 
     tornado.options.parse_command_line()
-    print(f"Tornado application starting on port {options.port}")
-    app = Application(njm)
+    print(
+        f"Tornado application starting on http://localhost:{options.port}/ ..."
+    )
+    app = Application(nqm)
     app.listen(options.port)
     tornado.ioloop.IOLoop.current().start()
 
