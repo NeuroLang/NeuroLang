@@ -46,9 +46,9 @@ class NeurolangQueryManager:
     Class to manage execution of queries and keep track of results.
 
     This class is initialized with a dict of `NeurolangEngineConfiguration`
-    which define which Neurolang engine to creates and how many.
+    that defines which Neurolang engine to create and how many.
     The NeurolangQueryManager creates a pool of thread workers (as many as
-    there are engines) to execute the queries which are submited.
+    there are engines) to execute the queries that are submited.
 
     It also keeps track of results in memory, in a results_cache which is a
     dict of uuid -> Future.
@@ -83,7 +83,7 @@ class NeurolangQueryManager:
     ) -> None:
         """
         Dispatch a series of tasks to create `nb_engines` engines using the
-        `NeurolangEngineConfiguration.create` function.
+        `NeurolangEngineConfiguration.create` functions.
 
         Parameters
         ----------

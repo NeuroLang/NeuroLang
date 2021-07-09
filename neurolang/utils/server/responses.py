@@ -47,13 +47,8 @@ class QueryResults:
     def set_error_details(self, error):
         self.message = str(error)
         self.errorName = str(type(error))
-        try:
-            self.errorLocation = {
-                "lineNumber": error.from_line + 1,
-                "columnNumber": error.from_col + 1,
-            }
-        except AttributeError:  # pragma: no cover
-            pass
+        if error.__doc__ is not None:
+            self.errorDoc = error.__doc__
 
     def set_results_details(self, results, symbol):
         self.results = {}
