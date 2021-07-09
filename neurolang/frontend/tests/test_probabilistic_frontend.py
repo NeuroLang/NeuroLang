@@ -108,7 +108,7 @@ def test_marg_query():
         {(0.2, "a"), (0.3, "b"), (0.5, "c")}, name="P"
     )
     nl.add_tuple_set({(1, "a"), (2, "a"), (2, "b")}, name="Q")
-    nl.add_tuple_set({(1, "a"), (1, "b"), (2, "b"), (2, "c")}, name="R)
+    nl.add_tuple_set({(1, "a"), (1, "b"), (2, "b"), (2, "c")}, name="R")
 
     with nl.scope as e:
         e.Z[e.x, e.z, e.PROB[e.x, e.z]] = (e.Q(e.x, e.y) & e.P(e.y)) // (
