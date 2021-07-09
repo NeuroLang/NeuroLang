@@ -108,7 +108,7 @@ def test_marg_query():
         {(0.2, "a"), (0.3, "b"), (0.5, "c")}, name="P"
     )
     nl.add_tuple_set({(1, "a"), (2, "a"), (2, "b")}, name="Q")
-    nl.add_tuple_set({(1, "a"), (1, "b"), (2, "b"), (2, "c")}, name="R")
+    nl.add_tuple_set({(1, "a"), (1, "b"), (2, "b"), (2, "c")}, name="R)
 
     with nl.scope as e:
         e.Z[e.x, e.z, e.PROB[e.x, e.z]] = (e.Q(e.x, e.y) & e.P(e.y)) // (
@@ -535,7 +535,7 @@ def test_empty_boolean_query_result():
 def test_trivial_probability_query_result():
     nl = NeurolangPDL()
     b = set(((0.4, "a"), (0.5, "b")))
-    B = nl.add_probabilistic_facts_from_tuples(b, name="B")
+    B = nl.add_probabilistic_facts_from_tuples(b, name='B')
     with nl.scope as e:
         e.D[e.x, e.PROB[e.x]] = B[e.x]
         res = nl.query((e.p, e.x), e.D[e.x, e.p])
@@ -783,7 +783,9 @@ def test_query_based_pfact_empty():
         (e.B @ (e.p / 2))[e.x] = e.A[e.x, e.p] & (e.p > 0.8)
         e.Query[e.PROB[e.x], e.x] = e.B[e.x]
         result = nl.query((e.x, e.p), e.Query[e.p, e.x])
-    expected = RelationalAlgebraFrozenSet([])
+    expected = RelationalAlgebraFrozenSet(
+        []
+    )
     assert_almost_equal(result, expected)
 
 

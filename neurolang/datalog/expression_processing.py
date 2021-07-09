@@ -651,7 +651,8 @@ class FreshenFreeVariables(PatternWalker):
 
 def flatten_query(query, program):
     """
-    Given a query, construct the UCQ on the probabilistic database.
+    Given a query on a probabilistic logic program with no probabilistic causal
+    rules, construct the UCQ on the associated probabilistic database.
 
     Parameters
     ----------
