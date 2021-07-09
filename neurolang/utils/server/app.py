@@ -323,6 +323,10 @@ class JSONRequestHandler(tornado.web.RequestHandler):
 class StatusHandler(JSONRequestHandler):
     """
     Return the status (or the result) of an already running calculation.
+    Optional query parameters are :
+        * symbol : return only the values for this symbol
+        * page : pagination start page
+        * limit : number of rows to return
     """
 
     async def get(self, uuid: str):
@@ -333,7 +337,10 @@ class StatusHandler(JSONRequestHandler):
             raise tornado.web.HTTPError(
                 status_code=404, log_message="uuid not found"
             )
-        return self.write_json_reponse(QueryResults(uuid, future))
+        symbol = self.get_argument("symbol", None)
+        page = int(self.get_argument("page", 0))
+        limit = int(self.get_argument("limit", 50))
+        return self.write_json_reponse(QueryResults(uuid, future, page, limit, symbol))
 
 
 class QueryHandler(JSONRequestHandler):

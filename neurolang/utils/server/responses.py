@@ -19,7 +19,12 @@ class CustomQueryResultsEncoder(json.JSONEncoder):
 
 class QueryResults:
     def __init__(
-        self, uuid: str, future: Future, page: int = 0, limit: int = 50
+        self,
+        uuid: str,
+        future: Future,
+        page: int = 0,
+        limit: int = 50,
+        symbol: str = None,
     ):
         self.page = page
         self.limit = limit
@@ -33,25 +38,50 @@ class QueryResults:
         if future.done():
             error = future.exception()
             if error is not None:
-                self.message = str(error)
-                self.errorName = str(type(error))
-                try:
-                    self.errorLocation = {
-                        "lineNumber": error.from_line + 1,
-                        "columnNumber": error.from_col + 1,
-                    }
-                except AttributeError:  # pragma: no cover
-                    pass
+                self.set_error_details(error)
             else:
                 results = future.result()
                 if results is not None:
-                    self.results = {}
-                    for key, ras in results.items():
-                        df = ras.as_pandas_dataframe()
-                        result = self.get_result_item_columns(ras, df)
-                        values = self.get_result_item_values(ras.row_type, df)
-                        result["values"] = values
-                        self.results[key] = result
+                    self.set_results_details(results, symbol)
+
+    def set_error_details(self, error):
+        self.message = str(error)
+        self.errorName = str(type(error))
+        try:
+            self.errorLocation = {
+                "lineNumber": error.from_line + 1,
+                "columnNumber": error.from_col + 1,
+            }
+        except AttributeError:  # pragma: no cover
+            pass
+
+    def set_results_details(self, results, symbol):
+        self.results = {}
+        if symbol is None:
+            for key, ras in results.items():
+                self.results[key] = self.get_result_item(ras)
+        else:
+            self.results[symbol] = self.get_result_item(results[symbol])
+
+    def get_result_item(self, ras: NamedRelationalAlgebraFrozenSet) -> Dict:
+        """
+        Serialize a result symbol into a dict of result values and metadata.
+
+        Parameters
+        ----------
+        ras : NamedRelationalAlgebraFrozenSet
+            the symbol to parse
+
+        Returns
+        -------
+        Dict
+            the parsed result values
+        """
+        df = ras.as_pandas_dataframe()
+        result = self.get_result_item_columns(ras, df)
+        values = self.get_result_item_values(ras.row_type, df)
+        result["values"] = values
+        return result
 
     def get_result_item_columns(
         self, ras: NamedRelationalAlgebraFrozenSet, df
@@ -85,8 +115,8 @@ class QueryResults:
         for col, col_type in zip(rows.columns, row_type.__args__):
             if col_type == ExplicitVBR or col_type == ExplicitVBROverlay:
                 # TODO: handle regions
-                rows[col] = rows[col].apply(lambda x: "ExplicitVBR")
+                rows.loc[:, col] = rows[col].apply(lambda x: "ExplicitVBR")
             elif rows[col].dtype == np.object_:
-                rows[col] = rows[col].astype(str)
+                rows.loc[:, col] = rows[col].astype(str)
 
         return rows.values.tolist()
