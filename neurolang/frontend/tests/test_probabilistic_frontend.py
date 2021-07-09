@@ -11,6 +11,7 @@ from ...exceptions import (
     NegativeFormulaNotSafeRangeException,
     UnsupportedProgramError,
     UnsupportedQueryError,
+    NeuroLangException,
 )
 from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
@@ -1081,7 +1082,7 @@ def test_no_tuple_unicity_qbased_pfact():
         e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
         try:
             nl.query((e.x, e.p), e.Query(e.x, e.p))
-        except:
+        except NeuroLangException:
             pytest.fail(
                 "Expected this test not to raise an exception as "
                 "the tuple unicity check on query-based probabilistic tables "
