@@ -108,21 +108,28 @@ def test_marg_query():
     nl.add_probabilistic_choice_from_tuples(
         {(0.2, "a"), (0.3, "b"), (0.5, "c")}, name="P"
     )
-    nl.add_tuple_set({(1, "a"), (2, "a"), (2, "b")}, name="Q")
-    nl.add_tuple_set({(1, "a"), (1, "b"), (2, "b"), (2, "c")}, name="R")
+    nl.add_tuple_set({(4, "a"), (5, "a"), (5, "b")}, name="Q")
+    nl.add_probabilistic_facts_from_tuples(
+        {
+            (0.2, 1, "a"),
+            (0.1, 1, "b"),
+            (0.7, 2, "b"),
+            (0.9, 2, "c"),
+        },
+        name="R",
+    )
 
     with nl.scope as e:
-        e.Z[e.x, e.z, e.PROB[e.x, e.z]] = (e.Q(e.x, e.y) & e.P(e.y)) // (
-            e.R(e.z, e.y) & e.P(e.y)
-        )
-
+        e.Z[e.x, e.z, e.PROB[e.x, e.z]] = (
+            e.Q(e.x, e.y) & e.P(e.y)
+        ) // (e.R(e.z, e.y) & e.P(e.y))
         res = nl.solve_all()
 
     expected = RelationalAlgebraFrozenSet(
         {
-            (1, 1, 0.4),
-            (2, 1, 1.0),
-            (2, 2, 0.375),
+            (4, 1, 0.2 * 0.2 / (0.2 * 0.2 + 0.3 * 0.1)),
+            (5, 1, (0.2 * 0.2 + 0.3 * 0.1) / (0.2 * 0.2 + 0.3 * 0.1)),
+            (5, 2, 0.3 * 0.7 / (0.3 * 0.7 + 0.9 * 0.5)),
         }
     )
     assert_almost_equal(res["Z"], expected)

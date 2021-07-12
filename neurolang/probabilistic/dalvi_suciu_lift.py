@@ -163,12 +163,24 @@ class DisjointProjectMixin(PatternWalker):
 
     @add_match(DisjointProjection)
     def disjoint_projection(self, proj_op):
-        return self.walk(
-            Projection(
-                self.walk(proj_op.relation),
-                proj_op.attributes
-            )
+        prov_set = self.walk(proj_op.relation)
+        prov_col = str2columnstr_constant(prov_set.provenance_column)
+        aggregate_functions = [
+            FunctionApplicationListMember(
+                FunctionApplication(Constant(sum), (prov_col,)),
+                prov_col,
+            ),
+        ]
+        operation = GroupByAggregation(
+            Constant[AbstractSet](prov_set.relations),
+            proj_op.attributes,
+            aggregate_functions,
         )
+        res = ProvenanceAlgebraSet(
+            self.walk(operation).value,
+            prov_col.value,
+        )
+        return res
 
     @add_match(Projection, is_provenance_operation)
     def unlabeled_projection(self, proj_op):
