@@ -1182,17 +1182,42 @@ def test_probchoice_disjunction():
         ],
         name="R",
     )
-    # with nl.scope as e:
-        # e.Z[e.x] = e.P(e.x) & e.Q(e.x)
-        # e.Z[e.x] = e.P(e.x) & e.R(e.x, e.y)
-        # e.Query[e.x, e.PROB(e.x)] = e.Z(e.x)
-        # sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
-    # expected = {
-        # ("a", 0.7 * 0.8),
-        # ("b", 0.3 * (1 - (1 - 0.1) * (1 - 0.4))),
-    # }
-    # assert_almost_equal(sol, expected)
+    with nl.scope as e:
+        e.Z[e.x] = e.P(e.x) & e.Q(e.x)
+        e.Z[e.x] = e.P(e.x) & e.R(e.x, e.y)
+        e.Query[e.x, e.PROB(e.x)] = e.Z(e.x)
+        sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 0.7 * 0.8),
+        ("b", 0.3 * (1 - (1 - 0.1) * (1 - 0.4))),
+    }
+    assert_almost_equal(sol, expected)
 
+
+def test_probchoice_disjunction_probfact_probchoice():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (0.7, "a"),
+            (0.3, "b"),
+        ],
+        name="P",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.8, "a"),
+            (0.9, "c"),
+        ],
+        name="Q",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "d", "c"),
+            (0.1, "b", "a"),
+            (0.4, "b", "b"),
+        ],
+        name="R",
+    )
     with nl.scope as e:
         e.Z[e.x] = e.P(e.x) & e.Q(e.x)
         e.Z[e.x] = e.R(e.x, e.y)
@@ -1200,6 +1225,7 @@ def test_probchoice_disjunction():
         sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
     expected = {
         ("a", 0.7 * 0.8),
-        ("b", 0.3 * (1 - (1 - 0.1) * (1 - 0.4))),
+        ("b", 1 - (1 - 0.1) * (1 - 0.4)),
+        ("d", 0.2),
     }
     assert_almost_equal(sol, expected)

@@ -1,7 +1,6 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
-from typing import AbstractSet
 
 import numpy as np
 
@@ -12,7 +11,7 @@ from ..datalog.expression_processing import (
     flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..exceptions import NonLiftableException
+from ..exceptions import NeuroLangException, NonLiftableException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
@@ -40,20 +39,12 @@ from ..logic.transformations import (
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
-    ExtendedProjection,
-    FunctionApplicationListMember,
-    GroupByAggregation,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
-    Projection,
-    RelationalAlgebraStringExpression,
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant,
 )
-from ..relational_algebra_provenance import (
-    ProvenanceAlgebraSet,
-    is_provenance_operation,
-)
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .exceptions import NotEasilyShatterableError
@@ -64,9 +55,7 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query,
 )
-from .probabilistic_semiring_solver import (
-    ProbSemiringSolver,
-)
+from .probabilistic_semiring_solver import ProbSemiringSolver
 from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
 from .small_dichotomy_theorem_based_solver import (
@@ -94,104 +83,12 @@ __all__ = [
 RTO = RemoveTrivialOperations()
 
 
-class IndependentProjection(Projection):
-    pass
-
-
-class DisjointProjection(Projection):
-    pass
-
-
-class DisjointProjectMixin(PatternWalker):
-    @add_match(IndependentProjection(ProvenanceAlgebraSet, ...))
-    def independent_projection(self, proj_op):
-        prov_set = self.walk(proj_op.relation)  # type: ProvenanceAlgebraSet
-        prov_col = str2columnstr_constant(prov_set.provenance_column)
-        proj_list = [
-            FunctionApplicationListMember(
-                str2columnstr_constant(col),
-                str2columnstr_constant(col),
-            )
-            for col in prov_set.non_provenance_columns
-        ]
-        proj_list.append(
-            FunctionApplicationListMember(
-                Constant(
-                    RelationalAlgebraStringExpression(
-                        "log(1 - {})".format(prov_col.value)
-                    )
-                ),
-                prov_col,
-            )
-        )
-        relation = Constant[AbstractSet](prov_set.value)
-        relation = ExtendedProjection(relation, proj_list)
-        group_cols = tuple(
-            proj_col if isinstance(proj_col.value, ColumnStr)
-            else Constant(
-                ColumnStr(prov_set.non_provenance_columns[proj_col.value])
-            )
-            for proj_col in proj_op.attributes
-        )
-        relation = GroupByAggregation(
-            relation,
-            groupby=group_cols,
-            aggregate_functions=(
-                FunctionApplicationListMember(
-                    FunctionApplication(Constant(sum), (prov_col,)),
-                    prov_col,
-                ),
-            ),
-        )
-        proj_list = [
-            FunctionApplicationListMember(col, col)
-            for col in group_cols
-        ]
-        proj_list.append(
-            FunctionApplicationListMember(
-                Constant(
-                    RelationalAlgebraStringExpression(
-                        "1 - exp({})".format(prov_col.value)
-                    )
-                ),
-                prov_col,
-            )
-        )
-        relation = ExtendedProjection(relation, proj_list)
-        relation = self.walk(relation)
-        return ProvenanceAlgebraSet(relation.value, prov_col.value)
-
-    @add_match(DisjointProjection)
-    def disjoint_projection(self, proj_op):
-        prov_set = self.walk(proj_op.relation)
-        prov_col = str2columnstr_constant(prov_set.provenance_column)
-        aggregate_functions = [
-            FunctionApplicationListMember(
-                FunctionApplication(Constant(sum), (prov_col,)),
-                prov_col,
-            ),
-        ]
-        operation = GroupByAggregation(
-            Constant[AbstractSet](prov_set.relations),
-            proj_op.attributes,
-            aggregate_functions,
-        )
-        res = ProvenanceAlgebraSet(
-            self.walk(operation).value,
-            prov_col.value,
-        )
-        return res
-
-    @add_match(Projection, is_provenance_operation)
-    def unlabeled_projection(self, proj_op):
-        return self.walk(IndependentProjection.apply(*proj_op.unapply()))
-
-
 class LiftedQueryProcessingSemiringSolver(
-    DisjointProjectMixin,
+    rap.DisjointProjectMixin,
     ProbSemiringSolver,
 ):
     pass
+
 
 
 def solve_succ_query(query, cpl_program):
@@ -245,7 +142,6 @@ def solve_succ_query(query, cpl_program):
             shattered_query = symbolic_shattering(unified_query, symbol_table)
         except NotEasilyShatterableError:
             shattered_query = unified_query
-        breakpoint()
         ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -296,7 +192,7 @@ def dalvi_suciu_lift(rule, symbol_table):
         rule = MakeExistentialsImplicit().walk(rule)
         result = TranslateToNamedRA().walk(rule)
         proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
-        return IndependentProjection(result, proj_cols)
+        return rap.IndependentProjection(result, proj_cols)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
     connected_components = symbol_connected_components(rule_cnf)
@@ -362,7 +258,11 @@ def disjoint_project_cnf(cnf_query, symbol_table):
     )
     symbol_table = symbol_table.copy()
     for atom in atoms_with_constants_in_all_key_positions:
-        assert isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet)
+        if not isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet):
+            raise NeuroLangException(
+                "Any atom with constants in all its key positions should be "
+                "a probabilistic choice atom"
+            )
         symbol_table[atom.functor] = ProbabilisticFactSet(
             symbol_table[atom.functor].relation,
             symbol_table[atom.functor].probability_column,
@@ -375,7 +275,7 @@ def disjoint_project_cnf(cnf_query, symbol_table):
         str2columnstr_constant(v.name)
         for v in free_variables
     )
-    plan = DisjointProjection(plan, attributes)
+    plan = rap.DisjointProjection(plan, attributes)
     return True, plan
 
 
@@ -422,7 +322,9 @@ def disjoint_project_dnf(dnf_query, symbol_table):
         dalvi_suciu_lift(f, symbol_table)
         for f in (first, second, third)
     )
-    return True, rap.WeightedNaturalJoin(formulas, (1, 1, -1))
+    return True, rap.WeightedNaturalJoin(
+        formulas, (Constant(1), Constant(1), Constant(-1))
+    )
 
 
 def extract_nonkey_variables(atom, symbol_table):
@@ -629,8 +531,8 @@ def separator_variable_plan(expression, separator_variables, symbol_table):
     )
     for v in existentials_to_add:
         expression = ExistentialPredicate(v, expression)
-    return IndependentProjection(
-        IndependentProjection(
+    return rap.IndependentProjection(
+        rap.IndependentProjection(
             dalvi_suciu_lift(expression, symbol_table),
             tuple(
                 str2columnstr_constant(v.name)
@@ -779,11 +681,10 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
             formula_powerset.append(Disjunction(tuple(formula)))
     formulas_weights = _formulas_weights(formula_powerset)
     new_formulas, weights = zip(*(
-        (dalvi_suciu_lift(formula, symbol_table), weight)
+        (dalvi_suciu_lift(formula, symbol_table), Constant(weight))
         for formula, weight in formulas_weights.items()
         if weight != 0
     ))
-
     return rap.WeightedNaturalJoin(tuple(new_formulas), weights)
 
 
