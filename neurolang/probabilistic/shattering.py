@@ -167,7 +167,6 @@ class EasyProbfactShatterer(
 
 
 def query_to_tagged_set_representation(query, symbol_table):
-    query = enforce_conjunctive_antecedent(query)
     new_antecedent = ReplaceExpressionWalker(symbol_table).walk(
         query.antecedent
     )
@@ -213,7 +212,6 @@ def shatter_easy_probfacts(query, symbol_table):
         An equivalent conjunctive query without constants.
 
     """
-    query = enforce_conjunctive_antecedent(query)
     tagged_query = query_to_tagged_set_representation(query, symbol_table)
     shatterer = EasyProbfactShatterer(symbol_table)
     shattered_query = shatterer.walk(tagged_query)

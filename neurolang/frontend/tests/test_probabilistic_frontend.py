@@ -1092,3 +1092,39 @@ def test_qbased_pfact_max_prob():
         sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
     expected = {("a", 0.9), ("b", 0.5)}
     assert_almost_equal(sol, expected)
+
+
+def test_nondeterministic():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.7, "a"),
+            (0.3, "b"),
+        ],
+        name="P",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.8, "a"),
+            (0.9, "c"),
+        ],
+        name="Q",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "d"),
+            (0.1, "b"),
+        ],
+        name="R",
+    )
+    with nl.scope as e:
+        e.Z[e.x] = e.P(e.x) & e.Q(e.x)
+        e.Z[e.x] = e.R(e.x, e.y)
+        e.Query[e.x, e.PROB(e.x)] = e.Z(e.x)
+        sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 0.7 * 0.8),
+        ("b", 0.1),
+        ("d", 0.2),
+    }
+    assert_almost_equal(sol, expected)

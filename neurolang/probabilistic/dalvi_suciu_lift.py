@@ -7,7 +7,6 @@ import numpy as np
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
-    enforce_conjunction,
     flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
@@ -122,11 +121,6 @@ def solve_succ_query(query, cpl_program):
         )
 
     with log_performance(LOG, "Translation and lifted optimisation"):
-        flat_query_body = enforce_conjunction(
-            lift_optimization_for_choice_predicates(
-                flat_query_body, cpl_program
-            )
-        )
         flat_query = Implication(query.consequent, flat_query_body)
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
@@ -538,7 +532,7 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
             formula_powerset.append(Disjunction(tuple(formula)))
     formulas_weights = _formulas_weights(formula_powerset)
     new_formulas, weights = zip(*(
-        (dalvi_suciu_lift(formula, symbol_table), weight)
+        (dalvi_suciu_lift(formula, symbol_table), Constant(weight))
         for formula, weight in formulas_weights.items()
         if weight != 0
     ))
@@ -559,10 +553,10 @@ def _formulas_weights(formula_powerset):
         for f1 in formula_powerset[i + 1:]:
             for c0, c1 in ((f0, f1), (f1, f0)):
                 if c1 not in tmp_fix_dict_get(f0) and is_contained(c0, c1):
-                    formula_containments[c0].add(c1)
-                    formula_containments[c0] |= (
-                        formula_containments[c1] -
-                        {c0}
+                    formula_containments[c0] = (
+                        tmp_fix_dict_get(c0)
+                        | {c1}
+                        | (tmp_fix_dict_get(c1) - {c0})
                     )
                     break
 

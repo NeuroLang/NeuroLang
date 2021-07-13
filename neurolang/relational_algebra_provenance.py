@@ -466,67 +466,6 @@ class RelationalAlgebraProvenanceCountingSolver(
             self.walk(result).value, res_prov_col.value
         )
 
-    @add_match(WeightedNaturalJoin)
-    def prov_weighted_join(self, join_op):
-        relations = self.walk(join_op.relations)
-        weights = self.walk(join_op.weights)
-
-        prov_columns = [
-            str2columnstr_constant(Symbol.fresh().name)
-            for _ in relations
-        ]
-
-        dst_columns = set(sum(
-            (
-                relation.non_provenance_columns
-                for relation in relations
-            ),
-            tuple()
-        ))
-
-        relations = [
-            ExtendedProjection(
-                Constant[AbstractSet](relation.relations),
-                (FunctionApplicationListMember(
-                    weight * str2columnstr_constant(
-                        relation.provenance_column
-                    ),
-                    prov_column
-                ),) + tuple(
-                    FunctionApplicationListMember(
-                        str2columnstr_constant(c), str2columnstr_constant(c)
-                    )
-                    for c in relation.non_provenance_columns
-                )
-            )
-            for relation, weight, prov_column in
-            zip(relations, weights, prov_columns)
-        ]
-
-        relation = relations[0]
-        for relation_ in relations[1:]:
-            relation = NaturalJoin(relation, relation_)
-
-        prov_col = str2columnstr_constant(Symbol.fresh().name)
-        dst_prov_expr = sum(prov_columns[1:], prov_columns[0])
-        relation = ExtendedProjection(
-            relation,
-            (FunctionApplicationListMember(
-                dst_prov_expr,
-                prov_col
-            ),) + tuple(
-                FunctionApplicationListMember(
-                    str2columnstr_constant(c), str2columnstr_constant(c)
-                )
-                for c in dst_columns
-            )
-        )
-
-        return ProvenanceAlgebraSet(
-            self.walk(relation).value,
-            prov_col.value
-        )
-
     @add_match(Union)
     def prov_union(self, union_op):
         left = self.walk(union_op.relation_left)
@@ -622,6 +561,67 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
                 new_pc.value
             )
         return res
+
+    @add_match(WeightedNaturalJoin)
+    def prov_weighted_join(self, join_op):
+        relations = self.walk(join_op.relations)
+        weights = self.walk(join_op.weights)
+
+        prov_columns = [
+            str2columnstr_constant(Symbol.fresh().name)
+            for _ in relations
+        ]
+
+        dst_columns = set(sum(
+            (
+                relation.non_provenance_columns
+                for relation in relations
+            ),
+            tuple()
+        ))
+
+        relations = [
+            ExtendedProjection(
+                Constant[AbstractSet](relation.relations),
+                (FunctionApplicationListMember(
+                    weight * str2columnstr_constant(
+                        relation.provenance_column
+                    ),
+                    prov_column
+                ),) + tuple(
+                    FunctionApplicationListMember(
+                        str2columnstr_constant(c), str2columnstr_constant(c)
+                    )
+                    for c in relation.non_provenance_columns
+                )
+            )
+            for relation, weight, prov_column in
+            zip(relations, weights, prov_columns)
+        ]
+
+        relation = relations[0]
+        for relation_ in relations[1:]:
+            relation = NaturalJoin(relation, relation_)
+
+        prov_col = str2columnstr_constant(Symbol.fresh().name)
+        dst_prov_expr = sum(prov_columns[1:], prov_columns[0])
+        relation = ExtendedProjection(
+            relation,
+            (FunctionApplicationListMember(
+                dst_prov_expr,
+                prov_col
+            ),) + tuple(
+                FunctionApplicationListMember(
+                    str2columnstr_constant(c), str2columnstr_constant(c)
+                )
+                for c in dst_columns
+            )
+        )
+
+        return ProvenanceAlgebraSet(
+            self.walk(relation).value,
+            prov_col.value
+        )
 
     def _semiring_mul(self, left, right):
         return left * right
