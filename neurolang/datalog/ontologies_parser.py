@@ -346,15 +346,15 @@ class OntologyParser:
         entity = Symbol(self._parse_name(entity))
         for value in nodes:
             value = self._parse_name(value)
-            ext_rule = RightImplication(entity(x), support_prop(x, y))
-            constraints.append(ext_rule)
-            self._add_existential_rule(entity(x), ext_rule)
+            exists_imp = RightImplication(support_prop(x, y), Symbol(value)(y))
+            constraints.append(exists_imp)
         prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
-        exists_imp = RightImplication(support_prop(x, y), Symbol(value)(y))
+        ext_rule = RightImplication(entity(x), support_prop(x, y))
+        self._add_existential_rule(entity(x), ext_rule)
         #prop_imp = Implication(onProp(x, y), support_prop(x, y))
         #exists_imp = Implication(Symbol(value)(y), support_prop(x, y))
 
-        constraints.append(exists_imp)
+        constraints.append(ext_rule)
         constraints.append(prop_imp)
 
         return constraints
