@@ -45,6 +45,8 @@ class Disjunction(NaryLogicOperator):
             self._symbols |= formula._symbols
 
     def __repr__(self):
+        if not isinstance(self.formulas, Iterable):
+            return '\u22C1(' + repr(self.formulas) + ')'
         repr_formulas = []
         chars = 0
         for formula in self.formulas:
