@@ -245,6 +245,7 @@ def solve_succ_query(query, cpl_program):
             shattered_query = symbolic_shattering(unified_query, symbol_table)
         except NotEasilyShatterableError:
             shattered_query = unified_query
+        breakpoint()
         ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -799,10 +800,10 @@ def _formulas_weights(formula_powerset):
         for f1 in formula_powerset[i + 1:]:
             for c0, c1 in ((f0, f1), (f1, f0)):
                 if c1 not in tmp_fix_dict_get(f0) and is_contained(c0, c1):
-                    formula_containments[c0].add(c1)
-                    formula_containments[c0] |= (
-                        formula_containments[c1] -
-                        {c0}
+                    formula_containments[c0] = (
+                        tmp_fix_dict_get(c0)
+                        | {c1}
+                        | (tmp_fix_dict_get(c1) - {c0})
                     )
                     break
 
