@@ -4,7 +4,8 @@ from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
 from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..logic.expression_processing import (
     extract_logic_atoms,
-    extract_logic_free_variables
+    extract_logic_free_variables,
+    extract_logic_predicates
 )
 from ..logic.transformations import (
     CollapseConjunctions,
@@ -193,10 +194,12 @@ def minimize_component_disjunction(disjunction):
     """
     if not isinstance(disjunction, Disjunction):
         return disjunction
+    positive_formulas, negative_formulas = \
+        split_positive_negative_formulas(disjunction)
     keep = minimise_formulas_containment(
-        disjunction.formulas,
+        positive_formulas,
         is_contained
-    )
+    ) + tuple(negative_formulas)
 
     return GD.walk(RTO.walk(Disjunction(keep)))
 
@@ -218,19 +221,44 @@ def minimize_component_conjunction(conjunction):
     """
     if not isinstance(conjunction, Conjunction):
         return conjunction
-    positive_formulas = []
-    negative_formulas = []
-    for formula in conjunction.formulas:
-        if isinstance(formula, Negation):
-            negative_formulas.append(formula)
-        else:
-            positive_formulas.append(formula)
+    positive_formulas, negative_formulas = \
+        split_positive_negative_formulas(conjunction)
     keep = minimise_formulas_containment(
         positive_formulas,
         lambda x, y: is_contained(y, x)
     ) + tuple(negative_formulas)
 
     return GC.walk(RTO.walk(Conjunction(keep)))
+
+
+def split_positive_negative_formulas(nary_logic_operation):
+    """Split formulas of the n_ary_logic operation in those
+    containing a negated predicate and those not.
+
+    Parameters
+    ----------
+    nary_logic_operation : NAryLogicOperation
+        Operation whose formulas are going to be split
+
+    Returns
+    -------
+    positive, negative
+        two Iterable[Union[LogicOperation, FunctionApplication]] objects
+        containing the positive and negative formulas
+    """
+
+    formulas = nary_logic_operation.formulas
+    positive_formulas = []
+    negative_formulas = []
+    for formula in formulas:
+        if any(
+            isinstance(sub_formula, Negation)
+            for sub_formula in extract_logic_predicates(formula)
+        ):
+            negative_formulas.append(formula)
+        else:
+            positive_formulas.append(formula)
+    return positive_formulas, negative_formulas
 
 
 def minimise_formulas_containment(components, containment_op):
