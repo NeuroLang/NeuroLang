@@ -1119,7 +1119,7 @@ def test_nondeterministic():
     )
     with nl.scope as e:
         e.Z[e.x] = e.P(e.x) & e.Q(e.x)
-        e.Z[e.x] = e.R(e.x, e.y)
+        e.Z[e.x] = e.R(e.x)
         e.Query[e.x, e.PROB(e.x)] = e.Z(e.x)
         sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
     expected = {
