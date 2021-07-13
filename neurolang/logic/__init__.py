@@ -1,3 +1,5 @@
+from typing import Iterable
+
 from ..exceptions import NeuroLangException
 from ..expressions import Constant, Definition, FunctionApplication, Symbol
 
@@ -27,9 +29,11 @@ class Conjunction(NaryLogicOperator):
             self._symbols |= formula._symbols
 
     def __repr__(self):
-        return '\u22C0(' + ', '.join(
-            repr(e) for e in self.formulas
-        ) + ')'
+        if isinstance(self.formulas, Iterable):
+            return '\u22C0(' + ', '.join(
+                repr(e) for e in self.formulas
+            ) + ')'
+        return '\u22C0(' + repr(self.formulas) + ")"
 
 
 class Disjunction(NaryLogicOperator):
