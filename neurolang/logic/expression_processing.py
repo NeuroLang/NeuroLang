@@ -2,7 +2,7 @@ from operator import and_, invert, or_
 from typing import Any
 
 from ..exceptions import NeuroLangException
-from ..expression_walker import PatternWalker, add_match
+from ..expression_walker import PatternWalker, ExpressionWalker, add_match
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..utils import OrderedSet
 from . import (
@@ -368,3 +368,14 @@ class HasExistentialPredicates(PatternWalker):
             self.walk(f)
             for f in expression.unapply()
         )
+
+
+class RemoveConjunctionDuplicates(ExpressionWalker):
+    @add_match(
+        Conjunction,
+        lambda conjunction: (
+            len(set(conjunction.formulas)) != len(conjunction.formulas)
+        )
+    )
+    def conjunction_with_duplicated_conjunct(self, conjunction):
+        return self.walk(Conjunction(tuple(set(conjunction.formulas))))

@@ -3,7 +3,10 @@ import itertools
 import operator
 from typing import AbstractSet
 
-from ..datalog.expression_processing import extract_logic_predicates
+from ..datalog.expression_processing import (
+    extract_logic_predicates,
+    maybe_deconjunct_single_pred,
+)
 from ..exceptions import NeuroLangException
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
@@ -14,6 +17,7 @@ from ..expressions import (
     TypedSymbolTableMixin,
 )
 from ..logic import Conjunction, Disjunction, Implication
+from ..logic.expression_processing import RemoveConjunctionDuplicates
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 
@@ -216,8 +220,9 @@ def shatter_easy_probfacts(query, symbol_table):
         An equivalent conjunctive query without constants.
 
     """
+    query = RemoveConjunctionDuplicates().walk(query)
     tagged_query = query_to_tagged_set_representation(query, symbol_table)
-    if isinstance(query.antecedent, Conjunction):
+    if isinstance(query.antecedent, (Conjunction, FunctionApplication)):
         return shatter_cq(tagged_query, symbol_table)
     elif isinstance(query.antecedent, Disjunction):
         return shatter_ucq(tagged_query, symbol_table)
@@ -243,8 +248,12 @@ def shatter_ucq(
 def shatter_cq(
     tagged_cq: Implication,
     symbol_table: TypedSymbolTableMixin,
-) -> Conjunction:
+) -> Implication:
     shatterer = EasyProbfactShatterer(symbol_table)
     shattered_query = shatterer.walk(tagged_cq)
     _check_shatter_fully_solved(shattered_query)
+    shattered_query = Implication(
+        shattered_query.consequent,
+        maybe_deconjunct_single_pred(shattered_query.antecedent)
+    )
     return shattered_query
