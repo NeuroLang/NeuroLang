@@ -8,7 +8,6 @@ from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     enforce_conjunction,
-    extract_logic_predicates,
     flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
@@ -131,7 +130,8 @@ def solve_succ_query(query, cpl_program):
             ColumnStr("_p_"),
         )
 
-    with log_performance(LOG, "Translation and lifted optimisation"):
+    with log_performance(LOG, "Translation to extensional plan"):
+        flat_query = Implication(query.consequent, flat_query_body)
         flat_query_body = lift_optimization_for_choice_predicates(
             flat_query_body, cpl_program
         )
@@ -765,14 +765,19 @@ def symbolic_shattering(unified_query, symbol_table):
 
 
 def is_atom_a_deterministic_relation(atom, symbol_table):
-    return isinstance(
-        symbol_table.get(atom.functor, None),
-        DeterministicFactSet
+    return (
+        isinstance(atom.functor, Symbol)
+        and atom.functor in symbol_table
+        and isinstance(symbol_table[atom.functor], DeterministicFactSet)
     )
 
 
 def is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-    return isinstance(symbol_table.get(atom.functor), ProbabilisticChoiceSet)
+    return (
+        isinstance(atom.functor, Symbol)
+        and atom.functor in symbol_table
+        and isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet)
+    )
 
 
 def is_probabilistic_atom_with_constants_in_all_key_positions(
@@ -792,5 +797,10 @@ def is_probabilistic_atom_with_constants_in_all_key_positions(
     """
     return is_atom_a_probabilistic_choice_relation(atom, symbol_table) or (
         not is_atom_a_deterministic_relation(atom, symbol_table)
-        and all(isinstance(arg, Constant) for arg in atom.args)
+        and (
+            isinstance(atom.functor, Symbol)
+            and atom.functor in symbol_table
+            and isinstance(symbol_table[atom.functor], ProbabilisticFactSet)
+            and all(isinstance(arg, Constant) for arg in atom.args)
+        )
     )
