@@ -434,10 +434,15 @@ class Symbol(NonConstant):
         self.is_fresh = False
 
     def __eq__(self, other):
-        return (
-            hash(self) == hash(other) and
-            (isinstance(other, Symbol) or isinstance(other, str))
-         )
+        if hash(self) != hash(other):
+            return False
+        if isinstance(other, str):
+            other_str = other
+        elif isinstance(other, Symbol):
+            other_str = other.name
+        else:
+            return False
+        return self.name == other_str
 
     def __hash__(self):
         return hash(self.name)

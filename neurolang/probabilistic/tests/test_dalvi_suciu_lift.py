@@ -11,6 +11,7 @@ from ...logic import (
     Implication,
 )
 from ...relational_algebra import str2columnstr_constant
+from ...relational_algebra_provenance import DisjointProjection
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
 from ..probabilistic_ra_utils import (
@@ -509,7 +510,7 @@ def test_single_disjoint_project_one_variable():
     }
     query = ExistentialPredicate(x, P(x))
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
-    assert isinstance(plan, dalvi_suciu_lift.DisjointProjection)
+    assert isinstance(plan, DisjointProjection)
 
 
 def test_single_disjoint_project_two_variables():
@@ -532,7 +533,7 @@ def test_single_disjoint_project_two_variables():
     }
     query = ExistentialPredicate(y, P(x, y))
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
-    assert isinstance(plan, dalvi_suciu_lift.DisjointProjection)
+    assert isinstance(plan, DisjointProjection)
 
 
 def test_simple_existential_query_plan():

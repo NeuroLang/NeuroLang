@@ -85,6 +85,7 @@ RTO = RemoveTrivialOperations()
 
 class LiftedQueryProcessingSemiringSolver(
     rap.DisjointProjectMixin,
+    rap.WeightedNaturalJoinSolverMixin,
     ProbSemiringSolver,
 ):
     pass
@@ -532,13 +533,7 @@ def separator_variable_plan(expression, separator_variables, symbol_table):
     for v in existentials_to_add:
         expression = ExistentialPredicate(v, expression)
     return rap.IndependentProjection(
-        rap.IndependentProjection(
-            dalvi_suciu_lift(expression, symbol_table),
-            tuple(
-                str2columnstr_constant(v.name)
-                for v in (variables_to_project | separator_variables)
-            )
-        ),
+        dalvi_suciu_lift(expression, symbol_table),
         tuple(
             str2columnstr_constant(v.name)
             for v in variables_to_project
@@ -688,27 +683,33 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
     return rap.WeightedNaturalJoin(tuple(new_formulas), weights)
 
 
-def _formulas_weights(formula_powerset):
-    formula_containments = {
-        formula: set()
-        for formula in formula_powerset
-    }
-    # temporary fix for key not in dict issue
-    tmp_fix_dict_get = lambda k: next(
-        v for f, v in formula_containments.items() if f == k
-    )
-    for i, f0 in enumerate(formula_powerset):
-        for f1 in formula_powerset[i + 1:]:
-            for c0, c1 in ((f0, f1), (f1, f0)):
-                if c1 not in tmp_fix_dict_get(f0) and is_contained(c0, c1):
-                    formula_containments[c0] = (
-                        tmp_fix_dict_get(c0)
-                        | {c1}
-                        | (tmp_fix_dict_get(c1) - {c0})
-                    )
-                    break
 
-    formulas_weights = mobius_weights(formula_containments)
+def _formulas_weights(formula_powerset):
+    # Using list set instead of a dictionary
+    # due to a strange bug in dictionary lookups with Expressions
+    # as keys
+    formula_containments = [
+        set()
+        for formula in formula_powerset
+    ]
+
+    for i, f0 in enumerate(formula_powerset):
+        for j, f1 in enumerate(formula_powerset[i + 1:], start=i + 1):
+            for i0, c0, i1, c1 in ((i, f0, j, f1), (j, f1, i, f0)):
+                if (
+                    c0 not in formula_containments[i1] and
+                    is_contained(c0, c1)
+                ):
+                    formula_containments[i0] |= (
+                        {c1} | formula_containments[i1] - {c0}
+                    )
+
+    fcs = {
+        formula: containment
+        for formula, containment in
+        zip(formula_powerset, formula_containments)
+    }
+    formulas_weights = mobius_weights(fcs)
     return formulas_weights
 
 
@@ -726,22 +727,17 @@ def mobius_function(formula, formula_containments, known_weights=None):
         known_weights = dict()
     if formula in known_weights:
         return known_weights[formula]
-    # temporary fix for key not in dict issue
-    tmp_fix_dict_get = lambda k: next(
-        v for f, v in formula_containments.items() if f == k
-    )
-    res = -sum(
-        (
-            known_weights.setdefault(
+    res = -1
+    for f in formula_containments[formula]:
+        weight = known_weights.setdefault(
+            f,
+            mobius_function(
                 f,
-                mobius_function(f, formula_containments)
+                formula_containments, known_weights=known_weights
             )
-            for f in tmp_fix_dict_get(formula)
-            if f != formula
-        ),
-        -1
-    )
-    return res
+        )
+        res += weight
+    return -res
 
 
 def powerset(iterable):
