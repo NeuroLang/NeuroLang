@@ -538,7 +538,10 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
         if weight != 0
     ))
 
-    return rap.WeightedNaturalJoin(tuple(new_formulas), weights)
+    return rap.WeightedNaturalJoin(
+        tuple(new_formulas),
+        tuple(Constant[int](w) for w in weights)
+    )
 
 
 def _formulas_weights(formula_powerset):
