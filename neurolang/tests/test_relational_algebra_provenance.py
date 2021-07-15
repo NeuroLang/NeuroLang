@@ -378,7 +378,7 @@ def test_extended_projection():
 
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            iterable=[(6, 1), (8, 2), (10, 2), (4, 1), (3, 1),],
+            iterable=[(6, 1), (8, 2), (10, 2), (4, 1), (3, 1)],
             columns=["sum_", "__provenance__"],
         ),
         ColumnStr("__provenance__"),
@@ -550,8 +550,6 @@ def test_selection_between_columnints():
         ColumnStr("_p_"),
     )
     assert testing.eq_prov_relations(result, expected)
-
-
 
 
 def test_weightednaturaljoin_provenance_name():
