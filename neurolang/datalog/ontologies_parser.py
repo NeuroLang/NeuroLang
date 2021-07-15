@@ -6,7 +6,7 @@ from rdflib.namespace import OWL, RDF, RDFS
 
 from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
 from ..expressions import Constant, Symbol
-from ..logic import Conjunction, Implication
+from ..logic import Conjunction
 from .constraints_representation import RightImplication
 
 
