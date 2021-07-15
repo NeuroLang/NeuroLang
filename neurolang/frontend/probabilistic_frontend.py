@@ -170,15 +170,13 @@ class NeurolangPDL(QueryBuilderDatalog):
             where the ontology files are stored
         """
         onto = OntologyParser(paths)
-        constraints, rules, est_knowledge = onto.parse_ontology()
+        constraints, est_knowledge = onto.parse_ontology()
         self.program_ir.set_constraints(constraints)
         for symbol, expressions in est_knowledge.items():
             iterable = [exp.args for exp in expressions]
             self.program_ir.add_extensional_predicate_from_tuples(
                 symbol, iterable
             )
-        for symbol, expressions in rules.items():
-            self.program_ir.add_bulk_rules(symbol, expressions)
         self.program_ir.add_existential_rules(onto.existential_rules)
 
     @property

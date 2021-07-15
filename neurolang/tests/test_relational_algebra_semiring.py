@@ -20,7 +20,7 @@ from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolver,
 )
-from ..utils import config
+from ..config import config
 
 EQ = Constant(operator.eq)
 

@@ -5,6 +5,7 @@ import numpy
 import pandas as pd
 import pytest
 
+from ..config import config
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
 from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionWalker
@@ -43,7 +44,6 @@ from ..utils import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
     RelationalAlgebraSet,
-    config
 )
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 
@@ -937,6 +937,29 @@ def test_eliminate_trivial_projections_optimiser(R1):
     exp1 = Projection(r, (a, b))
     res1 = opt.walk(exp1)
     assert res1 is r
+
+    r0 = Symbol('r0')
+    exp = Projection(Projection(r0, (a, b)), (a,))
+    res = opt.walk(exp)
+    assert res == Projection(r0, (a,))
+
+    exp = Projection(Projection(r0, (a, b)), (a, b))
+    res = opt.walk(exp)
+    assert res == Projection(r0, (a, b))
+
+    exp = ExtendedProjection(
+        r0,
+        (
+            FunctionApplicationListMember(a, a),
+            FunctionApplicationListMember(b, b)
+        )
+    )
+    res = opt.walk(exp)
+    assert res == Projection(r0, (a, b))
+
+    exp = Projection(exp, (a,))
+    res = opt.walk(exp)
+    assert res == Projection(r0, (a,))
 
 
 def test_numpy_log():

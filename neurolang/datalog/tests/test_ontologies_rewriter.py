@@ -267,10 +267,8 @@ def test_distinguished_variables():
 
     x = S_("x")
     y = S_("y")
-    z = S_("z")
     a = S_("a")
     b = S_("b")
-    db = C_("db")
 
     sigma = RI_(project(x), hasCollaborator(y, x))
     q = I_(p(a), hasCollaborator(a, b) & inArea(b))
