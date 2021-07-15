@@ -228,7 +228,8 @@ def test_selection():
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
         (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
     )
-    assert res == Selection(fa_trans, builtin_condition)
+    expected_builtin_condition = C_(gt)(C_(ColumnStr("x")), C_(3))
+    assert res == Selection(fa_trans, expected_builtin_condition)
 
 
 def test_extended_projection():
@@ -239,19 +240,22 @@ def test_extended_projection():
     fa = R1(x, y)
     builtin_condition = C_(eq)(C_(mul)(x, C_(3)), z)
     exp = Conjunction((fa, builtin_condition))
+    cs_x = C_(ColumnStr("x"))
+    cs_y = C_(ColumnStr("y"))
+    cs_z = C_(ColumnStr("z"))
 
     tr = TranslateToNamedRA()
     res = tr.walk(exp)
     fa_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        (cs_x, cs_y),
     )
     exp_trans = ExtendedProjection(
         fa_trans,
         [
-            FunctionApplicationListMember(*builtin_condition.args),
-            FunctionApplicationListMember(x, x),
-            FunctionApplicationListMember(y, y),
+            FunctionApplicationListMember(C_(mul)(cs_x, C_(3)), cs_z),
+            FunctionApplicationListMember(cs_x, cs_x),
+            FunctionApplicationListMember(cs_y, cs_y),
         ],
     )
     assert res == exp_trans
@@ -269,6 +273,12 @@ def test_extended_projection_2():
     builtin_condition_1 = C_(eq)(C_(mul)(x, C_(3)), z)
     builtin_condition_2 = C_(eq)(C_(mul)(v, C_(2)), w)
     exp = Conjunction((fa, builtin_condition_1, builtin_condition_2))
+    cs_x = C_(ColumnStr("x"))
+    cs_y = C_(ColumnStr("y"))
+    cs_z = C_(ColumnStr("z"))
+    cs_u = C_(ColumnStr("u"))
+    cs_v = C_(ColumnStr("v"))
+    cs_w = C_(ColumnStr("w"))
 
     tr = TranslateToNamedRA()
     res = tr.walk(exp)
@@ -282,22 +292,17 @@ def test_extended_projection_2():
                 C_(ColumnInt(3)),
             ),
         ),
-        (
-            Constant(ColumnStr("x")),
-            Constant(ColumnStr("y")),
-            Constant(ColumnStr("v")),
-            Constant(ColumnStr("u")),
-        ),
+        (cs_x, cs_y, cs_v, cs_u),
     )
     exp_trans = ExtendedProjection(
         fa_trans,
         [
-            FunctionApplicationListMember(*builtin_condition_1.args),
-            FunctionApplicationListMember(*builtin_condition_2.args),
-            FunctionApplicationListMember(x, x),
-            FunctionApplicationListMember(y, y),
-            FunctionApplicationListMember(u, u),
-            FunctionApplicationListMember(v, v),
+            FunctionApplicationListMember(C_(mul)(cs_x, C_(3)), cs_z),
+            FunctionApplicationListMember(C_(mul)(cs_v, C_(2)), cs_w),
+            FunctionApplicationListMember(cs_x, cs_x),
+            FunctionApplicationListMember(cs_y, cs_y),
+            FunctionApplicationListMember(cs_u, cs_u),
+            FunctionApplicationListMember(cs_v, cs_v),
         ],
     )
     assert res == exp_trans
@@ -333,7 +338,8 @@ def test_set_destroy():
     res = tr.walk(exp)
 
     exp_result = Destroy(
-        NameColumns(Projection(r1, (C_(0),)), (C_("x"),)), x, y
+        NameColumns(Projection(r1, (C_(0),)), (C_("x"),)),
+        C_(ColumnStr("x")), C_(ColumnStr("y"))
     )
     assert res == exp_result
 
@@ -349,8 +355,8 @@ def test_set_destroy_multicolumn():
     res = tr.walk(exp)
 
     exp_result = Destroy(
-        NameColumns(Projection(r1, (C_(0),)), (C_("x"),)),
-        x,
+        NameColumns(Projection(r1, (C_(0),)), (C_(ColumnStr("x")),)),
+        C_(ColumnStr("x")),
         C_[Tuple[ColumnStr, ColumnStr]]((ColumnStr("y"), ColumnStr("z"))),
     )
     assert res == exp_result
@@ -366,7 +372,7 @@ def test_set_constant_contains():
 
     exp_result = Selection(
         NameColumns(Projection(r1, (C_(0),)), (C_("x"),)),
-        C_(contains)(x, C_(0)),
+        C_(contains)(C_(ColumnStr("x")), C_(0)),
     )
     assert res == exp_result
 
