@@ -44,7 +44,10 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError, UnsupportedSolverError
 from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
-from ..probabilistic import dalvi_suciu_lift
+from ..probabilistic import (
+    dalvi_suciu_lift,
+    small_dichotomy_theorem_based_solver,
+)
 from ..probabilistic.cplogic.program import CPLogicMixin
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
