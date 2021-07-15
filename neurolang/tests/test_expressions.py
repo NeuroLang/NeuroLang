@@ -6,6 +6,8 @@ import pickle
 import pytest
 import numpy
 
+
+from ..config import config
 from .. import expressions, logic
 from ..expression_walker import (
     ExpressionBasicEvaluator,
@@ -336,3 +338,16 @@ def test_fresh_symbol_subclass():
 def test_numpy_ufunc_no_qualname_repr():
     exp = C_(numpy.exp)
     repr(exp)
+
+
+def test_type_printing_option():
+    x = S_[int]('x')
+    a = C_[str]('a')
+
+    assert repr(x) == 'S{x: int}'
+    assert repr(a) == "C{'a': str}"
+
+    config.switch_expression_type_printing()
+    assert repr(x) == 'S{x}'
+    assert repr(a) == "C{'a'}"
+
