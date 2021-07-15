@@ -344,10 +344,10 @@ def test_type_printing_option():
     x = S_[int]('x')
     a = C_[str]('a')
 
-    assert repr(x) == 'S{x: int}'
+    config.enable_expression_type_printing()
+    assert repr(x) == "S{x: int}"
     assert repr(a) == "C{'a': str}"
 
-    config.switch_expression_type_printing()
-    assert repr(x) == 'S{x}'
+    config.disable_expression_type_printing()
+    assert repr(x) == "S{x}"
     assert repr(a) == "C{'a'}"
-

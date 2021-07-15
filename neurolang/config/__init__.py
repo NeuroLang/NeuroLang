@@ -40,13 +40,19 @@ class NeurolangConfigParser(configparser.ConfigParser):
                 reload(module)
                 LOG.debug(f"Reloading module : {module}")
 
+    def enable_expression_type_printing(self):
+        self.set("DEFAULT", "expressionTypePrinting", "True")
+
+    def disable_expression_type_printing(self):
+        self.set("DEFAULT", "expressionTypePrinting", "False")
+
     def expression_type_printing(self):
-        return bool(self["DEFAULT"].get("expressionTypePrinting", True))
+        return self["DEFAULT"].get("expressionTypePrinting", "True") == "True"
 
     def switch_expression_type_printing(self):
-        old_value = bool(self.expression_type_printing())
+        old_value = self.expression_type_printing()
         self["DEFAULT"]["expressionTypePrinting"] = str(not old_value)
-        return bool(self["DEFAULT"]["expressionTypePrinting"])
+        return self["DEFAULT"]["expressionTypePrinting"] == "True"
 
 
 config = NeurolangConfigParser()
