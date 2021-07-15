@@ -23,7 +23,6 @@ class OntologyParser:
             self._load_ontology([paths], [load_format])
 
         self.parsed_constraints = {}
-        self.parsed_rules = {}
         self.existential_rules = {}
 
     def _load_ontology(self, paths, load_format):
@@ -47,7 +46,7 @@ class OntologyParser:
         '''
         self._parse_classes()
 
-        return self.parsed_constraints, self.parsed_rules
+        return self.parsed_constraints
 
     def _parse_classes(self):
         '''This method obtains all the classes present in the ontology and
@@ -144,8 +143,8 @@ class OntologyParser:
             ant = Symbol(self._parse_name(entity))
             cons = Symbol(self._parse_name(val))
             x = Symbol.fresh()
-            #imp = RightImplication(ant(x), cons(x))
-            imp = Implication(cons(x), ant(x))
+            imp = RightImplication(ant(x), cons(x))
+            #imp = Implication(cons(x), ant(x))
             self._categorize_constraints([imp])
 
     def _parse_BNode_intersection(self, entity, node, inter_entity):
@@ -316,15 +315,13 @@ class OntologyParser:
         entity = Symbol(self._parse_name(entity))
         for value in nodes:
             value = self._parse_name(value)
-            ext_rule = RightImplication(entity(x), support_prop(x, y))
-            constraints.append(ext_rule)
-            self._add_existential_rule(entity(x), ext_rule)
+            exists_imp = RightImplication(support_prop(x, y), Symbol(value)(y))
+            constraints.append(exists_imp)
         prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
-        exists_imp = RightImplication(support_prop(x, y), Symbol(value)(y))
-        # prop_imp = Implication(onProp(x, y), support_prop(x, y))
-        # exists_imp = Implication(Symbol(value)(y), support_prop(x, y))
+        ext_rule = RightImplication(entity(x), support_prop(x, y))
+        self._add_existential_rule(entity(x), ext_rule)
 
-        constraints.append(exists_imp)
+        constraints.append(ext_rule)
         constraints.append(prop_imp)
 
         return constraints
@@ -353,8 +350,7 @@ class OntologyParser:
         conj = Conjunction((ant(x), onProp(x, y)))
         for value in nodes:
             value = self._parse_name(value)
-            constraints.append(Implication(Symbol(value)(y), conj))
-            # constraints.append(RightImplication(conj, Symbol(value)(y)))
+            constraints.append(RightImplication(conj, Symbol(value)(y)))
 
         return constraints
 
@@ -378,8 +374,7 @@ class OntologyParser:
         ent = Symbol(self._parse_name(entity))
         onProp = Symbol(self._parse_name(prop))
         value = self._parse_name(nodes[0])
-        return [Implication(Symbol(onProp)(x, Constant(value)), Symbol(ent)(x))]
-        #return [RightImplication(Symbol(ent)(x), Symbol(onProp)(x, Constant(value)))]
+        return [RightImplication(Symbol(ent)(x), Symbol(onProp)(x, Constant(value)))]
 
     def _solve_BNode(self, initial_node):
         '''Once a BNode is identified, this function iterates over each of the pointers
@@ -469,8 +464,8 @@ class OntologyParser:
         label = Symbol(self._parse_name(prop))
         con = label(x, entity_name)
 
-        #self._categorize_constraints([RightImplication(ant, con)])
-        self._categorize_constraints([Implication(con, ant)])
+        self._categorize_constraints([RightImplication(ant, con)])
+        #self._categorize_constraints([Implication(con, ant)])
 
     def _parseEnumeratedClass(self, entity, prop, value):
         warnings.warn("Not implemented yet: EnumeratedClass")
@@ -485,22 +480,13 @@ class OntologyParser:
 
     def _categorize_constraints(self, formulas):
         for sigma in formulas:
-            if isinstance(sigma, RightImplication):
-                sigma_functor = sigma.consequent.functor.name
-                if sigma_functor in self.parsed_constraints:
-                    cons_set = self.parsed_constraints[sigma_functor]
-                    cons_set.add(sigma)
-                    self.parsed_constraints[sigma_functor] = cons_set
-                else:
-                    self.parsed_constraints[sigma_functor] = set([sigma])
+            sigma_functor = sigma.consequent.functor.name
+            if sigma_functor in self.parsed_constraints:
+                cons_set = self.parsed_constraints[sigma_functor]
+                cons_set.add(sigma)
+                self.parsed_constraints[sigma_functor] = cons_set
             else:
-                sigma_functor = Symbol(sigma.consequent.functor.name)
-                if sigma_functor in self.parsed_rules:
-                    cons_set = self.parsed_rules[sigma_functor]
-                    cons_set.add(sigma)
-                    self.parsed_rules[sigma_functor] = cons_set
-                else:
-                    self.parsed_rules[sigma_functor] = set([sigma])
+                self.parsed_constraints[sigma_functor] = set([sigma])
 
     def _add_existential_rule(self, entity, rule):
         if entity not in self.existential_rules:
