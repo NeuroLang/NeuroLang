@@ -563,30 +563,27 @@ def test_lifted_negation():
     }
     res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
     expected = Projection(
-        Projection(
-            Difference(
-                Projection(
-                    NameColumns(
-                        Projection(
-                            R,
-                            (Constant(ColumnInt(0)), Constant(ColumnInt(1))),
-                        ),
-                        (Constant(ColumnStr('x')), Constant(ColumnStr('y'))),
+        Difference(
+            Projection(
+                NameColumns(
+                    Projection(
+                        R,
+                        (Constant(ColumnInt(0)), Constant(ColumnInt(1))),
                     ),
-                    (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+                    (Constant(ColumnStr('x')), Constant(ColumnStr('y'))),
                 ),
-                Projection(
-                    NameColumns(
-                        Projection(
-                            S,
-                            (Constant(ColumnInt(0)),)
-                        ),
-                        (Constant(ColumnStr('y')),)
-                    ),
-                    (Constant(ColumnStr('y')),),
-                )
+                (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
             ),
-            (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+            Projection(
+                NameColumns(
+                    Projection(
+                        S,
+                        (Constant(ColumnInt(0)),)
+                    ),
+                    (Constant(ColumnStr('y')),)
+                ),
+                (Constant(ColumnStr('y')),),
+            )
         ),
         (Constant(ColumnStr('x')),)
     )
@@ -618,6 +615,38 @@ def test_lifted_disjunction_with_negation():
     symbol_table = {
         symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
         for symbol in (R, S, T)
+    }
+    res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+
+    assert dalvi_suciu_lift.is_pure_lifted_plan(res)
+
+
+def test_lifted_disjunction_cross_product_with_negation():
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    V = Symbol('V')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    query = Disjunction((
+        ExistentialPredicate(
+            y,
+            Conjunction((
+                R(x),
+                Negation(S(y)),
+                V(y)
+            ))
+        ),
+        ExistentialPredicate(
+            y,
+            T(x, y)
+        )
+    ))
+
+    symbol_table = {
+        symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
+        for symbol in (R, S, T, V)
     }
     res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
 
