@@ -8,41 +8,50 @@ from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
-    ColumnStr,
     ColumnInt,
-    Difference,
-    LeftNaturalJoin,
+    ColumnStr,
     NaturalJoin,
     Product,
     RenameColumn,
     RenameColumns,
     Selection,
     eq_,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
     ConcatenateConstantColumn,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NaturalJoinInverse,
     Projection,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     Union,
+    WeightedNaturalJoin
 )
-from ..utils import NamedRelationalAlgebraFrozenSet
+from ..utils import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraStringExpression
+)
 
 C_ = Constant
 S_ = Symbol
 
-R1 = NamedRelationalAlgebraFrozenSet(
-    columns=("col1", "col2", "__provenance__"),
-    iterable=[(i, i * 2, i) for i in range(10)],
-)
-provenance_set_r1 = ProvenanceAlgebraSet(R1, ColumnStr("__provenance__"))
+
+@pytest.fixture
+def R1():
+    return NamedRelationalAlgebraFrozenSet(
+        columns=("col1", "col2", "__provenance__"),
+        iterable=[(i, i * 2, i) for i in range(10)],
+    )
 
 
-def test_selection():
+@pytest.fixture
+def provenance_set_r1(R1):
+    return ProvenanceAlgebraSet(R1, ColumnStr("__provenance__"))
+
+
+def test_selection(R1, provenance_set_r1):
     s = Selection(provenance_set_r1, eq_(C_(ColumnStr("col1")), C_(4)))
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
 
@@ -50,7 +59,7 @@ def test_selection():
     assert "__provenance__" in sol.columns
 
 
-def test_selection_columns():
+def test_selection_columns(R1, provenance_set_r1):
     s = Selection(
         provenance_set_r1, eq_(C_(ColumnStr("col1")), C_(ColumnStr("col2")))
     )
@@ -61,7 +70,7 @@ def test_selection_columns():
     assert "__provenance__" in sol.columns
 
 
-def test_valid_rename():
+def test_valid_rename(R1, provenance_set_r1):
     s = RenameColumn(
         provenance_set_r1, C_(ColumnStr("col1")), C_(ColumnStr("renamed"))
     )
@@ -74,7 +83,7 @@ def test_valid_rename():
     assert R1.projection("__provenance__") == sol.projection("__provenance__")
 
 
-def test_provenance_rename():
+def test_provenance_rename(R1, provenance_set_r1):
     s = RenameColumn(
         provenance_set_r1,
         C_(ColumnStr("__provenance__")),
@@ -135,7 +144,7 @@ def test_naturaljoin():
         ProvenanceAlgebraSet(RnjR, ColumnStr("__provenance__1")),
         tuple(
             [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=Constant(ColumnStr("__provenance__1"))
                     * Constant(ColumnStr("__provenance__2")),
                     dst_column=Constant(ColumnStr("__provenance__")),
@@ -216,7 +225,7 @@ def test_product():
         ProvenanceAlgebraSet(RnjR, ColumnStr("__provenance__1")),
         tuple(
             [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=Constant(ColumnStr("__provenance__1"))
                     * Constant(ColumnStr("__provenance__2")),
                     dst_column=Constant(ColumnStr("__provenance__")),
@@ -343,7 +352,7 @@ def test_projection():
     assert result == expected
 
 
-def test_concatenate_constant():
+def test_concatenate_constant(provenance_set_r1):
     s = ConcatenateConstantColumn(
         provenance_set_r1, C_(ColumnStr("new_col")), C_(9)
     )
@@ -369,7 +378,7 @@ def test_extended_projection():
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             iterable=[(6, 1), (8, 2), (10, 2), (4, 1), (3, 1),],
-            columns=["sum", "__provenance__"],
+            columns=["sum_", "__provenance__"],
         ),
         ColumnStr("__provenance__"),
     )
@@ -378,10 +387,10 @@ def test_extended_projection():
         relation,
         tuple(
             [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=Constant(ColumnStr("x"))
                     + Constant(ColumnStr("y")),
-                    dst_column=Constant(ColumnStr("sum")),
+                    dst_column=Constant(ColumnStr("sum_")),
                 )
             ]
         ),
@@ -540,3 +549,32 @@ def test_selection_between_columnints():
         ColumnStr("_p_"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_weightednaturaljoin_provenance_name():
+    RA1 = NamedRelationalAlgebraFrozenSet(
+        columns=("col1", "__provenance__1"),
+        iterable=[(i * 2, i) for i in range(10)],
+    )
+    pset_r1 = ProvenanceAlgebraSet(RA1, ColumnStr("__provenance__1"))
+
+    RA2 = NamedRelationalAlgebraFrozenSet(
+        columns=("col1", "colA", "__provenance__2"),
+        iterable=[(i % 5, i * 3, i) for i in range(20)],
+    )
+    pset_r2 = ProvenanceAlgebraSet(RA2, ColumnStr("__provenance__2"))
+
+    s = WeightedNaturalJoin((pset_r1, pset_r2), (Constant(1), Constant(-1)))
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
+
+    expected = RA1.naturaljoin(RA2).extended_projection(
+        {
+            sol.provenance_column: RelationalAlgebraStringExpression(
+                '__provenance__1 - __provenance__2'
+            ),
+            'col1': RelationalAlgebraStringExpression('col1'),
+            'colA': RelationalAlgebraStringExpression('colA')
+        }
+    )
+
+    assert sol.relations == expected

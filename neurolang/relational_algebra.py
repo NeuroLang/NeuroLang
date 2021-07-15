@@ -1,6 +1,6 @@
 import math
 import operator
-from typing import AbstractSet, Callable, Tuple
+from typing import AbstractSet, Tuple, Callable
 
 import numpy
 import pandas.core.computation.ops
@@ -73,7 +73,19 @@ class RelationalAlgebraOperation(Definition):
         return self._columns
 
 
-class Selection(RelationalAlgebraOperation):
+class NAryRelationalAlgebraOperation(RelationalAlgebraOperation):
+    pass
+
+
+class BinaryRelationalAlgebraOperation(RelationalAlgebraOperation):
+    pass
+
+
+class UnaryRelationalAlgebraOperation(RelationalAlgebraOperation):
+    pass
+
+
+class Selection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, formula):
         self.relation = relation
         self.formula = formula
@@ -82,7 +94,7 @@ class Selection(RelationalAlgebraOperation):
         return f"\N{GREEK SMALL LETTER SIGMA}_{self.formula}({self.relation})"
 
 
-class Projection(RelationalAlgebraOperation):
+class Projection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
@@ -94,7 +106,7 @@ class Projection(RelationalAlgebraOperation):
         )
 
 
-class EquiJoin(RelationalAlgebraOperation):
+class EquiJoin(BinaryRelationalAlgebraOperation):
     def __init__(
         self, relation_left, columns_left, relation_right, columns_right
     ):
@@ -111,7 +123,7 @@ class EquiJoin(RelationalAlgebraOperation):
         )
 
 
-class NaturalJoin(RelationalAlgebraOperation):
+class NaturalJoin(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -120,7 +132,7 @@ class NaturalJoin(RelationalAlgebraOperation):
         return f"[{self.relation_left}" f"\N{JOIN}" f"{self.relation_right}]"
 
 
-class LeftNaturalJoin(RelationalAlgebraOperation):
+class LeftNaturalJoin(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -133,19 +145,19 @@ class LeftNaturalJoin(RelationalAlgebraOperation):
         )
 
 
-class Product(RelationalAlgebraOperation):
+class Product(NAryRelationalAlgebraOperation):
     def __init__(self, relations):
         self.relations = tuple(relations)
 
     def __repr__(self):
         return (
             "["
-            + f"\N{n-ary times operator}".join(repr(r) for r in self.relations)
+            + "\N{n-ary times operator}".join(repr(r) for r in self.relations)
             + "]"
         )
 
 
-class Difference(RelationalAlgebraOperation):
+class Difference(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -154,7 +166,7 @@ class Difference(RelationalAlgebraOperation):
         return f"[{self.relation_left}" f"-" f"{self.relation_right}]"
 
 
-class Union(RelationalAlgebraOperation):
+class Union(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -163,7 +175,7 @@ class Union(RelationalAlgebraOperation):
         return f"{self.relation_left} ∪ {self.relation_right}"
 
 
-class Intersection(RelationalAlgebraOperation):
+class Intersection(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -172,14 +184,13 @@ class Intersection(RelationalAlgebraOperation):
         return f"{self.relation_left} & {self.relation_right}"
 
 
-class NameColumns(RelationalAlgebraOperation):
+class NameColumns(UnaryRelationalAlgebraOperation):
     """
     Give names to the columns of a relational algebra set.
 
     All columns must be named at once. Each column name must either be a
     `Constant[ColumnStr]` or a `Symbol[ColumnStr]` pointing to a symbolic
     column name resolved when the expression is compiled.
-
     """
 
     def __init__(self, relation, column_names):
@@ -193,7 +204,7 @@ class NameColumns(RelationalAlgebraOperation):
         )
 
 
-class RenameColumn(RelationalAlgebraOperation):
+class RenameColumn(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, src, dst):
         self.relation = relation
         self.src = src
@@ -207,7 +218,7 @@ class RenameColumn(RelationalAlgebraOperation):
         )
 
 
-class RenameColumns(RelationalAlgebraOperation):
+class RenameColumns(UnaryRelationalAlgebraOperation):
     """
     Convenient operation for renaming multiple columns at the same time.
 
@@ -226,7 +237,7 @@ class RenameColumns(RelationalAlgebraOperation):
 
     def __repr__(self):
         return (
-            f"\N{GREEK SMALL LETTER DELTA}"
+            "\N{GREEK SMALL LETTER DELTA}"
             + "_({})".format(
                 ", ".join(
                     "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)
@@ -234,6 +245,36 @@ class RenameColumns(RelationalAlgebraOperation):
                 )
             )
             + f"({self.relation})"
+        )
+
+
+class GroupByAggregation(RelationalAlgebraOperation):
+    """
+    General representation of a groupby operation with aggregate functions.
+
+    Attributes
+    ----------
+    relation : Expression[AbstractSet]
+        Relation on which the groupby is applied.
+    groupby : `Tuple[Union[Constant[ColumnStr], Symbol[ColumnStr]]]`
+        The list of columns on which to group.
+    aggregate_functions : Tuple[FunctionApplicationListMember]
+        List of aggregate functions to apply.
+
+    """
+
+    def __init__(self, relation, groupby, aggregate_functions):
+        self.relation = relation
+        self.groupby = groupby
+        self.aggregate_functions = aggregate_functions
+
+    def __repr__(self):
+        join_str = "," if len(self.aggregate_functions) < 2 else ",\n"
+        return "γ_[{}]({})".format(
+            join_str.join(
+                [repr(member) for member in self.aggregate_functions]
+            ),
+            repr(self.relation),
         )
 
 
@@ -246,7 +287,7 @@ class ExtendedProjection(RelationalAlgebraOperation):
     ----------
     relation : Expression[AbstractSet]
         Relation on which the projections are applied.
-    projection_list : Tuple[ExtendedProjectionListMember]
+    projection_list : Tuple[FunctionApplicationListMember]
         List of projections to apply.
 
     Notes
@@ -287,20 +328,25 @@ class ExtendedProjection(RelationalAlgebraOperation):
         )
 
 
-class ExtendedProjectionListMember(Definition):
+class FunctionApplicationListMember(Definition):
     """
-    Member of a projection list.
+    Representation of a function application to a column. Can be used to
+    represent either the application of an extended projection, or the
+    application of an aggregate function, to a column.
+
 
     Attributes
     ----------
-    fun_exp : `Constant[str]`
-        Constant string representation of the extended projection operation.
+    fun_exp : `Union[Constant[str], FunctionApplication]`
+        Constant string representation of an extended projection operation,
+        or `FunctionApplication` representation of an aggregate function.
     dst_column : `Constant[ColumnStr]` or `Symbol[ColumnStr]`
         Constant column string of the destination column.
 
     Notes
     -----
-    As described in [1]_, a projection list member can either be
+    In the case of an extended projection operation, as described in [1]_,
+    a function application list member can either be
         - a single attribute (column) name in the relation, resulting in a
           normal non-extended projection,
         - an expression `x -> y` where `x` and `y` are both attribute (column)
@@ -324,7 +370,7 @@ class ExtendedProjectionListMember(Definition):
         return "{} -> {}".format(self.fun_exp, self.dst_column)
 
 
-class Destroy(RelationalAlgebraOperation):
+class Destroy(UnaryRelationalAlgebraOperation):
     """
     Operation to map a column of a collection of elements into
     a new column with all collections concatenated
@@ -360,7 +406,7 @@ class Destroy(RelationalAlgebraOperation):
         )
 
 
-class ConcatenateConstantColumn(RelationalAlgebraOperation):
+class ConcatenateConstantColumn(UnaryRelationalAlgebraOperation):
     """
     Add a column with a repeated constant value to a relation.
 
@@ -395,6 +441,7 @@ OPERATOR_STRING = {
     operator.le: "<=",
     operator.pow: "**",
 }
+
 
 def _get_evaluatable_operations_and_string_translations():
     """
@@ -497,6 +544,21 @@ class StringArithmeticWalker(ew.PatternWalker):
                     EVAL_OP_TO_STR[fa.functor.value],
                     self.walk(fa.args[0]).value,
                 )
+            ),
+            auto_infer_type=False,
+        )
+
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
+        lambda fa: (
+            isinstance(fa.functor.value, Callable)
+            and sum is fa.functor.value
+        ),
+    )
+    def operation_sum(self, fa):
+        return Constant[RelationalAlgebraStringExpression](
+            RelationalAlgebraStringExpression(
+                "sum({})".format(self.walk(fa.args[0]).value)
             ),
             auto_infer_type=False,
         )
@@ -726,12 +788,12 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                 column, auto_infer_type=False, verify_type=False
             )
             ext_proj_list_members.append(
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=cst_column, dst_column=cst_column,
                 )
             )
         ext_proj_list_members.append(
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 fun_exp=new_column_value, dst_column=new_column
             )
         )
@@ -757,7 +819,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             except NeuroLangPatternMatchingNoMatch:
                 fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
                 return lambda t: fun(
-                    **{arg: t[arg] for arg in args}
+                    **{arg: getattr(t, arg) for arg in args}
                 )
         elif isinstance(fun_exp, Constant[ColumnInt]):
             return RelationalAlgebraColumnInt(fun_exp.value)
@@ -765,6 +827,26 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             return RelationalAlgebraColumnStr(fun_exp.value)
         else:
             return fun_exp.value
+
+    @ew.add_match(GroupByAggregation(Constant, ..., ...))
+    def aggregate(self, agg_op):
+        relation = agg_op.relation
+        groupby = list(c.value for c in agg_op.groupby)
+        aggregate_functions = []
+        for member in agg_op.aggregate_functions:
+            fun_args = [arg.value for arg in member.fun_exp.args]
+            if len(fun_args) == 1:
+                fun_args = fun_args[0]
+            aggregate_functions.append(
+                (
+                    member.dst_column.value,
+                    fun_args,
+                    member.fun_exp.functor.value,
+                )
+            )
+        with sure_is_not_pattern():
+            result = relation.value.aggregate(groupby, aggregate_functions)
+        return self._build_relation_constant(result)
 
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):
@@ -1193,6 +1275,8 @@ def _infer_relation_type(relation):
     Infer the type of the tuples in the relation based on its first tuple. If
     the relation is empty, just return `Abstract[Tuple]`.
     """
+    if hasattr(relation, "set_row_type"):
+        return AbstractSet[relation.set_row_type]
     if relation.is_empty() or relation.arity == 0:
         return AbstractSet[Tuple]
     if hasattr(relation, "row_type"):
@@ -1217,12 +1301,46 @@ class EliminateTrivialProjections(ew.PatternWalker):
     @ew.add_match(Projection(Constant, ...))
     def eliminate_trivial_projection(self, expression):
         if (
-            tuple(c.value for c in expression.attributes) ==
-            tuple(c for c in expression.relation.value.columns)
+            tuple(c.value for c in expression.attributes)
+            == tuple(c for c in expression.relation.value.columns)
+        ) or (
+            tuple(str(c.value) for c in expression.attributes)
+            == tuple(c for c in expression.relation.value.columns)
         ):
             return expression.relation
         else:
             return expression
+
+    @ew.add_match(
+        Projection(Projection, ...),
+        lambda e: set(e.attributes) <= set(e.relation.attributes)
+    )
+    def eliminate_trivial_nested_projection(self, expression):
+        return self.walk(
+            Projection(expression.relation.relation, expression.attributes)
+        )
+
+    @ew.add_match(Projection(ExtendedProjection, ...))
+    def try_simplify_projection_extended_projection(self, expression):
+        new_relation = self.walk(expression.relation)
+        if new_relation is not expression.relation:
+            return self.walk(Projection(new_relation, expression.attributes))
+        else:
+            return expression
+
+    @ew.add_match(
+        ExtendedProjection,
+        lambda e: all(
+            isinstance(p.fun_exp, Constant[ColumnStr]) and
+            (p.fun_exp == p.dst_column)
+            for p in e.projection_list
+        )
+    )
+    def convert_extended_projection_2_projection(self, expression):
+        return self.walk(Projection(
+            expression.relation,
+            tuple(p.dst_column for p in expression.projection_list)
+        ))
 
 
 class RelationalAlgebraPushInSelections(ew.PatternWalker):

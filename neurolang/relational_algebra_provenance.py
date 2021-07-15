@@ -6,10 +6,9 @@ from .exceptions import (
     RelationalAlgebraError,
     RelationalAlgebraNotImplementedError
 )
-from .expression_walker import ExpressionWalker, add_match
+from .expression_walker import ExpressionWalker, PatternWalker, add_match
 from .expressions import (
     Constant,
-    Expression,
     FunctionApplication,
     Symbol,
     sure_is_not_pattern
@@ -19,12 +18,14 @@ from .relational_algebra import (
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
+    Difference,
     EquiJoin,
     ExtendedProjection,
-    ExtendedProjectionListMember,
-    Difference,
+    FunctionApplicationListMember,
+    GroupByAggregation,
     LeftNaturalJoin,
     NameColumns,
+    NAryRelationalAlgebraOperation,
     NaturalJoin,
     Product,
     Projection,
@@ -98,7 +99,68 @@ class NaturalJoinInverse(NaturalJoin):
         )
 
 
-class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
+class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
+    def __init__(self, relations, weights):
+        self.relations = relations
+        self.weights = weights
+
+    def __repr__(self):
+        return (
+            "\N{Greek Capital Letter Sigma}"
+            f"_{self.weights}({self.relations})"
+        )
+
+
+class ProvenanceExtendedProjectionMixin(PatternWalker):
+    """
+    Mixin that implements specific cases of extended projections on provenance
+    sets for which the semantics are not modified.
+
+    An extended projection on a provenance set is allowed if all the
+    non-provenance columns `c` are projected _as is_ (i.e. `c -> c`), which
+    ensures the number of tuples is going to be exactly the same in the
+    resulting provenance set, and the provenance label is still going to be
+    semantically valid. This is useful in particular for projecting a constant
+    column, which can happen when dealing with rules with constant terms or
+    variable equalities.
+
+    """
+    @add_match(ExtendedProjection, is_provenance_operation)
+    def prov_extended_projection(self, extended_proj):
+        relation = self.walk(extended_proj.relation)
+        if any(
+            proj_list_member.dst_column == relation.provenance_column
+            for proj_list_member in extended_proj.projection_list
+        ):
+            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
+        else:
+            new_prov_col = str2columnstr_constant(relation.provenance_column)
+        relation = self.walk(
+            RenameColumn(
+                relation,
+                str2columnstr_constant(relation.provenance_column),
+                new_prov_col
+            )
+        )
+        new_proj_list = extended_proj.projection_list + (
+            FunctionApplicationListMember(
+                fun_exp=new_prov_col, dst_column=new_prov_col
+            ),
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(
+                ExtendedProjection(
+                    Constant[AbstractSet](relation.value), new_proj_list,
+                )
+            ).value,
+            new_prov_col.value,
+        )
+
+
+class RelationalAlgebraProvenanceCountingSolver(
+    ProvenanceExtendedProjectionMixin,
+    ExpressionWalker,
+):
     """
     Mixing that walks through relational algebra expressions and
     executes the operations and provenance calculations.
@@ -209,16 +271,26 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def prov_projection(self, projection):
         prov_set = self.walk(projection.relation)
         prov_col = prov_set.provenance_column
-        relation = prov_set.value
+        group_columns = projection.attributes
+
         # aggregate the provenance column grouped by the projection columns
-        group_columns = [col.value for col in projection.attributes]
-        agg_relation = relation.aggregate(group_columns, {prov_col: sum})
-        # project the provenance column and the desired projection columns
-        proj_columns = [prov_col] + group_columns
-        projected_relation = agg_relation.projection(*proj_columns)
-        return ProvenanceAlgebraSet(
-            projected_relation, prov_set.provenance_column
+        aggregate_functions = [
+            FunctionApplicationListMember(
+                FunctionApplication(
+                    Constant(sum),
+                    (str2columnstr_constant(prov_col),),
+                    validate_arguments=False,
+                    verify_type=False,
+                ),
+                str2columnstr_constant(prov_col),
+            )
+        ]
+        operation = GroupByAggregation(
+            Constant[AbstractSet](prov_set.value),
+            group_columns,
+            aggregate_functions,
         )
+        return ProvenanceAlgebraSet(self.walk(operation).value, prov_col)
 
     @add_match(EquiJoin(ProvenanceAlgebraSet, ..., ProvenanceAlgebraSet, ...))
     def prov_equijoin(self, equijoin):
@@ -260,37 +332,6 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             new_prov_col,
         )
 
-    @add_match(ExtendedProjection)
-    def prov_extended_projection(self, extended_proj):
-        relation = self.walk(extended_proj.relation)
-        if any(
-            proj_list_member.dst_column == relation.provenance_column
-            for proj_list_member in extended_proj.projection_list
-        ):
-            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
-        else:
-            new_prov_col = str2columnstr_constant(relation.provenance_column)
-        relation = self.walk(
-            RenameColumn(
-                relation,
-                str2columnstr_constant(relation.provenance_column),
-                new_prov_col
-            )
-        )
-        new_proj_list = extended_proj.projection_list + (
-            ExtendedProjectionListMember(
-                fun_exp=new_prov_col, dst_column=new_prov_col
-            ),
-        )
-        return ProvenanceAlgebraSet(
-            self.walk(
-                ExtendedProjection(
-                    Constant[AbstractSet](relation.value), new_proj_list,
-                )
-            ).value,
-            new_prov_col.value,
-        )
-
     @add_match(Difference(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
     def prov_difference(self, diff):
         left = self.walk(diff.relation_left)
@@ -329,7 +370,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=MUL(
                         tmp_left_prov_col,
                         SUB(
@@ -341,7 +382,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 ),
             )
             + tuple(
-                ExtendedProjectionListMember(fun_exp=col, dst_column=col)
+                FunctionApplicationListMember(fun_exp=col, dst_column=col)
                 for col in set(res_columns) - {res_prov_col}
             ),
         )
@@ -411,18 +452,79 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=prov_binary_op(tmp_left_col, tmp_right_col),
                     dst_column=res_prov_col,
                 ),
             )
             + tuple(
-                ExtendedProjectionListMember(fun_exp=col, dst_column=col)
+                FunctionApplicationListMember(fun_exp=col, dst_column=col)
                 for col in set(res_columns) - {res_prov_col}
             ),
         )
         return ProvenanceAlgebraSet(
             self.walk(result).value, res_prov_col.value
+        )
+
+    @add_match(WeightedNaturalJoin)
+    def prov_weighted_join(self, join_op):
+        relations = self.walk(join_op.relations)
+        weights = self.walk(join_op.weights)
+
+        prov_columns = [
+            str2columnstr_constant(Symbol.fresh().name)
+            for _ in relations
+        ]
+
+        dst_columns = set(sum(
+            (
+                relation.non_provenance_columns
+                for relation in relations
+            ),
+            tuple()
+        ))
+
+        relations = [
+            ExtendedProjection(
+                Constant[AbstractSet](relation.relations),
+                (FunctionApplicationListMember(
+                    weight * str2columnstr_constant(
+                        relation.provenance_column
+                    ),
+                    prov_column
+                ),) + tuple(
+                    FunctionApplicationListMember(
+                        str2columnstr_constant(c), str2columnstr_constant(c)
+                    )
+                    for c in relation.non_provenance_columns
+                )
+            )
+            for relation, weight, prov_column in
+            zip(relations, weights, prov_columns)
+        ]
+
+        relation = relations[0]
+        for relation_ in relations[1:]:
+            relation = NaturalJoin(relation, relation_)
+
+        prov_col = str2columnstr_constant(Symbol.fresh().name)
+        dst_prov_expr = sum(prov_columns[1:], prov_columns[0])
+        relation = ExtendedProjection(
+            relation,
+            (FunctionApplicationListMember(
+                dst_prov_expr,
+                prov_col
+            ),) + tuple(
+                FunctionApplicationListMember(
+                    str2columnstr_constant(c), str2columnstr_constant(c)
+                )
+                for c in dst_columns
+            )
+        )
+
+        return ProvenanceAlgebraSet(
+            self.walk(relation).value,
+            prov_col.value
         )
 
     @add_match(Union)
@@ -481,7 +583,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         rap_right_pc = str2columnstr_constant(rap_right.provenance_column)
 
         cols_to_keep = [
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant(c), str2columnstr_constant(c)
             )
             for c in (rap_left.relations.columns + rap_right.relations.columns)
@@ -504,7 +606,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
                 rap_right_r
             ),
             cols_to_keep + [
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     self._semiring_mul(
                         str2columnstr_constant(rap_left.provenance_column),
                         rap_right_pc
@@ -579,38 +681,42 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     def projection_rap(self, projection):
         cols = tuple(v.value for v in projection.attributes)
         if projection.relation.relations.is_dum() or (
-            cols == tuple(
-                c for c in projection.relation.relations.columns
+            cols
+            == tuple(
+                c
+                for c in projection.relation.relations.columns
                 if c != projection.relation.provenance_column
             )
         ):
             return projection.relation
 
-        with sure_is_not_pattern():
-            projected_relation = projection.relation.relations.aggregate(
-                cols,
-                {
-                    projection.relation.provenance_column:
-                    self._semiring_agg_sum
-                }
+        aggregate_functions = [
+            FunctionApplicationListMember(
+                self._semiring_agg_sum(
+                    (str2columnstr_constant(
+                        projection.relation.provenance_column
+                    ),)
+                ),
+                str2columnstr_constant(projection.relation.provenance_column),
             )
-        return ProvenanceAlgebraSet(
-            projected_relation,
-            projection.relation.provenance_column
+        ]
+        operation = GroupByAggregation(
+            self._build_relation_constant(projection.relation.relations),
+            projection.attributes,
+            aggregate_functions,
         )
 
-    @staticmethod
-    def _semiring_agg_sum(x):
-        args = tuple(x)
-        if len(args) == 1:
-            r = args[0]
-        elif isinstance(args[0], Expression):
-            r = FunctionApplication(
-                ADD, args, validate_arguments=False, verify_type=False
+        with sure_is_not_pattern():
+            res = ProvenanceAlgebraSet(
+                self.walk(operation).value,
+                projection.relation.provenance_column,
             )
-        else:
-            r = sum(args)
-        return r
+        return res
+
+    def _semiring_agg_sum(self, args):
+        return FunctionApplication(
+            Constant(sum), args, validate_arguments=False, verify_type=False
+        )
 
     @add_match(RenameColumn(ProvenanceAlgebraSet, ..., ...))
     def rename_column_rap(self, expression):
@@ -738,7 +844,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     fun_exp=MUL(
                         tmp_left_prov_col,
                         SUB(Constant(1), isnan(tmp_right_prov_col)),
@@ -747,7 +853,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
                 ),
             )
             + tuple(
-                ExtendedProjectionListMember(fun_exp=col, dst_column=col)
+                FunctionApplicationListMember(fun_exp=col, dst_column=col)
                 for col in set(res_columns) - {res_prov_col}
             ),
         )

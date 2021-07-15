@@ -2,12 +2,14 @@ import operator
 from typing import AbstractSet, Tuple
 
 import numpy
+import pandas as pd
 import pytest
 
+from ..config import config
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
 from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionWalker
-from ..expressions import Constant, Symbol
+from ..expressions import Constant, FunctionApplication, Symbol
 from ..relational_algebra import (
     EVAL_OP_TO_STR,
     ColumnInt,
@@ -17,7 +19,8 @@ from ..relational_algebra import (
     EliminateTrivialProjections,
     EquiJoin,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
+    GroupByAggregation,
     Intersection,
     NameColumns,
     NaturalJoin,
@@ -44,35 +47,35 @@ from ..utils import (
 )
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 
-R1 = WrappedRelationalAlgebraSet([
-    (i, i * 2)
-    for i in range(10)
-])
-
-R2 = WrappedRelationalAlgebraSet([
-    (i * 2, i * 3)
-    for i in range(10)
-])
-
 
 C_ = Constant
 
 
-def test_selection():
+@pytest.fixture
+def R1():
+    return WrappedRelationalAlgebraSet([(i, i * 2) for i in range(10)])
+
+
+@pytest.fixture
+def R2():
+    return WrappedRelationalAlgebraSet([(i * 2, i * 3) for i in range(10)])
+
+
+def test_selection(R1):
     s = Selection(C_(R1), eq_(C_(ColumnInt(0)), C_(0)))
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == R1.selection({0: 0})
 
 
-def test_selection_columns():
+def test_selection_columns(R1):
     s = Selection(C_(R1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1))))
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == R1.selection_columns({0: 1})
 
 
-def test_selection_general():
+def test_selection_general(R1):
     gt_ = C_(operator.gt)
     r1_named = NamedRelationalAlgebraFrozenSet(('x', 'y'), R1)
     c = C_[AbstractSet[Tuple[int, int]]](r1_named)
@@ -82,14 +85,14 @@ def test_selection_general():
     assert sol == r1_named.selection(lambda t: t.x > 5)
 
 
-def test_projections():
+def test_projections(R1):
     s = Projection(C_(R1), (C_(ColumnInt(0)),))
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == R1.projection(0)
 
 
-def test_equijoin():
+def test_equijoin(R1, R2):
     s = EquiJoin(
         C_(R1), (C_(ColumnInt(0)),),
         C_(R2), (C_(ColumnInt(0)),)
@@ -99,7 +102,7 @@ def test_equijoin():
     assert sol == R1.equijoin(R2, [(0, 0)])
 
 
-def test_naturaljoin():
+def test_naturaljoin(R1, R2):
     r1_named = NamedRelationalAlgebraFrozenSet(('x', 'y'), R1)
     r2_named = NamedRelationalAlgebraFrozenSet(('x', 'z'), R2)
     s = NaturalJoin(
@@ -195,7 +198,7 @@ def test_intersection_named():
     assert RelationalAlgebraSolver().walk(Intersection(empty, r1)) == empty
 
 
-def test_product():
+def test_product(R1, R2):
     s = Product((C_(R1), C_(R2)))
     sol = RelationalAlgebraSolver().walk(s).value
 
@@ -211,7 +214,7 @@ def test_product():
     assert len(sol) == 0
 
 
-def test_selection_reorder():
+def test_selection_reorder(R1):
     raop = RelationalAlgebraOptimiser()
     s = Selection(C_(R1), eq_(C_(ColumnInt(0)), C_(1)))
     assert raop.walk(s) is s
@@ -234,7 +237,7 @@ def test_selection_reorder():
     assert raop.walk(s_out1) == s_out
 
 
-def test_push_selection_equijoins():
+def test_push_selection_equijoins(R1, R2):
     raop = RelationalAlgebraOptimiser()
     s2 = Selection(
         EquiJoin(
@@ -321,7 +324,7 @@ def test_push_selection_equijoins():
     assert raop.walk(s2) == s2
 
 
-def test_push_and_infer_equijoins():
+def test_push_and_infer_equijoins(R1, R2):
     raop = RelationalAlgebraOptimiser()
     inner = Product((C_(R1), C_(R2)))
     formula1 = eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))
@@ -527,16 +530,24 @@ def test_extended_projection_divide_columns():
         )
     )
     dst_column = Constant(ColumnStr('z'))
-    proj = ExtendedProjectionListMember(
+    proj = FunctionApplicationListMember(
         Constant(ColumnStr('y')) / Constant(ColumnStr('x')),
         dst_column
     )
     extended_proj_op = ExtendedProjection(relation, (proj, ))
-    expected = Constant[AbstractSet](
-        NamedRelationalAlgebraFrozenSet(
-            columns=("z",), iterable=[(2.0, ), (4.0, )]
+    if config["RAS"].get("backend") == "dask":
+        expected = Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(
+                columns=("z",),
+                iterable=pd.DataFrame([(2.0,), (4.0,)]).convert_dtypes(),
+            )
         )
-    )
+    else:
+        expected = Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(
+                columns=("z",), iterable=[(2.0,), (4.0,)]
+            )
+        )
     solver = RelationalAlgebraSolver()
     result = solver.walk(extended_proj_op)
     assert result == expected
@@ -552,10 +563,10 @@ def test_extended_projection_lambda_function():
     extended_proj_op = ExtendedProjection(
         relation,
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(lambda_fun), Constant(ColumnStr("z"))
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(RelationalAlgebraStringExpression("x")),
                 Constant(ColumnStr("pomme_de_terre"))
             )
@@ -581,7 +592,7 @@ def test_extended_projection_numeric_named_columns():
     extended_proj_op = ExtendedProjection(
         relation,
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(ColumnInt(1)),
                 Constant(ColumnStr("pomme_de_terre"))
             ),
@@ -610,7 +621,7 @@ def test_extended_projection_other_relation_length():
             columns=("hello",), iterable=[(i,) for i in range(length)]
         )
     )
-    proj = ExtendedProjectionListMember(
+    proj = FunctionApplicationListMember(
         Constant(ColumnStr("y")) / Constant(len)(r2), Constant(ColumnStr("y"))
     )
     extended_proj_op = ExtendedProjection(r1, (proj, ))
@@ -621,6 +632,63 @@ def test_extended_projection_other_relation_length():
     )
     solver = RelationalAlgebraSolver()
     result = solver.walk(extended_proj_op)
+    assert result == expected
+
+
+def test_groupby_aggregate_sum():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y", "z"),
+            iterable=[(10, 20, 30), (10, 20, 50), (1, 2, 3)],
+        )
+    )
+    agg_op = GroupByAggregation(
+        relation,
+        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        [
+            FunctionApplicationListMember(
+                FunctionApplication(Constant(sum), (Constant(ColumnStr("z")),), verify_type=False),
+                Constant(ColumnStr("z_sum")),
+            )
+        ],
+    )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y", "z_sum"), iterable=[(10, 20, 80), (1, 2, 3)]
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(agg_op)
+    assert result == expected
+
+
+def test_groupby_aggregate_lambda():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y", "z"),
+            iterable=[(10, 20, 30), (10, 20, 50), (10, 2, 50)],
+        )
+    )
+    custom_lambda = lambda y: min(y) - 2
+    agg_op = GroupByAggregation(
+        relation,
+        (Constant(ColumnStr("x")), Constant(ColumnStr("z"))),
+        [
+            FunctionApplicationListMember(
+                FunctionApplication(
+                    Constant(custom_lambda), (Constant(ColumnStr("y")),), verify_type=False
+                ),
+                Constant(ColumnStr("y_min")),
+            )
+        ],
+    )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "z", "y_min"), iterable=[(10, 30, 18), (10, 50, 0)]
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(agg_op)
     assert result == expected
 
 
@@ -842,7 +910,7 @@ def test_push_in_optimiser():
     assert res == exp_res
 
 
-def test_eliminate_trivial_projections_optimiser():
+def test_eliminate_trivial_projections_optimiser(R1):
     class Opt(EliminateTrivialProjections, ExpressionWalker):
         pass
 
@@ -870,6 +938,29 @@ def test_eliminate_trivial_projections_optimiser():
     res1 = opt.walk(exp1)
     assert res1 is r
 
+    r0 = Symbol('r0')
+    exp = Projection(Projection(r0, (a, b)), (a,))
+    res = opt.walk(exp)
+    assert res == Projection(r0, (a,))
+
+    exp = Projection(Projection(r0, (a, b)), (a, b))
+    res = opt.walk(exp)
+    assert res == Projection(r0, (a, b))
+
+    exp = ExtendedProjection(
+        r0,
+        (
+            FunctionApplicationListMember(a, a),
+            FunctionApplicationListMember(b, b)
+        )
+    )
+    res = opt.walk(exp)
+    assert res == Projection(r0, (a, b))
+
+    exp = Projection(exp, (a,))
+    res = opt.walk(exp)
+    assert res == Projection(r0, (a,))
+
 
 def test_numpy_log():
     r = Constant[AbstractSet[Tuple[str, float]]](
@@ -882,11 +973,11 @@ def test_numpy_log():
         )
     )
     projlist = (
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             fun_exp=Constant(RelationalAlgebraStringExpression("x")),
             dst_column=Constant(ColumnStr("x")),
         ),
-        ExtendedProjectionListMember(
+        FunctionApplicationListMember(
             fun_exp=Constant(numpy.log)(Constant(ColumnStr("y"))),
             dst_column=Constant(ColumnStr("z")),
         ),
