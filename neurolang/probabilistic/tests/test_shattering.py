@@ -5,7 +5,7 @@ import pytest
 
 from ...datalog.expression_processing import UnifyVariableEqualitiesMixin
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication
+from ...logic import Conjunction, Implication, Disjunction
 from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
     ProbabilisticFactSet,
@@ -251,5 +251,79 @@ def test_shattering_between_symbol_equalities():
     )
     assert any(
         formula.functor == EQ and formula.args == (y, z)
+        for formula in shattered.antecedent.formulas
+    )
+
+
+def test_shattering_ucq():
+    cpl = CPLogicProgramWithVarEqUnification()
+    cpl.add_probabilistic_facts_from_tuples(
+        P,
+        [
+            (0.2, 'a', 42),
+            (0.7, 'b', 19),
+            (0.1, 'a', 10),
+            (0.9, 'b', 99),
+            (0.888, 'b', 42),
+        ],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [
+            (0.777, 42, 'hello'),
+            (0.666, 42, 'bonjour'),
+            (0.999, 19, 'ciao'),
+        ],
+    )
+    query = Implication(
+        ans(x, y),
+        Disjunction(
+            (
+                Conjunction((P(a, x), Q(x, y))),
+                Conjunction((Q(y, Constant('hello')), P(b, y), P(a, x))),
+            )
+        )
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered, Implication)
+    assert isinstance(shattered.antecedent, Disjunction)
+    assert len(shattered.antecedent.formulas) == 2
+    assert any(
+        isinstance(formula, Conjunction)
+        and
+        any(
+            isinstance(f, FunctionApplication)
+            and isinstance(f.functor, ProbabilisticFactSet)
+            and f.args == (x,)
+            for f in formula.formulas
+        )
+        and
+        any(
+            isinstance(f, FunctionApplication)
+            and isinstance(f.functor, ProbabilisticFactSet)
+            and f.args == (x, y)
+            for f in formula.formulas
+        )
+        for formula in shattered.antecedent.formulas
+    )
+    assert any(
+        isinstance(formula, Conjunction)
+        and
+        len([
+            f
+            for f in formula.formulas
+            if
+            isinstance(f, FunctionApplication)
+            and isinstance(f.functor, ProbabilisticFactSet)
+            and f.args == (y,)
+        ]) == 2
+        and
+        any(
+            isinstance(f, FunctionApplication)
+            and isinstance(f.functor, ProbabilisticFactSet)
+            and f.args == (x,)
+            for f in formula.formulas
+        )
         for formula in shattered.antecedent.formulas
     )

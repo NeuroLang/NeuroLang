@@ -3,13 +3,17 @@ import itertools
 import operator
 from typing import AbstractSet
 
-from ..datalog.expression_processing import (
-    enforce_conjunctive_antecedent,
-    extract_logic_predicates,
-)
+from ..datalog.expression_processing import extract_logic_predicates
+from ..exceptions import NeuroLangException
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..expressions import (
+    Constant,
+    FunctionApplication,
+    Symbol,
+    TypedSymbolTableMixin,
+)
+from ..logic import Conjunction, Disjunction, Implication
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 
@@ -167,7 +171,6 @@ class EasyProbfactShatterer(
 
 
 def query_to_tagged_set_representation(query, symbol_table):
-    query = enforce_conjunctive_antecedent(query)
     new_antecedent = ReplaceExpressionWalker(symbol_table).walk(
         query.antecedent
     )
@@ -213,9 +216,35 @@ def shatter_easy_probfacts(query, symbol_table):
         An equivalent conjunctive query without constants.
 
     """
-    query = enforce_conjunctive_antecedent(query)
     tagged_query = query_to_tagged_set_representation(query, symbol_table)
+    if isinstance(query.antecedent, Conjunction):
+        return shatter_cq(tagged_query, symbol_table)
+    elif isinstance(query.antecedent, Disjunction):
+        return shatter_ucq(tagged_query, symbol_table)
+    raise NeuroLangException(
+        "Query should either be conjunctive or disjunctive"
+    )
+
+
+def shatter_ucq(
+    tagged_ucq: Implication,
+    symbol_table: TypedSymbolTableMixin,
+) -> Implication:
+    new_cqs = list()
+    for formula in tagged_ucq.antecedent.formulas:
+        cq = Implication(tagged_ucq.consequent, formula)
+        new_cq = shatter_cq(cq, symbol_table)
+        new_cqs.append(new_cq.antecedent)
+    antecedent = Disjunction(tuple(new_cqs))
+    consequent = tagged_ucq.consequent
+    return Implication(consequent, antecedent)
+
+
+def shatter_cq(
+    tagged_cq: Implication,
+    symbol_table: TypedSymbolTableMixin,
+) -> Conjunction:
     shatterer = EasyProbfactShatterer(symbol_table)
-    shattered_query = shatterer.walk(tagged_query)
+    shattered_query = shatterer.walk(tagged_cq)
     _check_shatter_fully_solved(shattered_query)
     return shattered_query
