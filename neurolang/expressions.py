@@ -434,10 +434,17 @@ class Symbol(NonConstant):
         self.is_fresh = False
 
     def __eq__(self, other):
-        return (
-            hash(self) == hash(other) and
-            (isinstance(other, Symbol) or isinstance(other, str))
-         )
+        if hash(self) != hash(other):
+            return False
+
+        if isinstance(other, str):
+            other_str = other
+        elif isinstance(other, Symbol):
+            other_str = other.name
+        else:
+            return False
+
+        return self.name == other_str
 
     def __hash__(self):
         return hash(self.name)
@@ -565,10 +572,10 @@ class Constant(Expression):
             warn('Making a comparison with types needed to be inferred')
 
         if isinstance(other, Expression):
-            if isinstance(other, Constant):
-                value_equal = other.value == self.value
-            else:
-                value_equal = hash(other) == hash(self)
+            value_equal = (
+                isinstance(other, Constant) and
+                (other.value == self.value)
+            )
 
             return value_equal and (
                 is_leq_informative(self.type, other.type) or
@@ -577,7 +584,8 @@ class Constant(Expression):
         else:
             return (
                 hash(other) == hash(self) and
-                type_validation_value(other, self.type)
+                type_validation_value(other, self.type) and
+                self.value == other
             )
 
     def __hash__(self):
