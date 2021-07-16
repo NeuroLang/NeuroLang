@@ -677,11 +677,15 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
             formula_powerset.append(Disjunction(tuple(formula)))
     formulas_weights = _formulas_weights(formula_powerset)
     new_formulas, weights = zip(*(
-        (dalvi_suciu_lift(formula, symbol_table), Constant(weight))
+        (dalvi_suciu_lift(formula, symbol_table), weight)
         for formula, weight in formulas_weights.items()
         if weight != 0
     ))
-    return rap.WeightedNaturalJoin(tuple(new_formulas), weights)
+
+    return rap.WeightedNaturalJoin(
+        tuple(new_formulas),
+        tuple(Constant[int](w) for w in weights)
+    )
 
 
 
