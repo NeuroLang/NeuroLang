@@ -1,6 +1,6 @@
 import math
 import operator
-from typing import AbstractSet, Callable, Iterable, Tuple
+from typing import AbstractSet, Tuple, Callable
 
 import numpy
 import pandas.core.computation.ops
@@ -236,12 +236,6 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
         self.renames = renames
 
     def __repr__(self):
-        if not isinstance(self.renames, Iterable):
-            return (
-                "\N{GREEK SMALL LETTER DELTA}"
-                + "_({})".format(repr(self.renames))
-                + f"({self.relation})"
-            )
         return (
             "\N{GREEK SMALL LETTER DELTA}"
             + "_({})".format(
@@ -275,11 +269,6 @@ class GroupByAggregation(RelationalAlgebraOperation):
         self.aggregate_functions = aggregate_functions
 
     def __repr__(self):
-        if not isinstance(self.aggregate_functions, Iterable):
-            return "γ_[{}]({})".format(
-                repr(self.aggregate_functions),
-                repr(self.relation)
-            )
         join_str = "," if len(self.aggregate_functions) < 2 else ",\n"
         return "γ_[{}]({})".format(
             join_str.join(
@@ -316,10 +305,6 @@ class ExtendedProjection(RelationalAlgebraOperation):
         self.projection_list = tuple(projection_list)
 
     def __repr__(self):
-        if not isinstance(self.projection_list, Iterable):
-            return "π_[{}]({})".format(
-                repr(self.projection_list), repr(self.relation)
-            )
         join_str = "," if len(self.projection_list) < 2 else ",\n"
         return "π_[{}]({})".format(
             join_str.join([repr(member) for member in self.projection_list]),
@@ -1328,26 +1313,18 @@ class EliminateTrivialProjections(ew.PatternWalker):
 
     @ew.add_match(
         Projection(Projection, ...),
-        lambda e: (
-            type(e) is type(e.relation)
-            and set(e.attributes) <= set(e.relation.attributes)
-        )
+        lambda e: set(e.attributes) <= set(e.relation.attributes)
     )
     def eliminate_trivial_nested_projection(self, expression):
         return self.walk(
-            expression.apply(
-                expression.relation.relation,
-                expression.attributes,
-            )
+            Projection(expression.relation.relation, expression.attributes)
         )
 
     @ew.add_match(Projection(ExtendedProjection, ...))
     def try_simplify_projection_extended_projection(self, expression):
         new_relation = self.walk(expression.relation)
         if new_relation is not expression.relation:
-            return self.walk(
-                expression.apply(new_relation, expression.attributes)
-            )
+            return self.walk(Projection(new_relation, expression.attributes))
         else:
             return expression
 

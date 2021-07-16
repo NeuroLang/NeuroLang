@@ -175,13 +175,28 @@ class WeightedNaturalJoinSolverMixin(PatternWalker):
 
 
 
-class IndependentProjection(Projection):
-    pass
+class LiftedPlanProjection(RelationalAlgebraOperation):
+    def __init__(self, relation, attributes):
+        self.relation = relation
+        self.attributes = attributes
 
 
-class DisjointProjection(Projection):
-    pass
+class IndependentProjection(LiftedPlanProjection):
+    def __repr__(self) -> str:
+        if self.attributes is Ellipsis:
+            attributes_repr = "..."
+        else:
+            attributes_repr = ",".join(repr(attr) for attr in self.attributes)
+        return "ind-π_[{}]({})".format(attributes_repr, repr(self.relation))
 
+
+class DisjointProjection(LiftedPlanProjection):
+    def __repr__(self) -> str:
+        if self.attributes is Ellipsis:
+            attributes_repr = "..."
+        else:
+            attributes_repr = ",".join(repr(attr) for attr in self.attributes)
+        return "disj-π_[{}]({})".format(attributes_repr, repr(self.relation))
 
 
 class DisjointProjectMixin(PatternWalker):
@@ -243,7 +258,7 @@ class DisjointProjectMixin(PatternWalker):
         relation = self.walk(relation)
         return ProvenanceAlgebraSet(relation.value, prov_col.value)
 
-    @add_match(DisjointProjection)
+    @add_match(DisjointProjection(ProvenanceAlgebraSet, ...))
     def disjoint_projection(self, proj_op):
         prov_set = self.walk(proj_op.relation)
         prov_col = str2columnstr_constant(prov_set.provenance_column)
@@ -264,9 +279,41 @@ class DisjointProjectMixin(PatternWalker):
         )
         return res
 
-    @add_match(Projection(ProvenanceAlgebraSet, ...))
-    def unlabeled_projection(self, proj_op):
-        return self.walk(IndependentProjection.apply(*proj_op.unapply()))
+    @add_match(Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
+    def union_rap(self, union):
+        prov_column_left = union.relation_left.provenance_column
+        prov_column_right = union.relation_right.provenance_column
+        relation_left = Constant[AbstractSet](union.relation_left.relations)
+        relation_right = Constant[AbstractSet](union.relation_right.relations)
+        if prov_column_left != prov_column_right:
+            relation_right = RenameColumn(
+                relation_right,
+                str2columnstr_constant(prov_column_right),
+                str2columnstr_constant(prov_column_left),
+            )
+        columns_to_keep = tuple(
+            str2columnstr_constant(c) for c in
+            union.relation_left.non_provenance_columns
+        )
+        dummy_col = str2columnstr_constant(Symbol.fresh().name)
+        relation_left = ConcatenateConstantColumn(
+            relation_left, dummy_col, Constant[int](0)
+        )
+        relation_right = ConcatenateConstantColumn(
+            relation_right, dummy_col, Constant[int](1)
+        )
+        with sure_is_not_pattern():
+            ra_union = self.walk(Union(relation_left, relation_right))
+        rap_projection = IndependentProjection(
+            ProvenanceAlgebraSet(
+                ra_union.value,
+                prov_column_left
+            ),
+            columns_to_keep
+        )
+        with sure_is_not_pattern():
+            res = self.walk(rap_projection)
+        return res
 
 
 class ProvenanceExtendedProjectionMixin(PatternWalker):
