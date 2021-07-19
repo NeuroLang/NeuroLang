@@ -5,7 +5,7 @@ import pytest
 
 from ...datalog.expression_processing import UnifyVariableEqualitiesMixin
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication, Disjunction
+from ...logic import Conjunction, Implication, Disjunction, Negation
 from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
     ProbabilisticFactSet,
@@ -17,6 +17,7 @@ EQ = Constant(operator.eq)
 
 P = Symbol("P")
 Q = Symbol("Q")
+R = Symbol("R")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
@@ -327,3 +328,65 @@ def test_shattering_ucq():
         )
         for formula in shattered.antecedent.formulas
     )
+
+
+def test_shattering_ignore_negation():
+    query = Implication(ans(x, y), Negation(P(x, y)))
+    cpl = CPLogicProgramWithVarEqUnification()
+    cpl.add_probabilistic_facts_from_tuples(
+        P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert shattered is query
+
+
+def test_shatter_disjunction_same_shattering_relation():
+    query = Implication(
+        ans(x, y),
+        Disjunction(
+            (
+                Conjunction((P(a, y), Q(x))),
+                Conjunction((P(a, y), R(x))),
+            )
+        )
+    )
+    cpl = CPLogicProgramWithVarEqUnification()
+    cpl.add_probabilistic_facts_from_tuples(
+        P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered.antecedent, Disjunction)
+    assert len(shattered.antecedent.formulas) == 2
+    R_formula = next(
+        formula for formula in shattered.antecedent.formulas
+        if isinstance(formula, Conjunction)
+        and any(
+            isinstance(f, FunctionApplication)
+            and f.functor == R
+            for f in formula.formulas
+        )
+    )
+    assert len(R_formula.formulas) == 2
+    Q_formula = next(
+        formula for formula in shattered.antecedent.formulas
+        if isinstance(formula, Conjunction)
+        and any(
+            isinstance(f, FunctionApplication)
+            and f.functor == Q
+            for f in formula.formulas
+        )
+    )
+    assert len(Q_formula.formulas) == 2
+    shattered_in_R = next(
+        formula for formula in R_formula.formulas
+        if isinstance(formula.functor, ProbabilisticFactSet)
+        and formula.functor.relation.is_fresh
+    )
+    shattered_in_Q = next(
+        formula for formula in Q_formula.formulas
+        if isinstance(formula.functor, ProbabilisticFactSet)
+        and formula.functor.relation.is_fresh
+    )
+    assert shattered_in_R.functor.relation == shattered_in_Q.functor.relation
