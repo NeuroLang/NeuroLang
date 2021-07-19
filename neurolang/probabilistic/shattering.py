@@ -1,7 +1,7 @@
 import collections
 import itertools
 import operator
-from typing import AbstractSet, Dict, Tuple
+from typing import AbstractSet
 
 from ..datalog.expression_processing import (
     extract_logic_predicates,
