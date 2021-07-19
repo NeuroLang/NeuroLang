@@ -85,7 +85,31 @@ class EliminateImplications(LogicExpressionWalker):
         return self.walk(Disjunction((c, Negation(a))))
 
 
-class MoveNegationsToAtoms(LogicExpressionWalker):
+class MoveNegationsToAtomsSimpleOperationsMixin(PatternWalker):
+    """
+    Moves the negations the furthest possible to the atoms. On
+    conjunction, disjunction, and negation operations.
+    """
+    @add_match(Negation(Conjunction(...)))
+    def negated_conjunction(self, negation):
+        conj = negation.formula
+        formulas = map(lambda e: self.walk(Negation(e)), conj.formulas)
+        return self.walk(Disjunction(tuple(formulas)))
+
+    @add_match(Negation(Disjunction(...)))
+    def negated_disjunction(self, negation):
+        disj = negation.formula
+        formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
+        return self.walk(Conjunction(tuple(formulas)))
+
+    @add_match(Negation(Negation(...)))
+    def negated_negation(self, negation):
+        return self.walk(negation.formula.formula)
+
+
+class MoveNegationsToAtoms(
+    MoveNegationsToAtomsSimpleOperationsMixin, LogicExpressionWalker
+):
     """
     Moves the negations the furthest possible to the atoms.
     Assumes that there are no implications in the expression.
@@ -105,22 +129,6 @@ class MoveNegationsToAtoms(LogicExpressionWalker):
         p = self.walk(Negation(quantifier.body))
         return self.walk(UniversalPredicate(x, p))
 
-    @add_match(Negation(Conjunction(...)))
-    def negated_conjunction(self, negation):
-        conj = negation.formula
-        formulas = map(lambda e: self.walk(Negation(e)), conj.formulas)
-        return self.walk(Disjunction(tuple(formulas)))
-
-    @add_match(Negation(Disjunction(...)))
-    def negated_disjunction(self, negation):
-        disj = negation.formula
-        formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
-        return self.walk(Conjunction(tuple(formulas)))
-
-    @add_match(Negation(Negation(...)))
-    def negated_negation(self, negation):
-        return self.walk(negation.formula.formula)
-
 
 class FONegELogicExpression(LogicExpressionWalker):
     """
@@ -129,14 +137,20 @@ class FONegELogicExpression(LogicExpressionWalker):
     """
     @add_match(UniversalPredicate)
     def abort_universal_predicate(self, expression):
-        raise NotInFONegE(f"Forumla {expression} not in FO Existental Negation")
+        raise NotInFONegE(
+            f"Forumla {expression} not in FO Existental Negation"
+        )
 
     @add_match(Implication)
     def abort_implication(self, expression):
-        raise NotInFONegE(f"Forumla {expression} not in FO Existental Negation")
+        raise NotInFONegE(
+            f"Forumla {expression} not in FO Existental Negation"
+        )
 
 
-class MoveNegationsToAtomsInFONegE(FONegELogicExpression):
+class MoveNegationsToAtomsInFONegE(
+    MoveNegationsToAtomsSimpleOperationsMixin, FONegELogicExpression
+):
     """
     Moves the negations the furthest possible to the atoms.
     Assumes that there are no implications in the expression.
@@ -151,24 +165,11 @@ class MoveNegationsToAtomsInFONegE(FONegELogicExpression):
         p = self.walk(Negation(quantifier.body))
         return self.walk(ExistentialPredicate(x, p))
 
-    @add_match(Negation(Conjunction(...)))
-    def negated_conjunction(self, negation):
-        conj = negation.formula
-        formulas = map(lambda e: self.walk(Negation(e)), conj.formulas)
-        return self.walk(Disjunction(tuple(formulas)))
-
-    @add_match(Negation(Disjunction(...)))
-    def negated_disjunction(self, negation):
-        disj = negation.formula
-        formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
-        return self.walk(Conjunction(tuple(formulas)))
-
-    @add_match(Negation(Negation(...)))
-    def negated_negation(self, negation):
-        return self.walk(negation.formula.formula)
-
 
 class FactorQuantifiersMixin(PatternWalker):
+    """
+    Factor quantifiers up on conjunctions and disjunctions.
+    """
     @add_match(
         Disjunction,
         lambda exp: any(isinstance(f, Quantifier) for f in exp.formulas),
@@ -550,7 +551,7 @@ class RemoveTrivialOperations(LogicExpressionWalker):
 
     @add_match(Negation(Negation(...)))
     def remove_double_negation(self, expression):
-        return expression.formula.formula
+        return self.walk(expression.formula.formula)
 
 
 class PushExistentialsDown(LogicExpressionWalker):
