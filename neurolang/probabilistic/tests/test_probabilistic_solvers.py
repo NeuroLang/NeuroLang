@@ -996,7 +996,14 @@ def test_dalvi_suciu_fails_unate():
         dalvi_suciu_lift.solve_succ_query(query, cpl)
 
 
-def test_dalvi_suciu_negation():
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_nested_negation(solver):
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         Q,
@@ -1018,18 +1025,25 @@ def test_dalvi_suciu_negation():
             Negation(Z(x, Constant(1)))
         )))
     cpl.walk(program)
-    res = dalvi_suciu_lift.solve_succ_query(query, cpl)
 
-    expected = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            ("_p_", "x"),
-            [
-                (0.08, "a"),
-                (0.30, "c"),
-            ],
-        ),
-        ColumnStr("_p_"),
-    )
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
 
-    assert testing.eq_prov_relations(res, expected)
+    with context:
+        res = solver.solve_succ_query(query, cpl)
+
+        expected = ProvenanceAlgebraSet(
+            NamedRelationalAlgebraFrozenSet(
+                ("_p_", "x"),
+                [
+                    (0.08, "a"),
+                    (0.30, "c"),
+                ],
+            ),
+            ColumnStr("_p_"),
+        )
+
+        assert testing.eq_prov_relations(res, expected)
 

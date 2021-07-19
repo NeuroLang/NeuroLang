@@ -32,8 +32,9 @@ from ..datalog.expression_processing import (
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker
-from ..expressions import Constant, Symbol
+from ..expressions import Constant, Symbol, FunctionApplication
 from ..logic import FALSE, Conjunction, Implication, Negation
+from ..logic.transformations import convert_to_pnf_with_dnf_matrix
 from ..relational_algebra import (
     ColumnStr,
     EliminateTrivialProjections,
@@ -44,9 +45,7 @@ from ..relational_algebra import (
     RelationalAlgebraPushInSelections,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import (
-    ProvenanceAlgebraSet,
-)
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
@@ -57,8 +56,8 @@ from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
-from .shattering import shatter_easy_probfacts
 from .query_resolution import lift_solve_marg_query
+from .shattering import shatter_easy_probfacts
 
 LOG = logging.getLogger(__name__)
 
@@ -168,6 +167,22 @@ def solve_succ_query(query, cpl_program):
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
         shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
+
+        shattered_query_antecedent = convert_to_pnf_with_dnf_matrix(
+            shattered_query.antecedent
+        )
+        if not isinstance(
+            shattered_query_antecedent,
+            (Conjunction, FunctionApplication)
+        ):
+            raise NotHierarchicalQueryException(
+                f"Query {query} not a hierarchical conjunctive query"
+            )
+
+        shattered_query = Implication(
+            shattered_query.consequent,
+            shattered_query_antecedent
+        )
         probabilistic_predicates = \
             _extract_antecedent_probabilistic_predicates(shattered_query)
         shattered_query_probabilistic_body = Conjunction(
