@@ -548,6 +548,10 @@ class RemoveTrivialOperations(LogicExpressionWalker):
     def remove_single(self, expression):
         return self.walk(expression.formulas[0])
 
+    @add_match(Negation(Negation(...)))
+    def remove_double_negation(self, expression):
+        return expression.formula.formula
+
 
 class PushExistentialsDown(LogicExpressionWalker):
     @add_match(ExistentialPredicate(..., Disjunction))

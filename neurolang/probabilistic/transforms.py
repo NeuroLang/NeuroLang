@@ -333,7 +333,7 @@ def unify_existential_variables(query):
     """
     original_query = query
     query = convert_to_pnf_with_dnf_matrix(query)
-    query = RemoveUniversalPredicates().walk(query)
+    query = RTO.walk(RemoveUniversalPredicates().walk(query))
     variables_to_project = extract_logic_free_variables(query)
     while isinstance(query, ExistentialPredicate):
         query = query.body
