@@ -1046,4 +1046,3 @@ def test_nested_negation(solver):
         )
 
         assert testing.eq_prov_relations(res, expected)
-
