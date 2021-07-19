@@ -135,12 +135,13 @@ class EasyQueryShatterer(ExpressionWalker):
 
     @add_match(Shatter(ProbabilisticFactSet, ...))
     def easy_shatter_probfact(self, shatter):
-        non_const_ixs = tuple(
-            i for i, arg in enumerate(shatter.args)
-            if not isinstance(arg, Constant)
-        )
         pred_symb = shatter.functor.relation
-        cache_key = (pred_symb, non_const_ixs)
+        cache_key = (pred_symb,)
+        for i, arg in enumerate(shatter.args):
+            if isinstance(arg, Constant):
+                cache_key += (arg,)
+            else:
+                cache_key += (i,)
         if cache_key in self._cached:
             new_pred_symb = self._cached[cache_key]
         else:
@@ -175,7 +176,9 @@ class EasyQueryShatterer(ExpressionWalker):
         new_tagged = ProbabilisticFactSet(
             new_pred_symb, shatter.functor.probability_column
         )
-        non_const_args = tuple(shatter.args[i] for i in non_const_ixs)
+        non_const_args = tuple(
+            arg for arg in shatter.args if not isinstance(arg, Constant)
+        )
         return FunctionApplication(new_tagged, non_const_args)
 
 
@@ -276,8 +279,9 @@ def shatter_cq(
     tagged_cq = tagger.walk(conjunctive_query)
     shattered_query = shatterer.walk(tagged_cq)
     _check_shatter_fully_solved(shattered_query)
-    shattered_query = Implication(
-        shattered_query.consequent,
-        maybe_deconjunct_single_pred(shattered_query.antecedent)
-    )
+    antecedent = shattered_query.antecedent
+    if isinstance(antecedent, Conjunction):
+        antecedent = Conjunction(tuple(set(antecedent.formulas)))
+        antecedent = maybe_deconjunct_single_pred(antecedent)
+    shattered_query = Implication(shattered_query.consequent, antecedent)
     return shattered_query
