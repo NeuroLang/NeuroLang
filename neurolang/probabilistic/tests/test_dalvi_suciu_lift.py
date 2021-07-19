@@ -651,3 +651,31 @@ def test_lifted_disjunction_cross_product_with_negation():
     res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
 
     assert dalvi_suciu_lift.is_pure_lifted_plan(res)
+
+
+def test_lifted_conjunction_existential_negtaion():
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    query = Conjunction((
+        Negation(
+            ExistentialPredicate(
+                x,
+                Conjunction((
+                    R(x),
+                    S(x, y)),
+                ))
+        ),
+        T(y)
+    ))
+
+    symbol_table = {
+        symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
+        for symbol in (R, S, T)
+    }
+    res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+
+    assert dalvi_suciu_lift.is_pure_lifted_plan(res)

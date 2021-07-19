@@ -121,6 +121,38 @@ class MoveNegationsToAtoms(LogicExpressionWalker):
         return self.walk(negation.formula.formula)
 
 
+class MoveNegationsToAtomsInFOENeg(LogicExpressionWalker):
+    """
+    Moves the negations the furthest possible to the atoms.
+    Assumes that there are no implications in the expression.
+    Expressions assumed to be in FO with existential and negation
+    only.
+    """
+
+    @add_match(Negation(UniversalPredicate(..., ...)))
+    def negated_universal(self, negation):
+        quantifier = negation.formula
+        x = quantifier.head
+        p = self.walk(Negation(quantifier.body))
+        return self.walk(ExistentialPredicate(x, p))
+
+    @add_match(Negation(Conjunction(...)))
+    def negated_conjunction(self, negation):
+        conj = negation.formula
+        formulas = map(lambda e: self.walk(Negation(e)), conj.formulas)
+        return self.walk(Disjunction(tuple(formulas)))
+
+    @add_match(Negation(Disjunction(...)))
+    def negated_disjunction(self, negation):
+        disj = negation.formula
+        formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
+        return self.walk(Conjunction(tuple(formulas)))
+
+    @add_match(Negation(Negation(...)))
+    def negated_negation(self, negation):
+        return self.walk(negation.formula.formula)
+
+
 class MoveQuantifiersUp(LogicExpressionWalker):
     """
     Moves the quantifiers up in order to format the expression

@@ -14,7 +14,7 @@ from ..logic.transformations import (
     DistributeDisjunctions,
     GuaranteeConjunction,
     GuaranteeDisjunction,
-    MoveNegationsToAtoms,
+    MoveNegationsToAtomsInFOENeg,
     PushExistentialsDown,
     RemoveTrivialOperations,
     RemoveUniversalPredicates,
@@ -25,7 +25,7 @@ from .containment import is_contained
 
 GC = GuaranteeConjunction()
 GD = GuaranteeDisjunction()
-MNA = MoveNegationsToAtoms()
+MNA = MoveNegationsToAtomsInFOENeg()
 PED = PushExistentialsDown()
 RTO = RemoveTrivialOperations()
 
@@ -52,7 +52,7 @@ def minimize_ucq_in_cnf(query):
     ))
 
     simplify = ChainedWalker(
-        MoveNegationsToAtoms,
+        MoveNegationsToAtomsInFOENeg,
         PushExistentialsDown,
         RemoveTrivialOperations,
         GuaranteeConjunction,
@@ -85,7 +85,7 @@ def minimize_ucq_in_dnf(query):
     ))
 
     simplify = ChainedWalker(
-        MoveNegationsToAtoms,
+        MoveNegationsToAtomsInFOENeg,
         PushExistentialsDown,
         RemoveTrivialOperations,
         GuaranteeDisjunction
@@ -142,7 +142,7 @@ def convert_to_cnf_ucq(expression):
     expression = RTO.walk(expression)
     expression = Conjunction((expression,))
     c = ChainedWalker(
-        MoveNegationsToAtoms,
+        MoveNegationsToAtomsInFOENeg,
         PushExistentialsDown,
         DistributeDisjunctions,
         CollapseConjunctions,
@@ -168,7 +168,7 @@ def convert_to_dnf_ucq(expression):
     expression = RTO.walk(expression)
     expression = Disjunction((expression,))
     c = ChainedWalker(
-        MoveNegationsToAtoms,
+        MoveNegationsToAtomsInFOENeg,
         PushExistentialsDown,
         DistributeConjunctions,
         CollapseDisjunctions,
