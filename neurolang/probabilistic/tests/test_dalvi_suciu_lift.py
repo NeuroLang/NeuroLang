@@ -1,4 +1,5 @@
 from typing import AbstractSet
+from operator import eq
 
 import pytest
 
@@ -23,6 +24,7 @@ from .. import dalvi_suciu_lift, transforms
 from ..probabilistic_ra_utils import DeterministicFactSet, ProbabilisticFactSet
 
 TNRA = TranslateToNamedRA()
+EQ = Constant(eq)
 
 
 def test_has_separator_variable_existential():
@@ -653,7 +655,7 @@ def test_lifted_disjunction_cross_product_with_negation():
     assert dalvi_suciu_lift.is_pure_lifted_plan(res)
 
 
-def test_lifted_conjunction_existential_negtaion():
+def test_lifted_conjunction_existential_negation():
     R = Symbol('R')
     S = Symbol('S')
     T = Symbol('T')
@@ -666,8 +668,38 @@ def test_lifted_conjunction_existential_negtaion():
                 x,
                 Conjunction((
                     R(x),
-                    S(x, y)),
+                    S(x, y),
                 ))
+            )
+        ),
+        T(y)
+    ))
+
+    symbol_table = {
+        symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
+        for symbol in (R, S, T)
+    }
+    res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+
+    assert dalvi_suciu_lift.is_pure_lifted_plan(res)
+
+
+def test_lifted_conjunction_existential_negation_constant():
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    query = Conjunction((
+        Negation(
+            ExistentialPredicate(
+                x,
+                Conjunction((
+                    R(x),
+                    S(x, y, Constant('2'))
+                ))
+            )
         ),
         T(y)
     ))
