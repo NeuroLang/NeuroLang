@@ -360,24 +360,10 @@ class Expression(metaclass=ExpressionMeta):
         if not isinstance(other, type(self)):
             return False
 
-        for child in self.__children__:
-            val = getattr(self, child)
-            val_other = getattr(other, child)
-
-            if isinstance(val, (list, tuple)):
-                if (
-                    len(val) != len(val_other) or
-                    not all(v == o for v, o in zip(val, val_other))
-                ):
-                    break
-            elif not val == val_other:
-                break
-        else:
-            return True
-        return False
+        return self.unapply() == other.unapply()
 
     def __hash__(self):
-        return hash(tuple(getattr(self, c) for c in self.__children__))
+        return hash(self.unapply())
 
     def __lt__(self, other):
         """
