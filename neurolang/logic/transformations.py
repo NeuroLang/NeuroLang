@@ -1,3 +1,4 @@
+from ..exceptions import NotInFONegE
 from ..expression_walker import (
     ChainedWalker,
     ExpressionWalker,
@@ -121,7 +122,21 @@ class MoveNegationsToAtoms(LogicExpressionWalker):
         return self.walk(negation.formula.formula)
 
 
-class MoveNegationsToAtomsInFOENeg(LogicExpressionWalker):
+class FONegELogicExpression(LogicExpressionWalker):
+    """
+    Walk a logic expression verifying that it is only in
+    FO Neg Existential.
+    """
+    @add_match(UniversalPredicate)
+    def abort_universal_predicate(self, expression):
+        raise NotInFONegE(f"Forumla {expression} not in FO Existental Negation")
+
+    @add_match(Implication)
+    def abort_implication(self, expression):
+        raise NotInFONegE(f"Forumla {expression} not in FO Existental Negation")
+
+
+class MoveNegationsToAtomsInFONegE(FONegELogicExpression):
     """
     Moves the negations the furthest possible to the atoms.
     Assumes that there are no implications in the expression.
@@ -153,25 +168,7 @@ class MoveNegationsToAtomsInFOENeg(LogicExpressionWalker):
         return self.walk(negation.formula.formula)
 
 
-class MoveQuantifiersUp(LogicExpressionWalker):
-    """
-    Moves the quantifiers up in order to format the expression
-    in prenex normal form. Assumes the expression contains no implications
-    and the variables of the quantifiers are not repeated.
-    """
-
-    @add_match(Negation(UniversalPredicate(..., ...)))
-    def negated_universal(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        return self.walk(ExistentialPredicate(x, Negation(quantifier.body)))
-
-    @add_match(Negation(ExistentialPredicate(..., ...)))
-    def negated_existential(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        return self.walk(UniversalPredicate(x, Negation(quantifier.body)))
-
+class FactorQuantifiersMixin(PatternWalker):
     @add_match(
         Disjunction,
         lambda exp: any(isinstance(f, Quantifier) for f in exp.formulas),
@@ -227,6 +224,36 @@ class MoveQuantifiersUp(LogicExpressionWalker):
         for q in reversed(quantifiers):
             exp = q.apply(q.head, exp)
         return self.walk(exp)
+
+
+class MoveQuantifiersUp(FactorQuantifiersMixin, LogicExpressionWalker):
+    """
+    Moves the quantifiers up in order to format the expression
+    in prenex normal form. Assumes the expression contains no implications
+    and the variables of the quantifiers are not repeated.
+    """
+
+    @add_match(Negation(UniversalPredicate(..., ...)))
+    def negated_universal(self, negation):
+        quantifier = negation.formula
+        x = quantifier.head
+        return self.walk(ExistentialPredicate(x, Negation(quantifier.body)))
+
+    @add_match(Negation(ExistentialPredicate(..., ...)))
+    def negated_existential(self, negation):
+        quantifier = negation.formula
+        x = quantifier.head
+        return self.walk(UniversalPredicate(x, Negation(quantifier.body)))
+
+
+class MoveQuantifiersUpFONegE(FactorQuantifiersMixin, FONegELogicExpression):
+    """
+    Moves the quantifiers up in order to format the expression
+    in prenex normal form. Assumes the expression contains no implications,
+    that the variables of the quantifiers are not repeated, and that
+    the query is in FO with Negation Existential as only quantifier.
+    """
+    pass
 
 
 class DesambiguateQuantifiedVariables(LogicExpressionWalker):
