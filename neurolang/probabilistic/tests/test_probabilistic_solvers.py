@@ -994,3 +994,42 @@ def test_dalvi_suciu_fails_unate():
     query = Implication(ans(x), P(x))
     with pytest.raises(NonLiftableException):
         dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+def test_dalvi_suciu_negation():
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [
+            (0.2, 'a', 1, 2),
+            (0.8, 'b', 1, 5),
+            (0.1, 'b', 2, 2),
+        ]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [(0.1, 'a'), (0.3, 'c')]
+    )
+    program = Union((
+        Implication(Z(x, y), Q(x, y, z)),
+    ))
+    query = Implication(ans(x), Conjunction((
+            R(x),
+            Negation(Z(x, Constant(1)))
+        )))
+    cpl.walk(program)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x"),
+            [
+                (0.08, "a"),
+                (0.30, "c"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+
+    assert testing.eq_prov_relations(res, expected)
+

@@ -35,6 +35,7 @@ from ..logic.expression_processing import (
 from ..logic.transformations import (
     MakeExistentialsImplicit,
     RemoveTrivialOperations,
+    convert_to_pnf_with_dnf_matrix,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -169,6 +170,7 @@ def _verify_that_the_query_is_unate(query):
     negative_relational_symbols = set()
 
     query = convert_rule_to_ucq(query)
+    query = convert_to_pnf_with_dnf_matrix(query)
 
     for predicate in extract_logic_predicates(query):
         if isinstance(predicate, Negation):

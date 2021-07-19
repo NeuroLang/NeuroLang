@@ -688,6 +688,7 @@ def test_lifted_conjunction_existential_negation_constant():
     R = Symbol('R')
     S = Symbol('S')
     T = Symbol('T')
+    Q = Symbol('Q')
     x = Symbol('x')
     y = Symbol('y')
 
@@ -701,6 +702,7 @@ def test_lifted_conjunction_existential_negation_constant():
                 ))
             )
         ),
+        Q(x, y),
         T(y)
     ))
 
@@ -708,6 +710,8 @@ def test_lifted_conjunction_existential_negation_constant():
         symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
         for symbol in (R, S, T)
     }
+    symbol_table[Q] = DeterministicFactSet(Symbol.fresh())
+
     res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
 
     assert dalvi_suciu_lift.is_pure_lifted_plan(res)

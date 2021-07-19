@@ -29,6 +29,7 @@ from ..expression_walker import (
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import (
+    ExistentialPredicate,
     FALSE,
     TRUE,
     Conjunction,
@@ -781,6 +782,18 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         else:
             res = new_formulas[0]
         return res
+
+    @add_match(Negation(FunctionApplication))
+    def negation_function_application(self, expression):
+        formula = expression.formula
+        flattened_formula = self.walk(formula)
+        existential_variables = (
+            extract_logic_free_variables(flattened_formula) -
+            extract_logic_free_variables(formula)
+        )
+        for e_var in existential_variables:
+            flattened_formula = ExistentialPredicate(e_var, flattened_formula)
+        return Negation(flattened_formula)
 
     @add_match(Negation)
     def negation(self, expression):
