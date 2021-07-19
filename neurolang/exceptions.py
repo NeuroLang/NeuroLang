@@ -125,6 +125,10 @@ class ForbiddenBuiltinError(ForbiddenExpressionError):
     pass
 
 
+class NotInFONegE(ForbiddenExpressionError):
+    pass
+
+
 class NeuroLangFrontendException(NeuroLangException):
     pass
 
