@@ -129,9 +129,7 @@ class EasyQueryShatterer(ExpressionWalker):
     def __init__(self, symbol_table, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.symbol_table = symbol_table
-        self._cached: Dict[
-            Tuple[Symbol, Tuple[int]], Symbol
-        ] = dict()
+        self._cached = dict()
 
     @add_match(Shatter(ProbabilisticFactSet, ...))
     def easy_shatter_probfact(self, shatter):
