@@ -230,16 +230,8 @@ def shatter_easy_probfacts(query, symbol_table):
     dnf_query_antecedent = convert_to_dnf_ucq(query.antecedent)
     disjuncts = list()
     for disjunct in dnf_query_antecedent.formulas:
-        has_negated_atom = False
         if isinstance(disjunct, Conjunction):
             disjunct = Conjunction(tuple(set((disjunct.formulas))))
-            has_negated_atom |= any(
-                isinstance(atom, Negation) for atom in disjunct.formulas
-            )
-        elif isinstance(disjunct, Negation):
-            has_negated_atom = True
-        if has_negated_atom:
-            return query
         disjuncts.append(disjunct)
     dnf_query_antecedent = Disjunction(tuple(set(disjuncts)))
     if len(dnf_query_antecedent.formulas) == 1:
@@ -247,9 +239,13 @@ def shatter_easy_probfacts(query, symbol_table):
     dnf_query = Implication(query.consequent, dnf_query_antecedent)
     tagged_query = query_to_tagged_set_representation(dnf_query, symbol_table)
     if is_conjunctive_expression(dnf_query.antecedent):
+        if _cq_has_negated_atom(dnf_query):
+            return query
         return shatter_cq(tagged_query, shatterer)
     elif isinstance(dnf_query.antecedent, Disjunction):
         return shatter_ucq(tagged_query, shatterer)
+    elif isinstance(dnf_query.antecedent, Negation):
+        return query
     raise ForbiddenExpressionError(
         "Query should either be conjunctive or disjunctive"
     )
@@ -283,3 +279,11 @@ def shatter_cq(
         antecedent = maybe_deconjunct_single_pred(antecedent)
     shattered_query = Implication(shattered_query.consequent, antecedent)
     return shattered_query
+
+
+def _cq_has_negated_atom(cq: Implication) -> bool:
+    return isinstance(cq.antecedent, Negation) or (
+        isinstance(cq.antecedent, Conjunction) and any(
+            isinstance(f, Negation) for f in cq.antecedent.formulas
+        )
+    )
