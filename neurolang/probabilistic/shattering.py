@@ -5,15 +5,11 @@ from typing import AbstractSet
 
 from ..datalog.expression_processing import (
     enforce_conjunctive_antecedent,
-    extract_logic_predicates,
-    is_conjunctive_expression,
-    maybe_deconjunct_single_pred,
 )
-from ..exceptions import ForbiddenExpressionError
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction, Disjunction, Implication, Negation
+from ..logic import Conjunction, Disjunction, Implication
 from ..logic.transformations import (
     RemoveTrivialOperations,
     RemoveDuplicatedConjunctsDisjuncts,
@@ -251,10 +247,8 @@ def shatter_easy_probfacts(query, symbol_table):
         dnf_query_antecedent
     )
     dnf_query = Implication(query.consequent, dnf_query_antecedent)
-    tagged_set_query = query_to_tagged_set_representation(
-        dnf_query, symbol_table
-    )
+    tagged_query = query_to_tagged_set_representation(dnf_query, symbol_table)
     shatterer = EasyQueryShatterer(symbol_table)
-    shattered = shatterer.walk(tagged_set_query)
+    shattered = shatterer.walk(tagged_query)
     shattered = RemoveTrivialOperations().walk(shattered)
     return shattered
