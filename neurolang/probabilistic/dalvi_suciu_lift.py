@@ -7,8 +7,6 @@ import numpy as np
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
-    enforce_conjunction,
-    extract_logic_predicates,
     flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
@@ -35,7 +33,7 @@ from ..logic.expression_processing import (
 from ..logic.transformations import (
     MakeExistentialsImplicit,
     RemoveTrivialOperations,
-    convert_to_pnf_with_dnf_matrix,
+    GuaranteeConjunction,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -125,7 +123,7 @@ def solve_succ_query(query, cpl_program):
         )
 
     with log_performance(LOG, "Translation and lifted optimisation"):
-        flat_query_body = enforce_conjunction(
+        flat_query_body = GuaranteeConjunction().walk(
             lift_optimization_for_choice_predicates(
                 flat_query_body, cpl_program
             )
