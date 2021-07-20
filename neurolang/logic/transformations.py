@@ -638,7 +638,7 @@ def nary_op_has_duplicated_formulas(nary_op: NaryLogicOperator) -> bool:
     return False
 
 
-class RemoveDuplicatedConjunctsDisjuncts(ExpressionWalker):
+class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
     @add_match(Disjunction, nary_op_has_duplicated_formulas)
     def disjunction(self, disjunction: Disjunction) -> Disjunction:
         return self.walk(self._nary_op_without_duplicates(disjunction))

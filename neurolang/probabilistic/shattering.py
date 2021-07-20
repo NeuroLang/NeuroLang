@@ -3,13 +3,10 @@ import itertools
 import operator
 from typing import AbstractSet
 
-from ..datalog.expression_processing import (
-    enforce_conjunctive_antecedent,
-)
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction, Disjunction, Implication
+from ..logic import Implication
 from ..logic.transformations import (
     RemoveTrivialOperations,
     RemoveDuplicatedConjunctsDisjuncts,
