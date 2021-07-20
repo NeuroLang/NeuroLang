@@ -31,22 +31,18 @@ from ..datalog.expression_processing import (
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker
-from ..expressions import Constant, Symbol
+from ..expressions import Symbol
 from ..logic import FALSE, Conjunction, Implication
 from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import (
     ColumnStr,
     EliminateTrivialProjections,
-    ExtendedProjection,
-    FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     Projection,
     RelationalAlgebraPushInSelections,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
-from ..relational_algebra_provenance import (
-    ProvenanceAlgebraSet,
-)
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
@@ -54,11 +50,14 @@ from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query
+    generate_probabilistic_symbol_table_for_query,
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
+from .query_resolution import (
+    lift_solve_marg_query,
+    reintroduce_unified_head_terms,
+)
 from .shattering import shatter_easy_probfacts
-from .query_resolution import lift_solve_marg_query
 
 LOG = logging.getLogger(__name__)
 
@@ -195,7 +194,7 @@ def solve_succ_query(query, cpl_program):
         # project on query's head variables
         ra_query = _project_on_query_head(ra_query, shattered_query)
         # re-introduce head variables potentially removed by unification
-        ra_query = _maybe_reintroduce_head_variables(
+        ra_query = reintroduce_unified_head_terms(
             ra_query, flat_query, unified_query
         )
         ra_query = RAQueryOptimiser().walk(ra_query)
@@ -216,28 +215,6 @@ def _project_on_query_head(provset, query):
         )
     )
     return Projection(provset, proj_cols)
-
-
-def _maybe_reintroduce_head_variables(ra_query, flat_query, unified_query):
-    proj_list = list()
-    for old, new in zip(
-        flat_query.consequent.args, unified_query.consequent.args
-    ):
-        dst_column = str2columnstr_constant(old.name)
-        fun_exp = dst_column
-        if new != old:
-            if isinstance(new, Symbol):
-                fun_exp = str2columnstr_constant(new.name)
-            elif isinstance(new, Constant):
-                fun_exp = new
-            else:
-                raise ValueError(
-                    f"Unexpected argument {new}. "
-                    "Expected symbol or constant"
-                )
-        member = FunctionApplicationListMember(fun_exp, dst_column)
-        proj_list.append(member)
-    return ExtendedProjection(ra_query, tuple(proj_list))
 
 
 def solve_marg_query(rule, cpl):

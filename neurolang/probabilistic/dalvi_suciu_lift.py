@@ -55,12 +55,12 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query,
 )
+from .query_resolution import reintroduce_unified_head_terms
 from .probabilistic_semiring_solver import ProbSemiringSolver
 from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
 from .small_dichotomy_theorem_based_solver import (
     RAQueryOptimiser,
-    _maybe_reintroduce_head_variables,
     lift_optimization_for_choice_predicates,
 )
 from .transforms import (
@@ -83,13 +83,12 @@ __all__ = [
 RTO = RemoveTrivialOperations()
 
 
-class LiftedQueryProcessingSemiringSolver(
+class LiftedQueryProcessingSolver(
     rap.DisjointProjectMixin,
     rap.WeightedNaturalJoinSolverMixin,
     ProbSemiringSolver,
 ):
     pass
-
 
 
 def solve_succ_query(query, cpl_program):
@@ -154,14 +153,13 @@ def solve_succ_query(query, cpl_program):
                 "Query %s not liftable, algorithm can't be applied",
                 query
             )
-        # re-introduce head variables potentially removed by unification
-        ra_query = _maybe_reintroduce_head_variables(
+        ra_query = reintroduce_unified_head_terms(
             ra_query, flat_query, unified_query
         )
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
-        solver = LiftedQueryProcessingSemiringSolver(symbol_table)
+        solver = LiftedQueryProcessingSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result
