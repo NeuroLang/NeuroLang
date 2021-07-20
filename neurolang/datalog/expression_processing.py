@@ -12,7 +12,6 @@ from typing import Iterable
 import numpy as np
 
 from ..exceptions import (
-    ForbiddenExpressionError,
     RuleNotFoundError,
     SymbolNotFoundError,
     UnsupportedProgramError,
