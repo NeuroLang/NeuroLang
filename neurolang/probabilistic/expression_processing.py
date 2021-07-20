@@ -356,7 +356,7 @@ def lift_optimization_for_choice_predicates(query, program):
             unifier = UnifyVariableEqualities()
             rule = Implication(Symbol.fresh()(tuple()), conj)
             unified_antecedent = unifier.walk(rule).antecedent
-            unified_conj = GuaranteeConjunction.walk(unified_antecedent)
+            unified_conj = GuaranteeConjunction().walk(unified_antecedent)
             new_formulas |= set(unified_conj.formulas)
     new_query = Conjunction(tuple(new_formulas))
     return new_query
