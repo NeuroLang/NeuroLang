@@ -256,7 +256,17 @@ def test_shattering_between_symbol_equalities():
     )
 
 
-def test_shattering_ucq():
+def test_cannot_shatter_dependent_disjuncts():
+    """
+    In this query
+
+    ans(x, y) :- ( P(a, x) ^ Q(x, y) ) v ( P(a, x) ^ P(b, x) ^ Q(y, hello) )
+
+    the two disjuncts are not independent because they have an overlapping
+    ground atom Q(x, hello) with x == y.
+
+    Therefore the shattering should raise a NotEasilyShatterableError
+    """
     cpl = CPLogicProgramWithVarEqUnification()
     cpl.add_probabilistic_facts_from_tuples(
         P,
@@ -286,48 +296,8 @@ def test_shattering_ucq():
         )
     )
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
-    shattered = shatter_easy_probfacts(query, symbol_table)
-    assert isinstance(shattered, Implication)
-    assert isinstance(shattered.antecedent, Disjunction)
-    assert len(shattered.antecedent.formulas) == 2
-    assert any(
-        isinstance(formula, Conjunction)
-        and
-        any(
-            isinstance(f, FunctionApplication)
-            and isinstance(f.functor, ProbabilisticFactSet)
-            and f.args == (x,)
-            for f in formula.formulas
-        )
-        and
-        any(
-            isinstance(f, FunctionApplication)
-            and isinstance(f.functor, ProbabilisticFactSet)
-            and f.args == (x, y)
-            for f in formula.formulas
-        )
-        for formula in shattered.antecedent.formulas
-    )
-    assert any(
-        isinstance(formula, Conjunction)
-        and
-        len([
-            f
-            for f in formula.formulas
-            if
-            isinstance(f, FunctionApplication)
-            and isinstance(f.functor, ProbabilisticFactSet)
-            and f.args == (y,)
-        ]) == 2
-        and
-        any(
-            isinstance(f, FunctionApplication)
-            and isinstance(f.functor, ProbabilisticFactSet)
-            and f.args == (x,)
-            for f in formula.formulas
-        )
-        for formula in shattered.antecedent.formulas
-    )
+    with pytest.raises(NotEasilyShatterableError):
+        shatter_easy_probfacts(query, symbol_table)
 
 
 def test_shattering_negation():

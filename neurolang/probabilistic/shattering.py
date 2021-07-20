@@ -89,78 +89,11 @@ class Shatter(FunctionApplication):
     pass
 
 
-class QueryEasyShatteringTagger(ExpressionWalker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._cached_args = collections.defaultdict(set)
-
-    @add_match(
-        FunctionApplication(ProbabilisticFactSet, ...),
-        lambda fa: not isinstance(fa, Shatter)
-        and any(isinstance(arg, Constant) for arg in fa.args),
-    )
-    def shatter_probfact_predicates(self, function_application):
-        self._check_can_shatter(function_application)
-        self._cached_args[function_application.functor.relation].add(
-            function_application.args
-        )
-        return Shatter(*function_application.unapply())
-
-    @add_match(
-        FunctionApplication(ProbabilisticFactSet, ...),
-        lambda fa: not isinstance(fa, Shatter),
-    )
-    def cache_non_constant_args(self, function_application):
-        self._check_can_shatter(function_application)
-        self._cached_args[function_application.functor.relation].add(
-            function_application.args
-        )
-        return function_application
-
-    def _check_can_shatter(self, function_application):
-        pred_symb = function_application.functor.relation
-        args = function_application.args
-        list_of_tuple_of_terms = list(
-            self._cached_args.get(pred_symb, set()).union({args})
-        )
-        if not is_easily_shatterable_self_join(list_of_tuple_of_terms):
-            raise NotEasilyShatterableError(
-                f"Cannot easily shatter {pred_symb}-predicates"
-            )
-
-
-class EasyQueryShatterer(ExpressionWalker):
-    def __init__(self, symbol_table, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class Shatterer(ExpressionWalker):
+    def __init__(self, symbol_table):
         self.symbol_table = symbol_table
+        self._cached_args = collections.defaultdict(set)
         self._cached = dict()
-
-    @add_match(Implication(..., FunctionApplication))
-    def implication(self, implication):
-        conjunctive_query = enforce_conjunctive_antecedent(implication)
-        return self.walk(conjunctive_query)
-
-    @add_match(Implication(..., Conjunction))
-    def conjunctive_query(self, conjunctive_query):
-        return Implication(
-            conjunctive_query.consequent,
-            self._shatter_conjunction(conjunctive_query.antecedent),
-        )
-
-    @add_match(Implication(..., Disjunction))
-    def disjunctive_query(self, disjunctive_query):
-        disjuncts = list()
-        for conjunctive_query in disjunctive_query.antecedent.formulas:
-            disjuncts.append(self._shatter_conjunction(conjunctive_query))
-        return Implication(
-            disjunctive_query.consequent,
-            Disjunction(tuple(disjuncts)),
-        )
-
-    def _shatter_conjunction(self, conjunction):
-        tagger = QueryEasyShatteringTagger()
-        tagged_conjunction = tagger.walk(conjunction)
-        return self.walk(tagged_conjunction)
 
     @add_match(Shatter(ProbabilisticFactSet, ...))
     def easy_shatter_probfact(self, shatter):
@@ -210,6 +143,40 @@ class EasyQueryShatterer(ExpressionWalker):
         )
         return FunctionApplication(new_tagged, non_const_args)
 
+    @add_match(
+        FunctionApplication(ProbabilisticFactSet, ...),
+        lambda fa: not isinstance(fa, Shatter)
+        and any(isinstance(arg, Constant) for arg in fa.args),
+    )
+    def shatter_probfact_predicates(self, function_application):
+        self._check_can_shatter(function_application)
+        self._cached_args[function_application.functor.relation].add(
+            function_application.args
+        )
+        return self.walk(Shatter(*function_application.unapply()))
+
+    @add_match(
+        FunctionApplication(ProbabilisticFactSet, ...),
+        lambda fa: not isinstance(fa, Shatter),
+    )
+    def cache_non_constant_args(self, function_application):
+        self._check_can_shatter(function_application)
+        self._cached_args[function_application.functor.relation].add(
+            function_application.args
+        )
+        return function_application
+
+    def _check_can_shatter(self, function_application):
+        pred_symb = function_application.functor.relation
+        args = function_application.args
+        list_of_tuple_of_terms = list(
+            self._cached_args.get(pred_symb, set()).union({args})
+        )
+        if not is_easily_shatterable_self_join(list_of_tuple_of_terms):
+            raise NotEasilyShatterableError(
+                f"Cannot easily shatter {pred_symb}-predicates"
+            )
+
 
 def shatter_easy_probfacts(query, symbol_table):
     """
@@ -248,7 +215,7 @@ def shatter_easy_probfacts(query, symbol_table):
     )
     dnf_query = Implication(query.consequent, dnf_query_antecedent)
     tagged_query = query_to_tagged_set_representation(dnf_query, symbol_table)
-    shatterer = EasyQueryShatterer(symbol_table)
+    shatterer = Shatterer(symbol_table)
     shattered = shatterer.walk(tagged_query)
     shattered = RemoveTrivialOperations().walk(shattered)
     return shattered
