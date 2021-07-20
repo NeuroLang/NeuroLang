@@ -39,7 +39,7 @@ from ..logic import (
     Union,
 )
 from ..logic import expression_processing as elp
-from ..logic.transformations import CollapseConjunctions
+from ..logic.transformations import CollapseConjunctions, GuaranteeConjunction
 from ..logic.unification import most_general_unifier
 from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
@@ -503,18 +503,8 @@ def is_ground_predicate(predicate):
     return all(isinstance(arg, Constant) for arg in predicate.args)
 
 
-def enforce_conjunction(expression):
-    if isinstance(expression, Conjunction):
-        return expression
-    elif isinstance(expression, (FunctionApplication, Negation)):
-        return Conjunction((expression,))
-    raise ForbiddenExpressionError(
-        "Cannot conjunct expression of type {}".format(type(expression))
-    )
-
-
 def enforce_conjunctive_antecedent(implication):
-    antecedent = enforce_conjunction(implication.antecedent)
+    antecedent = GuaranteeConjunction().walk(implication.antecedent)
     return implication.apply(implication.consequent, antecedent)
 
 
@@ -565,7 +555,7 @@ class HeadConstantToBodyEquality(PatternWalker):
     )
     def implication_with_constant_term_in_head(self, implication):
         body_formulas = list(
-            enforce_conjunction(implication.antecedent).formulas
+            GuaranteeConjunction().walk(implication.antecedent).formulas
         )
         new_consequent_vars = list()
         for term in implication.consequent.args:
