@@ -329,25 +329,25 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
     else:
         # did not find a CQ with a valid atom, so we cannot apply the rule
         return False, None
-    first = add_existentials_except(disjunct, free_vars)
-    first_plan = dalvi_suciu_lift(first, symbol_table)
-    if isinstance(first_plan, NonLiftable):
+    head = add_existentials_except(disjunct, free_vars)
+    head_plan = dalvi_suciu_lift(head, symbol_table)
+    if isinstance(head_plan, NonLiftable):
         return False, None
-    second = add_existentials_except(
+    tail = add_existentials_except(
         Conjunction(tuple(disjunctive_query.formulas[:1])),
         free_vars,
     )
-    second_plan = dalvi_suciu_lift(second, symbol_table)
-    if isinstance(second_plan, NonLiftable):
+    tail_plan = dalvi_suciu_lift(tail, symbol_table)
+    if isinstance(tail_plan, NonLiftable):
         return False, None
-    third = add_existentials_except(
+    head_and_tail = add_existentials_except(
         Conjunction(disjunctive_query.formulas), free_vars
     )
-    third_plan = dalvi_suciu_lift(third, symbol_table)
-    if isinstance(third_plan, NonLiftable):
+    head_and_tail_plan = dalvi_suciu_lift(head_and_tail, symbol_table)
+    if isinstance(head_and_tail_plan, NonLiftable):
         return False, None
     return True, rap.WeightedNaturalJoin(
-        (first_plan, second_plan, third_plan),
+        (head_plan, tail_plan, head_and_tail_plan),
         (Constant(1), Constant(1), Constant(-1)),
     )
 
