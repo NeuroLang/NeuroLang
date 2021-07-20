@@ -292,7 +292,7 @@ def disjoint_project_dnf(dnf_query, symbol_table):
     applied during the calculation of P(Q1) and P(Q1 ∧ Q').
 
     """
-    free_variables = extract_logic_free_variables(dnf_query)
+    free_vars = extract_logic_free_variables(dnf_query)
     for disjunct in dnf_query.formulas:
         disjunct = MakeExistentialsImplicit().walk(disjunct)
         disjunct = CollapseDisjunctions().walk(disjunct)
@@ -309,21 +309,24 @@ def disjoint_project_dnf(dnf_query, symbol_table):
     else:
         # did not find a CQ with a valid atom, so we cannot apply the rule
         return False, None
-    first = add_existentials_except(disjunct, free_variables)
+    first = add_existentials_except(disjunct, free_vars)
+    first_plan = dalvi_suciu_lift(first, symbol_table)
+    if isinstance(first_plan, NonLiftable):
+        return False, None
     second = add_existentials_except(
-        Conjunction(tuple(f for f in dnf_query.formulas if f != first)),
-        free_variables,
+        Conjunction(tuple(dnf_query.formulas[:1])),
+        free_vars,
     )
-    third = add_existentials_except(
-        Conjunction((first,) + second.formulas),
-        free_variables,
-    )
-    formulas = tuple(
-        dalvi_suciu_lift(f, symbol_table)
-        for f in (first, second, third)
-    )
+    second_plan = dalvi_suciu_lift(second, symbol_table)
+    if isinstance(second_plan, NonLiftable):
+        return False, None
+    third = add_existentials_except(Conjunction(dnf_query.formulas), free_vars)
+    third_plan = dalvi_suciu_lift(third, symbol_table)
+    if isinstance(third_plan, NonLiftable):
+        return False, None
     return True, rap.WeightedNaturalJoin(
-        formulas, (Constant(1), Constant(1), Constant(-1))
+        (first_plan, second_plan, third_plan),
+        (Constant(1), Constant(1), Constant(-1)),
     )
 
 
