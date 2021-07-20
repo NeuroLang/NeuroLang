@@ -627,3 +627,28 @@ class GuaranteeDisjunction(IdentityWalker):
     @add_match(..., lambda e: not isinstance(e, Disjunction))
     def guarantee_conjunction(self, expression):
         return Disjunction((expression,))
+
+
+def nary_op_has_duplicated_formulas(nary_op: NaryLogicOperator) -> bool:
+    seen = set()
+    for formula in nary_op.formulas:
+        if formula in seen:
+            return True
+        seen.add(formula)
+    return False
+
+
+class RemoveDuplicatedConjunctsDisjuncts(ExpressionWalker):
+    @add_match(Disjunction, nary_op_has_duplicated_formulas)
+    def disjunction(self, disjunction: Disjunction) -> Disjunction:
+        return self.walk(self._nary_op_without_duplicates(disjunction))
+
+    @add_match(Conjunction, nary_op_has_duplicated_formulas)
+    def conjunction(self, conjunction: Conjunction) -> Conjunction:
+        return self.walk(self._nary_op_without_duplicates(conjunction))
+
+    @staticmethod
+    def _nary_op_without_duplicates(
+        nary_op: NaryLogicOperator,
+    ) -> NaryLogicOperator:
+        return nary_op.apply(tuple(set(nary_op.formulas)))

@@ -514,12 +514,8 @@ def enforce_conjunction(expression):
 
 
 def enforce_conjunctive_antecedent(implication):
-    return implication.apply(
-        implication.consequent,
-        remove_conjunction_duplicates(
-            enforce_conjunction(implication.antecedent)
-        ),
-    )
+    antecedent = enforce_conjunction(implication.antecedent)
+    return implication.apply(implication.consequent, antecedent)
 
 
 def maybe_deconjunct_single_pred(expression):

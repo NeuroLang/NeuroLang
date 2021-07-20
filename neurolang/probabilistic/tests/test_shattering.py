@@ -330,7 +330,7 @@ def test_shattering_ucq():
     )
 
 
-def test_shattering_ignore_negation():
+def test_shattering_negation():
     query = Implication(ans(x, y), Negation(P(x, y)))
     cpl = CPLogicProgramWithVarEqUnification()
     cpl.add_probabilistic_facts_from_tuples(
@@ -338,7 +338,11 @@ def test_shattering_ignore_negation():
     )
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
-    assert shattered is query
+    assert isinstance(shattered.antecedent, Negation)
+    assert isinstance(
+        shattered.antecedent.formula.functor, ProbabilisticFactSet
+    )
+    assert shattered.antecedent.formula.functor.relation.is_fresh
 
 
 def test_shatter_disjunction_same_shattering_relation():

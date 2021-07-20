@@ -4,6 +4,7 @@ import operator
 from typing import AbstractSet
 
 from ..datalog.expression_processing import (
+    enforce_conjunctive_antecedent,
     extract_logic_predicates,
     is_conjunctive_expression,
     maybe_deconjunct_single_pred,
@@ -11,17 +12,24 @@ from ..datalog.expression_processing import (
 from ..exceptions import ForbiddenExpressionError
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
-from ..expressions import (
-    Constant,
-    FunctionApplication,
-    Symbol,
-)
+from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction, Disjunction, Implication, Negation
+from ..logic.transformations import (
+    RemoveTrivialOperations,
+    RemoveDuplicatedConjunctsDisjuncts,
+)
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 from .transforms import convert_to_dnf_ucq
 
 EQ = Constant(operator.eq)
+
+
+def query_to_tagged_set_representation(query, symbol_table):
+    new_antecedent = ReplaceExpressionWalker(symbol_table).walk(
+        query.antecedent
+    )
+    return query.apply(query.consequent, new_antecedent)
 
 
 def terms_differ_by_constant_term(terms_a, terms_b):
@@ -131,6 +139,33 @@ class EasyQueryShatterer(ExpressionWalker):
         self.symbol_table = symbol_table
         self._cached = dict()
 
+    @add_match(Implication(..., FunctionApplication))
+    def implication(self, implication):
+        conjunctive_query = enforce_conjunctive_antecedent(implication)
+        return self.walk(conjunctive_query)
+
+    @add_match(Implication(..., Conjunction))
+    def conjunctive_query(self, conjunctive_query):
+        return Implication(
+            conjunctive_query.consequent,
+            self._shatter_conjunction(conjunctive_query.antecedent),
+        )
+
+    @add_match(Implication(..., Disjunction))
+    def disjunctive_query(self, disjunctive_query):
+        disjuncts = list()
+        for conjunctive_query in disjunctive_query.antecedent.formulas:
+            disjuncts.append(self._shatter_conjunction(conjunctive_query))
+        return Implication(
+            disjunctive_query.consequent,
+            Disjunction(tuple(disjuncts)),
+        )
+
+    def _shatter_conjunction(self, conjunction):
+        tagger = QueryEasyShatteringTagger()
+        tagged_conjunction = tagger.walk(conjunction)
+        return self.walk(tagged_conjunction)
+
     @add_match(Shatter(ProbabilisticFactSet, ...))
     def easy_shatter_probfact(self, shatter):
         pred_symb = shatter.functor.relation
@@ -180,21 +215,6 @@ class EasyQueryShatterer(ExpressionWalker):
         return FunctionApplication(new_tagged, non_const_args)
 
 
-def query_to_tagged_set_representation(query, symbol_table):
-    new_antecedent = ReplaceExpressionWalker(symbol_table).walk(
-        query.antecedent
-    )
-    return query.apply(query.consequent, new_antecedent)
-
-
-def _check_shatter_fully_solved(shattered_query):
-    if any(
-        isinstance(formula, Shatter)
-        for formula in extract_logic_predicates(shattered_query.antecedent)
-    ):
-        raise NotEasilyShatterableError("Cannot easily shatter query")
-
-
 def shatter_easy_probfacts(query, symbol_table):
     """
     Remove constants occurring in a given query, possibly removing self-joins.
@@ -226,64 +246,15 @@ def shatter_easy_probfacts(query, symbol_table):
         An equivalent conjunctive query without constants.
 
     """
-    shatterer = EasyQueryShatterer(symbol_table)
     dnf_query_antecedent = convert_to_dnf_ucq(query.antecedent)
-    disjuncts = list()
-    for disjunct in dnf_query_antecedent.formulas:
-        if isinstance(disjunct, Conjunction):
-            disjunct = Conjunction(tuple(set((disjunct.formulas))))
-        disjuncts.append(disjunct)
-    dnf_query_antecedent = Disjunction(tuple(set(disjuncts)))
-    if len(dnf_query_antecedent.formulas) == 1:
-        dnf_query_antecedent = dnf_query_antecedent.formulas[0]
+    dnf_query_antecedent = RemoveDuplicatedConjunctsDisjuncts().walk(
+        dnf_query_antecedent
+    )
     dnf_query = Implication(query.consequent, dnf_query_antecedent)
-    tagged_query = query_to_tagged_set_representation(dnf_query, symbol_table)
-    if is_conjunctive_expression(dnf_query.antecedent):
-        if _cq_has_negated_atom(dnf_query):
-            return query
-        return shatter_cq(tagged_query, shatterer)
-    elif isinstance(dnf_query.antecedent, Disjunction):
-        return shatter_ucq(tagged_query, shatterer)
-    elif isinstance(dnf_query.antecedent, Negation):
-        return query
-    raise ForbiddenExpressionError(
-        "Query should either be conjunctive or disjunctive"
+    tagged_set_query = query_to_tagged_set_representation(
+        dnf_query, symbol_table
     )
-
-
-def shatter_ucq(
-    tagged_ucq: Implication,
-    shatterer: EasyQueryShatterer,
-) -> Implication:
-    new_cqs = list()
-    for formula in tagged_ucq.antecedent.formulas:
-        cq = Implication(tagged_ucq.consequent, formula)
-        new_cq = shatter_cq(cq, shatterer)
-        new_cqs.append(new_cq.antecedent)
-    antecedent = Disjunction(tuple(new_cqs))
-    consequent = tagged_ucq.consequent
-    return Implication(consequent, antecedent)
-
-
-def shatter_cq(
-    conjunctive_query: Implication,
-    shatterer: EasyQueryShatterer,
-) -> Implication:
-    tagger = QueryEasyShatteringTagger()
-    tagged_cq = tagger.walk(conjunctive_query)
-    shattered_query = shatterer.walk(tagged_cq)
-    _check_shatter_fully_solved(shattered_query)
-    antecedent = shattered_query.antecedent
-    if isinstance(antecedent, Conjunction):
-        antecedent = Conjunction(tuple(set(antecedent.formulas)))
-        antecedent = maybe_deconjunct_single_pred(antecedent)
-    shattered_query = Implication(shattered_query.consequent, antecedent)
-    return shattered_query
-
-
-def _cq_has_negated_atom(cq: Implication) -> bool:
-    return isinstance(cq.antecedent, Negation) or (
-        isinstance(cq.antecedent, Conjunction) and any(
-            isinstance(f, Negation) for f in cq.antecedent.formulas
-        )
-    )
+    shatterer = EasyQueryShatterer(symbol_table)
+    shattered = shatterer.walk(tagged_set_query)
+    shattered = RemoveTrivialOperations().walk(shattered)
+    return shattered
