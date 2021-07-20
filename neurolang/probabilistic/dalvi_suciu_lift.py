@@ -192,7 +192,7 @@ def dalvi_suciu_lift(rule, symbol_table):
         rule = MakeExistentialsImplicit().walk(rule)
         result = TranslateToNamedRA().walk(rule)
         proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
-        return rap.IndependentProjection(result, proj_cols)
+        return rap.Projection(result, proj_cols)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
     connected_components = symbol_connected_components(rule_cnf)
