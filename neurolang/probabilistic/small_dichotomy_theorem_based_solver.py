@@ -31,9 +31,12 @@ from ..datalog.expression_processing import (
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker
-from ..expressions import Constant, Symbol
-from ..logic import FALSE, Conjunction, Implication
-from ..logic.transformations import GuaranteeConjunction
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..logic import FALSE, Conjunction, Implication, Negation
+from ..logic.transformations import (
+    GuaranteeConjunction,
+    convert_to_pnf_with_dnf_matrix
+)
 from ..relational_algebra import (
     ColumnStr,
     EliminateTrivialProjections,

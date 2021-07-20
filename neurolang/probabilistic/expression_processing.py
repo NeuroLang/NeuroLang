@@ -9,6 +9,7 @@ from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     conjunct_formulas,
     extract_logic_atoms,
+    extract_logic_predicates,
     reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
