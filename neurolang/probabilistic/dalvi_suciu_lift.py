@@ -34,6 +34,7 @@ from ..logic.transformations import (
     CollapseDisjunctions,
     MakeExistentialsImplicit,
     RemoveTrivialOperations,
+    GuaranteeConjunction,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -241,7 +242,7 @@ def disjoint_project_cnf(cnf_query, symbol_table):
     free_variables = extract_logic_free_variables(cnf_query)
     query = MakeExistentialsImplicit().walk(cnf_query)
     query = CollapseConjunctions().walk(query)
-    query = enforce_conjunction(query)
+    query = GuaranteeConjunction().walk(query)
     atoms_with_constants_in_all_key_positions = set(
         atom
         for atom in query.formulas
@@ -297,7 +298,7 @@ def disjoint_project_dnf(dnf_query, symbol_table):
     for disjunct in dnf_query.formulas:
         disjunct = MakeExistentialsImplicit().walk(disjunct)
         disjunct = CollapseDisjunctions().walk(disjunct)
-        disjunct = enforce_conjunction(disjunct)
+        disjunct = GuaranteeConjunction().walk(disjunct)
         atoms_with_constants_in_all_key_positions = set(
             atom
             for atom in disjunct.formulas
