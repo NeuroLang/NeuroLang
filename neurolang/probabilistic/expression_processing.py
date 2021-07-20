@@ -8,14 +8,13 @@ from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
     conjunct_formulas,
-    enforce_conjunction,
-    extract_logic_predicates,
     extract_logic_atoms,
     reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
+from ..logic.transformations import GuaranteeConjunction
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -356,7 +355,8 @@ def lift_optimization_for_choice_predicates(query, program):
             conj = conjunct_formulas(Conjunction(tuple(preds)), eq_conj)
             unifier = UnifyVariableEqualities()
             rule = Implication(Symbol.fresh()(tuple()), conj)
-            unified_conj = enforce_conjunction(unifier.walk(rule).antecedent)
+            unified_antecedent = unifier.walk(rule).antecedent
+            unified_conj = GuaranteeConjunction().walk(unified_antecedent)
             new_formulas |= set(unified_conj.formulas)
     new_query = Conjunction(tuple(new_formulas))
     return new_query

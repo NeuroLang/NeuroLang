@@ -7,8 +7,6 @@ import numpy as np
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
-    enforce_conjunction,
-    extract_logic_predicates,
     flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA

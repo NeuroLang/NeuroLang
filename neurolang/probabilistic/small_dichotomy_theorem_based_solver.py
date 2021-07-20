@@ -25,7 +25,6 @@ from collections import defaultdict
 from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
-    enforce_conjunction,
     extract_logic_atoms,
     flatten_query,
     remove_conjunction_duplicates,
@@ -34,6 +33,7 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, Symbol
 from ..logic import FALSE, Conjunction, Implication
+from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import (
     ColumnStr,
     EliminateTrivialProjections,
@@ -160,7 +160,7 @@ def solve_succ_query(query, cpl_program):
         flat_query_body = remove_conjunction_duplicates(flat_query_body)
 
     with log_performance(LOG, "Translation and lifted optimisation"):
-        flat_query_body = enforce_conjunction(
+        flat_query_body = GuaranteeConjunction().walk(
             lift_optimization_for_choice_predicates(
                 flat_query_body, cpl_program
             )
