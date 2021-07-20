@@ -220,12 +220,32 @@ def dalvi_suciu_lift(rule, symbol_table):
 
 
 def disjoint_project(rule_dnf, symbol_table):
+    """
+    Rule that extends the lifted query processing algorithm to handle
+    Block-Independent Disjoint (BID) tables which encode mutual exclusivity
+    assumptions on top of the tuple-independent assumption of probabilistic
+    tables.
+
+    Modifications to the lifted query processing algorithm that are necessary
+    to extend it to BID tables are detailed in section 4.3.1 of [1]_.
+
+    Two variants of the rule exist: one for conjunctive queries, and one for
+    disjunctive queries.
+
+    [1] Suciu, Dan, Dan Olteanu, Christopher Ré, and Christoph Koch, eds.
+    Probabilistic Databases. Synthesis Lectures on Data Management 16. San
+    Rafael, Calif.: Morgan & Claypool Publ, 2011.
+
+    """
     if len(rule_dnf.formulas) == 1:
-        return disjoint_project_cnf(rule_dnf.formulas[0], symbol_table)
-    return disjoint_project_dnf(rule_dnf, symbol_table)
+        conjunctive_query = rule_dnf.formulas[0]
+        return disjoint_project_conjunctive_query(
+            conjunctive_query, symbol_table
+        )
+    return disjoint_project_disjunctive_query(rule_dnf, symbol_table)
 
 
-def disjoint_project_cnf(cnf_query, symbol_table):
+def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
     """
     First variant of the disjoint project on a CQ in CNF.
 
@@ -237,8 +257,8 @@ def disjoint_project_cnf(cnf_query, symbol_table):
     all probabilistic choice variables.
 
     """
-    free_variables = extract_logic_free_variables(cnf_query)
-    query = MakeExistentialsImplicit().walk(cnf_query)
+    free_variables = extract_logic_free_variables(conjunctive_query)
+    query = MakeExistentialsImplicit().walk(conjunctive_query)
     query = CollapseConjunctions().walk(query)
     query = GuaranteeConjunction().walk(query)
     atoms_with_constants_in_all_key_positions = set(
@@ -267,10 +287,10 @@ def disjoint_project_cnf(cnf_query, symbol_table):
             symbol_table[atom.functor].relation,
             symbol_table[atom.functor].probability_column,
         )
-    cnf_query = add_existentials_except(
+    conjunctive_query = add_existentials_except(
         query, free_variables | nonkey_variables
     )
-    plan = dalvi_suciu_lift(cnf_query, symbol_table)
+    plan = dalvi_suciu_lift(conjunctive_query, symbol_table)
     attributes = tuple(
         str2columnstr_constant(v.name)
         for v in free_variables
@@ -279,7 +299,7 @@ def disjoint_project_cnf(cnf_query, symbol_table):
     return True, plan
 
 
-def disjoint_project_dnf(dnf_query, symbol_table):
+def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
     """
     Second variant of the disjoint project on a UCQ in DNF.
 
@@ -292,8 +312,8 @@ def disjoint_project_dnf(dnf_query, symbol_table):
     applied during the calculation of P(Q1) and P(Q1 ∧ Q').
 
     """
-    free_vars = extract_logic_free_variables(dnf_query)
-    for disjunct in dnf_query.formulas:
+    free_vars = extract_logic_free_variables(disjunctive_query)
+    for disjunct in disjunctive_query.formulas:
         disjunct = MakeExistentialsImplicit().walk(disjunct)
         disjunct = CollapseDisjunctions().walk(disjunct)
         disjunct = GuaranteeConjunction().walk(disjunct)
@@ -314,13 +334,15 @@ def disjoint_project_dnf(dnf_query, symbol_table):
     if isinstance(first_plan, NonLiftable):
         return False, None
     second = add_existentials_except(
-        Conjunction(tuple(dnf_query.formulas[:1])),
+        Conjunction(tuple(disjunctive_query.formulas[:1])),
         free_vars,
     )
     second_plan = dalvi_suciu_lift(second, symbol_table)
     if isinstance(second_plan, NonLiftable):
         return False, None
-    third = add_existentials_except(Conjunction(dnf_query.formulas), free_vars)
+    third = add_existentials_except(
+        Conjunction(disjunctive_query.formulas), free_vars
+    )
     third_plan = dalvi_suciu_lift(third, symbol_table)
     if isinstance(third_plan, NonLiftable):
         return False, None
