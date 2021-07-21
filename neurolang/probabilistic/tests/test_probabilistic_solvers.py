@@ -179,6 +179,23 @@ def test_bernoulli_conjunction(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_probfact_existential():
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        P, {(0.7, 1, 2), (0.9, 1, 3), (0.88, 2, 4)}
+    )
+    query = Implication(ans(x), P(x, y))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            ((1 - (1 - 0.7) * (1 - 0.9)), 1),
+            (0.88, 2),
+        ],
+        ("_p_", "x"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
 def test_multi_level_conjunction(solver):
     """
     We consider the program

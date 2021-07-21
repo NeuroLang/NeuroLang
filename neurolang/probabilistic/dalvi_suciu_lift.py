@@ -181,8 +181,9 @@ def dalvi_suciu_lift(rule, symbol_table):
     if isinstance(rule, Implication):
         rule = convert_rule_to_ucq(rule)
     rule = RTO.walk(rule)
-    if (
-        isinstance(rule, FunctionApplication) or
+    if isinstance(rule, FunctionApplication):
+        return TranslateToNamedRA().walk(rule)
+    elif (
         all(
             is_atom_a_deterministic_relation(atom, symbol_table)
             for atom in extract_logic_atoms(rule)
