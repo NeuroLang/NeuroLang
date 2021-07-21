@@ -34,6 +34,7 @@ from .relational_algebra import (
     RenameColumn,
     RenameColumns,
     Selection,
+    UnaryRelationalAlgebraOperation,
     Union,
     eq_,
     str2columnstr_constant
@@ -90,6 +91,15 @@ def is_provenance_operation(operation):
     return False
 
 
+class BuildProvenanceAlgebraSet(UnaryRelationalAlgebraOperation):
+    def __init__(self, relation, provenance_column):
+        self.relation = relation
+        self.provenance_column = provenance_column
+
+    def __repr__(self):
+        return (f"RAP[{self.relation}, {self.provenance_column}")
+
+
 class NaturalJoinInverse(NaturalJoin):
     def __repr__(self):
         return (
@@ -109,6 +119,35 @@ class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
             "\N{Greek Capital Letter Sigma}"
             f"_{self.weights}({self.relations})"
         )
+
+
+class BuildProvenanceAlgebraSetMixin(PatternWalker):
+    """
+    Mixin to build Provnance Algebra Sets from 
+    the `BuildProvenanceAlgebraSet` operation.
+    """
+
+    @add_match(BuildProvenanceAlgebraSet(Constant, Constant))
+    def build_provenance_algebra_set(self, expression):
+        res = ProvenanceAlgebraSet(
+            expression.relation.value,
+            expression.provenance_column.value
+        )
+        return self.walk(res)
+
+    @add_match(BuildProvenanceAlgebraSet)
+    def cycle_in_build_provenance_algebra_set(self, expression):
+        relation = self.walk(expression.relation)
+        provenance_column = self.walk(expression.provenance_column)
+        if (
+            (relation is not expression.relation) or
+            (provenance_column is not expression.provenance_column)
+        ):
+            return self.walk(
+                BuildProvenanceAlgebraSet(relation, provenance_column)
+            )
+        else:
+            return expression
 
 
 class ProvenanceExtendedProjectionMixin(PatternWalker):
@@ -147,18 +186,20 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
                 fun_exp=new_prov_col, dst_column=new_prov_col
             ),
         )
-        return ProvenanceAlgebraSet(
+        return BuildProvenanceAlgebraSet(
             self.walk(
                 ExtendedProjection(
                     Constant[AbstractSet](relation.value), new_proj_list,
                 )
-            ).value,
-            new_prov_col.value,
+            ),
+            new_prov_col,
         )
 
 
 class RelationalAlgebraProvenanceCountingSolver(
     ProvenanceExtendedProjectionMixin,
+    BuildProvenanceAlgebraSetMixin,
+    RelationalAlgebraSolver,
     ExpressionWalker,
 ):
     """
@@ -178,62 +219,17 @@ class RelationalAlgebraProvenanceCountingSolver(
         return RelationalAlgebraSolver(self.symbol_table).walk(operation)
 
     @add_match(
-        Selection(
-            ...,
-            FunctionApplication(
-                eq_, (Constant[ColumnInt], Constant[ColumnInt])
-            ),
-        )
+        Selection(BuildProvenanceAlgebraSet, ...)
     )
     def selection_between_column_int(self, selection):
-        relation = self.walk(selection.relation)
-        columns = relation.non_provenance_columns
-        lhs_col = str2columnstr_constant(
-            columns[selection.formula.args[0].value]
+        res = BuildProvenanceAlgebraSet(
+            Selection(
+                selection.relation.relation,
+                selection.formula
+            ),
+            selection.relation.provenance_column
         )
-        rhs_col = str2columnstr_constant(
-            columns[selection.formula.args[1].value]
-        )
-        new_formula = Constant(operator.eq)(lhs_col, rhs_col)
-        new_selection = Selection(relation, new_formula)
-        return self.walk(new_selection)
-
-    @add_match(
-        Selection(
-            ...,
-            FunctionApplication(eq_, (Constant[Column], Constant[Column])),
-        )
-    )
-    def selection_between_columns(self, selection):
-        relation = self.walk(selection.relation)
-        if any(
-            col == relation.provenance_column for col in selection.formula.args
-        ):
-            raise RelationalAlgebraError("Cannot select on provenance column")
-        return ProvenanceAlgebraSet(
-            self.walk(
-                Selection(
-                    Constant[AbstractSet](relation.value), selection.formula
-                )
-            ).value,
-            relation.provenance_column,
-        )
-
-    @add_match(
-        Selection(..., FunctionApplication(eq_, (Constant[Column], Constant)),)
-    )
-    def selection_by_constant(self, selection):
-        relation = self.walk(selection.relation)
-        if selection.formula.args[0] == relation.provenance_column:
-            raise RelationalAlgebraError("Cannot select on provenance column")
-        return ProvenanceAlgebraSet(
-            self.walk(
-                Selection(
-                    Constant[AbstractSet](relation.value), selection.formula
-                )
-            ).value,
-            relation.provenance_column,
-        )
+        return self.walk(res)
 
     @add_match(Product)
     def prov_product(self, product):
@@ -265,11 +261,16 @@ class RelationalAlgebraProvenanceCountingSolver(
         relation = ConcatenateConstantColumn(
             relation, concat_op.column_name, concat_op.column_value,
         )
-        return ProvenanceAlgebraSet(self.walk(relation).value, new_prov_col)
+        return self.walk(
+            BuildProvenanceAlgebraSet(
+                relation,
+                str2columnstr_constant(new_prov_col)
+            )
+        )
 
-    @add_match(Projection)
+    @add_match(Projection(BuildProvenanceAlgebraSet, ...))
     def prov_projection(self, projection):
-        prov_set = self.walk(projection.relation)
+        prov_set = projection.relation
         prov_col = prov_set.provenance_column
         group_columns = projection.attributes
 
@@ -290,7 +291,9 @@ class RelationalAlgebraProvenanceCountingSolver(
             group_columns,
             aggregate_functions,
         )
-        return ProvenanceAlgebraSet(self.walk(operation).value, prov_col)
+        return self.walk(
+            BuildProvenanceAlgebraSet(operation, prov_col)
+        )
 
     @add_match(EquiJoin(ProvenanceAlgebraSet, ..., ProvenanceAlgebraSet, ...))
     def prov_equijoin(self, equijoin):
