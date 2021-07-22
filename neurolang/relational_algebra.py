@@ -304,6 +304,12 @@ class ExtendedProjection(RelationalAlgebraOperation):
         self.relation = relation
         self.projection_list = tuple(projection_list)
 
+    def columns(self):
+        return set().union(*(
+            projection.columns()
+            for projection in self.projection_list
+        ))
+
     def __repr__(self):
         join_str = "," if len(self.projection_list) < 2 else ",\n"
         return "π_[{}]({})".format(
@@ -365,6 +371,9 @@ class FunctionApplicationListMember(Definition):
     def __init__(self, fun_exp, dst_column):
         self.fun_exp = fun_exp
         self.dst_column = dst_column
+
+    def columns(self):
+        return {self.dst_column}
 
     def __repr__(self):
         return "{} -> {}".format(self.fun_exp, self.dst_column)

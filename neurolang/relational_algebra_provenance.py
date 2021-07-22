@@ -82,7 +82,10 @@ def is_provenance_operation(operation):
     stack = list(operation.unapply())
     while stack:
         stack_element = stack.pop()
-        if isinstance(stack_element, ProvenanceAlgebraSet):
+        if isinstance(
+            stack_element,
+            (ProvenanceAlgebraSet, BuildProvenanceAlgebraSet)
+        ):
             return True
         if isinstance(stack_element, tuple):
             stack += list(stack_element)
@@ -199,7 +202,6 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
 class RelationalAlgebraProvenanceCountingSolver(
     ProvenanceExtendedProjectionMixin,
     BuildProvenanceAlgebraSetMixin,
-    RelationalAlgebraSolver,
     ExpressionWalker,
 ):
     """
@@ -414,33 +416,31 @@ class RelationalAlgebraProvenanceCountingSolver(
     def _apply_provenance_join_operation(
         self, left, right, np_op, prov_binary_op
     ):
-        left = self.walk(left)
-        right = self.walk(right)
-        res_columns = set(left.value.columns) | (
-            set(right.value.columns) - {right.provenance_column}
+        res_columns = set(left.columns()) | (
+            set(right.columns()) - {right.provenance_column}
         )
-        res_columns = tuple(str2columnstr_constant(col) for col in res_columns)
-        res_prov_col = str2columnstr_constant(left.provenance_column)
+        res_columns = tuple(col for col in res_columns)
+        res_prov_col = left.provenance_column
         # provenance columns are temporarily renamed for executing the
         # non-provenance operation on the relations
         tmp_left_col = Constant[ColumnStr](
-            ColumnStr(f"{left.provenance_column}1"),
+            ColumnStr(f"{left.provenance_column.value}1"),
             verify_type=False,
             auto_infer_type=False,
         )
         tmp_right_col = Constant[ColumnStr](
-            ColumnStr(f"{right.provenance_column}2"),
+            ColumnStr(f"{right.provenance_column.value}2"),
             verify_type=False,
             auto_infer_type=False,
         )
         tmp_left = RenameColumn(
-            Constant[AbstractSet](left.value),
-            str2columnstr_constant(left.provenance_column),
+            left.relation,
+            left.provenance_column,
             tmp_left_col,
         )
         tmp_right = RenameColumn(
-            Constant[AbstractSet](right.value),
-            str2columnstr_constant(right.provenance_column),
+            right.relation,
+            right.provenance_column,
             tmp_right_col,
         )
         tmp_np_op_args = (tmp_left, tmp_right)
@@ -465,9 +465,9 @@ class RelationalAlgebraProvenanceCountingSolver(
                 for col in set(res_columns) - {res_prov_col}
             ),
         )
-        return ProvenanceAlgebraSet(
-            self.walk(result).value, res_prov_col.value
-        )
+        return self.walk(BuildProvenanceAlgebraSet(
+            result, res_prov_col
+        ))
 
     @add_match(WeightedNaturalJoin)
     def prov_weighted_join(self, join_op):
@@ -578,18 +578,18 @@ class RelationalAlgebraProvenanceCountingSolver(
 class RelationalAlgebraProvenanceExpressionSemringSolver(
     RelationalAlgebraSolver
 ):
-    @add_match(NaturalJoin(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
+    @add_match(NaturalJoin(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
     def natural_join_rap(self, expression):
         rap_left = expression.relation_left
         rap_right = expression.relation_right
-        rap_right_r = self._build_relation_constant(rap_right.relations)
+        rap_right_r = rap_right.relations
         rap_right_pc = str2columnstr_constant(rap_right.provenance_column)
 
         cols_to_keep = [
             FunctionApplicationListMember(
                 str2columnstr_constant(c), str2columnstr_constant(c)
             )
-            for c in (rap_left.relations.columns + rap_right.relations.columns)
+            for c in (rap_left.columns + rap_right.columns)
             if c not in (
                 rap_left.provenance_column,
                 rap_right.provenance_column,
@@ -599,7 +599,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             rap_right_pc = str2columnstr_constant(Symbol.fresh().name)
             rap_right_r = RenameColumn(
                 rap_right_r,
-                str2columnstr_constant(rap_right.provenance_column),
+                rap_right.provenance_column,
                 rap_right_pc
             )
         new_pc = str2columnstr_constant(Symbol.fresh().name)
@@ -620,9 +620,11 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         )
 
         with sure_is_not_pattern():
-            res = ProvenanceAlgebraSet(
-                self.walk(operation).value,
-                new_pc.value
+            res = self.walk(
+                BuildProvenanceAlgebraSet(
+                    operation,
+                    new_pc
+                )
             )
         return res
 

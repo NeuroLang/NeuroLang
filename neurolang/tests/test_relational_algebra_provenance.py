@@ -10,6 +10,7 @@ from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
+    NameColumns,
     NaturalJoin,
     Product,
     RenameColumn,
@@ -19,6 +20,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
+    BuildProvenanceAlgebraSet,
     ConcatenateConstantColumn,
     ExtendedProjection,
     FunctionApplicationListMember,
@@ -99,18 +101,31 @@ def test_provenance_rename(R1, provenance_set_r1):
     assert "__provenance__" not in sol.columns
 
 
+def bpas_from_nas(nas, provenance_column):
+    uas = nas.to_unnamed()
+    res = NameColumns(
+        C_[AbstractSet](uas),
+        tuple(str2columnstr_constant(c) for c in nas.columns)
+    )
+
+    return BuildProvenanceAlgebraSet(
+        res,
+        str2columnstr_constant(provenance_column)
+    )
+
+
+
 def test_naturaljoin():
     RA1 = NamedRelationalAlgebraFrozenSet(
         columns=("col1", "__provenance__"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = ProvenanceAlgebraSet(RA1, ColumnStr("__provenance__"))
-
+    pset_r1 = bpas_from_nas(RA1, "__provenance__")
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("col1", "colA", "__provenance__"),
         iterable=[(i % 5, i * 3, i) for i in range(20)],
     )
-    pset_r2 = ProvenanceAlgebraSet(RA2, ColumnStr("__provenance__"))
+    pset_r2 = bpas_from_nas(RA2, "__provenance__")
 
     s = NaturalJoin(pset_r1, pset_r2)
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
