@@ -318,14 +318,12 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
         disjunct = MakeExistentialsImplicit().walk(disjunct)
         disjunct = CollapseDisjunctions().walk(disjunct)
         disjunct = GuaranteeConjunction().walk(disjunct)
-        atoms_with_constants_in_all_key_positions = set(
-            atom
-            for atom in disjunct.formulas
-            if is_probabilistic_atom_with_constants_in_all_key_positions(
+        if any(
+            is_probabilistic_atom_with_constants_in_all_key_positions(
                 atom, symbol_table
             )
-        )
-        if atoms_with_constants_in_all_key_positions:
+            for atom in disjunct.formulas
+        ):
             break
     else:
         # did not find a CQ with a valid atom, so we cannot apply the rule
