@@ -49,7 +49,7 @@ def minimize_ucq_in_cnf(query):
     ))
 
     simplify = ChainedWalker(
-        PushExistentialsDown,
+        # PushExistentialsDown,
         RemoveTrivialOperations,
         GuaranteeConjunction,
     )
@@ -81,7 +81,7 @@ def minimize_ucq_in_dnf(query):
     ))
 
     simplify = ChainedWalker(
-        PushExistentialsDown,
+        # PushExistentialsDown,
         RemoveTrivialOperations,
         GuaranteeDisjunction
     )
@@ -116,7 +116,7 @@ def convert_rule_to_ucq(implication):
     )
     for a in existential_vars:
         antecedent = ExistentialPredicate(a, antecedent)
-    return RTO.walk(PED.walk(antecedent))
+    return RTO.walk(antecedent)
 
 
 def convert_to_cnf_ucq(expression):
@@ -136,7 +136,7 @@ def convert_to_cnf_ucq(expression):
     expression = RTO.walk(expression)
     expression = Conjunction((expression,))
     c = ChainedWalker(
-        PushExistentialsDown,
+        # PushExistentialsDown,
         DistributeDisjunctions,
         CollapseConjunctions,
         CollapseDisjunctions,
@@ -161,7 +161,7 @@ def convert_to_dnf_ucq(expression):
     expression = RTO.walk(expression)
     expression = Disjunction((expression,))
     c = ChainedWalker(
-        PushExistentialsDown,
+        # PushExistentialsDown,
         DistributeConjunctions,
         CollapseDisjunctions,
         CollapseConjunctions,

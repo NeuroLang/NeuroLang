@@ -953,3 +953,31 @@ def test_simple_boolean_query(solver):
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0,)], ("_p_",))
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_disjunctive_query_with_probchoice():
+    pchoice_as_sets = {
+        Q: {(0.6, 1), (0.4, 2)},
+        A: {(0.7, 1), (0.2, 2), (0.1, 3)},
+    }
+    pfact_as_sets = {
+        P: {(0.9, 3), (0.8, 2)},
+        R: {(0.4, 1), (0.1, 2)},
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_as_set in pfact_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_as_set
+        )
+    code = Union((
+        Implication(Z(x), Conjunction((P(x), Q(x), A(y)))),
+        Implication(Z(x), Conjunction((R(x), Q(x)))),
+    ))
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x))
+    dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    # not testing the result as this relies on the disjoint project implem
