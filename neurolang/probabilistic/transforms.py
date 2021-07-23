@@ -1,10 +1,17 @@
 from functools import reduce
 
+from ..datalog.expression_processing import flatten_query
+from ..datalog.negation import DatalogProgramNegation
 from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
+from ..expressions import Symbol
 from ..logic import Conjunction, Disjunction, ExistentialPredicate
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables
+)
+from ..logic.horn_clauses import (
+    NeuroLangTranslateToHornClauseException,
+    fol_query_to_datalog_program
 )
 from ..logic.transformations import (
     CollapseConjunctions,
@@ -21,10 +28,28 @@ from ..logic.transformations import (
 from ..logic.unification import compose_substitutions, most_general_unifier
 from .containment import is_contained
 
+CC = CollapseConjunctions()
 GC = GuaranteeConjunction()
 GD = GuaranteeDisjunction()
 PED = PushExistentialsDown()
 RTO = RemoveTrivialOperations()
+
+
+def convert_to_union_cnf(query):
+    free_vars = extract_logic_free_variables(query)
+    try:
+        datalog_program = fol_query_to_datalog_program(
+            Symbol.fresh()(*free_vars),
+            query
+        )
+    except NeuroLangTranslateToHornClauseException:
+        return False, None
+    dpn = DatalogProgramNegation()
+    dpn.walk(datalog_program.expressions)
+    ans_query = datalog_program.expressions[-1].consequent
+    res = flatten_query(ans_query, dpn)
+    res = GD.walk(CC.walk(PED.walk(add_existentials_except(res, free_vars))))
+    return True, minimize_component_disjunction(res)
 
 
 def minimize_ucq_in_cnf(query):
@@ -49,7 +74,7 @@ def minimize_ucq_in_cnf(query):
     ))
 
     simplify = ChainedWalker(
-        # PushExistentialsDown,
+        PushExistentialsDown,
         RemoveTrivialOperations,
         GuaranteeConjunction,
     )
@@ -81,7 +106,7 @@ def minimize_ucq_in_dnf(query):
     ))
 
     simplify = ChainedWalker(
-        # PushExistentialsDown,
+        PushExistentialsDown,
         RemoveTrivialOperations,
         GuaranteeDisjunction
     )
@@ -136,7 +161,7 @@ def convert_to_cnf_ucq(expression):
     expression = RTO.walk(expression)
     expression = Conjunction((expression,))
     c = ChainedWalker(
-        # PushExistentialsDown,
+        PushExistentialsDown,
         DistributeDisjunctions,
         CollapseConjunctions,
         CollapseDisjunctions,
@@ -161,7 +186,7 @@ def convert_to_dnf_ucq(expression):
     expression = RTO.walk(expression)
     expression = Disjunction((expression,))
     c = ChainedWalker(
-        # PushExistentialsDown,
+        PushExistentialsDown,
         DistributeConjunctions,
         CollapseDisjunctions,
         CollapseConjunctions,

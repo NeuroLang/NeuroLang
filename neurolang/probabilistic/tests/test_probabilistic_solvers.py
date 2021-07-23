@@ -975,7 +975,7 @@ def test_disjunctive_query_with_probchoice():
         )
     code = Union((
         Implication(Z(x), Conjunction((P(x), Q(x), A(y)))),
-        Implication(Z(x), Conjunction((R(x), Q(x)))),
+        Implication(Z(x), Conjunction((R(x),))),
     ))
     cpl_program.walk(code)
     query = Implication(ans(x), Z(x))

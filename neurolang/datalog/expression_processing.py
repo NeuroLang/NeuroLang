@@ -586,16 +586,16 @@ class HeadRepeatedVariableToBodyEquality(PatternWalker):
 
     @add_match(
         Implication(FunctionApplication, ...),
-        lambda implication: max(
-            collections.Counter(
+        lambda implication: (
+            len(implication.consequent.args) > 0 and
+            max(collections.Counter(
                 (
                     arg
                     for arg in implication.consequent.args
                     if isinstance(arg, Symbol)
                 )
-            ).values()
+            ).values()) > 1
         )
-        > 1,
     )
     def implication_with_repeated_variable_in_head(self, implication):
         seen_args = set()

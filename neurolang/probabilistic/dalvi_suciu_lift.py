@@ -24,6 +24,7 @@ from ..logic import (
     ExistentialPredicate,
     Implication,
     NaryLogicOperator,
+    horn_clauses
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
@@ -33,6 +34,7 @@ from ..logic.transformations import (
     MakeExistentialsImplicit,
     RemoveTrivialOperations,
     GuaranteeConjunction,
+    convert_to_pnf_with_cnf_matrix,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -62,6 +64,8 @@ from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
 from .transforms import (
     convert_rule_to_ucq,
+    convert_to_dnf_ucq,
+    convert_to_union_cnf,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables,
@@ -197,16 +201,19 @@ def dalvi_suciu_lift(rule, symbol_table):
             connected_components, rap.NaturalJoin, symbol_table
         )
     elif len(rule_cnf.formulas) > 1:
-        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
+        return inclusion_exclusion_plan(rule_cnf, symbol_table)
 
+    converted, rule_dnf = convert_to_union_cnf(rule)
+    if converted:
+        rule_dnf = convert_to_dnf_ucq(rule_dnf)
+        connected_components = symbol_connected_components(rule_dnf)
+        if len(connected_components) > 1:
+            return components_plan(connected_components, rap.Union, symbol_table)
+    
     rule_dnf = minimize_ucq_in_dnf(rule)
-    connected_components = symbol_connected_components(rule_dnf)
-    if len(connected_components) > 1:
-        return components_plan(connected_components, rap.Union, symbol_table)
-    else:
-        has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
-        if has_svs:
-            return plan
+    has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
+    if has_svs:
+        return plan
 
     return NonLiftable(rule)
 
@@ -505,13 +512,13 @@ def components_plan(components, operation, symbol_table):
     return reduce(operation, formulas[1:], formulas[0])
 
 
-def inclusion_exclusion_conjunction(expression, symbol_table):
+def inclusion_exclusion_plan(expression, symbol_table):
     """Produce a RAP query plan for the conjunction logic query
     based on the inclusion exclusion formula.
 
     Parameters
     ----------
-    expression : Conjunction
+    expression : Conjunction or Disjunction
         logic expression to produce a plan for.
     symbol_table : mapping of symbol to probabilistic table.
         mapping used to figure out specific strategies according to
@@ -523,13 +530,18 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
         plan for the logic expression.
     """
     formula_powerset = []
+    if isinstance(expression, Conjunction):
+        inclusion_op = Disjunction
+    elif isinstance(expression, Disjunction):
+        inclusion_op = Conjunction
+
     for formula in powerset(expression.formulas):
         if len(formula) == 0:
             continue
         elif len(formula) == 1:
             formula_powerset.append(formula[0])
         else:
-            formula_powerset.append(Disjunction(tuple(formula)))
+            formula_powerset.append(inclusion_op(tuple(formula)))
     formulas_weights = _formulas_weights(formula_powerset)
     new_formulas, weights = zip(*(
         (dalvi_suciu_lift(formula, symbol_table), weight)
