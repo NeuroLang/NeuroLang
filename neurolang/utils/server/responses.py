@@ -22,12 +22,16 @@ class QueryResults:
         self,
         uuid: str,
         future: Future,
-        page: int = 0,
-        limit: int = 50,
         symbol: str = None,
+        start: int = 0,
+        length: int = 50,
+        sort: int = -1,
+        asc: bool = True
     ):
-        self.page = page
-        self.limit = limit
+        self.start = start
+        self.length = length
+        self.sort = sort
+        self.asc = asc
         # First, set the uuid and status of the future
         self.uuid = uuid
         self.cancelled = future.cancelled()
@@ -92,7 +96,7 @@ class QueryResults:
     ) -> List[List]:
         """
         Return the rows of the dataframe corresponding to the requested slice
-        (as specified by page and limit values) in a json compatible form.
+        (as specified by start, length & sort values) in a json compatible form.
 
         Parameters
         ----------
@@ -106,7 +110,9 @@ class QueryResults:
         List[List]
             the values.
         """
-        rows = df.iloc[self.page * self.limit : (self.page + 1) * self.limit]
+        if self.sort > -1:
+            df = df.sort_values(by=[df.columns[self.sort]], ascending=self.asc)
+        rows = df.iloc[self.start: self.start + self.length]
         for col, col_type in zip(rows.columns, row_type.__args__):
             if col_type == ExplicitVBR or col_type == ExplicitVBROverlay:
                 # TODO: handle regions

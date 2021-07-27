@@ -327,8 +327,10 @@ class StatusHandler(JSONRequestHandler):
     Return the status (or the result) of an already running calculation.
     Optional query parameters are :
         * symbol : return only the values for this symbol
-        * page : pagination start page
-        * limit : number of rows to return
+        * start : index of the first row to return
+        * length : number of rows to return
+        * sort : the index of the column to sort by
+        * asc : sort by ascending (true) or descending (false)
     """
 
     async def get(self, uuid: str):
@@ -340,10 +342,12 @@ class StatusHandler(JSONRequestHandler):
                 status_code=404, log_message="uuid not found"
             )
         symbol = self.get_argument("symbol", None)
-        page = int(self.get_argument("page", 0))
-        limit = int(self.get_argument("limit", 50))
+        start = int(self.get_argument("start", 0))
+        length = int(self.get_argument("length", 50))
+        sort = int(self.get_argument("sort", -1))
+        asc = bool(int(self.get_argument("asc", 1)))
         return self.write_json_reponse(
-            QueryResults(uuid, future, page, limit, symbol)
+            QueryResults(uuid, future, symbol, start, length, sort, asc)
         )
 
 
