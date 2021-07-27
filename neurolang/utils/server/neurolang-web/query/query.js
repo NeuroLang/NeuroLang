@@ -38,7 +38,7 @@ function submitQuery () {
         setAlert('An error occured while submitting your query.')
       }
     }).fail(function () {
-      setAlert('An error occured while submitting your query.')
+      setAlert('An error occured while submitting your query.', true)
     }).always(function () {
       runQueryBtn.disable = false
     })

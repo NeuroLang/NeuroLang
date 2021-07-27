@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" type="text/css" href="/deps/papaya.css?build=1453" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Neurolang Web Application</title>
 </head>
@@ -59,7 +60,13 @@ ActivationGivenTerm(i, j, k, PROB(i, j, k)) :- Activation(i, j, k) // TermAssoci
     </div>
   </div>
 
+  <!-- <div class="container">
+    <div class='papaya' data-params='params'></div>
+  </div> -->
+
   <script type="module" src="/main.js"></script>
+  <!-- papaya is vendored as it is not packaged for npm -->
+  <script type="text/javascript" src="/deps/papaya.js?build=1453"></script>
 </body>
 
 </html>
