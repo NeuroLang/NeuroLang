@@ -1,6 +1,7 @@
 from abc import abstractproperty, abstractstaticmethod
 from contextlib import contextmanager
 from multiprocessing import BoundedSemaphore
+from neurolang.frontend.neurosynth_utils import StudyID
 from pathlib import Path
 from typing import Iterable, Union
 
@@ -132,6 +133,7 @@ def load_neurosynth_data(nl):
     )
 
     activations = pd.read_csv(ns_database_fn, sep="\t")
+    activations["id"] = activations["id"].apply(StudyID)
     mni_peaks = activations.loc[activations.space == "MNI"][
         ["x", "y", "z", "id"]
     ].rename(columns={"id": "study_id"})
@@ -188,6 +190,7 @@ def load_neurosynth_data(nl):
         id_vars="study_id",
         value_name="tfidf",
     ).query("tfidf > 1e-3")[["term", "tfidf", "study_id"]]
+    term_data["study_id"] = term_data["study_id"].apply(StudyID)
 
     nl.add_tuple_set(peak_data, name="PeakReported")
     nl.add_tuple_set(study_ids, name="Study")

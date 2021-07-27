@@ -1,5 +1,6 @@
 from concurrent.futures import Future
 import json
+from neurolang.type_system import get_args
 
 import numpy as np
 import pandas as pd
@@ -86,7 +87,7 @@ class QueryResults:
         self, ras: NamedRelationalAlgebraFrozenSet, df
     ) -> Dict:
         result = {}
-        result["row_type"] = str(ras.row_type)
+        result["row_type"] = [str(t) for t in get_args(ras.row_type)]
         result["columns"] = list(ras.columns)
         result["size"] = df.shape[0]
         return result

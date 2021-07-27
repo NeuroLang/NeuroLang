@@ -76,9 +76,7 @@ def test_query_results_has_results(future, result, data):
 
     qr = QueryResults(str(uuid4()), future)
     assert qr.results is not None
-    assert qr.results["ans"]["row_type"] == str(
-        Tuple[float, str, AbstractSet[Unknown]]
-    )
+    assert qr.results["ans"]["row_type"] == [str(t) for t in (float, str, AbstractSet[Unknown])]
     assert qr.results["ans"]["columns"] == ["a", "b", "c"]
     assert qr.results["ans"]["size"] == 3
     assert qr.results["ans"]["values"] == [[a, b, str(c)] for a, b, c in data]
@@ -140,7 +138,7 @@ def test_query_results_can_serialize_to_json(future, result, data):
         "results": {
             "ans": {
                 "columns": ["a", "b", "c"],
-                "row_type": str(Tuple[float, str, AbstractSet[Unknown]]),
+                "row_type": [str(t) for t in (float, str, AbstractSet[Unknown])],
                 "size": 3,
                 "values": [[a, b, str(c)] for a, b, c in data],
             }

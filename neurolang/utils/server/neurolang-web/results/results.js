@@ -45,7 +45,15 @@ function setActiveResultTab (evt, data, symbol) {
   // initialize table with new data
   const queryId = data.uuid
   const tab = data.results[symbol]
-  const cols = tab.columns.map(col => ({ title: col }))
+  const cols = tab.columns.map((col, idx) => {
+    const ret = {
+      title: col
+    }
+    if (tab.row_type[idx] === "<class 'neurolang.frontend.neurosynth_utils.StudyID'>") {
+      ret.render = renderPMID
+    }
+    return ret
+  })
   tabTable.DataTable({
     processing: true,
     serverSide: true,
@@ -88,4 +96,19 @@ function getAjaxTableData (data, callback, settings, queryId, symbol) {
     }
     callback(tableData)
   })
+}
+
+/**
+ * Custom renderer for PMID values.
+ * Displays PMIDs as links.
+ * @param {*} data
+ * @param {*} type
+ */
+function renderPMID (data, type) {
+  if (type === 'display') {
+    // when datatables is trying to display the value, return a link tag
+    return `<a class="nl-pmid-link" href="https://www.ncbi.nlm.nih.gov/pubmed/?term=${data}" target="_blank">PubMed:${data}</a>`
+  }
+  // otherwise return the raw data (for ordering)
+  return data
 }
