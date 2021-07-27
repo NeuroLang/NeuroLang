@@ -1,0 +1,13 @@
+.nl-results-container {
+    display: none;
+}
+
+.nl-results-container .nl-results-tabs .nav-link:not(.active) {
+    cursor: pointer;
+}
+
+.nl-results-container .tab-content {
+    padding: 1em;
+    border: 1px solid #dee2e6;
+    border-top: none;
+}

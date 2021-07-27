@@ -1,0 +1,19 @@
+{
+  "name": "neurolang-web",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^2.4.3"
+  },
+  "dependencies": {
+    "bootstrap": "^5.0.2",
+    "codemirror": "^5.62.2",
+    "datatables.net-bs5": "^1.10.25",
+    "datatables.net-dt": "^1.1.0",
+    "jquery": "^3.6.0"
+  }
+}
