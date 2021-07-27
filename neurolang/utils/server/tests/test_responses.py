@@ -89,22 +89,34 @@ def test_query_results_can_paginate(future, result, data):
     future.exception.return_value = None
     future.result.return_value = result
 
-    qr = QueryResults(str(uuid4()), future, page=0, limit=1)
+    qr = QueryResults(str(uuid4()), future, start=0, length=1)
     assert qr.results is not None
     assert qr.results["ans"]["values"] == [
         [a, b, str(c)] for a, b, c in data[0:1]
     ]
 
-    qr = QueryResults(str(uuid4()), future, page=1, limit=1)
+    qr = QueryResults(str(uuid4()), future, start=1, length=2)
     assert qr.results is not None
     assert qr.results["ans"]["values"] == [
-        [a, b, str(c)] for a, b, c in data[1:2]
+        [a, b, str(c)] for a, b, c in data[1:3]
     ]
 
-    qr = QueryResults(str(uuid4()), future, page=1, limit=2)
+    qr = QueryResults(str(uuid4()), future, start=2, length=2)
     assert qr.results is not None
     assert qr.results["ans"]["values"] == [
         [a, b, str(c)] for a, b, c in data[2:]
+    ]
+
+
+def test_query_results_can_sort(future, result, data):
+    future.done.return_value = True
+    future.exception.return_value = None
+    future.result.return_value = result
+
+    qr = QueryResults(str(uuid4()), future, start=0, length=2, sort=1)
+    assert qr.results is not None
+    assert qr.results["ans"]["values"] == [
+        [a, b, str(c)] for a, b, c in data[1::-1]
     ]
 
 
@@ -121,8 +133,10 @@ def test_query_results_can_serialize_to_json(future, result, data):
         "cancelled": False,
         "running": True,
         "done": True,
-        "page": 0,
-        "limit": 50,
+        "start": 0,
+        "length": 50,
+        "asc": True,
+        "sort": -1,
         "results": {
             "ans": {
                 "columns": ["a", "b", "c"],
