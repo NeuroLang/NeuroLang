@@ -1,7 +1,10 @@
 import operator
+
 import pytest
 
+from ..config import config
 from ..expressions import Constant
+from ..expression_walker import ChainedWalker, ExpressionWalker
 from ..probabilistic.cplogic import testing
 from ..probabilistic.cplogic.testing import eq_prov_relations
 from ..relational_algebra import (
@@ -14,23 +17,47 @@ from ..relational_algebra import (
     RenameColumn,
     Selection,
     Union,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceExpressionSemringSolver,
+    RelationalAlgebraProvenanceExpressionSemringSolverMixin,
+    BuildProvenanceAlgebraSetMixin,
+    BuildConstantProvenanceAlgebraSetMixin,
+    RelationalAlgebraSolver
 )
-from ..config import config
+from .test_relational_algebra_provenance import bpas_from_nas
 
 EQ = Constant(operator.eq)
 
 
+class RelationalAlgebraProvenanceExpressionSemring(
+    BuildProvenanceAlgebraSetMixin,
+    RelationalAlgebraProvenanceExpressionSemringSolverMixin,
+    ExpressionWalker
+):
+    pass
+
+
+class RAP2ProvSet(
+    BuildConstantProvenanceAlgebraSetMixin,
+    RelationalAlgebraSolver,
+):
+    pass
+
+
+RelationalAlgebraProvenanceExpressionSemringSolver = lambda: ChainedWalker(
+    RelationalAlgebraProvenanceExpressionSemring(),
+    RAP2ProvSet()
+)
+
+
 def test_integer_addition_semiring():
-    r1 = ProvenanceAlgebraSet(
+    r1 = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(2, "a"), (3, "b")]),
         ColumnStr("_p_"),
     )
-    r2 = ProvenanceAlgebraSet(
+    r2 = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(5, "a"), (10, "c")]),
         ColumnStr("_p_"),
     )
@@ -57,14 +84,14 @@ class SetType(frozenset):
     reason="multiplication of sets not yet implemented in dask backend",
 )
 def test_set_type_semiring():
-    r1 = ProvenanceAlgebraSet(
+    r1 = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"),
             [(SetType({"a", "b"}), "hello"), (SetType({"c", "a"}), "bonjour")],
         ),
         ColumnStr("_p_"),
     )
-    r2 = ProvenanceAlgebraSet(
+    r2 = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"),
             [(SetType({"c"}), "hello"), (SetType({"c", "a"}), "zoo")],
@@ -104,7 +131,7 @@ class StringTestType:
     reason="multiplication of strings not yet implemented in dask backend",
 )
 def test_string_semiring():
-    r1 = ProvenanceAlgebraSet(
+    r1 = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "word"),
             [
@@ -115,7 +142,7 @@ def test_string_semiring():
         ),
         ColumnStr("_p_"),
     )
-    r2 = ProvenanceAlgebraSet(
+    r2 = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "word"),
             [(StringTestType("he"), "my"), (StringTestType("the"), "name")],
@@ -139,7 +166,7 @@ def test_string_semiring():
 
 
 def test_multiple_columns():
-    r = ProvenanceAlgebraSet(
+    r = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
@@ -159,7 +186,7 @@ def test_multiple_columns():
 
 
 def test_renaming():
-    r = ProvenanceAlgebraSet(
+    r = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
@@ -182,7 +209,7 @@ def test_renaming():
 
 
 def test_selection():
-    r = ProvenanceAlgebraSet(
+    r = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
@@ -204,11 +231,11 @@ def test_selection():
 
 
 def test_union():
-    r1 = ProvenanceAlgebraSet(
+    r1 = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(("_p1_", "x"), [(2, "a"), (3, "b")]),
         ColumnStr("_p1_"),
     )
-    r2 = ProvenanceAlgebraSet(
+    r2 = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(("_p2_", "x"), [(5, "b"), (10, "c")]),
         ColumnStr("_p2_"),
     )
@@ -225,7 +252,7 @@ def test_union():
 
 
 def test_selection_by_columnint():
-    r = ProvenanceAlgebraSet(
+    r = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"), [(0.2, "a", "b"), (0.5, "b", "a")]
         ),
@@ -251,7 +278,7 @@ def test_selection_by_columnint():
 
 
 def test_projection_columnint():
-    r = ProvenanceAlgebraSet(
+    r = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"), [(0.2, "a", "b"), (0.5, "b", "a")]
         ),
@@ -270,7 +297,7 @@ def test_projection_columnint():
     op = Projection(r, (Constant(ColumnInt(0)), Constant(ColumnInt(1))))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    assert testing.eq_prov_relations(result, r)
+    assert testing.eq_prov_relations(result, solver.walk(r))
     op = Projection(r, (Constant(ColumnInt(1)), Constant(ColumnInt(0))))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
@@ -284,7 +311,7 @@ def test_projection_columnint():
 
 
 def test_selection_between_columnints():
-    r = ProvenanceAlgebraSet(
+    r = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y"),
             iterable=[
@@ -314,7 +341,7 @@ def test_selection_between_columnints():
 
 
 def test_difference():
-    r_left = ProvenanceAlgebraSet(
+    r_left = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p1_", "x", "y", "w"),
             iterable=[
@@ -326,7 +353,7 @@ def test_difference():
         ColumnStr("_p1_"),
     )
 
-    r_right = ProvenanceAlgebraSet(
+    r_right = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p2_", "x", "y", "z"),
             iterable=[
@@ -356,7 +383,7 @@ def test_difference():
 
 
 def test_difference_same_provenance_column():
-    r_left = ProvenanceAlgebraSet(
+    r_left = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y", "w"),
             iterable=[
@@ -368,7 +395,7 @@ def test_difference_same_provenance_column():
         ColumnStr("_p_"),
     )
 
-    r_right = ProvenanceAlgebraSet(
+    r_right = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y", "z"),
             iterable=[

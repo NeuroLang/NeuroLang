@@ -50,7 +50,7 @@ def str2columnstr_constant(name):
 
 
 def get_expression_columns(expression):
-    columns = set()
+    columns = OrderedSet()
     args = list(expression.unapply())
     while args:
         arg = args.pop()
