@@ -697,8 +697,8 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
                     (projection.relation.provenance_column,)
                 ),
                 projection.relation.provenance_column
-            )
-        ,)
+            ),
+        )
         operation = GroupByAggregation(
             projection.relation.relation,
             projection.attributes,
