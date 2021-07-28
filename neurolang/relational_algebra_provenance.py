@@ -44,6 +44,7 @@ from .relational_algebra import (
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
 SUB = Constant(operator.sub)
+SUM = Constant(sum)
 
 
 class ProvenanceAlgebraSet(Constant):
@@ -413,7 +414,7 @@ class RelationalAlgebraProvenanceCountingSolver(
         aggregate_functions = [
             FunctionApplicationListMember(
                 FunctionApplication(
-                    Constant(sum),
+                    SUM,
                     (prov_col,),
                     validate_arguments=False,
                     verify_type=False,
@@ -716,7 +717,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
 
     def _semiring_agg_sum(self, args):
         return FunctionApplication(
-            Constant(sum), args, validate_arguments=False, verify_type=False
+            SUM, args, validate_arguments=False, verify_type=False
         )
 
     @add_match(Difference(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
