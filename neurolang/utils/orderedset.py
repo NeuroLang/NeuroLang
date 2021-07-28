@@ -24,6 +24,16 @@ class OrderedSet(MutableSet, Sequence):
             self._set.discard(value)
             self._list.remove(value)
 
+    def replace(self, src, dst):
+        src_ix = self._list.index(src)
+        self._list = [
+            self._list[:src_ix] +
+            [dst] +
+            self._list[src_ix + 1:]
+        ]
+        self._set.discard(src)
+        self._set.add(dst)
+
     def __contains__(self, value):
         return value in self._set
 

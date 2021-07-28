@@ -1,12 +1,11 @@
 import math
 import operator
-from typing import AbstractSet, Tuple, Callable
+from typing import AbstractSet, Callable, Tuple
 
 import numpy
 import pandas.core.computation.ops
 
-from . import expression_walker as ew
-from . import type_system
+from . import expression_walker as ew, type_system
 from .exceptions import NeuroLangException, ProjectionOverMissingColumnsError
 from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
@@ -16,13 +15,17 @@ from .expressions import (
     FunctionApplication,
     Symbol,
     Unknown,
-    sure_is_not_pattern,
+    sure_is_not_pattern
 )
-from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
+from .utils import (
+    NamedRelationalAlgebraFrozenSet,
+    OrderedSet,
+    RelationalAlgebraSet
+)
 from .utils.relational_algebra_set import (
     RelationalAlgebraColumnInt,
     RelationalAlgebraColumnStr,
-    RelationalAlgebraStringExpression,
+    RelationalAlgebraStringExpression
 )
 
 eq_ = Constant(operator.eq)
@@ -98,6 +101,9 @@ class Projection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
+
+    def columns(self):
+        return OrderedSet(self.attributes)
 
     def __repr__(self):
         return (
@@ -197,6 +203,9 @@ class NameColumns(UnaryRelationalAlgebraOperation):
         self.relation = relation
         self.column_names = column_names
 
+    def columns(self):
+        return OrderedSet(self.column_names)
+
     def __repr__(self):
         return (
             f"\N{GREEK SMALL LETTER DELTA}"
@@ -209,6 +218,11 @@ class RenameColumn(UnaryRelationalAlgebraOperation):
         self.relation = relation
         self.src = src
         self.dst = dst
+
+    def columns(self):
+        return self.relation.columns().replace(
+            self.src, self.dst
+        )
 
     def __repr__(self):
         return (
@@ -234,6 +248,12 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, renames):
         self.relation = relation
         self.renames = renames
+
+    def columns(self):
+        columns = self.relation.columns()
+        for rename in self.renames:
+            columns.replace(rename[0], rename[1])
+        return columns
 
     def __repr__(self):
         return (
@@ -267,6 +287,15 @@ class GroupByAggregation(RelationalAlgebraOperation):
         self.relation = relation
         self.groupby = groupby
         self.aggregate_functions = aggregate_functions
+
+    def columns(self):
+        return (
+            OrderedSet(self.groupby) |
+            OrderedSet([
+                aggregate.dst_column
+                for aggregate in self.aggregate_functions
+            ])
+        )
 
     def __repr__(self):
         join_str = "," if len(self.aggregate_functions) < 2 else ",\n"
@@ -305,10 +334,10 @@ class ExtendedProjection(RelationalAlgebraOperation):
         self.projection_list = tuple(projection_list)
 
     def columns(self):
-        return set().union(*(
-            projection.columns()
-            for projection in self.projection_list
-        ))
+        return OrderedSet([
+            projection.dst_column for projection in
+            self.projection_list
+        ])
 
     def __repr__(self):
         join_str = "," if len(self.projection_list) < 2 else ",\n"
@@ -371,9 +400,6 @@ class FunctionApplicationListMember(Definition):
     def __init__(self, fun_exp, dst_column):
         self.fun_exp = fun_exp
         self.dst_column = dst_column
-
-    def columns(self):
-        return {self.dst_column}
 
     def __repr__(self):
         return "{} -> {}".format(self.fun_exp, self.dst_column)
