@@ -47,8 +47,7 @@ from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
-    RelationalAlgebraProvenanceExpressionSemringSolver,
-    ProvenanceExtendedProjectionMixin,
+    RelationalAlgebraProvenanceExpressionSemringSolver
 )
 from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet
@@ -160,7 +159,6 @@ class SemiRingRAPToSDD(PatternWalker):
 
 
 class WMCSemiRingSolver(
-    ProvenanceExtendedProjectionMixin,
     RelationalAlgebraProvenanceExpressionSemringSolver,
 ):
     def __init__(self, *args, **kwargs):
@@ -323,7 +321,6 @@ class WMCSemiRingSolver(
 
 
 class SDDWMCSemiRingSolver(
-    ProvenanceExtendedProjectionMixin,
     RelationalAlgebraProvenanceExpressionSemringSolver,
 ):
     def __init__(self, *args, **kwargs):

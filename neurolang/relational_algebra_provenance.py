@@ -17,7 +17,6 @@ from .expressions import (
 from .relational_algebra import (
     Column,
     ColumnInt,
-    ColumnStr,
     ConcatenateConstantColumn,
     Difference,
     EquiJoin,
@@ -372,8 +371,9 @@ class ProvenanceSetOperationsMixin(PatternWalker):
 
 class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
     ProvenanceSelectionMixin,
+    ProvenanceExtendedProjectionMixin,
     ProvenanceColumnManipulationMixin,
-    ProvenanceSetOperationsMixin
+    ProvenanceSetOperationsMixin,
 ):
     @add_match(NaturalJoin(
         BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet
@@ -564,10 +564,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
 class RelationalAlgebraProvenanceCountingSolver(
     BuildProvenanceAlgebraSetMixin,
     BuildConstantProvenanceAlgebraSetMixin,
-    ProvenanceSelectionMixin,
-    ProvenanceColumnManipulationMixin,
-    ProvenanceExtendedProjectionMixin,
-    ProvenanceSetOperationsMixin,
+    RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     RelationalAlgebraSolver,
 ):
     """
@@ -579,90 +576,9 @@ class RelationalAlgebraProvenanceCountingSolver(
     def __init__(self, symbol_table=None):
         self.symbol_table = symbol_table
 
-    @add_match(Projection(BuildProvenanceAlgebraSet, ...))
-    def prov_projection(self, projection):
-        prov_set = projection.relation
-        prov_col = prov_set.provenance_column
-        group_columns = projection.attributes
-
-        # aggregate the provenance column grouped by the projection columns
-        aggregate_functions = [
-            FunctionApplicationListMember(
-                FunctionApplication(
-                    SUM,
-                    (prov_col,),
-                    validate_arguments=False,
-                    verify_type=False,
-                ),
-                prov_col,
-            )
-        ]
-        operation = GroupByAggregation(
-            prov_set.relation,
-            group_columns,
-            aggregate_functions,
-        )
-        return self.walk(
-            BuildProvenanceAlgebraSet(operation, prov_col)
-        )
-
     @add_match(EquiJoin(ProvenanceAlgebraSet, ..., ProvenanceAlgebraSet, ...))
     def prov_equijoin(self, equijoin):
         raise NotImplementedError("EquiJoin is not implemented.")
-
-    @add_match(Difference(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
-    def prov_difference(self, diff):
-        left = diff.relation_left
-        right = diff.relation_right
-
-        res_columns = left.columns()
-        res_columns.symmetric_difference(right.columns())
-
-        res_columns = tuple(res_columns)
-        res_prov_col = left.provenance_column
-        tmp_left_prov_col = str2columnstr_constant(
-            f"{left.provenance_column.value}1"
-        )
-        tmp_right_prov_col = str2columnstr_constant(
-            f"{right.provenance_column.value}2"
-        )
-        tmp_left = RenameColumn(
-            left,
-            left.provenance_column,
-            tmp_left_prov_col,
-        )
-        tmp_right = RenameColumn(
-            right,
-            right.provenance_column,
-            tmp_right_prov_col,
-        )
-        tmp_np_op_args = (tmp_left, tmp_right)
-        tmp_non_prov_result = LeftNaturalJoin(*tmp_np_op_args)
-
-        isnan = Constant(lambda x: 0 if math.isnan(x) else x)
-
-        result = ExtendedProjection(
-            tmp_non_prov_result,
-            (
-                FunctionApplicationListMember(
-                    fun_exp=MUL(
-                        tmp_left_prov_col,
-                        SUB(
-                            Constant(1),
-                            isnan(tmp_right_prov_col)
-                        )
-                    ),
-                    dst_column=res_prov_col,
-                ),
-            )
-            + tuple(
-                FunctionApplicationListMember(fun_exp=col, dst_column=col)
-                for col in set(res_columns) - {res_prov_col}
-            ),
-        )
-        return self.walk(
-            BuildProvenanceAlgebraSet(result, res_prov_col)
-        )
 
     @add_match(NaturalJoinInverse)
     def prov_naturaljoin_inverse(self, naturaljoin):
@@ -672,7 +588,6 @@ class RelationalAlgebraProvenanceCountingSolver(
             NaturalJoin,
             Constant(operator.truediv),
         ))
-
 
     @add_match(WeightedNaturalJoin)
     def prov_weighted_join(self, join_op):
