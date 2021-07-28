@@ -3,14 +3,14 @@ import operator
 from typing import AbstractSet
 
 from .exceptions import (
+    NeuroLangException,
     RelationalAlgebraError,
     RelationalAlgebraNotImplementedError
 )
-from .expression_walker import ExpressionWalker, PatternWalker, add_match
+from .expression_walker import PatternWalker, add_match
 from .expressions import (
     Constant,
     FunctionApplication,
-    NonConstant,
     Symbol,
     sure_is_not_pattern
 )
@@ -19,7 +19,6 @@ from .relational_algebra import (
     ColumnInt,
     ConcatenateConstantColumn,
     Difference,
-    EquiJoin,
     ExtendedProjection,
     FunctionApplicationListMember,
     GroupByAggregation,
@@ -39,6 +38,8 @@ from .relational_algebra import (
     eq_,
     str2columnstr_constant
 )
+from .utils import OrderedSet
+
 
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
@@ -102,7 +103,11 @@ class BuildProvenanceAlgebraSet(UnaryRelationalAlgebraOperation):
 
     @property
     def non_provenance_columns(self):
-        return self.relation.columns() - {self.provenance_column}
+        if isinstance(self.relation, Constant):
+            columns = OrderedSet(self.relation.value.columns)
+        else:
+            columns = self.relation.columns()
+        return columns - {self.provenance_column}
 
     def __repr__(self):
         return (f"RAP[{self.relation}, {self.provenance_column}")
@@ -304,6 +309,13 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
     @add_match(ExtendedProjection(BuildProvenanceAlgebraSet, ...))
     def prov_extended_projection(self, extended_proj):
         relation = extended_proj.relation
+        equality_columns = {
+            c.dst_column for c in extended_proj.projection_list
+            if c.fun_exp == c.dst_column
+        }
+        if equality_columns != relation.non_provenance_columns:
+            raise NeuroLangException("Invalid provenance ExtendedProjection")
+
         if any(
             proj_list_member.dst_column == relation.provenance_column
             for proj_list_member in extended_proj.projection_list
@@ -575,10 +587,6 @@ class RelationalAlgebraProvenanceCountingSolver(
 
     def __init__(self, symbol_table=None):
         self.symbol_table = symbol_table
-
-    @add_match(EquiJoin(ProvenanceAlgebraSet, ..., ProvenanceAlgebraSet, ...))
-    def prov_equijoin(self, equijoin):
-        raise NotImplementedError("EquiJoin is not implemented.")
 
     @add_match(NaturalJoinInverse)
     def prov_naturaljoin_inverse(self, naturaljoin):
