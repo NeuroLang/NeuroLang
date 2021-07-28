@@ -1,18 +1,21 @@
+import gzip
 import json
 import logging
-from neurolang.utils.relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet,
-)
 import os.path
 from concurrent.futures import Future, ThreadPoolExecutor
-from threading import get_ident, RLock
+from io import BytesIO
+from threading import RLock, get_ident
 from typing import Dict
 from uuid import uuid4
 
+import nibabel
 import tornado.ioloop
 import tornado.options
 import tornado.web
 import tornado.websocket
+from neurolang.utils.relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+)
 from neurolang.utils.server.engines import (
     NeurolangEngineConfiguration,
     NeurolangEngineSet,
@@ -21,6 +24,7 @@ from neurolang.utils.server.engines import (
 from neurolang.utils.server.responses import (
     CustomQueryResultsEncoder,
     QueryResults,
+    base64_encode_nifti,
 )
 from tornado.options import define, options
 
@@ -71,7 +75,8 @@ class NeurolangQueryManager:
         self.engines = {}
         self._lock = RLock()
         self.results_cache = {}
-        
+        self.configs = options
+
         nb_engines = sum(options.values())
         LOG.debug(f"Creating query manager with {nb_engines} workers.")
         self.executor = ThreadPoolExecutor(max_workers=nb_engines)
@@ -231,6 +236,23 @@ class NeurolangQueryManager:
         """
         return self.results_cache[uuid].cancel()
 
+    def get_mni_mask(self, engine_type: str) -> nibabel.Nifti1Image:
+        """
+        Get the MNI mask for a given engine type.
+
+        Parameters
+        ----------
+        engine_type : str
+            the engine type
+
+        Returns
+        -------
+        nibabel.Nifti1Image
+            the mni mask
+        """
+        config = [c for c in self.configs.keys() if c.key == engine_type]
+        return config[0].mni_mask
+
 
 class Application(tornado.web.Application):
     """
@@ -262,6 +284,10 @@ class Application(tornado.web.Application):
             (
                 r"/v1/statement",
                 QueryHandler,
+            ),
+            (
+                r"/v1/atlas",
+                NiftiiImageHandler,
             ),
         ]
         settings = dict(
@@ -312,7 +338,7 @@ class JSONRequestHandler(tornado.web.RequestHandler):
     def set_default_headers(self):
         self.set_header("Access-Control-Allow-Origin", "*")
         self.set_header("Access-Control-Allow-Headers", "x-requested-with")
-        self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        self.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
         self.set_header("Content-Type", "application/json")
 
     def write_json_reponse(self, data=None, status: str = "ok"):
@@ -363,6 +389,23 @@ class QueryHandler(JSONRequestHandler):
         LOG.debug(f"Submitting query with uuid {uuid}.")
         self.application.nqm.submit_query(uuid, query, engine)
         return self.write_json_reponse({"query": query, "uuid": uuid})
+
+
+class NiftiiImageHandler(JSONRequestHandler):
+    """
+    Return the atlas image to be used by the Papaya viewer.
+    Currently returns the MNI_MASK used by the engine configuration.
+
+    Image is returned as base64 encoded.
+    """
+
+    def get(self):
+        engine = self.get_argument("engine", "neurosynth")
+        mni_mask = self.application.nqm.get_mni_mask(engine)
+
+        return self.write_json_reponse(
+            {"image": base64_encode_nifti(mni_mask)}
+        )
 
 
 def main():

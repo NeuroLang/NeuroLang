@@ -1,14 +1,33 @@
-from concurrent.futures import Future
+import base64
 import json
-from neurolang.type_system import get_args
+from concurrent.futures import Future
+from typing import Any, Dict, List, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
+from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
+from neurolang.type_system import get_args
 from neurolang.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
 )
-from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
-from typing import Any, Dict, List, Tuple, Type, Union
+
+
+def base64_encode_nifti(image):
+    """Returns base64 encoded string of the specified image.
+
+    Parameters
+    ----------
+    image : nibabel.Nifti2Image
+        image to be encoded.
+
+    Returns
+    -------
+    str
+        base64 encoded string of the image.
+    """
+    encoded_image = base64.encodebytes(image.to_bytes())
+    enc = encoded_image.decode("utf-8")
+    return enc
 
 
 class CustomQueryResultsEncoder(json.JSONEncoder):
@@ -27,7 +46,7 @@ class QueryResults:
         start: int = 0,
         length: int = 50,
         sort: int = -1,
-        asc: bool = True
+        asc: bool = True,
     ):
         self.start = start
         self.length = length
@@ -113,7 +132,7 @@ class QueryResults:
         """
         if self.sort > -1:
             df = df.sort_values(by=[df.columns[self.sort]], ascending=self.asc)
-        rows = df.iloc[self.start: self.start + self.length]
+        rows = df.iloc[self.start : self.start + self.length]
         for col, col_type in zip(rows.columns, row_type.__args__):
             if col_type == ExplicitVBR or col_type == ExplicitVBROverlay:
                 # TODO: handle regions

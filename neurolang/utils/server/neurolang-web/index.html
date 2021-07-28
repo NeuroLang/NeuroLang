@@ -60,13 +60,14 @@ ActivationGivenTerm(i, j, k, PROB(i, j, k)) :- Activation(i, j, k) // TermAssoci
     </div>
   </div>
 
-  <!-- <div class="container">
-    <div class='papaya' data-params='params'></div>
-  </div> -->
+  <div id="nlPapayaContainer" class="container nl-papaya-container">
+    <!-- <div class='papaya' data-params='params'></div> -->
+  </div>
 
-  <script type="module" src="/main.js"></script>
   <!-- papaya is vendored as it is not packaged for npm -->
   <script type="text/javascript" src="/deps/papaya.js?build=1453"></script>
+  <!-- papaya should load before our main.js script as it defines globals -->
+  <script type="module" src="/main.js"></script>
 </body>
 
 </html>

@@ -1,4 +1,4 @@
-from abc import abstractproperty, abstractstaticmethod
+from abc import abstractmethod, abstractproperty, abstractstaticmethod
 from contextlib import contextmanager
 from multiprocessing import BoundedSemaphore
 from neurolang.frontend.neurosynth_utils import StudyID
@@ -81,20 +81,36 @@ class NeurolangEngineConfiguration:
     def key(self):
         pass
 
-    @abstractstaticmethod
-    def create() -> Union[NeurolangDL, NeurolangPDL]:
+    @abstractproperty
+    def mni_mask(self):
+        pass
+
+    @abstractmethod
+    def create(self) -> Union[NeurolangDL, NeurolangPDL]:
         pass
 
 
 class NeurosynthEngineConf(NeurolangEngineConfiguration):
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._mni_mask = None
+
     @property
     def key(self):
         return "neurosynth"
 
-    @staticmethod
-    def create() -> NeurolangPDL:
+    @property
+    def mni_mask(self):
+        if self._mni_mask is None:
+            data_dir = Path("neurolang_data")
+            self._mni_mask = load_mni_atlas(data_dir, resolution=2)
+        return self._mni_mask
+
+    def create(self) -> NeurolangPDL:
         nl = init_frontend()
-        load_neurosynth_data(nl)
+        data_dir = Path("neurolang_data")
+        load_neurosynth_data(data_dir, nl, self.mni_mask)
         return nl
 
     def __eq__(self, other: object) -> bool:
@@ -106,16 +122,7 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
         return hash(self.key)
 
 
-def load_neurosynth_data(nl):
-    data_dir = Path("neurolang_data")
-    resolution = 2
-    mni_mask = image.resample_img(
-        nib.load(
-            datasets.fetch_icbm152_2009(data_dir=str(data_dir / "icbm"))["gm"]
-        ),
-        np.eye(3) * resolution,
-    )
-
+def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
     ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
         data_dir / "neurosynth",
         [
@@ -209,6 +216,24 @@ def load_neurosynth_data(nl):
         .T,
         name="Voxel",
     )
+
+
+def load_mni_atlas(
+    data_dir: Path,
+    resolution: int = 2,
+    interpolation: str = "continuous",
+    key: str = "gm",
+):
+    """Load an MNI atlas and resample it to given resolution."""
+
+    mni_mask = image.resample_img(
+        nib.load(
+            datasets.fetch_icbm152_2009(data_dir=str(data_dir / "icbm"))[key]
+        ),
+        np.eye(3) * resolution,
+        interpolation=interpolation,
+    )
+    return mni_mask
 
 
 def init_frontend():
