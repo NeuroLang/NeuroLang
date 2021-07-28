@@ -163,6 +163,130 @@ class BuildProvenanceAlgebraSetMixin(PatternWalker):
             return expression
 
 
+class ProvenanceSelectionMixin(PatternWalker):
+    @add_match(
+        Selection(
+            BuildProvenanceAlgebraSet,
+            FunctionApplication(
+                eq_, (Constant[ColumnInt], Constant[ColumnInt])
+            )
+        )
+    )
+    def selection_rap_eq_columnint_columnint(self, selection):
+        columns = selection.relation.non_provenance_columns
+        formula = selection.formula
+        new_formula = FunctionApplication(
+            eq_, (
+                columns[formula.args[0].value],
+                columns[formula.args[1].value],
+            )
+        )
+        return self.walk(Selection(selection.relation, new_formula))
+
+    @add_match(
+        Selection(
+            BuildProvenanceAlgebraSet,
+            FunctionApplication(eq_, (Constant[ColumnInt], ...))
+        )
+    )
+    def selection_rap_eq_columnint(self, selection):
+        columns = selection.relation.non_provenance_columns
+        formula = selection.formula
+        new_formula = FunctionApplication(
+            eq_, (
+                columns[formula.args[0].value],
+                formula.args[1]
+            )
+        )
+        return self.walk(Selection(selection.relation, new_formula))
+
+    @add_match(
+        Selection(BuildProvenanceAlgebraSet, ...)
+    )
+    def selection_between_column_int(self, selection):
+        res = BuildProvenanceAlgebraSet(
+            Selection(
+                selection.relation.relation,
+                selection.formula
+            ),
+            selection.relation.provenance_column
+        )
+        return self.walk(res)
+
+
+class ProvenanceColumnManipulationMixin(PatternWalker):
+    @add_match(ConcatenateConstantColumn(BuildProvenanceAlgebraSet, ..., ...))
+    def prov_concatenate_constant_column(self, concat_op):
+        if concat_op.column_name == concat_op.relation.provenance_column:
+            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
+            relation = RenameColumn(
+                concat_op.relation.relation,
+                concat_op.relation.provenance_column,
+                new_prov_col,
+            )
+        else:
+            relation = concat_op.relation.relation
+            new_prov_col = concat_op.relation.provenance_column
+
+        res = BuildProvenanceAlgebraSet(
+            ConcatenateConstantColumn(
+                relation,
+                concat_op.column_name,
+                concat_op.column_value
+            ),
+            new_prov_col
+        )
+        return self.walk(res)
+
+    @add_match(NameColumns(BuildProvenanceAlgebraSet, ...))
+    def name_columns_rap(self, expression):
+        relation = expression.relation.relation
+        columns_to_name = tuple(
+            c for c in relation.columns()
+            if c != expression.relation.provenance_column
+        )
+        ne = RenameColumns(
+            relation,
+            tuple(
+                (src, dst)
+                for src, dst in zip(
+                    columns_to_name, expression.column_names
+                )
+            )
+        )
+        return self.walk(BuildProvenanceAlgebraSet(
+            ne,
+            expression.relation.provenance_column
+        ))
+
+    @add_match(RenameColumn(BuildProvenanceAlgebraSet, ..., ...))
+    def prov_rename_column(self, rename_column):
+        if rename_column.src == rename_column.relation.provenance_column:
+            provenance_column = rename_column.dst
+        else:
+            provenance_column = rename_column.relation.provenance_column
+        res = BuildProvenanceAlgebraSet(
+            RenameColumn(
+                rename_column.relation.relation,
+                rename_column.src,
+                rename_column.dst
+            ),
+            provenance_column
+        )
+        return self.walk(res)
+
+    @add_match(RenameColumns(BuildProvenanceAlgebraSet, ...))
+    def prov_rename_columns(self, rename_columns):
+        res = BuildProvenanceAlgebraSet(
+            RenameColumns(
+                rename_columns.relation.relation,
+                rename_columns.renames
+            ),
+            rename_columns.relation.provenance_column
+        )
+        return self.walk(res)
+
+
 class ProvenanceExtendedProjectionMixin(PatternWalker):
     """
     Mixin that implements specific cases of extended projections on provenance
@@ -206,10 +330,52 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
         ))
 
 
+class ProvenanceSetOperationsMixin(PatternWalker):
+    @add_match(Union(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
+    def prov_union(self, union_op):
+        left = union_op.relation_left
+        right = union_op.relation_right
+        if left.non_provenance_columns != right.non_provenance_columns:
+            raise RelationalAlgebraError(
+                "All non-provenance columns must be the same: {} != {}".format(
+                    left.non_provenance_columns, right.non_provenance_columns,
+                )
+            )
+        prov_col = left.provenance_column
+        result_columns = left.non_provenance_columns
+        # move to non-provenance relational algebra
+        np_left = left.relation
+        np_right = right.relation
+        # make the the provenance columns match
+        np_right = RenameColumn(
+            np_right,
+            right.provenance_column,
+            prov_col,
+        )
+        # add a dummy column with different values for each relation
+        # this ensures that all the tuples will be part of the result
+        dummy_col = str2columnstr_constant(Symbol.fresh().name)
+        np_left = ConcatenateConstantColumn(
+            np_left, dummy_col, Constant[int](0)
+        )
+        np_right = ConcatenateConstantColumn(
+            np_right, dummy_col, Constant[int](1)
+        )
+        ra_union_op = Union(np_left, np_right)
+        result = BuildProvenanceAlgebraSet(ra_union_op, prov_col)
+        # provenance projection that removes the dummy column and sums the
+        # provenance of matching tuples
+        result = Projection(result, result_columns)
+        return self.walk(result)
+
+
 class RelationalAlgebraProvenanceCountingSolver(
     BuildProvenanceAlgebraSetMixin,
     BuildConstantProvenanceAlgebraSetMixin,
+    ProvenanceSelectionMixin,
+    ProvenanceColumnManipulationMixin,
     ProvenanceExtendedProjectionMixin,
+    ProvenanceSetOperationsMixin,
     RelationalAlgebraSolver,
 ):
     """
@@ -220,19 +386,6 @@ class RelationalAlgebraProvenanceCountingSolver(
 
     def __init__(self, symbol_table=None):
         self.symbol_table = symbol_table
-
-    @add_match(
-        Selection(BuildProvenanceAlgebraSet, ...)
-    )
-    def selection_between_column_int(self, selection):
-        res = BuildProvenanceAlgebraSet(
-            Selection(
-                selection.relation.relation,
-                selection.formula
-            ),
-            selection.relation.provenance_column
-        )
-        return self.walk(res)
 
     @add_match(
         Product,
@@ -249,29 +402,6 @@ class RelationalAlgebraProvenanceCountingSolver(
                 rel_res, relation, Product, MUL,
             )
         return self.walk(rel_res)
-
-    @add_match(ConcatenateConstantColumn(BuildProvenanceAlgebraSet, ..., ...))
-    def prov_concatenate_constant_column(self, concat_op):
-        if concat_op.column_name == concat_op.relation.provenance_column:
-            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
-            relation = RenameColumn(
-                concat_op.relation.relation,
-                concat_op.relation.provenance_column,
-                new_prov_col,
-            )
-        else:
-            relation = concat_op.relation.relation
-            new_prov_col = concat_op.relation.provenance_column
-
-        res = BuildProvenanceAlgebraSet(
-            ConcatenateConstantColumn(
-                relation,
-                concat_op.column_name,
-                concat_op.column_value
-            ),
-            new_prov_col
-        )
-        return self.walk(res)
 
     @add_match(Projection(BuildProvenanceAlgebraSet, ...))
     def prov_projection(self, projection):
@@ -303,33 +433,6 @@ class RelationalAlgebraProvenanceCountingSolver(
     @add_match(EquiJoin(ProvenanceAlgebraSet, ..., ProvenanceAlgebraSet, ...))
     def prov_equijoin(self, equijoin):
         raise NotImplementedError("EquiJoin is not implemented.")
-
-    @add_match(RenameColumn(BuildProvenanceAlgebraSet, ..., ...))
-    def prov_rename_column(self, rename_column):
-        if rename_column.src == rename_column.relation.provenance_column:
-            provenance_column = rename_column.dst
-        else:
-            provenance_column = rename_column.relation.provenance_column
-        res = BuildProvenanceAlgebraSet(
-            RenameColumn(
-                rename_column.relation.relation,
-                rename_column.src,
-                rename_column.dst
-            ),
-            provenance_column
-        )
-        return self.walk(res)
-
-    @add_match(RenameColumns(BuildProvenanceAlgebraSet, ...))
-    def prov_rename_columns(self, rename_columns):
-        res = BuildProvenanceAlgebraSet(
-            RenameColumns(
-                rename_columns.relation.relation,
-                rename_columns.renames
-            ),
-            rename_columns.relation.provenance_column
-        )
-        return self.walk(res)
 
     @add_match(Difference(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
     def prov_difference(self, diff):
@@ -514,50 +617,11 @@ class RelationalAlgebraProvenanceCountingSolver(
             prov_col.value
         )
 
-    @add_match(Union(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
-    def prov_union(self, union_op):
-        left = union_op.relation_left
-        right = union_op.relation_right
-        if left.non_provenance_columns != right.non_provenance_columns:
-            raise RelationalAlgebraError(
-                "All non-provenance columns must be the same: {} != {}".format(
-                    left.non_provenance_columns, right.non_provenance_columns,
-                )
-            )
-        prov_col = left.provenance_column
-        result_columns = left.non_provenance_columns
-        # move to non-provenance relational algebra
-        np_left = left.relation
-        np_right = right.relation
-        # make the the provenance columns match
-        np_right = RenameColumn(
-            np_right,
-            right.provenance_column,
-            prov_col,
-        )
-        # add a dummy column with different values for each relation
-        # this ensures that all the tuples will be part of the result
-        dummy_col = str2columnstr_constant(Symbol.fresh().name)
-        np_left = ConcatenateConstantColumn(
-            np_left, dummy_col, Constant[int](0)
-        )
-        np_right = ConcatenateConstantColumn(
-            np_right, dummy_col, Constant[int](1)
-        )
-        ra_union_op = Union(np_left, np_right)
-        result = BuildProvenanceAlgebraSet(ra_union_op, prov_col)
-        # provenance projection that removes the dummy column and sums the
-        # provenance of matching tuples
-        result = Projection(result, result_columns)
-        return self.walk(result)
-
-    @add_match(Constant[AbstractSet])
-    def constant_relation_or_provenance_set(self, relation):
-        return relation
-
 
 class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
-    PatternWalker
+    ProvenanceSelectionMixin,
+    ProvenanceColumnManipulationMixin,
+    ProvenanceSetOperationsMixin
 ):
     @add_match(NaturalJoin(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
     def natural_join_rap(self, expression):
@@ -625,42 +689,6 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
             new_attributes += (att,)
         return self.walk(Projection(projection.relation, new_attributes))
 
-    @add_match(
-        Selection(
-            BuildProvenanceAlgebraSet,
-            FunctionApplication(
-                eq_, (Constant[ColumnInt], Constant[ColumnInt])
-            )
-        )
-    )
-    def selection_rap_eq_columnint_columnint(self, selection):
-        columns = selection.relation.non_provenance_columns
-        formula = selection.formula
-        new_formula = FunctionApplication(
-            eq_, (
-                columns[formula.args[0].value],
-                columns[formula.args[1].value],
-            )
-        )
-        return self.walk(Selection(selection.relation, new_formula))
-
-    @add_match(
-        Selection(
-            BuildProvenanceAlgebraSet,
-            FunctionApplication(eq_, (Constant[ColumnInt], ...))
-        )
-    )
-    def selection_rap_eq_columnint(self, selection):
-        columns = selection.relation.non_provenance_columns
-        formula = selection.formula
-        new_formula = FunctionApplication(
-            eq_, (
-                columns[formula.args[0].value],
-                formula.args[1]
-            )
-        )
-        return self.walk(Selection(selection.relation, new_formula))
-
     @add_match(Projection(BuildProvenanceAlgebraSet, ...))
     def projection_rap(self, projection):
         aggregate_functions = (
@@ -691,103 +719,6 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
             Constant(sum), args, validate_arguments=False, verify_type=False
         )
 
-    @add_match(RenameColumn(BuildProvenanceAlgebraSet, ..., ...))
-    def rename_column_rap(self, expression):
-        ne = RenameColumn(
-            expression.relation.relation,
-            expression.src, expression.dst
-        )
-        return self.walk(
-            BuildProvenanceAlgebraSet(
-                ne,
-                expression.relation.provenance_column
-            )
-        )
-
-    @add_match(RenameColumns(BuildProvenanceAlgebraSet, ...))
-    def rename_columns_rap(self, expression):
-        ne = RenameColumns(
-            expression.relation.relation,
-            expression.renames
-        )
-        return self.walk(BuildProvenanceAlgebraSet(
-            ne,
-            expression.relation.provenance_column
-        ))
-
-    @add_match(NameColumns(BuildProvenanceAlgebraSet, ...))
-    def name_columns_rap(self, expression):
-        relation = expression.relation.relation
-        columns_to_name = tuple(
-            c for c in relation.columns()
-            if c != expression.relation.provenance_column
-        )
-        ne = RenameColumns(
-            relation,
-            tuple(
-                (src, dst)
-                for src, dst in zip(
-                    columns_to_name, expression.column_names
-                )
-            )
-        )
-        return self.walk(BuildProvenanceAlgebraSet(
-            ne,
-            expression.relation.provenance_column
-        ))
-
-    @add_match(Selection(BuildProvenanceAlgebraSet, ...))
-    def selection_rap(self, selection):
-        ne = Selection(
-            selection.relation.relation,
-            selection.formula
-        )
-        return self.walk(BuildProvenanceAlgebraSet(
-            ne,
-            selection.relation.provenance_column
-        ))
-
-    @add_match(Union(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
-    def union_rap(self, union):
-        prov_column_left = union.relation_left.provenance_column
-        prov_column_right = union.relation_right.provenance_column
-        relation_left = union.relation_left.relation
-        relation_right = union.relation_right.relation
-
-        if prov_column_left != prov_column_right:
-            relation_right = RenameColumn(
-                relation_right,
-                prov_column_right,
-                prov_column_left
-            )
-
-        columns_to_keep = tuple(
-            c for c in
-            union.relation_left.non_provenance_columns
-        )
-
-        dummy_col = str2columnstr_constant(Symbol.fresh().name)
-        relation_left = ConcatenateConstantColumn(
-            relation_left, dummy_col, Constant[int](0)
-        )
-        relation_right = ConcatenateConstantColumn(
-            relation_right, dummy_col, Constant[int](1)
-        )
-
-        ra_union = Union(relation_left, relation_right)
-        rap_projection = Projection(
-            BuildProvenanceAlgebraSet(
-                ra_union,
-                prov_column_left
-            ),
-            columns_to_keep
-        )
-
-        with sure_is_not_pattern():
-            res = self.walk(rap_projection)
-
-        return res
-
     @add_match(Difference(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
     def difference(self, diff):
         left = diff.relation_left
@@ -810,14 +741,12 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         )
         tmp_np_op_args = (tmp_left, tmp_right)
         tmp_non_prov_result = LeftNaturalJoin(*tmp_np_op_args)
-        isnan = Constant(lambda x: 0 if math.isnan(x) else x)
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
                 FunctionApplicationListMember(
-                    fun_exp=MUL(
-                        tmp_left_prov_col,
-                        SUB(Constant(1), isnan(tmp_right_prov_col)),
+                    fun_exp=self._semiring_monus(
+                        tmp_left_prov_col, tmp_right_prov_col
                     ),
                     dst_column=res_prov_col,
                 ),
@@ -830,6 +759,13 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         return self.walk(BuildProvenanceAlgebraSet(
             result, res_prov_col
         ))
+
+    def _semiring_monus(self, left, right):
+        isnan = Constant(lambda x: 0 if math.isnan(x) else x)
+        return MUL(
+            left,
+            SUB(Constant(1), isnan(right))
+        )
 
     # Raise Exception for non-implemented RAP operations
     @add_match(
