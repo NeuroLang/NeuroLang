@@ -46,6 +46,7 @@ tfidf :: TermInStudy(term, study) :- TermInStudyTFIDF(term, tfidf, study)
 TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
 Activation(i, j, k) :- SelectedStudy(s) & PeakReported(i, j, k, s)
 ActivationGivenTerm(i, j, k, PROB(i, j, k)) :- Activation(i, j, k) // TermAssociation("emotion")
+ActivationGivenTermImage(agg_create_region_overlay(i, j, k, p)) :- ActivationGivenTerm(i, j, k, p)
       </textarea>
       <button type="button" class="btn btn-primary mt-2" id="runQueryBtn">Run query</button>
       <div class="query-alert mt-2" id="queryAlert">
@@ -53,16 +54,20 @@ ActivationGivenTerm(i, j, k, PROB(i, j, k)) :- Activation(i, j, k) // TermAssoci
     </div>
   </div>
 
-  <div id="resultsContainer" class="container nl-results-container">
-    <ul class='nav nav-tabs nl-results-tabs' role='tablist'></ul>
-    <div class="tab-content">
-      <table class='table nl-result-table' id='tabTable'></table>
+  <div class="container d-flex flex-row">
+    <div id="resultsContainer" class="nl-results-container">
+      <ul class='nav nav-tabs nl-results-tabs' role='tablist'></ul>
+      <div class="tab-content mb-3">
+        <table class='table nl-result-table' id='tabTable' width="100%"></table>
+      </div>
+    </div>
+
+    <div id="nlPapayaContainer" class="nl-papaya-container w-50">
+      <!-- <div class='papaya' data-params='params'></div> -->
     </div>
   </div>
 
-  <div id="nlPapayaContainer" class="container nl-papaya-container">
-    <!-- <div class='papaya' data-params='params'></div> -->
-  </div>
+
 
   <!-- papaya is vendored as it is not packaged for npm -->
   <script type="text/javascript" src="/deps/papaya.js?build=1453"></script>

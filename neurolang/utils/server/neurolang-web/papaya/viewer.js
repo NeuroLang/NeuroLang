@@ -1,11 +1,24 @@
+import './viewer.css'
 import $ from 'jquery'
 
+/**
+ * Reset the papaya viewer and show it.
+ */
 export function showViewer () {
   // send a request for the atlas image
   $.get('http://localhost:8888/v1/atlas')
     .done(function (data) {
-      initViewer(data.data.image)
+      $('#resultsContainer').width('50%')
+      $('#nlPapayaContainer').show(500, function () { initViewer(data.data.image) })
     })
+}
+
+/**
+ * Hide the papaya viewer.
+ */
+export function hideViewer () {
+  $('#nlPapayaContainer').hide(500)
+  $('#resultsContainer').width('100%')
 }
 
 function initViewer (atlasImage) {

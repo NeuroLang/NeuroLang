@@ -2,6 +2,7 @@ import base64
 import json
 from concurrent.futures import Future
 from typing import Any, Dict, List, Tuple, Type, Union
+from nibabel.nifti1 import Nifti1Image
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,26 @@ def base64_encode_nifti(image):
     encoded_image = base64.encodebytes(image.to_bytes())
     enc = encoded_image.decode("utf-8")
     return enc
+
+
+def base64_encode_vbr(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
+    """Returns base64 encoded string of the ExplicitVBR.
+
+    Parameters
+    ----------
+    vrb : Union[ExplicitVBR, ExplicitVBROverlay]
+        volumetric brain region to be encoded.
+
+    Returns
+    -------
+    str
+        base64 encoded string of the vbr.
+    """
+    image = vbr.spatial_image()
+    nifti_image = Nifti1Image(
+        np.asanyarray(image.dataobj, dtype=np.float32), affine=image.affine
+    )
+    return base64_encode_nifti(nifti_image)
 
 
 class CustomQueryResultsEncoder(json.JSONEncoder):
@@ -132,11 +153,10 @@ class QueryResults:
         """
         if self.sort > -1:
             df = df.sort_values(by=[df.columns[self.sort]], ascending=self.asc)
-        rows = df.iloc[self.start : self.start + self.length]
+        rows = df.iloc[self.start : self.start + self.length].copy()
         for col, col_type in zip(rows.columns, row_type.__args__):
             if col_type == ExplicitVBR or col_type == ExplicitVBROverlay:
-                # TODO: handle regions
-                rows.loc[:, col] = rows[col].apply(lambda x: "ExplicitVBR")
+                rows.loc[:, col] = rows[col].apply(base64_encode_vbr)
             elif rows[col].dtype == np.object_:
                 rows.loc[:, col] = rows[col].astype(str)
 

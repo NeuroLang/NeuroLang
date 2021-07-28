@@ -1,6 +1,7 @@
-from abc import abstractmethod, abstractproperty, abstractstaticmethod
+from abc import abstractmethod, abstractproperty
 from contextlib import contextmanager
 from multiprocessing import BoundedSemaphore
+from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
 from neurolang.frontend.neurosynth_utils import StudyID
 from pathlib import Path
 from typing import Iterable, Union
@@ -91,7 +92,6 @@ class NeurolangEngineConfiguration:
 
 
 class NeurosynthEngineConf(NeurolangEngineConfiguration):
-
     def __init__(self) -> None:
         super().__init__()
         self._mni_mask = None
@@ -108,7 +108,7 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
         return self._mni_mask
 
     def create(self) -> NeurolangPDL:
-        nl = init_frontend()
+        nl = init_frontend(self.mni_mask)
         data_dir = Path("neurolang_data")
         load_neurosynth_data(data_dir, nl, self.mni_mask)
         return nl
@@ -236,7 +236,7 @@ def load_mni_atlas(
     return mni_mask
 
 
-def init_frontend():
+def init_frontend(mni_mask):
     """
     Create a Neurolang Probabilistic engine and add some aggregation methods.
 
@@ -250,5 +250,21 @@ def init_frontend():
     @nl.add_symbol
     def agg_count(i: Iterable) -> np.int64:
         return np.int64(len(i))
+
+    @nl.add_symbol
+    def agg_create_region(
+        i: Iterable, j: Iterable, k: Iterable
+    ) -> ExplicitVBR:
+        voxels = np.c_[i, j, k]
+        return ExplicitVBR(voxels, mni_mask.affine, image_dim=mni_mask.shape)
+
+    @nl.add_symbol
+    def agg_create_region_overlay(
+        i: Iterable, j: Iterable, k: Iterable, p: Iterable
+    ) -> ExplicitVBR:
+        voxels = np.c_[i, j, k]
+        return ExplicitVBROverlay(
+            voxels, mni_mask.affine, p, image_dim=mni_mask.shape
+        )
 
     return nl

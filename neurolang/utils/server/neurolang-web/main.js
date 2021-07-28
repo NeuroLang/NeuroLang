@@ -6,8 +6,4 @@ import dt from 'datatables.net-bs5'
 import 'datatables.net-bs5/css/dataTables.bootstrap5.min.css'
 import './query/query.js'
 
-import { showViewer } from './papaya/viewer'
-
 dt(window, $)
-
-showViewer()

@@ -1,5 +1,6 @@
-import $ from 'jquery'
 import './results.css'
+import $ from 'jquery'
+import { hideViewer, showViewer } from '../papaya/viewer'
 
 export function showQueryResults (queryId, data) {
   resultsContainer.show()
@@ -42,7 +43,7 @@ function setActiveResultTab (evt, data, symbol) {
     tabTable.empty()
   }
 
-  // initialize table with new data
+  // prepare table data
   const queryId = data.uuid
   const tab = data.results[symbol]
   const cols = tab.columns.map((col, idx) => {
@@ -51,9 +52,21 @@ function setActiveResultTab (evt, data, symbol) {
     }
     if (tab.row_type[idx] === "<class 'neurolang.frontend.neurosynth_utils.StudyID'>") {
       ret.render = renderPMID
+    } else if (tab.row_type[idx] === "<class 'neurolang.regions.ExplicitVBROverlay'>") {
+      ret.render = renderVBROverlay
     }
     return ret
   })
+
+  // hide or show papaya viewer. We want to show/hide the papaya viewer before
+  // we draw the table because of resizing.
+  if (tab.row_type.some((elt) => elt === "<class 'neurolang.regions.ExplicitVBROverlay'>")) {
+    showViewer()
+  } else {
+    hideViewer()
+  }
+
+  // initialize datatable with results
   tabTable.DataTable({
     processing: true,
     serverSide: true,
@@ -108,6 +121,21 @@ function renderPMID (data, type) {
   if (type === 'display') {
     // when datatables is trying to display the value, return a link tag
     return `<a class="nl-pmid-link" href="https://www.ncbi.nlm.nih.gov/pubmed/?term=${data}" target="_blank">PubMed:${data}</a>`
+  }
+  // otherwise return the raw data (for ordering)
+  return data
+}
+
+/**
+ * Custom renderer for VBROverlay values
+ * @param {*} data
+ * @param {*} type
+ * @returns
+ */
+function renderVBROverlay (data, type) {
+  if (type === 'display') {
+    // when datatables is trying to display the value, return a switch to display
+    return '<div class="form-check form-switch"><input class="form-check-input" type="checkbox"><label class="form-check-label">Show region</label></div>'
   }
   // otherwise return the raw data (for ordering)
   return data
