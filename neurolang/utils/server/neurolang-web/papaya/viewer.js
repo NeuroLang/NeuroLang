@@ -1,12 +1,13 @@
 import './viewer.css'
 import $ from 'jquery'
+import { API_ROUTE } from '../constants'
 
 /**
  * Reset the papaya viewer and show it.
  */
 export function showViewer () {
   // send a request for the atlas image
-  $.get('http://localhost:8888/v1/atlas')
+  $.get(API_ROUTE.atlas)
     .done(function (data) {
       $('#resultsContainer').width('50%')
       $('#nlPapayaContainer').show(500, function () { initViewer(data.data.image) })

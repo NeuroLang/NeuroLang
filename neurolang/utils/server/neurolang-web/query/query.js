@@ -6,6 +6,7 @@ import CodeMirror from 'codemirror'
 import './query.css'
 import $ from 'jquery'
 import { showQueryResults } from '../results/results'
+import { API_ROUTE } from '../constants'
 
 const queryTextArea = document.querySelector('#queryTextArea')
 const editor = CodeMirror.fromTextArea(queryTextArea, {
@@ -29,7 +30,7 @@ function submitQuery () {
   runQueryBtn.disable = true
   // submit query
   const query = editor.getValue()
-  $.post('http://localhost:8888/v1/statement', { query: query })
+  $.post(API_ROUTE.statement, { query: query })
     .done(function (data) {
       if (data.status === 'ok') {
         setAlert('Your query is running. Results will display below when available..')
@@ -45,7 +46,7 @@ function submitQuery () {
 }
 
 function pollResults (queryId) {
-  $.get(`http://localhost:8888/v1/status/${queryId}`)
+  $.get(`${API_ROUTE.status}/${queryId}`)
     .done(function (data) {
       if (data.data.cancelled) {
         // query was cancelled

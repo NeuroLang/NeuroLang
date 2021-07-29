@@ -270,8 +270,11 @@ class Application(tornado.web.Application):
         uuid_pattern = (
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
         )
+        static_path = os.path.join(
+            os.path.dirname(__file__), "neurolang-web/dist"
+        )
+
         handlers = [
-            (r"/", MainHandler),
             (r"/v1/empty", EmptyHandler),
             (
                 r"/v1/cancel/({uuid})".format(uuid=uuid_pattern),
@@ -289,11 +292,16 @@ class Application(tornado.web.Application):
                 r"/v1/atlas",
                 NiftiiImageHandler,
             ),
+            (
+                r"/(.*)",
+                tornado.web.StaticFileHandler,
+                {"path": static_path, "default_filename": "index.html"},
+            ),
         ]
         settings = dict(
             cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
-            static_path=os.path.join(os.path.dirname(__file__), "static"),
+            static_path=static_path,
             xsrf_cookies=False,
             debug=True,
         )

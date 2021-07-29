@@ -1,6 +1,7 @@
 import './results.css'
 import $ from 'jquery'
 import { hideViewer, showViewer } from '../papaya/viewer'
+import { API_ROUTE, DATA_TYPES, PUBMED_BASE_URL } from '../constants'
 
 export function showQueryResults (queryId, data) {
   resultsContainer.show()
@@ -43,30 +44,20 @@ function setActiveResultTab (evt, data, symbol) {
     tabTable.empty()
   }
 
-  // prepare table data
+  // prepare table data and show it
   const queryId = data.uuid
   const tab = data.results[symbol]
   const cols = tab.columns.map((col, idx) => {
     const ret = {
       title: col
     }
-    if (tab.row_type[idx] === "<class 'neurolang.frontend.neurosynth_utils.StudyID'>") {
+    if (tab.row_type[idx] === DATA_TYPES.studyID) {
       ret.render = renderPMID
-    } else if (tab.row_type[idx] === "<class 'neurolang.regions.ExplicitVBROverlay'>") {
+    } else if (tab.row_type[idx] === DATA_TYPES.VBROverlay) {
       ret.render = renderVBROverlay
     }
     return ret
   })
-
-  // hide or show papaya viewer. We want to show/hide the papaya viewer before
-  // we draw the table because of resizing.
-  if (tab.row_type.some((elt) => elt === "<class 'neurolang.regions.ExplicitVBROverlay'>")) {
-    showViewer()
-  } else {
-    hideViewer()
-  }
-
-  // initialize datatable with results
   tabTable.DataTable({
     processing: true,
     serverSide: true,
@@ -76,6 +67,13 @@ function setActiveResultTab (evt, data, symbol) {
     columns: cols,
     ajax: (data, callback, settings) => getAjaxTableData(data, callback, settings, queryId, symbol)
   })
+
+  // hide or show papaya viewer.
+  if (tab.row_type.some((elt) => elt === DATA_TYPES.VBROverlay)) {
+    showViewer()
+  } else {
+    hideViewer()
+  }
 }
 
 /**
@@ -97,7 +95,7 @@ function getAjaxTableData (data, callback, settings, queryId, symbol) {
     queryData.asc = +(data.order[0].dir === 'asc')
   }
   $.ajax({
-    url: `http://localhost:8888/v1/status/${queryId}`,
+    url: `${API_ROUTE.status}/${queryId}`,
     type: 'get',
     data: queryData
   }).done(function (result) {
@@ -120,7 +118,7 @@ function getAjaxTableData (data, callback, settings, queryId, symbol) {
 function renderPMID (data, type) {
   if (type === 'display') {
     // when datatables is trying to display the value, return a link tag
-    return `<a class="nl-pmid-link" href="https://www.ncbi.nlm.nih.gov/pubmed/?term=${data}" target="_blank">PubMed:${data}</a>`
+    return `<a class="nl-pmid-link" href="${PUBMED_BASE_URL}${data}" target="_blank">PubMed:${data}</a>`
   }
   // otherwise return the raw data (for ordering)
   return data
