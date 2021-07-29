@@ -26,11 +26,11 @@ class OrderedSet(MutableSet, Sequence):
 
     def replace(self, src, dst):
         src_ix = self._list.index(src)
-        self._list = [
+        self._list = (
             self._list[:src_ix] +
             [dst] +
             self._list[src_ix + 1:]
-        ]
+        )
         self._set.discard(src)
         self._set.add(dst)
 
@@ -57,3 +57,9 @@ class OrderedSet(MutableSet, Sequence):
 
     def __repr__(self):
         return 'OrderedSet(' + ','.join(repr(i) for i in self) + ')'
+
+    def copy(self):
+        res = OrderedSet()
+        res._set = self._set.copy()
+        res._list = self._list.copy()
+        return res

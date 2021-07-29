@@ -493,6 +493,12 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
 
     @add_match(Projection(BuildProvenanceAlgebraSet, ...))
     def projection_rap(self, projection):
+        if (
+            set(projection.attributes) ==
+            projection.relation.non_provenance_columns
+        ):
+            return self.walk(projection.relation)
+
         aggregate_functions = (
             FunctionApplicationListMember(
                 self._semiring_agg_sum(

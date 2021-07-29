@@ -41,6 +41,7 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     Projection,
     RelationalAlgebraPushInSelections,
+    RenameOptimizations,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
@@ -111,6 +112,7 @@ def extract_atom_sets_and_detect_self_joins(query):
 class RAQueryOptimiser(
     EliminateTrivialProjections,
     RelationalAlgebraPushInSelections,
+    RenameOptimizations,
     ExpressionWalker,
 ):
     pass

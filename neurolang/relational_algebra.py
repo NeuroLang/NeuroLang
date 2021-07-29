@@ -255,8 +255,8 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
         self.relation = relation
         self.renames = renames
 
-    def columns(self):
-        columns = self.relation.columns()
+    def columns(self):  
+        columns = self.relation.columns().copy()
         for rename in self.renames:
             columns.replace(rename[0], rename[1])
         return columns
@@ -1382,6 +1382,93 @@ class EliminateTrivialProjections(ew.PatternWalker):
             expression.relation,
             tuple(p.dst_column for p in expression.projection_list)
         ))
+
+
+class RenameOptimizations(ew.PatternWalker):
+    @ew.add_match(RenameColumn(ExtendedProjection, ..., ...))
+    def merge_rename_column_extended_projection(self, expression):
+        src = expression.src
+        dst = expression.dst
+        projection_list = expression.relation.projection_list
+        new_projection_list = []
+        for falm in projection_list:
+            if falm.dst_column == src:
+                falm = FunctionApplicationListMember(falm.fun_exp, dst)
+            new_projection_list.append(falm)
+        return self.walk(ExtendedProjection(
+            expression.relation.relation,
+            tuple(new_projection_list)
+        ))
+
+    @ew.add_match(RenameColumns(ExtendedProjection, ...))
+    def merge_rename_columns_extended_projection(self, expression):
+        renames = {src: dst for src, dst in expression.renames}
+        projection_list = expression.relation.projection_list
+        new_projection_list = []
+        for falm in projection_list:
+            if falm.dst_column in renames:
+                falm = FunctionApplicationListMember(
+                    falm.fun_exp,
+                    renames[falm.dst_column]
+                )
+            new_projection_list.append(falm)
+        return self.walk(ExtendedProjection(
+            expression.relation.relation,
+            tuple(new_projection_list)
+        ))
+
+    @ew.add_match(
+        RenameColumn(GroupByAggregation, ..., ...),
+        lambda exp: exp.src in {
+            f.dst_column for f in exp.relation.aggregate_functions
+        }
+    )
+    def merge_rename_column_group_by(self, expression):
+        src = expression.src
+        dst = expression.dst
+        aggregate_functions = expression.relation.aggregate_functions
+        new_aggregate_functions = []
+        for falm in aggregate_functions:
+            if falm.dst_column == src:
+                falm = FunctionApplicationListMember(falm.fun_exp, dst)
+            new_aggregate_functions.append(falm)
+        return self.walk(GroupByAggregation(
+            expression.relation.relation,
+            expression.relation.groupby,
+            tuple(new_aggregate_functions)
+        ))
+
+    @ew.add_match(RenameColumns, lambda exp: len(exp.renames) == 1)
+    def simplify_rename_columns(self, expression):
+        return self.walk(RenameColumn(
+            expression.relation,
+            expression.renames[0][0],
+            expression.renames[0][1]
+        ))
+
+    @ew.add_match(RenameColumn(NameColumns, ..., ...))
+    def simplify_rename_name(self, expression):
+        src = expression.src
+        dst = expression.dst
+        new_names = []
+        for name in expression.relation.column_names:
+            if name == src:
+                name = dst
+            new_names.append(name)
+        return self.walk(
+            NameColumns(expression.relation.relation, tuple(new_names))
+        )
+
+    @ew.add_match(RenameColumns(NameColumns, ...))
+    def simplify_renames_name(self, expression):
+        renames = {src: dst for src, dst in expression.renames}
+        new_names = []
+        for name in expression.relation.column_names:
+            name = renames.get(name, name)
+            new_names.append(name)
+        return self.walk(
+            NameColumns(expression.relation.relation, tuple(new_names))
+        )
 
 
 class RelationalAlgebraPushInSelections(ew.PatternWalker):
