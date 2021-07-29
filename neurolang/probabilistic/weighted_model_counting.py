@@ -4,6 +4,7 @@
 """
 import logging
 import operator as op
+from typing import AbstractSet, Tuple
 
 import numpy as np
 import pandas as pd
@@ -44,6 +45,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
+    BuildProvenanceAlgebraSet,
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
@@ -428,9 +430,9 @@ class SDDWMCSemiRingSolver(
     )
     def deterministic_fact_set_constant(self, deterministic_set):
         rap_column = ColumnStr(Symbol.fresh().name)
-        return ProvenanceAlgebraSet(
-            deterministic_set.relation.value,
-            rap_column
+        return BuildProvenanceAlgebraSet(
+            deterministic_set.relation,
+            str2columnstr_constant(rap_column)
         )
 
     @add_match(DeterministicFactSet(Symbol))
@@ -478,8 +480,8 @@ class SDDWMCSemiRingSolver(
         )
         self.tagged_sets.append(tagged_relation)
 
-        prov_set = ProvenanceAlgebraSet(
-            tagged_relation.value, rap_column.value
+        prov_set = BuildProvenanceAlgebraSet(
+            tagged_relation, rap_column
         )
 
         self.translated_probfact_sets[relation_symbol] = prov_set
@@ -537,8 +539,8 @@ class SDDWMCSemiRingSolver(
             )
             self.tagged_sets.append(tagged_relation)
 
-            prov_set = ProvenanceAlgebraSet(
-                tagged_relation.value, rap_column.value
+            prov_set = BuildProvenanceAlgebraSet(
+                tagged_relation, rap_column
             )
 
             self.translated_probfact_sets[relation_symbol] = prov_set
@@ -572,9 +574,9 @@ class SDDWMCSemiRingSolver(
             tagged_ras_set = NamedRelationalAlgebraFrozenSet(
                 new_columns, tagged_df
             )
-        return ProvenanceAlgebraSet(
-            tagged_ras_set,
-            ColumnStr(f'col_{prob_column}')
+        return BuildProvenanceAlgebraSet(
+            Constant[AbstractSet](tagged_ras_set, verify_type=False),
+            str2columnstr_constant(f'col_{prob_column}')
         )
 
     def generate_sdd_expression(

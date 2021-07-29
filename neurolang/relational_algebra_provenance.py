@@ -262,8 +262,8 @@ class ProvenanceColumnManipulationMixin(PatternWalker):
     @add_match(NameColumns(BuildProvenanceAlgebraSet, ...))
     def name_columns_rap(self, expression):
         relation = expression.relation.relation
-        columns_to_name = tuple(
-            c for c in relation.columns()
+        columns_to_name = (
+            c for c in expression.relation.columns()
             if c != expression.relation.provenance_column
         )
         ne = RenameColumns(
@@ -572,20 +572,6 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         return MUL(
             left,
             SUB(Constant(1), isnan(right))
-        )
-
-    # Raise Exception for non-implemented RAP operations
-    @add_match(
-        RelationalAlgebraOperation,
-        lambda x: any(
-            isinstance(arg, ProvenanceAlgebraSet)
-            for arg in x.unapply()
-        )
-    )
-    def rap_not_implemented(self, ra_operation):
-        raise RelationalAlgebraNotImplementedError(
-            f"Relational Algebra with Provenance "
-            f"operation {type(ra_operation)} not implemented"
         )
 
 

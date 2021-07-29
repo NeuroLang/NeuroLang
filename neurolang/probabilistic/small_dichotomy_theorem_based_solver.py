@@ -199,6 +199,10 @@ def solve_succ_query(query, cpl_program):
     with log_performance(LOG, "Run RAP query"):
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
+        prob_set_result = ProvenanceAlgebraSet(
+            prob_set_result.relation.value,
+            prob_set_result.provenance_column.value
+        )
 
     return prob_set_result
 
