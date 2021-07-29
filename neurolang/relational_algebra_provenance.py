@@ -2,11 +2,7 @@ import math
 import operator
 from typing import AbstractSet
 
-from .exceptions import (
-    NeuroLangException,
-    RelationalAlgebraError,
-    RelationalAlgebraNotImplementedError
-)
+from .exceptions import RelationalAlgebraError
 from .expression_walker import PatternWalker, add_match
 from .expressions import (
     Constant,
@@ -40,7 +36,6 @@ from .relational_algebra import (
     str2columnstr_constant
 )
 from .utils import OrderedSet
-
 
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
@@ -165,7 +160,7 @@ class BuildConstantProvenanceAlgebraSetMixin(PatternWalker):
         return self.walk(res)
 
 
-class BuildProvenanceAlgebraSetMixin(PatternWalker):
+class BuildProvenanceAlgebraSetWalkIntoMixin(PatternWalker):
     @add_match(
         BuildProvenanceAlgebraSet,
         lambda exp: any(not isinstance(arg, Constant) for arg in exp.unapply())
@@ -576,7 +571,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
 
 
 class RelationalAlgebraProvenanceCountingSolver(
-    BuildProvenanceAlgebraSetMixin,
+    BuildProvenanceAlgebraSetWalkIntoMixin,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     RelationalAlgebraSolver,
 ):
@@ -661,7 +656,7 @@ class RelationalAlgebraProvenanceCountingSolver(
 
 
 class RelationalAlgebraProvenanceExpressionSemringSolver(
-    BuildProvenanceAlgebraSetMixin,
+    BuildProvenanceAlgebraSetWalkIntoMixin,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     RelationalAlgebraSolver,
 ):

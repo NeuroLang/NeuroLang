@@ -87,9 +87,10 @@ class ProbSemiringSolver(
             ),
         )
 
-        self.translated_probfact_sets[relation_symbol] = BuildProvenanceAlgebraSet(
-            provenance_set, prov_column
-        )
+        self.translated_probfact_sets[relation_symbol] = \
+            BuildProvenanceAlgebraSet(
+                provenance_set, prov_column
+            )
         return self.translated_probfact_sets[relation_symbol]
 
     @add_match(ProbabilisticFactSet(Symbol, ...))
@@ -108,9 +109,10 @@ class ProbSemiringSolver(
         else:
             rap_column = str2columnstr_constant(Symbol.fresh().name)
 
-        self.translated_probfact_sets[relation_symbol] = BuildProvenanceAlgebraSet(
-            relation, rap_column
-        )
+        self.translated_probfact_sets[relation_symbol] = \
+            BuildProvenanceAlgebraSet(
+                relation, rap_column
+            )
         return self.translated_probfact_sets[relation_symbol]
 
     @add_match(ProbabilisticChoiceSet(Symbol, ...))

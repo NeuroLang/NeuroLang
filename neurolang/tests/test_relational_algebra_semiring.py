@@ -23,7 +23,7 @@ from ..relational_algebra import (
 )
 from ..relational_algebra_provenance import (
     BuildConstantProvenanceAlgebraSetMixin,
-    BuildProvenanceAlgebraSetMixin,
+    BuildProvenanceAlgebraSetWalkIntoMixin,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     RelationalAlgebraSolver
@@ -34,7 +34,7 @@ EQ = Constant(operator.eq)
 
 
 class RelationalAlgebraProvenanceExpressionSemring(
-    BuildProvenanceAlgebraSetMixin,
+    BuildProvenanceAlgebraSetWalkIntoMixin,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     ExpressionWalker
 ):
