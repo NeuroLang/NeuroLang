@@ -101,20 +101,28 @@ class BuildProvenanceAlgebraSet(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, provenance_column):
         self.relation = relation
         self.provenance_column = provenance_column
+        self._columns = None
         self._non_provenance_columns = None
+
+    def columns(self):
+        if self._columns is None:
+            if isinstance(self.relation, Constant):
+                columns = OrderedSet(
+                    str2columnstr_constant(c) if isinstance(c, str)
+                    else int2columnint_constant(c)
+                    for c in self.relation.value.columns
+                )
+            else:
+                columns = self.relation.columns()
+            self._columns = columns
+        return self._columns
 
     @property
     def non_provenance_columns(self):
         if self._non_provenance_columns is None:
-            if isinstance(self.relation, Constant):
-                    columns = OrderedSet(
-                        str2columnstr_constant(c) if isinstance(c, str)
-                        else int2columnint_constant(c)
-                        for c in self.relation.value.columns
-                    )
-            else:
-                columns = self.relation.columns()
-            self._non_provenance_columns = columns - {self.provenance_column}
+            self._non_provenance_columns = (
+                self.columns() - {self.provenance_column}
+            )
         return self._non_provenance_columns
 
     def __repr__(self):
