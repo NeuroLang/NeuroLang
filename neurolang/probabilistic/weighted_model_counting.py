@@ -722,23 +722,23 @@ def solve_succ_query_sdd_direct(
         solver = SDDWMCSemiRingSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
 
-    df = prob_set_result.relations.as_pandas_dataframe()
+    df = prob_set_result.relation.value.as_pandas_dataframe()
     if per_row_model:
         probabilities = sdd_solver_per_individual_row(
-            solver, df[prob_set_result.provenance_column]
+            solver, df[prob_set_result.provenance_column.value]
         )
     else:
         probabilities = sdd_solver_global_model(
-            solver, df[prob_set_result.provenance_column]
+            solver, df[prob_set_result.provenance_column.value]
         )
 
-    df[prob_set_result.provenance_column] = probabilities
+    df[prob_set_result.provenance_column.value] = probabilities
     return ProvenanceAlgebraSet(
-        type(prob_set_result.relations)(
-            prob_set_result.relations.columns,
+        type(prob_set_result.relation.value)(
+            prob_set_result.relation.value.columns,
             df
         ),
-        prob_set_result.provenance_column
+        prob_set_result.provenance_column.value
     )
 
 
