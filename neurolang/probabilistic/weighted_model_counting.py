@@ -686,7 +686,7 @@ def sdd_compilation_and_wmc(prob_set_result, solver):
 
 
 def solve_succ_query_sdd_direct(
-    query_predicate, cpl_program, per_row_model=True
+    query_predicate, cpl_program, per_row_model=True, return_prov_sets=True
 ):
     """
     Obtain the solution of a SUCC query on a CP-Logic program.
@@ -733,13 +733,22 @@ def solve_succ_query_sdd_direct(
         )
 
     df[prob_set_result.provenance_column.value] = probabilities
-    return ProvenanceAlgebraSet(
-        type(prob_set_result.relation.value)(
-            prob_set_result.relation.value.columns,
-            df
-        ),
-        prob_set_result.provenance_column.value
+
+    new_ras = type(prob_set_result.relation.value)(
+        prob_set_result.relation.value.columns,
+        df
     )
+
+    if return_prov_sets:
+        return ProvenanceAlgebraSet(
+            new_ras,
+            prob_set_result.provenance_column.value
+        )
+    else:
+        return BuildProvenanceAlgebraSet(
+            Constant[AbstractSet](new_ras),
+            prob_set_result.provenance_column
+        )
 
 
 def sdd_solver_global_model(solver, set_probabilities):
@@ -977,7 +986,7 @@ def solve_marg_query(rule, cpl):
     joint_rule = Implication(
         Symbol.fresh()(*joint_logic_variables), joint_antecedent
     )
-    joint_provset = solve_succ_query(joint_rule, cpl)
+    joint_provset = solve_succ_query(joint_rule, cpl, return_prov_sets=False)
 
     denominator_antecedent = rule.antecedent.conditioning
     denominator_logic_variables = extract_logic_free_variables(
@@ -987,7 +996,7 @@ def solve_marg_query(rule, cpl):
         Symbol.fresh()(*denominator_logic_variables),
         denominator_antecedent
     )
-    denominator_provset = solve_succ_query(denominator_rule, cpl)
+    denominator_provset = solve_succ_query(denominator_rule, cpl, return_prov_sets=False)
     rapcs = RelationalAlgebraProvenanceCountingSolver()
     provset = rapcs.walk(
         Projection(
@@ -995,4 +1004,7 @@ def solve_marg_query(rule, cpl):
             tuple(str2columnstr_constant(s.name) for s in res_args)
         )
     )
-    return provset
+    return ProvenanceAlgebraSet(
+        provset.relation.value,
+        provset.provenance_column.value
+    )
