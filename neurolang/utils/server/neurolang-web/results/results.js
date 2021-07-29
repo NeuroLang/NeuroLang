@@ -1,112 +1,159 @@
 import './results.css'
 import $ from 'jquery'
-import { hideViewer, showViewer } from '../papaya/viewer'
+import { PapayaViewer } from '../papaya/viewer'
 import { API_ROUTE, DATA_TYPES, PUBMED_BASE_URL } from '../constants'
 
 export function showQueryResults (queryId, data) {
   resultsContainer.show()
-  createResultTabs(data.data)
+  const rm = new ResultsManager(data.data)
+  rm.init()
 }
 
 const resultsContainer = $('#resultsContainer')
 const resultsTabs = resultsContainer.find('.nl-results-tabs')
 const tabTable = resultsContainer.find('.nl-result-table')
 
-function createResultTabs (data, defaultTab) {
-  // clear tabs
-  resultsTabs.empty()
+class ResultsManager {
+  constructor (resultsData) {
+    this.results = resultsData
+    this.activeSymbol = undefined
+    this.tableData = undefined
+    tabTable.off('draw.dt').on('draw.dt', () => this.onTableDraw())
 
-  // add new tabs
-  for (const symbol in data.results) {
-    const tab = $(`<li class='nav-item nav-link'>${symbol}</li>`)
-    if (typeof defaultTab === 'undefined' || defaultTab === symbol) {
-      tab.addClass('active')
-      defaultTab = symbol
+    this.viewer = new PapayaViewer()
+  }
+
+  /**
+   * Initialize the results view with new results.
+   * This method will create tabs for all the symbols in the result data
+   * and display the data for the default selected tab.
+   * @param {*} defaultTab
+   */
+  init (defaultTab) {
+    // clear tabs
+    resultsTabs.empty()
+
+    for (const symbol in this.results.results) {
+      const tab = $(`<li class='nav-item nav-link'>${symbol}</li>`)
+      if (typeof defaultTab === 'undefined' || defaultTab === symbol) {
+        tab.addClass('active')
+        defaultTab = symbol
+      }
+      tab.on('click', (evt) => this.setActiveResultTab(evt, symbol))
+      resultsTabs.append(tab)
     }
-    tab.on('click', (evt) => setActiveResultTab(evt, data, symbol))
-    resultsTabs.append(tab)
+
+    // display selected tab
+    this.setActiveResultTab(null, defaultTab)
   }
 
-  // display selected tab
-  setActiveResultTab(null, data, defaultTab)
-}
-
-function setActiveResultTab (evt, data, symbol) {
-  // remove active class from previous active tab
-  if (evt !== null) {
-    resultsContainer.find('li.active').removeClass('active')
-    $(evt.target).addClass('active')
-  }
-
-  // clear previous tab results
-  if ($.fn.DataTable.isDataTable(tabTable)) {
-    tabTable.DataTable().destroy()
-    tabTable.empty()
-  }
-
-  // prepare table data and show it
-  const queryId = data.uuid
-  const tab = data.results[symbol]
-  const cols = tab.columns.map((col, idx) => {
-    const ret = {
-      title: col
+  /**
+   * Callback for when a new tab has been selected
+   * @param {*} evt
+   * @param {*} symbol
+   */
+  setActiveResultTab (evt, symbol) {
+    // remove active class from previous active tab
+    if (evt !== null) {
+      resultsContainer.find('li.active').removeClass('active')
+      $(evt.target).addClass('active')
     }
-    if (tab.row_type[idx] === DATA_TYPES.studyID) {
-      ret.render = renderPMID
-    } else if (tab.row_type[idx] === DATA_TYPES.VBROverlay) {
-      ret.render = renderVBROverlay
-    }
-    return ret
-  })
-  tabTable.DataTable({
-    processing: true,
-    serverSide: true,
-    pageLength: 25,
-    order: [],
-    searching: false,
-    columns: cols,
-    ajax: (data, callback, settings) => getAjaxTableData(data, callback, settings, queryId, symbol)
-  })
 
-  // hide or show papaya viewer.
-  if (tab.row_type.some((elt) => elt === DATA_TYPES.VBROverlay)) {
-    showViewer()
-  } else {
-    hideViewer()
-  }
-}
+    this.activeSymbol = symbol
 
-/**
- * Custom function to make the ajax call when requesting new data
- * for the datatables.
- * See https://datatables.net/reference/option/ajax
- * @param {*} data
- * @param {*} callback
- * @param {*} settings
- */
-function getAjaxTableData (data, callback, settings, queryId, symbol) {
-  const queryData = {
-    symbol: symbol,
-    start: data.start,
-    length: data.length
-  }
-  if ('order' in data && data.order.length > 0) {
-    queryData.sort = data.order[0].column
-    queryData.asc = +(data.order[0].dir === 'asc')
-  }
-  $.ajax({
-    url: `${API_ROUTE.status}/${queryId}`,
-    type: 'get',
-    data: queryData
-  }).done(function (result) {
-    const tableData = {
-      draw: data.draw,
-      recordsTotal: result.data.results[symbol].size,
-      recordsFiltered: result.data.results[symbol].size,
-      data: result.data.results[symbol].values
+    // clear previous tab results
+    if ($.fn.DataTable.isDataTable(tabTable)) {
+      tabTable.DataTable().destroy()
+      tabTable.empty()
     }
-    callback(tableData)
-  })
+
+    // prepare results table by defining col types
+    // and initialize table
+    const tab = this.results.results[symbol]
+    const cols = tab.columns.map((col, idx) => {
+      const ret = {
+        title: col
+      }
+      if (tab.row_type[idx] === DATA_TYPES.studyID) {
+        ret.render = renderPMID
+      } else if (tab.row_type[idx] === DATA_TYPES.VBROverlay) {
+        ret.render = renderVBROverlay
+      }
+      return ret
+    })
+    tabTable.DataTable({
+      processing: true,
+      serverSide: true,
+      pageLength: 25,
+      order: [],
+      searching: false,
+      columns: cols,
+      ajax: (data, callback, settings) => this.fetchNewTableData(data, callback, settings)
+    })
+
+    // hide or show papaya viewer.
+    if (tab.row_type.some((elt) => elt === DATA_TYPES.VBROverlay)) {
+      this.viewer.showViewer()
+    } else {
+      this.viewer.hideViewer()
+    }
+  }
+
+  /**
+   * This function is called by the DataTables object to fetch new data
+   * to be displayed in the table (either upon initialization, or when the user
+   * changes page, or sorts a column).
+   * It needs to fetch the new data from the server, based on the criteria in
+   * the data parameter, and then call the callback with the new data.
+   * @param {*} data
+   * @param {*} callback
+   * @param {*} settings
+   */
+  fetchNewTableData (data, callback, settings) {
+    // get the symbol, page start, length
+    const queryData = {
+      symbol: this.activeSymbol,
+      start: data.start,
+      length: data.length
+    }
+    // add sorting info
+    if ('order' in data && data.order.length > 0) {
+      queryData.sort = data.order[0].column
+      queryData.asc = +(data.order[0].dir === 'asc')
+    }
+    // send get request to the server
+    const queryId = this.results.uuid
+    $.ajax({
+      url: `${API_ROUTE.status}/${queryId}`,
+      type: 'get',
+      data: queryData
+    }).done((result) => {
+      this.tableData = result.data
+      const dataToDraw = {
+        draw: data.draw,
+        recordsTotal: result.data.results[this.activeSymbol].size,
+        recordsFiltered: result.data.results[this.activeSymbol].size,
+        data: result.data.results[this.activeSymbol].values
+      }
+      callback(dataToDraw)
+    })
+  }
+
+  onTableDraw () {
+    $('.nl-vbr-overlay-switch input').on('change', (evt) => {
+      // get the item's image data
+      const elmt = $(evt.target)
+      const col = elmt.data('col')
+      const row = elmt.data('row')
+      const imageID = `image_${row}_${col}`
+      const image = this.tableData.results[this.activeSymbol].values[row][col]
+      if (evt.target.checked) {
+        this.viewer.addImage(imageID, image)
+      } else {
+        this.viewer.removeImage(imageID)
+      }
+    })
+  }
 }
 
 /**
@@ -130,10 +177,14 @@ function renderPMID (data, type) {
  * @param {*} type
  * @returns
  */
-function renderVBROverlay (data, type) {
+function renderVBROverlay (data, type, row, meta) {
   if (type === 'display') {
     // when datatables is trying to display the value, return a switch to display
-    return '<div class="form-check form-switch"><input class="form-check-input" type="checkbox"><label class="form-check-label">Show region</label></div>'
+    const imgSwitch = `<div class="form-check form-switch nl-vbr-overlay-switch">
+    <input class="form-check-input" type="checkbox" data-row=${meta.row} data-col=${meta.col}>
+    <label class="form-check-label">Show region</label></div>
+    `
+    return imgSwitch
   }
   // otherwise return the raw data (for ordering)
   return data
