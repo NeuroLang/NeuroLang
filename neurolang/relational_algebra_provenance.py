@@ -330,7 +330,7 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
             if c.fun_exp == c.dst_column
         }
         if equality_columns != relation.non_provenance_columns:
-            raise NeuroLangException("Invalid provenance ExtendedProjection")
+            raise ValueError("Invalid provenance ExtendedProjection")
 
         if any(
             proj_list_member.dst_column == relation.provenance_column

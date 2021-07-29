@@ -3,14 +3,16 @@ import operator
 import pytest
 
 from ..config import config
-from ..expressions import Constant
 from ..expression_walker import ChainedWalker, ExpressionWalker
+from ..expressions import Constant
 from ..probabilistic.cplogic import testing
 from ..probabilistic.cplogic.testing import eq_prov_relations
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
     Difference,
+    ExtendedProjection,
+    FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
     Projection,
@@ -20,10 +22,10 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
+    BuildConstantProvenanceAlgebraSetMixin,
+    BuildProvenanceAlgebraSetMixin,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
-    BuildProvenanceAlgebraSetMixin,
-    BuildConstantProvenanceAlgebraSetMixin,
     RelationalAlgebraSolver
 )
 from .test_relational_algebra_provenance import bpas_from_nas
@@ -422,3 +424,98 @@ def test_difference_same_provenance_column():
     op = Difference(r_left, r_right)
     result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
     assert eq_prov_relations(result, r_expected)
+
+
+def test_extended_proj():
+    provset = bpas_from_nas(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [
+                (0.2, "a", "b"),
+                (0.3, "b", "a"),
+                (0.5, "c", "c"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+    proj_list = [
+        FunctionApplicationListMember(
+            str2columnstr_constant("x"), str2columnstr_constant("x")
+        ),
+        FunctionApplicationListMember(
+            str2columnstr_constant("y"), str2columnstr_constant("y")
+        ),
+        FunctionApplicationListMember(
+            Constant("d"), str2columnstr_constant("z")
+        ),
+    ]
+    proj = ExtendedProjection(provset, proj_list)
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(proj)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y", "z"),
+            [
+                (0.2, "a", "b", "d"),
+                (0.3, "b", "a", "d"),
+                (0.5, "c", "c", "d"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_forbidden_extended_proj_missing_nonprov_cols():
+    provset = bpas_from_nas(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [
+                (0.2, "a", "b"),
+                (0.3, "b", "a"),
+                (0.5, "c", "c"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+    proj_list = [
+        FunctionApplicationListMember(
+            str2columnstr_constant("x"), str2columnstr_constant("x")
+        ),
+        FunctionApplicationListMember(
+            Constant("d"), str2columnstr_constant("z")
+        ),
+    ]
+    proj = ExtendedProjection(provset, proj_list)
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    with pytest.raises(ValueError):
+        solver.walk(proj)
+
+
+def testforbidden_extended_proj_on_provcol():
+    provset = bpas_from_nas(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [
+                (0.2, "a", "b"),
+                (0.3, "b", "a"),
+                (0.5, "c", "c"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+    proj_list = [
+        FunctionApplicationListMember(
+            str2columnstr_constant("x"), str2columnstr_constant("x")
+        ),
+        FunctionApplicationListMember(
+            str2columnstr_constant("y"), str2columnstr_constant("y")
+        ),
+        FunctionApplicationListMember(
+            Constant("d"), str2columnstr_constant("_p_")
+        ),
+    ]
+    proj = ExtendedProjection(provset, proj_list)
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    with pytest.raises(ValueError):
+        solver.walk(proj)
