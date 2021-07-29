@@ -76,7 +76,7 @@ class ResultsManager {
       }
       if (tab.row_type[idx] === DATA_TYPES.studyID) {
         ret.render = renderPMID
-      } else if (tab.row_type[idx] === DATA_TYPES.VBROverlay) {
+      } else if (tab.row_type[idx] === DATA_TYPES.VBROverlay || tab.row_type[idx] === DATA_TYPES.VBR) {
         ret.render = renderVBROverlay
       }
       return ret
@@ -92,7 +92,7 @@ class ResultsManager {
     })
 
     // hide or show papaya viewer.
-    if (tab.row_type.some((elt) => elt === DATA_TYPES.VBROverlay)) {
+    if (tab.row_type.some((elt) => elt === DATA_TYPES.VBROverlay || elt === DATA_TYPES.VBR)) {
       this.viewer.showViewer()
     } else {
       this.viewer.hideViewer()
@@ -146,9 +146,9 @@ class ResultsManager {
       const col = elmt.data('col')
       const row = elmt.data('row')
       const imageID = `image_${row}_${col}`
-      const image = this.tableData.results[this.activeSymbol].values[row][col]
+      const imageData = this.tableData.results[this.activeSymbol].values[row][col]
       if (evt.target.checked) {
-        this.viewer.addImage(imageID, image)
+        this.viewer.addImage(imageID, imageData.image, imageData.min, imageData.max)
       } else {
         this.viewer.removeImage(imageID)
       }
@@ -187,5 +187,5 @@ function renderVBROverlay (data, type, row, meta) {
     return imgSwitch
   }
   // otherwise return the raw data (for ordering)
-  return data
+  return data.hash
 }

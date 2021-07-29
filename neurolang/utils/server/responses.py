@@ -1,8 +1,10 @@
 import base64
+import hashlib
 import json
 from concurrent.futures import Future
 from typing import Any, Dict, List, Tuple, Type, Union
 from nibabel.nifti1 import Nifti1Image
+from nibabel.spatialimages import SpatialImage
 
 import numpy as np
 import pandas as pd
@@ -31,24 +33,51 @@ def base64_encode_nifti(image):
     return enc
 
 
-def base64_encode_vbr(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
-    """Returns base64 encoded string of the ExplicitVBR.
+def base64_encode_spatial(image: SpatialImage):
+    """Returns base64 encoded string of a spatial image
 
     Parameters
     ----------
-    vrb : Union[ExplicitVBR, ExplicitVBROverlay]
-        volumetric brain region to be encoded.
+    image : nibabel.spatialimages.SpatialImage
+        spatial image to be encoded.
 
     Returns
     -------
     str
         base64 encoded string of the vbr.
     """
-    image = vbr.spatial_image()
     nifti_image = Nifti1Image(
         np.asanyarray(image.dataobj, dtype=np.float32), affine=image.affine
     )
     return base64_encode_nifti(nifti_image)
+
+
+def serializeVBR(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
+    """
+    Serialize a Volumetric Brain Region object. 
+
+    Parameters
+    ----------
+    vbr : Union[ExplicitVBR, ExplicitVBROverlay]
+        the volumetric brain region to serialize
+
+    Returns
+    -------
+    Dict
+        a dict containing the base64 encoded image, as well as min and max
+        values, and a hash of the image.
+    """
+    image = vbr.spatial_image()
+    flattened = image.get_fdata().flatten()
+    min = flattened[flattened != 0].min()
+    max = flattened.max()
+    hash = hashlib.sha224(image.dataobj.tobytes()).hexdigest()
+    return {
+        "min": min,
+        "max": max,
+        "image": base64_encode_spatial(image),
+        "hash": hash,
+    }
 
 
 class CustomQueryResultsEncoder(json.JSONEncoder):
@@ -156,7 +185,7 @@ class QueryResults:
         rows = df.iloc[self.start : self.start + self.length].copy()
         for col, col_type in zip(rows.columns, row_type.__args__):
             if col_type == ExplicitVBR or col_type == ExplicitVBROverlay:
-                rows.loc[:, col] = rows[col].apply(base64_encode_vbr)
+                rows.loc[:, col] = rows[col].apply(serializeVBR)
             elif rows[col].dtype == np.object_:
                 rows.loc[:, col] = rows[col].astype(str)
 
