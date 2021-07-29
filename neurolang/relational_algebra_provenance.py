@@ -577,7 +577,6 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
 
 class RelationalAlgebraProvenanceCountingSolver(
     BuildProvenanceAlgebraSetMixin,
-    BuildConstantProvenanceAlgebraSetMixin,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     RelationalAlgebraSolver,
 ):

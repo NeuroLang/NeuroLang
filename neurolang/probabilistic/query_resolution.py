@@ -16,6 +16,7 @@ from ..logic import TRUE, Conjunction, Implication, Union
 from ..relational_algebra import Projection, str2columnstr_constant
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
+    ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
 from .cplogic.program import CPLogicProgram
@@ -235,7 +236,7 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
     joint_rule = Implication(
         Symbol.fresh()(*joint_logic_variables), joint_antecedent
     )
-    joint_provset = succ_solver(joint_rule, cpl)
+    joint_provset = succ_solver(joint_rule, cpl, return_prov_sets=False)
 
     denominator_antecedent = rule.antecedent.conditioning
     denominator_logic_variables = (
@@ -244,13 +245,17 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
     denominator_rule = Implication(
         Symbol.fresh()(*denominator_logic_variables), denominator_antecedent
     )
-    denominator_provset = succ_solver(denominator_rule, cpl)
+    denominator_provset = succ_solver(denominator_rule, cpl, return_prov_sets=False)
     rapcs = RelationalAlgebraProvenanceCountingSolver()
     provset = rapcs.walk(
         Projection(
             NaturalJoinInverse(joint_provset, denominator_provset),
             tuple(str2columnstr_constant(s.name) for s in res_args),
         )
+    )
+    provset = ProvenanceAlgebraSet(
+        provset.relation.value,
+        provset.provenance_column.value
     )
     return provset
 

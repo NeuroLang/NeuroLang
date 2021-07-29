@@ -1,5 +1,3 @@
-import typing
-
 from ..expression_walker import add_match
 from ..expressions import Constant, Symbol
 from ..relational_algebra import (
@@ -12,7 +10,6 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
-    BuildConstantProvenanceAlgebraSetMixin,
     BuildProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolver
 )
@@ -106,7 +103,10 @@ class ProbSemiringSolver(
             str2columnstr_constant(f"col_{i}") for i in relation.value.columns
         )
         relation = NameColumns(relation, named_columns)
-        rap_column = named_columns[prob_fact_set.probability_column.value]
+        if len(named_columns) > 0:
+            rap_column = named_columns[prob_fact_set.probability_column.value]
+        else:
+            rap_column = str2columnstr_constant(Symbol.fresh().name)
 
         self.translated_probfact_sets[relation_symbol] = BuildProvenanceAlgebraSet(
             relation, rap_column

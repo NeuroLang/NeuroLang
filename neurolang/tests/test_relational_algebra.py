@@ -869,7 +869,7 @@ def test_columns():
     nj = NaturalJoin(r1, r2)
     assert len(nj.columns()) == 0
 
-    rc = RenameColumn(r1, a, b)
+    rc = NameColumns(r1, (a, b))
     assert rc.columns() == set((a, b))
 
     assert NaturalJoin(rc, r2).columns() == set((a, b))

@@ -116,7 +116,7 @@ class RAQueryOptimiser(
     pass
 
 
-def solve_succ_query(query, cpl_program):
+def solve_succ_query(query, cpl_program, return_prov_sets=True):
     """
     Solve a SUCC query on a CP-Logic program.
 
@@ -199,10 +199,11 @@ def solve_succ_query(query, cpl_program):
     with log_performance(LOG, "Run RAP query"):
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
-        prob_set_result = ProvenanceAlgebraSet(
-            prob_set_result.relation.value,
-            prob_set_result.provenance_column.value
-        )
+        if return_prov_sets:
+            prob_set_result = ProvenanceAlgebraSet(
+                prob_set_result.relation.value,
+                prob_set_result.provenance_column.value
+            )
 
     return prob_set_result
 

@@ -34,6 +34,12 @@ class OrderedSet(MutableSet, Sequence):
         self._set.discard(src)
         self._set.add(dst)
 
+    def issubset(self, other):
+        return self <= other
+
+    def issuperset(self, other):
+        return self >= other
+
     def __contains__(self, value):
         return value in self._set
 
