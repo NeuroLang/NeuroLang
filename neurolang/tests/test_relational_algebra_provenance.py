@@ -13,6 +13,7 @@ from ..relational_algebra import (
     NameColumns,
     NaturalJoin,
     Product,
+    RelationalAlgebraSolver,
     RenameColumn,
     RenameColumns,
     Selection,
@@ -159,19 +160,21 @@ def test_naturaljoin():
     RnjR = R1cpR2.naturaljoin(R1njR2)
 
     res = ExtendedProjection(
-        bpas_from_nas(RnjR, ColumnStr("__provenance__1")),
+        Constant[AbstractSet](RnjR),
         tuple(
             [
                 FunctionApplicationListMember(
-                    fun_exp=Constant(ColumnStr("__provenance__1"))
-                    * Constant(ColumnStr("__provenance__2")),
+                    fun_exp=(
+                        Constant(ColumnStr("__provenance__1")) *
+                        Constant(ColumnStr("__provenance__2"))
+                    ),
                     dst_column=Constant(ColumnStr("__provenance__")),
                 )
             ]
         ),
     )
 
-    res = RelationalAlgebraProvenanceCountingSolver().walk(res)
+    res = RelationalAlgebraSolver().walk(res)
 
     prov_sol = sol.value.projection("__provenance__")
     prov_res = res.value.projection("__provenance__")
@@ -240,19 +243,21 @@ def test_product():
     R1cpR2 = R1.cross_product(R2)
     RnjR = R1cpR2.naturaljoin(R1njR2)
     res = ExtendedProjection(
-        ProvenanceAlgebraSet(RnjR, ColumnStr("__provenance__1")),
+        Constant[AbstractSet](RnjR),
         tuple(
             [
                 FunctionApplicationListMember(
-                    fun_exp=Constant(ColumnStr("__provenance__1"))
-                    * Constant(ColumnStr("__provenance__2")),
+                    fun_exp=(
+                        Constant(ColumnStr("__provenance__1")) *
+                        Constant(ColumnStr("__provenance__2"))
+                    ),
                     dst_column=Constant(ColumnStr("__provenance__")),
                 )
             ]
         ),
     )
 
-    res = RelationalAlgebraProvenanceCountingSolver().walk(res)
+    res = RelationalAlgebraSolver().walk(res)
 
     prov_sol = sol.projection("__provenance__")
     prov_res = res.value.projection("__provenance__")
@@ -410,21 +415,29 @@ def test_extended_projection():
 
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            iterable=[(6, 1), (8, 2), (10, 2), (4, 1), (3, 1),],
-            columns=["sum_", "__provenance__"],
+            iterable=[
+                (5, 1, 6, 1), (6, 2, 8, 2),
+                (7, 3, 10, 2), (1, 3, 4, 1),
+                (2, 1, 3, 1),
+            ],
+            columns=["x", "y", "sum_", "__provenance__"],
         ),
         ColumnStr("__provenance__"),
     )
+
+    x = str2columnstr_constant("x")
+    y = str2columnstr_constant("y")
 
     res = ExtendedProjection(
         relation,
         tuple(
             [
                 FunctionApplicationListMember(
-                    fun_exp=Constant(ColumnStr("x"))
-                    + Constant(ColumnStr("y")),
+                    fun_exp=x + y,
                     dst_column=Constant(ColumnStr("sum_")),
-                )
+                ),
+                FunctionApplicationListMember(x, x),
+                FunctionApplicationListMember(y, y)
             ]
         ),
     )
