@@ -36,6 +36,7 @@ from .relational_algebra import (
     UnaryRelationalAlgebraOperation,
     Union,
     eq_,
+    int2columnint_constant,
     str2columnstr_constant
 )
 from .utils import OrderedSet
@@ -100,14 +101,21 @@ class BuildProvenanceAlgebraSet(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, provenance_column):
         self.relation = relation
         self.provenance_column = provenance_column
+        self._non_provenance_columns = None
 
     @property
     def non_provenance_columns(self):
-        if isinstance(self.relation, Constant):
-            columns = OrderedSet(self.relation.value.columns)
-        else:
-            columns = self.relation.columns()
-        return columns - {self.provenance_column}
+        if self._non_provenance_columns is None:
+            if isinstance(self.relation, Constant):
+                    columns = OrderedSet(
+                        str2columnstr_constant(c) if isinstance(c, str)
+                        else int2columnint_constant(c)
+                        for c in self.relation.value.columns
+                    )
+            else:
+                columns = self.relation.columns()
+            self._non_provenance_columns = columns - {self.provenance_column}
+        return self._non_provenance_columns
 
     def __repr__(self):
         return (f"RAP[{self.relation}, {self.provenance_column}")

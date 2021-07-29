@@ -49,6 +49,12 @@ def str2columnstr_constant(name):
     )
 
 
+def int2columnint_constant(col):
+    return Constant[ColumnInt](
+        ColumnInt(col), auto_infer_type=False, verify_type=False,
+    )
+
+
 def get_expression_columns(expression):
     columns = OrderedSet()
     args = list(expression.unapply())
