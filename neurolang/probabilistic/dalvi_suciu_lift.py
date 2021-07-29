@@ -7,14 +7,16 @@ import numpy as np
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
-    flatten_query,
+    flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NonLiftableException
 from ..expression_walker import (
+    ChainedWalker,
+    ExpressionWalker,
     PatternWalker,
     ReplaceExpressionWalker,
-    add_match,
+    add_match
 )
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import (
@@ -23,16 +25,16 @@ from ..logic import (
     Disjunction,
     ExistentialPredicate,
     Implication,
-    NaryLogicOperator,
+    NaryLogicOperator
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
-    extract_logic_free_variables,
+    extract_logic_free_variables
 )
 from ..logic.transformations import (
-    MakeExistentialsImplicit,
-    RemoveTrivialOperations,
     GuaranteeConjunction,
+    MakeExistentialsImplicit,
+    RemoveTrivialOperations
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -40,35 +42,37 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     Projection,
+    RelationalAlgebraSolver,
     UnaryRelationalAlgebraOperation,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
-from ..relational_algebra_provenance import ProvenanceAlgebraSet
+from ..relational_algebra_provenance import BuildConstantProvenanceAlgebraSetMixin, ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
-from .small_dichotomy_theorem_based_solver import (
-    RAQueryOptimiser,
-    lift_optimization_for_choice_predicates,
-)
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     NonLiftable,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query,
+    generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import ProbSemiringSolver
+from .probabilistic_semiring_solver import (
+    ProbSemiringSolver,
+    ProbSemiringToRelationalAlgebraSolver
+)
 from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
+from .small_dichotomy_theorem_based_solver import (
+    RAQueryOptimiser,
+    _maybe_reintroduce_head_variables,
+    _project_on_query_head,
+    lift_optimization_for_choice_predicates
+)
 from .transforms import (
     convert_rule_to_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
-    unify_existential_variables,
-)
-from .small_dichotomy_theorem_based_solver import (
-    _project_on_query_head,
-    _maybe_reintroduce_head_variables,
+    unify_existential_variables
 )
 
 LOG = logging.getLogger(__name__)
@@ -152,19 +156,34 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
         ra_query = _maybe_reintroduce_head_variables(
             ra_query, flat_query, unified_query
         )
-        ra_query = RAQueryOptimiser().walk(ra_query)
+
+    query_compiler = generate_query_compiler(symbol_table, return_prov_sets)
 
     with log_performance(LOG, "Run RAP query"):
-        solver = ProbSemiringSolver(symbol_table)
-        prob_set_result = solver.walk(ra_query)
-
-        if return_prov_sets:
-            prob_set_result = ProvenanceAlgebraSet(
-                prob_set_result.relation.value,
-                prob_set_result.provenance_column.value
-            )
+        prob_set_result = query_compiler.walk(ra_query)
 
     return prob_set_result
+
+
+def generate_query_compiler(symbol_table, return_prov_sets):
+    steps = [
+        RAQueryOptimiser(),
+        ProbSemiringToRelationalAlgebraSolver(symbol_table=symbol_table),
+        RAQueryOptimiser(),
+        RelationalAlgebraSolver()
+    ]
+
+    if return_prov_sets:
+        class BuildConstantProvenanceAlgebraSetSolver(
+            BuildConstantProvenanceAlgebraSetMixin,
+            ExpressionWalker
+        ):
+            pass
+
+        steps.append(BuildConstantProvenanceAlgebraSetSolver)
+
+    query_compiler = ChainedWalker(*steps)
+    return query_compiler
 
 
 def solve_marg_query(rule, cpl):

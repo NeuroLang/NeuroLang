@@ -1,4 +1,4 @@
-from ..expression_walker import add_match
+from ..expression_walker import ExpressionWalker, PatternWalker, ResolveSymbolMixin, add_match
 from ..expressions import Constant, Symbol
 from ..relational_algebra import (
     ColumnStr,
@@ -6,12 +6,14 @@ from ..relational_algebra import (
     FunctionApplicationListMember,
     NameColumns,
     Projection,
+    RelationalAlgebraSolver,
     RelationalAlgebraStringExpression,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
     BuildProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceExpressionSemringSolver
+    BuildProvenanceAlgebraSetWalkIntoMixin,
+    RelationalAlgebraProvenanceExpressionSemringSolverMixin
 )
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
@@ -20,8 +22,10 @@ from .probabilistic_ra_utils import (
 )
 
 
-class ProbSemiringSolver(
-    RelationalAlgebraProvenanceExpressionSemringSolver,
+class ProbSemiringSolverMixin(
+    BuildProvenanceAlgebraSetWalkIntoMixin,
+    RelationalAlgebraProvenanceExpressionSemringSolverMixin,
+    PatternWalker
 ):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -150,3 +154,20 @@ class ProbSemiringSolver(
                 "All non-provenance columns must be part of the extended "
                 "projection as {c: c} projection list member."
             )
+
+
+class ProbSemiringSolver(
+    ProbSemiringSolverMixin,
+    RelationalAlgebraSolver
+):
+    pass
+
+
+class ProbSemiringToRelationalAlgebraSolver(
+    ProbSemiringSolverMixin,
+    ResolveSymbolMixin,
+    ExpressionWalker
+):
+    def __init__(self, *args, symbol_table=None, **kwargs):
+        self.symbol_table = symbol_table
+        super().__init__(*args, **kwargs)
