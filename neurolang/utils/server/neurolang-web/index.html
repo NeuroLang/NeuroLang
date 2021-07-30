@@ -5,64 +5,78 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" type="text/css" href="/papaya.css?build=1453" />
+  <link rel="stylesheet" type="text/css" href="/node_modules/semantic-ui-css/semantic.min.css" />
+  <link rel="stylesheet" type="text/css" href="/node_modules/datatables.net-se/css/dataTables.semanticui.min.css" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Neurolang Web Application</title>
 </head>
 
 <body>
 
-  <header class="p-3 bg-dark text-white">
-    <div class="container">
-      <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-lg-start">
-        <a href="/" class="d-flex align-items-center mb-2 mb-lg-0 text-white text-decoration-none">
-          Neurolang
-        </a>
-
-        <!-- <ul class="nav col-12 col-lg-auto me-lg-auto mb-2 justify-content-center mb-md-0">
-          <li><a href="#" class="nav-link px-2 text-secondary">Home</a></li>
-          <li><a href="#" class="nav-link px-2 text-white">Features</a></li>
-          <li><a href="#" class="nav-link px-2 text-white">Pricing</a></li>
-          <li><a href="#" class="nav-link px-2 text-white">FAQs</a></li>
-          <li><a href="#" class="nav-link px-2 text-white">About</a></li>
-        </ul>
-
-        <form class="col-12 col-lg-auto mb-3 mb-lg-0 me-lg-3">
-          <input type="search" class="form-control form-control-dark" placeholder="Search..." aria-label="Search">
-        </form>
-
-        <div class="text-end">
-          <button type="button" class="btn btn-outline-light me-2">Login</button>
-          <button type="button" class="btn btn-warning">Sign-up</button>
-        </div> -->
-      </div>
-    </div>
-  </header>
-
-  <div id="queryContainer" class="container">
-    <div class="mb-3">
-      <label for="queryTextArea" class="form-label">Write your query on neurological data</label>
-      <textarea class="form-control" id="queryTextArea">
-tfidf :: TermInStudy(term, study) :- TermInStudyTFIDF(term, tfidf, study)
-TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
-Activation(i, j, k) :- SelectedStudy(s) & PeakReported(i, j, k, s)
-ActivationGivenTerm(i, j, k, PROB(i, j, k)) :- Activation(i, j, k) // TermAssociation("emotion")
-ActivationGivenTermImage(agg_create_region_overlay(i, j, k, p)) :- ActivationGivenTerm(i, j, k, p)
-      </textarea>
-      <button type="button" class="btn btn-primary mt-2" id="runQueryBtn">Run query</button>
-      <div class="query-alert mt-2" id="queryAlert">
+  <!-- Following Menu -->
+  <div class="ui top fixed menu">
+    <div class="ui container">
+      <a class="active item">Neurolang</a>
+      <div class="right menu">
+        <div class="item">
+          <div class="ui action left icon input">
+            <i class="search icon"></i>
+            <input type="text" placeholder="Search">
+            <button class="ui button">Submit</button>
+          </div>
+        </div>
+        <a class="item">Link</a>
       </div>
     </div>
   </div>
 
-  <div class="container d-flex flex-row">
-    <div id="resultsContainer" class="nl-results-container">
-      <ul class='nav nav-tabs nl-results-tabs' role='tablist'></ul>
-      <div class="tab-content mb-3">
-        <table class='table nl-result-table' id='tabTable' width="100%"></table>
+  <div id="queryContainer" class="ui grid container">
+    <div class="sixteen wide column">
+      <div class="ui raised segment query-segment">
+        <div class="ui top attached label">Write your query on neurological data</div>
+        <div class="code-mirror-container">
+          <textarea class="ui input" id="queryTextArea">
+tfidf :: TermInStudy(term, study) :- TermInStudyTFIDF(term, tfidf, study)
+TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
+Activation(i, j, k) :- SelectedStudy(s) & PeakReported(i, j, k, s)
+ActivationGivenTerm(i, j, k, PROB(i, j, k)) :- Activation(i, j, k) // TermAssociation("emotion")
+ActivationGivenTermImage(agg_create_region_overlay(i, j, k, p)) :- ActivationGivenTerm(i, j, k, p)</textarea>
+        </div>
       </div>
     </div>
 
-    <div id="nlPapayaContainer" class="nl-papaya-container w-50">
+    <div class="two wide column">
+      <button type="button" class="ui button" id="runQueryBtn">Run query</button>
+      
+    </div>
+
+    <div class="fourteen wide column">
+      <div class="ui message" id="queryAlert">
+        <div class="content">
+          <p></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ui container nl-results-viewer-container">
+    <div id="resultsContainer" class="nl-results-container">
+      <!-- <ul class='nav nav-tabs nl-results-tabs' role='tablist'></ul>
+      <div class="tab-content mb-3">
+        <table class='table nl-result-table' id='tabTable' width="100%"></table>
+      </div> -->
+
+      <div class="ui top attached tabular menu nl-results-tabs">
+        <a class="item active" data-tab="first">First</a>
+        <a class="item" data-tab="second">Second</a>
+        <a class="item" data-tab="third">Third</a>
+      </div>
+      <div class="ui bottom attached tab segment active">
+        <table class='ui table nl-result-table' id='tabTable' width="100%"></table>
+      </div>
+    </div>
+
+    <div id="nlPapayaContainer" class="nl-papaya-container">
       <!-- <div class='papaya' data-params='params'></div> -->
     </div>
   </div>

@@ -34,7 +34,7 @@ class ResultsManager {
     resultsTabs.empty()
 
     for (const symbol in this.results.results) {
-      const tab = $(`<li class='nav-item nav-link'>${symbol}</li>`)
+      const tab = $(`<li class='item'>${symbol}</li>`)
       if (typeof defaultTab === 'undefined' || defaultTab === symbol) {
         tab.addClass('active')
         defaultTab = symbol

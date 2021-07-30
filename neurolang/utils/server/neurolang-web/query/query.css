@@ -1,17 +1,12 @@
 #queryContainer .CodeMirror{
-    height: 15em;
-    resize: vertical;
-    overflow: auto !important;
-    border: 1px solid silver;
+    height: 20em;
+    width: 100%;
 }
 
-/* #queryTextArea + .CodeMirror {
-    height: 200px;
-    min-height:100px;
-    resize: vertical;
-    overflow: auto !important;
+#queryContainer .query-segment {
+    padding: 0;
 }
 
-#queryTextArea + .CodeMirror pre {
-    padding-bottom: .7em;
-} */
+#queryAlert {
+    display: none;
+}

@@ -4,7 +4,13 @@
     width: 100%;
 }
 
-.nl-results-container .nl-results-tabs .nav-link:not(.active) {
+.nl-results-container .nl-results-tabs {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.nl-results-container .nl-results-tabs .item:not(.active) {
     cursor: pointer;
 }
 

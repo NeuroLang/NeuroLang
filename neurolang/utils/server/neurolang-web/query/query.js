@@ -22,7 +22,7 @@ const editor = CodeMirror.fromTextArea(queryTextArea, {
 })
 
 const runQueryBtn = document.querySelector('#runQueryBtn')
-const queryAlert = document.querySelector('#queryAlert')
+const queryAlert = $('#queryAlert')
 runQueryBtn.addEventListener('click', submitQuery)
 
 function submitQuery () {
@@ -72,10 +72,15 @@ function setQueryError (data) {
 }
 
 function setAlert (msg, error = false) {
+  queryAlert.removeClass('error')
+  queryAlert.removeClass('info')
   if (typeof msg !== 'undefined') {
-    const styleClass = error ? 'alert-danger' : 'alert-primary'
-    queryAlert.innerHTML = `<div class="alert ${styleClass}" role="alert">${msg}</div>`
+    const styleClass = error ? 'error' : 'info'
+    queryAlert.addClass(styleClass)
+    queryAlert.find('.content p').text(msg)
+    // queryAlert.innerHTML = `<div class="content"><p>${msg}</p></div>`
+    queryAlert.show()
   } else {
-    queryAlert.innerHTML = ''
+    queryAlert.hide()
   }
 }

@@ -15,10 +15,10 @@
     "vite": "^2.4.3"
   },
   "dependencies": {
-    "bootstrap": "^5.0.2",
     "codemirror": "^5.62.2",
-    "datatables.net-bs5": "^1.10.25",
     "datatables.net-dt": "^1.1.0",
-    "jquery": "^3.6.0"
+    "datatables.net-se": "^1.10.25",
+    "jquery": "^3.6.0",
+    "semantic-ui-css": "^2.4.1"
   }
 }
