@@ -124,8 +124,6 @@ def test_provenance_rename(R1, provenance_set_r1):
     assert "__provenance__" not in sol.columns
 
 
-
-
 def test_naturaljoin():
     RA1 = NamedRelationalAlgebraFrozenSet(
         columns=("col1", "__provenance__"),

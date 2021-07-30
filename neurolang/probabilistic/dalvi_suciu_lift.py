@@ -46,7 +46,10 @@ from ..relational_algebra import (
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import BuildConstantProvenanceAlgebraSetMixin, ProvenanceAlgebraSet
+from ..relational_algebra_provenance import (
+    BuildConstantProvenanceAlgebraSetMixin,
+    ProvenanceAlgebraSet
+)
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .exceptions import NotEasilyShatterableError
@@ -57,7 +60,6 @@ from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query
 )
 from .probabilistic_semiring_solver import (
-    ProbSemiringSolver,
     ProbSemiringToRelationalAlgebraSolver
 )
 from .query_resolution import lift_solve_marg_query

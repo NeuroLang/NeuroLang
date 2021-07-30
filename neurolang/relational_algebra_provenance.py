@@ -147,7 +147,7 @@ class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
 
 class BuildConstantProvenanceAlgebraSetMixin(PatternWalker):
     """
-    Mixin to build Provnance Algebra Sets from 
+    Mixin to build Provnance Algebra Sets from
     the `BuildProvenanceAlgebraSet` operation.
     """
 
@@ -419,8 +419,12 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         res_prov_col = left.provenance_column
         # provenance columns are temporarily renamed for executing the
         # non-provenance operation on the relations
-        tmp_left_col = str2columnstr_constant(f"{left.provenance_column.value}1")
-        tmp_right_col = str2columnstr_constant(f"{right.provenance_column.value}2")
+        tmp_left_col = str2columnstr_constant(
+            f"{left.provenance_column.value}1"
+        )
+        tmp_right_col = str2columnstr_constant(
+            f"{right.provenance_column.value}2"
+        )
         tmp_left = RenameColumn(
             left.relation,
             left.provenance_column,
@@ -527,7 +531,9 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
             SUM, args, validate_arguments=False, verify_type=False
         )
 
-    @add_match(Difference(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
+    @add_match(
+        Difference(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet)
+    )
     def difference(self, diff):
         left = diff.relation_left
         right = diff.relation_right

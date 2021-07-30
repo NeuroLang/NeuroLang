@@ -1,5 +1,4 @@
 import math
-from neurolang.logic.transformations import ReplaceFreeSymbolWalker
 import operator
 from typing import AbstractSet, Callable, Tuple
 
@@ -288,7 +287,7 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
         self.relation = relation
         self.renames = renames
 
-    def columns(self):  
+    def columns(self):
         columns = get_raop_or_constant_columns(self.relation).copy()
         for rename in self.renames:
             columns.replace(rename[0], rename[1])
@@ -1516,7 +1515,10 @@ class RenameOptimizations(ew.PatternWalker):
 
         return self.walk(
             GroupByAggregation(
-                RenameColumns(expression.relation.relation, expression.renames),
+                RenameColumns(
+                    expression.relation.relation,
+                    expression.renames
+                ),
                 new_groupby,
                 expression.relation.aggregate_functions
             )
@@ -1531,7 +1533,10 @@ class RenameOptimizations(ew.PatternWalker):
 
         return self.walk(
             Projection(
-                RenameColumns(expression.relation.relation, expression.renames),
+                RenameColumns(
+                    expression.relation.relation,
+                    expression.renames
+                ),
                 new_attributes
             )
         )

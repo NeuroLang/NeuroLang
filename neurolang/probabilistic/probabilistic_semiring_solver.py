@@ -1,4 +1,9 @@
-from ..expression_walker import ExpressionWalker, PatternWalker, ResolveSymbolMixin, add_match
+from ..expression_walker import (
+    ExpressionWalker,
+    PatternWalker,
+    ResolveSymbolMixin,
+    add_match
+)
 from ..expressions import Constant, Symbol
 from ..relational_algebra import (
     ColumnStr,
