@@ -1,12 +1,11 @@
 import math
 import operator
-from typing import AbstractSet, Tuple, Callable
+from typing import AbstractSet, Callable, Tuple
 
 import numpy
 import pandas.core.computation.ops
 
-from . import expression_walker as ew
-from . import type_system
+from . import expression_walker as ew, type_system
 from .exceptions import NeuroLangException, ProjectionOverMissingColumnsError
 from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
@@ -16,13 +15,18 @@ from .expressions import (
     FunctionApplication,
     Symbol,
     Unknown,
-    sure_is_not_pattern,
+    sure_is_not_pattern
 )
-from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
+from .utils import (
+    RelationalAlgebraFrozenSet,
+    NamedRelationalAlgebraFrozenSet,
+    OrderedSet,
+    RelationalAlgebraSet
+)
 from .utils.relational_algebra_set import (
     RelationalAlgebraColumnInt,
     RelationalAlgebraColumnStr,
-    RelationalAlgebraStringExpression,
+    RelationalAlgebraStringExpression
 )
 
 eq_ = Constant(operator.eq)
@@ -46,8 +50,14 @@ def str2columnstr_constant(name):
     )
 
 
+def int2columnint_constant(col):
+    return Constant[ColumnInt](
+        ColumnInt(col), auto_infer_type=False, verify_type=False,
+    )
+
+
 def get_expression_columns(expression):
-    columns = set()
+    columns = OrderedSet()
     args = list(expression.unapply())
     while args:
         arg = args.pop()
@@ -69,20 +79,56 @@ class RelationalAlgebraOperation(Definition):
 
     def columns(self):
         if not hasattr(self, '_columns'):
-            self._columns = get_expression_columns(self)
+            raise NotImplementedError()
         return self._columns
 
 
+def _get_columns_for_RA_or_constant(expression):
+    if isinstance(expression, RelationalAlgebraOperation):
+        return expression.columns()
+    elif isinstance(expression, Constant):
+        if isinstance(expression.value, NamedRelationalAlgebraFrozenSet):
+            return OrderedSet(
+                str2columnstr_constant(c)
+                for c in expression.value.columns
+            )
+        elif isinstance(expression.value, RelationalAlgebraFrozenSet):
+            return OrderedSet(
+                int2columnint_constant(c)
+                for c in expression.value.columns
+            )
+    raise NotImplementedError()
+
+
 class NAryRelationalAlgebraOperation(RelationalAlgebraOperation):
-    pass
+    def columns(self):
+        if not hasattr(self, '_columns'):
+            self._columns = _get_columns_for_RA_or_constant(self.relations[0])
+            for r in self.relations[1:]:
+                self._columns = (
+                    self._columns |
+                    _get_columns_for_RA_or_constant(r)
+                )
+        return self._columns
 
 
 class BinaryRelationalAlgebraOperation(RelationalAlgebraOperation):
-    pass
+    def columns(self):
+        if not hasattr(self, '_columns'):
+            self._columns = (
+                _get_columns_for_RA_or_constant(self.relation_left) |
+                _get_columns_for_RA_or_constant(self.relation_right)
+            )
+        return self._columns
 
 
 class UnaryRelationalAlgebraOperation(RelationalAlgebraOperation):
-    pass
+    def columns(self):
+        if not hasattr(self, '_columns'):
+            self._columns = (
+                _get_columns_for_RA_or_constant(self.relation)
+            )
+        return self._columns
 
 
 class Selection(UnaryRelationalAlgebraOperation):
@@ -98,6 +144,7 @@ class Projection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
+        self._columns = OrderedSet(self.attributes)
 
     def __repr__(self):
         return (
@@ -197,6 +244,9 @@ class NameColumns(UnaryRelationalAlgebraOperation):
         self.relation = relation
         self.column_names = column_names
 
+    def columns(self):
+        return OrderedSet(self.column_names)
+
     def __repr__(self):
         return (
             f"\N{GREEK SMALL LETTER DELTA}"
@@ -209,6 +259,11 @@ class RenameColumn(UnaryRelationalAlgebraOperation):
         self.relation = relation
         self.src = src
         self.dst = dst
+
+    def columns(self):
+        columns = _get_columns_for_RA_or_constant(self.relation).copy()
+        columns.replace(self.src, self.dst)
+        return columns
 
     def __repr__(self):
         return (
@@ -234,6 +289,12 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, renames):
         self.relation = relation
         self.renames = renames
+
+    def columns(self):
+        columns = _get_columns_for_RA_or_constant(self.relation).copy()
+        for rename in self.renames:
+            columns.replace(rename[0], rename[1])
+        return columns
 
     def __repr__(self):
         return (
@@ -267,6 +328,15 @@ class GroupByAggregation(RelationalAlgebraOperation):
         self.relation = relation
         self.groupby = groupby
         self.aggregate_functions = aggregate_functions
+
+    def columns(self):
+        return (
+            OrderedSet(self.groupby) |
+            OrderedSet([
+                aggregate.dst_column
+                for aggregate in self.aggregate_functions
+            ])
+        )
 
     def __repr__(self):
         join_str = "," if len(self.aggregate_functions) < 2 else ",\n"
@@ -303,6 +373,12 @@ class ExtendedProjection(RelationalAlgebraOperation):
     def __init__(self, relation, projection_list):
         self.relation = relation
         self.projection_list = tuple(projection_list)
+
+    def columns(self):
+        return OrderedSet([
+            projection.dst_column for projection in
+            self.projection_list
+        ])
 
     def __repr__(self):
         join_str = "," if len(self.projection_list) < 2 else ",\n"
@@ -427,6 +503,12 @@ class ConcatenateConstantColumn(UnaryRelationalAlgebraOperation):
         self.relation = relation
         self.column_name = column_name
         self.column_value = column_value
+
+    def columns(self):
+        return (
+            _get_columns_for_RA_or_constant(self.relation) |
+            {self.column_name}
+        )
 
 
 OPERATOR_STRING = {
@@ -1341,6 +1423,150 @@ class EliminateTrivialProjections(ew.PatternWalker):
             expression.relation,
             tuple(p.dst_column for p in expression.projection_list)
         ))
+
+
+class RenameOptimizations(ew.PatternWalker):
+    @ew.add_match(RenameColumn)
+    def convert_rename_column(self, expression):
+        return self.walk(RenameColumns(
+            expression.relation,
+            ((expression.src, expression.dst),)
+        ))
+
+    @ew.add_match(RenameColumns, lambda exp: len(exp.renames) == 0)
+    def remove_trivial_rename(self, expression):
+        return self.walk(expression.relation)
+
+    @ew.add_match(RenameColumns(RenameColumns, ...))
+    def merge_nested_rename_columns(self, expression):
+        outer_renames = {src: dst for src, dst in expression.renames}
+        new_renames = []
+        for src, dst in expression.relation.renames:
+            if dst in outer_renames:
+                new_renames.append(
+                    (src, outer_renames[dst])
+                )
+                del outer_renames[dst]
+            new_renames.append((src, dst))
+        new_renames += [
+            (src, dst)
+            for src, dst in outer_renames.items()
+        ]
+
+        return self.walk(
+            RenameColumns(expression.relation.relation, tuple(new_renames))
+        )
+
+    @ew.add_match(RenameColumns(ExtendedProjection, ...))
+    def merge_rename_columns_extended_projection(self, expression):
+        renames = {src: dst for src, dst in expression.renames}
+        projection_list = expression.relation.projection_list
+        new_projection_list = []
+        for falm in projection_list:
+            if falm.dst_column in renames:
+                falm = FunctionApplicationListMember(
+                    falm.fun_exp,
+                    renames[falm.dst_column]
+                )
+            new_projection_list.append(falm)
+        return self.walk(ExtendedProjection(
+            expression.relation.relation,
+            tuple(new_projection_list)
+        ))
+
+    @ew.add_match(
+        RenameColumns(GroupByAggregation, ...),
+        lambda exp: len({src for src, _ in exp.renames} & {
+            f.dst_column for f in exp.relation.aggregate_functions
+        }) > 0
+    )
+    def merge_rename_column_group_by(self, expression):
+        renames = {src: dst for src, dst in expression.renames}
+        aggregate_functions = expression.relation.aggregate_functions
+        new_aggregate_functions = []
+        for falm in aggregate_functions:
+            if falm.dst_column in renames:
+                old_dst = falm.dst_column
+                falm = FunctionApplicationListMember(
+                    falm.fun_exp,
+                    renames[falm.dst_column]
+                )
+                del renames[old_dst]
+            new_aggregate_functions.append(falm)
+        return self.walk(
+            RenameColumns(
+                GroupByAggregation(
+                    expression.relation.relation,
+                    expression.relation.groupby,
+                    tuple(new_aggregate_functions)
+                ),
+                tuple((src, dst) for src, dst in renames.items())
+            )
+        )
+
+    @ew.add_match(
+        RenameColumns(GroupByAggregation, ...),
+        lambda exp: {src for src, _ in exp.renames} <= set(
+            exp.relation.groupby
+        )
+    )
+    def push_rename_past_groupby(self, expression):
+        renames = {src: dst for src, dst in expression.renames}
+        new_groupby = tuple(
+            renames.get(col, col) for col in expression.relation.groupby
+        )
+
+        return self.walk(
+            GroupByAggregation(
+                RenameColumns(
+                    expression.relation.relation,
+                    expression.renames
+                ),
+                new_groupby,
+                expression.relation.aggregate_functions
+            )
+        )
+
+    @ew.add_match(RenameColumns(Projection, ...))
+    def push_rename_past_projection(self, expression):
+        renames = {src: dst for src, dst in expression.renames}
+        new_attributes = tuple(
+            renames.get(col, col) for col in expression.relation.attributes
+        )
+
+        return self.walk(
+            Projection(
+                RenameColumns(
+                    expression.relation.relation,
+                    expression.renames
+                ),
+                new_attributes
+            )
+        )
+
+    @ew.add_match(RenameColumns(Selection, ...))
+    def push_rename_past_selection(self, expression):
+        selection = expression.relation
+        renames = {src: dst for src, dst in expression.renames}
+        rsw = ew.ReplaceExpressionWalker(renames)
+        new_formula = rsw.walk(selection.formula)
+        return self.walk(
+            Selection(
+                RenameColumns(selection.relation, expression.renames),
+                new_formula
+            )
+        )
+
+    @ew.add_match(RenameColumns(NameColumns, ...))
+    def simplify_renames_name(self, expression):
+        renames = {src: dst for src, dst in expression.renames}
+        new_names = []
+        for name in expression.relation.column_names:
+            name = renames.get(name, name)
+            new_names.append(name)
+        return self.walk(
+            NameColumns(expression.relation.relation, tuple(new_names))
+        )
 
 
 class RelationalAlgebraPushInSelections(ew.PatternWalker):
