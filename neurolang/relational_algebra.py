@@ -105,7 +105,10 @@ class NAryRelationalAlgebraOperation(RelationalAlgebraOperation):
         if not hasattr(self, '_columns'):
             self._columns = _get_columns_for_RA_or_constant(self.relations[0])
             for r in self.relations[1:]:
-                self.columns = self.columns | _get_columns_for_RA_or_constant(r)
+                self._columns = (
+                    self._columns |
+                    _get_columns_for_RA_or_constant(r)
+                )
         return self._columns
 
 

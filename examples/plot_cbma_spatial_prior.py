@@ -20,6 +20,12 @@ import numpy as np
 import pandas as pd
 
 from neurolang.frontend import ExplicitVBR, ExplicitVBROverlay, NeurolangPDL
+from neurolang.config import config
+
+import logging
+logger = logging.getLogger('neurolang.probabilistic')
+logger.setLevel(logging.INFO)
+config.disable_expression_type_printing()
 
 # ##############################################################################
 # Data preparation
