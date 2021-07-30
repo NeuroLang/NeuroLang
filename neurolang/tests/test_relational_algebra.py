@@ -866,13 +866,11 @@ def test_columns():
     a = Constant[ColumnStr](ColumnStr('a'))
     b = Constant[ColumnInt](ColumnInt(0))
 
-    nj = NaturalJoin(r1, r2)
-    assert len(nj.columns()) == 0
-
     rc = NameColumns(r1, (a, b))
     assert rc.columns() == set((a, b))
 
-    assert NaturalJoin(rc, r2).columns() == set((a, b))
+    rc2 = NameColumns(r2, (b,))
+    assert NaturalJoin(rc, rc2).columns() == set((a, b))
 
 
 def test_push_in_optimiser():

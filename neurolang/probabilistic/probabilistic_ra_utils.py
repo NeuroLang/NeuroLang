@@ -62,15 +62,16 @@ def generate_probabilistic_symbol_table_for_query(
         The tables has neurolang.expressions.Symbol as keys and
         relational algebra representations as values
     """
-    symbol_table = defaultdict(
-        lambda: DeterministicFactSet(
+    def t():
+        return DeterministicFactSet(
             Constant[AbstractSet](
                 WrappedNamedRelationalAlgebraFrozenSet(
                     columns=tuple()
                 )
             )
-        )
-    )
+        ) 
+
+    symbol_table = defaultdict(t)
     classify_and_wrap_symbols(
         cpl_program.probabilistic_facts(), query_predicate,
         symbol_table, ProbabilisticFactSet

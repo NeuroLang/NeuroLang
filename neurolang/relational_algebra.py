@@ -18,6 +18,7 @@ from .expressions import (
     sure_is_not_pattern
 )
 from .utils import (
+    RelationalAlgebraFrozenSet,
     NamedRelationalAlgebraFrozenSet,
     OrderedSet,
     RelationalAlgebraSet
@@ -78,20 +79,53 @@ class RelationalAlgebraOperation(Definition):
 
     def columns(self):
         if not hasattr(self, '_columns'):
-            self._columns = get_expression_columns(self)
+            raise NotImplementedError()
         return self._columns
 
 
+def get_raop_or_constant_columns(expression):
+    if isinstance(expression, RelationalAlgebraOperation):
+        return expression.columns()
+    elif isinstance(expression, Constant):
+        if isinstance(expression, NamedRelationalAlgebraFrozenSet):
+            return OrderedSet(
+                str2columnstr_constant(c)
+                for c in expression.value.columns
+            )
+        elif isinstance(expression, RelationalAlgebraFrozenSet):
+            return OrderedSet(
+                int2columnint_constant(c)
+                for c in expression.value.columns
+            )
+    raise NotImplementedError()
+
+
 class NAryRelationalAlgebraOperation(RelationalAlgebraOperation):
-    pass
+    def columns(self):
+        if not hasattr(self, '_columns'):
+            self._columns = get_raop_or_constant_columns(self.relations[0])
+            for r in self.relations[1:]:
+                self.columns = self.columns | get_raop_or_constant_columns(r)
+        return self._columns
 
 
 class BinaryRelationalAlgebraOperation(RelationalAlgebraOperation):
-    pass
+    def columns(self):
+        if not hasattr(self, '_columns'):
+            self._columns = (
+                get_raop_or_constant_columns(self.relation_left) |
+                get_raop_or_constant_columns(self.relation_right)
+            )
+        return self._columns
 
 
 class UnaryRelationalAlgebraOperation(RelationalAlgebraOperation):
-    pass
+    def columns(self):
+        if not hasattr(self, '_columns'):
+            self._columns = (
+                get_raop_or_constant_columns(self.relation)
+            )
+        return self._columns
 
 
 class Selection(UnaryRelationalAlgebraOperation):
@@ -107,9 +141,7 @@ class Projection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
-
-    def columns(self):
-        return OrderedSet(self.attributes)
+        self._columns = OrderedSet(self.attributes)
 
     def __repr__(self):
         return (
@@ -226,9 +258,9 @@ class RenameColumn(UnaryRelationalAlgebraOperation):
         self.dst = dst
 
     def columns(self):
-        return self.relation.columns().replace(
-            self.src, self.dst
-        )
+        columns = get_raop_or_constant_columns(self.relation).copy()
+        columns.replace(self.src, self.dst)
+        return columns
 
     def __repr__(self):
         return (
@@ -256,7 +288,7 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
         self.renames = renames
 
     def columns(self):  
-        columns = self.relation.columns().copy()
+        columns = get_raop_or_constant_columns(self.relation).copy()
         for rename in self.renames:
             columns.replace(rename[0], rename[1])
         return columns
@@ -468,6 +500,12 @@ class ConcatenateConstantColumn(UnaryRelationalAlgebraOperation):
         self.relation = relation
         self.column_name = column_name
         self.column_value = column_value
+
+    def columns(self):
+        return (
+            get_raop_or_constant_columns(self.relation) |
+            {self.column_name}
+        )
 
 
 OPERATOR_STRING = {

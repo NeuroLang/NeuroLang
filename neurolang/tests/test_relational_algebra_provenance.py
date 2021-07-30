@@ -4,7 +4,6 @@ from typing import AbstractSet
 import numpy as np
 import pytest
 
-from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
@@ -21,6 +20,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
+    BuildConstantProvenanceAlgebraSetMixin,
     BuildProvenanceAlgebraSet,
     ConcatenateConstantColumn,
     ExtendedProjection,
@@ -28,7 +28,7 @@ from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     Projection,
     ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceCountingSolver,
+    RelationalAlgebraProvenanceCountingSolver as RAPCS,
     Union,
     WeightedNaturalJoin
 )
@@ -39,6 +39,13 @@ from ..utils import (
 
 C_ = Constant
 S_ = Symbol
+
+
+class RelationalAlgebraProvenanceCountingSolver(
+    BuildConstantProvenanceAlgebraSetMixin,
+    RAPCS
+):
+    pass
 
 
 def bpas_from_nas(nas, provenance_column):
@@ -367,8 +374,8 @@ def test_projection():
                 ("a", "b", 1),
                 ("b", "a", 2),
                 ("c", "a", 2),
-                ("c", "a", 1),
-                ("b", "a", 1),
+                ("c", "x", 1),
+                ("b", "x", 1),
             ],
             columns=["x", "y", "__provenance__"],
         ),
@@ -376,13 +383,13 @@ def test_projection():
     )
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            iterable=[("a", "b", 1), ("b", "a", 3), ("c", "a", 3)],
-            columns=["x", "y", "__provenance__"],
+            iterable=[("a", 1), ("b", 3), ("c", 3)],
+            columns=["x", "__provenance__"],
         ),
         ColumnStr("__provenance__"),
     )
     sum_agg_op = Projection(
-        relation, tuple([Constant(ColumnStr("x")), Constant(ColumnStr("y"))]),
+        relation, (str2columnstr_constant("x"),)
     )
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(sum_agg_op)
