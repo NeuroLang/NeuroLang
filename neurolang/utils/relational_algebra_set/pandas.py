@@ -646,6 +646,8 @@ class NamedRelationalAlgebraFrozenSet(
         return res
 
     def rename_column(self, src, dst):
+        if self.is_dum():
+            return self
         if src not in self._columns:
             raise ValueError(f"{src} not in columns")
         if src == dst:
@@ -664,6 +666,8 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def rename_columns(self, renames):
+        if self.is_dum():
+            return self
         # prevent duplicated destination columns
         self._check_for_duplicated_columns(renames.values())
         if not set(renames).issubset(self.columns):
