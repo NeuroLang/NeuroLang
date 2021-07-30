@@ -1,4 +1,5 @@
 import math
+from neurolang.logic.transformations import ReplaceFreeSymbolWalker
 import operator
 from typing import AbstractSet, Callable, Tuple
 
@@ -1423,20 +1424,36 @@ class EliminateTrivialProjections(ew.PatternWalker):
 
 
 class RenameOptimizations(ew.PatternWalker):
-    @ew.add_match(RenameColumn(ExtendedProjection, ..., ...))
-    def merge_rename_column_extended_projection(self, expression):
-        src = expression.src
-        dst = expression.dst
-        projection_list = expression.relation.projection_list
-        new_projection_list = []
-        for falm in projection_list:
-            if falm.dst_column == src:
-                falm = FunctionApplicationListMember(falm.fun_exp, dst)
-            new_projection_list.append(falm)
-        return self.walk(ExtendedProjection(
-            expression.relation.relation,
-            tuple(new_projection_list)
+    @ew.add_match(RenameColumn)
+    def convert_rename_column(self, expression):
+        return self.walk(RenameColumns(
+            expression.relation,
+            ((expression.src, expression.dst),)
         ))
+
+    @ew.add_match(RenameColumns, lambda exp: len(exp.renames) == 0)
+    def remove_trivial_rename(self, expression):
+        return self.walk(expression.relation)
+
+    @ew.add_match(RenameColumns(RenameColumns, ...))
+    def merge_nested_rename_columns(self, expression):
+        outer_renames = {src: dst for src, dst in expression.renames}
+        new_renames = []
+        for src, dst in expression.relation.renames:
+            if dst in outer_renames:
+                new_renames.append(
+                    (src, outer_renames[dst])
+                )
+                del outer_renames[dst]
+            new_renames.append((src, dst))
+        new_renames += [
+            (src, dst)
+            for src, dst in outer_renames.items()
+        ]
+
+        return self.walk(
+            RenameColumns(expression.relation.relation, tuple(new_renames))
+        )
 
     @ew.add_match(RenameColumns(ExtendedProjection, ...))
     def merge_rename_columns_extended_projection(self, expression):
@@ -1456,45 +1473,80 @@ class RenameOptimizations(ew.PatternWalker):
         ))
 
     @ew.add_match(
-        RenameColumn(GroupByAggregation, ..., ...),
-        lambda exp: exp.src in {
+        RenameColumns(GroupByAggregation, ...),
+        lambda exp: len({src for src, _ in exp.renames} & {
             f.dst_column for f in exp.relation.aggregate_functions
-        }
+        }) > 0
     )
     def merge_rename_column_group_by(self, expression):
-        src = expression.src
-        dst = expression.dst
+        renames = {src: dst for src, dst in expression.renames}
         aggregate_functions = expression.relation.aggregate_functions
         new_aggregate_functions = []
         for falm in aggregate_functions:
-            if falm.dst_column == src:
-                falm = FunctionApplicationListMember(falm.fun_exp, dst)
+            if falm.dst_column in renames:
+                old_dst = falm.dst_column
+                falm = FunctionApplicationListMember(
+                    falm.fun_exp,
+                    renames[falm.dst_column]
+                )
+                del renames[old_dst]
             new_aggregate_functions.append(falm)
-        return self.walk(GroupByAggregation(
-            expression.relation.relation,
-            expression.relation.groupby,
-            tuple(new_aggregate_functions)
-        ))
-
-    @ew.add_match(RenameColumns, lambda exp: len(exp.renames) == 1)
-    def simplify_rename_columns(self, expression):
-        return self.walk(RenameColumn(
-            expression.relation,
-            expression.renames[0][0],
-            expression.renames[0][1]
-        ))
-
-    @ew.add_match(RenameColumn(NameColumns, ..., ...))
-    def simplify_rename_name(self, expression):
-        src = expression.src
-        dst = expression.dst
-        new_names = []
-        for name in expression.relation.column_names:
-            if name == src:
-                name = dst
-            new_names.append(name)
         return self.walk(
-            NameColumns(expression.relation.relation, tuple(new_names))
+            RenameColumns(
+                GroupByAggregation(
+                    expression.relation.relation,
+                    expression.relation.groupby,
+                    tuple(new_aggregate_functions)
+                ),
+                tuple((src, dst) for src, dst in renames.items())
+            )
+        )
+
+    @ew.add_match(
+        RenameColumns(GroupByAggregation, ...),
+        lambda exp: {src for src, _ in exp.renames} <= set(
+            exp.relation.groupby
+        )
+    )
+    def push_rename_past_groupby(self, expression):
+        renames = {src: dst for src, dst in expression.renames}
+        new_groupby = tuple(
+            renames.get(col, col) for col in expression.relation.groupby
+        )
+
+        return self.walk(
+            GroupByAggregation(
+                RenameColumns(expression.relation.relation, expression.renames),
+                new_groupby,
+                expression.relation.aggregate_functions
+            )
+        )
+
+    @ew.add_match(RenameColumns(Projection, ...))
+    def push_rename_past_projection(self, expression):
+        renames = {src: dst for src, dst in expression.renames}
+        new_attributes = tuple(
+            renames.get(col, col) for col in expression.relation.attributes
+        )
+
+        return self.walk(
+            Projection(
+                RenameColumns(expression.relation.relation, expression.renames),
+                new_attributes
+            )
+        )
+
+    @ew.add_match(RenameColumns(Selection, ...))
+    def push_rename_past_selection(self, expression):
+        selection = expression.relation
+        renames = {src: dst for src, dst in expression.renames}
+        rsw = ew.ReplaceExpressionWalker(renames)
+        new_formula = rsw.walk(selection.formula)
+        return self.walk(
+            Selection(
+                RenameColumns(selection.relation, expression.renames),
+                new_formula
+            )
         )
 
     @ew.add_match(RenameColumns(NameColumns, ...))
