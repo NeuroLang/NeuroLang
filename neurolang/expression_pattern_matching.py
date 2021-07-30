@@ -255,6 +255,9 @@ def add_entry_point_match(pattern, guard=None):
 class PatternMatcher(metaclass=PatternMatchingMetaClass):
     """Class for expression pattern matching."""
 
+    def __init__(self, *args, **kwargs):
+        pass
+
     @property
     def patterns(self):
         """Property holding an iterator of triplets ``(pattern, guard, action)``.
