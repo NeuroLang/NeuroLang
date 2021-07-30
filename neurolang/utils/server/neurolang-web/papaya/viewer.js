@@ -3,18 +3,18 @@ import $ from 'jquery'
 import { API_ROUTE } from '../constants'
 
 const LUTS = [
-  { name: 'red', data: [[0, 0.96, 0.26, 0.21], [1, 0.96, 0.26, 0.21]], gradation: false }, // #f44336
-  { name: 'pink', data: [[0, 0.91, 0.12, 0.39], [1, 0.91, 0.12, 0.39]], gradation: false }, // #e91e63
-  { name: 'deep purple', data: [[0, 0.4, 0.23, 0.72], [1, 0.4, 0.23, 0.72]], gradation: false }, // #673ab7
-  { name: 'indigo', data: [[0, 0.25, 0.32, 0.71], [1, 0.25, 0.32, 0.71]], gradation: false }, // #3f51b5
-  { name: 'blue', data: [[0, 0.13, 0.59, 0.95], [1, 0.13, 0.59, 0.95]], gradation: false }, // #2196f3
-  { name: 'cyan', data: [[0, 0, 0.74, 0.83], [1, 0, 0.74, 0.83]], gradation: false }, // #00bcd4
-  { name: 'teal', data: [[0, 0, 0.59, 0.53], [1, 0, 0.59, 0.53]], gradation: false }, // #009688
-  { name: 'green', data: [[0, 0.30, 0.69, 0.31], [1, 0.30, 0.69, 0.31]], gradation: false }, // #4caf50
-  { name: 'lime', data: [[0, 0.80, 0.86, 0.22], [1, 0.80, 0.86, 0.22]], gradation: false }, // #cddc39
-  { name: 'yellow', data: [[0, 1, 0.92, 0.23], [1, 1, 0.92, 0.23]], gradation: false }, // #ffeb3b
-  { name: 'orange', data: [[0, 1, 0.60, 0], [1, 1, 0.60, 0]], gradation: false }, // #ff9800
-  { name: 'blue gray', data: [[0, 0.38, 0.49, 0.55], [1, 0.38, 0.49, 0.55]], gradation: false } // #607d8b
+  { name: 'red', data: [[0, 0.96, 0.26, 0.21], [1, 0.96, 0.26, 0.21]], gradation: false, hex: '#f44336' }, // #f44336
+  { name: 'pink', data: [[0, 0.91, 0.12, 0.39], [1, 0.91, 0.12, 0.39]], gradation: false, hex: '#e91e63' }, // #e91e63
+  { name: 'deep purple', data: [[0, 0.4, 0.23, 0.72], [1, 0.4, 0.23, 0.72]], gradation: false, hex: '#673ab7' }, // #673ab7
+  { name: 'indigo', data: [[0, 0.25, 0.32, 0.71], [1, 0.25, 0.32, 0.71]], gradation: false, hex: '#3f51b5' }, // #3f51b5
+  { name: 'blue', data: [[0, 0.13, 0.59, 0.95], [1, 0.13, 0.59, 0.95]], gradation: false, hex: '#2196f3' }, // #2196f3
+  { name: 'cyan', data: [[0, 0, 0.74, 0.83], [1, 0, 0.74, 0.83]], gradation: false, hex: '#00bcd4' }, // #00bcd4
+  { name: 'teal', data: [[0, 0, 0.59, 0.53], [1, 0, 0.59, 0.53]], gradation: false, hex: '#009688' }, // #009688
+  { name: 'green', data: [[0, 0.30, 0.69, 0.31], [1, 0.30, 0.69, 0.31]], gradation: false, hex: '#4caf50' }, // #4caf50
+  { name: 'lime', data: [[0, 0.80, 0.86, 0.22], [1, 0.80, 0.86, 0.22]], gradation: false, hex: '#cddc39' }, // #cddc39
+  { name: 'yellow', data: [[0, 1, 0.92, 0.23], [1, 1, 0.92, 0.23]], gradation: false, hex: '#ffeb3b' }, // #ffeb3b
+  { name: 'orange', data: [[0, 1, 0.60, 0], [1, 1, 0.60, 0]], gradation: false, hex: '#ff9800' }, // #ff9800
+  { name: 'blue gray', data: [[0, 0.38, 0.49, 0.55], [1, 0.38, 0.49, 0.55]], gradation: false, hex: '#607d8b' } // #607d8b
 ]
 
 class AtlasCache {
@@ -51,26 +51,36 @@ const papayaContainer = $('#nlPapayaContainer')
  * Hide the papaya viewer.
  */
 export function hideViewer () {
-  $('#nlPapayaContainer').hide(500)
-  $('#resultsContainer').width('100%')
+  papayaContainer.hide(500)
+  resultsContainer.width('100%')
 }
 
 export class PapayaViewer {
   constructor (atlasKey) {
     this.atlasKey = atlasKey
     this.imageIds = []
+    this.lutIndex = 0
   }
 
   showViewer () {
+    $('.nl-papaya-alert').hide()
     if (ATLAS_CACHE.exists(this.atlasKey)) {
       resultsContainer.width('50%')
-      papayaContainer.show(500, () => this._initViewer())
+      if (papayaContainer.is(':hidden')) {
+        papayaContainer.show(500, () => this._initViewer())
+      } else {
+        this._initViewer()
+      }
     } else {
       $.get(API_ROUTE.atlas)
         .done((data) => {
           ATLAS_CACHE.set(this.atlasKey, data.data.image)
           resultsContainer.width('50%')
-          papayaContainer.show(500, () => this._initViewer())
+          if (papayaContainer.is(':hidden')) {
+            papayaContainer.show(500, () => this._initViewer())
+          } else {
+            this._initViewer()
+          }
         })
     }
   }
@@ -101,7 +111,7 @@ export class PapayaViewer {
     this.params.encodedImages = ['atlas']
     if (papayaContainers.length === 0) {
     // add a new viewer
-      papaya.Container.addViewer('nlPapayaContainer', this.params)
+      papaya.Container.addViewer('nlPapayaParent', this.params)
     } else {
     // reset the first (only) viewer
       papaya.Container.resetViewer(0, this.params)
@@ -111,21 +121,37 @@ export class PapayaViewer {
 
   /**
    * Add an image to the papaya viewer.
+   * Maximum 8 images can be added to the papaya viewer
    * @param {*} name the unique name for this image
    * @param {*} image the image data (base64 encoded)
    * @param {*} min the min value for the image
    * @param {*} max the max value for the image
    */
   addImage (name, image, min, max) {
-    window[name] = image
-    papaya.Container.addImage(0, name, this._getImageParams(name, image, min, max))
-    this.imageIds.push(name)
+    if (this.canAdd()) {
+      window[name] = image
+      const imageParams = this._getImageParams(name, image, min, max)
+      papaya.Container.addImage(0, name, imageParams)
+      this.imageIds.push(name)
+      if ('hex' in imageParams[name]) {
+        return imageParams[name].hex
+      }
+      return null
+    } else {
+      return null
+    }
   }
 
   removeImage (name) {
     const idx = this.imageIds.indexOf(name)
-    papaya.Container.removeImage(0, idx)
-    this.imageIds.splice(idx, 1)
+    if (idx > -1) {
+      papaya.Container.removeImage(0, idx)
+      this.imageIds.splice(idx, 1)
+    }
+  }
+
+  canAdd () {
+    return this.imageIds.length - 1 < 8
   }
 
   imageIndex (name) {
@@ -136,7 +162,10 @@ export class PapayaViewer {
     const imageParams = {}
     if (typeof min !== 'undefined' && typeof max !== 'undefined' && min === max) {
       // showing a segmented region
-      imageParams.lut = 'lime'
+      const lut = LUTS[this.lutIndex]
+      imageParams.lut = lut.name
+      imageParams.hex = lut.hex
+      this.lutIndex = (this.lutIndex + 1) % LUTS.length
       imageParams.alpha = 0.8
     } else {
       // showing an overlay

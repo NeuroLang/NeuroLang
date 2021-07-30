@@ -1,10 +1,10 @@
 from abc import abstractmethod, abstractproperty
 from contextlib import contextmanager
 from multiprocessing import BoundedSemaphore
-from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
+from neurolang.regions import ExplicitVBR, ExplicitVBROverlay, region_union
 from neurolang.frontend.neurosynth_utils import StudyID
 from pathlib import Path
-from typing import Iterable, Union
+from typing import Callable, Iterable, Union
 
 import nibabel as nib
 import numpy as np
@@ -90,6 +90,14 @@ class NeurolangEngineConfiguration:
     def create(self) -> Union[NeurolangDL, NeurolangPDL]:
         pass
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, NeurolangEngineConfiguration):
+            return super().__eq__(other)
+        return self.key == other.key
+
+    def __hash__(self) -> int:
+        return hash(self.key)
+
 
 class NeurosynthEngineConf(NeurolangEngineConfiguration):
     def __init__(self, resolution=None) -> None:
@@ -120,14 +128,6 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
         data_dir = Path("neurolang_data")
         load_neurosynth_data(data_dir, nl, mask)
         return nl
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, NeurolangEngineConfiguration):
-            return super().__eq__(other)
-        return self.key == other.key
-
-    def __hash__(self) -> int:
-        return hash(self.key)
 
 
 def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
@@ -258,3 +258,59 @@ def init_frontend(mni_mask):
         )
 
     return nl
+
+
+class DestrieuxEngineConf(NeurolangEngineConfiguration):
+    def __init__(self, resolution=None) -> None:
+        super().__init__()
+        self._mni_mask = None
+        self.resolution = resolution
+
+    @property
+    def key(self):
+        return "destrieux"
+
+    @property
+    def mni_mask(self):
+        if self._mni_mask is None:
+            data_dir = Path("neurolang_data")
+            self._mni_mask = nib.load(
+                datasets.fetch_icbm152_2009(data_dir=str(data_dir / "icbm"))[
+                    "t1"
+                ]
+            )
+        return self._mni_mask
+
+    def create(self) -> NeurolangPDL:
+        mask = self.mni_mask
+        if self.resolution is not None:
+            mask = image.resample_img(mask, np.eye(3) * self.resolution)
+        nl = init_frontend(mask)
+        nl.add_symbol(
+            region_union,
+            name="region_union",
+            type_=Callable[[Iterable[ExplicitVBR]], ExplicitVBR],
+        )
+
+        data_dir = Path("neurolang_data")
+        load_destrieux_atlas(data_dir, nl)
+        return nl
+
+
+def load_destrieux_atlas(data_dir, nl):
+    destrieux_atlas = datasets.fetch_atlas_destrieux_2009(data_dir=str(data_dir / "destrieux"))
+
+    nl.new_symbol(name="destrieux")
+    destrieux_atlas_image = nib.load(destrieux_atlas["maps"])
+    destrieux_labels = dict(destrieux_atlas["labels"])
+    destrieux_set = set()
+    for k, v in destrieux_labels.items():
+        if k == 0:
+            continue
+        destrieux_set.add(
+            (
+                v.decode("utf8"),
+                ExplicitVBR.from_spatial_image_label(destrieux_atlas_image, k),
+            )
+        )
+    nl.add_tuple_set(destrieux_set, name="destrieux")

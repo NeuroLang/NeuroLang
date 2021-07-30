@@ -32,6 +32,8 @@
       <div class="ui raised segment query-segment">
         <div class="ui top attached label">Write your query on neurological data</div>
         <div class="code-mirror-container">
+          <!-- <textarea class="ui input" id="queryTextArea">union(region_union(r)) :- destrieux(..., r)</textarea> -->
+          
           <textarea class="ui input" id="queryTextArea">
 tfidf :: TermInStudy(term, study) :- TermInStudyTFIDF(term, tfidf, study)
 TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
@@ -67,12 +69,18 @@ ActivationGivenTermImage(agg_create_region_overlay(i, j, k, p)) :- ActivationGiv
         <a class="item" data-tab="third">Third</a>
       </div>
       <div class="ui bottom attached tab segment active">
-        <table class='ui compact table nl-result-table' id='tabTable' width="100%"></table>
+        <table class='ui compact striped table nl-result-table' id='tabTable' width="100%"></table>
       </div>
     </div>
 
     <div id="nlPapayaContainer" class="nl-papaya-container">
+      <div id="nlPapayaParent" class="nl-papaya-parent"></div>
+      <div class="ui message warning nl-papaya-alert">
+        <div class="header">You cannot add more than 8 overlays</div>
+        <p>Please unselect an overlay to add a new one</p>
+      </div>
       <!-- <div class='papaya' data-params='params'></div> -->
+
     </div>
   </div>
 

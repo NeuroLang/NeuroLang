@@ -8,7 +8,7 @@ from nibabel.spatialimages import SpatialImage
 
 import numpy as np
 import pandas as pd
-from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
+from neurolang.regions import EmptyRegion, ExplicitVBR, ExplicitVBROverlay
 from neurolang.type_system import get_args
 from neurolang.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
@@ -67,6 +67,9 @@ def serializeVBR(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
         a dict containing the base64 encoded image, as well as min and max
         values, and a hash of the image.
     """
+    if  isinstance(vbr, EmptyRegion):
+        return "Empty Region"
+
     image = vbr.spatial_image()
     flattened = image.get_fdata().flatten()
     min = flattened[flattened != 0].min()

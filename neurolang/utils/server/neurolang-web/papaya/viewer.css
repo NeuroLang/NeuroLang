@@ -2,3 +2,8 @@
     display: none;
     width: 50%;
 }
+
+.nl-papaya-alert {
+    margin: .5em !important;
+    display: none;
+}

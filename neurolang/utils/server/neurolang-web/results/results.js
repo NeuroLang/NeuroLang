@@ -150,6 +150,10 @@ class ResultsManager {
     })
   }
 
+  /**
+   * Whenever the datatable gets redrawn, we need to add event
+   * listeners to the region checkboxes which might be in the table.
+   */
   onTableDraw () {
     $('.nl-vbr-overlay-switch input').on('change', (evt) => {
       // get the item's image data
@@ -158,10 +162,20 @@ class ResultsManager {
       const row = elmt.data('row')
       const imageID = `image_${row}_${col}`
       const imageData = this.tableData.results[this.activeSymbol].values[row][col]
+      $('#nlPapayaContainer .nl-papaya-alert').hide()
       if (evt.target.checked) {
-        this.viewer.addImage(imageID, imageData.image, imageData.min, imageData.max)
+        if (this.viewer.canAdd()) {
+          const hex = this.viewer.addImage(imageID, imageData.image, imageData.min, imageData.max)
+          if (hex !== null) {
+            elmt.siblings('label').attr('style', 'color: ' + hex + ' !important')
+          }
+        } else {
+          $('#nlPapayaContainer .nl-papaya-alert').show()
+          evt.target.checked = false
+        }
       } else {
         this.viewer.removeImage(imageID)
+        elmt.siblings('label').attr('style', '')
       }
     })
   }
@@ -189,14 +203,17 @@ function renderPMID (data, type) {
  * @returns
  */
 function renderVBROverlay (data, type, row, meta) {
-  if (type === 'display') {
-    // when datatables is trying to display the value, return a switch to display
-    const imgSwitch = `<div class="ui toggle checkbox nl-vbr-overlay-switch">
-    <input type="checkbox" data-row=${meta.row} data-col=${meta.col}>
-    <label>Show region</label></div>
-    `
-    return imgSwitch
+  if (typeof data === 'object' && 'image' in data) {
+    if (type === 'display') {
+      // when datatables is trying to display the value, return a switch to display
+      const imgSwitch = `<div class="ui toggle checkbox nl-vbr-overlay-switch">
+      <input type="checkbox" data-row=${meta.row} data-col=${meta.col}>
+      <label>Show region</label></div>
+      `
+      return imgSwitch
+    }
+    // otherwise return the raw data (for ordering)
+    return data.hash
   }
-  // otherwise return the raw data (for ordering)
-  return data.hash
+  return data
 }

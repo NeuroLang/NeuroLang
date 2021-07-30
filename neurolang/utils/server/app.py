@@ -15,6 +15,7 @@ from neurolang.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
 )
 from neurolang.utils.server.engines import (
+    DestrieuxEngineConf,
     NeurolangEngineConfiguration,
     NeurolangEngineSet,
     NeurosynthEngineConf,
@@ -450,7 +451,7 @@ class NiftiiImageHandler(JSONRequestHandler):
 
 
 def main():
-    opts = {NeurosynthEngineConf(resolution=2): 2}
+    opts = {NeurosynthEngineConf(resolution=2): 2, DestrieuxEngineConf(): 2}
     nqm = NeurolangQueryManager(opts)
 
     tornado.options.parse_command_line()
