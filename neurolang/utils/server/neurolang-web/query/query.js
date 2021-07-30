@@ -21,51 +21,48 @@ const editor = CodeMirror.fromTextArea(queryTextArea, {
   ]
 })
 
-const runQueryBtn = document.querySelector('#runQueryBtn')
+const runQueryBtn = $('#runQueryBtn')
 const queryAlert = $('#queryAlert')
-runQueryBtn.addEventListener('click', submitQuery)
 
-function submitQuery () {
-  // disable query btn
-  runQueryBtn.disable = true
-  // submit query
-  const query = editor.getValue()
-  $.post(API_ROUTE.statement, { query: query })
-    .done(function (data) {
-      if (data.status === 'ok') {
-        setAlert('Your query is running. Results will display below when available..')
-        setTimeout(() => pollResults(data.data.uuid), 2000)
-      } else {
-        setAlert('An error occured while submitting your query.')
-      }
-    }).fail(function () {
-      setAlert('An error occured while submitting your query.', true)
-    }).always(function () {
-      runQueryBtn.disable = false
-    })
-}
+class QueryManager {
+  constructor () {
+    this.socket = new WebSocket(API_ROUTE.statementsocket)
+  }
 
-function pollResults (queryId) {
-  $.get(`${API_ROUTE.status}/${queryId}`)
-    .done(function (data) {
-      if (data.data.cancelled) {
+  submitQuery () {
+    const query = editor.getValue()
+    const msg = { query: query }
+    this.socket.send(JSON.stringify(msg))
+    this.socket.onmessage = this._onmessage
+  }
+
+  _onmessage (event) {
+    const msg = JSON.parse(event.data)
+    if (msg.status !== 'ok') {
+      setAlert('An error occured while submitting your query.')
+    } else {
+      if (msg.data.cancelled) {
         // query was cancelled
         setAlert('The query was cancelled.')
-      } else if (data.data.done) {
-        if ('errorName' in data.data) {
+      } else if (msg.data.done) {
+        if ('errorName' in msg.data) {
           // query returned an error
-          setQueryError(data)
+          setQueryError(msg)
         } else {
           // query was sucessfull
           setAlert()
-          showQueryResults(queryId, data)
+          showQueryResults(msg)
         }
       } else {
         // query is either still running or has not yet started
-        setTimeout(() => pollResults(queryId), 3000)
+        setAlert('Your query is running. Results will display below when available..')
       }
-    })
+    }
+  }
 }
+
+const qm = new QueryManager()
+runQueryBtn.on('click', () => qm.submitQuery())
 
 function setQueryError (data) {
   setAlert(data.data.message, true)

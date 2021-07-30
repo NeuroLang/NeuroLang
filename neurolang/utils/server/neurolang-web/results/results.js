@@ -3,7 +3,7 @@ import $ from 'jquery'
 import { PapayaViewer } from '../papaya/viewer'
 import { API_ROUTE, DATA_TYPES, PUBMED_BASE_URL } from '../constants'
 
-export function showQueryResults (queryId, data) {
+export function showQueryResults (data) {
   resultsContainer.show()
   const rm = new ResultsManager(data.data)
   rm.init()

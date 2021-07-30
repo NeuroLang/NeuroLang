@@ -1,9 +1,7 @@
-import gzip
 import json
 import logging
 import os.path
 from concurrent.futures import Future, ThreadPoolExecutor
-from io import BytesIO
 from threading import RLock, get_ident
 from typing import Dict
 from uuid import uuid4
@@ -289,6 +287,10 @@ class Application(tornado.web.Application):
                 QueryHandler,
             ),
             (
+                r"/v1/statementsocket",
+                QuerySocketHandler,
+            ),
+            (
                 r"/v1/atlas",
                 NiftiiImageHandler,
             ),
@@ -338,6 +340,13 @@ class CancelHandler(tornado.web.RequestHandler):
         return self.write_json_reponse({"cancelled": result})
 
 
+def query_results_to_json(data=None, status: str = "ok"):
+    response = {"status": status}
+    if data is not None:
+        response["data"] = data
+    return json.dumps(response, cls=CustomQueryResultsEncoder)
+
+
 class JSONRequestHandler(tornado.web.RequestHandler):
     """
     Base Handler for writing JSON responses.
@@ -350,10 +359,7 @@ class JSONRequestHandler(tornado.web.RequestHandler):
         self.set_header("Content-Type", "application/json")
 
     def write_json_reponse(self, data=None, status: str = "ok"):
-        response = {"status": status}
-        if data is not None:
-            response["data"] = data
-        return self.write(json.dumps(response, cls=CustomQueryResultsEncoder))
+        return self.write(query_results_to_json(data, status))
 
 
 class StatusHandler(JSONRequestHandler):
@@ -382,6 +388,33 @@ class StatusHandler(JSONRequestHandler):
         asc = bool(int(self.get_argument("asc", 1)))
         return self.write_json_reponse(
             QueryResults(uuid, future, symbol, start, length, sort, asc)
+        )
+
+
+class QuerySocketHandler(tornado.websocket.WebSocketHandler):
+    """
+    Main endpoint to submit a query using a websocket.
+    """
+
+    def check_origin(self, origin):
+        return True
+
+    async def on_message(self, message):
+        parsed = tornado.escape.json_decode(message)
+        query = parsed["query"]
+        engine = parsed.get("engine", "neurosynth")
+        self.uuid = str(uuid4())
+
+        LOG.debug(f"Submitting query with uuid {self.uuid}.")
+        future = self.application.nqm.submit_query(self.uuid, query, engine)
+        tornado.ioloop.IOLoop.current().add_future(
+            future, self.send_query_update
+        )
+        self.send_query_update(future)
+
+    def send_query_update(self, future: Future, status: str = "ok"):
+        self.write_message(
+            query_results_to_json(QueryResults(self.uuid, future), status)
         )
 
 
