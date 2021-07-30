@@ -83,7 +83,7 @@ class RelationalAlgebraOperation(Definition):
         return self._columns
 
 
-def get_raop_or_constant_columns(expression):
+def _get_columns_for_RA_or_constant(expression):
     if isinstance(expression, RelationalAlgebraOperation):
         return expression.columns()
     elif isinstance(expression, Constant):
@@ -103,9 +103,12 @@ def get_raop_or_constant_columns(expression):
 class NAryRelationalAlgebraOperation(RelationalAlgebraOperation):
     def columns(self):
         if not hasattr(self, '_columns'):
-            self._columns = get_raop_or_constant_columns(self.relations[0])
+            self._columns = _get_columns_for_RA_or_constant(self.relations[0])
             for r in self.relations[1:]:
-                self.columns = self.columns | get_raop_or_constant_columns(r)
+                self._columns = (
+                    self._columns |
+                    _get_columns_for_RA_or_constant(r)
+                )
         return self._columns
 
 
@@ -113,8 +116,8 @@ class BinaryRelationalAlgebraOperation(RelationalAlgebraOperation):
     def columns(self):
         if not hasattr(self, '_columns'):
             self._columns = (
-                get_raop_or_constant_columns(self.relation_left) |
-                get_raop_or_constant_columns(self.relation_right)
+                _get_columns_for_RA_or_constant(self.relation_left) |
+                _get_columns_for_RA_or_constant(self.relation_right)
             )
         return self._columns
 
@@ -123,7 +126,7 @@ class UnaryRelationalAlgebraOperation(RelationalAlgebraOperation):
     def columns(self):
         if not hasattr(self, '_columns'):
             self._columns = (
-                get_raop_or_constant_columns(self.relation)
+                _get_columns_for_RA_or_constant(self.relation)
             )
         return self._columns
 
@@ -258,7 +261,7 @@ class RenameColumn(UnaryRelationalAlgebraOperation):
         self.dst = dst
 
     def columns(self):
-        columns = get_raop_or_constant_columns(self.relation).copy()
+        columns = _get_columns_for_RA_or_constant(self.relation).copy()
         columns.replace(self.src, self.dst)
         return columns
 
@@ -288,7 +291,7 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
         self.renames = renames
 
     def columns(self):
-        columns = get_raop_or_constant_columns(self.relation).copy()
+        columns = _get_columns_for_RA_or_constant(self.relation).copy()
         for rename in self.renames:
             columns.replace(rename[0], rename[1])
         return columns
@@ -503,7 +506,7 @@ class ConcatenateConstantColumn(UnaryRelationalAlgebraOperation):
 
     def columns(self):
         return (
-            get_raop_or_constant_columns(self.relation) |
+            _get_columns_for_RA_or_constant(self.relation) |
             {self.column_name}
         )
 
