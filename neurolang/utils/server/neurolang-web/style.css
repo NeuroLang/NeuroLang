@@ -13,3 +13,12 @@ body {
   margin: 2rem 0;
   display: flex !important;
 }
+
+.main.menu .item img.logo {
+  margin-right: 1.5em;
+  width: 4em;
+}
+
+.main.menu .item .github.icon {
+  font-size: 1.5em;
+}

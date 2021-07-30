@@ -180,9 +180,9 @@ function renderPMID (data, type) {
 function renderVBROverlay (data, type, row, meta) {
   if (type === 'display') {
     // when datatables is trying to display the value, return a switch to display
-    const imgSwitch = `<div class="form-check form-switch nl-vbr-overlay-switch">
-    <input class="form-check-input" type="checkbox" data-row=${meta.row} data-col=${meta.col}>
-    <label class="form-check-label">Show region</label></div>
+    const imgSwitch = `<div class="ui toggle checkbox nl-vbr-overlay-switch">
+    <input type="checkbox" data-row=${meta.row} data-col=${meta.col}>
+    <label>Show region</label></div>
     `
     return imgSwitch
   }
