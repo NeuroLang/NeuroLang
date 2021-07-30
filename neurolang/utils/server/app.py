@@ -450,7 +450,7 @@ class NiftiiImageHandler(JSONRequestHandler):
 
 
 def main():
-    opts = {NeurosynthEngineConf(): 2}
+    opts = {NeurosynthEngineConf(resolution=2): 2}
     nqm = NeurolangQueryManager(opts)
 
     tornado.options.parse_command_line()

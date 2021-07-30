@@ -10,3 +10,7 @@
 #queryAlert {
     display: none;
 }
+
+#queryAlert .nl-query-message {
+    margin: 0;
+}

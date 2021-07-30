@@ -3,10 +3,21 @@ import $ from 'jquery'
 import { PapayaViewer } from '../papaya/viewer'
 import { API_ROUTE, DATA_TYPES, PUBMED_BASE_URL } from '../constants'
 
+/**
+ * Show the results of query execution
+ * @param {*} data the results from the query execution
+ */
 export function showQueryResults (data) {
   resultsContainer.show()
   const rm = new ResultsManager(data.data)
   rm.init()
+}
+
+/**
+ * Hide the results
+ */
+export function hideQueryResults () {
+  resultsContainer.hide()
 }
 
 const resultsContainer = $('#resultsContainer')

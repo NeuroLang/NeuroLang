@@ -133,9 +133,6 @@ export class PapayaViewer {
   }
 
   _getImageParams (name, image, min, max) {
-    console.log(name)
-    console.log(min)
-    console.log(max)
     const imageParams = {}
     if (typeof min !== 'undefined' && typeof max !== 'undefined' && min === max) {
       // showing a segmented region

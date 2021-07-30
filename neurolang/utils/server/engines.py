@@ -92,9 +92,10 @@ class NeurolangEngineConfiguration:
 
 
 class NeurosynthEngineConf(NeurolangEngineConfiguration):
-    def __init__(self) -> None:
+    def __init__(self, resolution=None) -> None:
         super().__init__()
         self._mni_mask = None
+        self.resolution = resolution
 
     @property
     def key(self):
@@ -104,13 +105,20 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
     def mni_mask(self):
         if self._mni_mask is None:
             data_dir = Path("neurolang_data")
-            self._mni_mask = load_mni_atlas(data_dir, resolution=2)
+            self._mni_mask = nib.load(
+                datasets.fetch_icbm152_2009(data_dir=str(data_dir / "icbm"))[
+                    "t1"
+                ]
+            )
         return self._mni_mask
 
     def create(self) -> NeurolangPDL:
-        nl = init_frontend(self.mni_mask)
+        mask = self.mni_mask
+        if self.resolution is not None:
+            mask = image.resample_img(mask, np.eye(3) * self.resolution)
+        nl = init_frontend(mask)
         data_dir = Path("neurolang_data")
-        load_neurosynth_data(data_dir, nl, self.mni_mask)
+        load_neurosynth_data(data_dir, nl, mask)
         return nl
 
     def __eq__(self, other: object) -> bool:
@@ -216,24 +224,6 @@ def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
         .T,
         name="Voxel",
     )
-
-
-def load_mni_atlas(
-    data_dir: Path,
-    resolution: int = 2,
-    interpolation: str = "continuous",
-    key: str = "gm",
-):
-    """Load an MNI atlas and resample it to given resolution."""
-
-    mni_mask = image.resample_img(
-        nib.load(
-            datasets.fetch_icbm152_2009(data_dir=str(data_dir / "icbm"))[key]
-        ),
-        np.eye(3) * resolution,
-        interpolation=interpolation,
-    )
-    return mni_mask
 
 
 def init_frontend(mni_mask):
