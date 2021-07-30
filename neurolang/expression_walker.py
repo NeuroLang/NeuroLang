@@ -389,7 +389,10 @@ class ResolveSymbolMixin(PatternMatcher):
     @add_match(Symbol)
     def symbol_from_table(self, symbol):
         try:
-            return self.symbol_table.get(symbol, symbol)
+            if hasattr(self.symbol_table, 'default_factory'):
+                return self.symbol_table[symbol]
+            else:
+                return self.symbol_table.get(symbol, symbol)
         except KeyError:
             if self.simplify_mode:
                 return symbol
