@@ -1079,7 +1079,7 @@ def test_no_tuple_unicity_qbased_pfact():
         (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
         e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
         result = nl.query((e.x, e.p), e.Query(e.x, e.p))
-    expected = {("a", 1.1), ("b", 0.5)}
+    expected = {("a", 0.2), ("b", 0.5), ("a", 0.9)}
     assert_almost_equal(result, expected)
 
 

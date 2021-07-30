@@ -87,12 +87,12 @@ def get_raop_or_constant_columns(expression):
     if isinstance(expression, RelationalAlgebraOperation):
         return expression.columns()
     elif isinstance(expression, Constant):
-        if isinstance(expression, NamedRelationalAlgebraFrozenSet):
+        if isinstance(expression.value, NamedRelationalAlgebraFrozenSet):
             return OrderedSet(
                 str2columnstr_constant(c)
                 for c in expression.value.columns
             )
-        elif isinstance(expression, RelationalAlgebraFrozenSet):
+        elif isinstance(expression.value, RelationalAlgebraFrozenSet):
             return OrderedSet(
                 int2columnint_constant(c)
                 for c in expression.value.columns
