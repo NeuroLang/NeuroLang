@@ -802,6 +802,10 @@ class NamedRelationalAlgebraFrozenSet(
     def rename_columns(self, renames):
         # prevent duplicated destination columns
         self._check_for_duplicated_columns(renames.values())
+
+        if self.is_dum():
+            return self
+
         if not set(renames).issubset(self.columns):
             # get the missing source columns
             # for a more convenient error message
