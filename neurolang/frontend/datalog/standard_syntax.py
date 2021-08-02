@@ -6,7 +6,7 @@ import tatsu
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
 from ...expressions import Constant, Expression, FunctionApplication, Query, Symbol
-from ...probabilistic.expressions import Condition, ProbabilisticPredicate
+from ...probabilistic.expressions import Condition, ProbabilisticPredicate, PROB
 
 
 GRAMMAR = u"""
@@ -198,6 +198,19 @@ class DatalogSemantics:
                 for arg in ast[2]:
                     arguments.append(arg)
 
+                if PROB in arguments:
+                    ix_prob = arguments.index(PROB)
+                    arguments_not_prob = (
+                        arguments[:ix_prob] +
+                        arguments[ix_prob + 1:]
+                    )
+                    prob_arg = PROB(*arguments_not_prob)
+                    arguments = (
+                        arguments[:ix_prob] +
+                        [prob_arg] +
+                        arguments[ix_prob + 1:]
+                    )
+
                 ast = ast[0](*arguments)
             else:
                 ast = ast[0]()
@@ -208,7 +221,7 @@ class DatalogSemantics:
             # Query head has arguments
             arguments = ast[1]
             return Symbol("ans")(*arguments)
-        else :
+        else:
             # Query head has no arguments
             return Symbol("ans")()
 
