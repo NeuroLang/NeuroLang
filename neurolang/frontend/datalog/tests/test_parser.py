@@ -326,12 +326,23 @@ def test_query():
     )
 
 
-def test_prob():
+def test_prob_implicit():
     B = Symbol("B")
     C = Symbol("C")
     x = Symbol("x")
     y = Symbol("y")
     res = parser("B(x, PROB, y) :- C(x, y)")
+    assert res == Union(
+        (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
+    )
+
+
+def test_prob_explicit():
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("B(x, PROB(x, y), y) :- C(x, y)")
     assert res == Union(
         (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
     )
