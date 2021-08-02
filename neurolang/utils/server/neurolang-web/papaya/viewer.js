@@ -158,6 +158,17 @@ export class PapayaViewer {
     return this.imagesIds.indexOf(name)
   }
 
+  setCoordinates (coords) {
+    papayaContainers[0].viewer.gotoWorldCoordinate(
+      new papaya.core.Coordinate(
+        coords[0],
+        coords[1],
+        coords[2]
+      ),
+      false
+    )
+  }
+
   _getImageParams (name, image, min, max) {
     const imageParams = {}
     if (typeof min !== 'undefined' && typeof max !== 'undefined' && min === max) {

@@ -8,6 +8,7 @@ from nibabel.spatialimages import SpatialImage
 
 import numpy as np
 import pandas as pd
+import nibabel as nib
 from neurolang.regions import EmptyRegion, ExplicitVBR, ExplicitVBROverlay
 from neurolang.type_system import get_args
 from neurolang.utils.relational_algebra_set import (
@@ -52,6 +53,13 @@ def base64_encode_spatial(image: SpatialImage):
     return base64_encode_nifti(nifti_image)
 
 
+def calculate_image_center(image: SpatialImage):
+    """Calculates center coordinates for the specified image."""
+    coords = np.transpose(image.get_fdata().nonzero()).mean(0).astype(int)
+    coords = nib.affines.apply_affine(image.affine, coords)
+    return [int(c) for c in coords]
+
+
 def serializeVBR(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
     """
     Serialize a Volumetric Brain Region object. 
@@ -80,6 +88,7 @@ def serializeVBR(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
         "max": max,
         "image": base64_encode_spatial(image),
         "hash": hash,
+        "center": calculate_image_center(image)
     }
 
 

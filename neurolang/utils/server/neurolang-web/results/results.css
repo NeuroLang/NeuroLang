@@ -19,3 +19,12 @@
     border: 1px solid #dee2e6;
     border-top: none;
 }
+
+.nl-vbr-overlay-center.ui.button {
+    margin-left: .5em;
+    display: none;
+}
+
+.nl-vbr-overlay-switch.active + button.nl-vbr-overlay-center.ui.button {
+    display: inline-block;
+}

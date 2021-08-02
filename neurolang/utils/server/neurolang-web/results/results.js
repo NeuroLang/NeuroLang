@@ -169,6 +169,7 @@ class ResultsManager {
           if (hex !== null) {
             elmt.siblings('label').attr('style', 'color: ' + hex + ' !important')
           }
+          elmt.parent().addClass('active')
         } else {
           $('#nlPapayaContainer .nl-papaya-alert').show()
           evt.target.checked = false
@@ -176,7 +177,20 @@ class ResultsManager {
       } else {
         this.viewer.removeImage(imageID)
         elmt.siblings('label').attr('style', '')
+        elmt.parent().removeClass('active')
       }
+    })
+
+    $('.nl-vbr-overlay-center').on('click', (evt) => {
+      // get the item's image data
+      let elmt = $(evt.target)
+      if (elmt.is('i')) {
+        elmt = elmt.parent()
+      }
+      const col = elmt.data('col')
+      const row = elmt.data('row')
+      const imageData = this.tableData.results[this.activeSymbol].values[row][col]
+      this.viewer.setCoordinates(imageData.center)
     })
   }
 }
@@ -209,6 +223,8 @@ function renderVBROverlay (data, type, row, meta) {
       const imgSwitch = `<div class="ui toggle checkbox nl-vbr-overlay-switch">
       <input type="checkbox" data-row=${meta.row} data-col=${meta.col}>
       <label>Show region</label></div>
+      <button class="ui tiny icon button nl-vbr-overlay-center" data-row=${meta.row} data-col=${meta.col} alt="Center on region">
+      <i class="crosshairs icon"></i></button>
       `
       return imgSwitch
     }
