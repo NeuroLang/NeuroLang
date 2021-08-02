@@ -1,9 +1,14 @@
-from neurolang.logic import ExistentialPredicate
 from operator import add, eq, lt, mul, pow, sub, truediv
 
+from neurolang.logic import ExistentialPredicate
+
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
-from ....probabilistic.expressions import Condition, ProbabilisticPredicate
-from ....expressions import Constant, Query, Symbol, FunctionApplication
+from ....expressions import Constant, FunctionApplication, Query, Symbol
+from ....probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate
+)
 from ..standard_syntax import ExternalSymbol, parser
 
 
@@ -203,7 +208,7 @@ def test_probabilistic_fact():
     d = Symbol("d")
     x = Symbol("x")
     B = Symbol("B")
-    res = parser("exp((-1 * d) / 5.0) :: B(x) :- A(x, d) & (d < 0.8)")
+    res = parser("B(x) :: exp((-1 * d) / 5.0) :- A(x, d) & (d < 0.8)")
     expected = Union(
         (
             Implication(
@@ -308,6 +313,7 @@ def test_existential():
 
     assert res == expected
 
+
 def test_query():
     ans = Symbol("ans")
     B = Symbol("B")
@@ -317,4 +323,26 @@ def test_query():
     res = parser("ans(x) :- B(x, y), C(3, y)")
     assert res == Union(
         (Query(ans(x), Conjunction((B(x, y), C(Constant(3), y)))),)
+    )
+
+
+def test_prob_implicit():
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("B(x, PROB, y) :- C(x, y)")
+    assert res == Union(
+        (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
+    )
+
+
+def test_prob_explicit():
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("B(x, PROB(x, y), y) :- C(x, y)")
+    assert res == Union(
+        (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
     )
