@@ -17,13 +17,14 @@ GRAMMAR = u"""
 
     start = expressions $ ;
 
-    expressions = ( newline ).{ probabilistic_expression | expression };
+    expressions = ( newline ).{ expression };
 
 
-    probabilistic_expression = ( arithmetic_operation | int_ext_identifier ) '::' expression ;
-    expression = rule | constraint | fact;
+    expression = rule | constraint | fact | probabilistic_rule | probabilistic_fact ;
     fact = constant_predicate ;
+    probabilistic_fact = ( arithmetic_operation | int_ext_identifier ) '::' constant_predicate ;
     rule = (head | query) implication (condition | body) ;
+    probabilistic_rule = head '::' ( arithmetic_operation | int_ext_identifier ) implication (condition | body) ;
     constraint = body right_implication head ;
     head = head_predicate ;
     body = conjunction ;
@@ -148,20 +149,14 @@ class DatalogSemantics:
             ast = (ast,)
         return Union(ast)
 
-    def probabilistic_expression(self, ast):
-        probability = ast[0]
-        expression = ast[2]
-
-        if isinstance(expression, Implication):
-            return Implication(
-                ProbabilisticPredicate(probability, expression.consequent),
-                expression.antecedent,
-            )
-        else:
-            raise ValueError("Invalid rule")
-
     def fact(self, ast):
         return Fact(ast)
+
+    def probabilistic_fact(self, ast):
+        return Implication(
+            ProbabilisticPredicate(ast[0], ast[2]),
+            Constant(True),
+        )
 
     def constant_predicate(self, ast):
         return ast[0](*ast[2])
@@ -172,6 +167,15 @@ class DatalogSemantics:
             return Query(ast[0], ast[2])
         else:
             return Implication(ast[0], ast[2])
+
+    def probabilistic_rule(self, ast):
+        head = ast[0]
+        probability = ast[2]
+        body = ast[4]
+        return Implication(
+            ProbabilisticPredicate(probability, head),
+            body,
+        )
 
     def constraint(self, ast):
         return RightImplication(ast[0], ast[2])
