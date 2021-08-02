@@ -12,6 +12,7 @@ Neurolang enables the analysis of NeuroImaging data through probabilistic logic 
 Important links
 ===============
 - Official source code repo: https://github.com/Neurolang/Neurolang/
+- Interactive gallery of examples (best viewed with Chrome) https://neurolang.saclay.inria.fr/hub/gallery
 - HTML documentation (stable release): http://neurolang.github.io/
 - HTML documentation (dev release): http://neurolang.github.io/dev
 
