@@ -1,6 +1,7 @@
 import './viewer.css'
 import $ from 'jquery'
 import { API_ROUTE } from '../constants'
+import Plotly from 'plotly.js-dist-min'
 
 const LUTS = [
   { name: 'red', data: [[0, 0.96, 0.26, 0.21], [1, 0.96, 0.26, 0.21]], gradation: false, hex: '#f44336' }, // #f44336
@@ -133,6 +134,8 @@ export class PapayaViewer {
       const imageParams = this._getImageParams(name, image, min, max)
       papaya.Container.addImage(0, name, imageParams)
       this.imageIds.push(name)
+      setTimeout(this.showImageHistogram, 2000)
+      // this.showImageHistogram()
       if ('hex' in imageParams[name]) {
         return imageParams[name].hex
       }
@@ -167,6 +170,19 @@ export class PapayaViewer {
       ),
       false
     )
+  }
+
+  showImageHistogram () {
+    const trace = {
+      x: papayaContainers[0].viewer.screenVolumes[1].volume.imageData.data.filter((elt) => elt > 0),
+      type: 'histogram'
+    }
+    const data = [trace]
+    const layout = {
+      title: 'Histogram of non-zero image data',
+      showlegend: false
+    }
+    Plotly.newPlot('nlHistogramContainer', data, layout)
   }
 
   _getImageParams (name, image, min, max) {

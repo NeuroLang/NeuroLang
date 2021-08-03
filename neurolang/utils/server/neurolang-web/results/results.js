@@ -169,7 +169,7 @@ class ResultsManager {
           if (hex !== null) {
             elmt.siblings('label').attr('style', 'color: ' + hex + ' !important')
           }
-          elmt.parent().addClass('active')
+          elmt.parent().parent().addClass('displayed')
         } else {
           $('#nlPapayaContainer .nl-papaya-alert').show()
           evt.target.checked = false
@@ -177,7 +177,7 @@ class ResultsManager {
       } else {
         this.viewer.removeImage(imageID)
         elmt.siblings('label').attr('style', '')
-        elmt.parent().removeClass('active')
+        elmt.parent().parent().removeClass('displayed')
       }
     })
 
@@ -192,6 +192,8 @@ class ResultsManager {
       const imageData = this.tableData.results[this.activeSymbol].values[row][col]
       this.viewer.setCoordinates(imageData.center)
     })
+
+    // $('.nl-overlay-control').popup()
   }
 }
 
@@ -220,13 +222,18 @@ function renderVBROverlay (data, type, row, meta) {
   if (typeof data === 'object' && 'image' in data) {
     if (type === 'display') {
       // when datatables is trying to display the value, return a switch to display
-      const imgSwitch = `<div class="ui toggle checkbox nl-vbr-overlay-switch">
+      const imgDiv = `<div class="nl-vbr-overlay-controls">
+      <div class="ui toggle checkbox nl-vbr-overlay-switch">
       <input type="checkbox" data-row=${meta.row} data-col=${meta.col}>
       <label>Show region</label></div>
-      <button class="ui tiny icon button nl-vbr-overlay-center" data-row=${meta.row} data-col=${meta.col} alt="Center on region">
+      <button class="ui tiny icon button nl-vbr-overlay-center nl-overlay-control"
+      data-row=${meta.row} data-col=${meta.col} data-content="Center on region">
       <i class="crosshairs icon"></i></button>
+      <button class="ui tiny icon button nl-vbr-overlay-hist nl-overlay-control"
+      data-row=${meta.row} data-col=${meta.col} data-content="Show image histogram">
+      <i class="chart bar outline icon"></i></button></div>
       `
-      return imgSwitch
+      return imgDiv
     }
     // otherwise return the raw data (for ordering)
     return data.hash

@@ -20,11 +20,20 @@
     border-top: none;
 }
 
-.nl-vbr-overlay-center.ui.button {
+.nl-vbr-overlay-controls .ui.button.nl-overlay-control {
+    display: none;
+    margin-left: .5em;
+}
+
+.nl-vbr-overlay-controls.displayed .ui.button.nl-overlay-control {
+    display: inline-block;
+}
+
+/* .nl-vbr-overlay-center.ui.button {
     margin-left: .5em;
     display: none;
 }
 
 .nl-vbr-overlay-switch.active + button.nl-vbr-overlay-center.ui.button {
     display: inline-block;
-}
+} */
