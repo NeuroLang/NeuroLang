@@ -5,6 +5,7 @@ import pytest
 
 from ..config import config
 from ..expressions import Constant
+from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -28,16 +29,6 @@ from ..relational_algebra_provenance import (
 from .test_relational_algebra_provenance import bpas_from_nas
 
 EQ = Constant(operator.eq)
-
-
-def eq_prov_relations(r1, r2):
-    pc1 = r1.provenance_column.value
-    pc2 = r2.provenance_column.value
-
-    rr1 = r1.relation.value
-    rr2 = r2.relation.value.rename_column(pc2, pc1)
-
-    return (rr1 == rr2)
 
 
 class RelationalAlgebraProvenanceExpressionSemringSolver(
@@ -67,7 +58,7 @@ def test_integer_addition_semiring():
         ),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 class SetType(frozenset):
@@ -106,7 +97,7 @@ def test_set_type_semiring():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 class StringTestType:
@@ -162,7 +153,7 @@ def test_string_semiring():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 def test_multiple_columns():
@@ -182,7 +173,7 @@ def test_multiple_columns():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 def test_renaming():
@@ -205,7 +196,7 @@ def test_renaming():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 def test_selection():
@@ -227,7 +218,7 @@ def test_selection():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 def test_union():
@@ -248,7 +239,7 @@ def test_union():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 def test_selection_by_columnint():
@@ -267,7 +258,7 @@ def test_selection_by_columnint():
         ),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
     op = Selection(r, EQ(Constant(ColumnInt(0)), Constant("a")))
     op = Selection(op, EQ(Constant(ColumnInt(1)), Constant("b")))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
@@ -279,7 +270,7 @@ def test_selection_by_columnint():
         ),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 def test_projection_columnint():
@@ -298,11 +289,11 @@ def test_projection_columnint():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
     op = Projection(r, (Constant(ColumnInt(0)), Constant(ColumnInt(1))))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    assert eq_prov_relations(result, solver.walk(r))
+    assert testing.eq_bprov_relations(result, solver.walk(r))
     op = Projection(r, (Constant(ColumnInt(1)), Constant(ColumnInt(0))))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
@@ -312,7 +303,7 @@ def test_projection_columnint():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 def test_selection_between_columnints():
@@ -342,7 +333,7 @@ def test_selection_between_columnints():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 def test_difference():
@@ -384,7 +375,7 @@ def test_difference():
 
     op = Difference(r_left, r_right)
     result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
-    assert eq_prov_relations(result, r_expected)
+    assert testing.eq_bprov_relations(result, r_expected)
 
 
 def test_difference_same_provenance_column():
@@ -426,7 +417,7 @@ def test_difference_same_provenance_column():
 
     op = Difference(r_left, r_right)
     result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
-    assert eq_prov_relations(result, r_expected)
+    assert testing.eq_bprov_relations(result, r_expected)
 
 
 def test_extended_proj():
@@ -466,7 +457,7 @@ def test_extended_proj():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 def test_forbidden_extended_proj_missing_nonprov_cols():
