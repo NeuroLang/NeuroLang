@@ -103,7 +103,7 @@ def test_deterministic_conjunction_varying_arity(solver):
     query = Implication(ans(x, y), Z(x, y))
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0, "a", "b")], ("_p_", "x", "y"))
-    assert testing.eq_prov_relations(result, expected)
+    assert testing.eq_bprov_relations(result, expected)
 
 
 def test_deterministic_conjunction_varying_arity_empty(solver):
