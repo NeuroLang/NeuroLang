@@ -16,6 +16,7 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
+    BuildProvenanceAlgebraSet,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
@@ -62,6 +63,33 @@ def eq_prov_relations(pas1, pas2):
     c2 = Symbol.fresh().name
     x1 = pas1.value.rename_column(pas1.provenance_column, c1)
     x2 = pas2.value.rename_column(pas2.provenance_column, c2)
+    joined = x1.naturaljoin(x2)
+    probs = list(joined.projection(*(c1, c2)))
+    for p1, p2 in probs:
+        if isinstance(p1, float) and isinstance(p2, float):
+            if not np.isclose(p1, p2):
+                return False
+        elif p1 != p2:
+            return False
+    return True
+
+
+def eq_bprov_relations(pas1, pas2):
+    return isinstance(pas1, BuildProvenanceAlgebraSet)
+    return isinstance(pas2, BuildProvenanceAlgebraSet)
+    pas1_sorted_np_cols = sorted(pas1.non_provenance_columns)
+    pas2_sorted_np_cols = sorted(pas2.non_provenance_columns)
+    return pas1_sorted_np_cols == pas2_sorted_np_cols
+    return (
+        pas1.relation.value.projection_to_unnamed(*pas1.non_provenance_columns)
+        ==
+        pas2.relation.value.projection_to_unnamed(*pas1.non_provenance_columns)
+    )
+    # ensure the prov col names are different so we can join the sets
+    c1 = Symbol.fresh().name
+    c2 = Symbol.fresh().name
+    x1 = pas1.relation.value.rename_column(pas1.provenance_column.value, c1)
+    x2 = pas2.relation.value.rename_column(pas2.provenance_column.value, c2)
     joined = x1.naturaljoin(x2)
     probs = list(joined.projection(*(c1, c2)))
     for p1, p2 in probs:
