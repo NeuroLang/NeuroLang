@@ -1,6 +1,6 @@
 import './results.css'
-import $ from 'jquery'
-import { PapayaViewer } from '../papaya/viewer'
+import $ from '../jquery-bundler'
+import { hideViewer, PapayaViewer } from '../papaya/viewer'
 import { API_ROUTE, DATA_TYPES, PUBMED_BASE_URL } from '../constants'
 
 /**
@@ -18,6 +18,7 @@ export function showQueryResults (data) {
  */
 export function hideQueryResults () {
   resultsContainer.hide()
+  hideViewer(0)
 }
 
 const resultsContainer = $('#resultsContainer')
@@ -151,49 +152,86 @@ class ResultsManager {
   }
 
   /**
-   * Whenever the datatable gets redrawn, we need to add event
-   * listeners to the region checkboxes which might be in the table.
+   * Whenever the datatable gets redrawn, we need to attach event
+   * listeners to controls which might be in the table (show image buttons, etc.)
    */
   onTableDraw () {
-    $('.nl-vbr-overlay-switch input').on('change', (evt) => {
-      // get the item's image data
-      const elmt = $(evt.target)
-      const col = elmt.data('col')
-      const row = elmt.data('row')
-      const imageID = `image_${row}_${col}`
-      const imageData = this.tableData.results[this.activeSymbol].values[row][col]
-      $('#nlPapayaContainer .nl-papaya-alert').hide()
-      if (evt.target.checked) {
-        if (this.viewer.canAdd()) {
-          const hex = this.viewer.addImage(imageID, imageData.image, imageData.min, imageData.max)
-          if (hex !== null) {
-            elmt.siblings('label').attr('style', 'color: ' + hex + ' !important')
-          }
-          elmt.parent().parent().addClass('displayed')
-        } else {
-          $('#nlPapayaContainer .nl-papaya-alert').show()
-          evt.target.checked = false
+    $('.nl-vbr-overlay-switch input').on('change', (evt) => this.onImageSwitchChanged(evt))
+    $('.nl-vbr-overlay-center').on('click', (evt) => this.onImageCenterClicked(evt))
+
+    $('.nl-vbr-overlay-hist').on('click', (evt) => this.onShowHistogramClicked(evt))
+    $('.nl-vbr-overlay-hist').popup({
+      on: 'manual',
+      html: '<div id="nlHistogramContainer" class="nl-histogram-container"></div>',
+      position: 'top center',
+      lastResort: 'top center'
+    })
+  }
+
+  /**
+   * Listener for value change on Show Image toggle buttons
+   * @param {*} evt
+   */
+  onImageSwitchChanged (evt) {
+    // get the item's image data
+    const elmt = $(evt.target)
+    const parentDiv = elmt.parent().parent()
+    const col = elmt.data('col')
+    const row = elmt.data('row')
+    const imageID = `image_${row}_${col}`
+    const imageData = this.tableData.results[this.activeSymbol].values[row][col]
+    $('#nlPapayaContainer .nl-papaya-alert').hide()
+    if (evt.target.checked) {
+      if (this.viewer.canAdd()) {
+        const hex = this.viewer.addImage(imageID, imageData.image, imageData.min, imageData.max)
+        if (hex !== null) {
+          elmt.siblings('label').attr('style', 'color: ' + hex + ' !important')
         }
+        parentDiv.addClass('displayed')
       } else {
-        this.viewer.removeImage(imageID)
-        elmt.siblings('label').attr('style', '')
-        elmt.parent().parent().removeClass('displayed')
+        $('#nlPapayaContainer .nl-papaya-alert').show()
+        evt.target.checked = false
       }
-    })
+    } else {
+      this.viewer.removeImage(imageID)
+      elmt.siblings('label').attr('style', '')
+      parentDiv.removeClass('displayed')
+    }
+  }
 
-    $('.nl-vbr-overlay-center').on('click', (evt) => {
-      // get the item's image data
-      let elmt = $(evt.target)
-      if (elmt.is('i')) {
-        elmt = elmt.parent()
-      }
-      const col = elmt.data('col')
-      const row = elmt.data('row')
-      const imageData = this.tableData.results[this.activeSymbol].values[row][col]
-      this.viewer.setCoordinates(imageData.center)
-    })
+  /**
+   * Listener for click events on show histogram buttons
+   * @param {*} evt
+   */
+  onShowHistogramClicked (evt) {
+    let elmt = $(evt.target)
+    if (elmt.is('i')) {
+      elmt = elmt.parent()
+    }
+    const col = elmt.data('col')
+    const row = elmt.data('row')
+    const imageID = `image_${row}_${col}`
+    const vis = elmt.popup('is visible')
+    elmt.popup('toggle')
+    if (!vis) {
+      this.viewer.showImageHistogram(imageID)
+    }
+  }
 
-    // $('.nl-overlay-control').popup()
+  /**
+   * Listener for click events on image center buttons
+   * @param {*} evt
+   */
+  onImageCenterClicked (evt) {
+    // get the item's image data
+    let elmt = $(evt.target)
+    if (elmt.is('i')) {
+      elmt = elmt.parent()
+    }
+    const col = elmt.data('col')
+    const row = elmt.data('row')
+    const imageData = this.tableData.results[this.activeSymbol].values[row][col]
+    this.viewer.setCoordinates(imageData.center)
   }
 }
 
@@ -227,10 +265,10 @@ function renderVBROverlay (data, type, row, meta) {
       <input type="checkbox" data-row=${meta.row} data-col=${meta.col}>
       <label>Show region</label></div>
       <button class="ui tiny icon button nl-vbr-overlay-center nl-overlay-control"
-      data-row=${meta.row} data-col=${meta.col} data-content="Center on region">
+      data-row=${meta.row} data-col=${meta.col} data-tooltip="Center on region">
       <i class="crosshairs icon"></i></button>
       <button class="ui tiny icon button nl-vbr-overlay-hist nl-overlay-control"
-      data-row=${meta.row} data-col=${meta.col} data-content="Show image histogram">
+      data-row=${meta.row} data-col=${meta.col} data-tooltip="Show image histogram">
       <i class="chart bar outline icon"></i></button></div>
       `
       return imgDiv

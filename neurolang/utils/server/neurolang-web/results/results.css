@@ -29,6 +29,12 @@
     display: inline-block;
 }
 
+#nlHistogramContainer {
+    width: 400px;
+    height: 400px;
+    /* padding: 0; */
+}
+
 /* .nl-vbr-overlay-center.ui.button {
     margin-left: .5em;
     display: none;

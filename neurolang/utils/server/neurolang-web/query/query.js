@@ -4,7 +4,7 @@ import 'codemirror/addon/display/autorefresh'
 import 'codemirror/mode/python/python'
 import CodeMirror from 'codemirror'
 import './query.css'
-import $ from 'jquery'
+import $ from '../jquery-bundler'
 import { hideQueryResults, showQueryResults } from '../results/results'
 import { API_ROUTE } from '../constants'
 

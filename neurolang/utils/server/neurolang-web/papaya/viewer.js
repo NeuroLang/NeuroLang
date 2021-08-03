@@ -1,5 +1,5 @@
 import './viewer.css'
-import $ from 'jquery'
+import $ from '../jquery-bundler'
 import { API_ROUTE } from '../constants'
 import Plotly from 'plotly.js-dist-min'
 
@@ -51,8 +51,8 @@ const papayaContainer = $('#nlPapayaContainer')
 /**
  * Hide the papaya viewer.
  */
-export function hideViewer () {
-  papayaContainer.hide(500)
+export function hideViewer (duration = 500) {
+  papayaContainer.hide(duration)
   resultsContainer.width('100%')
 }
 
@@ -87,8 +87,7 @@ export class PapayaViewer {
   }
 
   hideViewer () {
-    papayaContainer.hide(500)
-    resultsContainer.width('100%')
+    hideViewer(500)
   }
 
   _initParams () {
@@ -129,20 +128,17 @@ export class PapayaViewer {
    * @param {*} max the max value for the image
    */
   addImage (name, image, min, max) {
+    let res = null
     if (this.canAdd()) {
       window[name] = image
       const imageParams = this._getImageParams(name, image, min, max)
       papaya.Container.addImage(0, name, imageParams)
       this.imageIds.push(name)
-      setTimeout(this.showImageHistogram, 2000)
-      // this.showImageHistogram()
       if ('hex' in imageParams[name]) {
-        return imageParams[name].hex
+        res = imageParams[name].hex
       }
-      return null
-    } else {
-      return null
     }
+    return res
   }
 
   removeImage (name) {
@@ -158,7 +154,7 @@ export class PapayaViewer {
   }
 
   imageIndex (name) {
-    return this.imagesIds.indexOf(name)
+    return this.imageIds.indexOf(name)
   }
 
   setCoordinates (coords) {
@@ -172,15 +168,22 @@ export class PapayaViewer {
     )
   }
 
-  showImageHistogram () {
+  onImageLoaded () {
+    // this.showImageHistogram(this.imageIds.length - 1)
+  }
+
+  showImageHistogram (imageId) {
+    const index = this.imageIndex(imageId)
     const trace = {
-      x: papayaContainers[0].viewer.screenVolumes[1].volume.imageData.data.filter((elt) => elt > 0),
+      x: papayaContainers[0].viewer.screenVolumes[index].volume.imageData.data.filter((elt) => elt > 0),
       type: 'histogram'
     }
     const data = [trace]
     const layout = {
       title: 'Histogram of non-zero image data',
-      showlegend: false
+      showlegend: false,
+      width: 380,
+      height: 380
     }
     Plotly.newPlot('nlHistogramContainer', data, layout)
   }
@@ -202,6 +205,7 @@ export class PapayaViewer {
       if (typeof max !== 'undefined') {
         imageParams.max = Number(max.toFixed(2))
       }
+      imageParams.loadingComplete = () => this.onImageLoaded()
     }
     const params = []
     params[name] = imageParams
