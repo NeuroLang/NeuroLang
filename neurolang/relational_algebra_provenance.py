@@ -1,6 +1,5 @@
 import math
 import operator
-from typing import AbstractSet
 
 from .exceptions import RelationalAlgebraError
 from .expression_walker import PatternWalker, add_match
@@ -80,10 +79,7 @@ def is_provenance_operation(operation):
     stack = list(operation.unapply())
     while stack:
         stack_element = stack.pop()
-        if isinstance(
-            stack_element,
-            (ProvenanceAlgebraSet, BuildProvenanceAlgebraSet)
-        ):
+        if isinstance(stack_element, BuildProvenanceAlgebraSet):
             return True
         if isinstance(stack_element, tuple):
             stack += list(stack_element)
@@ -607,33 +603,28 @@ class RelationalAlgebraProvenanceCountingSolver(
 
     @add_match(WeightedNaturalJoin)
     def prov_weighted_join(self, join_op):
-        relations = self.walk(join_op.relations)
-        weights = self.walk(join_op.weights)
+        relations = join_op.relations
+        weights = join_op.weights
 
         prov_columns = [
             str2columnstr_constant(Symbol.fresh().name)
             for _ in relations
         ]
 
-        dst_columns = set(sum(
-            (
-                relation.non_provenance_columns
-                for relation in relations
-            ),
-            tuple()
-        ))
+        dst_columns = relations[0].non_provenance_columns
+        for relation in relations[1:]:
+            dst_columns = dst_columns | relation.non_provenance_columns
+        dst_columns = tuple(dst_columns)
 
         relations = [
             ExtendedProjection(
-                Constant[AbstractSet](relation.relations),
+                relation.relation,
                 (FunctionApplicationListMember(
-                    weight * str2columnstr_constant(
-                        relation.provenance_column
-                    ),
+                    weight * relation.provenance_column,
                     prov_column
                 ),) + tuple(
                     FunctionApplicationListMember(
-                        str2columnstr_constant(c), str2columnstr_constant(c)
+                        c, c
                     )
                     for c in relation.non_provenance_columns
                 )
@@ -655,16 +646,16 @@ class RelationalAlgebraProvenanceCountingSolver(
                 prov_col
             ),) + tuple(
                 FunctionApplicationListMember(
-                    str2columnstr_constant(c), str2columnstr_constant(c)
+                    c, c
                 )
                 for c in dst_columns
             )
         )
 
-        return ProvenanceAlgebraSet(
-            self.walk(relation).value,
-            prov_col.value
-        )
+        return self.walk(BuildProvenanceAlgebraSet(
+            relation,
+            prov_col
+        ))
 
 
 class RelationalAlgebraProvenanceExpressionSemringSolver(

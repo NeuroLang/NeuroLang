@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from ..expressions import Constant, Symbol
+from ..exceptions import RelationalAlgebraError
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     ColumnInt,
@@ -26,7 +27,6 @@ from ..relational_algebra_provenance import (
     FunctionApplicationListMember,
     NaturalJoinInverse,
     Projection,
-    ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     Union,
     WeightedNaturalJoin
@@ -416,7 +416,7 @@ def test_extended_projection():
         "__provenance__",
     )
 
-    expected = ProvenanceAlgebraSet(
+    expected = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
                 (5, 1, 6, 1), (6, 2, 8, 2),
@@ -445,7 +445,8 @@ def test_extended_projection():
         ),
     )
 
-    res = RelationalAlgebraProvenanceCountingSolver().walk(res).relation
+    res = RelationalAlgebraProvenanceCountingSolver().walk(res)
+    expected = RelationalAlgebraProvenanceCountingSolver().walk(expected)
     assert res == expected
 
 
@@ -475,7 +476,7 @@ def test_provenance_projection():
 
 
 def test_provenance_product_with_shared_non_prov_col_should_fail():
-    r1 = ProvenanceAlgebraSet(
+    r1 = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
                 (0.8, "a", 42),
@@ -487,7 +488,7 @@ def test_provenance_product_with_shared_non_prov_col_should_fail():
         ),
         ColumnStr("myprov"),
     )
-    r2 = ProvenanceAlgebraSet(
+    r2 = bpas_from_nas(
         NamedRelationalAlgebraFrozenSet(
             iterable=[(0.2, "a", 42), (0.5, "b", 84)],
             columns=["myprov", "x", "z"],
@@ -496,10 +497,7 @@ def test_provenance_product_with_shared_non_prov_col_should_fail():
     )
     product = Product((r1, r2))
     solver = RelationalAlgebraProvenanceCountingSolver()
-    with pytest.raises(
-        ValueError,
-        match="Cross product with common columns is not valid",
-    ):
+    with pytest.raises(RelationalAlgebraError):
         solver.walk(product)
 
 
@@ -608,20 +606,20 @@ def test_weightednaturaljoin_provenance_name():
         columns=("col1", "__provenance__1"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = ProvenanceAlgebraSet(RA1, ColumnStr("__provenance__1"))
+    pset_r1 = bpas_from_nas(RA1, ColumnStr("__provenance__1"))
 
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("col1", "colA", "__provenance__2"),
         iterable=[(i % 5, i * 3, i) for i in range(20)],
     )
-    pset_r2 = ProvenanceAlgebraSet(RA2, ColumnStr("__provenance__2"))
+    pset_r2 = bpas_from_nas(RA2, ColumnStr("__provenance__2"))
 
     s = WeightedNaturalJoin((pset_r1, pset_r2), (Constant(1), Constant(-1)))
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
 
     expected = RA1.naturaljoin(RA2).extended_projection(
         {
-            sol.provenance_column: RelationalAlgebraStringExpression(
+            sol.provenance_column.value: RelationalAlgebraStringExpression(
                 '__provenance__1 - __provenance__2'
             ),
             'col1': RelationalAlgebraStringExpression('col1'),
@@ -629,4 +627,4 @@ def test_weightednaturaljoin_provenance_name():
         }
     )
 
-    assert sol.relations == expected
+    assert sol.relation.value == expected
