@@ -130,7 +130,7 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
 
     Returns
     -------
-    ProvenanceAlgebraSet
+    BuildProvenanceAlgebraSet
         Provenance set labelled with probabilities for each tuple in the result
         set.
 
@@ -256,7 +256,7 @@ def solve_marg_query(rule, cpl):
         CP-Logic program on which the query should be solved.
     Returns
     -------
-    ProvenanceAlgebraSet
+    BuildProvenanceAlgebraSet
         Provenance set labelled with probabilities for each tuple in the result
         set.
     """

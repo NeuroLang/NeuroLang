@@ -3,8 +3,8 @@ import pytest
 
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication
-from ...relational_algebra import ColumnStr, NamedRelationalAlgebraFrozenSet, str2columnstr_constant
-from ...relational_algebra_provenance import BuildProvenanceAlgebraSet, ProvenanceAlgebraSet
+from ...relational_algebra import NamedRelationalAlgebraFrozenSet
+from ...relational_algebra_provenance import BuildProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -13,7 +13,6 @@ from .. import (
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
 from ..expressions import PROB, Condition, ProbabilisticQuery
-from ...tests.test_relational_algebra_provenance import bpas_from_nas
 
 ans = Symbol("ans")
 P = Symbol("P")

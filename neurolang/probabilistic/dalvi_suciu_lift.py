@@ -103,7 +103,7 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
 
     Returns
     -------
-    ProvenanceAlgebraSet
+    BuildProvenanceAlgebraSet
         Provenance set labelled with probabilities for each tuple in the result
         set.
 

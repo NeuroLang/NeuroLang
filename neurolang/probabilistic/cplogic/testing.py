@@ -18,7 +18,6 @@ from ...relational_algebra import (
 )
 from ...relational_algebra_provenance import (
     BuildProvenanceAlgebraSet,
-    ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
 from .cplogic_to_gm import CPLogicGroundingToGraphicalModelTranslator
@@ -47,32 +46,6 @@ def get_named_relation_tuples(relation):
     if isinstance(relation, Constant):
         relation = relation.value
     return set(tuple(x) for x in relation)
-
-
-def eq_prov_relations(pas1, pas2):
-    assert isinstance(pas1, ProvenanceAlgebraSet)
-    assert isinstance(pas2, ProvenanceAlgebraSet)
-    pas1_sorted_np_cols = sorted(pas1.non_provenance_columns)
-    pas2_sorted_np_cols = sorted(pas2.non_provenance_columns)
-    assert pas1_sorted_np_cols == pas2_sorted_np_cols
-    assert (
-        pas1.value.projection(*pas1.non_provenance_columns).to_unnamed()
-        == pas2.value.projection(*pas1.non_provenance_columns).to_unnamed()
-    )
-    # ensure the prov col names are different so we can join the sets
-    c1 = Symbol.fresh().name
-    c2 = Symbol.fresh().name
-    x1 = pas1.value.rename_column(pas1.provenance_column, c1)
-    x2 = pas2.value.rename_column(pas2.provenance_column, c2)
-    joined = x1.naturaljoin(x2)
-    probs = list(joined.projection(*(c1, c2)))
-    for p1, p2 in probs:
-        if isinstance(p1, float) and isinstance(p2, float):
-            if not np.isclose(p1, p2):
-                return False
-        elif p1 != p2:
-            return False
-    return True
 
 
 def eq_bprov_relations(pas1, pas2):
@@ -104,7 +77,9 @@ def eq_bprov_relations(pas1, pas2):
 
 def make_prov_set(iterable, columns):
     return BuildProvenanceAlgebraSet(
-        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(columns, iterable)),
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns, iterable
+        )),
         str2columnstr_constant(columns[0]),
     )
 
@@ -238,7 +213,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
             + "\n\\right\\}"
         )
 
-    @add_match(ProvenanceAlgebraSet)
+    @add_match(BuildProvenanceAlgebraSet)
     def provenance_algebra_set(self, prov_set):
         if not hasattr(prov_set, "__debug_expression__"):
             raise RuntimeError(
@@ -246,7 +221,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
                 "stored in __debug_expression__ attribute"
             )
         pred = get_grounding_predicate(prov_set.__debug_expression__)
-        string = f"\\mathcal{{{pred.functor.name}}}"
+        string = f"\\mathcal{{{pred.relation.functor.name}}}"
         if hasattr(prov_set, "__debug_alway_true__"):
             string += "_1"
         return string

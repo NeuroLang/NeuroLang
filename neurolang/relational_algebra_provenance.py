@@ -42,26 +42,6 @@ SUB = Constant(operator.sub)
 SUM = Constant(sum)
 
 
-class ProvenanceAlgebraSet(Constant):
-    def __init__(self, relations, provenance_column):
-        self.relations = relations
-        self.provenance_column = provenance_column
-        if not isinstance(provenance_column, Column):
-            raise ValueError("Provenance column needs to be of Column type")
-
-    @property
-    def value(self):
-        return self.relations
-
-    @property
-    def non_provenance_columns(self):
-        return tuple(
-            column
-            for column in self.value.columns
-            if column != self.provenance_column
-        )
-
-
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
     shared_columns = set(prov_set_1.non_provenance_columns) & set(
         prov_set_2.non_provenance_columns
@@ -139,21 +119,6 @@ class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
             "\N{Greek Capital Letter Sigma}"
             f"_{self.weights}({self.relations})"
         )
-
-
-class BuildConstantProvenanceAlgebraSetMixin(PatternWalker):
-    """
-    Mixin to build Provnance Algebra Sets from
-    the `BuildProvenanceAlgebraSet` operation.
-    """
-
-    @add_match(BuildProvenanceAlgebraSet(Constant, Constant))
-    def build_provenance_algebra_set(self, expression):
-        res = ProvenanceAlgebraSet(
-            expression.relation.value,
-            expression.provenance_column.value
-        )
-        return self.walk(res)
 
 
 class BuildProvenanceAlgebraSetWalkIntoMixin(PatternWalker):

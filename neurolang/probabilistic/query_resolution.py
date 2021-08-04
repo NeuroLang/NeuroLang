@@ -215,7 +215,7 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
 
     Returns
     -------
-    ProvenanceAlgebraSet
+    BuildProvenanceAlgebraSet
         Provenance set labelled with probabilities for each tuple in the result
         set.
 

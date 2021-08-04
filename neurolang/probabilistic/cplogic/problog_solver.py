@@ -1,4 +1,5 @@
 import collections
+from typing import AbstractSet
 
 import problog.core
 import problog.logic
@@ -11,7 +12,7 @@ from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     str2columnstr_constant,
 )
-from ...relational_algebra_provenance import ProvenanceAlgebraSet
+from ...relational_algebra_provenance import BuildProvenanceAlgebraSet
 from ..expression_processing import (
     construct_within_language_succ_result,
     is_within_language_prob_query,
@@ -35,12 +36,12 @@ def pl_preds_to_prov_set(pl_preds, columns):
         if prob > 0:
             tupl = (prob,) + tuple(arg.value for arg in pl_pred.args)
             tuples.add(tupl)
-    prob_col = ColumnStr(Symbol.fresh().name)
-    return ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
+    prob_col = str2columnstr_constant(Symbol.fresh().name)
+    return BuildProvenanceAlgebraSet(
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             columns=(prob_col,) + tuple(c.value for c in columns),
             iterable=tuples,
-        ),
+        )),
         prob_col,
     )
 
@@ -115,13 +116,13 @@ def pl_solution_to_nl_solution(pl_solution, query_preds):
         tupl = (prob,) + tuple(arg.value for arg in pl_pred.args)
         pred_symb = Symbol(pl_pred.functor)
         pred_symb_to_tuples[pred_symb].add(tupl)
-    prob_col = ColumnStr(Symbol.fresh().name)
+    prob_col = str2columnstr_constant(Symbol.fresh().name)
     return {
-        qpred.functor: ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(
+        qpred.functor: BuildProvenanceAlgebraSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
                 columns=(prob_col,) + tuple(arg.name for arg in qpred.args),
                 iterable=pred_symb_to_tuples[qpred.functor],
-            ),
+            )),
             prob_col,
         )
         for qpred in query_preds
