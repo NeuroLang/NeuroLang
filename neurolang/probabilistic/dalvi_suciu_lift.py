@@ -47,10 +47,7 @@ from ..relational_algebra import (
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import (
-    BuildConstantProvenanceAlgebraSetMixin,
-    BuildProvenanceAlgebraSet
-)
+from ..relational_algebra_provenance import BuildProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .exceptions import NotEasilyShatterableError
