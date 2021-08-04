@@ -97,7 +97,7 @@ class ProvenanceAlgebraSet(UnaryRelationalAlgebraOperation):
         return self._non_provenance_columns
 
     def __repr__(self):
-        return (f"RAP[{self.relation}, {self.provenance_column}")
+        return (f"RAP[{self.relation}, {self.provenance_column}]")
 
 
 class NaturalJoinInverse(NaturalJoin):
