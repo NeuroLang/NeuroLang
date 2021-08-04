@@ -29,17 +29,12 @@
     display: inline-block;
 }
 
+.nl-vbr-overlay-controls.region-label .ui.button.nl-vbr-overlay-hist {
+    display: none;
+}
+
 #nlHistogramContainer {
     width: 400px;
     height: 400px;
     /* padding: 0; */
 }
-
-/* .nl-vbr-overlay-center.ui.button {
-    margin-left: .5em;
-    display: none;
-}
-
-.nl-vbr-overlay-switch.active + button.nl-vbr-overlay-center.ui.button {
-    display: inline-block;
-} */

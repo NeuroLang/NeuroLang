@@ -186,6 +186,7 @@ class ResultsManager {
         const hex = this.viewer.addImage(imageID, imageData.image, imageData.min, imageData.max)
         if (hex !== null) {
           elmt.siblings('label').attr('style', 'color: ' + hex + ' !important')
+          parentDiv.addClass('region-label')
         }
         parentDiv.addClass('displayed')
       } else {
