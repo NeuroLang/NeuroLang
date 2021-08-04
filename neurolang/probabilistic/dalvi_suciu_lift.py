@@ -237,21 +237,21 @@ def convert_rule_to_ccq(implication):
     )
 
     ccq = []
-    for cq in antecedent.formulas:
-        scc = args_connected_components(cq)
-        for q in scc:
-            for a in existential_vars:
-                if a in get_args(q):
-                    ccq.append(ExistentialPredicate(a, q))
+    for cc in antecedent.formulas:
+        scc = args_connected_components(cc)
+        for component in scc:
+            for free_var in existential_vars:
+                if free_var in get_component_args(component):
+                    ccq.append(ExistentialPredicate(free_var, component))
                 else:
-                    ccq.append(q)
+                    ccq.append(component)
 
     operation = type(antecedent)
     new_ant = operation(tuple(ccq))
 
     return RTO.walk(new_ant)
 
-def get_args(q):
+def get_component_args(q):
     args = ()
     if isinstance(q, NaryLogicOperator):
         formulas = q.formulas
