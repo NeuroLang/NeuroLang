@@ -229,18 +229,38 @@ def convert_rule_to_ccq(implication):
        input datalog rule.
     """
     implication = RTO.walk(implication)
-    _, antecedent = implication.unapply()
+    consequent, antecedent = implication.unapply()
+    head_vars = set(consequent.args)
+    existential_vars = (
+        extract_logic_free_variables(antecedent) -
+        set(head_vars)
+    )
 
     ccq = []
     for cq in antecedent.formulas:
         scc = args_connected_components(cq)
         for q in scc:
-            ccq.append(q)
+            for a in existential_vars:
+                if a in get_args(q):
+                    ccq.append(ExistentialPredicate(a, q))
+                else:
+                    ccq.append(q)
 
     operation = type(antecedent)
     new_ant = operation(tuple(ccq))
 
     return RTO.walk(new_ant)
+
+def get_args(q):
+    args = ()
+    if isinstance(q, NaryLogicOperator):
+        formulas = q.formulas
+        for f in formulas:
+            args = args + f.args
+    else:
+        args = q.args
+
+    return args
 
 def args_connected_components(expression):
     if isinstance(expression, FunctionApplication):
