@@ -15,8 +15,8 @@ from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
 from ..relational_algebra import Projection, str2columnstr_constant
 from ..relational_algebra_provenance import (
+    BuildProvenanceAlgebraSet,
     NaturalJoinInverse,
-    ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
 from .cplogic.program import CPLogicProgram
@@ -165,11 +165,7 @@ def _solve_for_probabilistic_rule(
     succ_prob_solver: typing.Callable,
 ):
     provset = succ_prob_solver(rule, cpl)
-    relation = Constant[AbstractSet](
-        provset.value,
-        auto_infer_type=False,
-        verify_type=False,
-    )
+    relation = provset.relation
     return relation
 
 
@@ -253,9 +249,9 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
             tuple(str2columnstr_constant(s.name) for s in res_args),
         )
     )
-    provset = ProvenanceAlgebraSet(
-        provset.relation.value,
-        provset.provenance_column.value
+    provset = BuildProvenanceAlgebraSet(
+        provset.relation,
+        provset.provenance_column
     )
     return provset
 

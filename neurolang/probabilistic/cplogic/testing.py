@@ -1,5 +1,6 @@
 import contextlib
 import itertools
+from typing import AbstractSet
 
 import numpy as np
 
@@ -102,9 +103,9 @@ def eq_bprov_relations(pas1, pas2):
 
 
 def make_prov_set(iterable, columns):
-    return ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(columns, iterable),
-        ColumnStr(columns[0]),
+    return BuildProvenanceAlgebraSet(
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(columns, iterable)),
+        str2columnstr_constant(columns[0]),
     )
 
 

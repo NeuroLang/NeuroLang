@@ -21,6 +21,7 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 
 import logging
 from collections import defaultdict
+from typing import AbstractSet
 
 from ..datalog.expression_processing import (
     EQ,
@@ -44,9 +45,7 @@ from ..relational_algebra import (
     RenameOptimizations,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import (
-    ProvenanceAlgebraSet,
-)
+from ..relational_algebra_provenance import BuildProvenanceAlgebraSet
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
@@ -57,8 +56,8 @@ from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
-from .shattering import shatter_easy_probfacts
 from .query_resolution import lift_solve_marg_query
+from .shattering import shatter_easy_probfacts
 
 LOG = logging.getLogger(__name__)
 
@@ -152,9 +151,11 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
             term.name for term in query.consequent.args
             if isinstance(term, Symbol)
         )
-        return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names),
-            ColumnStr("_p_"),
+        return BuildProvenanceAlgebraSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                ("_p_",) + head_var_names)
+            ),
+            str2columnstr_constant("_p_"),
         )
 
     with log_performance(LOG, "Translation and lifted optimisation"):
@@ -202,9 +203,9 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
         if return_prov_sets:
-            prob_set_result = ProvenanceAlgebraSet(
-                prob_set_result.relation.value,
-                prob_set_result.provenance_column.value
+            prob_set_result = BuildProvenanceAlgebraSet(
+                prob_set_result.relation,
+                prob_set_result.provenance_column
             )
 
     return prob_set_result

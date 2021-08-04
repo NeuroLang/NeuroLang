@@ -40,17 +40,22 @@ C_ = Constant
 S_ = Symbol
 
 
-def bpas_from_nas(nas, provenance_column):
-    uas = nas.to_unnamed()
-    res = NameColumns(
-        C_[AbstractSet](uas),
-        tuple(str2columnstr_constant(c) for c in nas.columns)
-    )
 
-    return BuildProvenanceAlgebraSet(
-        res,
-        str2columnstr_constant(provenance_column)
-    )
+def newmethod311():
+    def bpas_from_nas(nas, provenance_column):
+        uas = nas.to_unnamed()
+        res = NameColumns(
+            C_[AbstractSet](uas),
+            tuple(str2columnstr_constant(c) for c in nas.columns)
+        )
+
+        return BuildProvenanceAlgebraSet(
+            res,
+            str2columnstr_constant(provenance_column)
+        )
+    return bpas_from_nas
+
+bpas_from_nas = newmethod311()
 
 
 @pytest.fixture

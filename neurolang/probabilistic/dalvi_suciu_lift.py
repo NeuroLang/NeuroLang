@@ -1,6 +1,7 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
+from typing import AbstractSet
 
 import numpy as np
 
@@ -48,7 +49,7 @@ from ..relational_algebra import (
 )
 from ..relational_algebra_provenance import (
     BuildConstantProvenanceAlgebraSetMixin,
-    ProvenanceAlgebraSet
+    BuildProvenanceAlgebraSet
 )
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
@@ -122,9 +123,11 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
             term.name for term in query.consequent.args
             if isinstance(term, Symbol)
         )
-        return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names),
-            ColumnStr("_p_"),
+        return BuildProvenanceAlgebraSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                ("_p_",) + head_var_names
+            )),
+            str2columnstr_constant("_p_"),
         )
 
     with log_performance(LOG, "Translation and lifted optimisation"):
@@ -174,15 +177,6 @@ def generate_query_compiler(symbol_table, return_prov_sets):
         RAQueryOptimiser(),
         RelationalAlgebraSolver()
     ]
-
-    if return_prov_sets:
-        class BuildConstantProvenanceAlgebraSetSolver(
-            BuildConstantProvenanceAlgebraSetMixin,
-            ExpressionWalker
-        ):
-            pass
-
-        steps.append(BuildConstantProvenanceAlgebraSetSolver)
 
     query_compiler = ChainedWalker(*steps)
     return query_compiler
