@@ -1,14 +1,18 @@
 from typing import AbstractSet
+
 import pytest
 
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication
-from ...relational_algebra import NamedRelationalAlgebraFrozenSet
+from ...relational_algebra import (
+    NamedRelationalAlgebraFrozenSet,
+    str2columnstr_constant
+)
 from ...relational_algebra_provenance import BuildProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
-    weighted_model_counting,
+    weighted_model_counting
 )
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
