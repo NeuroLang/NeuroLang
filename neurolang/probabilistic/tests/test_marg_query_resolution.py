@@ -85,7 +85,7 @@ def test_marg_query_ground_conditioning(solver):
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_marg_query_two_vars_conditioning(solver):
@@ -126,7 +126,7 @@ def test_marg_query_two_vars_conditioning(solver):
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_marg_query_conjunctive_conditioned_and_conditioning(solver):
@@ -189,4 +189,4 @@ def test_marg_query_conjunctive_conditioned_and_conditioning(solver):
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)

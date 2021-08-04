@@ -241,7 +241,9 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
     denominator_rule = Implication(
         Symbol.fresh()(*denominator_logic_variables), denominator_antecedent
     )
-    denominator_provset = succ_solver(denominator_rule, cpl, return_prov_sets=False)
+    denominator_provset = succ_solver(
+        denominator_rule, cpl, return_prov_sets=False
+    )
     rapcs = RelationalAlgebraProvenanceCountingSolver()
     provset = rapcs.walk(
         Projection(

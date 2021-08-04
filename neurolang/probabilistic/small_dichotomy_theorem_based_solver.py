@@ -35,7 +35,6 @@ from ..expressions import Constant, Symbol
 from ..logic import FALSE, Conjunction, Implication
 from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import (
-    ColumnStr,
     EliminateTrivialProjections,
     ExtendedProjection,
     FunctionApplicationListMember,

@@ -8,7 +8,6 @@ import problog.sdd_formula
 
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...relational_algebra import (
-    ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     str2columnstr_constant,
 )

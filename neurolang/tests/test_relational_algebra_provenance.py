@@ -10,7 +10,6 @@ from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
-    NameColumns,
     NaturalJoin,
     Product,
     RelationalAlgebraSolver,
@@ -40,24 +39,6 @@ C_ = Constant
 S_ = Symbol
 
 
-
-def newmethod311():
-    def bpas_from_nas(nas, provenance_column):
-        uas = nas.to_unnamed()
-        res = NameColumns(
-            C_[AbstractSet](uas),
-            tuple(str2columnstr_constant(c) for c in nas.columns)
-        )
-
-        return BuildProvenanceAlgebraSet(
-            res,
-            str2columnstr_constant(provenance_column)
-        )
-    return bpas_from_nas
-
-bpas_from_nas = newmethod311()
-
-
 @pytest.fixture
 def R1():
     return NamedRelationalAlgebraFrozenSet(
@@ -68,7 +49,7 @@ def R1():
 
 @pytest.fixture
 def provenance_set_r1(R1):
-    return bpas_from_nas(
+    return testing.build_ra_provenance_set_from_named_ra_set(
         R1, ColumnStr("__provenance__")
     )
 
@@ -126,12 +107,16 @@ def test_naturaljoin():
         columns=("col1", "__provenance__"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = bpas_from_nas(RA1, "__provenance__")
+    pset_r1 = testing.build_ra_provenance_set_from_named_ra_set(
+        RA1, "__provenance__"
+    )
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("col1", "colA", "__provenance__"),
         iterable=[(i % 5, i * 3, i) for i in range(20)],
     )
-    pset_r2 = bpas_from_nas(RA2, "__provenance__")
+    pset_r2 = testing.build_ra_provenance_set_from_named_ra_set(
+        RA2, "__provenance__"
+    )
 
     s = NaturalJoin(pset_r1, pset_r2)
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s).relation.value
@@ -188,13 +173,17 @@ def test_naturaljoin_provenance_name():
         columns=("col1", "__provenance__1"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = bpas_from_nas(RA1, ColumnStr("__provenance__1"))
+    pset_r1 = testing.build_ra_provenance_set_from_named_ra_set(
+        RA1, ColumnStr("__provenance__1")
+    )
 
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("col1", "colA", "__provenance__2"),
         iterable=[(i % 5, i * 3, i) for i in range(20)],
     )
-    pset_r2 = bpas_from_nas(RA2, ColumnStr("__provenance__2"))
+    pset_r2 = testing.build_ra_provenance_set_from_named_ra_set(
+        RA2, ColumnStr("__provenance__2")
+    )
 
     s = NaturalJoin(pset_r1, pset_r2)
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
@@ -209,13 +198,17 @@ def test_product():
         columns=("col1", "__provenance__"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = bpas_from_nas(R1, ColumnStr("__provenance__"))
+    pset_r1 = testing.build_ra_provenance_set_from_named_ra_set(
+        R1, ColumnStr("__provenance__")
+    )
 
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("colA", "__provenance__"),
         iterable=[(i * 3, i) for i in range(20)],
     )
-    pset_r2 = bpas_from_nas(RA2, ColumnStr("__provenance__"))
+    pset_r2 = testing.build_ra_provenance_set_from_named_ra_set(
+        RA2, ColumnStr("__provenance__")
+    )
 
     s = Product((pset_r1, pset_r2))
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s).relation.value
@@ -271,13 +264,17 @@ def test_product_provenance_name():
         columns=("col1", "__provenance__1"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = bpas_from_nas(RA1, ColumnStr("__provenance__1"))
+    pset_r1 = testing.build_ra_provenance_set_from_named_ra_set(
+        RA1, ColumnStr("__provenance__1")
+    )
 
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("col2", "colA", "__provenance__2"),
         iterable=[(i % 5, i * 3, i) for i in range(20)],
     )
-    pset_r2 = bpas_from_nas(RA2, ColumnStr("__provenance__2"))
+    pset_r2 = testing.build_ra_provenance_set_from_named_ra_set(
+        RA2, ColumnStr("__provenance__2")
+    )
 
     s = Product((pset_r1, pset_r2))
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
@@ -288,7 +285,7 @@ def test_product_provenance_name():
 
 
 def test_union():
-    relation1 = bpas_from_nas(
+    relation1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
                 ("a", "b", 1),
@@ -301,7 +298,7 @@ def test_union():
         ),
         ColumnStr("__provenance__"),
     )
-    relation2 = bpas_from_nas(
+    relation2 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
                 ("a", "b", 1),
@@ -327,7 +324,7 @@ def test_union():
 
 
 def test_union_different_prov_col_names():
-    r1 = bpas_from_nas(
+    r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p1_", "x"),
             [(0.1, "a"), (0.2, "b")]
@@ -335,7 +332,7 @@ def test_union_different_prov_col_names():
         ColumnStr("_p1_")
     )
 
-    r2 = bpas_from_nas(
+    r2 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p2_", "x"),
             [(0.5, "a"), (0.9, "c")]
@@ -346,29 +343,29 @@ def test_union_different_prov_col_names():
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(operation)
 
-    expected = solver.walk(bpas_from_nas(
+    expected = solver.walk(testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_whatever_", "x"), [(0.6, "a"), (0.2, "b"), (0.9, "c")]
         ),
         "_whatever_"
     ))
 
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_union_with_empty_set(provenance_set_r1):
-    empty = bpas_from_nas(
+    empty = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(("_p_", "col1", "col2")),
         ColumnStr("_p_")
     )
     operation = Union(provenance_set_r1, empty)
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(operation)
-    assert testing.eq_bprov_relations(result, solver.walk(provenance_set_r1))
+    assert testing.eq_prov_relations(result, solver.walk(provenance_set_r1))
 
 
 def test_projection():
-    relation = bpas_from_nas(
+    relation = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
                 ("a", "b", 1),
@@ -381,7 +378,7 @@ def test_projection():
         ),
         ColumnStr("__provenance__"),
     )
-    expected = bpas_from_nas(
+    expected = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             iterable=[("a", 1), ("b", 3), ("c", 3)],
             columns=["x", "__provenance__"],
@@ -413,7 +410,7 @@ def test_concatenate_constant(provenance_set_r1):
 
 
 def test_extended_projection():
-    relation = bpas_from_nas(
+    relation = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             iterable=[(5, 1, 1), (6, 2, 2), (7, 3, 2), (1, 3, 1), (2, 1, 1)],
             columns=["x", "y", "__provenance__"],
@@ -421,7 +418,7 @@ def test_extended_projection():
         "__provenance__",
     )
 
-    expected = bpas_from_nas(
+    expected = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
                 (5, 1, 6, 1), (6, 2, 8, 2),
@@ -481,7 +478,7 @@ def test_provenance_projection():
 
 
 def test_provenance_product_with_shared_non_prov_col_should_fail():
-    r1 = bpas_from_nas(
+    r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
                 (0.8, "a", 42),
@@ -493,7 +490,7 @@ def test_provenance_product_with_shared_non_prov_col_should_fail():
         ),
         ColumnStr("myprov"),
     )
-    r2 = bpas_from_nas(
+    r2 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             iterable=[(0.2, "a", 42), (0.5, "b", 84)],
             columns=["myprov", "x", "z"],
@@ -526,7 +523,7 @@ def test_concatenate_column_to_ra_relation():
 
 
 def test_rename_columns():
-    prov_relation = bpas_from_nas(
+    prov_relation = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y"),
             iterable=[(0.1, "a", 0), (1.0, "b", 44)],
@@ -537,7 +534,7 @@ def test_rename_columns():
         prov_relation,
         ((str2columnstr_constant("x"), str2columnstr_constant("z")),),
     )
-    expected = bpas_from_nas(
+    expected = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "z", "y"),
             iterable=[(0.1, "a", 0), (1.0, "b", 44)],
@@ -547,23 +544,23 @@ def test_rename_columns():
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(rename_columns)
     expected = solver.walk(expected)
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_njoin_inverse():
-    r1 = bpas_from_nas(
+    r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x"), iterable=[(1.0, "a"), (0.5, "b")],
         ),
         ColumnStr("_p_"),
     )
-    r2 = bpas_from_nas(
+    r2 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x"), iterable=[(0.5, "b")],
         ),
         ColumnStr("_p_"),
     )
-    expected = bpas_from_nas(
+    expected = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x"), iterable=[(1.0, "b")],
         ),
@@ -573,7 +570,7 @@ def test_njoin_inverse():
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(op)
     expected = solver.walk(expected)
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_selection_between_columnints():
@@ -593,7 +590,7 @@ def test_selection_between_columnints():
     op = Selection(r, Constant(operator.eq)(col1, col2))
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(op)
-    expected = bpas_from_nas(
+    expected = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y"),
             iterable=[
@@ -603,7 +600,7 @@ def test_selection_between_columnints():
         ),
         ColumnStr("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_weightednaturaljoin_provenance_name():
@@ -611,13 +608,17 @@ def test_weightednaturaljoin_provenance_name():
         columns=("col1", "__provenance__1"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = bpas_from_nas(RA1, ColumnStr("__provenance__1"))
+    pset_r1 = testing.build_ra_provenance_set_from_named_ra_set(
+        RA1, ColumnStr("__provenance__1")
+    )
 
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("col1", "colA", "__provenance__2"),
         iterable=[(i % 5, i * 3, i) for i in range(20)],
     )
-    pset_r2 = bpas_from_nas(RA2, ColumnStr("__provenance__2"))
+    pset_r2 = testing.build_ra_provenance_set_from_named_ra_set(
+        RA2, ColumnStr("__provenance__2")
+    )
 
     s = WeightedNaturalJoin((pset_r1, pset_r2), (Constant(1), Constant(-1)))
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s)

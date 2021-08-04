@@ -26,7 +26,7 @@ from ..relational_algebra_provenance import (
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     RelationalAlgebraSolver
 )
-from .test_relational_algebra_provenance import bpas_from_nas
+
 
 EQ = Constant(operator.eq)
 
@@ -40,11 +40,11 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
 
 
 def test_integer_addition_semiring():
-    r1 = bpas_from_nas(
+    r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(2, "a"), (3, "b")]),
         ColumnStr("_p_"),
     )
-    r2 = bpas_from_nas(
+    r2 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(5, "a"), (10, "c")]),
         ColumnStr("_p_"),
     )
@@ -58,7 +58,7 @@ def test_integer_addition_semiring():
         ),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 class SetType(frozenset):
@@ -74,14 +74,14 @@ class SetType(frozenset):
     reason="multiplication of sets not yet implemented in dask backend",
 )
 def test_set_type_semiring():
-    r1 = bpas_from_nas(
+    r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"),
             [(SetType({"a", "b"}), "hello"), (SetType({"c", "a"}), "bonjour")],
         ),
         ColumnStr("_p_"),
     )
-    r2 = bpas_from_nas(
+    r2 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"),
             [(SetType({"c"}), "hello"), (SetType({"c", "a"}), "zoo")],
@@ -97,7 +97,7 @@ def test_set_type_semiring():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 class StringTestType:
@@ -122,7 +122,7 @@ class StringTestType:
     reason="multiplication of strings not yet implemented in dask backend",
 )
 def test_string_semiring():
-    r1 = bpas_from_nas(
+    r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "word"),
             [
@@ -133,7 +133,7 @@ def test_string_semiring():
         ),
         ColumnStr("_p_"),
     )
-    r2 = bpas_from_nas(
+    r2 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "word"),
             [(StringTestType("he"), "my"), (StringTestType("the"), "name")],
@@ -153,11 +153,11 @@ def test_string_semiring():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_multiple_columns():
-    r = bpas_from_nas(
+    r = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
@@ -173,11 +173,11 @@ def test_multiple_columns():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_renaming():
-    r = bpas_from_nas(
+    r = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
@@ -196,11 +196,11 @@ def test_renaming():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_selection():
-    r = bpas_from_nas(
+    r = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
@@ -218,15 +218,15 @@ def test_selection():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_union():
-    r1 = bpas_from_nas(
+    r1 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(("_p1_", "x"), [(2, "a"), (3, "b")]),
         ColumnStr("_p1_"),
     )
-    r2 = bpas_from_nas(
+    r2 = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(("_p2_", "x"), [(5, "b"), (10, "c")]),
         ColumnStr("_p2_"),
     )
@@ -239,11 +239,11 @@ def test_union():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_selection_by_columnint():
-    r = bpas_from_nas(
+    r = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"), [(0.2, "a", "b"), (0.5, "b", "a")]
         ),
@@ -254,11 +254,13 @@ def test_selection_by_columnint():
     result = solver.walk(op)
     expected = BuildProvenanceAlgebraSet(
         Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(("_p_", "x", "y"), [(0.2, "a", "b")])
+            NamedRelationalAlgebraFrozenSet(
+                ("_p_", "x", "y"), [(0.2, "a", "b")]
+            )
         ),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
     op = Selection(r, EQ(Constant(ColumnInt(0)), Constant("a")))
     op = Selection(op, EQ(Constant(ColumnInt(1)), Constant("b")))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
@@ -270,11 +272,11 @@ def test_selection_by_columnint():
         ),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_projection_columnint():
-    r = bpas_from_nas(
+    r = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"), [(0.2, "a", "b"), (0.5, "b", "a")]
         ),
@@ -289,11 +291,11 @@ def test_projection_columnint():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
     op = Projection(r, (Constant(ColumnInt(0)), Constant(ColumnInt(1))))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    assert testing.eq_bprov_relations(result, solver.walk(r))
+    assert testing.eq_prov_relations(result, solver.walk(r))
     op = Projection(r, (Constant(ColumnInt(1)), Constant(ColumnInt(0))))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
@@ -303,11 +305,11 @@ def test_projection_columnint():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_selection_between_columnints():
-    r = bpas_from_nas(
+    r = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y"),
             iterable=[
@@ -333,11 +335,11 @@ def test_selection_between_columnints():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_difference():
-    r_left = bpas_from_nas(
+    r_left = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p1_", "x", "y", "w"),
             iterable=[
@@ -349,7 +351,7 @@ def test_difference():
         ColumnStr("_p1_"),
     )
 
-    r_right = bpas_from_nas(
+    r_right = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p2_", "x", "y", "z"),
             iterable=[
@@ -375,11 +377,11 @@ def test_difference():
 
     op = Difference(r_left, r_right)
     result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
-    assert testing.eq_bprov_relations(result, r_expected)
+    assert testing.eq_prov_relations(result, r_expected)
 
 
 def test_difference_same_provenance_column():
-    r_left = bpas_from_nas(
+    r_left = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y", "w"),
             iterable=[
@@ -391,7 +393,7 @@ def test_difference_same_provenance_column():
         ColumnStr("_p_"),
     )
 
-    r_right = bpas_from_nas(
+    r_right = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y", "z"),
             iterable=[
@@ -417,11 +419,11 @@ def test_difference_same_provenance_column():
 
     op = Difference(r_left, r_right)
     result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
-    assert testing.eq_bprov_relations(result, r_expected)
+    assert testing.eq_prov_relations(result, r_expected)
 
 
 def test_extended_proj():
-    provset = bpas_from_nas(
+    provset = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [
@@ -457,11 +459,11 @@ def test_extended_proj():
         )),
         str2columnstr_constant("_p_"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_forbidden_extended_proj_missing_nonprov_cols():
-    provset = bpas_from_nas(
+    provset = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [
@@ -487,7 +489,7 @@ def test_forbidden_extended_proj_missing_nonprov_cols():
 
 
 def testforbidden_extended_proj_on_provcol():
-    provset = bpas_from_nas(
+    provset = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [

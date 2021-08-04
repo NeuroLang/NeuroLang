@@ -9,16 +9,17 @@ from ...expression_walker import PatternWalker
 from ...expressions import Constant, Symbol
 from ...relational_algebra import (
     ColumnStr,
+    NameColumns,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
     Projection,
     RenameColumn,
     Selection,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ...relational_algebra_provenance import (
     BuildProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceCountingSolver,
+    RelationalAlgebraProvenanceCountingSolver
 )
 from .cplogic_to_gm import CPLogicGroundingToGraphicalModelTranslator
 from .gm_provenance_solver import (
@@ -30,7 +31,7 @@ from .gm_provenance_solver import (
     TupleSymbol,
     UnionOverTuples,
     UnionRemover,
-    rename_columns_for_args_to_match,
+    rename_columns_for_args_to_match
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
 
@@ -48,7 +49,20 @@ def get_named_relation_tuples(relation):
     return set(tuple(x) for x in relation)
 
 
-def eq_bprov_relations(pas1, pas2):
+def build_ra_provenance_set_from_named_ra_set(nas, provenance_column):
+    uas = nas.to_unnamed()
+    res = NameColumns(
+        Constant[AbstractSet](uas),
+        tuple(str2columnstr_constant(c) for c in nas.columns)
+    )
+
+    return BuildProvenanceAlgebraSet(
+        res,
+        str2columnstr_constant(provenance_column)
+    )
+
+
+def eq_prov_relations(pas1, pas2):
     return isinstance(pas1, BuildProvenanceAlgebraSet)
     return isinstance(pas2, BuildProvenanceAlgebraSet)
     pas1_sorted_np_cols = sorted(pas1.non_provenance_columns)

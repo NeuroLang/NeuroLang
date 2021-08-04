@@ -86,7 +86,7 @@ def test_deterministic(solver):
     query = Implication(ans(x), P(x))
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0, "a"), (1.0, "b")], ("_p_", "x"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_deterministic_conjunction_varying_arity(solver):
@@ -103,7 +103,7 @@ def test_deterministic_conjunction_varying_arity(solver):
     query = Implication(ans(x, y), Z(x, y))
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0, "a", "b")], ("_p_", "x", "y"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_deterministic_conjunction_varying_arity_empty(solver):
@@ -149,7 +149,7 @@ def test_simple_bernoulli(solver):
     query = Implication(ans(x), P(x))
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(0.7, "a"), (0.8, "b")], ("_p_", "x"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_bernoulli_conjunction(solver):
@@ -167,7 +167,7 @@ def test_bernoulli_conjunction(solver):
     result = solver.solve_succ_query(query, cpl_program)
 
     expected = testing.make_prov_set([(0.9 * 0.9 * 0.5, "b")], ("_p_", "x"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_multi_level_conjunction(solver):
@@ -214,7 +214,7 @@ def test_multi_level_conjunction(solver):
         ],
         ("_p_", "x", "y"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_intertwined_conjunctions_and_probfacts(solver):
@@ -249,7 +249,7 @@ def test_intertwined_conjunctions_and_probfacts(solver):
     query = Implication(ans(y), Z(y))
     result = solver.solve_succ_query(query, cpl)
     expected = testing.make_prov_set([(0.8 * 0.5, "a")], ("_p_", "y"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_simple_probchoice(solver):
@@ -268,7 +268,7 @@ def test_simple_probchoice(solver):
         ],
         ("_p_", "x"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 @pytest.mark.parametrize("solver", [
@@ -293,7 +293,7 @@ def test_mutual_exclusivity(solver):
     query = Implication(ans(x, y), Z(x, y))
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([], ("_p_", "x", "y"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_multiple_probchoices_mutual_exclusivity(solver):
@@ -314,7 +314,7 @@ def test_multiple_probchoices_mutual_exclusivity(solver):
     expected = testing.make_prov_set(
         [(0.2 * 0.1, "a", "b"), (0.8 * 0.1, "b", "b")], ("_p_", "x", "y")
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_large_probabilistic_choice(solver):
@@ -348,7 +348,7 @@ def test_large_probabilistic_choice(solver):
         ],
         ("_p_", "x", "y"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_simple_probchoice_existential(solver):
@@ -375,7 +375,7 @@ def test_simple_probchoice_existential(solver):
     query = Implication(ans(x), Q(x))
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(0.9, "a"), (0.1, "c")], ("_p_", "x"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_existential_in_conjunction(solver):
@@ -393,7 +393,7 @@ def test_existential_in_conjunction(solver):
     query = Implication(ans(x), Q(x))
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p_", "x"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_existential_alternative_variables(solver):
@@ -421,7 +421,7 @@ def test_existential_alternative_variables(solver):
     query = Implication(ans(z), H(z))
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(0.2 * 0.8, "b")], ("prob", "z"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_multilevel_existential(solver):
@@ -458,7 +458,7 @@ def test_multilevel_existential(solver):
         ],
         ("_p_", "x", "y"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
     query = Implication(ans(z), C(z))
     result = solver.solve_succ_query(query, cpl_program)
@@ -470,7 +470,7 @@ def test_multilevel_existential(solver):
         ],
         ("_p_", "z"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
     query = Implication(ans(z), B(z))
 
@@ -485,7 +485,7 @@ def test_multilevel_existential(solver):
             [(0.5 * 0.1 * 0.5, "c")],
             ("_p_", "z"),
         )
-        assert testing.eq_bprov_relations(result, expected)
+        assert testing.eq_prov_relations(result, expected)
 
 
 def test_repeated_antecedent_predicate_symbol(solver):
@@ -544,7 +544,7 @@ def test_repeated_antecedent_predicate_symbol(solver):
             ],
             ("_p_", "x", "y"),
         )
-        assert testing.eq_bprov_relations(result, expected)
+        assert testing.eq_prov_relations(result, expected)
 
 
 def test_tiny_cbma_example(solver):
@@ -615,7 +615,7 @@ def test_tiny_cbma_example(solver):
         ],
         ("_p_", "t"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_conjunct_pfact_equantified_pchoice(solver):
@@ -639,7 +639,7 @@ def test_conjunct_pfact_equantified_pchoice(solver):
         ],
         ("_p_", "x"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_shatterable_query(solver):
@@ -657,7 +657,7 @@ def test_shatterable_query(solver):
         ],
         ("_p_", "x"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_shatterable_query_2(solver):
@@ -677,7 +677,7 @@ def test_shatterable_query_2(solver):
         ],
         ("_p_", "x"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_program_with_variable_equality(solver):
@@ -708,7 +708,7 @@ def test_program_with_variable_equality(solver):
         ],
         ("_p_", "x", "y"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_repeated_variable_probabilistic_rule(solver):
@@ -720,7 +720,7 @@ def test_repeated_variable_probabilistic_rule(solver):
     query = Implication(ans(x, y), H(x, y))
     result = solver.solve_succ_query(query, cpl)
     expected = testing.make_prov_set([(0.2, 7, 7)], ("_p_", "x", "y"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_repeated_variable_with_constant_in_head(solver):
@@ -742,7 +742,7 @@ def test_repeated_variable_with_constant_in_head(solver):
         [(0.4 * 0.9, 8, 8)],
         ("_p_", "x", "y"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_empty_result_program(solver):
@@ -756,7 +756,7 @@ def test_empty_result_program(solver):
     query = Implication(ans(x), R(x, x))
     result = solver.solve_succ_query(query, cpl)
     expected = testing.make_prov_set([], ("_p_", "x"))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 @pytest.mark.parametrize("solver", [
@@ -783,7 +783,7 @@ def test_program_with_probchoice_selfjoin(solver):
     expected = testing.make_prov_set(
         [(0.2 * 0.6, "a", "a"), (0.8 * 0.8, "b", "b")], ("_p_", "x", "y")
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 @pytest.mark.parametrize("solver", [
@@ -811,7 +811,7 @@ def test_probchoice_selfjoin_multiple_variables(solver):
         [(0.2 * 0.6, "a", "b", "a", "b"), (0.8 * 0.8, "b", "c", "b", "c")],
         ("_p_", "x", "y", "z", "w"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 @pytest.mark.parametrize("solver", [
@@ -839,7 +839,7 @@ def test_probchoice_selfjoin_multiple_variables_shared_var(solver):
         [(0.2 * 0.8, "b", "b", "b")],
         ("_p_", "x", "y", "z"),
     )
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
 
 
 
@@ -853,4 +853,4 @@ def test_simple_boolean_query(solver):
     query = Implication(ans(), Z(x))
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0,)], ("_p_",))
-    assert testing.eq_bprov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)

@@ -4,7 +4,7 @@
 """
 import logging
 import operator as op
-from typing import AbstractSet, Tuple
+from typing import AbstractSet
 
 import numpy as np
 import pandas as pd
@@ -260,7 +260,9 @@ class WMCSemiRingSolver(
             tag_set = []
             with sure_is_not_pattern():
                 for probability in df[prob_column]:
-                    adjusted_probability = probability / (1 - previous_probability)
+                    adjusted_probability = (
+                        probability / (1 - previous_probability)
+                    )
                     previous_probability += probability
                     previous = self._generate_tag_choice_expression(
                         previous, adjusted_probability, prov_column, tag_set
@@ -993,7 +995,9 @@ def solve_marg_query(rule, cpl):
         Symbol.fresh()(*denominator_logic_variables),
         denominator_antecedent
     )
-    denominator_provset = solve_succ_query(denominator_rule, cpl, return_prov_sets=False)
+    denominator_provset = solve_succ_query(
+        denominator_rule, cpl, return_prov_sets=False
+    )
     rapcs = RelationalAlgebraProvenanceCountingSolver()
     provset = rapcs.walk(
         Projection(
