@@ -109,11 +109,13 @@ class NeurolangPDL(QueryBuilderDatalog):
         self,
         chase_class: Type[Chase] = Chase,
         probabilistic_solvers: Tuple[Callable] = (
+            small_dichotomy_theorem_based_solver.solve_succ_query,
             dalvi_suciu_lift.solve_succ_query,
             wmc_solve_succ_query,
         ),
         probabilistic_marg_solvers: Tuple[Callable] = (
-            dalvi_suciu_lift.solve_marg_query,
+            small_dichotomy_theorem_based_solver.solve_marg_query,
+            dalvi_suciu_lift.solve_succ_query,
             wmc_solve_marg_query,
         ),
         check_qbased_pfact_tuple_unicity=False,
