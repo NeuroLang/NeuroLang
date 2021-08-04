@@ -175,7 +175,8 @@ def dalvi_suciu_lift(rule, symbol_table):
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
     if isinstance(rule, Implication):
-        rule = convert_rule_to_ucq(rule)
+        rule = convert_rule_to_ccq(rule)
+        #rule = convert_rule_to_ucq(rule)
     rule = RTO.walk(rule)
     if (
         isinstance(rule, FunctionApplication) or
@@ -210,6 +211,59 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     return NonLiftable(rule)
 
+
+def convert_rule_to_ccq(implication):
+    """Convert datalog rule to CCQ.
+    CCQ's are defined in Dalvi and Suciu - 2012 -
+    The dichotomy of probabilistic inference for union.
+
+    Parameters
+    ----------
+    expression : Implication
+        Datalog rule.
+
+    Returns
+    -------
+    LogicExpression
+       CCQ with the same ground set as the
+       input datalog rule.
+    """
+    implication = RTO.walk(implication)
+    _, antecedent = implication.unapply()
+
+    ccq = []
+    for cq in antecedent.formulas:
+        scc = args_connected_components(cq)
+        for q in scc:
+            ccq.append(q)
+
+    operation = type(antecedent)
+    new_ant = operation(tuple(ccq))
+
+    return RTO.walk(new_ant)
+
+def args_connected_components(expression):
+    if isinstance(expression, FunctionApplication):
+        return [expression]
+
+    c_matrix = np.zeros((len(expression.formulas),) * 2)
+    for i, formula in enumerate(expression.formulas):
+        f_args = set(a.args for a in extract_logic_atoms(formula))
+        for j, formula_ in enumerate(expression.formulas[i + 1:]):
+            f_args_ = set(
+                a.args for a in extract_logic_atoms(formula_)
+            )
+            if not f_args.isdisjoint(f_args_):
+                c_matrix[i, i + 1 + j] = 1
+                c_matrix[i + 1 + j, i] = 1
+
+    components = connected_components(c_matrix)
+
+    operation = type(expression)
+    return [
+        operation(tuple(expression.formulas[i] for i in component))
+        for component in components
+    ]
 
 def has_separator_variables(query, symbol_table):
     """Returns true if `query` has a separator variable and the plan.
