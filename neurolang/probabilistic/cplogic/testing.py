@@ -18,7 +18,7 @@ from ...relational_algebra import (
     str2columnstr_constant
 )
 from ...relational_algebra_provenance import (
-    BuildProvenanceAlgebraSet,
+    ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver
 )
 from .cplogic_to_gm import CPLogicGroundingToGraphicalModelTranslator
@@ -56,15 +56,15 @@ def build_ra_provenance_set_from_named_ra_set(nas, provenance_column):
         tuple(str2columnstr_constant(c) for c in nas.columns)
     )
 
-    return BuildProvenanceAlgebraSet(
+    return ProvenanceAlgebraSet(
         res,
         str2columnstr_constant(provenance_column)
     )
 
 
 def eq_prov_relations(pas1, pas2):
-    return isinstance(pas1, BuildProvenanceAlgebraSet)
-    return isinstance(pas2, BuildProvenanceAlgebraSet)
+    return isinstance(pas1, ProvenanceAlgebraSet)
+    return isinstance(pas2, ProvenanceAlgebraSet)
     pas1_sorted_np_cols = sorted(pas1.non_provenance_columns)
     pas2_sorted_np_cols = sorted(pas2.non_provenance_columns)
     return pas1_sorted_np_cols == pas2_sorted_np_cols
@@ -90,7 +90,7 @@ def eq_prov_relations(pas1, pas2):
 
 
 def make_prov_set(iterable, columns):
-    return BuildProvenanceAlgebraSet(
+    return ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             columns, iterable
         )),
@@ -227,7 +227,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
             + "\n\\right\\}"
         )
 
-    @add_match(BuildProvenanceAlgebraSet)
+    @add_match(ProvenanceAlgebraSet)
     def provenance_algebra_set(self, prov_set):
         if not hasattr(prov_set, "__debug_expression__"):
             raise RuntimeError(

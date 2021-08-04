@@ -8,7 +8,7 @@ from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     str2columnstr_constant
 )
-from ...relational_algebra_provenance import BuildProvenanceAlgebraSet
+from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -74,7 +74,7 @@ def test_marg_query_ground_conditioning(solver):
     )
     cpl.walk(query)
     result = solver.solve_marg_query(query, cpl)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"),
             [
@@ -113,7 +113,7 @@ def test_marg_query_two_vars_conditioning(solver):
     )
     cpl.walk(query)
     result = solver.solve_marg_query(query, cpl)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [
@@ -178,7 +178,7 @@ def test_marg_query_conjunctive_conditioned_and_conditioning(solver):
     )
     cpl.walk(query)
     result = solver.solve_marg_query(query, cpl)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [

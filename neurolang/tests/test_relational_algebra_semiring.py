@@ -21,7 +21,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
-    BuildProvenanceAlgebraSet,
+    ProvenanceAlgebraSet,
     BuildProvenanceAlgebraSetWalkIntoMixin,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     RelationalAlgebraSolver
@@ -52,7 +52,7 @@ def test_integer_addition_semiring():
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
 
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(10, "a")])
         ),
@@ -91,7 +91,7 @@ def test_set_type_semiring():
     op = NaturalJoin(r1, r2)
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"), [(SetType({"a", "b", "c"}), "hello")]
         )),
@@ -143,7 +143,7 @@ def test_string_semiring():
     op = NaturalJoin(r1, r2)
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "word"),
             [
@@ -167,7 +167,7 @@ def test_multiple_columns():
     op = Projection(r, (str2columnstr_constant("x"),))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"), [(63, "a"), (101, "b"),],
         )),
@@ -189,7 +189,7 @@ def test_renaming():
     )
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "z", "y"),
             [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
@@ -212,7 +212,7 @@ def test_selection():
     )
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"), [(42, "a", "b"), (21, "a", "z")],
         )),
@@ -233,7 +233,7 @@ def test_union():
     op = Union(r1, r2)
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"), [(2, "a"), (8, "b"), (10, "c")]
         )),
@@ -252,7 +252,7 @@ def test_selection_by_columnint():
     op = Selection(r, EQ(Constant(ColumnInt(0)), Constant("a")))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 ("_p_", "x", "y"), [(0.2, "a", "b")]
@@ -265,7 +265,7 @@ def test_selection_by_columnint():
     op = Selection(op, EQ(Constant(ColumnInt(1)), Constant("b")))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [(0.2, "a", "b")])
@@ -285,7 +285,7 @@ def test_projection_columnint():
     op = Projection(r, (Constant(ColumnInt(0)),))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"), [(0.2, "a"), (0.5, "b")]
         )),
@@ -299,7 +299,7 @@ def test_projection_columnint():
     op = Projection(r, (Constant(ColumnInt(1)), Constant(ColumnInt(0))))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "y", "x"), [(0.2, "b", "a"), (0.5, "a", "b")]
         )),
@@ -325,7 +325,7 @@ def test_selection_between_columnints():
     op = Selection(r, Constant(operator.eq)(col1, col2))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y"),
             iterable=[
@@ -363,7 +363,7 @@ def test_difference():
         ColumnStr("_p2_"),
     )
 
-    r_expected = BuildProvenanceAlgebraSet(
+    r_expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             columns=("_p1_", "x", "y", "w"),
             iterable=[
@@ -405,7 +405,7 @@ def test_difference_same_provenance_column():
         ColumnStr("_p_"),
     )
 
-    r_expected = BuildProvenanceAlgebraSet(
+    r_expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y", "w"),
             iterable=[
@@ -448,7 +448,7 @@ def test_extended_proj():
     proj = ExtendedProjection(provset, proj_list)
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(proj)
-    expected = BuildProvenanceAlgebraSet(
+    expected = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y", "z"),
             [

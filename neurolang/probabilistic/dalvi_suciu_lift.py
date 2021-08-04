@@ -47,7 +47,7 @@ from ..relational_algebra import (
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import BuildProvenanceAlgebraSet
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .exceptions import NotEasilyShatterableError
@@ -100,7 +100,7 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
 
     Returns
     -------
-    BuildProvenanceAlgebraSet
+    ProvenanceAlgebraSet
         Provenance set labelled with probabilities for each tuple in the result
         set.
 
@@ -120,7 +120,7 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
             term.name for term in query.consequent.args
             if isinstance(term, Symbol)
         )
-        return BuildProvenanceAlgebraSet(
+        return ProvenanceAlgebraSet(
             Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
                 ("_p_",) + head_var_names
             )),

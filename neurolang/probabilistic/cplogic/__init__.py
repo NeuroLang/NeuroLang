@@ -12,7 +12,7 @@ from ...relational_algebra import (
     eq_,
     str2columnstr_constant,
 )
-from ...relational_algebra_provenance import BuildProvenanceAlgebraSet
+from ...relational_algebra_provenance import ProvenanceAlgebraSet
 
 
 def fresh_name_relation(ra_set):
@@ -27,7 +27,7 @@ def rename_columns_for_args_to_match(relation, src_args, dst_args):
 
     Parameters
     ----------
-    relation : BuildProvenanceAlgebraSet or RelationalAlgebraOperation
+    relation : ProvenanceAlgebraSet or RelationalAlgebraOperation
         The relation on which the renaming of the columns should happen.
     src_args : tuple of Symbols
         The predicate's arguments currently matching the columns.
@@ -71,7 +71,7 @@ def build_always_true_provenance_relation(relation, prob_col=None):
 
     Returns
     -------
-    BuildProvenanceAlgebraSet
+    ProvenanceAlgebraSet
 
     """
     if prob_col is None:
@@ -92,4 +92,4 @@ def build_always_true_provenance_relation(relation, prob_col=None):
         relation, prob_col, cst_one_probability
     )
     relation = RelationalAlgebraSolver().walk(relation)
-    return BuildProvenanceAlgebraSet(relation, prob_col)
+    return ProvenanceAlgebraSet(relation, prob_col)

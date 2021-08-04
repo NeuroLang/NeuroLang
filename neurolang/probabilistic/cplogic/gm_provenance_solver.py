@@ -17,7 +17,7 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
-    BuildProvenanceAlgebraSet,
+    ProvenanceAlgebraSet,
     NaturalJoinInverse,
     RelationalAlgebraProvenanceCountingSolver,
 )
@@ -262,7 +262,7 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         node = operation.valued_node[0]
         relation = node.relation
         prov_col = node.probability_column
-        prov_set = BuildProvenanceAlgebraSet(relation, prov_col)
+        prov_set = ProvenanceAlgebraSet(relation, prov_col)
         prov_set.__debug_expression__ = node.expression
         return prov_set
 
@@ -356,7 +356,7 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         """
         choice_node = operation.valued_node[0]
         choice_value = operation.valued_node[1]
-        prov_set = BuildProvenanceAlgebraSet(
+        prov_set = ProvenanceAlgebraSet(
             choice_node.relation, choice_node.probability_column,
         )
         prov_set.__debug_expression__ = choice_node.expression

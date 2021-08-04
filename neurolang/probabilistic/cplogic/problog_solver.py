@@ -11,7 +11,7 @@ from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     str2columnstr_constant,
 )
-from ...relational_algebra_provenance import BuildProvenanceAlgebraSet
+from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from ..expression_processing import (
     construct_within_language_succ_result,
     is_within_language_prob_query,
@@ -36,7 +36,7 @@ def pl_preds_to_prov_set(pl_preds, columns):
             tupl = (prob,) + tuple(arg.value for arg in pl_pred.args)
             tuples.add(tupl)
     prob_col = str2columnstr_constant(Symbol.fresh().name)
-    return BuildProvenanceAlgebraSet(
+    return ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             columns=(prob_col,) + tuple(c.value for c in columns),
             iterable=tuples,
@@ -117,7 +117,7 @@ def pl_solution_to_nl_solution(pl_solution, query_preds):
         pred_symb_to_tuples[pred_symb].add(tupl)
     prob_col = str2columnstr_constant(Symbol.fresh().name)
     return {
-        qpred.functor: BuildProvenanceAlgebraSet(
+        qpred.functor: ProvenanceAlgebraSet(
             Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
                 columns=(prob_col,) + tuple(arg.name for arg in qpred.args),
                 iterable=pred_symb_to_tuples[qpred.functor],

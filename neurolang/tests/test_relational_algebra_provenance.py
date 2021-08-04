@@ -20,7 +20,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
-    BuildProvenanceAlgebraSet,
+    ProvenanceAlgebraSet,
     ConcatenateConstantColumn,
     ExtendedProjection,
     FunctionApplicationListMember,
@@ -453,7 +453,7 @@ def test_extended_projection():
 
 
 def test_provenance_projection():
-    relation = BuildProvenanceAlgebraSet(
+    relation = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             iterable=[
                 (0.8, "a", 42),
@@ -574,7 +574,7 @@ def test_njoin_inverse():
 
 
 def test_selection_between_columnints():
-    r = BuildProvenanceAlgebraSet(
+    r = ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y"),
             iterable=[

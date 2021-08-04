@@ -15,7 +15,7 @@ from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
 from ..relational_algebra import Projection, str2columnstr_constant
 from ..relational_algebra_provenance import (
-    BuildProvenanceAlgebraSet,
+    ProvenanceAlgebraSet,
     NaturalJoinInverse,
     RelationalAlgebraProvenanceCountingSolver,
 )
@@ -215,7 +215,7 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
 
     Returns
     -------
-    BuildProvenanceAlgebraSet
+    ProvenanceAlgebraSet
         Provenance set labelled with probabilities for each tuple in the result
         set.
 
@@ -251,7 +251,7 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
             tuple(str2columnstr_constant(s.name) for s in res_args),
         )
     )
-    provset = BuildProvenanceAlgebraSet(
+    provset = ProvenanceAlgebraSet(
         provset.relation,
         provset.provenance_column
     )

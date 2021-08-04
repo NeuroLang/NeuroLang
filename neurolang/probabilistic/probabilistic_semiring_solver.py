@@ -16,7 +16,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
-    BuildProvenanceAlgebraSet,
+    ProvenanceAlgebraSet,
     BuildProvenanceAlgebraSetWalkIntoMixin,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin
 )
@@ -58,7 +58,7 @@ class ProbSemiringSolverMixin(
     )
     def empty_deterministic_fact_set(self, deterministic_set):
         provenance_column = ColumnStr(Symbol.fresh().name)
-        return BuildProvenanceAlgebraSet(
+        return ProvenanceAlgebraSet(
             deterministic_set.relation,
             str2columnstr_constant(provenance_column)
         )
@@ -97,7 +97,7 @@ class ProbSemiringSolverMixin(
         )
 
         self.translated_probfact_sets[relation_symbol] = \
-            BuildProvenanceAlgebraSet(
+            ProvenanceAlgebraSet(
                 provenance_set, prov_column
             )
         return self.translated_probfact_sets[relation_symbol]
@@ -119,7 +119,7 @@ class ProbSemiringSolverMixin(
             rap_column = str2columnstr_constant(Symbol.fresh().name)
 
         self.translated_probfact_sets[relation_symbol] = \
-            BuildProvenanceAlgebraSet(
+            ProvenanceAlgebraSet(
                 relation, rap_column
             )
         return self.translated_probfact_sets[relation_symbol]

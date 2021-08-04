@@ -59,7 +59,7 @@ def is_provenance_operation(operation):
     stack = list(operation.unapply())
     while stack:
         stack_element = stack.pop()
-        if isinstance(stack_element, BuildProvenanceAlgebraSet):
+        if isinstance(stack_element, ProvenanceAlgebraSet):
             return True
         if isinstance(stack_element, tuple):
             stack += list(stack_element)
@@ -68,7 +68,7 @@ def is_provenance_operation(operation):
     return False
 
 
-class BuildProvenanceAlgebraSet(UnaryRelationalAlgebraOperation):
+class ProvenanceAlgebraSet(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, provenance_column):
         self.relation = relation
         self.provenance_column = provenance_column
@@ -123,7 +123,7 @@ class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
 
 class BuildProvenanceAlgebraSetWalkIntoMixin(PatternWalker):
     @add_match(
-        BuildProvenanceAlgebraSet,
+        ProvenanceAlgebraSet,
         lambda exp: any(not isinstance(arg, Constant) for arg in exp.unapply())
     )
     def cycle_in_build_provenance_algebra_set(self, expression):
@@ -134,7 +134,7 @@ class BuildProvenanceAlgebraSetWalkIntoMixin(PatternWalker):
             (provenance_column is not expression.provenance_column)
         ):
             return self.walk(
-                BuildProvenanceAlgebraSet(relation, provenance_column)
+                ProvenanceAlgebraSet(relation, provenance_column)
             )
         else:
             return expression
@@ -143,7 +143,7 @@ class BuildProvenanceAlgebraSetWalkIntoMixin(PatternWalker):
 class ProvenanceSelectionMixin(PatternWalker):
     @add_match(
         Selection(
-            BuildProvenanceAlgebraSet,
+            ProvenanceAlgebraSet,
             FunctionApplication(
                 eq_, (Constant[ColumnInt], Constant[ColumnInt])
             )
@@ -162,7 +162,7 @@ class ProvenanceSelectionMixin(PatternWalker):
 
     @add_match(
         Selection(
-            BuildProvenanceAlgebraSet,
+            ProvenanceAlgebraSet,
             FunctionApplication(eq_, (Constant[ColumnInt], ...))
         )
     )
@@ -178,10 +178,10 @@ class ProvenanceSelectionMixin(PatternWalker):
         return self.walk(Selection(selection.relation, new_formula))
 
     @add_match(
-        Selection(BuildProvenanceAlgebraSet, ...)
+        Selection(ProvenanceAlgebraSet, ...)
     )
     def selection_between_column_int(self, selection):
-        res = BuildProvenanceAlgebraSet(
+        res = ProvenanceAlgebraSet(
             Selection(
                 selection.relation.relation,
                 selection.formula
@@ -192,7 +192,7 @@ class ProvenanceSelectionMixin(PatternWalker):
 
 
 class ProvenanceColumnManipulationMixin(PatternWalker):
-    @add_match(ConcatenateConstantColumn(BuildProvenanceAlgebraSet, ..., ...))
+    @add_match(ConcatenateConstantColumn(ProvenanceAlgebraSet, ..., ...))
     def prov_concatenate_constant_column(self, concat_op):
         if concat_op.column_name == concat_op.relation.provenance_column:
             new_prov_col = str2columnstr_constant(Symbol.fresh().name)
@@ -205,7 +205,7 @@ class ProvenanceColumnManipulationMixin(PatternWalker):
             relation = concat_op.relation.relation
             new_prov_col = concat_op.relation.provenance_column
 
-        res = BuildProvenanceAlgebraSet(
+        res = ProvenanceAlgebraSet(
             ConcatenateConstantColumn(
                 relation,
                 concat_op.column_name,
@@ -215,7 +215,7 @@ class ProvenanceColumnManipulationMixin(PatternWalker):
         )
         return self.walk(res)
 
-    @add_match(NameColumns(BuildProvenanceAlgebraSet, ...))
+    @add_match(NameColumns(ProvenanceAlgebraSet, ...))
     def name_columns_rap(self, expression):
         relation = expression.relation.relation
         columns_to_name = (
@@ -231,18 +231,18 @@ class ProvenanceColumnManipulationMixin(PatternWalker):
                 )
             )
         )
-        return self.walk(BuildProvenanceAlgebraSet(
+        return self.walk(ProvenanceAlgebraSet(
             ne,
             expression.relation.provenance_column
         ))
 
-    @add_match(RenameColumn(BuildProvenanceAlgebraSet, ..., ...))
+    @add_match(RenameColumn(ProvenanceAlgebraSet, ..., ...))
     def prov_rename_column(self, rename_column):
         if rename_column.src == rename_column.relation.provenance_column:
             provenance_column = rename_column.dst
         else:
             provenance_column = rename_column.relation.provenance_column
-        res = BuildProvenanceAlgebraSet(
+        res = ProvenanceAlgebraSet(
             RenameColumn(
                 rename_column.relation.relation,
                 rename_column.src,
@@ -252,9 +252,9 @@ class ProvenanceColumnManipulationMixin(PatternWalker):
         )
         return self.walk(res)
 
-    @add_match(RenameColumns(BuildProvenanceAlgebraSet, ...))
+    @add_match(RenameColumns(ProvenanceAlgebraSet, ...))
     def prov_rename_columns(self, rename_columns):
-        res = BuildProvenanceAlgebraSet(
+        res = ProvenanceAlgebraSet(
             RenameColumns(
                 rename_columns.relation.relation,
                 rename_columns.renames
@@ -278,7 +278,7 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
     variable equalities.
 
     """
-    @add_match(ExtendedProjection(BuildProvenanceAlgebraSet, ...))
+    @add_match(ExtendedProjection(ProvenanceAlgebraSet, ...))
     def prov_extended_projection(self, extended_proj):
         relation = extended_proj.relation
         equality_columns = {
@@ -306,7 +306,7 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
                 fun_exp=new_prov_col, dst_column=new_prov_col
             ),
         )
-        return self.walk(BuildProvenanceAlgebraSet(
+        return self.walk(ProvenanceAlgebraSet(
                 ExtendedProjection(
                     relation.relation, new_proj_list,
                 ),
@@ -315,7 +315,7 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
 
 
 class ProvenanceSetOperationsMixin(PatternWalker):
-    @add_match(Union(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet))
+    @add_match(Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
     def prov_union(self, union_op):
         left = union_op.relation_left
         right = union_op.relation_right
@@ -346,7 +346,7 @@ class ProvenanceSetOperationsMixin(PatternWalker):
             np_right, dummy_col, Constant[int](1)
         )
         ra_union_op = Union(np_left, np_right)
-        result = BuildProvenanceAlgebraSet(ra_union_op, prov_col)
+        result = ProvenanceAlgebraSet(ra_union_op, prov_col)
         # provenance projection that removes the dummy column and sums the
         # provenance of matching tuples
         result = Projection(result, result_columns)
@@ -360,7 +360,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
     ProvenanceSetOperationsMixin,
 ):
     @add_match(NaturalJoin(
-        BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet
+        ProvenanceAlgebraSet, ProvenanceAlgebraSet
     ))
     def prov_naturaljoin(self, naturaljoin):
         return self.walk(self._apply_provenance_join_operation(
@@ -418,14 +418,14 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
                 for col in set(res_columns) - {res_prov_col}
             ),
         )
-        return BuildProvenanceAlgebraSet(
+        return ProvenanceAlgebraSet(
             result, res_prov_col
         )
 
     @add_match(
         Product,
         lambda product: all(
-            isinstance(ras, BuildProvenanceAlgebraSet)
+            isinstance(ras, ProvenanceAlgebraSet)
             for ras in product.relations
         )
     )
@@ -442,7 +442,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         return left * right
 
     @add_match(
-        Projection(BuildProvenanceAlgebraSet, ...),
+        Projection(ProvenanceAlgebraSet, ...),
         lambda proj: any(
             issubclass(att.type, ColumnInt) for att in proj.attributes
         )
@@ -456,7 +456,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
             new_attributes += (att,)
         return self.walk(Projection(projection.relation, new_attributes))
 
-    @add_match(Projection(BuildProvenanceAlgebraSet, ...))
+    @add_match(Projection(ProvenanceAlgebraSet, ...))
     def projection_rap(self, projection):
         if (
             set(projection.attributes) ==
@@ -480,7 +480,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
 
         with sure_is_not_pattern():
             res = self.walk(
-                BuildProvenanceAlgebraSet(
+                ProvenanceAlgebraSet(
                     operation,
                     projection.relation.provenance_column
                 )
@@ -493,7 +493,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         )
 
     @add_match(
-        Difference(BuildProvenanceAlgebraSet, BuildProvenanceAlgebraSet)
+        Difference(ProvenanceAlgebraSet, ProvenanceAlgebraSet)
     )
     def difference(self, diff):
         left = diff.relation_left
@@ -531,7 +531,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
                 for col in set(res_columns) - {res_prov_col}
             ),
         )
-        return self.walk(BuildProvenanceAlgebraSet(
+        return self.walk(ProvenanceAlgebraSet(
             result, res_prov_col
         ))
 
@@ -617,7 +617,7 @@ class RelationalAlgebraProvenanceCountingSolver(
             )
         )
 
-        return self.walk(BuildProvenanceAlgebraSet(
+        return self.walk(ProvenanceAlgebraSet(
             relation,
             prov_col
         ))

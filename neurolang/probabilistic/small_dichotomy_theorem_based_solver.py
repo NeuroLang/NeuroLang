@@ -44,7 +44,7 @@ from ..relational_algebra import (
     RenameOptimizations,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import BuildProvenanceAlgebraSet
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
@@ -129,7 +129,7 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
 
     Returns
     -------
-    BuildProvenanceAlgebraSet
+    ProvenanceAlgebraSet
         Provenance set labelled with probabilities for each tuple in the result
         set.
 
@@ -150,7 +150,7 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
             term.name for term in query.consequent.args
             if isinstance(term, Symbol)
         )
-        return BuildProvenanceAlgebraSet(
+        return ProvenanceAlgebraSet(
             Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
                 ("_p_",) + head_var_names)
             ),
@@ -202,7 +202,7 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
         if return_prov_sets:
-            prob_set_result = BuildProvenanceAlgebraSet(
+            prob_set_result = ProvenanceAlgebraSet(
                 prob_set_result.relation,
                 prob_set_result.provenance_column
             )
@@ -255,7 +255,7 @@ def solve_marg_query(rule, cpl):
         CP-Logic program on which the query should be solved.
     Returns
     -------
-    BuildProvenanceAlgebraSet
+    ProvenanceAlgebraSet
         Provenance set labelled with probabilities for each tuple in the result
         set.
     """

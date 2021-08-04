@@ -45,7 +45,7 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
-    BuildProvenanceAlgebraSet,
+    ProvenanceAlgebraSet,
     NaturalJoinInverse,
     RelationalAlgebraProvenanceCountingSolver,
     RelationalAlgebraProvenanceExpressionSemringSolver
@@ -199,7 +199,7 @@ class WMCSemiRingSolver(
     )
     def deterministic_fact_set_constant(self, deterministic_set):
         rap_column = ColumnStr(Symbol.fresh().name)
-        return BuildProvenanceAlgebraSet(
+        return ProvenanceAlgebraSet(
             deterministic_set.relation,
             str2columnstr_constant(rap_column)
         )
@@ -292,7 +292,7 @@ class WMCSemiRingSolver(
         tagged_ras_set = NamedRelationalAlgebraFrozenSet(
             new_columns, tagged_df
         )
-        prov_set = BuildProvenanceAlgebraSet(
+        prov_set = ProvenanceAlgebraSet(
             Constant[AbstractSet](tagged_ras_set),
             str2columnstr_constant(f"col_{prob_column}")
         )
@@ -432,7 +432,7 @@ class SDDWMCSemiRingSolver(
     )
     def deterministic_fact_set_constant(self, deterministic_set):
         rap_column = ColumnStr(Symbol.fresh().name)
-        return BuildProvenanceAlgebraSet(
+        return ProvenanceAlgebraSet(
             deterministic_set.relation,
             str2columnstr_constant(rap_column)
         )
@@ -482,7 +482,7 @@ class SDDWMCSemiRingSolver(
         )
         self.tagged_sets.append(tagged_relation)
 
-        prov_set = BuildProvenanceAlgebraSet(
+        prov_set = ProvenanceAlgebraSet(
             tagged_relation, rap_column
         )
 
@@ -541,7 +541,7 @@ class SDDWMCSemiRingSolver(
             )
             self.tagged_sets.append(tagged_relation)
 
-            prov_set = BuildProvenanceAlgebraSet(
+            prov_set = ProvenanceAlgebraSet(
                 tagged_relation, rap_column
             )
 
@@ -576,7 +576,7 @@ class SDDWMCSemiRingSolver(
             tagged_ras_set = NamedRelationalAlgebraFrozenSet(
                 new_columns, tagged_df
             )
-        return BuildProvenanceAlgebraSet(
+        return ProvenanceAlgebraSet(
             Constant[AbstractSet](tagged_ras_set, verify_type=False),
             str2columnstr_constant(f'col_{prob_column}')
         )
@@ -617,7 +617,7 @@ def _build_empty_result_set(variables_to_project):
     cols = tuple(v.value for v in variables_to_project)
     prov_col = ColumnStr(Symbol.fresh().name)
     cols += (prov_col,)
-    return BuildProvenanceAlgebraSet(
+    return ProvenanceAlgebraSet(
         Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             iterable=[], columns=cols)
         ),
@@ -666,7 +666,7 @@ def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
             prob_set_result, solver
         )
 
-    return BuildProvenanceAlgebraSet(
+    return ProvenanceAlgebraSet(
         Constant[AbstractSet](res),
         str2columnstr_constant(provenance_column)
     )
@@ -744,7 +744,7 @@ def solve_succ_query_sdd_direct(
         df
     )
 
-    return BuildProvenanceAlgebraSet(
+    return ProvenanceAlgebraSet(
         Constant[AbstractSet](new_ras),
         prob_set_result.provenance_column
     )
@@ -962,7 +962,7 @@ def solve_marg_query(rule, cpl):
 
     Returns
     -------
-    BuildProvenanceAlgebraSet
+    ProvenanceAlgebraSet
         Provenance set labelled with probabilities for each tuple in the result
         set.
 
@@ -1005,7 +1005,7 @@ def solve_marg_query(rule, cpl):
             tuple(str2columnstr_constant(s.name) for s in res_args)
         )
     )
-    return BuildProvenanceAlgebraSet(
+    return ProvenanceAlgebraSet(
         provset.relation,
         provset.provenance_column
     )
