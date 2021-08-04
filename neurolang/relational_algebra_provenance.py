@@ -2,7 +2,12 @@ import math
 import operator
 
 from .exceptions import RelationalAlgebraError
-from .expression_walker import PatternWalker, add_match
+from .expression_walker import (
+    ExpressionWalker,
+    PatternWalker,
+    ResolveSymbolMixin,
+    add_match
+)
 from .expressions import (
     Constant,
     FunctionApplication,
@@ -542,19 +547,15 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         )
 
 
-class RelationalAlgebraProvenanceCountingSolver(
-    BuildProvenanceAlgebraSetWalkIntoMixin,
+class RelationalAlgebraProvenanceCountingSolverMixin(
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
-    RelationalAlgebraSolver,
+    PatternWalker
 ):
     """
     Mixing that walks through relational algebra expressions and
     executes the operations and provenance calculations.
 
     """
-
-    def __init__(self, symbol_table=None):
-        self.symbol_table = symbol_table
 
     @add_match(NaturalJoinInverse)
     def prov_naturaljoin_inverse(self, naturaljoin):
@@ -620,6 +621,14 @@ class RelationalAlgebraProvenanceCountingSolver(
             relation,
             prov_col
         ))
+
+
+class RelationalAlgebraProvenanceCountingSolver(
+    BuildProvenanceAlgebraSetWalkIntoMixin,
+    RelationalAlgebraProvenanceCountingSolverMixin,
+    RelationalAlgebraSolver,
+):
+    pass
 
 
 class RelationalAlgebraProvenanceExpressionSemringSolver(

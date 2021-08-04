@@ -13,15 +13,11 @@ from pysdd import sdd
 from ..config import config
 from ..datalog.expression_processing import (
     extract_logic_predicates,
-    flatten_query,
+    flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import (
-    ExpressionWalker,
-    PatternWalker,
-    add_match
-)
 from ..exceptions import NeuroLangException
+from ..expression_walker import ExpressionWalker, PatternWalker, add_match
 from ..expressions import (
     Constant,
     ExpressionBlock,
@@ -29,10 +25,7 @@ from ..expressions import (
     Symbol,
     sure_is_not_pattern
 )
-from ..logic import Conjunction, Implication, FALSE
-from ..logic.expression_processing import (
-    extract_logic_free_variables,
-)
+from ..logic import FALSE, Implication
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -46,15 +39,11 @@ from ..relational_algebra import (
 )
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
-    NaturalJoinInverse,
-    RelationalAlgebraProvenanceCountingSolver,
     RelationalAlgebraProvenanceExpressionSemringSolver
 )
-from ..utils.relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet
-)
 from ..utils import log_performance
-
+from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from .query_resolution import solve_marg_query as _solve_marg_query
 from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
@@ -62,7 +51,6 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
-
 
 LOG = logging.getLogger(__name__)
 
@@ -691,7 +679,8 @@ def sdd_compilation_and_wmc(prob_set_result, solver):
 
 
 def solve_succ_query_sdd_direct(
-    query_predicate, cpl_program, per_row_model=True, return_prov_sets=True
+    query_predicate, cpl_program,
+    per_row_model=True, run_relational_algebra_solver=True
 ):
     """
     Obtain the solution of a SUCC query on a CP-Logic program.
@@ -967,45 +956,4 @@ def solve_marg_query(rule, cpl):
         set.
 
     """
-    res_args = tuple(
-        s
-        for s in rule.consequent.args
-        if isinstance(s, Symbol)
-    )
-
-    joint_antecedent = Conjunction(
-        tuple(
-            extract_logic_predicates(rule.antecedent.conditioned) |
-            extract_logic_predicates(rule.antecedent.conditioning)
-        )
-    )
-    joint_logic_variables = extract_logic_free_variables(
-        joint_antecedent
-    ) & res_args
-    joint_rule = Implication(
-        Symbol.fresh()(*joint_logic_variables), joint_antecedent
-    )
-    joint_provset = solve_succ_query(joint_rule, cpl, return_prov_sets=False)
-
-    denominator_antecedent = rule.antecedent.conditioning
-    denominator_logic_variables = extract_logic_free_variables(
-        denominator_antecedent
-    ) & res_args
-    denominator_rule = Implication(
-        Symbol.fresh()(*denominator_logic_variables),
-        denominator_antecedent
-    )
-    denominator_provset = solve_succ_query(
-        denominator_rule, cpl, return_prov_sets=False
-    )
-    rapcs = RelationalAlgebraProvenanceCountingSolver()
-    provset = rapcs.walk(
-        Projection(
-            NaturalJoinInverse(joint_provset, denominator_provset),
-            tuple(str2columnstr_constant(s.name) for s in res_args)
-        )
-    )
-    return ProvenanceAlgebraSet(
-        provset.relation,
-        provset.provenance_column
-    )
+    return _solve_marg_query(rule, cpl, solve_succ_query)

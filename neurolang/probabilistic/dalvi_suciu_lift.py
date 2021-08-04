@@ -13,8 +13,6 @@ from ..datalog.expression_processing import (
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NonLiftableException
 from ..expression_walker import (
-    ChainedWalker,
-    ExpressionWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match
@@ -43,7 +41,6 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     Projection,
-    RelationalAlgebraSolver,
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
@@ -57,13 +54,12 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import (
-    ProbSemiringToRelationalAlgebraSolver
+from .query_resolution import (
+    generate_provenance_query_compiler,
+    solve_marg_query as _solve_marg_query
 )
-from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
 from .small_dichotomy_theorem_based_solver import (
-    RAQueryOptimiser,
     _maybe_reintroduce_head_variables,
     _project_on_query_head,
     lift_optimization_for_choice_predicates
@@ -87,7 +83,7 @@ __all__ = [
 RTO = RemoveTrivialOperations()
 
 
-def solve_succ_query(query, cpl_program, return_prov_sets=True):
+def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     """
     Solve a SUCC query on a CP-Logic program.
 
@@ -97,6 +93,10 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
         SUCC query of the form `ans(x) :- P(x)`.
     cpl_program : CPLogicProgram
         CP-Logic program on which the query should be solved.
+    run_relational_algebra_solver: bool
+        When true the result's `relation` attribute is a NameAlgebraSet,
+        when false the attribute is the relational algebra expression that
+        produces the such set.
 
     Returns
     -------
@@ -159,7 +159,9 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
             ra_query, flat_query, unified_query
         )
 
-    query_compiler = generate_query_compiler(symbol_table, return_prov_sets)
+    query_compiler = generate_provenance_query_compiler(
+        symbol_table, run_relational_algebra_solver
+    )
 
     with log_performance(LOG, "Run RAP query"):
         prob_set_result = query_compiler.walk(ra_query)
@@ -167,20 +169,8 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
     return prob_set_result
 
 
-def generate_query_compiler(symbol_table, return_prov_sets):
-    steps = [
-        RAQueryOptimiser(),
-        ProbSemiringToRelationalAlgebraSolver(symbol_table=symbol_table),
-        RAQueryOptimiser(),
-        RelationalAlgebraSolver()
-    ]
-
-    query_compiler = ChainedWalker(*steps)
-    return query_compiler
-
-
 def solve_marg_query(rule, cpl):
-    return lift_solve_marg_query(rule, cpl, solve_succ_query)
+    return _solve_marg_query(rule, cpl, solve_succ_query)
 
 
 def dalvi_suciu_lift(rule, symbol_table):

@@ -6,18 +6,23 @@ from ..datalog.expression_processing import (
     EQ,
     conjunct_formulas,
     extract_logic_free_variables,
-    extract_logic_predicates,
+    extract_logic_predicates
 )
 from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
 from ..expression_pattern_matching import add_match
-from ..expression_walker import PatternWalker
+from ..expression_walker import ChainedWalker, ExpressionWalker, PatternWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
-from ..relational_algebra import Projection, str2columnstr_constant
+from ..relational_algebra import (
+    EliminateTrivialProjections,
+    Projection,
+    RelationalAlgebraPushInSelections,
+    RelationalAlgebraSolver,
+    RenameOptimizations,
+    str2columnstr_constant
+)
 from ..relational_algebra_provenance import (
-    ProvenanceAlgebraSet,
     NaturalJoinInverse,
-    RelationalAlgebraProvenanceCountingSolver,
 )
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
@@ -25,9 +30,12 @@ from .expression_processing import (
     construct_within_language_succ_result,
     is_query_based_probfact,
     is_within_language_prob_query,
-    within_language_succ_query_to_intensional_rule,
+    within_language_succ_query_to_intensional_rule
 )
 from .expressions import Condition, ProbabilisticPredicate
+from .probabilistic_semiring_solver import (
+    ProbSemiringToRelationalAlgebraSolver
+)
 
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
@@ -201,7 +209,7 @@ def compute_probabilistic_solution(
     return solution
 
 
-def lift_solve_marg_query(rule, cpl, succ_solver):
+def solve_marg_query(rule, cpl, succ_solver):
     """
     Solve a MARG query on a CP-Logic program.
 
@@ -232,7 +240,9 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
     joint_rule = Implication(
         Symbol.fresh()(*joint_logic_variables), joint_antecedent
     )
-    joint_provset = succ_solver(joint_rule, cpl, return_prov_sets=False)
+    joint_provset = succ_solver(
+        joint_rule, cpl, run_relational_algebra_solver=False
+    )
 
     denominator_antecedent = rule.antecedent.conditioning
     denominator_logic_variables = (
@@ -242,18 +252,14 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
         Symbol.fresh()(*denominator_logic_variables), denominator_antecedent
     )
     denominator_provset = succ_solver(
-        denominator_rule, cpl, return_prov_sets=False
+        denominator_rule, cpl, run_relational_algebra_solver=False
     )
-    rapcs = RelationalAlgebraProvenanceCountingSolver()
-    provset = rapcs.walk(
+    query_compiler = generate_provenance_query_compiler({}, True)
+    provset = query_compiler.walk(
         Projection(
             NaturalJoinInverse(joint_provset, denominator_provset),
             tuple(str2columnstr_constant(s.name) for s in res_args),
         )
-    )
-    provset = ProvenanceAlgebraSet(
-        provset.relation,
-        provset.provenance_column
     )
     return provset
 
@@ -343,3 +349,42 @@ def _build_probabilistic_program(
     prob_idb = _discard_query_based_probfacts(prob_idb)
     cpl.walk(prob_idb)
     return cpl, prob_idb
+
+
+class RAQueryOptimiser(
+    EliminateTrivialProjections,
+    RelationalAlgebraPushInSelections,
+    RenameOptimizations,
+    ExpressionWalker,
+):
+    pass
+
+
+def generate_provenance_query_compiler(
+    symbol_table, run_relational_algebra_solver
+):
+    """
+    Generate a walker that compiles a RAP query.
+
+    Parameters
+    ----------
+    symbol_table : Mapping
+        Mapping from symbols to probabilistic or deterministic sets to
+        solve the query.
+    run_relational_algebra_solver : bool
+        if `true` the walker will return a ProvenanceAlgebraSet containing
+        a NamedAlgebraSet as `relation` attribute. If `false` the walker will
+        produce a relational algebra expression as `relation` attribute.
+    """
+
+    steps = [
+        RAQueryOptimiser(),
+        ProbSemiringToRelationalAlgebraSolver(symbol_table=symbol_table),
+        RAQueryOptimiser()
+    ]
+
+    if run_relational_algebra_solver:
+        steps.append(RelationalAlgebraSolver())
+
+    query_compiler = ChainedWalker(*steps)
+    return query_compiler

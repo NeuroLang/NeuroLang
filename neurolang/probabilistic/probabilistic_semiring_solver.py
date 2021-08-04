@@ -18,7 +18,8 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     BuildProvenanceAlgebraSetWalkIntoMixin,
-    RelationalAlgebraProvenanceExpressionSemringSolverMixin
+    RelationalAlgebraProvenanceExpressionSemringSolverMixin,
+    RelationalAlgebraProvenanceCountingSolverMixin
 )
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
@@ -29,7 +30,7 @@ from .probabilistic_ra_utils import (
 
 class ProbSemiringSolverMixin(
     BuildProvenanceAlgebraSetWalkIntoMixin,
-    RelationalAlgebraProvenanceExpressionSemringSolverMixin,
+    RelationalAlgebraProvenanceCountingSolverMixin,
     PatternWalker
 ):
     def __init__(self, *args, **kwargs):

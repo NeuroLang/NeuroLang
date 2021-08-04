@@ -30,18 +30,14 @@ from ..datalog.expression_processing import (
     flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, Symbol
 from ..logic import FALSE, Conjunction, Implication
 from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import (
-    EliminateTrivialProjections,
     ExtendedProjection,
     FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     Projection,
-    RelationalAlgebraPushInSelections,
-    RenameOptimizations,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
@@ -54,8 +50,10 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import ProbSemiringSolver
-from .query_resolution import lift_solve_marg_query
+from .query_resolution import (
+    generate_provenance_query_compiler,
+    solve_marg_query as _solve_marg_query
+)
 from .shattering import shatter_easy_probfacts
 
 LOG = logging.getLogger(__name__)
@@ -107,16 +105,7 @@ def extract_atom_sets_and_detect_self_joins(query):
     return has_self_joins, atom_set
 
 
-class RAQueryOptimiser(
-    EliminateTrivialProjections,
-    RelationalAlgebraPushInSelections,
-    RenameOptimizations,
-    ExpressionWalker,
-):
-    pass
-
-
-def solve_succ_query(query, cpl_program, return_prov_sets=True):
+def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     """
     Solve a SUCC query on a CP-Logic program.
 
@@ -126,6 +115,10 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
         SUCC query of the form `ans(x) :- P(x)`.
     cpl_program : CPLogicProgram
         CP-Logic program on which the query should be solved.
+    run_relational_algebra_solver: bool
+        When true the result's `relation` attribute is a NameAlgebraSet,
+        when false the attribute is the relational algebra expression that
+        produces the such set.
 
     Returns
     -------
@@ -196,16 +189,13 @@ def solve_succ_query(query, cpl_program, return_prov_sets=True):
         ra_query = _maybe_reintroduce_head_variables(
             ra_query, flat_query, unified_query
         )
-        ra_query = RAQueryOptimiser().walk(ra_query)
+
+    query_compiler = generate_provenance_query_compiler(
+        symbol_table, run_relational_algebra_solver
+    )
 
     with log_performance(LOG, "Run RAP query"):
-        solver = ProbSemiringSolver(symbol_table)
-        prob_set_result = solver.walk(ra_query)
-        if return_prov_sets:
-            prob_set_result = ProvenanceAlgebraSet(
-                prob_set_result.relation,
-                prob_set_result.provenance_column
-            )
+        prob_set_result = query_compiler.walk(ra_query)
 
     return prob_set_result
 
@@ -259,4 +249,4 @@ def solve_marg_query(rule, cpl):
         Provenance set labelled with probabilities for each tuple in the result
         set.
     """
-    return lift_solve_marg_query(rule, cpl, solve_succ_query)
+    return _solve_marg_query(rule, cpl, solve_succ_query)
