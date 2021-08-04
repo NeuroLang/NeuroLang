@@ -948,6 +948,59 @@ def test_cbma_two_term_conjunctive_query():
     assert_almost_equal(res, expected)
 
 
+def test_cbma_prob_query_with_negation():
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [
+            ("s1",),
+            ("s2",),
+            ("s3",),
+        ],
+        name="SelectedStudy",
+    )
+    nl.add_tuple_set([("nA",), ("nB",)], name="Network")
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.1, "t1", "s1"),
+            (0.2, "t2", "s1"),
+            (0.3, "t1", "s2"),
+            (0.4, "t2", "s2"),
+            (0.5, "t1", "s3"),
+            (0.6, "t2", "s3"),
+        ],
+        name="TermInStudy",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.6, "nA", "s1"),
+            (0.5, "nB", "s1"),
+            (0.4, "nA", "s2"),
+            (0.3, "nB", "s2"),
+            (0.2, "nA", "s3"),
+            (0.1, "nB", "s3"),
+        ],
+        name="NetworkReported",
+    )
+    with nl.environment as e:
+        e.ProbTermAssociation[e.t, e.n, e.PROB[e.t, e.n]] = (
+            e.TermInStudy[e.t, e.s] & e.SelectedStudy[e.s]
+        ) // (
+            ~e.NetworkReported[e.n, e.s]
+            & e.Network[e.n]
+            & e.SelectedStudy[e.s]
+        )
+        res = nl.query((e.t, e.n, e.p), e.ProbTermAssociation[e.t, e.n, e.p])
+    expected = RelationalAlgebraFrozenSet(
+        [
+            ("t1", "nA", 0.482963),
+            ("t1", "nB", 0.419524),
+            ("t2", "nA", 0.637037),
+            ("t2", "nB", 0.554921),
+        ]
+    )
+    assert_almost_equal(res, expected)
+
+
 def test_query_based_spatial_prior():
     nl = NeurolangPDL()
     nl.add_tuple_set(
