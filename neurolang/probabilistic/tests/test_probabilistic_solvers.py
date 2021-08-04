@@ -842,7 +842,6 @@ def test_probchoice_selfjoin_multiple_variables_shared_var(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-
 def test_simple_boolean_query(solver):
     pchoice_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
     cpl_program = CPLogicProgram()

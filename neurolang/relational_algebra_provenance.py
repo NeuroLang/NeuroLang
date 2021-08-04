@@ -10,7 +10,6 @@ from .expressions import (
     sure_is_not_pattern
 )
 from .relational_algebra import (
-    Column,
     ColumnInt,
     ConcatenateConstantColumn,
     Difference,

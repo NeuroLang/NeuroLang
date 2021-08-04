@@ -2,7 +2,6 @@ from typing import AbstractSet
 
 from ...expressions import Constant, Symbol
 from ...relational_algebra import (
-    ColumnStr,
     ConcatenateConstantColumn,
     NamedRelationalAlgebraFrozenSet,
     Projection,
