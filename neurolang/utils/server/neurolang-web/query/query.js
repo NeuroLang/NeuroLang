@@ -13,6 +13,7 @@ import { API_ROUTE } from '../constants'
  */
 export class QueryController {
   constructor () {
+    this.engine = 'destrieux'
     /// Initialize the query box with the CodeMirror plugin
     this.queryTextArea = document.querySelector('#queryTextArea')
     this.editor = CodeMirror.fromTextArea(this.queryTextArea, {
@@ -33,6 +34,15 @@ export class QueryController {
 
     /// Results Manager
     this.rc = new ResultsController()
+  }
+
+  /**
+   * Set the active engine
+   * @param {*} engine
+   */
+  setRouteEngine (engine) {
+    console.log('Setting engine ' + engine.engine)
+    this.engine = engine
   }
 
   _submitQuery () {
