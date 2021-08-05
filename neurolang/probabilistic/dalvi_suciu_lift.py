@@ -16,7 +16,12 @@ from ..expression_walker import (
     ReplaceExpressionWalker,
     add_match,
 )
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..expressions import (
+    Constant,
+    FunctionApplication,
+    Symbol,
+    TypedSymbolTableMixin,
+)
 from ..logic import (
     FALSE,
     Conjunction,
@@ -24,6 +29,7 @@ from ..logic import (
     ExistentialPredicate,
     Implication,
     NaryLogicOperator,
+    Union,
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
@@ -32,9 +38,9 @@ from ..logic.expression_processing import (
 from ..logic.transformations import (
     CollapseConjunctions,
     CollapseDisjunctions,
+    GuaranteeConjunction,
     MakeExistentialsImplicit,
     RemoveTrivialOperations,
-    GuaranteeConjunction,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -55,9 +61,11 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query,
 )
-from .query_resolution import reintroduce_unified_head_terms
 from .probabilistic_semiring_solver import ProbSemiringSolver
-from .query_resolution import lift_solve_marg_query
+from .query_resolution import (
+    lift_solve_marg_query,
+    reintroduce_unified_head_terms,
+)
 from .shattering import shatter_easy_probfacts
 from .small_dichotomy_theorem_based_solver import (
     RAQueryOptimiser,
@@ -313,21 +321,41 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
     applied during the calculation of P(Q1) and P(Q1 ∧ Q').
 
     """
-    free_vars = extract_logic_free_variables(disjunctive_query)
-    for disjunct in disjunctive_query.formulas:
-        disjunct = MakeExistentialsImplicit().walk(disjunct)
-        disjunct = CollapseDisjunctions().walk(disjunct)
-        disjunct = GuaranteeConjunction().walk(disjunct)
+    matching_disjuncts = (
+        _get_disjuncts_containing_atom_with_all_key_attributes(
+            disjunctive_query, symbol_table
+        )
+    )
+    if not matching_disjuncts:
+        return False, None
+    for disjunct in matching_disjuncts:
+        has_safe_plan, plan = _apply_disjoint_project_ucq_rule(
+            disjunctive_query, disjunct, symbol_table
+        )
+
+
+def _get_disjuncts_containing_atom_with_all_key_attributes(ucq, symbol_table):
+    matching_disjuncts = set()
+    for disjunct in ucq.formulas:
+        rewritten_ucq = MakeExistentialsImplicit().walk(disjunct)
+        rewritten_ucq = CollapseDisjunctions().walk(rewritten_ucq)
+        rewritten_ucq = GuaranteeConjunction().walk(rewritten_ucq)
         if any(
             is_probabilistic_atom_with_constants_in_all_key_positions(
                 atom, symbol_table
             )
-            for atom in disjunct.formulas
+            for atom in rewritten_ucq.formulas
         ):
-            break
-    else:
-        # did not find a CQ with a valid atom, so we cannot apply the rule
-        return False, None
+            matching_disjuncts.add(disjunct)
+    return matching_disjuncts
+
+
+def _apply_disjoint_project_ucq_rule(
+    disjunctive_query: Union,
+    disjunct: Conjunction,
+    symbol_table: TypedSymbolTableMixin,
+):
+    free_vars = extract_logic_free_variables(disjunctive_query)
     head = add_existentials_except(disjunct, free_vars)
     head_plan = dalvi_suciu_lift(head, symbol_table)
     if isinstance(head_plan, NonLiftable):

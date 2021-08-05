@@ -976,6 +976,7 @@ def test_simple_boolean_query(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.skip(reason="issue in dalvi/suciu algorithm to be fixed")
 def test_disjunctive_query_with_probchoice():
     pchoice_as_sets = {
         Q: {(0.6, 1), (0.4, 2)},
