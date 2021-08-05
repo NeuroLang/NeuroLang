@@ -326,12 +326,14 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
             disjunctive_query, symbol_table
         )
     )
-    if not matching_disjuncts:
-        return False, None
     for disjunct in matching_disjuncts:
         has_safe_plan, plan = _apply_disjoint_project_ucq_rule(
             disjunctive_query, disjunct, symbol_table
         )
+        if has_safe_plan:
+            return plan
+    else:
+        return False, None
 
 
 def _get_disjuncts_containing_atom_with_all_key_attributes(ucq, symbol_table):
