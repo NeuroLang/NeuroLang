@@ -51,3 +51,15 @@ The backend [server application](app.py) is configured to serve static files fro
 ## Environment variables
 
 Constants used by the frontend application are defined in the [constants.js](neurolang-web/constants.js) file. The value for some of these variables will depend on the environment in which the frontend application is served (dev or prod), allowing for changing the behaviour of the app depending on the environment (for instance the API_URL can be `localhost` in development, and `http://my-production-site.fr` in production).
+
+## Testing
+
+Both parts of the application include unit tests. To run the tests for the frontend javascript code, run
+
+```
+$ npm test
+```
+
+from the `neurolang-web` directory.
+
+Tests for the python tornado application can be run with pytest in the same way as other tests for Neurolang.
