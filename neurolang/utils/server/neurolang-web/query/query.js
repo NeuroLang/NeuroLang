@@ -5,13 +5,13 @@ import 'codemirror/mode/python/python'
 import CodeMirror from 'codemirror'
 import './query.css'
 import $ from '../jquery-bundler'
-import { hideQueryResults, showQueryResults } from '../results/results'
+import { ResultsController } from '../results/results'
 import { API_ROUTE } from '../constants'
 
 /**
  * Class to manage query submission.
  */
-export class QueryManager {
+export class QueryController {
   constructor () {
     /// Initialize the query box with the CodeMirror plugin
     this.queryTextArea = document.querySelector('#queryTextArea')
@@ -30,6 +30,9 @@ export class QueryManager {
     this.runQueryBtn = $('#runQueryBtn')
     this.queryAlert = $('#queryAlert')
     this.runQueryBtn.on('click', () => this._submitQuery())
+
+    /// Results Manager
+    this.rc = new ResultsController()
   }
 
   _submitQuery () {
@@ -42,7 +45,7 @@ export class QueryManager {
     this.socket.onopen = () => {
       this.runQueryBtn.addClass('loading')
       this.runQueryBtn.prop('disabled', true)
-      hideQueryResults()
+      this.rc.hideQueryResults()
       this.socket.send(JSON.stringify(msg))
     }
   }
@@ -71,7 +74,7 @@ export class QueryManager {
           // query was sucessfull
           this._clearAlert()
           this._finishQuery()
-          showQueryResults(msg)
+          this.rc.showQueryResults(msg)
         }
       } else {
         // query is either still running or has not yet started

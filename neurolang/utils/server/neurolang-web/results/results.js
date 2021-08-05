@@ -1,38 +1,38 @@
 import './results.css'
 import $ from '../jquery-bundler'
-import { hideViewer, PapayaViewer } from '../papaya/viewer'
+import { PapayaViewer } from '../papaya/viewer'
 import { API_ROUTE, DATA_TYPES, PUBMED_BASE_URL } from '../constants'
 
-/**
- * Show the results of query execution
- * @param {*} data the results from the query execution
- */
-export function showQueryResults (data) {
-  resultsContainer.show()
-  const rm = new ResultsManager(data.data)
-  rm.init()
-}
-
-/**
- * Hide the results
- */
-export function hideQueryResults () {
-  resultsContainer.hide()
-  hideViewer(0)
-}
-
-const resultsContainer = $('#resultsContainer')
-const resultsTabs = resultsContainer.find('.nl-results-tabs')
-const tabTable = resultsContainer.find('.nl-result-table')
-
-class ResultsManager {
-  constructor (resultsData) {
-    this.results = resultsData
+export class ResultsController {
+  constructor () {
+    this.results = undefined
     this.activeSymbol = undefined
     this.tableData = undefined
-    tabTable.off('draw.dt').on('draw.dt', () => this.onTableDraw())
+
+    this.resultsContainer = $('#resultsContainer')
+    this.resultsTabs = this.resultsContainer.find('.nl-results-tabs')
+    this.tabTable = this.resultsContainer.find('.nl-result-table')
+    this.tabTable.off('draw.dt').on('draw.dt', () => this.onTableDraw())
 
     this.viewer = new PapayaViewer()
+  }
+
+  /**
+   * Show the results of a query execution
+   * @param {*} data
+   */
+  showQueryResults (data) {
+    this.resultsContainer.show()
+    this.results = data.data
+    this._init()
+  }
+
+  /**
+   * Hide the results
+   */
+  hideQueryResults () {
+    this.resultsContainer.hide()
+    this.viewer.hideViewer(0)
   }
 
   /**
@@ -41,9 +41,9 @@ class ResultsManager {
    * and display the data for the default selected tab.
    * @param {*} defaultTab
    */
-  init (defaultTab) {
+  _init (defaultTab) {
     // clear tabs
-    resultsTabs.empty()
+    this.resultsTabs.empty()
 
     for (const symbol in this.results.results) {
       const tab = $(`<li class='item'>${symbol}</li>`)
@@ -52,7 +52,7 @@ class ResultsManager {
         defaultTab = symbol
       }
       tab.on('click', (evt) => this.setActiveResultTab(evt, symbol))
-      resultsTabs.append(tab)
+      this.resultsTabs.append(tab)
     }
 
     // display selected tab
@@ -67,16 +67,16 @@ class ResultsManager {
   setActiveResultTab (evt, symbol) {
     // remove active class from previous active tab
     if (evt !== null) {
-      resultsContainer.find('li.active').removeClass('active')
+      this.resultsContainer.find('li.active').removeClass('active')
       $(evt.target).addClass('active')
     }
 
     this.activeSymbol = symbol
 
     // clear previous tab results
-    if ($.fn.DataTable.isDataTable(tabTable)) {
-      tabTable.DataTable().destroy()
-      tabTable.empty()
+    if ($.fn.DataTable.isDataTable(this.tabTable)) {
+      this.tabTable.DataTable().destroy()
+      this.tabTable.empty()
     }
 
     // prepare results table by defining col types
@@ -93,7 +93,7 @@ class ResultsManager {
       }
       return ret
     })
-    tabTable.DataTable({
+    this.tabTable.DataTable({
       processing: true,
       serverSide: true,
       pageLength: 25,

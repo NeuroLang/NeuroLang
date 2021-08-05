@@ -45,30 +45,22 @@ class AtlasCache {
 }
 
 const ATLAS_CACHE = new AtlasCache()
-const resultsContainer = $('#resultsContainer')
-const papayaContainer = $('#nlPapayaContainer')
-
-/**
- * Hide the papaya viewer.
- */
-export function hideViewer (duration = 500) {
-  papayaContainer.hide(duration)
-  resultsContainer.width('100%')
-}
 
 export class PapayaViewer {
   constructor (atlasKey) {
     this.atlasKey = atlasKey
     this.imageIds = []
     this.lutIndex = 0
+    this.resultsContainer = $('#resultsContainer')
+    this.papayaContainer = $('#nlPapayaContainer')
   }
 
   showViewer () {
     $('.nl-papaya-alert').hide()
     if (ATLAS_CACHE.exists(this.atlasKey)) {
-      resultsContainer.width('50%')
-      if (papayaContainer.is(':hidden')) {
-        papayaContainer.show(500, () => this._initViewer())
+      this.resultsContainer.width('50%')
+      if (this.papayaContainer.is(':hidden')) {
+        this.papayaContainer.show(500, () => this._initViewer())
       } else {
         this._initViewer()
       }
@@ -76,9 +68,9 @@ export class PapayaViewer {
       $.get(API_ROUTE.atlas)
         .done((data) => {
           ATLAS_CACHE.set(this.atlasKey, data.data.image)
-          resultsContainer.width('50%')
-          if (papayaContainer.is(':hidden')) {
-            papayaContainer.show(500, () => this._initViewer())
+          this.resultsContainer.width('50%')
+          if (this.papayaContainer.is(':hidden')) {
+            this.papayaContainer.show(500, () => this._initViewer())
           } else {
             this._initViewer()
           }
@@ -86,8 +78,9 @@ export class PapayaViewer {
     }
   }
 
-  hideViewer () {
-    hideViewer(500)
+  hideViewer (duration = 500) {
+    this.papayaContainer.hide(duration)
+    this.resultsContainer.width('100%')
   }
 
   _initParams () {

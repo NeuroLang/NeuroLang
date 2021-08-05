@@ -3,8 +3,8 @@ import $ from './jquery-bundler'
 import 'datatables.net'
 import dt from 'datatables.net-se'
 import 'semantic-ui-css'
-import { QueryManager } from './query/query'
+import { QueryController } from './query/query'
 
 dt(window, $)
 
-const qm = new QueryManager()
+const qc = new QueryController()

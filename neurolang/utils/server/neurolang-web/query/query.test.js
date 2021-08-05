@@ -1,13 +1,16 @@
 import '../tests/tests.setup'
 import '@testing-library/jest-dom/extend-expect'
 import $ from '../jquery-bundler'
-import { QueryManager } from './query'
+import { QueryController } from './query'
 import WS from 'jest-websocket-mock'
-import * as Results from '../results/results'
+
+const mockShowResults = jest.fn()
+const mockHideResults = jest.fn()
 
 jest.mock('../results/results', () => ({
-  showQueryResults: jest.fn(),
-  hideQueryResults: jest.fn()
+  ResultsController: jest.fn().mockImplementation(() => {
+    return { showQueryResults: mockShowResults, hideQueryResults: mockHideResults }
+  })
 }))
 
 function getTestHTML () {
@@ -37,21 +40,23 @@ function getTestHTML () {
   return HTML
 }
 
-describe('QueryManager', () => {
-  let qm
+describe('QueryController', () => {
+  let qc
   beforeEach(() => {
     document.body.innerHTML = getTestHTML()
-    qm = new QueryManager()
+    qc = new QueryController()
   })
 
   it('should create', () => {
-    expect(qm).toBeDefined()
+    expect(qc).toBeDefined()
   })
 
   describe('query submission', () => {
     let wsserver
     beforeEach(async () => {
       wsserver = new WS('ws://localhost:8888/v1/statementsocket', { jsonProtocol: true })
+      mockShowResults.mockClear()
+      mockHideResults.mockClear()
     })
 
     afterEach(() => {
@@ -59,7 +64,7 @@ describe('QueryManager', () => {
     })
 
     it('should listen for click events on button', () => {
-      const spy = jest.spyOn(qm, '_submitQuery')
+      const spy = jest.spyOn(qc, '_submitQuery')
 
       $('#runQueryBtn').trigger('click')
 
@@ -103,7 +108,7 @@ describe('QueryManager', () => {
       wsserver.send({ status: 'ok', data: { done: true, running: false, cancelled: false, message, errorName, errorDoc } })
 
       await wsserver.closed
-      expect(qm.socket.readyState).toBe(WebSocket.CLOSED)
+      expect(qc.socket.readyState).toBe(WebSocket.CLOSED)
       expect($('.nl-query-message').text()).toBe(message)
       expect($('.nl-query-header').text()).toBe(errorName)
       expect($('.nl-query-help').text()).toBe(errorDoc)
@@ -121,8 +126,8 @@ describe('QueryManager', () => {
       wsserver.send(response)
 
       await wsserver.closed
-      expect(qm.socket.readyState).toBe(WebSocket.CLOSED)
-      expect(Results.showQueryResults).toHaveBeenCalledWith(response)
+      expect(qc.socket.readyState).toBe(WebSocket.CLOSED)
+      expect(mockShowResults).toHaveBeenCalledWith(response)
       expect($('#runQueryBtn').is(':disabled')).toBe(false)
     })
   })

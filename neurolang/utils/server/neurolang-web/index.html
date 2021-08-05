@@ -35,10 +35,10 @@
           <!-- <textarea class="ui input" id="queryTextArea">union(region_union(r)) :- destrieux(..., r)</textarea> -->
           
           <textarea class="ui input" id="queryTextArea">
-tfidf :: TermInStudy(term, study) :- TermInStudyTFIDF(term, tfidf, study)
+TermInStudy(term, study) :: tfidf :- TermInStudyTFIDF(term, tfidf, study)
 TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
 Activation(i, j, k) :- SelectedStudy(s) & PeakReported(i, j, k, s)
-ActivationGivenTerm(i, j, k, PROB(i, j, k)) :- Activation(i, j, k) // TermAssociation("emotion")
+ActivationGivenTerm(i, j, k, PROB) :- Activation(i, j, k) // TermAssociation("emotion")
 ActivationGivenTermImage(agg_create_region_overlay(i, j, k, p)) :- ActivationGivenTerm(i, j, k, p)</textarea>
         </div>
       </div>
@@ -62,9 +62,6 @@ ActivationGivenTermImage(agg_create_region_overlay(i, j, k, p)) :- ActivationGiv
   <div class="ui container nl-results-viewer-container">
     <div id="resultsContainer" class="nl-results-container">
       <div class="ui top attached tabular menu nl-results-tabs">
-        <a class="item active" data-tab="first">First</a>
-        <a class="item" data-tab="second">Second</a>
-        <a class="item" data-tab="third">Third</a>
       </div>
       <div class="ui bottom attached tab segment active">
         <table class='ui compact striped table nl-result-table' id='tabTable' width="100%"></table>
