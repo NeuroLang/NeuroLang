@@ -40,14 +40,19 @@ export class QueryController {
    * Set the active engine
    * @param {*} engine
    */
-  setRouteEngine (engine) {
-    console.log('Setting engine ' + engine.engine)
+  setRouteEngine (engine, query) {
     this.engine = engine
+    this.editor.setValue(query)
+    this._clearAlert()
+    this.rc.hideQueryResults()
   }
 
   _submitQuery () {
     const query = this.editor.getValue()
     const msg = { query: query }
+    if (this.engine) {
+      msg.engine = this.engine
+    }
     // create a new WebSocket and set the event listeners on it
     this.socket = new WebSocket(API_ROUTE.statementsocket)
     this.socket.onerror = this._onerror

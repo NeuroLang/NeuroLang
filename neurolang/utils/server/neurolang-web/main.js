@@ -13,8 +13,9 @@ const qc = new QueryController()
 const ec = new EnginesController(qc)
 
 const routes = [
-  { path: '/', onRouteChange: (rp) => ec.setRouteEngine(rp) },
-  { path: '/:engine', onRouteChange: (rp) => ec.setRouteEngine(rp) }
+  { path: '/:engine/:queryId', onRouteChange: (rp) => ec.setRouteEngine(rp) },
+  { path: '/:engine', onRouteChange: (rp) => ec.setRouteEngine(rp) },
+  { path: '/', onRouteChange: (rp) => ec.setRouteEngine(rp) }
 ]
 
 const router = new Router(routes)

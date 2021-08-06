@@ -31,9 +31,10 @@ export class Router {
     // Listen for clicks on links with `data-link` attributes
     document.addEventListener('DOMContentLoaded', () => {
       document.body.addEventListener('click', e => {
-        if (e.target.matches('[data-link]')) {
+        const closest = e.target.closest('[data-link]')
+        if (closest) {
           e.preventDefault()
-          this.navigateTo(e.target.href)
+          this.navigateTo(closest.href)
         }
       })
 
