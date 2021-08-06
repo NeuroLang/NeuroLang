@@ -9,79 +9,61 @@ export class ResultsController {
     this.activeSymbol = undefined
     this.tableData = undefined
 
-    this.resultsContainer = $('#resultsContainer')
-    this.resultsTabs = this.resultsContainer.find('.nl-results-tabs')
-    this.tabTable = this.resultsContainer.find('.nl-result-table')
-    this.tabTable.off('draw.dt').on('draw.dt', () => this.onTableDraw())
+    this.resultsContainer = $('#symbolsContainer')
+    this.dropdown = this.resultsContainer.find('.nl-symbols-dropdown')
+    this.tabTable = this.resultsContainer.find('.nl-symbols-table')
 
+    this.tabTable.off('draw.dt').on('draw.dt', () => this.onTableDraw())
+    this.dropdown.dropdown()
+    this.dropdown.find('input').on('change', (evt) => this.onSymbolChange(evt))
     this.viewer = new PapayaViewer()
   }
 
   /**
-   * Show the results of a query execution
+   * Set the results of a query execution
    * @param {*} data
    */
-  showQueryResults (data) {
+  setQueryResults (data) {
     this.resultsContainer.show()
     this.results = data.data
-    this._init()
+    this._updateSymbolsList()
   }
 
   /**
-   * Hide the results
+   * Hide the symbols container
    */
-  hideQueryResults () {
+  hide () {
     this.resultsContainer.hide()
     this.viewer.hideViewer(0)
   }
 
   /**
-   * Initialize the results view with new results.
-   * This method will create tabs for all the symbols in the result data
-   * and display the data for the default selected tab.
-   * @param {*} defaultTab
+   * Set the list of symbols in the dropdown
    */
-  _init (defaultTab) {
-    // clear tabs
-    this.resultsTabs.empty()
-
-    for (const symbol in this.results.results) {
-      const tab = $(`<li class='item'>${symbol}</li>`)
-      if (typeof defaultTab === 'undefined' || defaultTab === symbol) {
-        tab.addClass('active')
-        defaultTab = symbol
-      }
-      tab.on('click', (evt) => this.setActiveResultTab(evt, symbol))
-      this.resultsTabs.append(tab)
-    }
-
-    // display selected tab
-    this.setActiveResultTab(null, defaultTab)
+  _updateSymbolsList () {
+    const keys = Object.keys(this.results.results)
+    keys.sort()
+    this.dropdown.dropdown('setup menu',
+      { values: keys.map((elt) => ({ value: elt, name: elt })) }
+    )
+    this.dropdown.dropdown('set selected', keys[0])
   }
 
   /**
-   * Callback for when a new tab has been selected
+   * Callback for symbol change
    * @param {*} evt
-   * @param {*} symbol
    */
-  setActiveResultTab (evt, symbol) {
-    // remove active class from previous active tab
-    if (evt !== null) {
-      this.resultsContainer.find('li.active').removeClass('active')
-      $(evt.target).addClass('active')
-    }
-
-    this.activeSymbol = symbol
-
-    // clear previous tab results
+  onSymbolChange (evt) {
+    this.activeSymbol = evt.target.value
+    // clear previous table data
     if ($.fn.DataTable.isDataTable(this.tabTable)) {
       this.tabTable.DataTable().destroy()
       this.tabTable.empty()
     }
 
-    // prepare results table by defining col types
+    // prepare table by defining col types
     // and initialize table
-    const tab = this.results.results[symbol]
+    const tab = this.results.results[this.activeSymbol]
     const cols = tab.columns.map((col, idx) => {
       const ret = {
         title: col

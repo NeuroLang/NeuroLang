@@ -44,7 +44,7 @@ export class QueryController {
     this.engine = engine
     this.editor.setValue(query)
     this._clearAlert()
-    this.rc.hideQueryResults()
+    this.rc.hide()
   }
 
   _submitQuery () {
@@ -60,7 +60,7 @@ export class QueryController {
     this.socket.onopen = () => {
       this.runQueryBtn.addClass('loading')
       this.runQueryBtn.prop('disabled', true)
-      this.rc.hideQueryResults()
+      this.rc.hide()
       this.socket.send(JSON.stringify(msg))
     }
   }
@@ -89,7 +89,7 @@ export class QueryController {
           // query was sucessfull
           this._clearAlert()
           this._finishQuery()
-          this.rc.showQueryResults(msg)
+          this.rc.setQueryResults(msg)
         }
       } else {
         // query is either still running or has not yet started

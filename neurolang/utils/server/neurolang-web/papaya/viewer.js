@@ -51,7 +51,7 @@ export class PapayaViewer {
     this.atlasKey = atlasKey
     this.imageIds = []
     this.lutIndex = 0
-    this.resultsContainer = $('#resultsContainer')
+    this.resultsContainer = $('#symbolsContainer')
     this.papayaContainer = $('#nlPapayaContainer')
   }
 

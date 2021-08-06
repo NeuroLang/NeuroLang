@@ -13,7 +13,7 @@
 
 <body>
 
-  <!-- Following Menu -->
+  <!-- Top Menu -->
   <div class="ui borderless large main menu">
     <div class="ui container">
       <div class="header item">
@@ -41,6 +41,7 @@
     </div>
   </div>
 
+  <!-- Query input container -->
   <div id="queryContainer" class="ui grid container">
     <div class="sixteen wide column">
       <div class="ui raised segment query-segment">
@@ -73,12 +74,23 @@ ActivationGivenTermImage(agg_create_region_overlay(i, j, k, p)) :- ActivationGiv
     </div>
   </div>
 
-  <div class="ui container nl-results-viewer-container">
-    <div id="resultsContainer" class="nl-results-container">
-      <div class="ui top attached tabular menu nl-results-tabs">
-      </div>
-      <div class="ui bottom attached tab segment active">
-        <table class='ui compact striped table nl-result-table' id='tabTable' width="100%"></table>
+  <!-- Symbols container -->
+  <div class="ui container nl-symbols-viewer-container">
+    <div id="symbolsContainer" class="nl-symbols-container">
+      <div class="ui raised segments">
+        <div class="ui label segment secondary">
+          <span class="text">Select a symbol to explore</span>
+          <div class="ui search selection dropdown nl-symbols-dropdown">
+            <input type="hidden" name="symbol">
+            <i class="dropdown icon"></i>
+            <div class="default text">Select Symbol</div>
+            <div class="menu">
+            </div>
+          </div>
+        </div>
+        <div class="ui  segment">
+          <table class='ui compact striped table nl-symbols-table' id='tabTable' width="100%"></table>
+        </div>
       </div>
     </div>
 
