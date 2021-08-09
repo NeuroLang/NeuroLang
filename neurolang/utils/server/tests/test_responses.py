@@ -47,6 +47,15 @@ def result(data):
     results = {"ans": ans}
     return results
 
+@pytest.fixture
+def results(data):
+    ans = NamedRelationalAlgebraFrozenSet(("a", "b", "c"), data)
+    ans.row_type = Tuple[float, str, AbstractSet[Unknown]]
+    voxels = NamedRelationalAlgebraFrozenSet(("i", "j", "k"), [[12, 15, 98], [107, 2, 33], [89, 8, 34]])
+    voxels.row_type = Tuple[int, int, int]
+    results = {"ans": ans, "Voxel": voxels}
+    return results
+
 
 def test_query_results_has_metadata(future):
     uuid = str(uuid4())
@@ -69,13 +78,50 @@ def test_query_results_has_exceptions(future, error):
     assert qr.message == str(error)
 
 
-def test_query_results_has_results(future, result, data):
+def test_query_results_has_results(future, results, data):
+    future.done.return_value = True
+    future.exception.return_value = None
+    future.result.return_value = results
+
+    qr = QueryResults(str(uuid4()), future, get_values=True)
+    assert qr.results is not None
+    assert qr.results["ans"]["row_type"] == [str(t) for t in (float, str, AbstractSet[Unknown])]
+    assert qr.results["ans"]["columns"] == ["a", "b", "c"]
+    assert qr.results["ans"]["size"] == 3
+    assert qr.results["ans"]["values"] == [[a, b, str(c)] for a, b, c in data]
+    assert qr.results["Voxel"]["row_type"] == [str(t) for t in (int, int, int)]
+    assert qr.results["Voxel"]["columns"] == ["i", "j", "k"]
+    assert qr.results["Voxel"]["size"] == 3
+
+
+def test_query_results_does_not_return_values_by_default(future, result):
     future.done.return_value = True
     future.exception.return_value = None
     future.result.return_value = result
 
-    qr = QueryResults(str(uuid4()), future, get_values=True)
+    qr = QueryResults(str(uuid4()), future)
     assert qr.results is not None
+    assert qr.results["ans"]["row_type"] == [str(t) for t in (float, str, AbstractSet[Unknown])]
+    assert qr.results["ans"]["columns"] == ["a", "b", "c"]
+    assert qr.results["ans"]["size"] == 3
+    assert "values" not in qr.results["ans"]
+
+def test_query_results_only_returns_requested_symbol(future, results, data):
+    future.done.return_value = True
+    future.exception.return_value = None
+    future.result.return_value = results
+
+    qr = QueryResults(str(uuid4()), future, "Voxel")
+    assert qr.results is not None
+    assert len(qr.results) == 1
+    assert qr.results["Voxel"]["row_type"] == [str(t) for t in (int, int, int)]
+    assert qr.results["Voxel"]["columns"] == ["i", "j", "k"]
+    assert qr.results["Voxel"]["size"] == 3
+    assert len(qr.results["Voxel"]["values"]) == 3
+
+    qr = QueryResults(str(uuid4()), future, "ans")
+    assert qr.results is not None
+    assert len(qr.results) == 1
     assert qr.results["ans"]["row_type"] == [str(t) for t in (float, str, AbstractSet[Unknown])]
     assert qr.results["ans"]["columns"] == ["a", "b", "c"]
     assert qr.results["ans"]["size"] == 3
