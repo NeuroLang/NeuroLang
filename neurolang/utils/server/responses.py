@@ -101,6 +101,22 @@ class CustomQueryResultsEncoder(json.JSONEncoder):
 
 
 class QueryResults:
+    """
+    A representation of query results. This class is returned by
+    the tornado application as a JSON serialized string.
+
+    It contains
+        * metadata information about the query:
+            - cancelled, running, done
+        * metadata about the requested information:
+            - the specific symbol to return, as well as
+            - start, length, sort, asc (parameters for which rows to return)
+        * if the query resulted in an error, the error details
+        * if the query resulted in data, the details for each requested symbol:
+            - its columns, size, & row_type
+            - the rows corresponding to the start, length, sort & asc params
+    """
+
     def __init__(
         self,
         uuid: str,
@@ -110,6 +126,7 @@ class QueryResults:
         length: int = 50,
         sort: int = -1,
         asc: bool = True,
+        get_values: bool = False
     ):
         self.start = start
         self.length = length
@@ -129,7 +146,7 @@ class QueryResults:
             else:
                 results = future.result()
                 if results is not None:
-                    self.set_results_details(results, symbol)
+                    self.set_results_details(results, symbol, get_values)
 
     def set_error_details(self, error):
         self.message = str(error)
@@ -137,11 +154,11 @@ class QueryResults:
         if error.__doc__ is not None:
             self.errorDoc = error.__doc__
 
-    def set_results_details(self, results, symbol):
+    def set_results_details(self, results, symbol, get_values):
         self.results = {}
         if symbol is None:
             for key, ras in results.items():
-                self.results[key] = self.get_result_item(ras)
+                self.results[key] = self.get_result_item(ras, get_values)
         else:
             self.results[symbol] = self.get_result_item(results[symbol], True)
 

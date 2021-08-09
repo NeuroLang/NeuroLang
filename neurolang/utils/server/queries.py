@@ -249,6 +249,10 @@ class NeurolangQueryManager:
             LOG.debug(f"Returning cached symbols for {engine_type} engine.")
             return self.results_cache[key]
 
+        # Raise a KeyError if engines are not yet available
+        self.engines[engine_type]
+
+        # Submit task
         future_res = self.executor.submit(
             self._get_engine_symbols, engine_type
         )

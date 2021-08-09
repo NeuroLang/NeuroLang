@@ -74,7 +74,7 @@ def test_query_results_has_results(future, result, data):
     future.exception.return_value = None
     future.result.return_value = result
 
-    qr = QueryResults(str(uuid4()), future)
+    qr = QueryResults(str(uuid4()), future, get_values=True)
     assert qr.results is not None
     assert qr.results["ans"]["row_type"] == [str(t) for t in (float, str, AbstractSet[Unknown])]
     assert qr.results["ans"]["columns"] == ["a", "b", "c"]
@@ -87,19 +87,19 @@ def test_query_results_can_paginate(future, result, data):
     future.exception.return_value = None
     future.result.return_value = result
 
-    qr = QueryResults(str(uuid4()), future, start=0, length=1)
+    qr = QueryResults(str(uuid4()), future, start=0, length=1, get_values=True)
     assert qr.results is not None
     assert qr.results["ans"]["values"] == [
         [a, b, str(c)] for a, b, c in data[0:1]
     ]
 
-    qr = QueryResults(str(uuid4()), future, start=1, length=2)
+    qr = QueryResults(str(uuid4()), future, start=1, length=2, get_values=True)
     assert qr.results is not None
     assert qr.results["ans"]["values"] == [
         [a, b, str(c)] for a, b, c in data[1:3]
     ]
 
-    qr = QueryResults(str(uuid4()), future, start=2, length=2)
+    qr = QueryResults(str(uuid4()), future, start=2, length=2, get_values=True)
     assert qr.results is not None
     assert qr.results["ans"]["values"] == [
         [a, b, str(c)] for a, b, c in data[2:]
@@ -111,7 +111,7 @@ def test_query_results_can_sort(future, result, data):
     future.exception.return_value = None
     future.result.return_value = result
 
-    qr = QueryResults(str(uuid4()), future, start=0, length=2, sort=1)
+    qr = QueryResults(str(uuid4()), future, start=0, length=2, sort=1, get_values=True)
     assert qr.results is not None
     assert qr.results["ans"]["values"] == [
         [a, b, str(c)] for a, b, c in data[1::-1]
@@ -124,7 +124,7 @@ def test_query_results_can_serialize_to_json(future, result, data):
     future.result.return_value = result
 
     uuid = str(uuid4())
-    qr = QueryResults(uuid, future)
+    qr = QueryResults(uuid, future, get_values=True)
     json_string = json.dumps(qr, cls=CustomQueryResultsEncoder)
     expected = {
         "uuid": uuid,

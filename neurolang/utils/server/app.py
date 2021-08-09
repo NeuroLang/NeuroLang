@@ -1,7 +1,5 @@
 import json
 import logging
-from typing import Callable
-from neurolang.type_system import is_leq_informative
 from neurolang.utils.server.queries import NeurolangQueryManager
 import os.path
 from concurrent.futures import Future
@@ -142,17 +140,32 @@ class JSONRequestHandler(tornado.web.RequestHandler):
 
 
 class StatusHandler(JSONRequestHandler):
-    """
-    Return the status (or the result) of an already running calculation.
-    Optional query parameters are :
-        * symbol : return only the values for this symbol
-        * start : index of the first row to return
-        * length : number of rows to return
-        * sort : the index of the column to sort by
-        * asc : sort by ascending (true) or descending (false)
-    """
 
     async def get(self, uuid: str):
+        """
+        Return the status (or the result) of an already running calculation.
+        Optional query parameters are :
+            * symbol : return only the values for this symbol
+            * start : index of the first row to return
+            * length : number of rows to return
+            * sort : the index of the column to sort by
+            * asc : sort by ascending (true) or descending (false)
+
+        Parameters
+        ----------
+        uuid : str
+            The query id
+
+        Returns
+        -------
+        QueryResults
+            The query results.
+
+        Raises
+        ------
+        tornado.web.HTTPError
+            raises 404 if query id does not exist.
+        """
         LOG.debug(f"Accessing status for request {uuid}.")
         try:
             future = self.application.nqm.get_result(uuid)
@@ -171,11 +184,35 @@ class StatusHandler(JSONRequestHandler):
 
 
 class SymbolsHandler(JSONRequestHandler):
-    """
-    Return the symbols available on an engine.
-    """
 
     def get(self, engine: str):
+        """
+        Return the symbols available on an engine.
+        This method is syncronous and will block until an engine is
+        available to get its symbols.
+
+        Optional query parameters are :
+            * symbol : return only the values for this symbol
+            * start : index of the first row to return
+            * length : number of rows to return
+            * sort : the index of the column to sort by
+            * asc : sort by ascending (true) or descending (false)
+
+        Parameters
+        ----------
+        engine : str
+            The engine id
+
+        Returns
+        -------
+        QueryResults
+            A dict of query results
+
+        Raises
+        ------
+        tornado.web.HTTPError
+            raises 404 if engine id does not exist
+        """
         LOG.debug(f"Accessing symbols for engine {engine}.")
         try:
             symbols = self.application.nqm.get_symbols(engine)
@@ -198,13 +235,27 @@ class SymbolsHandler(JSONRequestHandler):
 
 class QuerySocketHandler(tornado.websocket.WebSocketHandler):
     """
-    Main endpoint to submit a query using a websocket.
+    Main handler to submit a query using a websocket.
     """
 
     def check_origin(self, origin):
+        """
+        Allow cross-origin websockets.
+        """
         return True
 
     async def on_message(self, message):
+        """
+        Upon receiving a message, extract the query from it and generate
+        a uuid. Submit the query to the NeurolangQueryManager and set
+        `send_query_update` as the callback for when the query execution
+        completes.
+
+        Parameters
+        ----------
+        message : str
+            a serialized JSON representation of an object containing a query.
+        """
         parsed = tornado.escape.json_decode(message)
         query = parsed["query"]
         engine = parsed.get("engine", "neurosynth")
@@ -218,6 +269,16 @@ class QuerySocketHandler(tornado.websocket.WebSocketHandler):
         self.send_query_update(future)
 
     def send_query_update(self, future: Future, status: str = "ok"):
+        """
+        Upon completion of a query, send a message with the results
+
+        Parameters
+        ----------
+        future : Future
+            the query results.
+        status : str, optional
+            the status of the query, by default "ok"
+        """
         self.write_message(
             query_results_to_json(QueryResults(self.uuid, future), status)
         )
