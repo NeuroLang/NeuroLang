@@ -1,6 +1,6 @@
 from functools import reduce
 
-from ..datalog.expression_processing import flatten_query
+from ..datalog.expression_processing import FlattenQueryInNonRecursiveUCQ, flatten_query
 from ..datalog.negation import DatalogProgramNegation
 from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
 from ..expressions import Symbol
@@ -114,7 +114,6 @@ def minimize_ucq_in_dnf(query):
     cq_min = minimize_component_disjunction(cq_d_min)
     cq_min = add_existentials_except(cq_min, head_variables)
     return simplify.walk(cq_min)
-
 
 def convert_rule_to_ucq(implication):
     """Convert datalog rule to logic UCQ.

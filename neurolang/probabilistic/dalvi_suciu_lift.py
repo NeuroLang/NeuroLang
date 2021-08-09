@@ -1,6 +1,7 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
+from neurolang.probabilistic.dalvi_suciu_lift_transformations import convert_rule_to_components_cnf, minimize_component_cnf
 
 import numpy as np
 
@@ -34,6 +35,9 @@ from ..logic.transformations import (
     RemoveTrivialOperations,
     GuaranteeConjunction,
 )
+from ..logic.horn_clauses import (
+    is_safe_range,
+)
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
@@ -62,6 +66,7 @@ from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
 from .transforms import (
     convert_rule_to_ucq,
+    convert_to_union_cnf,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables,
@@ -136,6 +141,7 @@ def solve_succ_query(query, cpl_program):
             shattered_query = symbolic_shattering(unified_query, symbol_table)
         except NotEasilyShatterableError:
             shattered_query = unified_query
+
         ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -175,9 +181,10 @@ def dalvi_suciu_lift(rule, symbol_table):
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
     if isinstance(rule, Implication):
-        rule = convert_rule_to_ccq(rule)
-        #rule = convert_rule_to_ucq(rule)
+        #rule_ccq = convert_rule_to_ccq(rule)
+        rule = convert_rule_to_ucq(rule)
     rule = RTO.walk(rule)
+
     if (
         isinstance(rule, FunctionApplication) or
         all(
@@ -192,6 +199,9 @@ def dalvi_suciu_lift(rule, symbol_table):
         return Projection(result, proj_cols)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
+    if is_safe_range(rule_cnf):
+        a = 1
+
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
         return components_plan(
@@ -211,79 +221,58 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     return NonLiftable(rule)
 
+def dalvi_suciu_lift_temporal(rule, symbol_table):
+    '''
+    Translation from a datalog rule which allows disjunctions in the body
+    to a safe plan according to [1]_. Non-liftable segments are identified
+    by the `NonLiftable` expression.
 
-def convert_rule_to_ccq(implication):
-    """Convert datalog rule to CCQ.
-    CCQ's are defined in Dalvi and Suciu - 2012 -
-    The dichotomy of probabilistic inference for union.
+    [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
+    for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
+    '''
+    if isinstance(rule, Implication):
+        rule = convert_rule_to_components_cnf(rule)
+        #rule = convert_rule_to_ucq(rule)
+    rule = RTO.walk(rule)
 
-    Parameters
-    ----------
-    expression : Implication
-        Datalog rule.
+    if (
+        isinstance(rule, FunctionApplication) or
+        isinstance(rule, ExistentialPredicate) or
+        all(
+            is_atom_a_deterministic_relation(atom, symbol_table)
+            for atom in extract_logic_atoms(rule)
+        )
+    ):
+        free_vars = extract_logic_free_variables(rule)
+        rule = MakeExistentialsImplicit().walk(rule)
+        result = TranslateToNamedRA().walk(rule)
+        proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
+        return Projection(result, proj_cols)
 
-    Returns
-    -------
-    LogicExpression
-       CCQ with the same ground set as the
-       input datalog rule.
-    """
-    implication = RTO.walk(implication)
-    consequent, antecedent = implication.unapply()
-    head_vars = set(consequent.args)
-    existential_vars = (
-        extract_logic_free_variables(antecedent) -
-        set(head_vars)
-    )
+    # TODO Problem with recursion
+    rule_cnf = minimize_component_cnf(rule)
+    if is_safe_range(rule_cnf):
+        a = 1
 
-    ccq = []
-    for cc in antecedent.formulas:
-        scc = args_connected_components(cc)
-        for component in scc:
-            for free_var in existential_vars:
-                if free_var in get_component_args(component):
-                    ccq.append(ExistentialPredicate(free_var, component))
-                else:
-                    ccq.append(component)
+    if len(rule_cnf.formulas) > 1:
+        return components_plan(
+            rule_cnf.formulas, rap.NaturalJoin, symbol_table
+        )
 
-    operation = type(antecedent)
-    new_ant = operation(tuple(ccq))
+    if isinstance(rule_cnf.formulas[0], Conjunction):
+        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
-    return RTO.walk(new_ant)
-
-def get_component_args(q):
-    args = ()
-    if isinstance(q, NaryLogicOperator):
-        formulas = q.formulas
-        for f in formulas:
-            args = args + f.args
+    rule_dnf = minimize_ucq_in_dnf(rule)
+    connected_components = symbol_connected_components(rule_dnf)
+    if len(connected_components) > 1:
+        return components_plan(connected_components, rap.Union, symbol_table)
     else:
-        args = q.args
+        has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
+        if has_svs:
+            return plan
 
-    return args
+    return NonLiftable(rule)
 
-def args_connected_components(expression):
-    if isinstance(expression, FunctionApplication):
-        return [expression]
-
-    c_matrix = np.zeros((len(expression.formulas),) * 2)
-    for i, formula in enumerate(expression.formulas):
-        f_args = set(a.args for a in extract_logic_atoms(formula))
-        for j, formula_ in enumerate(expression.formulas[i + 1:]):
-            f_args_ = set(
-                a.args for a in extract_logic_atoms(formula_)
-            )
-            if not f_args.isdisjoint(f_args_):
-                c_matrix[i, i + 1 + j] = 1
-                c_matrix[i + 1 + j, i] = 1
-
-    components = connected_components(c_matrix)
-
-    operation = type(expression)
-    return [
-        operation(tuple(expression.formulas[i] for i in component))
-        for component in components
-    ]
 
 def has_separator_variables(query, symbol_table):
     """Returns true if `query` has a separator variable and the plan.
