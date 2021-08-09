@@ -1,12 +1,13 @@
 import logging
 from concurrent.futures import Future, ThreadPoolExecutor
+from neurolang.frontend.query_resolution_expressions import Symbol
+from neurolang.type_system import get_args, is_leq_informative
 from threading import RLock, get_ident
-from typing import Dict
+from typing import AbstractSet, Callable, Dict, Union
 
 import nibabel
-import tornado.websocket
 from neurolang.utils.relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet,
+    NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 )
 from neurolang.utils.server.engines import (
     NeurolangEngineConfiguration,
@@ -224,3 +225,75 @@ class NeurolangQueryManager:
         """
         config = [c for c in self.configs.keys() if c.key == engine_type]
         return config[0].mni_mask
+
+    def get_symbols(self, engine_type: str) -> Future:
+        """
+        Request the symbols table for a given engine. If the symbols table for
+        this engine type is present in cache, then this is returned, otherwise
+        a job to fetch the symbols table is dispatched to the threadpool
+        executor.
+
+        Parameters
+        ----------
+        engine_type : str
+            the engine type.
+
+        Returns
+        -------
+        Future
+            the Future result for the symbols query
+        """
+        LOG.debug(f"Requesting symbols for {engine_type} engine...")
+        key = f"ENGINE_SYMBOLS_{engine_type}"
+        if key in self.results_cache:
+            LOG.debug(f"Returning cached symbols for {engine_type} engine.")
+            return self.results_cache[key]
+
+        future_res = self.executor.submit(
+            self._get_engine_symbols, engine_type
+        )
+        self.results_cache[key] = future_res
+        return future_res
+
+    def _get_engine_symbols(self, engine_type: str) -> Dict[str, Union[RelationalAlgebraFrozenSet, Symbol]]:
+        """
+        Function executed on a ThreadPoolExecutor worker to get the available symbols
+        on a neurolang engine.
+
+        Parameters
+        ----------
+        engine_type : str
+            the type of engine for which to get the symbols
+
+        Returns
+        -------
+        Dict[str, Union[NamedRelationalAlgebraFrozenSet, Symbol]]
+            the result of the query execution
+        """
+        LOG.debug(
+            f"[Thread - {get_ident()}] - Fetching symbols for {engine_type} engine..."
+        )
+        engine_set = self.engines[engine_type]
+        with engine_set.engine() as engine:
+            try:
+                LOG.debug(
+                    f"[Thread - {get_ident()}] - Engine of type {engine_type} acquired."
+                )
+                LOG.debug(
+                    f"[Thread - {get_ident()}] - Returning symbol_table."
+                )
+                symbols = {}
+                for name in engine.symbols:
+                    if not name.startswith('_'):
+                        symbol = engine.symbols[name]
+                        if is_leq_informative(symbol.type, Callable):
+                            symbols[name] = symbol
+                        elif is_leq_informative(symbol.type, AbstractSet):
+                            ras = symbol.value
+                            ras.row_type = get_args(symbol.type)[0]
+                            symbols[name] = ras
+                return symbols
+            finally:
+                LOG.debug(
+                    f"[Thread - {get_ident()}] - Engine of type {engine_type} released."
+                )

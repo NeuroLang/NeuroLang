@@ -1,5 +1,7 @@
 import json
 import logging
+from typing import Callable
+from neurolang.type_system import is_leq_informative
 from neurolang.utils.server.queries import NeurolangQueryManager
 import os.path
 from concurrent.futures import Future
@@ -54,6 +56,10 @@ class Application(tornado.web.Application):
             (
                 r"/v1/status/({uuid})".format(uuid=uuid_pattern),
                 StatusHandler,
+            ),
+            (
+                r"/v1/symbol/(.+)",
+                SymbolsHandler,
             ),
             (
                 r"/v1/statement",
@@ -161,6 +167,32 @@ class StatusHandler(JSONRequestHandler):
         asc = bool(int(self.get_argument("asc", 1)))
         return self.write_json_reponse(
             QueryResults(uuid, future, symbol, start, length, sort, asc)
+        )
+
+
+class SymbolsHandler(JSONRequestHandler):
+    """
+    Return the symbols available on an engine.
+    """
+
+    def get(self, engine: str):
+        LOG.debug(f"Accessing symbols for engine {engine}.")
+        try:
+            symbols = self.application.nqm.get_symbols(engine)
+            # Block until results are available
+            symbols.result()
+        except KeyError:
+            raise tornado.web.HTTPError(
+                status_code=404, log_message="engine not found"
+            )
+        uuid = f"ENGINE_SYMBOLS_{engine}"
+        symbol = self.get_argument("symbol", None)
+        start = int(self.get_argument("start", 0))
+        length = int(self.get_argument("length", 50))
+        sort = int(self.get_argument("sort", -1))
+        asc = bool(int(self.get_argument("asc", 1)))
+        return self.write_json_reponse(
+            QueryResults(uuid, symbols, symbol, start, length, sort, asc)
         )
 
 

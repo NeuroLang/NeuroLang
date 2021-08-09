@@ -45,6 +45,7 @@ export class QueryController {
     this.editor.setValue(query)
     this._clearAlert()
     this.rc.hide()
+    this.rc.setRouteEngine(engine)
   }
 
   _submitQuery () {
@@ -60,7 +61,6 @@ export class QueryController {
     this.socket.onopen = () => {
       this.runQueryBtn.addClass('loading')
       this.runQueryBtn.prop('disabled', true)
-      this.rc.hide()
       this.socket.send(JSON.stringify(msg))
     }
   }

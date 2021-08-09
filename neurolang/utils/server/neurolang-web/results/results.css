@@ -4,7 +4,6 @@
 }
 
 .nl-symbols-container {
-    /* display: none; */
     transition: width .5s;
     width: 100%;
 }
@@ -29,5 +28,9 @@
 #nlHistogramContainer {
     width: 400px;
     height: 400px;
-    /* padding: 0; */
+}
+
+.nl-symbols-dropdown .menu .item.function {
+    font-style: italic;
+    color: grey;
 }

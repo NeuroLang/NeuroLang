@@ -12,6 +12,7 @@ export class ResultsController {
     this.resultsContainer = $('#symbolsContainer')
     this.dropdown = this.resultsContainer.find('.nl-symbols-dropdown')
     this.tabTable = this.resultsContainer.find('.nl-symbols-table')
+    this.functionsHelp = this.resultsContainer.find('.nl-functions-msg')
 
     this.tabTable.off('draw.dt').on('draw.dt', () => this.onTableDraw())
     this.dropdown.dropdown()
@@ -38,58 +39,123 @@ export class ResultsController {
   }
 
   /**
-   * Set the list of symbols in the dropdown
+   * Set the active engine. This will trigger a call to the server
+   * to fetch the symbols & function available on the engine.
+   * @param {*} engine
    */
-  _updateSymbolsList () {
-    const keys = Object.keys(this.results.results)
-    keys.sort()
-    this.dropdown.dropdown('setup menu',
-      { values: keys.map((elt) => ({ value: elt, name: elt })) }
-    )
-    this.dropdown.dropdown('set selected', keys[0])
+  setRouteEngine (engine) {
+    // reset the results from a previous engine
+    this.results = undefined
+    // Fetch symbols for this engine type
+    this.engine = engine
+    $.ajax({
+      url: `${API_ROUTE.symbols}/${engine}`,
+      type: 'get'
+    }).done((data) => {
+      if ('status' in data && data.status === 'ok' && data.data.done && !('errorName' in data.data)) {
+        // Fetching the symbols done with success
+        this.resultsContainer.show()
+        this.symbols = data.data
+        this._updateSymbolsList()
+      } else {
+        // An error occurred while fetching the symbols. Fail silently and hide self
+        this.symbols = undefined
+        console.log('An error occurred while fetching symbols for engine ' + engine)
+        console.log(data)
+        this.hide()
+      }
+    })
   }
 
   /**
-   * Callback for symbol change
+   * Set the list of symbols in the dropdown. This list is composed
+   * of query result symbols if available, and symbols & functions
+   * present on the engine.
+   */
+  _updateSymbolsList () {
+    const menu = this.dropdown.find('.menu')
+    menu.empty()
+    let selected = null
+    // Always add the query symbols at the top of the list
+    let resultKeys = []
+    if (this.results) {
+      resultKeys = Object.keys(this.results.results)
+      resultKeys.sort()
+      addItemsToDropdownMenu(menu, resultKeys, 'Query symbols', 'symbol query-symbol')
+      selected = resultKeys[0]
+    }
+    // Then add the base symbols and functions
+    if (this.symbols) {
+      const functions = Object.keys(this.symbols.results)
+        .filter(elt => this.symbols.results[elt].function)
+      const symbols = Object.keys(this.symbols.results)
+        .filter(elt => !this.symbols.results[elt].function && resultKeys.indexOf(elt) < 0)
+      if (symbols) {
+        addItemsToDropdownMenu(menu, symbols, 'Base symbols', 'symbol base-symbol')
+        selected = !selected ? symbols[0] : selected
+      }
+      if (functions) {
+        addItemsToDropdownMenu(menu, functions, 'Functions', 'function')
+        selected = !selected ? functions[0] : selected
+      }
+    }
+    this.dropdown.dropdown('refresh')
+    this.dropdown.dropdown('set selected', selected)
+  }
+
+  /**
+   * Callback for when the selected symbol changes.
    * @param {*} evt
    */
   onSymbolChange (evt) {
     this.activeSymbol = evt.target.value
-    // clear previous table data
-    if ($.fn.DataTable.isDataTable(this.tabTable)) {
-      this.tabTable.DataTable().destroy()
-      this.tabTable.empty()
-    }
 
-    // prepare table by defining col types
-    // and initialize table
-    const tab = this.results.results[this.activeSymbol]
-    const cols = tab.columns.map((col, idx) => {
-      const ret = {
-        title: col
-      }
-      if (tab.row_type[idx] === DATA_TYPES.studyID) {
-        ret.render = renderPMID
-      } else if (tab.row_type[idx] === DATA_TYPES.VBROverlay || tab.row_type[idx] === DATA_TYPES.VBR) {
-        ret.render = renderVBROverlay
-      }
-      return ret
-    })
-    this.tabTable.DataTable({
-      processing: true,
-      serverSide: true,
-      pageLength: 25,
-      order: [],
-      searching: false,
-      columns: cols,
-      ajax: (data, callback, settings) => this.fetchNewTableData(data, callback, settings)
-    })
-
-    // hide or show papaya viewer.
-    if (tab.row_type.some((elt) => elt === DATA_TYPES.VBROverlay || elt === DATA_TYPES.VBR)) {
-      this.viewer.showViewer()
-    } else {
+    // get the active symbol metadata
+    const tab = (this.results && this.activeSymbol in this.results.results)
+      ? this.results.results[this.activeSymbol]
+      : this.symbols.results[this.activeSymbol]
+    if ('function' in tab && tab.function) {
+      // Selected symbol is a function, display its doctstring
+      this.setFunctionHelp('', `A function of type ${tab.type}`, this.activeSymbol, tab.doc)
+      this.tabTable.hide()
       this.viewer.hideViewer()
+    } else {
+      // Selected symbol is a RelationalAlgebraSet, display its values
+      // clear previous table data
+      if ($.fn.DataTable.isDataTable(this.tabTable)) {
+        this.tabTable.DataTable().destroy()
+        this.tabTable.empty()
+      }
+
+      this.tabTable.show()
+      this.functionsHelp.hide()
+      const cols = tab.columns.map((col, idx) => {
+        const ret = {
+          title: col
+        }
+        if (tab.row_type[idx] === DATA_TYPES.studyID) {
+          ret.render = renderPMID
+        } else if (tab.row_type[idx] === DATA_TYPES.VBROverlay || tab.row_type[idx] === DATA_TYPES.VBR) {
+          ret.render = renderVBROverlay
+        }
+        return ret
+      })
+      this.tabTable.DataTable({
+        processing: true,
+        serverSide: true,
+        pageLength: 25,
+        order: [],
+        searching: false,
+        columns: cols,
+        ajax: (data, callback, settings) => this.fetchNewTableData(data, callback, settings)
+      })
+
+      // hide or show papaya viewer.
+      if (tab.row_type.some((elt) => elt === DATA_TYPES.VBROverlay || elt === DATA_TYPES.VBR)) {
+        this.viewer.showViewer()
+      } else {
+        this.viewer.hideViewer()
+      }
     }
   }
 
@@ -116,9 +182,11 @@ export class ResultsController {
       queryData.asc = +(data.order[0].dir === 'asc')
     }
     // send get request to the server
-    const queryId = this.results.uuid
+    const url = (this.results && this.activeSymbol in this.results.results)
+      ? `${API_ROUTE.status}/${this.results.uuid}`
+      : `${API_ROUTE.symbols}/${this.engine}`
     $.ajax({
-      url: `${API_ROUTE.status}/${queryId}`,
+      url: url,
       type: 'get',
       data: queryData
     }).done((result) => {
@@ -131,6 +199,39 @@ export class ResultsController {
       }
       callback(dataToDraw)
     })
+  }
+
+  /**
+   * Display the help content for the selected function
+   * @param {*} style
+   * @param {*} content
+   * @param {*} header
+   * @param {*} help
+   */
+  setFunctionHelp (style, content, header, help) {
+    const fHeader = this.functionsHelp.find('.nl-functions-header')
+    if (typeof header !== 'undefined') {
+      fHeader.text(header)
+    } else {
+      fHeader.empty()
+    }
+    const fMsg = this.functionsHelp.find('.nl-functions-message')
+    if (typeof content !== 'undefined') {
+      fMsg.text(content)
+    } else {
+      fMsg.empty()
+    }
+    const fHelp = this.functionsHelp.find('.nl-functions-help')
+    if (typeof help !== 'undefined') {
+      fHelp.text(help)
+      fHelp.show()
+    } else {
+      fHelp.empty()
+      fHelp.hide()
+    }
+    this.functionsHelp.removeClass('info error warning success')
+    this.functionsHelp.addClass(style)
+    this.functionsHelp.show()
   }
 
   /**
@@ -260,4 +361,20 @@ function renderVBROverlay (data, type, row, meta) {
     return data.hash
   }
   return data
+}
+
+/**
+ * Helper function to add items to the dropdown menu.
+ * @param {*} menu
+ * @param {*} items
+ * @param {*} header
+ * @param {*} classes
+ */
+function addItemsToDropdownMenu (menu, items, header, classes) {
+  menu.append($('<div class="divider"></div>'))
+  menu.append($(`<div class="header">${header}</div>`))
+  menu.append($('<div class="divider"></div>'))
+  items.forEach(elt => {
+    menu.append($(`<div class="item ${classes}" data-value="${elt}">${elt}</div>`))
+  })
 }

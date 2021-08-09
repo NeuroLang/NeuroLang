@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 from concurrent.futures import Future
+from neurolang.frontend.query_resolution_expressions import Symbol
 from typing import Any, Dict, List, Tuple, Type, Union
 from nibabel.nifti1 import Nifti1Image
 from nibabel.spatialimages import SpatialImage
@@ -12,7 +13,7 @@ import nibabel as nib
 from neurolang.regions import EmptyRegion, ExplicitVBR, ExplicitVBROverlay
 from neurolang.type_system import get_args
 from neurolang.utils.relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
 )
 
 
@@ -62,7 +63,7 @@ def calculate_image_center(image: SpatialImage):
 
 def serializeVBR(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
     """
-    Serialize a Volumetric Brain Region object. 
+    Serialize a Volumetric Brain Region object.
 
     Parameters
     ----------
@@ -75,7 +76,7 @@ def serializeVBR(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
         a dict containing the base64 encoded image, as well as min and max
         values, and a hash of the image.
     """
-    if  isinstance(vbr, EmptyRegion):
+    if isinstance(vbr, EmptyRegion):
         return "Empty Region"
 
     image = vbr.spatial_image()
@@ -88,7 +89,7 @@ def serializeVBR(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
         "max": max,
         "image": base64_encode_spatial(image),
         "hash": hash,
-        "center": calculate_image_center(image)
+        "center": calculate_image_center(image),
     }
 
 
@@ -142,34 +143,52 @@ class QueryResults:
             for key, ras in results.items():
                 self.results[key] = self.get_result_item(ras)
         else:
-            self.results[symbol] = self.get_result_item(results[symbol])
+            self.results[symbol] = self.get_result_item(results[symbol], True)
 
-    def get_result_item(self, ras: NamedRelationalAlgebraFrozenSet) -> Dict:
+    def get_result_item(
+        self,
+        symbol: Union[RelationalAlgebraFrozenSet, Symbol],
+        get_item_values: bool = False,
+    ) -> Dict:
         """
-        Serialize a result symbol into a dict of result values and metadata.
+        Serialize a symbol into a dict of result values and metadata.
 
         Parameters
         ----------
-        ras : NamedRelationalAlgebraFrozenSet
+        symbol : Union[RelationalAlgebraFrozenSet, Symbol]
             the symbol to parse
+        get_item_values : bool
+            get the values for the item
 
         Returns
         -------
         Dict
             the parsed result values
         """
-        df = ras.as_pandas_dataframe()
-        result = self.get_result_item_columns(ras, df)
-        values = self.get_result_item_values(ras.row_type, df)
-        result["values"] = values
+        if isinstance(symbol, RelationalAlgebraFrozenSet):
+            df = symbol.as_pandas_dataframe()
+            result = self.get_result_item_columns(symbol, df)
+            if get_item_values:
+                values = self.get_result_item_values(symbol.row_type, df)
+                result["values"] = values
+        elif isinstance(symbol, Symbol):
+            result = self.get_function_metadata(symbol)
+        return result
+
+    def get_function_metadata(self, symbol: Symbol):
+        result = {
+            "type": str(symbol.type),
+            "doc": symbol.value.__doc__,
+            "function": True,
+        }
         return result
 
     def get_result_item_columns(
-        self, ras: NamedRelationalAlgebraFrozenSet, df
+        self, symbol: RelationalAlgebraFrozenSet, df
     ) -> Dict:
         result = {}
-        result["row_type"] = [str(t) for t in get_args(ras.row_type)]
-        result["columns"] = list(ras.columns)
+        result["row_type"] = [str(t) for t in get_args(symbol.row_type)]
+        result["columns"] = [str(c) for c in symbol.columns]
         result["size"] = df.shape[0]
         return result
 

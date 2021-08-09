@@ -16,7 +16,8 @@ export const API_ROUTE = {
   statementsocket: 'ws://' + BASE_API_HOST + '/v1/statementsocket',
   status: BASE_API_URL + '/v1/status',
   atlas: BASE_API_URL + '/v1/atlas',
-  engines: BASE_API_URL + '/v1/engines'
+  engines: BASE_API_URL + '/v1/engine',
+  symbols: BASE_API_URL + '/v1/symbol'
 }
 
 // The custom data types which might need special rendering
