@@ -234,7 +234,7 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     if (
         isinstance(rule, FunctionApplication) or
-        #isinstance(rule, ExistentialPredicate) or
+        isinstance(rule, ExistentialPredicate) or
         all(
             is_atom_a_deterministic_relation(atom, symbol_table)
             for atom in extract_logic_atoms(rule)
@@ -246,8 +246,9 @@ def dalvi_suciu_lift(rule, symbol_table):
         proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
         return Projection(result, proj_cols)
 
-
+    #if isinstance(rule, Conjunction):
     rule_cnf = minimize_component_cnf(rule)
+
     if len(rule_cnf.formulas) > 1:
         return components_plan(
             rule_cnf.formulas, rap.NaturalJoin, symbol_table

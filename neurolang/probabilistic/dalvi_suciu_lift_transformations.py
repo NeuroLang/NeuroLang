@@ -73,20 +73,26 @@ def convert_rule_to_components_cnf(implication):
 
     ccq = []
     expression = Disjunction(plain_expression(antecedent))
+
     scc = args_connected_components(expression)
     for component in scc:
         if len(existential_vars) > 1:
-            for free_var in existential_vars:
-                if free_var in get_component_args(component):
-                    ccq.append(ExistentialPredicate(free_var, component))
-                else:
-                    ccq.append(component)
+            ccq.append(match_existentials(component, existential_vars))
         else:
             ccq.append(component)
 
     new_ant = Conjunction(tuple(ccq))
 
     return RTO.walk(new_ant)
+
+def match_existentials(component, existential_vars):
+    c_args = get_component_args(component)
+    free_vars = set(c_args) & set(existential_vars)
+    if len(free_vars) > 0:
+        for fv in free_vars:
+            component = ExistentialPredicate(fv, component)
+
+    return component
 
 
 def minimize_component_cnf(query):
@@ -134,11 +140,9 @@ def args_connected_components(expression):
 
     c_matrix = np.zeros((len(expression.formulas),) * 2)
     for i, formula in enumerate(expression.formulas):
-        f_args = set(a.args for a in extract_logic_atoms(formula))
+        f_args = set(b for a in extract_logic_atoms(formula) for b in a.args)
         for j, formula_ in enumerate(expression.formulas[i + 1:]):
-            f_args_ = set(
-                a.args for a in extract_logic_atoms(formula_)
-            )
+            f_args_ = set(b for a in extract_logic_atoms(formula_) for b in a.args)
             if not f_args.isdisjoint(f_args_):
                 c_matrix[i, i + 1 + j] = 1
                 c_matrix[i + 1 + j, i] = 1
