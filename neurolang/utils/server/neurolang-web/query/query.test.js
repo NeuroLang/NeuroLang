@@ -4,12 +4,12 @@ import $ from '../jquery-bundler'
 import { QueryController } from './query'
 import WS from 'jest-websocket-mock'
 
-const mockShowResults = jest.fn()
+const mockSetResults = jest.fn()
 const mockHideResults = jest.fn()
 
-jest.mock('../results/results', () => ({
-  ResultsController: jest.fn().mockImplementation(() => {
-    return { showQueryResults: mockShowResults, hideQueryResults: mockHideResults }
+jest.mock('../symbols/symbols', () => ({
+  SymbolsController: jest.fn().mockImplementation(() => {
+    return { setQueryResults: mockSetResults, hide: mockHideResults }
   })
 }))
 
@@ -55,7 +55,7 @@ describe('QueryController', () => {
     let wsserver
     beforeEach(async () => {
       wsserver = new WS('ws://localhost:8888/v1/statementsocket', { jsonProtocol: true })
-      mockShowResults.mockClear()
+      mockSetResults.mockClear()
       mockHideResults.mockClear()
     })
 
@@ -75,7 +75,7 @@ describe('QueryController', () => {
       $('#runQueryBtn').trigger('click')
 
       await wsserver.connected
-      const expectedQuery = { query: 'union(region_union(r)) :- destrieux(..., r)' }
+      const expectedQuery = { engine: 'destrieux', query: 'union(region_union(r)) :- destrieux(..., r)' }
       await expect(wsserver).toReceiveMessage(expectedQuery)
       expect(wsserver).toHaveReceivedMessages([expectedQuery])
 
@@ -87,7 +87,7 @@ describe('QueryController', () => {
       $('#runQueryBtn').trigger('click')
 
       await wsserver.connected
-      const expectedQuery = { query: 'union(region_union(r)) :- destrieux(..., r)' }
+      const expectedQuery = { engine: 'destrieux', query: 'union(region_union(r)) :- destrieux(..., r)' }
       await expect(wsserver).toReceiveMessage(expectedQuery)
       wsserver.send({ status: 'ok', data: { done: false, running: true, cancelled: false } })
 
@@ -100,7 +100,7 @@ describe('QueryController', () => {
       $('#runQueryBtn').trigger('click')
 
       await wsserver.connected
-      const expectedQuery = { query: 'union(region_union(r)) :- destrieux(..., r)' }
+      const expectedQuery = { engine: 'destrieux', query: 'union(region_union(r)) :- destrieux(..., r)' }
       await expect(wsserver).toReceiveMessage(expectedQuery)
       const errorName = 'neurolang.exceptions.InvalidQueryError'
       const message = 'Your query is invalid'
@@ -119,7 +119,7 @@ describe('QueryController', () => {
       $('#runQueryBtn').trigger('click')
 
       await wsserver.connected
-      const expectedQuery = { query: 'union(region_union(r)) :- destrieux(..., r)' }
+      const expectedQuery = { engine: 'destrieux', query: 'union(region_union(r)) :- destrieux(..., r)' }
       await expect(wsserver).toReceiveMessage(expectedQuery)
       const results = { ans: { size: 15, row_type: 'Tuple[float, str]', values: [[0, 1, 2]] } }
       const response = { status: 'ok', data: { done: true, running: false, cancelled: false, results } }
@@ -127,7 +127,7 @@ describe('QueryController', () => {
 
       await wsserver.closed
       expect(qc.socket.readyState).toBe(WebSocket.CLOSED)
-      expect(mockShowResults).toHaveBeenCalledWith(response)
+      expect(mockSetResults).toHaveBeenCalledWith(response)
       expect($('#runQueryBtn').is(':disabled')).toBe(false)
     })
   })

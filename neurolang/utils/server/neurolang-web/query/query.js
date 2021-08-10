@@ -5,7 +5,7 @@ import 'codemirror/mode/python/python'
 import CodeMirror from 'codemirror'
 import './query.css'
 import $ from '../jquery-bundler'
-import { ResultsController } from '../results/results'
+import { SymbolsController } from '../symbols/symbols'
 import { API_ROUTE } from '../constants'
 
 /**
@@ -33,7 +33,7 @@ export class QueryController {
     this.runQueryBtn.on('click', () => this._submitQuery())
 
     /// Results Manager
-    this.rc = new ResultsController()
+    this.sc = new SymbolsController()
   }
 
   /**
@@ -44,8 +44,8 @@ export class QueryController {
     this.engine = engine
     this.editor.setValue(query)
     this._clearAlert()
-    this.rc.hide()
-    this.rc.setRouteEngine(engine)
+    this.sc.hide()
+    this.sc.setRouteEngine(engine)
   }
 
   _submitQuery () {
@@ -89,7 +89,7 @@ export class QueryController {
           // query was sucessfull
           this._clearAlert()
           this._finishQuery()
-          this.rc.setQueryResults(msg)
+          this.sc.setQueryResults(msg)
         }
       } else {
         // query is either still running or has not yet started

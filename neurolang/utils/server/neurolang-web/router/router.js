@@ -1,5 +1,3 @@
-import $ from '../jquery-bundler'
-
 const pathToRegex = path => new RegExp('^' + path.replace(/\//g, '\\/').replace(/:\w+/g, '(.+)') + '$')
 
 const getParams = match => {

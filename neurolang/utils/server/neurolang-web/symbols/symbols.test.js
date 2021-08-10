@@ -4,7 +4,7 @@ import $ from '../jquery-bundler'
 import 'datatables.net'
 import dt from 'datatables.net-se'
 import 'semantic-ui-css'
-import { ResultsController } from './results'
+import { SymbolsController } from './symbols'
 
 const mockShowViewer = jest.fn()
 const mockHideViewer = jest.fn()
@@ -66,40 +66,54 @@ function getTestHTML () {
   const HTML = `
     <div id="queryContainer" class="ui grid container">
     </div>
-    <div class="ui container nl-results-viewer-container">
-        <div id="resultsContainer" class="nl-results-container">
-        <div class="ui top attached tabular menu nl-results-tabs">
-        </div>
-        <div class="ui bottom attached tab segment active">
-            <table class='ui compact striped table nl-result-table' id='tabTable' width="100%"></table>
-        </div>
-        </div>
-
-        <div id="nlPapayaContainer" class="nl-papaya-container">
-          <div id="nlPapayaParent" class="nl-papaya-parent"></div>
-          
-          <div class="ui message warning nl-papaya-alert">
-              <div class="header">You cannot add more than 8 overlays</div>
-              <p>Please unselect an overlay to add a new one</p>
+    <div class="ui container nl-symbols-viewer-container">
+      <div id="symbolsContainer" class="nl-symbols-container">
+        <div class="ui raised segments">
+          <div class="ui label segment secondary">
+            <span class="text">Select a symbol to explore</span>
+            <div class="ui search selection dropdown nl-symbols-dropdown">
+              <input type="hidden" name="symbol">
+              <i class="dropdown icon"></i>
+              <div class="default text">Select Symbol</div>
+              <div class="menu">
+              </div>
+            </div>
+          </div>
+          <div class="ui  segment">
+            <table class='ui compact striped table nl-symbols-table' id='tabTable' width="100%"></table>
+            <div class="ui message nl-functions-msg" id="queryAlert">
+              <div class="header nl-functions-header">
+              </div>
+              <p class="nl-functions-message"></p>
+              <pre class="nl-functions-help"></pre>
+          </div>
           </div>
         </div>
+      </div>
+      <div id="nlPapayaContainer" class="nl-papaya-container">
+        <div id="nlPapayaParent" class="nl-papaya-parent"></div>
+        <div class="ui message warning nl-papaya-alert">
+          <div class="header">You cannot add more than 8 overlays</div>
+          <p>Please unselect an overlay to add a new one</p>
+        </div>
+      </div>
     </div>
     `
   return HTML
 }
 
-describe('ResultsController', () => {
-  let rc
+describe('SymbolsController', () => {
+  let sc
   beforeEach(() => {
     document.body.innerHTML = getTestHTML()
-    rc = new ResultsController()
+    sc = new SymbolsController()
   })
 
   it('should create', () => {
-    expect(rc).toBeDefined()
+    expect(sc).toBeDefined()
   })
 
-  describe('showQueryResults', () => {
+  describe('setQueryResults', () => {
     let mockFetchTableData
     let mockTableData
     beforeEach(() => {
@@ -111,22 +125,22 @@ describe('ResultsController', () => {
         recordsFiltered: 500,
         data: mockResults.data.results.ActivationGivenTerm.values
       }
-      mockFetchTableData = jest.spyOn(rc, 'fetchNewTableData').mockImplementation((data, callback, settings) => callback(mockTableData))
+      mockFetchTableData = jest.spyOn(sc, 'fetchNewTableData').mockImplementation((data, callback, settings) => callback(mockTableData))
     })
 
-    it('should create tabs for all symbols', () => {
-      rc.showQueryResults(mockResults)
+    it('should add symbols to the symbols list', () => {
+      sc.setQueryResults(mockResults)
 
-      const items = $('.nl-results-tabs .item')
+      const items = $('.nl-symbols-dropdown .item')
       expect(items.length).toBe(3)
       expect(items.first().text()).toBe('ActivationGivenTerm')
-      expect($(items.get(1)).text()).toBe('TermInStudyTFIDF')
-      expect(items.last().text()).toBe('RegionImage')
+      expect($(items.get(1)).text()).toBe('RegionImage')
+      expect(items.last().text()).toBe('TermInStudyTFIDF')
     })
 
-    it('should display the first tab', () => {
-      rc.showQueryResults(mockResults)
-      expect(rc.activeSymbol).toBe('ActivationGivenTerm')
+    it('should select the first item from the list', () => {
+      sc.setQueryResults(mockResults)
+      expect(sc.activeSymbol).toBe('ActivationGivenTerm')
 
       expect(mockFetchTableData).toHaveBeenCalled()
       // Expect 1 row per item + header
@@ -135,12 +149,12 @@ describe('ResultsController', () => {
 
     describe('image results', () => {
       beforeEach(() => {
-        rc.showQueryResults(mockResults)
+        sc.setQueryResults(mockResults)
         mockFetchTableData.mockClear()
         mockShowViewer.mockClear()
         mockHideViewer.mockClear()
 
-        rc.tableData = mockResults.data
+        sc.tableData = mockResults.data
         mockTableData = {
           draw: 1,
           recordsTotal: 1,
@@ -154,16 +168,16 @@ describe('ResultsController', () => {
       })
 
       it('should show papaya viewer when tab has VBROverlay type', () => {
-        // trigger click on last tab which contains images
-        $('.nl-results-tabs .item').last().trigger('click')
+        // trigger click on 2nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
         expect(mockShowViewer).toHaveBeenCalled()
         expect(mockHideViewer).not.toHaveBeenCalled()
         expect(mockFetchTableData).toHaveBeenCalled()
       })
 
       it('should show controls when displaying brain images', () => {
-        // trigger click on last tab which contains images
-        $('.nl-results-tabs .item').last().trigger('click')
+        // trigger click on 2nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
         expect(mockShowViewer).toHaveBeenCalled()
         expect($('#tabTable tr').length).toBe(mockTableData.data.length + 1)
         expect($('.nl-vbr-overlay-switch').length).toBe(mockTableData.data.length)
@@ -175,8 +189,8 @@ describe('ResultsController', () => {
       })
 
       it('should call setImage on papayaViewer when image switch is checked', () => {
-        // trigger click on last tab which contains images
-        $('.nl-results-tabs .item').last().trigger('click')
+        // trigger click on 2nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
         mockCanAdd.mockReturnValueOnce(true)
 
         // click on second image checkbox
@@ -192,8 +206,8 @@ describe('ResultsController', () => {
       it('should not add image if max images already added', () => {
         mockCanAdd.mockReturnValueOnce(false)
 
-        // trigger click on last tab which contains images
-        $('.nl-results-tabs .item').last().trigger('click')
+        // trigger click on 2nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
 
         // click on first image checkbox
         const chkbox = $('.nl-vbr-overlay-switch input').first()
@@ -208,8 +222,8 @@ describe('ResultsController', () => {
       it('should set the color and hide histogram for region labels', () => {
         mockCanAdd.mockReturnValueOnce(true)
         mockAddImage.mockReturnValueOnce('#f44336')
-        // trigger click on last tab which contains images
-        $('.nl-results-tabs .item').last().trigger('click')
+        // trigger click on 2nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
         // click on first image checkbox
         const chkbox = $('.nl-vbr-overlay-switch input').first()
         chkbox.prop('checked', true)
@@ -222,8 +236,8 @@ describe('ResultsController', () => {
       })
 
       it('should set center when center btn is clicked', () => {
-        // trigger click on last tab which contains images
-        $('.nl-results-tabs .item').last().trigger('click')
+        // trigger click on 2nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
 
         // click on first image checkbox
         mockCanAdd.mockReturnValueOnce(true)
@@ -237,8 +251,8 @@ describe('ResultsController', () => {
       })
 
       it('should call showHistogram when histogram btn is clicked', () => {
-        // trigger click on last tab which contains images
-        $('.nl-results-tabs .item').last().trigger('click')
+        // trigger click on 2nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
 
         // click on second image checkbox
         mockCanAdd.mockReturnValueOnce(true)

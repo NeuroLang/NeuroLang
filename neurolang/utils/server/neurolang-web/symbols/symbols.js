@@ -1,9 +1,9 @@
-import './results.css'
+import './symbols.css'
 import $ from '../jquery-bundler'
 import { PapayaViewer } from '../papaya/viewer'
 import { API_ROUTE, DATA_TYPES, PUBMED_BASE_URL } from '../constants'
 
-export class ResultsController {
+export class SymbolsController {
   constructor () {
     this.results = undefined
     this.activeSymbol = undefined
@@ -117,7 +117,7 @@ export class ResultsController {
     if ('function' in tab && tab.function) {
       // Selected symbol is a function, display its doctstring
       this.setFunctionHelp('', `A function of type ${tab.type}`, this.activeSymbol, tab.doc)
-      this.tabTable.hide()
+      this.tabTable.parents('div.dataTables_wrapper').first().hide()
       this.viewer.hideViewer()
     } else {
       // Selected symbol is a RelationalAlgebraSet, display its values
@@ -127,7 +127,7 @@ export class ResultsController {
         this.tabTable.empty()
       }
 
-      this.tabTable.show()
+      this.tabTable.parents('div.dataTables_wrapper').first().show()
       this.functionsHelp.hide()
       const cols = tab.columns.map((col, idx) => {
         const ret = {
