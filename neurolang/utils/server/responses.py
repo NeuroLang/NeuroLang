@@ -6,6 +6,7 @@ from neurolang.frontend.query_resolution_expressions import Symbol
 from typing import Any, Dict, List, Tuple, Type, Union
 from nibabel.nifti1 import Nifti1Image
 from nibabel.spatialimages import SpatialImage
+from tatsu.exceptions import FailedParse
 
 import numpy as np
 import pandas as pd
@@ -126,7 +127,7 @@ class QueryResults:
         length: int = 50,
         sort: int = -1,
         asc: bool = True,
-        get_values: bool = False
+        get_values: bool = False,
     ):
         self.start = start
         self.length = length
@@ -149,10 +150,24 @@ class QueryResults:
                     self.set_results_details(results, symbol, get_values)
 
     def set_error_details(self, error):
-        self.message = str(error)
         self.errorName = str(type(error))
-        if error.__doc__ is not None:
-            self.errorDoc = error.__doc__
+        if isinstance(error, FailedParse):
+            self.message = "An error occured while parsing your query."
+            self.errorDoc = str(error)
+            try:
+                line_info = error.tokenizer.line_info(error.pos)
+            except AttributeError:
+                # support tatsu 4.x
+                line_info = error.buf.line_info(error.pos)
+            self.line_info = {
+                "line": line_info.line,
+                "col": line_info.col,
+                "text": error.message,
+            }
+        else:
+            self.message = str(error)
+            if error.__doc__ is not None:
+                self.errorDoc = error.__doc__
 
     def set_results_details(self, results, symbol, get_values):
         self.results = {}

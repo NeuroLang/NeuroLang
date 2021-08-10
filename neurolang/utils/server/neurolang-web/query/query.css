@@ -3,6 +3,10 @@
     width: 100%;
 }
 
+#queryTextArea + .CodeMirror pre {
+    padding-bottom: .5em;
+}
+
 #queryContainer .query-segment {
     padding: 0;
 }

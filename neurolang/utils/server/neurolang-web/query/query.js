@@ -1,7 +1,7 @@
 import 'codemirror/lib/codemirror.css'
 import 'codemirror/theme/xq-light.css'
 import 'codemirror/addon/display/autorefresh'
-import 'codemirror/mode/python/python'
+import './datalog'
 import CodeMirror from 'codemirror'
 import './query.css'
 import $ from '../jquery-bundler'
@@ -17,7 +17,7 @@ export class QueryController {
     /// Initialize the query box with the CodeMirror plugin
     this.queryTextArea = document.querySelector('#queryTextArea')
     this.editor = CodeMirror.fromTextArea(this.queryTextArea, {
-      mode: 'python',
+      mode: 'datalog',
       theme: 'xq-light',
       autoRefresh: true,
       lineNumbers: true,
@@ -50,6 +50,7 @@ export class QueryController {
 
   _submitQuery () {
     const query = this.editor.getValue()
+    const defaultSymbol = parseLastQuerySymbol(query)
     const msg = { query: query }
     if (this.engine) {
       msg.engine = this.engine
@@ -57,7 +58,7 @@ export class QueryController {
     // create a new WebSocket and set the event listeners on it
     this.socket = new WebSocket(API_ROUTE.statementsocket)
     this.socket.onerror = this._onerror
-    this.socket.onmessage = (event) => this._onmessage(event)
+    this.socket.onmessage = (event) => this._onmessage(event, defaultSymbol)
     this.socket.onopen = () => {
       this.runQueryBtn.addClass('loading')
       this.runQueryBtn.prop('disabled', true)
@@ -69,7 +70,7 @@ export class QueryController {
     this._setAlert('warning', 'An error occured while connecting to the server.')
   }
 
-  _onmessage (event) {
+  _onmessage (event, defaultSymbol) {
     const msg = JSON.parse(event.data)
     if (!('status' in msg) || msg.status !== 'ok') {
       this._setAlert('error', msg, 'An error occured while submitting your query.')
@@ -81,15 +82,19 @@ export class QueryController {
         this._finishQuery()
       } else if (msg.data.done) {
         if ('errorName' in msg.data) {
+          this._clearAlert()
           // query returned an error
           const errorDoc = 'errorDoc' in msg.data ? msg.data.errorDoc : undefined
           this._setAlert('error', msg.data.message, msg.data.errorName, errorDoc)
+          if ('line_info' in msg.data) {
+            this._setEditorMarks(msg.data.line_info)
+          }
           this._finishQuery()
         } else {
           // query was sucessfull
           this._clearAlert()
           this._finishQuery()
-          this.sc.setQueryResults(msg)
+          this.sc.setQueryResults(msg, defaultSymbol)
         }
       } else {
         // query is either still running or has not yet started
@@ -102,6 +107,18 @@ export class QueryController {
     this.socket.close()
     this.runQueryBtn.removeClass('loading')
     this.runQueryBtn.prop('disabled', false)
+  }
+
+  _setEditorMarks (lineInfo) {
+    const from = { line: lineInfo.line, ch: lineInfo.col === 0 ? 0 : lineInfo.col - 1 }
+    const to = { line: lineInfo.line, ch: lineInfo.col + 1 }
+    const marker = $(`<div data-position="bottom center" data-content="${lineInfo.text}">❌</div>`)
+    marker.css('color', '#822')
+    marker.popup()
+    this.editor.setGutterMarker(lineInfo.line, 'marks', marker[0])
+    this.editor.markText(from, to, {
+      css: 'text-decoration: red double underline; text-underline-offset: .3em;'
+    })
   }
 
   /**
@@ -138,5 +155,15 @@ export class QueryController {
 
   _clearAlert () {
     this.queryAlert.hide()
+    this.editor.clearGutter('marks')
+    this.editor.getAllMarks().forEach((elt) => elt.clear())
   }
+}
+
+function parseLastQuerySymbol (query) {
+  const lines = query.split(/\r?\n/)
+  const lastLine = lines[lines.length - 1]
+  const parenthese = lastLine.indexOf('(')
+  const head = parenthese > 0 ? lastLine.substring(0, parenthese) : undefined
+  return head
 }

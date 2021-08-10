@@ -24,10 +24,10 @@ export class SymbolsController {
    * Set the results of a query execution
    * @param {*} data
    */
-  setQueryResults (data) {
+  setQueryResults (data, defaultSymbol) {
     this.resultsContainer.show()
     this.results = data.data
-    this._updateSymbolsList()
+    this._updateSymbolsList(defaultSymbol)
   }
 
   /**
@@ -72,7 +72,7 @@ export class SymbolsController {
    * of query result symbols if available, and symbols & functions
    * present on the engine.
    */
-  _updateSymbolsList () {
+  _updateSymbolsList (defaultSymbol) {
     const menu = this.dropdown.find('.menu')
     menu.empty()
     let selected = null
@@ -82,7 +82,7 @@ export class SymbolsController {
       resultKeys = Object.keys(this.results.results)
       resultKeys.sort()
       addItemsToDropdownMenu(menu, resultKeys, 'Query symbols', 'symbol query-symbol')
-      selected = resultKeys[0]
+      selected = resultKeys.indexOf(defaultSymbol) > 0 ? defaultSymbol : resultKeys[0]
     }
     // Then add the base symbols and functions
     if (this.symbols) {
@@ -90,11 +90,11 @@ export class SymbolsController {
         .filter(elt => this.symbols.results[elt].function)
       const symbols = Object.keys(this.symbols.results)
         .filter(elt => !this.symbols.results[elt].function && resultKeys.indexOf(elt) < 0)
-      if (symbols) {
+      if (symbols.length > 0) {
         addItemsToDropdownMenu(menu, symbols, 'Base symbols', 'symbol base-symbol')
         selected = !selected ? symbols[0] : selected
       }
-      if (functions) {
+      if (functions.length > 0) {
         addItemsToDropdownMenu(menu, functions, 'Functions', 'function')
         selected = !selected ? functions[0] : selected
       }
