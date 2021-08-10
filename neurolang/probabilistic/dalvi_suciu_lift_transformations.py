@@ -75,11 +75,14 @@ def convert_rule_to_components_cnf(implication):
     expression = Disjunction(plain_expression(antecedent))
     scc = args_connected_components(expression)
     for component in scc:
-        for free_var in existential_vars:
-            if free_var in get_component_args(component):
-                ccq.append(ExistentialPredicate(free_var, component))
-            else:
-                ccq.append(component)
+        if len(existential_vars) > 1:
+            for free_var in existential_vars:
+                if free_var in get_component_args(component):
+                    ccq.append(ExistentialPredicate(free_var, component))
+                else:
+                    ccq.append(component)
+        else:
+            ccq.append(component)
 
     new_ant = Conjunction(tuple(ccq))
 

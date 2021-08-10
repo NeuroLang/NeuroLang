@@ -171,7 +171,7 @@ def solve_marg_query(rule, cpl):
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
 
 
-def dalvi_suciu_lift(rule, symbol_table):
+def dalvi_suciu_lift_old(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
     to a safe plan according to [1]_. Non-liftable segments are identified
@@ -199,8 +199,6 @@ def dalvi_suciu_lift(rule, symbol_table):
         return Projection(result, proj_cols)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
-    if is_safe_range(rule_cnf):
-        a = 1
 
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
@@ -221,7 +219,7 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     return NonLiftable(rule)
 
-def dalvi_suciu_lift_temporal(rule, symbol_table):
+def dalvi_suciu_lift(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
     to a safe plan according to [1]_. Non-liftable segments are identified
@@ -232,12 +230,11 @@ def dalvi_suciu_lift_temporal(rule, symbol_table):
     '''
     if isinstance(rule, Implication):
         rule = convert_rule_to_components_cnf(rule)
-        #rule = convert_rule_to_ucq(rule)
     rule = RTO.walk(rule)
 
     if (
         isinstance(rule, FunctionApplication) or
-        isinstance(rule, ExistentialPredicate) or
+        #isinstance(rule, ExistentialPredicate) or
         all(
             is_atom_a_deterministic_relation(atom, symbol_table)
             for atom in extract_logic_atoms(rule)
@@ -249,22 +246,19 @@ def dalvi_suciu_lift_temporal(rule, symbol_table):
         proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
         return Projection(result, proj_cols)
 
-    # TODO Problem with recursion
-    rule_cnf = minimize_component_cnf(rule)
-    if is_safe_range(rule_cnf):
-        a = 1
 
+    rule_cnf = minimize_component_cnf(rule)
     if len(rule_cnf.formulas) > 1:
         return components_plan(
             rule_cnf.formulas, rap.NaturalJoin, symbol_table
         )
 
-    if isinstance(rule_cnf.formulas[0], Conjunction):
+    sc_cnf = rule_cnf.formulas[0]
+    if isinstance(sc_cnf, Conjunction) and len(sc_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
-    rule_dnf = minimize_ucq_in_dnf(rule)
-    connected_components = symbol_connected_components(rule_dnf)
-    if len(connected_components) > 1:
+    rule_dnf = minimize_ucq_in_dnf(sc_cnf)
+    if len(rule_dnf.formulas) > 1:
         return components_plan(connected_components, rap.Union, symbol_table)
     else:
         has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
