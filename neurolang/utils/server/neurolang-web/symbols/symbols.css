@@ -34,3 +34,11 @@
     font-style: italic;
     color: grey;
 }
+
+.nl-symbols-help {
+    margin-left: .3em !important;
+}
+
+.nl-symbols-download {
+    float: right;
+}

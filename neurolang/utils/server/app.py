@@ -1,11 +1,13 @@
+import gzip
 import json
 import logging
-from neurolang.utils.server.queries import NeurolangQueryManager
 import os.path
 from concurrent.futures import Future
+from io import BytesIO
 from uuid import uuid4
 
 import tornado.ioloop
+import tornado.iostream
 import tornado.options
 import tornado.web
 import tornado.websocket
@@ -13,6 +15,7 @@ from neurolang.utils.server.engines import (
     DestrieuxEngineConf,
     NeurosynthEngineConf,
 )
+from neurolang.utils.server.queries import NeurolangQueryManager
 from neurolang.utils.server.responses import (
     CustomQueryResultsEncoder,
     QueryResults,
@@ -70,6 +73,10 @@ class Application(tornado.web.Application):
             (
                 r"/v1/atlas",
                 NiftiiImageHandler,
+            ),
+            (
+                r"/v1/download/({uuid})".format(uuid=uuid_pattern),
+                DownloadsHandler,
             ),
             (
                 r"/(.*)",
@@ -140,7 +147,6 @@ class JSONRequestHandler(tornado.web.RequestHandler):
 
 
 class StatusHandler(JSONRequestHandler):
-
     async def get(self, uuid: str):
         """
         Return the status (or the result) of an already running calculation.
@@ -184,7 +190,6 @@ class StatusHandler(JSONRequestHandler):
 
 
 class SymbolsHandler(JSONRequestHandler):
-
     def get(self, engine: str):
         """
         Return the symbols available on an engine.
@@ -313,6 +318,56 @@ class NiftiiImageHandler(JSONRequestHandler):
         return self.write_json_reponse(
             {"image": base64_encode_nifti(mni_mask)}
         )
+
+
+class DownloadsHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
+        self.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        self.set_header("Content-Type", "application/octet-stream")
+
+    async def get(self, uuid: str):
+        # 1. Get the symbol to download
+        symbol = self.get_argument("symbol")
+        LOG.debug(
+            f"Preparing download file for request {uuid} and symbol {symbol}."
+        )
+        try:
+            future = self.application.nqm.get_result(uuid)
+        except KeyError:
+            raise tornado.web.HTTPError(
+                status_code=404, log_message="uuid not found"
+            )
+        if not (future.done() and future.result()):
+            raise tornado.web.HTTPError(
+                status_code=404, log_message="query does not have results"
+            )
+        results = future.result()
+        ras = results[symbol]
+        df = ras.as_pandas_dataframe()
+
+        # 2. Write the dataframe as gzip bytes
+        data = BytesIO(
+            gzip.compress(df.to_csv(index=False, compression="gzip").encode())
+        )
+
+        # 3. Stream the data in chunks to avoid blocking the server
+        self.set_header(
+            "Content-Disposition", "attachment; filename=" + symbol + ".csv.gz"
+        )
+        chunk_size = 1024 * 1024 * 1  # 1 MiB
+        while True:
+            chunk = data.read(chunk_size)
+            if not chunk:
+                break
+            try:
+                self.write(chunk)  # write the chunk to response
+                await self.flush()  # send the chunk to client
+            except tornado.iostream.StreamClosedError:
+                break
+            finally:
+                del chunk
 
 
 def setup_logs():

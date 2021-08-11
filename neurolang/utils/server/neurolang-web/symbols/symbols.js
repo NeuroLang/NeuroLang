@@ -13,10 +13,13 @@ export class SymbolsController {
     this.dropdown = this.resultsContainer.find('.nl-symbols-dropdown')
     this.tabTable = this.resultsContainer.find('.nl-symbols-table')
     this.functionsHelp = this.resultsContainer.find('.nl-functions-msg')
+    this.symbolsHelp = this.resultsContainer.find('.nl-symbols-help')
+    this.symbolsDownload = this.resultsContainer.find('.nl-symbols-download')
 
     this.tabTable.off('draw.dt').on('draw.dt', () => this.onTableDraw())
     this.dropdown.dropdown()
     this.dropdown.find('input').on('change', (evt) => this.onSymbolChange(evt))
+    this.symbolsHelp.popup()
     this.viewer = new PapayaViewer()
   }
 
@@ -111,9 +114,8 @@ export class SymbolsController {
     this.activeSymbol = evt.target.value
 
     // get the active symbol metadata
-    const tab = (this.results && this.activeSymbol in this.results.results)
-      ? this.results.results[this.activeSymbol]
-      : this.symbols.results[this.activeSymbol]
+    const isQuerySymbol = this.results && this.activeSymbol in this.results.results
+    const tab = isQuerySymbol ? this.results.results[this.activeSymbol] : this.symbols.results[this.activeSymbol]
     if ('function' in tab && tab.function) {
       // Selected symbol is a function, display its doctstring
       this.setFunctionHelp('', `A function of type ${tab.type}`, this.activeSymbol, tab.doc)
@@ -151,10 +153,19 @@ export class SymbolsController {
       })
 
       // hide or show papaya viewer.
-      if (tab.row_type.some((elt) => elt === DATA_TYPES.VBROverlay || elt === DATA_TYPES.VBR)) {
+      const hasImages = tab.row_type.some((elt) => elt === DATA_TYPES.VBROverlay || elt === DATA_TYPES.VBR)
+      if (hasImages) {
         this.viewer.showViewer()
       } else {
         this.viewer.hideViewer()
+      }
+
+      // hide or show the download link.
+      if (isQuerySymbol && !hasImages) {
+        this.symbolsDownload.show()
+        this.symbolsDownload.attr('href', `${API_ROUTE.downloads}/${this.results.uuid}?symbol=${this.activeSymbol}`)
+      } else {
+        this.symbolsDownload.hide()
       }
     }
   }

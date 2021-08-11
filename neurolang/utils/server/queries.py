@@ -169,9 +169,6 @@ class NeurolangQueryManager:
             f"Submitting query with uuid {uuid} to executor pool of {engine_type} engines."
         )
 
-        # Raise a KeyError if engines are not yet available
-        self.engines[engine_type]
-        
         future_res = self.executor.submit(
             self._execute_neurolang_query, query, engine_type
         )

@@ -17,7 +17,8 @@ export const API_ROUTE = {
   status: BASE_API_URL + '/v1/status',
   atlas: BASE_API_URL + '/v1/atlas',
   engines: BASE_API_URL + '/v1/engine',
-  symbols: BASE_API_URL + '/v1/symbol'
+  symbols: BASE_API_URL + '/v1/symbol',
+  downloads: BASE_API_URL + '/v1/download'
 }
 
 // The custom data types which might need special rendering
