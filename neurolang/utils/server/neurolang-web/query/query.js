@@ -49,20 +49,22 @@ export class QueryController {
   }
 
   _submitQuery () {
-    const query = this.editor.getValue()
-    const defaultSymbol = parseLastQuerySymbol(query)
-    const msg = { query: query }
-    if (this.engine) {
-      msg.engine = this.engine
-    }
-    // create a new WebSocket and set the event listeners on it
-    this.socket = new WebSocket(API_ROUTE.statementsocket)
-    this.socket.onerror = this._onerror
-    this.socket.onmessage = (event) => this._onmessage(event, defaultSymbol)
-    this.socket.onopen = () => {
-      this.runQueryBtn.addClass('loading')
-      this.runQueryBtn.prop('disabled', true)
-      this.socket.send(JSON.stringify(msg))
+    const query = this.editor.getValue().trim()
+    if (query) {
+      const defaultSymbol = parseLastQuerySymbol(query)
+      const msg = { query: query }
+      if (this.engine) {
+        msg.engine = this.engine
+      }
+      // create a new WebSocket and set the event listeners on it
+      this.socket = new WebSocket(API_ROUTE.statementsocket)
+      this.socket.onerror = this._onerror
+      this.socket.onmessage = (event) => this._onmessage(event, defaultSymbol)
+      this.socket.onopen = () => {
+        this.runQueryBtn.addClass('loading')
+        this.runQueryBtn.prop('disabled', true)
+        this.socket.send(JSON.stringify(msg))
+      }
     }
   }
 

@@ -257,6 +257,68 @@ def init_frontend(mni_mask):
             voxels, mni_mask.affine, p, image_dim=mni_mask.shape
         )
 
+    @nl.add_symbol
+    def startswith(prefix: str, s: str) -> bool:
+        """Describe the prefix of string `s`.
+
+        Parameters
+        ----------
+        prefix : str
+            prefix to query.
+        s : str
+            string to check whether its
+            prefixed by `s`.
+
+        Returns
+        -------
+        bool
+            whether `s` is prefixed by
+            `prefix`.
+        """
+        return s.startswith(prefix)
+
+
+    @nl.add_symbol
+    def principal_direction(s: ExplicitVBR, direction: str, eps=1e-6) -> bool:
+        """Describe the principal direction of
+        the extension of a volumetric region.
+
+        Parameters
+        ----------
+        s : ExplicitVBR
+            region to analyse the principal
+            direction of its extension.
+        direction : str
+            principal directions, one of
+            `LR`, `AP`, `SI`, for the directions
+            left-right, anterio-posterior, and
+            superior inferior respectively.
+        eps : float, optional
+            minimum difference on between
+            directional standard deviations,
+            by default 1e-6.
+
+        Returns
+        -------
+        bool
+            wether the principal variance of
+            `s` is `direction`.
+        """
+        # Assuming RAS coding os the xyz space.
+        c = ["LR", "AP", "SI"]
+
+        s_xyz = s.to_xyz()
+        cov = np.cov(s_xyz.T)
+        evals, evecs = np.linalg.eig(cov)
+        i = np.argmax(np.abs(evals))
+        abs_max_evec = np.abs(evecs[:, i].squeeze())
+        sort_dir = np.argsort(abs_max_evec)
+        if np.abs(abs_max_evec[sort_dir[-1]] - abs_max_evec[sort_dir[-2]]) < eps:
+            return False
+        else:
+            main_dir = c[sort_dir[-1]]
+        return (direction == main_dir) or (direction[::-1] == main_dir)
+
     return nl
 
 
@@ -309,7 +371,7 @@ def load_destrieux_atlas(data_dir, nl):
             continue
         destrieux_set.add(
             (
-                v.decode("utf8"),
+                v.decode("utf8").replace('-', ' ').replace('_', ' '),
                 ExplicitVBR.from_spatial_image_label(destrieux_atlas_image, k),
             )
         )

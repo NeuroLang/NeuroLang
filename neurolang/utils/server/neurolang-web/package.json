@@ -30,6 +30,7 @@
     "datatables.net-se": "^1.10.25",
     "jquery": "^3.6.0",
     "plotly.js-dist-min": "^2.3.1",
-    "semantic-ui-css": "^2.4.1"
+    "semantic-ui-css": "^2.4.1",
+    "showdown": "^1.9.1"
   }
 }

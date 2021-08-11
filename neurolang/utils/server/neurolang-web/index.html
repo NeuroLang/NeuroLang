@@ -20,7 +20,7 @@
         <img class="logo" src="/inr_logo_grisbleu.svg">
         Neurolang
       </div>
-      <a href="#" class="item">About</a>
+      <a href="https://neurolang.github.io/" class="item">About</a>
       <div href="#" class="ui dropdown item">
         Dataset <i class="dropdown icon"></i>
         <div class="menu nl-dataset-dropdown">
@@ -35,7 +35,7 @@
           </a>
         </div>
       </div>
-      <a href="#" class="ui right floated item">
+      <a href="https://github.com/NeuroLang/NeuroLang" class="ui right floated item">
         <i class="github icon"></i>
       </a>
     </div>
@@ -44,17 +44,18 @@
   <!-- Query input container -->
   <div id="queryContainer" class="ui grid container">
     <div class="sixteen wide column">
+      <div class="ui fluid accordion nl-query-info">
+        <div class="title">
+          <i class="dropdown icon"></i>
+          <span class="ui header nl-query-title"></span>
+        </div>
+        <div class="content nl-query-description">
+        </div>
+      </div>
       <div class="ui raised segment query-segment">
         <div class="ui top attached label">Write your query on neurological data</div>
         <div class="code-mirror-container">
-          <!-- <textarea class="ui input" id="queryTextArea">union(region_union(r)) :- destrieux(..., r)</textarea> -->
-          
-          <textarea class="ui input" id="queryTextArea">
-TermInStudy(term, study) :: tfidf :- TermInStudyTFIDF(term, tfidf, study)
-TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
-Activation(i, j, k) :- SelectedStudy(s) & PeakReported(i, j, k, s)
-ActivationGivenTerm(i, j, k, PROB) :- Activation(i, j, k) // TermAssociation("emotion")
-ActivationGivenTermImage(agg_create_region_overlay(i, j, k, p)) :- ActivationGivenTerm(i, j, k, p)</textarea>
+          <textarea class="ui input" id="queryTextArea"></textarea>
         </div>
       </div>
     </div>
