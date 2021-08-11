@@ -476,6 +476,29 @@ def test_multilevel_existential(solver):
     )
     assert testing.eq_prov_relations(result, expected)
 
+
+def test_multilevel_existential_2(solver):
+    pchoice_as_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "c")},
+        R: {(0.1, "a"), (0.4, "b"), (0.5, "c")},
+        Q: {(0.9, "a"), (0.1, "c")},
+        Z: {(0.1, "b"), (0.9, "c")},
+    }
+    code = Union(
+        (
+            Implication(H(x, y), Conjunction((R(x), Z(y)))),
+            Implication(A(x), Conjunction((H(x, y), P(y, x)))),
+            Implication(B(x), Conjunction((A(x), Q(y)))),
+            Implication(C(x), H(x, y)),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+
     query = Implication(ans(z), B(z))
 
     if solver is small_dichotomy_theorem_based_solver:
@@ -490,7 +513,6 @@ def test_multilevel_existential(solver):
             ("_p_", "z"),
         )
         assert testing.eq_prov_relations(result, expected)
-
 
 def test_repeated_antecedent_predicate_symbol(solver):
     """

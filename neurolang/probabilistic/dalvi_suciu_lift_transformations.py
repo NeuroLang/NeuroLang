@@ -97,7 +97,7 @@ def match_existentials(component, existential_vars):
     return component
 
 
-def minimize_component_cnf(query):
+def minimize_component_query(query):
     head_variables = extract_logic_free_variables(query)
     if isinstance(query, NaryLogicOperator):
         cq_d_min = Conjunction(tuple(

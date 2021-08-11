@@ -1,7 +1,7 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
-from neurolang.probabilistic.dalvi_suciu_lift_transformations import convert_rule_to_components_cnf, minimize_component_cnf
+from neurolang.probabilistic.dalvi_suciu_lift_transformations import convert_rule_to_components_cnf, minimize_component_query
 
 import numpy as np
 
@@ -257,7 +257,7 @@ def dalvi_suciu_lift(rule, symbol_table):
         proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
         return Projection(result, proj_cols)
 
-    rule_cnf = minimize_component_cnf(rule)
+    rule_cnf = minimize_component_query(rule)
     if isinstance(rule_cnf, Conjunction):
 
         if len(rule_cnf.formulas) > 1:
@@ -269,7 +269,7 @@ def dalvi_suciu_lift(rule, symbol_table):
         if isinstance(sc_cnf, Conjunction) and len(sc_cnf.formulas) > 1:
             return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
-    rule_dnf = minimize_ucq_in_dnf(sc_cnf)
+    rule_dnf = minimize_component_query(rule)
     if len(rule_dnf.formulas) > 1:
         return components_plan(connected_components, rap.Union, symbol_table)
     else:
