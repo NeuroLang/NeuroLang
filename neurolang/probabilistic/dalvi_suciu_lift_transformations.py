@@ -8,6 +8,8 @@ from neurolang.logic.expression_processing import extract_logic_atoms, extract_l
 
 import numpy as np
 
+PED = PushExistentialsDown()
+
 
 def convert_rule_to_components_dnf(implication):
     """Convert datalog rule to CCQ.
@@ -90,17 +92,20 @@ def match_existentials(component, existential_vars):
     free_vars = set(c_args) & set(existential_vars)
     if len(free_vars) > 0:
         for fv in free_vars:
-            component = ExistentialPredicate(fv, component)
+            component = PED.walk(ExistentialPredicate(fv, component))
 
     return component
 
 
 def minimize_component_cnf(query):
     head_variables = extract_logic_free_variables(query)
-    cq_d_min = Conjunction(tuple(
-        minimize_component_conjunction(c)
-        for c in query.formulas
-    ))
+    if isinstance(query, NaryLogicOperator):
+        cq_d_min = Conjunction(tuple(
+            minimize_component_conjunction(c)
+            for c in query.formulas
+        ))
+    else:
+        cq_d_min = minimize_component_conjunction(query)
 
     simplify = ChainedWalker(
         PushExistentialsDown,

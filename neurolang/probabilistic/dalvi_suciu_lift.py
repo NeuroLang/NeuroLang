@@ -181,10 +181,8 @@ def dalvi_suciu_lift_old(rule, symbol_table):
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
     if isinstance(rule, Implication):
-        #rule_ccq = convert_rule_to_ccq(rule)
         rule = convert_rule_to_ucq(rule)
     rule = RTO.walk(rule)
-
     if (
         isinstance(rule, FunctionApplication) or
         all(
@@ -199,7 +197,6 @@ def dalvi_suciu_lift_old(rule, symbol_table):
         return Projection(result, proj_cols)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
-
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
         return components_plan(
@@ -229,34 +226,48 @@ def dalvi_suciu_lift(rule, symbol_table):
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
     if isinstance(rule, Implication):
+        rule_ucq = convert_rule_to_ucq(rule)
+        rule_ucq = RTO.walk(rule_ucq)
+        if (
+            isinstance(rule, FunctionApplication) or
+            all(
+                is_atom_a_deterministic_relation(atom, symbol_table)
+                for atom in extract_logic_atoms(rule_ucq)
+            )
+        ):
+            free_vars = extract_logic_free_variables(rule_ucq)
+            rule_ucq = MakeExistentialsImplicit().walk(rule_ucq)
+            result = TranslateToNamedRA().walk(rule_ucq)
+            proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
+            return Projection(result, proj_cols)
+
         rule = convert_rule_to_components_cnf(rule)
     rule = RTO.walk(rule)
 
     if (
         isinstance(rule, FunctionApplication) or
-        isinstance(rule, ExistentialPredicate) or
         all(
             is_atom_a_deterministic_relation(atom, symbol_table)
             for atom in extract_logic_atoms(rule)
         )
     ):
         free_vars = extract_logic_free_variables(rule)
-        rule = MakeExistentialsImplicit().walk(rule)
-        result = TranslateToNamedRA().walk(rule)
+        rule_ucq = MakeExistentialsImplicit().walk(rule)
+        result = TranslateToNamedRA().walk(rule_ucq)
         proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
         return Projection(result, proj_cols)
 
-    #if isinstance(rule, Conjunction):
     rule_cnf = minimize_component_cnf(rule)
+    if isinstance(rule_cnf, Conjunction):
 
-    if len(rule_cnf.formulas) > 1:
-        return components_plan(
-            rule_cnf.formulas, rap.NaturalJoin, symbol_table
-        )
+        if len(rule_cnf.formulas) > 1:
+            return components_plan(
+                rule_cnf.formulas, rap.NaturalJoin, symbol_table
+            )
 
-    sc_cnf = rule_cnf.formulas[0]
-    if isinstance(sc_cnf, Conjunction) and len(sc_cnf.formulas) > 1:
-        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
+        sc_cnf = rule_cnf.formulas[0]
+        if isinstance(sc_cnf, Conjunction) and len(sc_cnf.formulas) > 1:
+            return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     rule_dnf = minimize_ucq_in_dnf(sc_cnf)
     if len(rule_dnf.formulas) > 1:
