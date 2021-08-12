@@ -1,6 +1,7 @@
 import gzip
 import json
 import logging
+import yaml
 import os.path
 from concurrent.futures import Future
 from io import BytesIO
@@ -50,6 +51,7 @@ class Application(tornado.web.Application):
 
         handlers = [
             (r"/v1/empty", EmptyHandler),
+            (r"/v1/engines", EnginesHandler),
             (
                 r"/v1/cancel/({uuid})".format(uuid=uuid_pattern),
                 CancelHandler,
@@ -368,6 +370,23 @@ class DownloadsHandler(tornado.web.RequestHandler):
                 break
             finally:
                 del chunk
+
+
+class EnginesHandler(JSONRequestHandler):
+    def get(self):
+        engines = [e.key for e in self.application.nqm.configs.keys()]
+
+        queries_file = os.path.join(os.path.dirname(__file__), "queries.yaml")
+        with open(queries_file, "r") as stream:
+            queries = yaml.safe_load(stream)
+
+        data = []
+        for engine in engines:
+            res = {"engine": engine}
+            if engine in queries:
+                res["queries"] = queries[engine]
+            data.append(res)
+        self.write_json_reponse(data)
 
 
 def setup_logs():
