@@ -172,7 +172,7 @@ def solve_marg_query(rule, cpl):
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
 
 
-def dalvi_suciu_lift2(rule, symbol_table):
+def dalvi_suciu_lift(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
     to a safe plan according to [1]_. Non-liftable segments are identified
@@ -198,7 +198,7 @@ def dalvi_suciu_lift2(rule, symbol_table):
         return Projection(result, proj_cols)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
-    connected_components = symbol_connected_components_cnf(rule_cnf)
+    connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
         return components_plan(
             connected_components, rap.NaturalJoin, symbol_table
@@ -207,7 +207,7 @@ def dalvi_suciu_lift2(rule, symbol_table):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     rule_dnf = minimize_ucq_in_dnf(rule)
-    connected_components = symbol_connected_components_dnf(rule_dnf)
+    connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
         return components_plan(connected_components, rap.Union, symbol_table)
     else:
@@ -217,7 +217,7 @@ def dalvi_suciu_lift2(rule, symbol_table):
 
     return NonLiftable(rule)
 
-def dalvi_suciu_lift(rule, symbol_table):
+def dalvi_suciu_lift2(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
     to a safe plan according to [1]_. Non-liftable segments are identified
@@ -245,21 +245,25 @@ def dalvi_suciu_lift(rule, symbol_table):
         return Projection(result, proj_cols)
 
     rule_cnf = minimize_component_conj(rule)
+    # Compute the symbol-components: Q = Q1 ∧ · · · ∧ Qm
     rule_cnf_comp = symbol_connected_components_cnf(rule_cnf)
     if len(rule_cnf_comp) > 1:
         return components_plan(
             rule_cnf_comp, rap.NaturalJoin, symbol_table
         )
 
+    # Q is a symbol-connected CNF: Q = d1 ∧ · · · ∧ dk
     sc_cnf = rule_cnf_comp[0]
-    if isinstance(sc_cnf, Conjunction) and len(sc_cnf.formulas) > 1:
+    if isinstance(rule, Conjunction) and len(sc_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
+    # Q is a disjunctive query
     rule_dnf = minimize_component_disj(rule)
     rule_dnf_comp = symbol_connected_components_dnf(rule_dnf)
     if len(rule_dnf_comp) > 1:
         return components_plan(rule_dnf_comp, rap.Union, symbol_table)
     else:
+        # d is symbol-connected, disjunctive query d = c1 ∨ · · · ∨ ck
         has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
         if has_svs:
             return plan
@@ -452,6 +456,20 @@ def separator_variable_plan(expression, separator_variables, symbol_table):
         )
     )
 
+def symbol_connected_components(expression):
+    if not isinstance(expression, NaryLogicOperator):
+        raise ValueError(
+            "Connected components can only be computed "
+            "for n-ary logic operators."
+        )
+    c_matrix = symbol_co_occurence_graph(expression)
+    components = connected_components(c_matrix)
+
+    operation = type(expression)
+    return [
+        operation(tuple(expression.formulas[i] for i in component))
+        for component in components
+    ]
 
 def symbol_connected_components_cnf(expression):
     if not isinstance(expression, NaryLogicOperator):
