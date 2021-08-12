@@ -103,7 +103,12 @@ export class SymbolsController {
       }
     }
     this.dropdown.dropdown('refresh')
+    const previousSelected = this.dropdown.dropdown('get value')
     this.dropdown.dropdown('set selected', selected)
+    if (previousSelected === selected) {
+      // manually trigger a change event to redraw the table
+      this.onSymbolChange()
+    }
   }
 
   /**
@@ -111,7 +116,7 @@ export class SymbolsController {
    * @param {*} evt
    */
   onSymbolChange (evt) {
-    this.activeSymbol = evt.target.value
+    this.activeSymbol = evt ? evt.target.value : this.activeSymbol
 
     // get the active symbol metadata
     const isQuerySymbol = this.results && this.activeSymbol in this.results.results
