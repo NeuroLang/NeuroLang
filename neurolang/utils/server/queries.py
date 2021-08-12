@@ -4,10 +4,12 @@ from neurolang.frontend.query_resolution_expressions import Symbol
 from neurolang.type_system import get_args, is_leq_informative
 from threading import RLock, get_ident
 from typing import AbstractSet, Callable, Dict, Union
+from collections import OrderedDict
 
 import nibabel
 from neurolang.utils.relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
 )
 from neurolang.utils.server.engines import (
     NeurolangEngineConfiguration,
@@ -16,6 +18,29 @@ from neurolang.utils.server.engines import (
 
 
 LOG = logging.getLogger(__name__)
+
+
+class LRUCacheDict(OrderedDict):
+    """Dict with a limited length, ejecting LRUs as needed."""
+
+    def __init__(self, cache_len: int = 15, *args, **kwargs):
+        assert cache_len > 0
+        self.cache_len = cache_len
+
+        super().__init__(*args, **kwargs)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        super().move_to_end(key)
+
+        while len(self) > self.cache_len:
+            oldkey = next(iter(self))
+            super().__delitem__(oldkey)
+
+    def __getitem__(self, key):
+        val = super().__getitem__(key)
+        super().move_to_end(key)
+        return val
 
 
 class NeurolangQueryManager:
@@ -32,7 +57,9 @@ class NeurolangQueryManager:
     """
 
     def __init__(
-        self, options: Dict[NeurolangEngineConfiguration, int]
+        self,
+        options: Dict[NeurolangEngineConfiguration, int],
+        cache_len: int = 15,
     ) -> None:
         """
         By default the `NeurolangQueryManager` creates
@@ -44,10 +71,12 @@ class NeurolangQueryManager:
         options : Dict[NeurolangEngineConfiguration, int]
             a dictionnary defining the types of engines and the number of each
             type to create.
+        cache_len : int, optional
+            the maximum size for the results cache, by default 15
         """
         self.engines = {}
         self._lock = RLock()
-        self.results_cache = {}
+        self.results_cache = LRUCacheDict(cache_len=cache_len)
         self.configs = options
 
         nb_engines = sum(options.values())
@@ -260,7 +289,9 @@ class NeurolangQueryManager:
         self.results_cache[key] = future_res
         return future_res
 
-    def _get_engine_symbols(self, engine_type: str) -> Dict[str, Union[RelationalAlgebraFrozenSet, Symbol]]:
+    def _get_engine_symbols(
+        self, engine_type: str
+    ) -> Dict[str, Union[RelationalAlgebraFrozenSet, Symbol]]:
         """
         Function executed on a ThreadPoolExecutor worker to get the available symbols
         on a neurolang engine.
@@ -289,7 +320,7 @@ class NeurolangQueryManager:
                 )
                 symbols = {}
                 for name in engine.symbols:
-                    if not name.startswith('_'):
+                    if not name.startswith("_"):
                         symbol = engine.symbols[name]
                         if is_leq_informative(symbol.type, Callable):
                             symbols[name] = symbol
