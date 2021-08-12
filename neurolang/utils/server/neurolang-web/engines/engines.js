@@ -23,13 +23,18 @@ export class EnginesController {
           this.ready = true
           this.onRouteEngineChange()
         } else {
-          // An error occurred while fetching the engines.
-          this.engines = undefined
-          console.log('An error occurred while fetching list of engines.')
+          this.onFail()
         }
-      })
+      }).fail(() => this.onFail())
     const queryAccordion = $('.nl-query-info')
     queryAccordion.accordion()
+  }
+
+  onFail () {
+    // An error occurred while fetching the engines.
+    this.engines = undefined
+    console.log('An error occurred while fetching the list of engines.')
+    $('.nl-server-error-modal').modal('show')
   }
 
   /**
