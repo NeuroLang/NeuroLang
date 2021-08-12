@@ -1,91 +1,26 @@
 
-from neurolang.logic.transformations import GuaranteeConjunction, PushExistentialsDown, RemoveTrivialOperations
+from neurolang.logic.transformations import (
+    GuaranteeConjunction, GuaranteeDisjunction,
+    PushExistentialsDown, RemoveTrivialOperations,
+)
 from neurolang.expression_walker import ChainedWalker
-from neurolang.probabilistic.transforms import RTO, add_existentials_except, minimize_component_conjunction
+from neurolang.probabilistic.transforms import (
+    RTO, add_existentials_except,
+    minimize_component_conjunction, minimize_component_disjunction,
+)
 from neurolang.expressions import FunctionApplication
-from neurolang.logic import Conjunction, Disjunction, ExistentialPredicate, NaryLogicOperator
-from neurolang.logic.expression_processing import extract_logic_atoms, extract_logic_free_variables
+from neurolang.logic import (
+    Conjunction, Disjunction,
+    ExistentialPredicate, NaryLogicOperator,
+)
+from neurolang.logic.expression_processing import (
+    extract_logic_atoms, extract_logic_free_variables
+)
 
 import numpy as np
 
 PED = PushExistentialsDown()
 
-
-def convert_rule_to_components_dnf(implication):
-    """Convert datalog rule to CCQ.
-    CCQ's are defined in Dalvi and Suciu - 2012 -
-    The dichotomy of probabilistic inference for union.
-
-    Parameters
-    ----------
-    expression : Implication
-        Datalog rule.
-
-    Returns
-    -------
-    LogicExpression
-       CCQ with the same ground set as the
-       input datalog rule.
-    """
-    implication = RTO.walk(implication)
-    consequent, antecedent = implication.unapply()
-    head_vars = set(consequent.args)
-    existential_vars = (
-        extract_logic_free_variables(antecedent) -
-        set(head_vars)
-    )
-
-    ccq = []
-    expression = Conjunction(plain_expression(antecedent))
-    scc = args_connected_components(expression)
-    for component in scc:
-        for free_var in existential_vars:
-            if free_var in get_component_args(component):
-                ccq.append(ExistentialPredicate(free_var, component))
-            else:
-                ccq.append(component)
-
-    new_ant = Disjunction(tuple(ccq))
-
-    return RTO.walk(new_ant)
-
-def convert_rule_to_components_cnf(implication):
-    """Convert datalog rule to CCQ.
-    CCQ's are defined in Dalvi and Suciu - 2012 -
-    The dichotomy of probabilistic inference for union.
-
-    Parameters
-    ----------
-    expression : Implication
-        Datalog rule.
-
-    Returns
-    -------
-    LogicExpression
-       CCQ with the same ground set as the
-       input datalog rule.
-    """
-    implication = RTO.walk(implication)
-    consequent, antecedent = implication.unapply()
-    head_vars = set(consequent.args)
-    existential_vars = (
-        extract_logic_free_variables(antecedent) -
-        set(head_vars)
-    )
-
-    ccq = []
-    expression = Disjunction(plain_expression(antecedent))
-
-    scc = args_connected_components(expression)
-    for component in scc:
-        if len(existential_vars) > 1:
-            ccq.append(match_existentials(component, existential_vars))
-        else:
-            ccq.append(component)
-
-    new_ant = Conjunction(tuple(ccq))
-
-    return RTO.walk(new_ant)
 
 def match_existentials(component, existential_vars):
     c_args = get_component_args(component)
@@ -97,7 +32,7 @@ def match_existentials(component, existential_vars):
     return component
 
 
-def minimize_component_query(query):
+def minimize_component_conj(query):
     head_variables = extract_logic_free_variables(query)
     if isinstance(query, NaryLogicOperator):
         cq_d_min = Conjunction(tuple(
@@ -115,7 +50,35 @@ def minimize_component_query(query):
 
     cq_min = minimize_component_conjunction(cq_d_min)
     cq_min = add_existentials_except(cq_min, head_variables)
-    return simplify.walk(cq_min)
+
+
+    cq_min = simplify.walk(cq_min)
+
+    return args_connected_components_cnf(cq_min)
+
+    #return simplify.walk(cq_min)
+
+def minimize_component_disj(query):
+    head_variables = extract_logic_free_variables(query)
+    if isinstance(query, NaryLogicOperator):
+        cq_d_min = Disjunction(tuple(
+            minimize_component_conjunction(c)
+            for c in query.formulas
+        ))
+    else:
+        cq_d_min = minimize_component_conjunction(query)
+
+    simplify = ChainedWalker(
+        PushExistentialsDown,
+        RemoveTrivialOperations,
+        GuaranteeDisjunction,
+    )
+
+    cq_min = minimize_component_disjunction(cq_d_min)
+    cq_min = add_existentials_except(cq_min, head_variables)
+    cq_min = simplify.walk(cq_min)
+
+    return args_connected_components_dnf(cq_min)
 
 def get_component_args(q):
     args = ()
@@ -139,7 +102,37 @@ def plain_expression(expression):
 
     return atoms
 
-def args_connected_components(expression):
+def args_connected_components_cnf(expression):
+    if not isinstance(expression, NaryLogicOperator):
+        return expression
+
+    c_matrix = args_co_occurence_graph(expression)
+    components = connected_components(c_matrix)
+
+    operation = Disjunction
+    res = [
+        operation(tuple(expression.formulas[i] for i in component))
+        for component in components
+    ]
+
+    return Conjunction(res)
+
+def args_connected_components_dnf(expression):
+    if not isinstance(expression, NaryLogicOperator):
+        return expression
+
+    c_matrix = args_co_occurence_graph(expression)
+    components = connected_components(c_matrix)
+
+    operation = Disjunction
+    res = [
+        operation(tuple(expression.formulas[i] for i in component))
+        for component in components
+    ]
+
+    return Disjunction(res)
+
+def args_co_occurence_graph(expression):
     if isinstance(expression, FunctionApplication):
         return [expression]
 
@@ -152,13 +145,14 @@ def args_connected_components(expression):
                 c_matrix[i, i + 1 + j] = 1
                 c_matrix[i + 1 + j, i] = 1
 
-    components = connected_components(c_matrix)
+    #components = connected_components(c_matrix)
 
-    operation = type(expression)
-    return [
-        operation(tuple(expression.formulas[i] for i in component))
-        for component in components
-    ]
+    #return [
+    #    operation(tuple(expression.formulas[i] for i in component))
+    #    for component in components
+    #]
+
+    return c_matrix
 
 def connected_components(adjacency_matrix):
     """Connected components of an undirected graph.
