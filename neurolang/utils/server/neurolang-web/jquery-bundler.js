@@ -5,8 +5,9 @@
  * and would access it from window.$
  * See https://stackoverflow.com/questions/34338411/how-to-import-jquery-using-es6-syntax
  */
-import $ from 'jquery'
 
-window.$ = window.jQuery = $
+// import 'jquery'
+// window.$ = window.jQuery = $
+// export default $
 
-export default $
+export default window.$
