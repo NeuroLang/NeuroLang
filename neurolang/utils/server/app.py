@@ -1,3 +1,4 @@
+import os
 import gzip
 import json
 import logging
@@ -86,12 +87,17 @@ class Application(tornado.web.Application):
                 {"path": static_path, "default_filename": "index.html"},
             ),
         ]
+        dev = (
+            os.environ.get("NEUROLANG_SERVER_MODE") is None
+            or os.environ.get("NEUROLANG_SERVER_MODE") == "dev"
+        )
+        cookie_secret = os.environ.get("NEUROLANG_COOKIE_SECRET") or "WWdY+9ILT/u/7hZ24ubLYDA5I1lfgEQMuwRVMp9PY4U="
         settings = dict(
-            cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
+            cookie_secret=cookie_secret,
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
             static_path=static_path,
-            xsrf_cookies=False,
-            debug=True,
+            xsrf_cookies=not dev,
+            debug=dev,
         )
         super().__init__(handlers, **settings)
 
