@@ -2,6 +2,7 @@ import os
 import gzip
 import json
 import logging
+import sys
 import yaml
 import os.path
 from concurrent.futures import Future
@@ -382,9 +383,17 @@ class EnginesHandler(JSONRequestHandler):
     def get(self):
         engines = [e.key for e in self.application.nqm.configs.keys()]
 
-        queries_file = os.path.join(os.path.dirname(__file__), "queries.yaml")
-        with open(queries_file, "r") as stream:
-            queries = yaml.safe_load(stream)
+        dirs = [
+            os.path.join(sys.prefix, "queries"),
+            os.path.dirname(os.path.realpath(__file__)),
+        ]
+        for d in dirs:
+            queries_file = os.path.join(d, "queries.yaml")
+            if os.path.isfile(queries_file):
+                LOG.info(f"Reading queries configuration file for Neurolang: {queries_file}")
+                with open(queries_file, "r") as stream:
+                    queries = yaml.safe_load(stream)
+                break
 
         data = []
         for engine in engines:
