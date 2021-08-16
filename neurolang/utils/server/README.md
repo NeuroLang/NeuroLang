@@ -46,11 +46,13 @@ $ npm run build
 
 from the `neurolang-web` directory. This command will process the various javascript, html and css files and bundle them together in production-ready files. The `npm run build` command will output the built files in a `dist` directory.
 
-The backend [server application](app.py) is configured to serve static files from this directory, so that if you build the frontend application with `npm run build` and then start the backend server, you should be able to see the production frontend application by navigating to [http://localhost:8888/](http://localhost:8888/) (note the port, 8888, which is the one for the tornado server and not the one used by the development frontend server).
+The backend [server application](app.py) is configured to serve static files from this directory, so that if you build the frontend application with `npm run build -- --mode local` and then start the backend server, you should be able to see the production frontend application by navigating to [http://localhost:8888/](http://localhost:8888/) (note the port, 8888, which is the one for the tornado server and not the one used by the development frontend server) (also note that we build the application with a specific mode `-- --mode local`, since by default running `npm run build` will build the application for production, replacing the base api url with the url for the production server, i.e. `http://neurolang-u18.saclay.inria.fr, which would not work on a local machine).
 
 ## Environment variables
 
 Constants used by the frontend application are defined in the [constants.js](neurolang-web/constants.js) file. The value for some of these variables will depend on the environment in which the frontend application is served (dev or prod), allowing for changing the behaviour of the app depending on the environment (for instance the API_URL can be `localhost` in development, and `http://my-production-site.fr` in production).
+
+By default, if you run the frontend application with `npm run dev`, the mode will be `development`. If you build the application using `npm run build`, the mode will be production. To build the application for a specific mode, run `npm run build -- --mode stage` (here mode will be `stage`).
 
 ## Testing
 
