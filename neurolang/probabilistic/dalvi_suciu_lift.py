@@ -2,7 +2,7 @@ import logging
 from functools import reduce
 from itertools import chain, combinations
 from neurolang.probabilistic.dalvi_suciu_lift_transformations import (
-    minimize_component_conj, minimize_component_disj,
+    connected_components, minimize_component_conj, minimize_component_disj, symbol_co_occurence_graph,
     symbol_connected_components_cnf,
     symbol_connected_components_dnf
 )
@@ -67,6 +67,8 @@ from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
 from .transforms import (
     convert_rule_to_ucq,
+    minimize_ucq_in_cnf,
+    minimize_ucq_in_dnf,
     unify_existential_variables,
 )
 from .small_dichotomy_theorem_based_solver import (
@@ -168,8 +170,51 @@ def solve_succ_query(query, cpl_program):
 def solve_marg_query(rule, cpl):
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
 
-
 def dalvi_suciu_lift(rule, symbol_table):
+    '''
+    Translation from a datalog rule which allows disjunctions in the body
+    to a safe plan according to [1]_. Non-liftable segments are identified
+    by the `NonLiftable` expression.
+    [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
+    for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
+    '''
+    if isinstance(rule, Implication):
+        rule = convert_rule_to_ucq(rule)
+    rule = RTO.walk(rule)
+    if (
+        isinstance(rule, FunctionApplication) or
+        all(
+            is_atom_a_deterministic_relation(atom, symbol_table)
+            for atom in extract_logic_atoms(rule)
+        )
+    ):
+        free_vars = extract_logic_free_variables(rule)
+        rule = MakeExistentialsImplicit().walk(rule)
+        result = TranslateToNamedRA().walk(rule)
+        proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
+        return Projection(result, proj_cols)
+
+    rule_cnf = minimize_ucq_in_cnf(rule)
+    connected_components = symbol_connected_components(rule_cnf)
+    if len(connected_components) > 1:
+        return components_plan(
+            connected_components, rap.NaturalJoin, symbol_table
+        )
+    elif len(rule_cnf.formulas) > 1:
+        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
+
+    rule_dnf = minimize_ucq_in_dnf(rule)
+    connected_components = symbol_connected_components(rule_dnf)
+    if len(connected_components) > 1:
+        return components_plan(connected_components, rap.Union, symbol_table)
+    else:
+        has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
+        if has_svs:
+            return plan
+
+    return NonLiftable(rule)
+
+def dalvi_suciu_lift_new(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
     to a safe plan according to [1]_. Non-liftable segments are identified
@@ -206,7 +251,7 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     # Q is a symbol-connected CNF: Q = d1 ∧ · · · ∧ dk
     sc_cnf = rule_cnf_comp[0]
-    if isinstance(rule, Conjunction) and len(sc_cnf.formulas) > 1:
+    if isinstance(rule_cnf, Conjunction) and len(sc_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     # Q is a disjunctive query
@@ -221,6 +266,21 @@ def dalvi_suciu_lift(rule, symbol_table):
             return plan
 
     return NonLiftable(rule)
+
+def symbol_connected_components(expression):
+    if not isinstance(expression, NaryLogicOperator):
+        raise ValueError(
+            "Connected components can only be computed "
+            "for n-ary logic operators."
+        )
+    c_matrix = symbol_co_occurence_graph(expression)
+    components = connected_components(c_matrix)
+
+    operation = type(expression)
+    return [
+        operation(tuple(expression.formulas[i] for i in component))
+        for component in components
+    ]
 
 
 def has_separator_variables(query, symbol_table):
