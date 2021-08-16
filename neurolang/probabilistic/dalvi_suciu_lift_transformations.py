@@ -133,7 +133,7 @@ def symbol_connected_components_cnf(expression):
     c_matrix = symbol_co_occurence_graph(expression)
     components = connected_components(c_matrix)
 
-    operation = Conjunction
+    operation = Disjunction
     return [
         operation(tuple(expression.formulas[i] for i in component))
         for component in components
@@ -148,7 +148,7 @@ def symbol_connected_components_dnf(expression):
     c_matrix = symbol_co_occurence_graph(expression)
     components = connected_components(c_matrix)
 
-    operation = Disjunction
+    operation = Conjunction
     return [
         operation(tuple(expression.formulas[i] for i in component))
         for component in components
