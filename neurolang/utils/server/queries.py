@@ -165,6 +165,11 @@ class NeurolangQueryManager:
                     else:
                         res = {"ans": res}
                     LOG.debug(f"[Thread - {get_ident()}] - Query solved.")
+                    for s in engine.program_ir.probabilistic_predicate_symbols:
+                        try:
+                            res[s]._is_probabilistic = True
+                        except KeyError:
+                            pass
                     return res
             except Exception as e:
                 LOG.debug(

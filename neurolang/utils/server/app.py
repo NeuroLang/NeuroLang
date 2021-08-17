@@ -1,23 +1,21 @@
-from nibabel.nifti1 import Nifti1Image
-import numpy as np
-import pandas as pd
-from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
-import os
 import gzip
 import json
 import logging
-import sys
-import yaml
+import os
 import os.path
+import sys
 from concurrent.futures import Future
 from io import BytesIO
 from uuid import uuid4
 
+import pandas as pd
 import tornado.ioloop
 import tornado.iostream
 import tornado.options
 import tornado.web
 import tornado.websocket
+import yaml
+from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
 from neurolang.utils.server.engines import (
     DestrieuxEngineConf,
     NeurosynthEngineConf,

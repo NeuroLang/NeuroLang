@@ -225,6 +225,7 @@ class QueryResults:
         result["row_type"] = [str(t) for t in get_args(symbol.row_type)]
         result["columns"] = [str(c) for c in symbol.columns]
         result["size"] = df.shape[0]
+        result["probabilistic"] = hasattr(symbol, "_is_probabilistic") and symbol._is_probabilistic
         return result
 
     def get_result_item_values(

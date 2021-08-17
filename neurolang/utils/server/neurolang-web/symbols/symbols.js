@@ -84,7 +84,8 @@ export class SymbolsController {
     if (this.results) {
       resultKeys = Object.keys(this.results.results)
       resultKeys.sort()
-      addItemsToDropdownMenu(menu, resultKeys, 'Query symbols', 'symbol query-symbol')
+      const probClasses = resultKeys.map((val) => this.results.results[val].probabilistic ? 'probabilistic' : '')
+      addItemsToDropdownMenu(menu, resultKeys, 'Query symbols', 'symbol query-symbol', probClasses)
       selected = resultKeys.indexOf(defaultSymbol) > 0 ? defaultSymbol : resultKeys[0]
     }
     // Then add the base symbols and functions
@@ -402,11 +403,15 @@ function renderVBROverlay (data, type, row, meta) {
  * @param {*} header
  * @param {*} classes
  */
-function addItemsToDropdownMenu (menu, items, header, classes) {
+function addItemsToDropdownMenu (menu, items, header, classes, itemClasses) {
   menu.append($('<div class="divider"></div>'))
   menu.append($(`<div class="header">${header}</div>`))
   menu.append($('<div class="divider"></div>'))
-  items.forEach(elt => {
-    menu.append($(`<div class="item ${classes}" data-value="${elt}">${elt}</div>`))
+  items.forEach((elt, idx) => {
+    const div = $(`<div class="item ${classes}" data-value="${elt}">${elt}</div>`)
+    if (itemClasses) {
+      div.addClass(itemClasses[idx])
+    }
+    menu.append(div)
   })
 }

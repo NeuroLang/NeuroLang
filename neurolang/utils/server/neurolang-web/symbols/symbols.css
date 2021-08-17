@@ -39,6 +39,10 @@
     color: grey;
 }
 
+.nl-symbols-dropdown .menu .item.probabilistic {
+    color: #276f86;
+}
+
 .nl-symbols-help {
     margin-left: .3em !important;
 }
