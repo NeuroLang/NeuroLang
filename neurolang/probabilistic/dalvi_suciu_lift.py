@@ -332,8 +332,7 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
         )
         if has_safe_plan:
             return plan
-    else:
-        return False, None
+    return False, None
 
 
 def _get_disjuncts_containing_atom_with_all_key_attributes(ucq, symbol_table):

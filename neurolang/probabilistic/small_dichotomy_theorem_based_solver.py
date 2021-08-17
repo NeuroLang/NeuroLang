@@ -30,9 +30,10 @@ from ..datalog.expression_processing import (
     remove_conjunction_duplicates,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
+from ..exceptions import UnsupportedSolverError
 from ..expression_walker import ExpressionWalker
 from ..expressions import Symbol
-from ..logic import FALSE, Conjunction, Implication
+from ..logic import FALSE, Conjunction, Disjunction, Implication, Negation
 from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import (
     ColumnStr,
@@ -42,7 +43,6 @@ from ..relational_algebra import (
     RelationalAlgebraPushInSelections,
     str2columnstr_constant,
 )
-from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
@@ -180,6 +180,19 @@ def solve_succ_query(query, cpl_program):
                 )
             )
         )
+        if (
+            isinstance(shattered_query.antecedent, Disjunction)
+            or
+            _get_existential_variables_in_atoms(
+                shattered_query, ProbabilisticFactSet
+            )
+            - _get_existential_variables_in_atoms(
+                shattered_query, ProbabilisticChoiceSet
+            )
+        ):
+            raise UnsupportedSolverError(
+                "Cannot solve queries with probabilstic choices"
+            )
         if not is_hierarchical_without_self_joins(
             shattered_query_probabilistic_body
         ):
@@ -234,3 +247,25 @@ def solve_marg_query(rule, cpl):
         set.
     """
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
+
+
+def _get_existential_variables_in_atoms(query, functor_type):
+    eq_vars = set()
+    head_vars = set(
+        arg for arg in query.consequent.args if isinstance(arg, Symbol)
+    )
+    if isinstance(query.antecedent, Conjunction):
+        conjuncts = query.antecedent.formulas
+    else:
+        conjuncts = (query.antecedent,)
+    for conjunct in conjuncts:
+        literal = (
+            conjunct.formula if isinstance(conjunct, Negation) else conjunct
+        )
+        if isinstance(literal.functor, functor_type):
+            eq_vars |= set(
+                arg
+                for arg in literal.args
+                if isinstance(arg, Symbol) and arg not in head_vars
+            )
+    return eq_vars
