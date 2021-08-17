@@ -221,21 +221,13 @@ def convert_ucq_to_ccq(expression):
 
     expression = simplify.walk(expression)
 
-    #if isinstance(expression, Disjunction):
-    #    outter_op = Disjunction
-    #    inner_op = Conjunction
-    #else:
-
-    outter_op = Conjunction
-    inner_op = Disjunction
-
     p_expression = Conjunction(plain_expression(expression))
     c_matrix = args_co_occurence_graph(p_expression)
     components = connected_components(c_matrix)
 
     if len(components) > 1:
-        new_exp = outter_op([
-            inner_op(tuple(p_expression.formulas[i] for i in component))
+        new_exp = Conjunction([
+            Disjunction(tuple(p_expression.formulas[i] for i in component))
             for component in components
         ])
     else:
