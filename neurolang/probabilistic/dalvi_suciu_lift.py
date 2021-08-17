@@ -1,11 +1,6 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
-from neurolang.probabilistic.dalvi_suciu_lift_transformations import (
-    connected_components, minimize_component_conj, minimize_component_disj, symbol_co_occurence_graph,
-    symbol_connected_components_cnf,
-    symbol_connected_components_dnf
-)
 
 import numpy as np
 
@@ -17,6 +12,7 @@ from ..datalog.expression_processing import (
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NonLiftableException
 from ..expression_walker import (
+    ChainedWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match,
@@ -35,7 +31,9 @@ from ..logic.expression_processing import (
     extract_logic_free_variables,
 )
 from ..logic.transformations import (
+    GuaranteeDisjunction,
     MakeExistentialsImplicit,
+    PushExistentialsDown,
     RemoveTrivialOperations,
     GuaranteeConjunction,
 )
@@ -170,7 +168,7 @@ def solve_succ_query(query, cpl_program):
 def solve_marg_query(rule, cpl):
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
 
-def dalvi_suciu_lift_old(rule, symbol_table):
+def dalvi_suciu_lift(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
     to a safe plan according to [1]_. Non-liftable segments are identified
@@ -180,6 +178,7 @@ def dalvi_suciu_lift_old(rule, symbol_table):
     '''
     if isinstance(rule, Implication):
         rule = convert_rule_to_ucq(rule)
+        rule = convert_ucq_to_ccq(rule)
     rule = RTO.walk(rule)
     if (
         isinstance(rule, FunctionApplication) or
@@ -214,58 +213,80 @@ def dalvi_suciu_lift_old(rule, symbol_table):
 
     return NonLiftable(rule)
 
-def dalvi_suciu_lift(rule, symbol_table):
-    '''
-    Translation from a datalog rule which allows disjunctions in the body
-    to a safe plan according to [1]_. Non-liftable segments are identified
-    by the `NonLiftable` expression.
+def convert_ucq_to_ccq(expression):
+    simplify = ChainedWalker(
+        PushExistentialsDown,
+        RemoveTrivialOperations
+    )
 
-    [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
-    for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
-    '''
-    if isinstance(rule, Implication):
-        rule = convert_rule_to_ucq(rule)
+    expression = simplify.walk(expression)
 
-    rule = RTO.walk(rule)
+    #if isinstance(expression, Disjunction):
+    #    outter_op = Disjunction
+    #    inner_op = Conjunction
+    #else:
+
+    outter_op = Conjunction
+    inner_op = Disjunction
+
+    p_expression = Conjunction(plain_expression(expression))
+    c_matrix = args_co_occurence_graph(p_expression)
+    components = connected_components(c_matrix)
+
+    if len(components) > 1:
+        new_exp = outter_op([
+            inner_op(tuple(p_expression.formulas[i] for i in component))
+            for component in components
+        ])
+    else:
+        if isinstance(expression, Disjunction):
+            operation = Disjunction
+        else:
+            operation = Conjunction
+        new_exp = operation(tuple(p_expression.formulas[i] for i in components[0]))
+
+    return new_exp
+
+def get_component_args(q):
+    args = ()
+    if isinstance(q, NaryLogicOperator):
+        formulas = q.formulas
+        for f in formulas:
+            args = args + f.args
+    else:
+        args = q.args
+
+    return args
+
+def plain_expression(expression):
+    if isinstance(expression, FunctionApplication):
+        return (expression,)
 
     if (
-        isinstance(rule, FunctionApplication) or
-        all(
-            is_atom_a_deterministic_relation(atom, symbol_table)
-            for atom in extract_logic_atoms(rule)
-        )
+        isinstance(expression, ExistentialPredicate) and
+        not isinstance(expression.body, NaryLogicOperator)
     ):
-        free_vars = extract_logic_free_variables(rule)
-        rule_ucq = MakeExistentialsImplicit().walk(rule)
-        result = TranslateToNamedRA().walk(rule_ucq)
-        proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
-        return Projection(result, proj_cols)
+        return (expression.body,)
+    elif (
+        isinstance(expression, ExistentialPredicate) and
+        isinstance(expression.body, NaryLogicOperator)
+    ):
+        atoms = ()
+        head = expression.head
+        expression = expression.body
+        operation = type(expression)
+        for f in expression.formulas:
+            atom = plain_expression(f)
+            atoms = atoms + atom
 
-    rule_cnf = minimize_ucq_in_cnf(rule)
-    # Compute the symbol-components: Q = Q1 ∧ · · · ∧ Qm
-    rule_cnf_comp = symbol_connected_components_cnf(rule_cnf)
-    if len(rule_cnf_comp) > 1:
-        return components_plan(
-            rule_cnf_comp, rap.NaturalJoin, symbol_table
-        )
+        return (ExistentialPredicate(head, operation(atoms)),)
 
-    # Q is a symbol-connected CNF: Q = d1 ∧ · · · ∧ dk
-    sc_cnf = rule_cnf_comp[0]
-    if len(sc_cnf.formulas) > 1:
-        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
+    atoms = ()
+    for f in expression.formulas:
+            atom = plain_expression(f)
+            atoms = atoms + atom
 
-    # Q is a disjunctive query
-    rule_dnf = minimize_ucq_in_dnf(rule)
-    rule_dnf_comp = symbol_connected_components_dnf(rule_dnf)
-    if len(rule_dnf_comp) > 1:
-        return components_plan(rule_dnf_comp, rap.Union, symbol_table)
-    else:
-        # d is symbol-connected, disjunctive query d = c1 ∨ · · · ∨ ck
-        has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
-        if has_svs:
-            return plan
-
-    return NonLiftable(rule)
+    return atoms
 
 def symbol_connected_components(expression):
     if not isinstance(expression, NaryLogicOperator):
@@ -282,6 +303,92 @@ def symbol_connected_components(expression):
         for component in components
     ]
 
+def symbol_co_occurence_graph(expression):
+    """Symbol co-ocurrence graph expressed as
+    an adjacency matrix.
+
+    Parameters
+    ----------
+    expression : NAryLogicExpression
+        logic expression for which the adjacency matrix is computed.
+
+    Returns
+    -------
+    numpy.ndarray
+        squared binary array where a component is 1 if there is a
+        shared predicate symbol between two subformulas of the
+        logic expression.
+    """
+    c_matrix = np.zeros((len(expression.formulas),) * 2)
+    for i, formula in enumerate(expression.formulas):
+        atom_symbols = set(a.functor for a in extract_logic_atoms(formula))
+        for j, formula_ in enumerate(expression.formulas[i + 1:]):
+            atom_symbols_ = set(
+                a.functor for a in extract_logic_atoms(formula_)
+            )
+            if not atom_symbols.isdisjoint(atom_symbols_):
+                c_matrix[i, i + 1 + j] = 1
+                c_matrix[i + 1 + j, i] = 1
+    return c_matrix
+
+def args_co_occurence_graph(expression):
+    """Arguments co-ocurrence graph expressed as
+    an adjacency matrix.
+
+    Parameters
+    ----------
+    expression : NAryLogicExpression
+        logic expression for which the adjacency matrix is computed.
+
+    Returns
+    -------
+    numpy.ndarray
+        squared binary array where a component is 1 if there is a
+        shared predicate symbol between two subformulas of the
+        logic expression.
+    """
+    if isinstance(expression, FunctionApplication):
+        return [expression]
+
+    c_matrix = np.zeros((len(expression.formulas),) * 2)
+    for i, formula in enumerate(expression.formulas):
+        f_args = set(b for a in extract_logic_atoms(formula) for b in a.args)
+        for j, formula_ in enumerate(expression.formulas[i + 1:]):
+            f_args_ = set(b for a in extract_logic_atoms(formula_) for b in a.args)
+            if not f_args.isdisjoint(f_args_):
+                c_matrix[i, i + 1 + j] = 1
+                c_matrix[i + 1 + j, i] = 1
+
+    return c_matrix
+
+def connected_components(adjacency_matrix):
+    """Connected components of an undirected graph.
+
+    Parameters
+    ----------
+    adjacency_matrix : numpy.ndarray
+        squared array representing the adjacency
+        matrix of an undirected graph.
+
+    Returns
+    -------
+    list of integer sets
+        connected components of the graph.
+    """
+    node_idxs = set(range(adjacency_matrix.shape[0]))
+    components = []
+    while node_idxs:
+        idx = node_idxs.pop()
+        component = {idx}
+        component_follow = [idx]
+        while component_follow:
+            idx = component_follow.pop()
+            idxs = set(adjacency_matrix[idx].nonzero()[0]) - component
+            component |= idxs
+            component_follow += idxs
+        components.append(component)
+        node_idxs -= component
+    return components
 
 def has_separator_variables(query, symbol_table):
     """Returns true if `query` has a separator variable and the plan.
