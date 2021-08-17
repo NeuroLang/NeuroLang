@@ -62,7 +62,7 @@ def calculate_image_center(image: SpatialImage):
     return [int(c) for c in coords]
 
 
-def serializeVBR(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
+def serializeVBR(image_row: pd.Series):
     """
     Serialize a Volumetric Brain Region object.
 
@@ -77,6 +77,8 @@ def serializeVBR(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
         a dict containing the base64 encoded image, as well as min and max
         values, and a hash of the image.
     """
+    index = image_row["index"]
+    vbr = image_row[1]
     if isinstance(vbr, EmptyRegion):
         return "Empty Region"
 
@@ -91,6 +93,7 @@ def serializeVBR(vbr: Union[ExplicitVBR, ExplicitVBROverlay]):
         "image": base64_encode_spatial(image),
         "hash": hash,
         "center": calculate_image_center(image),
+        "idx": index
     }
 
 
@@ -248,8 +251,8 @@ class QueryResults:
         rows = df.iloc[self.start : self.start + self.length].copy()
         for col, col_type in zip(rows.columns, row_type.__args__):
             if col_type == ExplicitVBR or col_type == ExplicitVBROverlay:
-                rows.loc[:, col] = rows[col].apply(serializeVBR)
+                rows[col] = rows[col].reset_index().apply(serializeVBR, axis=1).values
             elif rows[col].dtype == np.object_:
-                rows.loc[:, col] = rows[col].astype(str)
+                rows[col] = rows[col].astype(str)
 
         return rows.values.tolist()

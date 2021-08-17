@@ -1,3 +1,7 @@
+#tabTable_paginate .ui.pagination.menu {
+    flex-wrap: wrap;
+}
+
 .nl-symbols-viewer-container {
     margin: 2rem 0;
     display: flex !important;

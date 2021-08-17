@@ -1,3 +1,7 @@
+from nibabel.nifti1 import Nifti1Image
+import numpy as np
+import pandas as pd
+from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
 import os
 import gzip
 import json
@@ -79,7 +83,7 @@ class Application(tornado.web.Application):
                 NiftiiImageHandler,
             ),
             (
-                r"/v1/download/({uuid})".format(uuid=uuid_pattern),
+                r"/v1/download/(.+)",
                 DownloadsHandler,
             ),
             (
@@ -92,7 +96,10 @@ class Application(tornado.web.Application):
             os.environ.get("NEUROLANG_SERVER_MODE") is None
             or os.environ.get("NEUROLANG_SERVER_MODE") == "dev"
         )
-        cookie_secret = os.environ.get("NEUROLANG_COOKIE_SECRET") or "WWdY+9ILT/u/7hZ24ubLYDA5I1lfgEQMuwRVMp9PY4U="
+        cookie_secret = (
+            os.environ.get("NEUROLANG_COOKIE_SECRET")
+            or "WWdY+9ILT/u/7hZ24ubLYDA5I1lfgEQMuwRVMp9PY4U="
+        )
         settings = dict(
             cookie_secret=cookie_secret,
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
@@ -330,24 +337,90 @@ class NiftiiImageHandler(JSONRequestHandler):
 
 
 class DownloadsHandler(tornado.web.RequestHandler):
+    """
+    Handle requests for file downloads.
+    """
+
     def set_default_headers(self):
         self.set_header("Access-Control-Allow-Origin", "*")
         self.set_header("Access-Control-Allow-Headers", "x-requested-with")
         self.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
         self.set_header("Content-Type", "application/octet-stream")
 
-    async def get(self, uuid: str):
+    def save_image_to_gzip(
+        self, df: pd.DataFrame, col: str, idx: str
+    ) -> BytesIO:
+        """
+        Save an image as nii.gz to a bytes array. The image should be an
+        ExplicitVBR or ExplicitVBROverlay object located in the given
+        dataframe at idx, col position.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            the dataframe containing the images
+        col : str
+            the col index for the image in the df
+        idx : str
+            the row index for the image in the df
+
+        Returns
+        -------
+        BytesIO
+            the bytes buffer with the compressed image data
+
+        Raises
+        ------
+        tornado.web.HTTPError
+            404 if object at given col, row indices is not the right type.
+        """
+        image = df.iat[int(idx), int(col)]
+        if not isinstance(image, (ExplicitVBR, ExplicitVBROverlay)):
+            raise tornado.web.HTTPError(
+                status_code=404, log_message="Invalid file format to download"
+            )
+        data = BytesIO(gzip.compress(image.spatial_image().dataobj.tobytes()))
+        return data
+
+    async def get(self, key: str):
+        """
+        Serve the file for the given key. Required query parameters are:
+        - symbol: the symbol to download
+        Optional query parameters:
+        - col
+        - idx
+        the col and row index when a specific image file should be downloaded
+        instead of the whole dataframe.
+
+        Parameters
+        ----------
+        key : str
+            the unique id key, either for a query or for an engine type
+
+        Raises
+        ------
+        tornado.web.HTTPError
+            404 if key is invalid, or results are not available
+        """
         # 1. Get the symbol to download
         symbol = self.get_argument("symbol")
-        LOG.debug(
-            f"Preparing download file for request {uuid} and symbol {symbol}."
-        )
+        col = self.get_argument("col", None)
+        idx = self.get_argument("idx", None)
         try:
-            future = self.application.nqm.get_result(uuid)
-        except KeyError:
-            raise tornado.web.HTTPError(
-                status_code=404, log_message="uuid not found"
+            future = self.application.nqm.get_result(key)
+            LOG.debug(
+                f"Preparing image file for query {key} and symbol {symbol}."
             )
+        except KeyError:
+            try:
+                future = self.application.nqm.get_symbols(key)
+                LOG.debug(
+                    f"Preparing image file for engine {key} and symbol {symbol}."
+                )
+            except KeyError:
+                raise tornado.web.HTTPError(
+                    status_code=404, log_message="uuid not found"
+                )
         if not (future.done() and future.result()):
             raise tornado.web.HTTPError(
                 status_code=404, log_message="query does not have results"
@@ -356,14 +429,21 @@ class DownloadsHandler(tornado.web.RequestHandler):
         ras = results[symbol]
         df = ras.as_pandas_dataframe()
 
-        # 2. Write the dataframe as gzip bytes
-        data = BytesIO(
-            gzip.compress(df.to_csv(index=False, compression="gzip").encode())
-        )
+        # 2. Write the object as gzip bytes
+        if col is not None and idx is not None:
+            data = self.save_image_to_gzip(df, col, idx)
+            filename = symbol + "_" + idx + ".nii.gz"
+        else:
+            data = BytesIO(
+                gzip.compress(
+                    df.to_csv(index=False, compression="gzip").encode()
+                )
+            )
+            filename = symbol + ".csv.gz"
 
         # 3. Stream the data in chunks to avoid blocking the server
         self.set_header(
-            "Content-Disposition", "attachment; filename=" + symbol + ".csv.gz"
+            "Content-Disposition", "attachment; filename=" + filename
         )
         chunk_size = 1024 * 1024 * 1  # 1 MiB
         while True:
@@ -390,7 +470,9 @@ class EnginesHandler(JSONRequestHandler):
         for d in dirs:
             queries_file = os.path.join(d, "queries.yaml")
             if os.path.isfile(queries_file):
-                LOG.info(f"Reading queries configuration file for Neurolang: {queries_file}")
+                LOG.info(
+                    f"Reading queries configuration file for Neurolang: {queries_file}"
+                )
                 with open(queries_file, "r") as stream:
                     queries = yaml.safe_load(stream)
                 break

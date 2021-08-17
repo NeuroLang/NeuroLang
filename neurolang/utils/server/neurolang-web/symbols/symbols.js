@@ -265,6 +265,7 @@ export class SymbolsController {
       position: 'top center',
       lastResort: 'top center'
     })
+    $('.nl-image-download').on('click', (evt) => this.onImageDownloadClicked(evt))
   }
 
   /**
@@ -333,6 +334,18 @@ export class SymbolsController {
     const imageData = this.tableData.results[this.activeSymbol].values[row][col]
     this.viewer.setCoordinates(imageData.center)
   }
+
+  onImageDownloadClicked (evt) {
+    // get the item's image data
+    const elmt = $(evt.target).parents('.nl-image-download')
+    const idx = elmt.data('idx')
+    const col = elmt.data('col')
+    let url = (this.results && this.activeSymbol in this.results.results)
+      ? `${API_ROUTE.downloads}/${this.results.uuid}`
+      : `${API_ROUTE.downloads}/${this.engine}`
+    url += `?symbol=${this.activeSymbol}&col=${col}&idx=${idx}`
+    elmt.attr('href', url)
+  }
 }
 
 /**
@@ -369,7 +382,10 @@ function renderVBROverlay (data, type, row, meta) {
       <i class="crosshairs icon"></i></button>
       <button class="ui tiny icon button nl-vbr-overlay-hist nl-overlay-control"
       data-row=${meta.row} data-col=${meta.col} data-tooltip="Show image histogram">
-      <i class="chart bar outline icon"></i></button></div>
+      <i class="chart bar outline icon"></i></button>
+      <a href="#" class="nl-image-download" data-idx=${data.idx} data-col=${meta.col}>
+      <button class="ui tiny circular icon button" data-tooltip="Download image file">
+      <i class="download icon"></i></button></a></div>
       `
       return imgDiv
     }

@@ -168,7 +168,7 @@ export class PapayaViewer {
   showImageHistogram (imageId) {
     const index = this.imageIndex(imageId)
     const trace = {
-      x: papayaContainers[0].viewer.screenVolumes[index].volume.imageData.data.filter((elt) => elt > 0),
+      x: papayaContainers[0].viewer.screenVolumes[index].volume.imageData.data.filter((elt) => elt !== 0),
       type: 'histogram'
     }
     const data = [trace]
