@@ -192,7 +192,9 @@ def solve_succ_query(query, cpl_program):
             )
         ):
             raise UnsupportedSolverError(
-                "Cannot solve queries with probabilstic choices"
+                "Cannot solve queries with existentially quantified variable "
+                "occurring in probabilistic fact but not in any probabilistic "
+                "choice, or disjunctive queries"
             )
         if not is_hierarchical_without_self_joins(
             shattered_query_probabilistic_body
