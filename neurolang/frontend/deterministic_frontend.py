@@ -4,6 +4,7 @@ import numpy as np
 
 from .. import expressions as ir
 from ..datalog import DatalogProgram
+from ..datalog.basic_representation import NumpyFunctionsMixin
 from ..datalog.chase import Chase
 from ..datalog.aggregation import (
     DatalogWithAggregationMixin,
@@ -76,6 +77,7 @@ class RegionFrontendDatalogSolver(
     DatalogProgramNegationMixin,
     DatalogProgram,
     ExpressionBasicEvaluator,
+    NumpyFunctionsMixin,
 ):
     """
     DatalogProgram preloaded with Region symbols and builtins, and

@@ -33,6 +33,7 @@ from ..datalog.aggregation import (
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
 )
+from ..datalog.basic_representation import NumpyFunctionsMixin
 from ..datalog.chase import Chase
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.expression_processing import (
@@ -94,6 +95,7 @@ class RegionFrontendCPLogicSolver(
     DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
     ExpressionBasicEvaluator,
+    NumpyFunctionsMixin,
 ):
     pass
 
