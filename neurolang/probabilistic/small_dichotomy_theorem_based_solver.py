@@ -43,6 +43,7 @@ from ..relational_algebra import (
     RelationalAlgebraPushInSelections,
     str2columnstr_constant,
 )
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException

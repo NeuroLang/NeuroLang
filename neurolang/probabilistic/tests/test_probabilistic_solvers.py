@@ -737,6 +737,13 @@ def test_program_with_variable_equality(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.parametrize("solver", [
+    weighted_model_counting,
+    pytest.param(small_dichotomy_theorem_based_solver, marks=pytest.mark.xfail(
+        reason="Existential variable in probfact leads to unsupported noisy-or"
+    )),
+    dalvi_suciu_lift,
+])
 def test_repeated_variable_probabilistic_rule(solver):
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
