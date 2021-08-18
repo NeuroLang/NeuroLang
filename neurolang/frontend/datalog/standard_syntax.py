@@ -64,6 +64,7 @@ GRAMMAR = u"""
              | function_application
              | '...' ;
 
+    signed_int_ext_identifier = [ '-' ] int_ext_identifier ;
     int_ext_identifier = identifier | ext_identifier ;
     ext_identifier = '@'identifier;
 
@@ -79,7 +80,7 @@ GRAMMAR = u"""
 
     exponent = literal
              | function_application
-             | int_ext_identifier
+             | signed_int_ext_identifier
              | '(' @:argument ')' ;
 
     literal = number
@@ -294,6 +295,12 @@ class DatalogSemantics:
         else:
             f = ast[0]
         return FunctionApplication(f, args=ast[2])
+
+    def signed_int_ext_identifier(self, ast):
+        if isinstance(ast, Expression):
+            return ast
+        else:
+            return Constant(mul)(Constant(-1), ast[1])
 
     def identifier(self, ast):
         return Symbol(ast)

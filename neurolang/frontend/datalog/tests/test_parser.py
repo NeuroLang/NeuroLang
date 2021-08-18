@@ -208,7 +208,7 @@ def test_probabilistic_fact():
     d = Symbol("d")
     x = Symbol("x")
     B = Symbol("B")
-    res = parser("B(x) :: exp((-1 * d) / 5.0) :- A(x, d) & (d < 0.8)")
+    res = parser("B(x) :: exp(-d / 5.0) :- A(x, d) & (d < 0.8)")
     expected = Union(
         (
             Implication(
