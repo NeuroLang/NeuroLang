@@ -1,5 +1,14 @@
-# List of docker images that will be built when running the `build-image` cli with the
-# -f option. Images should have a unique lowercase name.
+# List of example programs to display on the Neurolang web app.
+
+# Top level keys should be keys of neurolang.utils.server.engines.NeurolangEngineConfiguration instances
+# passed to the web app (see neurolang.utils.server.app:main).
+
+# For each engine instance, a list of program examples can be specified, with fields
+# - id : unique string id for the program
+# - title : the string title describing the program
+# - shortTitle : shorter string title used to link to the program in the menu
+# - query : the neurolang program
+# - description : markdown text describing the program
 neurosynth:
   - id: "neuro1"
     title: "Coordinate-based meta-analysis (CBMA) on the Neurosynth database"
