@@ -53,7 +53,7 @@ GRAMMAR = u"""
     constant_predicate = identifier'(' ','.{ literal } ')' ;
 
     negated_predicate = ('~' | '\u00AC' ) predicate ;
-    existential_body = arguments such_that composite_predicate;
+    existential_body = arguments such_that ( conjunction_symbol ).{ predicate }+ ;
     existential_predicate = \
         exists '(' @:existential_body ')' ;
 
@@ -240,7 +240,9 @@ class DatalogSemantics:
 
     def existential_predicate(self, ast):
         exp = ast[2]
-        if isinstance(exp, list):
+        if len(exp) == 1:
+            exp = exp[0]
+        else:
             exp = Conjunction(tuple(exp))
 
         for arg in ast[0]:
