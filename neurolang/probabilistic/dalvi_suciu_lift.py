@@ -12,7 +12,6 @@ from ..datalog.expression_processing import (
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NonLiftableException
 from ..expression_walker import (
-    ChainedWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match,
@@ -31,7 +30,7 @@ from ..logic.expression_processing import (
     extract_logic_free_variables,
 )
 from ..logic.transformations import (
-    GuaranteeDisjunction,
+    CollapseConjunctions,
     MakeExistentialsImplicit,
     PushExistentialsDown,
     RemoveTrivialOperations,
@@ -65,6 +64,7 @@ from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
 from .transforms import (
     convert_rule_to_ucq,
+    convert_to_cnf_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables,
@@ -168,6 +168,7 @@ def solve_succ_query(query, cpl_program):
 def solve_marg_query(rule, cpl):
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
 
+
 def dalvi_suciu_lift(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
@@ -213,72 +214,89 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     return NonLiftable(rule)
 
+
 def convert_ucq_to_ccq(expression):
-    simplify = ChainedWalker(
-        PushExistentialsDown,
-        RemoveTrivialOperations
-    )
+    expression = convert_to_cnf_ucq(expression)
 
-    expression = simplify.walk(expression)
+    disjuntive_expressions = disjuntive_expressions_cnf(expression)
 
-    p_expression = Conjunction(plain_expression(expression))
-    c_matrix = args_co_occurence_graph(p_expression)
-    components = connected_components(c_matrix)
-
-    if len(components) > 1:
-        new_exp = Conjunction([
-            Disjunction(tuple(p_expression.formulas[i] for i in component))
-            for component in components
-        ])
+    if len(disjuntive_expressions) > 0:
+        new_expression = rewrite_disjunctions_in_components(disjuntive_expressions)
     else:
-        if isinstance(expression, Disjunction):
-            operation = Disjunction
-        else:
-            operation = Conjunction
-        new_exp = operation(tuple(p_expression.formulas[i] for i in components[0]))
+        new_expression = rewrite_atoms_in_components(expression)
 
-    return new_exp
+    return new_expression
 
-def get_component_args(q):
-    args = ()
-    if isinstance(q, NaryLogicOperator):
-        formulas = q.formulas
-        for f in formulas:
-            args = args + f.args
-    else:
-        args = q.args
 
-    return args
+def disjuntive_expressions_cnf(expression):
+    disjunctions = []
+    if not isinstance(expression, Conjunction):
+        raise ValueError(
+            "Expression not in CNF"
+        )
 
-def plain_expression(expression):
-    if isinstance(expression, FunctionApplication):
-        return (expression,)
-
-    if (
-        isinstance(expression, ExistentialPredicate) and
-        not isinstance(expression.body, NaryLogicOperator)
-    ):
-        return (expression.body,)
-    elif (
-        isinstance(expression, ExistentialPredicate) and
-        isinstance(expression.body, NaryLogicOperator)
-    ):
-        atoms = ()
-        head = expression.head
-        expression = expression.body
-        operation = type(expression)
+    if any(map(lambda x: isinstance(x, Disjunction), expression.formulas)):
         for f in expression.formulas:
-            atom = plain_expression(f)
-            atoms = atoms + atom
+            disjunctions.append(f)
 
-        return (ExistentialPredicate(head, operation(atoms)),)
+    return disjunctions
 
-    atoms = ()
+
+def rewrite_disjunctions_in_components(disjuntive_expressions):
+    components = []
+
+    for f in disjuntive_expressions:
+        c_matrix = args_co_occurence_graph(f)
+        component = connected_components(c_matrix)
+
+        for e in component:
+            disj = []
+            for i in e:
+                disj.append(f.formulas[i])
+
+            temp = Disjunction(disj)
+            components.append(temp)
+
+    return RTO.walk(Conjunction(components))
+
+
+def rewrite_atoms_in_components(expression):
+    components = []
+
     for f in expression.formulas:
-            atom = plain_expression(f)
-            atoms = atoms + atom
+        existentials_vars = []
+        while isinstance(f, ExistentialPredicate):
+            existentials_vars.append(f.head)
+            f = f.body
 
-    return atoms
+        if isinstance(f, FunctionApplication):
+            while existentials_vars:
+                exis = existentials_vars.pop()
+                f = ExistentialPredicate(exis, f)
+            components.append(f)
+            continue
+
+        c_matrix = args_co_occurence_graph(f)
+        component = connected_components(c_matrix)
+
+        for e in component:
+            disj = []
+            for i in e:
+                disj.append(f.formulas[i])
+
+            temp = Conjunction(disj)
+
+            while existentials_vars:
+                exis = existentials_vars.pop()
+                temp = ExistentialPredicate(exis, temp)
+
+        components.append(temp)
+
+    CC = CollapseConjunctions()
+    PED = PushExistentialsDown()
+
+    return CC.walk(PED.walk(Conjunction(components)))
+
 
 def symbol_connected_components(expression):
     if not isinstance(expression, NaryLogicOperator):
@@ -294,6 +312,7 @@ def symbol_connected_components(expression):
         operation(tuple(expression.formulas[i] for i in component))
         for component in components
     ]
+
 
 def symbol_co_occurence_graph(expression):
     """Symbol co-ocurrence graph expressed as
@@ -323,6 +342,7 @@ def symbol_co_occurence_graph(expression):
                 c_matrix[i + 1 + j, i] = 1
     return c_matrix
 
+
 def args_co_occurence_graph(expression):
     """Arguments co-ocurrence graph expressed as
     an adjacency matrix.
@@ -339,9 +359,6 @@ def args_co_occurence_graph(expression):
         shared predicate symbol between two subformulas of the
         logic expression.
     """
-    if isinstance(expression, FunctionApplication):
-        return [expression]
-
     c_matrix = np.zeros((len(expression.formulas),) * 2)
     for i, formula in enumerate(expression.formulas):
         f_args = set(b for a in extract_logic_atoms(formula) for b in a.args)
@@ -352,6 +369,7 @@ def args_co_occurence_graph(expression):
                 c_matrix[i + 1 + j, i] = 1
 
     return c_matrix
+
 
 def connected_components(adjacency_matrix):
     """Connected components of an undirected graph.
@@ -381,6 +399,7 @@ def connected_components(adjacency_matrix):
         components.append(component)
         node_idxs -= component
     return components
+
 
 def has_separator_variables(query, symbol_table):
     """Returns true if `query` has a separator variable and the plan.

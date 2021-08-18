@@ -91,7 +91,7 @@ def test_lifted_bcq_fig_4_():
     assert res
 
 
-def test_lifed_separator_variable():
+def test_lifted_separator_variable():
     Q = Symbol('Q')
     R = Symbol('R')
     x1 = Symbol('x1')
