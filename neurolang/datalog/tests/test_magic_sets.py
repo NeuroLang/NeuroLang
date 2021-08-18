@@ -4,8 +4,15 @@ from pytest import raises
 
 from ... import expression_walker, expressions
 from .. import DatalogProgram, Fact, Implication, magic_sets
+from ..aggregation import (
+    AGG_COUNT,
+    BuiltinAggregationMixin,
+    DatalogWithAggregationMixin,
+    TranslateToLogicWithAggregation
+)
 from ..chase import Chase
 from ..expressions import TranslateToLogic
+from ..negation import DatalogProgramNegationMixin
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -15,7 +22,10 @@ Eb_ = expressions.ExpressionBlock
 
 
 class Datalog(
-    TranslateToLogic,
+    TranslateToLogicWithAggregation,
+    BuiltinAggregationMixin,
+    DatalogWithAggregationMixin,
+    DatalogProgramNegationMixin,
     DatalogProgram,
     expression_walker.ExpressionBasicEvaluator
 ):
@@ -149,6 +159,46 @@ def test_resolution_works_builtin():
         Imp_(anc(x, y), par(x, y)),
         Imp_(anc(x, y), anc(x, z) & par(z, y)),
         Imp_(anc2(x, y), anc(x, z) & eq(z, y))
+    ])
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
+
+
+def test_resolution_works_aggregation():
+    x = S_('X')
+    y = S_('Y')
+    z = S_('Z')
+    anc = S_('anc')
+    par = S_('par')
+    anc2 = S_('anc2')
+    q = S_('q')
+    a = C_('a')
+    b = C_('b')
+    c = C_('c')
+    d = C_('d')
+    eq = C_(operator.eq)
+
+    edb = Eb_([
+        F_(par(a, b)),
+        F_(par(b, c)),
+        F_(par(c, d)),
+    ])
+
+    code = Eb_([
+        Imp_(q(x), anc2(a, x)),
+        Imp_(anc(x, y), par(x, y)),
+        Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        Imp_(anc2(x, AGG_COUNT(y)), anc(x, y))
     ])
 
     dl = Datalog()
