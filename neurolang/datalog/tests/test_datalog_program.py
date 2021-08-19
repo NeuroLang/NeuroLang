@@ -1,11 +1,8 @@
-from operator import eq
-import numpy as np
 from neurolang.type_system import Unknown
 from typing import AbstractSet, Tuple
 
 import pytest
 
-from ..chase import Chase
 from ...expression_walker import ExpressionBasicEvaluator, IdentityWalker
 from ...expressions import (Constant, ExpressionBlock, FunctionApplication,
                             Lambda, NeuroLangException, Query, Symbol,
