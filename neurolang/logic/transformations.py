@@ -652,3 +652,73 @@ class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
         nary_op: NaryLogicOperator,
     ) -> NaryLogicOperator:
         return nary_op.apply(tuple(set(nary_op.formulas)))
+
+
+class IdentifyPureConjunctions(LogicExpressionWalker):
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        CPC = CheckPureConjunction()
+        if CPC.walk(conjunction):
+            return [conjunction]
+
+        conjunctions = []
+        for f in conjunction.formulas:
+            inner_f = self.walk(f)
+            for inner_term in inner_f:
+                if inner_term:
+                    conjunctions.append(inner_term)
+
+        return conjunctions
+
+    @add_match(Disjunction)
+    def disjunction(self, disjunction):
+        res = []
+        for f in disjunction.formulas:
+            walked_f = self.walk(f)
+            for inner_f in walked_f:
+                if inner_f:
+                    res.append(inner_f)
+
+        return res
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, fa):
+        return self.walk(fa.body)
+
+    @add_match(FunctionApplication)
+    def function_application(self, fa):
+        return []
+
+class CheckPureConjunction(LogicExpressionWalker):
+    # This should be an entry point walker
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        for f in conjunction.formulas:
+            if isinstance(f, Conjunction) or not self.walk(f):
+                return False
+
+        return True
+
+    @add_match(FunctionApplication)
+    def function_application(self, fa):
+        return True
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, exist_predicate):
+        if isinstance(exist_predicate.body, Conjunction):
+            return False
+
+        return self.walk(exist_predicate.body)
+
+    @add_match(...)
+    def default(self, expression):
+        return False
+
+
+class RemoveExistentialPredicates(LogicExpressionWalker):
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, existential_predicate):
+        return self.walk(existential_predicate.body)
+
+

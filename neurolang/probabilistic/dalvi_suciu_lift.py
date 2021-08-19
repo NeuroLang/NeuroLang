@@ -3,6 +3,7 @@ from functools import reduce
 from itertools import chain, combinations
 
 import numpy as np
+from typing_inspect import NEW_TYPING
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
@@ -31,8 +32,10 @@ from ..logic.expression_processing import (
 )
 from ..logic.transformations import (
     CollapseConjunctions,
+    IdentifyPureConjunctions,
     MakeExistentialsImplicit,
     PushExistentialsDown,
+    RemoveExistentialPredicates,
     RemoveTrivialOperations,
     GuaranteeConjunction,
 )
@@ -65,6 +68,7 @@ from .shattering import shatter_easy_probfacts
 from .transforms import (
     convert_rule_to_ucq,
     convert_to_cnf_ucq,
+    convert_to_dnf_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables,
@@ -73,6 +77,7 @@ from .small_dichotomy_theorem_based_solver import (
     _project_on_query_head,
     _maybe_reintroduce_head_variables,
 )
+from neurolang.logic import transformations
 
 LOG = logging.getLogger(__name__)
 
@@ -178,7 +183,6 @@ def dalvi_suciu_lift(rule, symbol_table):
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
     if isinstance(rule, Implication):
-        rule = convert_rule_to_ucq(rule)
         rule = convert_ucq_to_ccq(rule)
     rule = RTO.walk(rule)
     if (
@@ -215,7 +219,91 @@ def dalvi_suciu_lift(rule, symbol_table):
     return NonLiftable(rule)
 
 
-def convert_ucq_to_ccq(expression):
+def convert_ucq_to_ccq(rule, transformation='CNF'):
+    implication = RTO.walk(rule)
+    consequent, antecedent = implication.unapply()
+    head_vars = set(consequent.args)
+    existential_vars = set(
+        extract_logic_free_variables(antecedent) -
+        set(head_vars)
+    )
+
+    for a in existential_vars:
+        antecedent = ExistentialPredicate(a, antecedent)
+    expression = RTO.walk(antecedent)
+
+    IPC = IdentifyPureConjunctions()
+    conjunctions = IPC.walk(expression)
+    dic_components = extract_connected_components(conjunctions, existential_vars)
+
+    fresh_symbols_expression = components_to_fresh_symbols(dic_components, expression)
+    if transformation == 'CNF':
+        fresh_symbols_expression = convert_to_cnf_ucq(fresh_symbols_expression)
+    elif transformation == 'DNF':
+        fresh_symbols_expression = convert_to_dnf_ucq(fresh_symbols_expression)
+    else:
+        raise ValueError('Invalid transformation type')
+
+    final_expression = fresh_symbols_to_components(dic_components, fresh_symbols_expression)
+
+    # Chequear codigo a partir de este punto.
+    PED = PushExistentialsDown()
+    for a in existential_vars:
+        final_expression = ExistentialPredicate(a, final_expression)
+    final_expression = PED.walk(final_expression)
+
+    final_expression = GuaranteeConjunction().walk(final_expression)
+
+    return final_expression
+
+
+def extract_connected_components(list_of_conjunctions, existential_vars):
+    transformations = {}
+    for f in list_of_conjunctions:
+        c_matrix = args_co_occurence_graph(f)
+        components = connected_components(c_matrix)
+
+        for c in components:
+            form = [f.formulas[i] for i in c]
+            if len(form) > 1:
+                form = Conjunction(form)
+                transformations[form] = calc_new_fresh_symbol(form, existential_vars)
+            else:
+                # This is awfull
+                conj = Conjunction(form)
+                transformations[form[0]] = calc_new_fresh_symbol(conj, existential_vars)
+
+    return transformations
+
+def transform_in_formulas(components, formula):
+    conj = []
+    for i in components:
+        f = formula.formulas[i]
+        conj.append(f)
+
+    return conj
+
+def calc_new_fresh_symbol(formula, existential_vars):
+    cvars = extract_logic_free_variables(formula) - existential_vars
+
+    fresh_symbol = Symbol.fresh()
+    new_symbol = fresh_symbol(tuple(cvars))
+
+    return new_symbol
+
+def components_to_fresh_symbols(dic_to_fresh, expression):
+    non_existentials_expression = RemoveExistentialPredicates().walk(expression)
+    expression = ReplaceExpressionWalker(dic_to_fresh).walk(non_existentials_expression)
+
+    return expression
+
+def fresh_symbols_to_components(dic_replacements, expression):
+    dic_replacements = {v: k for k, v in dic_replacements.items()}
+    expression = ReplaceExpressionWalker(dic_replacements).walk(expression)
+
+    return expression
+
+def convert_ucq_to_ccq2(expression):
     expression = convert_to_cnf_ucq(expression)
 
     disjuntive_expressions = disjuntive_expressions_cnf(expression)
@@ -243,21 +331,27 @@ def disjuntive_expressions_cnf(expression):
 
 
 def rewrite_disjunctions_in_components(disjuntive_expressions):
-    components = []
 
+    new_elems = []
     for f in disjuntive_expressions:
         c_matrix = args_co_occurence_graph(f)
         component = connected_components(c_matrix)
 
+        disj_components = []
         for e in component:
             disj = []
             for i in e:
                 disj.append(f.formulas[i])
 
-            temp = Disjunction(disj)
-            components.append(temp)
+            if len(disj) > 1:
+                temp = Conjunction(disj)
+            else:
+                temp = disj[0]
+            disj_components.append(temp)
 
-    return RTO.walk(Conjunction(components))
+        new_elems.append(Disjunction(disj_components))
+
+    return Conjunction(new_elems)
 
 
 def rewrite_atoms_in_components(expression):
@@ -286,6 +380,7 @@ def rewrite_atoms_in_components(expression):
 
             temp = Conjunction(disj)
 
+            existentials_vars.reverse()
             while existentials_vars:
                 exis = existentials_vars.pop()
                 temp = ExistentialPredicate(exis, temp)
