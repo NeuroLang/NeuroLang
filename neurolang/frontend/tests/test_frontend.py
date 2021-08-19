@@ -747,3 +747,20 @@ def test_head_constant():
         res_all = qr.solve_all()
 
     assert set(res_all['r']) == {('one', 1)}
+
+
+def test_numpy_mixin_adds_functions():
+    nl = frontend.NeurolangDL()
+    functions = ["exp", "log", "log10", "cos", "sin", "tan"]
+
+    p = nl.add_tuple_set([(i,) for i in np.arange(1, 10)], name="P")
+
+    for func in functions:
+        assert exp.Symbol(func) in nl.symbol_table
+        with nl.scope as e:
+            e.q[e.x, e.y] = p[e.x] & (e.y == getattr(e, func)(e.x))
+            res = nl.solve_all()
+
+        assert set(res["q"]) == {
+            (i, getattr(np, func)(i)) for i in np.arange(1, 10)
+        }
