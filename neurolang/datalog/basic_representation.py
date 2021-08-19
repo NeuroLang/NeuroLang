@@ -10,8 +10,6 @@ from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 from warnings import warn
 
-import numpy
-
 from ..expression_walker import PatternWalker, add_match
 from ..exceptions import NotConjunctiveExpression, NotConjunctiveExpressionNestedPredicates, ProtectedKeywordError
 from ..expressions import (Constant, Expression, FunctionApplication,
@@ -34,15 +32,6 @@ __all__ = [
 
 class UnionOfConjunctiveQueries:
     pass
-
-
-class NumpyFunctionsMixin():
-    constant_exp = Constant[Callable[[float], float]](numpy.exp)
-    constant_log = Constant[Callable[[float], float]](numpy.log)
-    constant_log10 = Constant[Callable[[float], float]](numpy.log10)
-    constant_cos = Constant[Callable[[float], float]](numpy.cos)
-    constant_sin = Constant[Callable[[float], float]](numpy.sin)
-    constant_tan = Constant[Callable[[float], float]](numpy.tan)
 
 
 class DatalogProgram(TypedSymbolTableMixin, PatternWalker):

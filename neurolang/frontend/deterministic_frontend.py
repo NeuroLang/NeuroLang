@@ -4,7 +4,6 @@ import numpy as np
 
 from .. import expressions as ir
 from ..datalog import DatalogProgram
-from ..datalog.basic_representation import NumpyFunctionsMixin
 from ..datalog.chase import Chase
 from ..datalog.aggregation import (
     DatalogWithAggregationMixin,
@@ -21,6 +20,7 @@ from .datalog.sugar import (
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities
 )
+from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol
 
@@ -73,11 +73,11 @@ class RegionFrontendDatalogSolver(
     TranslateHeadConstantsToEqualities,
     Fol2DatalogMixin,
     RegionSolver,
+    NumpyFunctionsMixin,
     DatalogWithAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogProgram,
     ExpressionBasicEvaluator,
-    NumpyFunctionsMixin,
 ):
     """
     DatalogProgram preloaded with Region symbols and builtins, and

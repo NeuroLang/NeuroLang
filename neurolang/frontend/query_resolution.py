@@ -1034,3 +1034,5 @@ class QuerySymbolsProxy:
         """Describes symbols currently in symbol_table"""
         init = [symbol.name for symbol in self._query_builder.symbol_table]
         return f"QuerySymbolsProxy with symbols {init}"
+
+

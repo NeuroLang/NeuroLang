@@ -12,7 +12,7 @@ from ...expressions import (Constant, ExpressionBlock, FunctionApplication,
                             is_leq_informative)
 from ...logic import ExistentialPredicate, Implication, Union
 from .. import DatalogProgram, Fact
-from ..basic_representation import NumpyFunctionsMixin, UnionOfConjunctiveQueries
+from ..basic_representation import UnionOfConjunctiveQueries
 from ..expressions import TranslateToLogic
 from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from ..wrapped_collections import WrappedNamedRelationalAlgebraFrozenSet, WrappedRelationalAlgebraFrozenSet
@@ -308,37 +308,3 @@ def test_add_extensional_preducate_from_tuples():
     q = dl.extensional_database()[Q]
     assert q.type is AbstractSet[Tuple[int, str]]
     assert q.value == rw
-
-
-def test_numpy_functions():
-    class DatalogWithNumpyFunctions(Datalog, NumpyFunctionsMixin):
-        pass
-
-    dl = DatalogWithNumpyFunctions()
-
-    assert Symbol("exp") in dl.symbol_table
-    assert Symbol("log") in dl.symbol_table
-    assert Symbol("log10") in dl.symbol_table
-    assert Symbol("cos") in dl.symbol_table
-    assert Symbol("sin") in dl.symbol_table
-    assert Symbol("tan") in dl.symbol_table
-
-    P = S_("P")
-    Q = S_("Q")
-    x = S_("x")
-    y = S_("y")
-    exp = S_("exp")
-    EQ = C_(eq)
-    edb = ExpressionBlock(tuple(T_(P(C_(i))) for i in np.arange(4)))
-    dl.walk(edb)
-
-    code = DT.walk(
-        ExpressionBlock((Implication(Q(x, y), P(x) & EQ(y, exp(x))),))
-    )
-    dl.walk(code)
-    chase = Chase(dl)
-    solution = chase.build_chase_solution()
-    assert Q in solution
-    result = solution[Q]
-    expected = Constant[AbstractSet]({(i, np.exp(i)) for i in np.arange(4)})
-    assert result == expected
