@@ -2,6 +2,9 @@ import './viewer.css'
 import $ from '../jquery-bundler'
 import { API_ROUTE } from '../constants'
 import Plotly from 'plotly.js-dist-min'
+import { lab, rgb } from 'd3-color'
+import * as d3chromatic from 'd3-scale-chromatic'
+import * as d3array from 'd3-array'
 
 const LUTS = [
   { name: 'red', data: [[0, 0.96, 0.26, 0.21], [1, 0.96, 0.26, 0.21]], gradation: false, hex: '#f44336' }, // #f44336
@@ -53,6 +56,9 @@ export class PapayaViewer {
     this.lutIndex = 0
     this.resultsContainer = $('#symbolsContainer')
     this.papayaContainer = $('#nlPapayaContainer')
+    this.cbContainer = $('#nlColorbarContainer')
+    this.colorSchemes = ['Turbo', 'Viridis', 'Inferno', 'Magma', 'Plasma', 'Cividis', 'Warm', 'Cool', 'BrBG', 'PRGn', 'Blues', 'Greens', 'Greys', 'BuGn', 'BuPu', 'YlGn', 'YlOrBr', 'YlOrRd'].map(s => scaleChromaticToLUT(s))
+    this.colorIndex = 0
   }
 
   showViewer () {
@@ -89,7 +95,7 @@ export class PapayaViewer {
     params.kioskMode = true
     params.showControlBar = true
     params.showImageButtons = true
-    params.luts = LUTS
+    params.luts = this.colorSchemes.concat(...LUTS)
     this.params = params
   }
 
@@ -161,8 +167,16 @@ export class PapayaViewer {
     )
   }
 
-  onImageLoaded () {
+  onImageLoaded (params) {
     // this.showImageHistogram(this.imageIds.length - 1)
+    const screenVolume = papayaContainers[0].viewer.screenVolumes[this.imageIds.length - 1]
+    const imageData = screenVolume.volume.imageData.data.filter((elt) => elt !== 0)
+    const q95 = d3array.quantile(imageData, 0.95)
+    if (screenVolume.screenMin !== q95) {
+      screenVolume.screenMin = Number(q95.toFixed(3))
+      papayaContainers[0].viewer.drawViewer(true, false)
+    }
+    createColorBar(this.cbContainer, screenVolume.lutName, screenVolume.screenMin, screenVolume.screenMax)
   }
 
   showImageHistogram (imageId) {
@@ -198,10 +212,88 @@ export class PapayaViewer {
       if (typeof max !== 'undefined') {
         imageParams.max = Number(max.toFixed(2))
       }
+      const lut = this.colorSchemes[this.colorIndex]
+      imageParams.lut = lut.name
+      this.colorIndex = (this.colorIndex + 1) % this.colorSchemes.length
       imageParams.loadingComplete = () => this.onImageLoaded()
     }
     const params = []
     params[name] = imageParams
     return params
   }
+}
+
+/**
+ * Convert a d3Scale to a LUT for papaya
+ * @param {*} name the name of the d3 color scheme
+ * @returns
+ */
+function scaleChromaticToLUT (name) {
+  const n = 9
+  const scheme = getDiscreteScheme(name, n)
+  const colors = scheme.colors.map((val, i) => {
+    const r = rgb(val)
+    return [i / (n - 1), r.r / 255, r.g / 255, r.b / 255]
+  })
+  return { name, data: colors, gradation: true }
+}
+
+/**
+ * The the discrete color scheme of size n for the given color scheme name.
+ * It will return an array of size n where each element is the interpolated
+ * color value of the ith element.
+ * @param {*} name the color scheme name
+ * @param {*} n the size for the discrete array of values
+ * @returns
+ */
+function getDiscreteScheme (name, n) {
+  let colors
+  let dark0, dark1
+  if (d3chromatic[`scheme${name}`] && d3chromatic[`scheme${name}`][n]) {
+    colors = d3chromatic[`scheme${name}`][n]
+    dark0 = lab(colors[0]).l < 50
+    dark1 = lab(colors[colors.length - 1]).l < 50
+  } else {
+    const interpolate = d3chromatic[`interpolate${name}`]
+    colors = []
+    dark0 = lab(interpolate(0)).l < 50
+    dark1 = lab(interpolate(1)).l < 50
+    for (let i = 0; i < n; ++i) {
+      colors.push(rgb(interpolate(i / (n - 1))).hex())
+    }
+  }
+  return { colors, dark0, dark1 }
+}
+
+function createColorBar (container, name, minValue, maxValue, n = 256) {
+  const { colors, dark0, dark1 } = getDiscreteScheme(name, n)
+  const canvas = document.createElement('canvas')
+  canvas.width = n
+  canvas.height = 1
+  const context = canvas.getContext('2d')
+  canvas.style.margin = '0'
+  canvas.style.width = '100%'
+  canvas.style.height = '25px'
+  for (let i = 0; i < n; ++i) {
+    context.fillStyle = colors[i]
+    context.fillRect(i, 0, 1, 1)
+  }
+
+  const minLabel = document.createElement('div')
+  minLabel.textContent = minValue
+  minLabel.style.position = 'absolute'
+  minLabel.style.top = '4px'
+  minLabel.style.color = dark0 ? '#fff' : '#000'
+
+  const maxLabel = document.createElement('div')
+  maxLabel.textContent = maxValue
+  maxLabel.style.position = 'absolute'
+  maxLabel.style.top = '4px'
+  maxLabel.style.right = '4px'
+  maxLabel.style.color = dark1 ? '#fff' : '#000'
+
+  container.empty()
+  container.append(canvas)
+  container.append(minLabel)
+  container.append(maxLabel)
 }

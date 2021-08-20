@@ -7,3 +7,10 @@
     margin: .5em !important;
     display: none;
 }
+
+.nl-colorbar-container {
+    position: relative;
+    top: -19.5%;
+    width: 25%;
+    right: -65%;
+}

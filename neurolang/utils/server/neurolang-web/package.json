@@ -26,6 +26,9 @@
   },
   "dependencies": {
     "codemirror": "^5.62.2",
+    "d3-array": "^3.0.2",
+    "d3-color": "^3.0.1",
+    "d3-scale-chromatic": "^3.0.0",
     "datatables.net-dt": "^1.1.0",
     "datatables.net-se": "^1.10.25",
     "jquery": "^3.6.0",
