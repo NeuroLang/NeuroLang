@@ -655,12 +655,12 @@ class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
 
 
 class IdentifyPureConjunctions(LogicExpressionWalker):
+    @add_match(Conjunction, lambda e: CheckPureConjunction().walk(e))
+    def pure_conjunction(self, conjunction):
+        return [conjunction]
+
     @add_match(Conjunction)
     def conjunction(self, conjunction):
-        CPC = CheckPureConjunction()
-        if CPC.walk(conjunction):
-            return [conjunction]
-
         conjunctions = []
         for f in conjunction.formulas:
             inner_f = self.walk(f)
