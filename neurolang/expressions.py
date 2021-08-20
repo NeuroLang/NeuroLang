@@ -362,6 +362,22 @@ class Expression(metaclass=ExpressionMeta):
 
         return self.unapply() == other.unapply()
 
+    def __repr__(self):
+        name = type(self).__name__
+        if config.expression_type_printing():
+            r = f'{{{name}: {self.__type_repr__}}}'
+        else:
+            r = f'{{{self.name}}}'
+        args = self.unapply()
+        if len(args) > 0:
+            str_args = (
+                '(' +
+                ', '.join(repr(arg) for arg in args) +
+                ')'
+            )
+            r += str_args
+        return r
+
     def __hash__(self):
         return hash(self.unapply())
 
