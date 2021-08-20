@@ -14,11 +14,11 @@ neurosynth:
     title: "Coordinate-based meta-analysis (CBMA) on the Neurosynth database"
     shortTitle: "CBMA Single Term"
     query: |
-      TermInStudy(term, study) :: tfidf :- TermInStudyTFIDF(term, tfidf, study)
+      TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(term, tfidf, study)
       TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
-      Activation(i, j, k) :- SelectedStudy(s) & PeakReported(i, j, k, s)
-      ActivationGivenTerm(i, j, k, PROB) :- Activation(i, j, k) // TermAssociation("emotion")
-      ActivationGivenTermImage(agg_create_region_overlay(i, j, k, p)) :- ActivationGivenTerm(i, j, k, p)
+      Activation(x, y, z) :- SelectedStudy(s) & PeakReported(x, y, z, s)
+      ActivationGivenTerm(x, y, z, PROB) :- Activation(x, y, z) // TermAssociation("emotion")
+      ActivationGivenTermImage(agg_create_region_overlay(x, y, z, p)) :- ActivationGivenTerm(x, y, z, p)
     description: |
       In this example, we use the Neurosynth CBMA database (Yarkoni et al., 2011), consisting of 14,371 studies.
       We load the data from the Neurosynth database into tables in the Neurolang engine :
@@ -32,25 +32,25 @@ neurosynth:
     title: "Coordinate-based meta-analysis (CBMA) on the Neurosynth database"
     shortTitle: "CBMA Multiple Terms"
     query: |
-      TermInStudy(term, study) :: tfidf :- TermInStudyTFIDF(term, tfidf, study)
+      TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(term, tfidf, study)
       TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
       TermsToSelect("emotion")
       TermsToSelect("fear")
-      Activation(i, j, k) :- SelectedStudy(s) & PeakReported(i, j, k, s)
-      ActivationGivenTerm(i, j, k, t, PROB) :- Activation(i, j, k) // (TermAssociation(t) & TermsToSelect(t))
-      ActivationGivenTermImage(t, agg_create_region_overlay(i, j, k, p)) :- ActivationGivenTerm(i, j, k, t, p)
+      Activation(x, y, z) :- SelectedStudy(s) & PeakReported(x, y, z, s)
+      ActivationGivenTerm(x, y, z, t, PROB) :- Activation(x, y, z) // (TermAssociation(t) & TermsToSelect(t))
+      ActivationGivenTermImage(t, agg_create_region_overlay(x, y, z, p)) :- ActivationGivenTerm(x, y, z, t, p)
     description: |
       This example is similar to the [CBMA Single Term](/neurosynth/neuro1) example but it showcases how to query multiple term associations.
   - id: "neuro3"
     title: "Coordinate-based meta-analysis (CBMA) with spatial prior smoothing"
     shortTitle: "CBMA Spatial Prior"
     query: |
-      VoxelReported (i, j, k, study) :- PeakReported(i2, j2, k2, study) & Voxel(i, j, k) & (d == EUCLIDEAN(i, j, k, i2, j2, k2)) & (d < 1)
-      TermInStudy(term, study) :: tfidf :- TermInStudyTFIDF(term, tfidf, study)
+      VoxelReported (x, y, z, study) :- PeakReported(x2, y2, z2, study) & Voxel(x, y, z) & (d == EUCLIDEAN(x, y, z, x2, y2, z2)) & (d < 4)
+      TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(term, tfidf, study)
       TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
-      Activation(i, j, k) :- SelectedStudy(s) & VoxelReported(i, j, k, s)
-      ActivationGivenTerm(i, j, k, PROB) :- Activation(i, j, k) // TermAssociation("emotion")
-      ActivationGivenTermImage(agg_create_region_overlay(i, j, k, p)) :- ActivationGivenTerm(i, j, k, p)
+      Activation(x, y, z) :- SelectedStudy(s) & VoxelReported(x, y, z, s)
+      ActivationGivenTerm(x, y, z, PROB) :- Activation(x, y, z) // TermAssociation("emotion")
+      ActivationGivenTermImage(agg_create_region_overlay(x, y, z, p)) :- ActivationGivenTerm(x, y, z, p)
     description: |
       This example illustrates how a spatial prior can be defined based on the distance between voxels 
       and foci in a coordinate-based meta-analysis database.

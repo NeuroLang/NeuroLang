@@ -244,9 +244,9 @@ class NeurolangQueryManager:
         """
         return self.results_cache[uuid].cancel()
 
-    def get_mni_mask(self, engine_type: str) -> nibabel.Nifti1Image:
+    def get_atlas(self, engine_type: str) -> nibabel.Nifti1Image:
         """
-        Get the MNI mask for a given engine type.
+        Get the atlas for a given engine type.
 
         Parameters
         ----------
@@ -256,10 +256,10 @@ class NeurolangQueryManager:
         Returns
         -------
         nibabel.Nifti1Image
-            the mni mask
+            the mni atlas
         """
         config = [c for c in self.configs.keys() if c.key == engine_type]
-        return config[0].mni_mask
+        return config[0].atlas
 
     def get_symbols(self, engine_type: str) -> Future:
         """

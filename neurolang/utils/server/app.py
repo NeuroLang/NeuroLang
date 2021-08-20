@@ -6,6 +6,7 @@ import os.path
 import sys
 from concurrent.futures import Future
 from io import BytesIO
+from pathlib import Path
 from uuid import uuid4
 
 import pandas as pd
@@ -327,11 +328,8 @@ class NiftiiImageHandler(JSONRequestHandler):
 
     def get(self):
         engine = self.get_argument("engine", "neurosynth")
-        mni_mask = self.application.nqm.get_mni_mask(engine)
-
-        return self.write_json_reponse(
-            {"image": base64_encode_nifti(mni_mask)}
-        )
+        atlas = self.application.nqm.get_atlas(engine)
+        return self.write_json_reponse({"image": base64_encode_nifti(atlas)})
 
 
 class DownloadsHandler(tornado.web.RequestHandler):
@@ -502,7 +500,11 @@ def setup_logs():
 
 def main():
     setup_logs()
-    opts = {NeurosynthEngineConf(resolution=2): 2, DestrieuxEngineConf(): 2}
+    data_dir = Path("neurolang_data")
+    opts = {
+        NeurosynthEngineConf(data_dir, resolution=2): 2,
+        DestrieuxEngineConf(data_dir): 2,
+    }
     nqm = NeurolangQueryManager(opts)
 
     tornado.options.parse_command_line()
