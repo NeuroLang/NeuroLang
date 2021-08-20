@@ -95,7 +95,8 @@ export class PapayaViewer {
     params.kioskMode = true
     params.showControlBar = true
     params.showImageButtons = true
-    params.luts = this.colorSchemes.concat(...LUTS)
+    // params.luts = this.colorSchemes.concat(...LUTS)
+    params.luts = LUTS
     this.params = params
   }
 
@@ -212,10 +213,10 @@ export class PapayaViewer {
       if (typeof max !== 'undefined') {
         imageParams.max = Number(max.toFixed(2))
       }
-      const lut = this.colorSchemes[this.colorIndex]
-      imageParams.lut = lut.name
-      this.colorIndex = (this.colorIndex + 1) % this.colorSchemes.length
-      imageParams.loadingComplete = () => this.onImageLoaded()
+      // const lut = this.colorSchemes[this.colorIndex]
+      // imageParams.lut = lut.name
+      // this.colorIndex = (this.colorIndex + 1) % this.colorSchemes.length
+      // imageParams.loadingComplete = () => this.onImageLoaded()
     }
     const params = []
     params[name] = imageParams
