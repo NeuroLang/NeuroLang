@@ -554,7 +554,19 @@ class RemoveTrivialOperations(LogicExpressionWalker):
         return self.walk(expression.formula.formula)
 
 
-class PushExistentialsDown(LogicExpressionWalker):
+class PushExistentialsDown(
+    CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
+    LogicExpressionWalker
+):
+    @add_match(
+        ExistentialPredicate(..., NaryLogicOperator),
+        lambda e: len(e.body.formulas) == 1
+    )
+    def push_eliminate_trivial_operation(self, expression):
+        return self.walk(
+            ExistentialPredicate(expression.head, expression.body.formulas[0])
+        )
+
     @add_match(ExistentialPredicate(..., Disjunction))
     def push_existential_down_disjunction(self, expression):
         variable = expression.head
@@ -588,10 +600,11 @@ class PushExistentialsDown(LogicExpressionWalker):
             res = self.walk(Conjunction(out_))
         if len(in_) > 0 and len(out_) > 0:
             res = self.walk(
-                Conjunction((
-                    ExistentialPredicate(variable, Conjunction(in_)),
-                    Conjunction(out_)
-                ))
+                Conjunction(
+                    (
+                        ExistentialPredicate(variable, Conjunction(in_)),
+                    ) + out_
+                )
             )
         return res
 
