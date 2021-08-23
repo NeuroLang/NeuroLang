@@ -1,6 +1,7 @@
 
+from neurolang.logic.expression_processing import extract_logic_free_variables
 from numpy import isin
-from neurolang.logic.transformations import CheckPureConjunction, IdentifyPureConjunctions, PushExistentialsDown, RemoveExistentialPredicates
+from neurolang.logic.transformations import CheckPureConjunction, IdentifyPureConjunctions, PushExistentialsDown, RemoveExistentialPredicates, RemoveTrivialOperations
 from neurolang.probabilistic.dalvi_suciu_lift import convert_ucq_to_ccq
 from neurolang.probabilistic.transforms import convert_rule_to_ucq, convert_to_cnf_ucq
 from neurolang.logic import Conjunction, Disjunction, ExistentialPredicate, Implication
@@ -403,7 +404,7 @@ def test_ccq_transformation_example_2_12():
     assert rule == expected
 
 
-def test_ccq_transformation_conjunction():
+def test_ccq_no_transformation_conjunction():
     Q = Symbol('Q')
     R = Symbol('R')
     S = Symbol('S')
@@ -420,13 +421,17 @@ def test_ccq_transformation_conjunction():
 
     rule_ccq = convert_ucq_to_ccq(rule)
 
-    expected = Conjunction((
-        Disjunction((
-            R(z),
-        )),
-        Disjunction((
-            R(z),
-        ))
-    ))
+    RTO = RemoveTrivialOperations()
+    implication = RTO.walk(rule)
+    consequent, antecedent = implication.unapply()
+    head_vars = set(consequent.args)
+    existential_vars = set(
+        extract_logic_free_variables(antecedent) -
+        set(head_vars)
+    )
 
-    assert rule == expected
+    for a in existential_vars:
+        antecedent = ExistentialPredicate(a, antecedent)
+    expected = PED.walk(RTO.walk(antecedent))
+
+    assert rule_ccq == Conjunction((expected,))

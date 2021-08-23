@@ -186,7 +186,6 @@ def dalvi_suciu_lift(rule, symbol_table):
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
     if isinstance(rule, Implication):
-        # Tomar variables libres en el metodo y agregar transformacion a UCQ
         rule = convert_ucq_to_ccq(rule)
     rule = RTO.walk(rule)
     if (
