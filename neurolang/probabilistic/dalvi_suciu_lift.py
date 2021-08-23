@@ -233,7 +233,7 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
 
     for a in existential_vars:
         antecedent = ExistentialPredicate(a, antecedent)
-    expression = PED.walk(RTO.walk(antecedent))
+    expression = RTO.walk(PED.walk(antecedent))
 
     conjunctions = IdentifyPureConjunctions().walk(expression)
     dic_components = extract_connected_components(conjunctions, existential_vars)
