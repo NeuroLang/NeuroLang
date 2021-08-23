@@ -170,6 +170,23 @@ def test_bernoulli_conjunction(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_probfact_existential():
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        P, {(0.7, 1, 2), (0.9, 1, 3), (0.88, 2, 4)}
+    )
+    query = Implication(ans(x), P(x, y))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            ((1 - (1 - 0.7) * (1 - 0.9)), 1),
+            (0.88, 2),
+        ],
+        ("_p_", "x"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
 def test_multi_level_conjunction(solver):
     """
     We consider the program
@@ -711,6 +728,13 @@ def test_program_with_variable_equality(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.parametrize("solver", [
+    weighted_model_counting,
+    pytest.param(small_dichotomy_theorem_based_solver, marks=pytest.mark.xfail(
+        reason="Existential variable in probfact leads to unsupported noisy-or"
+    )),
+    dalvi_suciu_lift,
+])
 def test_repeated_variable_probabilistic_rule(solver):
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
@@ -852,4 +876,40 @@ def test_simple_boolean_query(solver):
     query = Implication(ans(), Z(x))
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0,)], ("_p_",))
+    assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.skip(reason="issue in dalvi/suciu algorithm to be fixed")
+def test_disjunctive_query_with_probchoice():
+    pchoice_as_sets = {
+        Q: {(0.6, 1), (0.4, 2)},
+        A: {(0.7, 1), (0.2, 2), (0.1, 3)},
+    }
+    pfact_as_sets = {
+        P: {(0.9, 3), (0.8, 2)},
+        R: {(0.4, 1), (0.1, 2)},
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_as_set in pfact_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_as_set
+        )
+    code = Union((
+        Implication(Z(x), Conjunction((P(x), Q(x), A(y)))),
+        Implication(Z(x), Conjunction((R(x), Q(x)))),
+    ))
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            (0.6 * 0.4, 1),
+            (0.4 * (1 - (1 - 0.8) * (1 - 0.1)), 2),
+        ],
+        ("_p_", "x"),
+    )
     assert testing.eq_prov_relations(result, expected)

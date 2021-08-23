@@ -15,15 +15,16 @@ from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
 from ..relational_algebra import (
     EliminateTrivialProjections,
+    ExtendedProjection,
+    FunctionApplicationListMember,
     Projection,
+    RelationalAlgebraOperation,
     RelationalAlgebraPushInSelections,
     RelationalAlgebraSolver,
     RenameOptimizations,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import (
-    NaturalJoinInverse,
-)
+from ..relational_algebra_provenance import NaturalJoinInverse
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
@@ -388,3 +389,43 @@ def generate_provenance_query_compiler(
 
     query_compiler = ChainedWalker(*steps)
     return query_compiler
+
+
+def reintroduce_unified_head_terms(
+    ra_query: RelationalAlgebraOperation,
+    flat_query: Implication,
+    unified_query: Implication,
+) -> RelationalAlgebraOperation:
+    """
+    Reintroduce terms that have been removed through unification of the query.
+
+    There are two such cases:
+
+    1. A head variable was repeated, such as in `ans(y, y)` and the extensional
+    plan computes all possible values for `y` but will output only one column.
+    This function makes sure that a second column for `y` is outputed, and that
+    the resulting solution set will be a binary relation, as required.
+
+    2. The query's head contains a constant, such as in `ans(2, y)`, in which
+    case a constant column is added to the solution set.
+
+    """
+    proj_list = list()
+    for old, new in zip(
+        flat_query.consequent.args, unified_query.consequent.args
+    ):
+        dst_column = str2columnstr_constant(old.name)
+        fun_exp = dst_column
+        if new != old:
+            if isinstance(new, Symbol):
+                fun_exp = str2columnstr_constant(new.name)
+            elif isinstance(new, Constant):
+                fun_exp = new
+            else:
+                raise ValueError(
+                    f"Unexpected argument {new}. "
+                    "Expected symbol or constant"
+                )
+        member = FunctionApplicationListMember(fun_exp, dst_column)
+        proj_list.append(member)
+    return ExtendedProjection(ra_query, tuple(proj_list))

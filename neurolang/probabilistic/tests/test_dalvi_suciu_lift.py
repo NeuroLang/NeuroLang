@@ -10,9 +10,14 @@ from ...logic import (
     ExistentialPredicate,
     Implication,
 )
+from ...relational_algebra import str2columnstr_constant
+from ...relational_algebra_provenance import DisjointProjection
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
-from ..probabilistic_ra_utils import DeterministicFactSet
+from ..probabilistic_ra_utils import (
+    DeterministicFactSet,
+    ProbabilisticChoiceSet,
+)
 
 TNRA = TranslateToNamedRA()
 
@@ -484,6 +489,51 @@ def test_example_4_8_tractable_query_intractable_subquery():
     )
     resulting_plan = dalvi_suciu_lift.dalvi_suciu_lift(query, {})
     assert dalvi_suciu_lift.is_pure_lifted_plan(resulting_plan)
+
+
+def test_single_disjoint_project_one_variable():
+    P = Symbol("P")
+    x = Symbol("x")
+    pchoice_relation = NamedRelationalAlgebraFrozenSet(
+        iterable=[
+            (0.2, "a"),
+            (0.7, "b"),
+            (0.1, "c"),
+        ],
+        columns=("_p_", "x"),
+    )
+    symbol_table = {
+        P: ProbabilisticChoiceSet(
+            Constant[AbstractSet](pchoice_relation),
+            str2columnstr_constant("_p_"),
+        ),
+    }
+    query = ExistentialPredicate(x, P(x))
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert isinstance(plan, DisjointProjection)
+
+
+def test_single_disjoint_project_two_variables():
+    P = Symbol("P")
+    x = Symbol("x")
+    y = Symbol("y")
+    pchoice_relation = NamedRelationalAlgebraFrozenSet(
+        iterable=[
+            (0.2, "a", "b"),
+            (0.7, "b", "b"),
+            (0.1, "b", "c"),
+        ],
+        columns=("_p_", "x", "y"),
+    )
+    symbol_table = {
+        P: ProbabilisticChoiceSet(
+            Constant[AbstractSet](pchoice_relation),
+            str2columnstr_constant("_p_"),
+        ),
+    }
+    query = ExistentialPredicate(y, P(x, y))
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert isinstance(plan, DisjointProjection)
 
 
 def test_simple_existential_query_plan():

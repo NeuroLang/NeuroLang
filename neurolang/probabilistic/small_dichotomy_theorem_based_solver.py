@@ -27,15 +27,15 @@ from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
     extract_logic_atoms,
-    flatten_query
+    flatten_query,
+    remove_conjunction_duplicates
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
+from ..exceptions import UnsupportedSolverError
 from ..expressions import Constant, Symbol
-from ..logic import FALSE, Conjunction, Implication
+from ..logic import FALSE, Conjunction, Disjunction, Implication, Negation
 from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import (
-    ExtendedProjection,
-    FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     Projection,
     str2columnstr_constant
@@ -52,7 +52,8 @@ from .probabilistic_ra_utils import (
 )
 from .query_resolution import (
     generate_provenance_query_compiler,
-    solve_marg_query as _solve_marg_query
+    lift_solve_marg_query,
+    reintroduce_unified_head_terms
 )
 from .shattering import shatter_easy_probfacts
 
@@ -150,6 +151,9 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             str2columnstr_constant("_p_"),
         )
 
+    if isinstance(flat_query_body, Conjunction):
+        flat_query_body = remove_conjunction_duplicates(flat_query_body)
+
     with log_performance(LOG, "Translation and lifted optimisation"):
         flat_query_body = GuaranteeConjunction().walk(
             lift_optimization_for_choice_predicates(
@@ -172,6 +176,21 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
                 )
             )
         )
+        if (
+            isinstance(shattered_query.antecedent, Disjunction)
+            or
+            _get_existential_variables_in_atoms(
+                shattered_query, ProbabilisticFactSet
+            )
+            - _get_existential_variables_in_atoms(
+                shattered_query, ProbabilisticChoiceSet
+            )
+        ):
+            raise UnsupportedSolverError(
+                "Cannot solve queries with existentially quantified variable "
+                "occurring in probabilistic fact but not in any probabilistic "
+                "choice, or disjunctive queries"
+            )
         if not is_hierarchical_without_self_joins(
             shattered_query_probabilistic_body
         ):
@@ -186,7 +205,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         # project on query's head variables
         ra_query = _project_on_query_head(ra_query, shattered_query)
         # re-introduce head variables potentially removed by unification
-        ra_query = _maybe_reintroduce_head_variables(
+        ra_query = reintroduce_unified_head_terms(
             ra_query, flat_query, unified_query
         )
 
@@ -211,28 +230,6 @@ def _project_on_query_head(provset, query):
     return Projection(provset, proj_cols)
 
 
-def _maybe_reintroduce_head_variables(ra_query, flat_query, unified_query):
-    proj_list = list()
-    for old, new in zip(
-        flat_query.consequent.args, unified_query.consequent.args
-    ):
-        dst_column = str2columnstr_constant(old.name)
-        fun_exp = dst_column
-        if new != old:
-            if isinstance(new, Symbol):
-                fun_exp = str2columnstr_constant(new.name)
-            elif isinstance(new, Constant):
-                fun_exp = new
-            else:
-                raise ValueError(
-                    f"Unexpected argument {new}. "
-                    "Expected symbol or constant"
-                )
-        member = FunctionApplicationListMember(fun_exp, dst_column)
-        proj_list.append(member)
-    return ExtendedProjection(ra_query, tuple(proj_list))
-
-
 def solve_marg_query(rule, cpl):
     """
     Solve a MARG query on a CP-Logic program.
@@ -249,4 +246,26 @@ def solve_marg_query(rule, cpl):
         Provenance set labelled with probabilities for each tuple in the result
         set.
     """
-    return _solve_marg_query(rule, cpl, solve_succ_query)
+    return lift_solve_marg_query(rule, cpl, solve_succ_query)
+
+
+def _get_existential_variables_in_atoms(query, functor_type):
+    eq_vars = set()
+    head_vars = set(
+        arg for arg in query.consequent.args if isinstance(arg, Symbol)
+    )
+    if isinstance(query.antecedent, Conjunction):
+        conjuncts = query.antecedent.formulas
+    else:
+        conjuncts = (query.antecedent,)
+    for conjunct in conjuncts:
+        literal = (
+            conjunct.formula if isinstance(conjunct, Negation) else conjunct
+        )
+        if isinstance(literal.functor, functor_type):
+            eq_vars |= set(
+                arg
+                for arg in literal.args
+                if isinstance(arg, Symbol) and arg not in head_vars
+            )
+    return eq_vars
