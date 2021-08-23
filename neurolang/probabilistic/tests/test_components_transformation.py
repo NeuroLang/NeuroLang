@@ -2,13 +2,14 @@
 from numpy import isin
 from neurolang.logic.transformations import CheckPureConjunction, IdentifyPureConjunctions, PushExistentialsDown, RemoveExistentialPredicates
 from neurolang.probabilistic.dalvi_suciu_lift import convert_ucq_to_ccq
-from neurolang.probabilistic.transforms import convert_rule_to_ucq
+from neurolang.probabilistic.transforms import convert_rule_to_ucq, convert_to_cnf_ucq
 from neurolang.logic import Conjunction, Disjunction, ExistentialPredicate, Implication
 from neurolang.expressions import Symbol
 
 IPC = IdentifyPureConjunctions()
 CPC = CheckPureConjunction()
 REP = RemoveExistentialPredicates()
+PED = PushExistentialsDown()
 
 # Tests for RemoveExistentialPredicate, start here
 def test_remove_existential():
@@ -300,6 +301,38 @@ def test_basic_nested_mixed_2():
     conjunctions = IPC.walk(rule)
     assert conjunctions == expected
 
+def test_nested_existentials():
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    x1 = Symbol('x1')
+    x2 = Symbol('x2')
+    y1 = Symbol('y1')
+    y2 = Symbol('y2')
+    z = Symbol('z')
+
+    rule = Conjunction((
+        ExistentialPredicate(y2,
+            ExistentialPredicate(x2,
+                Conjunction((
+                    T(z, x2), S(x2, y2)
+                ))
+            )
+        ),
+        ExistentialPredicate(y1,
+            ExistentialPredicate(x1,
+                Conjunction((
+                    R(z, x1), S(x1, y1)
+                ))
+            )
+        )
+    ))
+
+    expected = [rule.formulas[0], rule.formulas[1]]
+
+    conjunctions = IPC.walk(rule)
+    assert conjunctions == expected
+
 
 # Tests for CCQ transformation, start here
 
@@ -329,10 +362,45 @@ def test_ccq_transformation_example_2_12():
     )))
 
     rule = convert_ucq_to_ccq(rule)
-    # Test valido, falta revisar los existenciales que no bajan
-    # Tambien la conjuncion mas exteriores (que si los existenciales bajan no es problema)
-    # Cuando este listo, crear `expected`
-    # Y soluciona la descomposicion del caso de abajo
+
+    c0 = ExistentialPredicate(x1,
+        Conjunction((
+            ExistentialPredicate(
+                y1, Conjunction((S(x1,y1),))
+            ),
+            Conjunction((R(x1),))
+        ))
+    )
+    c1 = ExistentialPredicate(y2,
+        Conjunction((
+            ExistentialPredicate(
+                x2, Conjunction((S(x2, y2),))
+            ),
+            Conjunction((T(y2),))
+        ))
+    )
+    c2 = ExistentialPredicate(x3, Conjunction((
+        Conjunction((
+            R(x3),
+        )),
+    )))
+    c3 = ExistentialPredicate(y3, Conjunction((
+        #Conjunction((
+            T(y3),
+        #)),
+    )))
+
+
+    expected = Conjunction((
+        Disjunction((
+            c0, c1, c2
+        )),
+        Disjunction((
+            c0, c1, c3
+        )),
+    ))
+
+    assert rule == expected
 
 
 def test_ccq_transformation_conjunction():
@@ -350,100 +418,15 @@ def test_ccq_transformation_conjunction():
          R(z, x1), S(x1, y1), T(z, x2), S(x2, y2)
     )))
 
-    rule = convert_ucq_to_ccq(rule)
-
-    #expected = Conjunction((
-    #    ExistentialPredicate(y1,
-    #        ExistentialPredicate(x2,
-    #            ExistentialPredicate(y2,
-    #                ExistentialPredicate(x1,
-    #                    Disjunction((
-    #                        Conjunction((
-    #                            R(z, x1), S(x1, y1), T(z, x2), S(x2, y2)
-    #                        )),
-    #                    ))
-    #                )
-    #            )
-    #        )
-    #    ),
-    #))
-
-    # I need to decompose the expression because
-    # the existential predicates do not have a guaranteed order.
-    existential_vars = [y1, y2, x1, x2]
-    if not isinstance(rule, Conjunction):
-        assert False
-
-    if len(rule.formulas) != 1 or not isinstance(rule.formulas[0], ExistentialPredicate):
-        assert False
-
-    rule = rule.formulas[0]
-    while isinstance(rule, ExistentialPredicate):
-        var = rule.head
-        rule = rule.body
-        if var in existential_vars:
-            existential_vars.remove(var)
-        else:
-            assert False
-
-    if len(existential_vars) > 0:
-        assert False
-
-    inner_disjunction = Disjunction((
-        Conjunction((
-            R(z, x1), S(x1, y1), T(z, x2), S(x2, y2)
-        )),
-    ))
-
-    assert rule == inner_disjunction
-
-def test_ccq_transformation_disjunction():
-    P = Symbol('P')
-    Q = Symbol('Q')
-    R = Symbol('R')
-    S = Symbol('S')
-    x = Symbol('x')
-    y = Symbol('y')
-
-    rule = Implication(Q(x), Disjunction((
-         P(x), S(x), R(y)
-    )))
-
-    rule = convert_ucq_to_ccq(rule)
+    rule_ccq = convert_ucq_to_ccq(rule)
 
     expected = Conjunction((
         Disjunction((
-            Conjunction((
-                P(x), S(x)
-            )),
-            ExistentialPredicate(y,
-                R(y)
-            )
+            R(z),
         )),
+        Disjunction((
+            R(z),
+        ))
     ))
 
-    rule == expected
-
-
-def test_ccq_transformation_disjunction_conjunction():
-    P = Symbol('P')
-    Q = Symbol('Q')
-    R = Symbol('R')
-    S = Symbol('S')
-    T = Symbol('T')
-    x = Symbol('x')
-    y = Symbol('y')
-
-    rule = Implication(Q(x), Disjunction((
-        Conjunction((
-             P(x), S(x), R(y)
-        )),
-        Conjunction((
-            T(x), S(y)
-        )),
-        R(y)
-    )))
-
-    #rule = convert_rule_to_ucq(rule)
-    rule = convert_ucq_to_ccq(rule)
-    a = 1
+    assert rule == expected

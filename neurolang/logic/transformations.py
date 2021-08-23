@@ -683,14 +683,17 @@ class IdentifyPureConjunctions(LogicExpressionWalker):
 
     @add_match(ExistentialPredicate)
     def existential_predicate(self, fa):
-        return self.walk(fa.body)
+        body = self.walk(fa.body)
+        if body:
+            return [fa]
+
+        return []
 
     @add_match(FunctionApplication)
     def function_application(self, fa):
         return []
 
 class CheckPureConjunction(LogicExpressionWalker):
-    # This should be an entry point walker
     @add_match(Conjunction)
     def conjunction(self, conjunction):
         for f in conjunction.formulas:
