@@ -1,7 +1,7 @@
 
 from neurolang.logic.expression_processing import extract_logic_free_variables
 from numpy import isin
-from neurolang.logic.transformations import CheckPureConjunction, IdentifyPureConjunctions, PushExistentialsDown, RemoveExistentialPredicates, RemoveTrivialOperations
+from neurolang.logic.transformations import CheckPureConjunction, GuaranteeConjunction, IdentifyPureConjunctions, PushExistentialsDown, RemoveExistentialPredicates, RemoveTrivialOperations
 from neurolang.probabilistic.dalvi_suciu_lift import convert_ucq_to_ccq
 from neurolang.probabilistic.transforms import convert_rule_to_ucq, convert_to_cnf_ucq
 from neurolang.logic import Conjunction, Disjunction, ExistentialPredicate, Implication
@@ -11,6 +11,7 @@ IPC = IdentifyPureConjunctions()
 CPC = CheckPureConjunction()
 REP = RemoveExistentialPredicates()
 PED = PushExistentialsDown()
+GC = GuaranteeConjunction()
 
 # Tests for RemoveExistentialPredicate, start here
 def test_remove_existential():
@@ -405,6 +406,10 @@ def test_ccq_transformation_example_2_12():
 
 
 def test_ccq_no_transformation_conjunction():
+
+    from neurolang.config import config
+    config.disable_expression_type_printing()
+
     Q = Symbol('Q')
     R = Symbol('R')
     S = Symbol('S')
@@ -434,4 +439,4 @@ def test_ccq_no_transformation_conjunction():
         antecedent = ExistentialPredicate(a, antecedent)
     expected = PED.walk(RTO.walk(antecedent))
 
-    assert rule_ccq == Conjunction((expected,))
+    assert rule_ccq == GC.walk(expected)

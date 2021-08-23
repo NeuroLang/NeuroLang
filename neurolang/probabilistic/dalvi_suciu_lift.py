@@ -249,7 +249,7 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         raise ValueError('Invalid transformation type')
 
     final_expression = fresh_symbols_to_components(dic_components, fresh_symbols_expression)
-    final_expression = GCD.walk(PED.walk(final_expression))
+    final_expression = GCD.walk(final_expression)
 
     return final_expression
 
