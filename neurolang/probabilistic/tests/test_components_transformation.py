@@ -368,30 +368,21 @@ def test_ccq_transformation_example_2_12():
     c0 = ExistentialPredicate(x1,
         Conjunction((
             ExistentialPredicate(
-                y1, Conjunction((S(x1,y1),))
+                y1, S(x1,y1),
             ),
-            Conjunction((R(x1),))
+            R(x1),
         ))
     )
     c1 = ExistentialPredicate(y2,
         Conjunction((
             ExistentialPredicate(
-                x2, Conjunction((S(x2, y2),))
+                x2, S(x2, y2),
             ),
-            Conjunction((T(y2),))
+            T(y2),
         ))
     )
-    c2 = ExistentialPredicate(x3, Conjunction((
-        Conjunction((
-            R(x3),
-        )),
-    )))
-    c3 = ExistentialPredicate(y3, Conjunction((
-        #Conjunction((
-            T(y3),
-        #)),
-    )))
-
+    c2 = ExistentialPredicate(x3, R(x3),)
+    c3 = ExistentialPredicate(y3, T(y3),)
 
     expected = Conjunction((
         Disjunction((
@@ -437,6 +428,6 @@ def test_ccq_no_transformation_conjunction():
 
     for a in existential_vars:
         antecedent = ExistentialPredicate(a, antecedent)
-    expected = PED.walk(RTO.walk(antecedent))
+    expected = RTO.walk(PED.walk(antecedent))
 
     assert rule_ccq == GC.walk(expected)
