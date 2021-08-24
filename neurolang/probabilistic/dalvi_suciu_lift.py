@@ -62,18 +62,14 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import ProbSemiringSolver
+from .probabilistic_semiring_solver import ProbSemiringToRelationalAlgebraSolver
 from .query_resolution import (
     generate_provenance_query_compiler,
     lift_solve_marg_query,
-    reintroduce_unified_head_terms,
-    solve_marg_query as _solve_marg_query
+    reintroduce_unified_head_terms
 )
 from .shattering import shatter_easy_probfacts
 from .small_dichotomy_theorem_based_solver import (
-    RAQueryOptimiser,
-    _maybe_reintroduce_head_variables,
-    _project_on_query_head,
     lift_optimization_for_choice_predicates
 )
 from .transforms import (
@@ -96,15 +92,15 @@ __all__ = [
 RTO = RemoveTrivialOperations()
 
 
-class LiftedQueryProcessingSolver(
+class ExtendedRelationalAlgebraToRelationalAlgebraWalker(
     rap.DisjointProjectMixin,
     rap.WeightedNaturalJoinSolverMixin,
-    ProbSemiringSolver,
+    ProbSemiringToRelationalAlgebraSolver,
 ):
     pass
 
 
-def solve_succ_query(query, cpl_program):
+def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     """
     Solve a SUCC query on a CP-Logic program.
 
@@ -177,18 +173,18 @@ def solve_succ_query(query, cpl_program):
         )
 
     query_compiler = generate_provenance_query_compiler(
-        symbol_table, run_relational_algebra_solver
+        symbol_table, run_relational_algebra_solver,
+        solver_class=ExtendedRelationalAlgebraToRelationalAlgebraWalker
     )
 
     with log_performance(LOG, "Run RAP query"):
-        solver = LiftedQueryProcessingSolver(symbol_table)
-        prob_set_result = solver.walk(ra_query)
+        prob_set_result = query_compiler.walk(ra_query)
 
     return prob_set_result
 
 
 def solve_marg_query(rule, cpl):
-    return _solve_marg_query(rule, cpl, solve_succ_query)
+    return lift_solve_marg_query(rule, cpl, solve_succ_query)
 
 
 def dalvi_suciu_lift(rule, symbol_table):

@@ -225,10 +225,10 @@ class DisjointProjectMixin(PatternWalker):
                 prov_col,
             )
         )
-        relation = ExtendedProjection(prov_set, proj_list)
+        relation = ExtendedProjection(prov_set.relation, proj_list)
         relation = GroupByAggregation(
             relation,
-            groupby=prov_set.non_provenance_columns,
+            groupby=proj_op.attributes,
             aggregate_functions=(
                 FunctionApplicationListMember(
                     FunctionApplication(Constant(sum), (prov_col,)),
@@ -264,7 +264,7 @@ class DisjointProjectMixin(PatternWalker):
             ),
         ]
         operation = GroupByAggregation(
-            prov_set,
+            prov_set.relation,
             proj_op.attributes,
             aggregate_functions,
         )
@@ -717,7 +717,6 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
 
 
 class RelationalAlgebraProvenanceCountingSolverMixin(
-    WeightedNaturalJoinSolverMixin,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     PatternWalker
 ):

@@ -43,7 +43,7 @@ from ..relational_algebra_provenance import (
 )
 from ..utils import log_performance
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from .query_resolution import solve_marg_query as _solve_marg_query
+from .query_resolution import lift_solve_marg_query as _solve_marg_query
 from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     DeterministicFactSet,

@@ -210,7 +210,7 @@ def compute_probabilistic_solution(
     return solution
 
 
-def solve_marg_query(rule, cpl, succ_solver):
+def lift_solve_marg_query(rule, cpl, succ_solver):
     """
     Solve a MARG query on a CP-Logic program.
 
@@ -362,7 +362,8 @@ class RAQueryOptimiser(
 
 
 def generate_provenance_query_compiler(
-    symbol_table, run_relational_algebra_solver
+    symbol_table, run_relational_algebra_solver,
+    solver_class=ProbSemiringToRelationalAlgebraSolver
 ):
     """
     Generate a walker that compiles a RAP query.
@@ -376,11 +377,14 @@ def generate_provenance_query_compiler(
         if `true` the walker will return a ProvenanceAlgebraSet containing
         a NamedAlgebraSet as `relation` attribute. If `false` the walker will
         produce a relational algebra expression as `relation` attribute.
+    solver_class: PatternWalker
+        class to translate a provenance RA sets program into a RA program.
+        Default is `ProbSemiringToRelationalAlgebraSolver`.
     """
 
     steps = [
         RAQueryOptimiser(),
-        ProbSemiringToRelationalAlgebraSolver(symbol_table=symbol_table),
+        solver_class(symbol_table=symbol_table),
         RAQueryOptimiser()
     ]
 
