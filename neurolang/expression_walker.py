@@ -237,9 +237,6 @@ class ChainedWalker:
 
     def walk(self, expression):
         for walker in self.walkers:
-            logging.debug(
-                "Walking over {} with {}".format(expression, walker.__class__)
-            )
             expression = walker.walk(expression)
         return expression
 
