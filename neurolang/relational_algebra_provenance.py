@@ -124,6 +124,30 @@ class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
         )
 
 
+class LiftedPlanProjection(RelationalAlgebraOperation):
+    def __init__(self, relation, attributes):
+        self.relation = relation
+        self.attributes = attributes
+
+
+class IndependentProjection(LiftedPlanProjection):
+    def __repr__(self) -> str:
+        if self.attributes is Ellipsis:
+            attributes_repr = "..."
+        else:
+            attributes_repr = ",".join(repr(attr) for attr in self.attributes)
+        return "ind-π_[{}]({})".format(attributes_repr, repr(self.relation))
+
+
+class DisjointProjection(LiftedPlanProjection):
+    def __repr__(self) -> str:
+        if self.attributes is Ellipsis:
+            attributes_repr = "..."
+        else:
+            attributes_repr = ",".join(repr(attr) for attr in self.attributes)
+        return "disj-π_[{}]({})".format(attributes_repr, repr(self.relation))
+
+
 class WeightedNaturalJoinSolverMixin(PatternWalker):
     @add_match(WeightedNaturalJoin)
     def prov_weighted_join(self, join_op):
@@ -182,31 +206,7 @@ class WeightedNaturalJoinSolverMixin(PatternWalker):
         ))
 
 
-class LiftedPlanProjection(RelationalAlgebraOperation):
-    def __init__(self, relation, attributes):
-        self.relation = relation
-        self.attributes = attributes
-
-
-class IndependentProjection(LiftedPlanProjection):
-    def __repr__(self) -> str:
-        if self.attributes is Ellipsis:
-            attributes_repr = "..."
-        else:
-            attributes_repr = ",".join(repr(attr) for attr in self.attributes)
-        return "ind-π_[{}]({})".format(attributes_repr, repr(self.relation))
-
-
-class DisjointProjection(LiftedPlanProjection):
-    def __repr__(self) -> str:
-        if self.attributes is Ellipsis:
-            attributes_repr = "..."
-        else:
-            attributes_repr = ",".join(repr(attr) for attr in self.attributes)
-        return "disj-π_[{}]({})".format(attributes_repr, repr(self.relation))
-
-
-class IndependentDisjointProjectionsAndUnion(PatternWalker):
+class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
     @add_match(IndependentProjection(ProvenanceAlgebraSet, ...))
     def independent_projection(self, proj_op):
         prov_set = proj_op.relation

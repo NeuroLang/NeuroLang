@@ -94,7 +94,7 @@ RTO = RemoveTrivialOperations()
 
 
 class ExtendedRelationalAlgebraToRelationalAlgebraWalker(
-    rap.DisjointProjectMixin,
+    rap.IndependentDisjointProjectionsAndUnionMixin,
     rap.WeightedNaturalJoinSolverMixin,
     ProbSemiringToRelationalAlgebraSolver,
 ):

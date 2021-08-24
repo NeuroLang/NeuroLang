@@ -54,7 +54,7 @@ from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query
+    generate_probabilistic_symbol_table_for_query,
 )
 from .query_resolution import (
     generate_provenance_query_compiler,
