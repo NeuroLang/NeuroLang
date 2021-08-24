@@ -10,13 +10,14 @@ from ...logic import (
     ExistentialPredicate,
     Implication,
 )
-from ...relational_algebra import str2columnstr_constant
+from ...relational_algebra import str2columnstr_constant, ColumnStr
 from ...relational_algebra_provenance import DisjointProjection
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
 from ..probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
+    ProbabilisticFactSet,
 )
 
 TNRA = TranslateToNamedRA()
@@ -583,3 +584,98 @@ def test_extract_probabilistic_root_variables_no_probabilistic_atom():
         formulas, symbol_table
     )
     assert len(res) == 0
+
+
+def test_mixed_probabilistic_deterministic_safe():
+    R = Symbol("R")
+    S = Symbol("S")
+    T = Symbol("T")
+    x = Symbol("x")
+    y = Symbol("y")
+    R_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("x",))
+    )
+    S_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x", "y"))
+    )
+    T_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x",))
+    )
+    symbol_table = {
+        R: DeterministicFactSet(R_relation),
+        S: ProbabilisticFactSet(S_relation, Constant(ColumnStr("_p_"))),
+        T: ProbabilisticFactSet(T_relation, Constant(ColumnStr("_p_"))),
+    }
+    query = ExistentialPredicate(
+        x,
+        ExistentialPredicate(
+            y,
+            Conjunction((R(x), S(x, y), T(y))),
+        )
+    )
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+def test_mixed_probabilistic_deterministic_unsafe():
+    R = Symbol("R")
+    S = Symbol("S")
+    T = Symbol("T")
+    x = Symbol("x")
+    y = Symbol("y")
+    R_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("x",))
+    )
+    S_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x", "y"))
+    )
+    T_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x",))
+    )
+    symbol_table = {
+        R: ProbabilisticFactSet(R_relation, Constant(ColumnStr("_p_"))),
+        S: DeterministicFactSet(S_relation),
+        T: ProbabilisticFactSet(T_relation, Constant(ColumnStr("_p_"))),
+    }
+    query = ExistentialPredicate(
+        x,
+        ExistentialPredicate(
+            y,
+            Conjunction((R(x), S(x, y), T(y))),
+        )
+    )
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert not dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+def test_interaction_deterministic_probfact_probchoice_safe():
+    Det = Symbol("Det")
+    Pchoice = Symbol("Pchoice")
+    Pfact = Symbol("Pfact")
+    x = Symbol("x")
+    y = Symbol("y")
+    Det_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("x",))
+    )
+    Pchoice_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "y"))
+    )
+    Pfact_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x",))
+    )
+    symbol_table = {
+        Det: ProbabilisticFactSet(Det_relation, Constant(ColumnStr("_p_"))),
+        Pchoice: DeterministicFactSet(Pchoice_relation),
+        Pfact: ProbabilisticFactSet(
+            Pfact_relation, Constant(ColumnStr("_p_"))
+        ),
+    }
+    query = ExistentialPredicate(
+        x,
+        ExistentialPredicate(
+            y,
+            Conjunction((Det(x, y), Pchoice(y), Pfact(x))),
+        )
+    )
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
