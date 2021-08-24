@@ -53,7 +53,7 @@ GRAMMAR = u"""
     constant_predicate = identifier'(' ','.{ literal } ')' ;
 
     negated_predicate = ('~' | '\u00AC' ) predicate ;
-    existential_body = arguments such_that composite_predicate;
+    existential_body = arguments such_that ( conjunction_symbol ).{ predicate }+ ;
     existential_predicate = \
         exists '(' @:existential_body ')' ;
 
@@ -64,6 +64,7 @@ GRAMMAR = u"""
              | function_application
              | '...' ;
 
+    signed_int_ext_identifier = [ '-' ] int_ext_identifier ;
     int_ext_identifier = identifier | ext_identifier ;
     ext_identifier = '@'identifier;
 
@@ -79,7 +80,7 @@ GRAMMAR = u"""
 
     exponent = literal
              | function_application
-             | int_ext_identifier
+             | signed_int_ext_identifier
              | '(' @:argument ')' ;
 
     literal = number
@@ -239,7 +240,9 @@ class DatalogSemantics:
 
     def existential_predicate(self, ast):
         exp = ast[2]
-        if isinstance(exp, list):
+        if len(exp) == 1:
+            exp = exp[0]
+        else:
             exp = Conjunction(tuple(exp))
 
         for arg in ast[0]:
@@ -294,6 +297,12 @@ class DatalogSemantics:
         else:
             f = ast[0]
         return FunctionApplication(f, args=ast[2])
+
+    def signed_int_ext_identifier(self, ast):
+        if isinstance(ast, Expression):
+            return ast
+        else:
+            return Constant(mul)(Constant(-1), ast[1])
 
     def identifier(self, ast):
         return Symbol(ast)

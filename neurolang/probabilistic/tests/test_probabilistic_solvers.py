@@ -5,7 +5,7 @@ import pytest
 
 from ...config import config
 from ...datalog import Fact
-from ...exceptions import NonLiftableException
+from ...exceptions import NonLiftableException, UnsupportedSolverError
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
 from .. import (
@@ -913,3 +913,69 @@ def test_disjunctive_query_with_probchoice():
         ("_p_", "x"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_small_dichotomy_fails_on_disjunctive_query():
+    solver = small_dichotomy_theorem_based_solver
+    pchoice_as_sets = {
+        Q: {(0.6, 1), (0.4, 2)},
+        A: {(0.7, 1), (0.2, 2), (0.1, 3)},
+    }
+    pfact_as_sets = {
+        P: {(0.9, 3), (0.8, 2)},
+        R: {(0.4, 1), (0.1, 2)},
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_as_set in pfact_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_as_set
+        )
+    code = Union((
+        Implication(Z(x), Conjunction((P(x), Q(x), A(y)))),
+        Implication(Z(x), Conjunction((R(x), Q(x)))),
+    ))
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x))
+    with pytest.raises(UnsupportedSolverError):
+        solver.solve_succ_query(query, cpl_program)
+
+
+def test_small_dichotomy_fails_on_noisy_or_projection():
+    solver = small_dichotomy_theorem_based_solver
+    pfact_as_sets = {
+        P: {(0.9, 3, 2), (0.8, 3, 1)},
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_as_set in pfact_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_as_set
+        )
+    query = Implication(ans(x), P(x, y))
+    with pytest.raises(UnsupportedSolverError):
+        solver.solve_succ_query(query, cpl_program)
+
+
+def test_small_dichotomy_fails_on_noisy_or_projection_with_pchoice_in_query():
+    solver = small_dichotomy_theorem_based_solver
+    pfact_as_sets = {
+        P: {(0.9, 3, 2), (0.8, 3, 1)},
+    }
+    pchoice_as_sets = {
+        Q: {(0.6, 1), (0.4, 2)},
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_as_set in pfact_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_as_set
+        )
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    query = Implication(ans(x), Conjunction((Q(x), P(x, y))))
+    with pytest.raises(UnsupportedSolverError):
+        solver.solve_succ_query(query, cpl_program)

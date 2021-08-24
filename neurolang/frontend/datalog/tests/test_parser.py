@@ -1,16 +1,17 @@
 from operator import add, eq, lt, mul, pow, sub, truediv
 
+import pytest
 from neurolang.logic import ExistentialPredicate
+from tatsu.exceptions import FailedParse
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....expressions import Constant, FunctionApplication, Query, Symbol
 from ....probabilistic.expressions import (
     PROB,
     Condition,
-    ProbabilisticPredicate
+    ProbabilisticPredicate,
 )
 from ..standard_syntax import ExternalSymbol, parser
-
 
 def test_facts():
     res = parser('A(3)')
@@ -208,7 +209,7 @@ def test_probabilistic_fact():
     d = Symbol("d")
     x = Symbol("x")
     B = Symbol("B")
-    res = parser("B(x) :: exp((-1 * d) / 5.0) :- A(x, d) & (d < 0.8)")
+    res = parser("B(x) :: exp(-d / 5.0) :- A(x, d) & (d < 0.8)")
     expected = Union(
         (
             Implication(
@@ -290,7 +291,7 @@ def test_existential():
     res = parser("C(x) :- B(x), ∃(s1 st A(s1))")
     assert res == expected
 
-    res = parser("C(x) :- B(x), exists(s1, s2; (A(s1), A(s2)))")
+    res = parser("C(x) :- B(x), exists(s1, s2; A(s1), A(s2))")
 
     expected = Union(
         (
@@ -312,6 +313,9 @@ def test_existential():
     )
 
     assert res == expected
+
+    with pytest.raises(FailedParse):
+        res = parser("C(x) :- B(x), exists(s1; )")
 
 
 def test_query():

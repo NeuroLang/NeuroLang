@@ -76,6 +76,7 @@ from .datalog.sugar import (
 )
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
+from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
@@ -88,6 +89,7 @@ class RegionFrontendCPLogicSolver(
     QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
     RegionSolver,
+    NumpyFunctionsMixin,
     CPLogicMixin,
     DatalogWithAggregationMixin,
     BuiltinAggregationMixin,
