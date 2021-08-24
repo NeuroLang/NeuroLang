@@ -147,22 +147,7 @@ class SemiRingRAPToSDD(PatternWalker):
         return res
 
 
-class WMCSemiRingSolver(
-    RelationalAlgebraProvenanceExpressionSemringSolver,
-):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.translated_probfact_sets = dict()
-        self.tagged_sets = []
-
-    def _semiring_mul(self, left, right):
-        return FunctionApplication(Constant(self._internal_mul), (left, right))
-
-    @staticmethod
-    def _internal_mul(left, right):
-        r = left * right
-        return r
-
+class EliminateSuperfluousProjectionMixin(PatternWalker):
     @add_match(
         Projection,
         lambda exp: (
@@ -181,6 +166,8 @@ class WMCSemiRingSolver(
         relation = self.walk(expression.relation)
         return relation
 
+
+class DeterministicFactSetTranslation(PatternWalker):
     @add_match(
         DeterministicFactSet(Constant),
         lambda e: e.relation.value.is_empty()
@@ -191,6 +178,25 @@ class WMCSemiRingSolver(
             deterministic_set.relation,
             str2columnstr_constant(rap_column)
         )
+
+
+class WMCSemiRingSolver(
+    EliminateSuperfluousProjectionMixin,
+    DeterministicFactSetTranslation,
+    RelationalAlgebraProvenanceExpressionSemringSolver,
+):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.translated_probfact_sets = dict()
+        self.tagged_sets = []
+
+    def _semiring_mul(self, left, right):
+        return FunctionApplication(Constant(self._internal_mul), (left, right))
+
+    @staticmethod
+    def _internal_mul(left, right):
+        r = left * right
+        return r
 
     @add_match(DeterministicFactSet(Symbol))
     def deterministic_fact_set(self, deterministic_set):
@@ -313,6 +319,8 @@ class WMCSemiRingSolver(
 
 
 class SDDWMCSemiRingSolver(
+    EliminateSuperfluousProjectionMixin,
+    DeterministicFactSetTranslation,
     RelationalAlgebraProvenanceExpressionSemringSolver,
 ):
     def __init__(self, *args, **kwargs):
@@ -395,35 +403,6 @@ class SDDWMCSemiRingSolver(
         right.deref()
 
         return r
-
-    @add_match(
-        Projection,
-        lambda exp: (
-            isinstance(
-                exp.relation,
-                (
-                    DeterministicFactSet,
-                    ProbabilisticFactSet,
-                    ProbabilisticChoiceSet
-                )
-            )
-            and all(att.type is ColumnInt for att in exp.attributes)
-        )
-    )
-    def eliminate_superfluous_projection(self, expression):
-        relation = self.walk(expression.relation)
-        return relation
-
-    @add_match(
-        DeterministicFactSet(Constant),
-        lambda e: e.relation.value.is_empty()
-    )
-    def deterministic_fact_set_constant(self, deterministic_set):
-        rap_column = ColumnStr(Symbol.fresh().name)
-        return ProvenanceAlgebraSet(
-            deterministic_set.relation,
-            str2columnstr_constant(rap_column)
-        )
 
     @add_match(DeterministicFactSet(Symbol))
     def deterministic_fact_set(self, deterministic_set):
@@ -621,25 +600,6 @@ def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
 
         SUCC[ P(x) ]
     """
-    with log_performance(LOG, 'Preparing query'):
-        conjunctive_query, variables_to_project = prepare_initial_query(
-            query_predicate
-        )
-
-        flat_query = flatten_query(conjunctive_query, cpl_program)
-
-    with log_performance(LOG, "Translation and lifted optimisation"):
-        if len(cpl_program.pchoice_pred_symbs) > 0:
-            flat_query = lift_optimization_for_choice_predicates(
-                flat_query, cpl_program
-            )
-
-        if flat_query == FALSE:
-            return _build_empty_result_set(variables_to_project)
-
-        ra_query = TranslateToNamedRA().walk(flat_query)
-        ra_query = Projection(ra_query, variables_to_project)
-        ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
         symbol_table = generate_probabilistic_symbol_table_for_query(
