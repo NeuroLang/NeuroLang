@@ -242,7 +242,7 @@ class ChainedWalker:
     def walk(self, expression):
         for walker in self.walkers:
             LOG.debug(
-                "Walking %(expression) with %(walker)",
+                "Walking %(expression)s with %(walker)s",
                 {
                     "expression": expression,
                     "walker": walker
