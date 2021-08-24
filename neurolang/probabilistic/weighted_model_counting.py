@@ -329,7 +329,7 @@ class SDDWMCSemiRingSolver(
         self.tagged_sets = []
         self.var_count = 0
         symbols_seen = set()
-        for k, v in self.symbol_table.items():
+        for v in self.symbol_table.values():
             if not isinstance(
                 v,
                 (
@@ -801,7 +801,7 @@ def build_global_sdd_model_rows(solver, literal_probabilities):
     neg = solver.manager.true()
     exclusive_clause = solver.manager.false()
     initial_var_count = solver.manager.var_count()
-    for i, sdd_ in enumerate(literal_probabilities):
+    for sdd_ in literal_probabilities:
         solver.manager.add_var_after_last()
         new_literal = solver.manager.literal(solver.manager.var_count())
         clause = (new_literal).equiv(sdd_)
