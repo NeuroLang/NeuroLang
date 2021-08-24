@@ -646,3 +646,36 @@ def test_mixed_probabilistic_deterministic_unsafe():
     )
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
     assert not dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+def test_interaction_deterministic_probfact_probchoice_safe():
+    Det = Symbol("Det")
+    Pchoice = Symbol("Pchoice")
+    Pfact = Symbol("Pfact")
+    x = Symbol("x")
+    y = Symbol("y")
+    Det_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("x",))
+    )
+    Pchoice_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "y"))
+    )
+    Pfact_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x",))
+    )
+    symbol_table = {
+        Det: ProbabilisticFactSet(Det_relation, Constant(ColumnStr("_p_"))),
+        Pchoice: DeterministicFactSet(Pchoice_relation),
+        Pfact: ProbabilisticFactSet(
+            Pfact_relation, Constant(ColumnStr("_p_"))
+        ),
+    }
+    query = ExistentialPredicate(
+        x,
+        ExistentialPredicate(
+            y,
+            Conjunction((Det(x, y), Pchoice(y), Pfact(x))),
+        )
+    )
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
