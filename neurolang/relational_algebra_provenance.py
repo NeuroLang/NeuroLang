@@ -206,7 +206,7 @@ class DisjointProjection(LiftedPlanProjection):
         return "disj-π_[{}]({})".format(attributes_repr, repr(self.relation))
 
 
-class DisjointProjectMixin(PatternWalker):
+class IndependentDisjointProjectionsAndUnion(PatternWalker):
     @add_match(IndependentProjection(ProvenanceAlgebraSet, ...))
     def independent_projection(self, proj_op):
         prov_set = proj_op.relation
