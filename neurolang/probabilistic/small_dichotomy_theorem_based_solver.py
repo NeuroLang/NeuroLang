@@ -26,6 +26,7 @@ from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
     extract_logic_atoms,
+    extract_logic_free_variables,
     flatten_query,
     remove_conjunction_duplicates,
 )
@@ -33,7 +34,12 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import UnsupportedSolverError
 from ..expression_walker import ExpressionWalker
 from ..expressions import Symbol
-from ..logic import FALSE, Conjunction, Disjunction, Implication, Negation
+from ..logic import (
+    FALSE,
+    Conjunction,
+    Disjunction,
+    Implication,
+)
 from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import (
     ColumnStr,
@@ -184,10 +190,10 @@ def solve_succ_query(query, cpl_program):
         if (
             isinstance(shattered_query.antecedent, Disjunction)
             or
-            _get_existential_variables_in_atoms(
+            _get_eqvars_in_atoms_matching_functype(
                 shattered_query, ProbabilisticFactSet
             )
-            - _get_existential_variables_in_atoms(
+            - _get_eqvars_in_atoms_matching_functype(
                 shattered_query, ProbabilisticChoiceSet
             )
         ):
@@ -252,23 +258,13 @@ def solve_marg_query(rule, cpl):
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
 
 
-def _get_existential_variables_in_atoms(query, functor_type):
+def _get_eqvars_in_atoms_matching_functype(query, functor_type):
     eq_vars = set()
-    head_vars = set(
-        arg for arg in query.consequent.args if isinstance(arg, Symbol)
-    )
-    if isinstance(query.antecedent, Conjunction):
-        conjuncts = query.antecedent.formulas
-    else:
-        conjuncts = (query.antecedent,)
-    for conjunct in conjuncts:
-        literal = (
-            conjunct.formula if isinstance(conjunct, Negation) else conjunct
-        )
-        if isinstance(literal.functor, functor_type):
-            eq_vars |= set(
-                arg
-                for arg in literal.args
-                if isinstance(arg, Symbol) and arg not in head_vars
+    head_vars = set(extract_logic_free_variables(query.consequent))
+    for atom in extract_logic_atoms(query.antecedent):
+        if isinstance(atom.functor, functor_type):
+            eq_vars |= (
+                set(extract_logic_free_variables(atom))
+                - head_vars
             )
     return eq_vars
