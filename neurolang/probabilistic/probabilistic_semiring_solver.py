@@ -18,7 +18,6 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     BuildProvenanceAlgebraSetWalkIntoMixin,
-    RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     RelationalAlgebraProvenanceCountingSolverMixin
 )
 from .probabilistic_ra_utils import (

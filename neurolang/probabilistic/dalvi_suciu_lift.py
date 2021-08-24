@@ -62,7 +62,8 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import ProbSemiringToRelationalAlgebraSolver
+from .probabilistic_semiring_solver import \
+    ProbSemiringToRelationalAlgebraSolver
 from .query_resolution import (
     generate_provenance_query_compiler,
     lift_solve_marg_query,
