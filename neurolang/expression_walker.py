@@ -25,6 +25,10 @@ from .expressions import (
 )
 from .utils import OrderedSet
 
+
+LOG = logging.getLogger(__name__)
+
+
 __all__ = [
     "expression_iterator",
     "PatternWalker",
@@ -122,7 +126,7 @@ def expression_iterator_constant(current_element):
 
 class PatternWalker(PatternMatcher):
     def walk(self, expression):
-        logging.debug("walking %(expression)s", {"expression": expression})
+        LOG.debug("walking %(expression)s", {"expression": expression})
         if isinstance(expression, tuple):
             result = [self.walk(e) for e in expression]
             result = tuple(result)
@@ -157,12 +161,12 @@ class EntryPointPatternWalker(PatternWalker):
             ):
                 pattern, guard, action = self.__entry_point__
                 name = "\033[1m\033[91m" + action.__qualname__ + "\033[0m"
-                logging.info("\tENTRY POINT MATCH %(name)s", {"name": name})
-                logging.info("\t\tpattern: %(pattern)s", {"pattern": pattern})
-                logging.info("\t\tguard: %(guard)s", {"guard": guard})
+                LOG.info("\tENTRY POINT MATCH %(name)s", {"name": name})
+                LOG.info("\t\tpattern: %(pattern)s", {"pattern": pattern})
+                LOG.info("\t\tguard: %(guard)s", {"guard": guard})
                 self._entry_point_walked = True
                 result_expression = action(self, expression)
-                logging.info(
+                LOG.info(
                     "\t\tresult: %(result_expression)s",
                     {"result_expression": result_expression},
                 )
@@ -237,8 +241,12 @@ class ChainedWalker:
 
     def walk(self, expression):
         for walker in self.walkers:
-            logging.debug(
-                "Walking over {} with {}".format(expression, walker.__class__)
+            LOG.debug(
+                "Walking %(expression)s with %(walker)s",
+                {
+                    "expression": expression,
+                    "walker": walker
+                }
             )
             expression = walker.walk(expression)
         return expression
