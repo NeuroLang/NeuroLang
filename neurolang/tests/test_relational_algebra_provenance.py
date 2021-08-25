@@ -591,7 +591,7 @@ def test_selection_between_columnints():
     op = Selection(r, Constant(operator.eq)(col1, col2))
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(op)
-    expected = testing.build_ra_provenance_set_from_named_ra_set(
+    expected = solver.walk(testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y"),
             iterable=[
@@ -600,7 +600,7 @@ def test_selection_between_columnints():
             ],
         ),
         ColumnStr("_p_"),
-    )
+    ))
     assert testing.eq_prov_relations(result, expected)
 
 

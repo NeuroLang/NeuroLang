@@ -63,16 +63,24 @@ def build_ra_provenance_set_from_named_ra_set(nas, provenance_column):
 
 
 def eq_prov_relations(pas1, pas2):
-    return isinstance(pas1, ProvenanceAlgebraSet)
-    return isinstance(pas2, ProvenanceAlgebraSet)
-    pas1_sorted_np_cols = sorted(pas1.non_provenance_columns)
-    pas2_sorted_np_cols = sorted(pas2.non_provenance_columns)
-    return pas1_sorted_np_cols == pas2_sorted_np_cols
-    return (
-        pas1.relation.value.projection_to_unnamed(*pas1.non_provenance_columns)
+    if not (
+        isinstance(pas1, ProvenanceAlgebraSet) and
+        isinstance(pas2, ProvenanceAlgebraSet)
+    ):
+        return False
+
+    if pas1.non_provenance_columns != pas2.non_provenance_columns:
+        return False
+
+    columns = [v.value for v in pas1.non_provenance_columns]
+
+    if not (
+        pas1.relation.value.projection_to_unnamed(*columns)
         ==
-        pas2.relation.value.projection_to_unnamed(*pas1.non_provenance_columns)
-    )
+        pas2.relation.value.projection_to_unnamed(*columns)
+    ):
+        return False
+
     # ensure the prov col names are different so we can join the sets
     c1 = Symbol.fresh().name
     c2 = Symbol.fresh().name
