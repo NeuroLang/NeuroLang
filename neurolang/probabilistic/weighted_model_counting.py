@@ -600,6 +600,12 @@ def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
 
         SUCC[ P(x) ]
     """
+    flat_query, ra_query = _prepare_and_translate_query(
+        query_predicate, cpl_program
+    )
+
+    if flat_query == FALSE:
+        return ra_query
 
     with log_performance(LOG, "Run RAP query"):
         symbol_table = generate_probabilistic_symbol_table_for_query(
@@ -649,25 +655,12 @@ def solve_succ_query_sdd_direct(
 
         SUCC[ P(x) ]
     """
-    with log_performance(LOG, 'Preparing query'):
-        conjunctive_query, variables_to_project = prepare_initial_query(
-            query_predicate
-        )
+    flat_query, ra_query = _prepare_and_translate_query(
+        query_predicate, cpl_program
+    )
 
-        flat_query = flatten_query(conjunctive_query, cpl_program)
-
-    with log_performance(LOG, "Translation and lifted optimisation"):
-        if len(cpl_program.pchoice_pred_symbs) > 0:
-            flat_query = lift_optimization_for_choice_predicates(
-                flat_query, cpl_program
-            )
-
-        if flat_query == FALSE:
-            return _build_empty_result_set(variables_to_project)
-
-        ra_query = TranslateToNamedRA().walk(flat_query)
-        ra_query = Projection(ra_query, variables_to_project)
-        ra_query = RAQueryOptimiser().walk(ra_query)
+    if flat_query == FALSE:
+        return ra_query
 
     with log_performance(LOG, "Run RAP query"):
         symbol_table = generate_probabilistic_symbol_table_for_query(
@@ -697,6 +690,27 @@ def solve_succ_query_sdd_direct(
         Constant[AbstractSet](new_ras),
         prob_set_result.provenance_column
     )
+
+def _prepare_and_translate_query(query_predicate, cpl_program):
+    with log_performance(LOG, 'Preparing query'):
+        conjunctive_query, variables_to_project = prepare_initial_query(
+            query_predicate
+        )
+
+        flat_query = flatten_query(conjunctive_query, cpl_program)
+        if len(cpl_program.pchoice_pred_symbs) > 0:
+            flat_query = lift_optimization_for_choice_predicates(
+                flat_query, cpl_program
+            )
+
+        if flat_query == FALSE:
+            flat_query = _build_empty_result_set(variables_to_project)
+
+    with log_performance(LOG, "Translation and lifted optimisation"):
+        ra_query = TranslateToNamedRA().walk(flat_query)
+        ra_query = Projection(ra_query, variables_to_project)
+        ra_query = RAQueryOptimiser().walk(ra_query)
+    return flat_query, ra_query
 
 
 def sdd_solver_global_model(solver, set_probabilities):
