@@ -691,6 +691,7 @@ def solve_succ_query_sdd_direct(
         prob_set_result.provenance_column
     )
 
+
 def _prepare_and_translate_query(query_predicate, cpl_program):
     with log_performance(LOG, 'Preparing query'):
         conjunctive_query, variables_to_project = prepare_initial_query(
@@ -704,12 +705,12 @@ def _prepare_and_translate_query(query_predicate, cpl_program):
             )
 
         if flat_query == FALSE:
-            flat_query = _build_empty_result_set(variables_to_project)
-
-    with log_performance(LOG, "Translation and lifted optimisation"):
-        ra_query = TranslateToNamedRA().walk(flat_query)
-        ra_query = Projection(ra_query, variables_to_project)
-        ra_query = RAQueryOptimiser().walk(ra_query)
+            ra_query = _build_empty_result_set(variables_to_project)
+        else:
+            with log_performance(LOG, "Translation and lifted optimisation"):
+                ra_query = TranslateToNamedRA().walk(flat_query)
+                ra_query = Projection(ra_query, variables_to_project)
+                ra_query = RAQueryOptimiser().walk(ra_query)
     return flat_query, ra_query
 
 
