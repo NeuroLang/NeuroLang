@@ -367,7 +367,7 @@ class Expression(metaclass=ExpressionMeta):
         if config.expression_type_printing():
             r = f'{{{name}: {self.__type_repr__}}}'
         else:
-            r = f'{{{self.name}}}'
+            r = f'{{{name}}}'
         args = self.unapply()
         if len(args) > 0:
             str_args = (
