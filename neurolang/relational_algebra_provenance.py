@@ -353,7 +353,7 @@ class ProvenanceSelectionMixin(PatternWalker):
     @add_match(
         Selection(ProvenanceAlgebraSet, ...)
     )
-    def selection_between_column_int(self, selection):
+    def selection_provenance_set(self, selection):
         res = ProvenanceAlgebraSet(
             Selection(
                 selection.relation.relation,
