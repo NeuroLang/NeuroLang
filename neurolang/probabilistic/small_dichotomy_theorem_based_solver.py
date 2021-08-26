@@ -122,8 +122,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         SUCC query of the form `ans(x) :- P(x)`.
     cpl_program : CPLogicProgram
         CP-Logic program on which the query should be solved.
-    run_relational_algebra_solver: bool
-        When true the result's `relation` attribute is a NameAlgebraSet,
+    run_relational_algebra_solver: bool, default True
+        When true the result's `relation` attribute is a NamedRelationalAlgebraFrozenSet,
         when false the attribute is the relational algebra expression that
         produces the such set.
 

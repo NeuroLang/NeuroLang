@@ -74,7 +74,7 @@ def build_always_true_provenance_relation(relation, prob_col=None):
 
     """
     if prob_col is None:
-        prob_col = str2columnstr_constant((Symbol.fresh().name))
+        prob_col = str2columnstr_constant(Symbol.fresh().name)
     # remove the probability column if it is already there
     elif prob_col in relation.columns:
         kept_cols = tuple(
