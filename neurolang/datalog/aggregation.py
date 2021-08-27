@@ -124,11 +124,6 @@ class DatalogWithAggregationMixin(PatternWalker):
                     'constants, symbols'
                 )
 
-            # if seen_aggregations > 1:
-            #     raise NeuroLangException(
-            #        f'Only one aggregation allowed in {consequent}'
-            #    )
-
         consequent_symbols = (
             consequent._symbols - consequent.functor._symbols -
             aggregation_functor_symbols
