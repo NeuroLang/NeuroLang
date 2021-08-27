@@ -7,7 +7,7 @@ from ..expressions import (Constant, FunctionApplication, NeuroLangException,
 from ..type_system import Unknown
 from .basic_representation import DatalogProgram, UnionOfConjunctiveQueries
 from .expression_processing import extract_logic_free_variables
-from ..logic import Conjunction, Union, Implication, Negation, Quantifier
+from ..logic import Conjunction, Union, Implication, Negation
 
 
 class NegativeFact(Implication):

@@ -47,8 +47,8 @@ GRAMMAR = u"""
                         | predicate ;
     exists = 'exists' | '\u2203' | 'EXISTS';
     such_that = 'st' | ';' ;
-    reserved_words = exists 
-                   | 'st' 
+    reserved_words = exists
+                   | 'st'
                    | 'ans' ;
 
     conjunction_symbol = ',' | '&' | '\N{LOGICAL AND}' ;

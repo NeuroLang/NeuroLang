@@ -586,7 +586,7 @@ class HeadRepeatedVariableToBodyEquality(PatternWalker):
 
     @add_match(
         Implication(FunctionApplication, ...),
-        lambda implication: max(
+        lambda implication: (len(implication.consequent.args) > 0) and max(
             collections.Counter(
                 (
                     arg

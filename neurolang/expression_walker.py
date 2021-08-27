@@ -368,7 +368,8 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         value = constant_iterable.value
         it1, it2 = tee(value)
         (
-            ReplaceExpressionsByValues._validate_iterable_for_constant_iterable_case(
+            ReplaceExpressionsByValues.
+            _validate_iterable_for_constant_iterable_case(
                 it1
             )
         )
@@ -475,8 +476,8 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         args = function_application.args
         lambda_args = lambda_.args
         if len(args) != len(lambda_args) or not all(
-            is_leq_informative(l.type, a.type)
-            for l, a in zip(lambda_args, args)
+            is_leq_informative(lambda_arg.type, arg.type)
+            for lambda_arg, arg in zip(lambda_args, args)
         ):
             raise NeuroLangTypeException(
                 f"{args} is not the appropriate "

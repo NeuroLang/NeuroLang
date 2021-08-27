@@ -1,19 +1,29 @@
-from neurolang.type_system import Unknown
 from typing import AbstractSet, Tuple
 
 import pytest
 
+from neurolang.type_system import Unknown
+
 from ...expression_walker import ExpressionBasicEvaluator, IdentityWalker
-from ...expressions import (Constant, ExpressionBlock, FunctionApplication,
-                            Lambda, NeuroLangException, Query, Symbol,
-                            is_leq_informative)
+from ...expressions import (
+    Constant,
+    ExpressionBlock,
+    FunctionApplication,
+    Lambda,
+    NeuroLangException,
+    Query,
+    Symbol,
+    is_leq_informative
+)
 from ...logic import ExistentialPredicate, Implication, Union
+from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from .. import DatalogProgram, Fact
 from ..basic_representation import UnionOfConjunctiveQueries
 from ..expressions import TranslateToLogic
-from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
-from ..wrapped_collections import WrappedNamedRelationalAlgebraFrozenSet, WrappedRelationalAlgebraFrozenSet
-
+from ..wrapped_collections import (
+    WrappedNamedRelationalAlgebraFrozenSet,
+    WrappedRelationalAlgebraFrozenSet
+)
 
 S_ = Symbol
 C_ = Constant

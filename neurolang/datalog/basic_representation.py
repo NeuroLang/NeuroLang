@@ -6,22 +6,41 @@ the extensional, intensional, and builtin
 sets.
 """
 
-from itertools import tee
 import operator as op
+from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 from warnings import warn
 
+from ..exceptions import (
+    NotConjunctiveExpression,
+    NotConjunctiveExpressionNestedPredicates,
+    ProtectedKeywordError
+)
 from ..expression_walker import ExpressionWalker, PatternWalker, add_match
-from ..exceptions import NotConjunctiveExpression, NotConjunctiveExpressionNestedPredicates, ProtectedKeywordError
-from ..expressions import (Constant, Expression, FunctionApplication,
-                           NeuroLangException, Symbol, TypedSymbolTableMixin,
-                           is_leq_informative)
+from ..expressions import (
+    Constant,
+    Expression,
+    FunctionApplication,
+    NeuroLangException,
+    Symbol,
+    TypedSymbolTableMixin,
+    is_leq_informative
+)
 from ..type_system import Unknown, get_args, infer_type
 from .expression_processing import (
-    extract_logic_free_variables, is_conjunctive_expression,
-    is_conjunctive_expression_with_nested_predicates)
-from .expressions import (NULL, UNDEFINED, Fact, Implication, NullConstant,
-                          Undefined, Union)
+    extract_logic_free_variables,
+    is_conjunctive_expression,
+    is_conjunctive_expression_with_nested_predicates
+)
+from .expressions import (
+    NULL,
+    UNDEFINED,
+    Fact,
+    Implication,
+    NullConstant,
+    Undefined,
+    Union
+)
 from .wrapped_collections import WrappedRelationalAlgebraSet
 
 __all__ = [
