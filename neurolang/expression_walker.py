@@ -409,7 +409,7 @@ class ResolveSymbolMixin(PatternMatcher):
                 raise ValueError(f"{symbol} not in symbol table")
 
 
-class TypedSymbolTableMixin(
+class TypedSymbolTableEvaluatorMixin(
     ResolveSymbolMixin, TypedSymbolTableMixin, PatternWalker
 ):
     @add_match(Statement)
@@ -425,7 +425,9 @@ class TypedSymbolTableMixin(
             return self.walk(Statement[statement.type](statement.lhs, rhs))
 
 
-class TypedSymbolTableEvaluator(TypedSymbolTableMixin, ExpressionWalker):
+class TypedSymbolTableEvaluator(
+    TypedSymbolTableEvaluatorMixin, ExpressionWalker
+):
     pass
 
 
