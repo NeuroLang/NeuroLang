@@ -92,7 +92,7 @@ def test_facts_constants():
 def test_atoms_variables():
     dl = Datalog()
 
-    eq = S_('equals')
+    eq = S_('equals_not_solve')
     x = S_('x')
     y = S_('y')
     Q = S_('Q')  # noqa: N806

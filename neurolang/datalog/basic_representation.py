@@ -78,6 +78,17 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
         else:
             return new_expression
 
+    @add_match(Union)
+    def union_of_cq(self, expression):
+        """This pattern is here to avoid
+        processing the full program when one rule
+        is rewritten.
+        """
+        for formula in expression.formulas:
+            self.walk(formula)
+
+        return expression
+
     @add_match(Fact(FunctionApplication(Symbol, ...)))
     def fact(self, expression):
         fact = expression.fact
