@@ -7,10 +7,11 @@ sets.
 """
 
 from itertools import tee
+import operator as op
 from typing import AbstractSet, Any, Callable, Tuple
 from warnings import warn
 
-from ..expression_walker import PatternWalker, add_match
+from ..expression_walker import ExpressionWalker, PatternWalker, add_match
 from ..exceptions import NotConjunctiveExpression, NotConjunctiveExpressionNestedPredicates, ProtectedKeywordError
 from ..expressions import (Constant, Expression, FunctionApplication,
                            NeuroLangException, Symbol, TypedSymbolTableMixin,
@@ -34,7 +35,7 @@ class UnionOfConjunctiveQueries:
     pass
 
 
-class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
+class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
     '''
     Implementation of Datalog grammar in terms of
     Intermediate Representations. No query resolution implemented.
@@ -65,8 +66,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
     protected_keywords = set()
 
-    def function_equals(self, a: Any, b: Any) -> bool:
-        return a == b
+    constant_equals = Constant[Callable[[Any, Any], bool]](op.eq)
 
     @add_match(Symbol)
     def symbol(self, expression):
@@ -128,8 +128,10 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         Expression
     ))
     def statement_intensional(self, expression):
-        consequent = expression.consequent
-        antecedent = expression.antecedent
+        original_expression = expression
+        consequent = self.walk(expression.consequent)
+        antecedent = self.walk(expression.antecedent)
+        expression = Implication(consequent, antecedent)
 
         self._validate_implication_syntax(consequent, antecedent)
 
@@ -145,7 +147,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
         self.symbol_table[symbol] = Union(disj)
 
-        return expression
+        return original_expression
 
     def _new_intensional_internal_representation(self, consequent):
         symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
@@ -314,3 +316,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         elif first is not None:
             type_ = infer_type(first)
         return type_, iterable
+
+
+class DatalogProgram(DatalogProgramMixin, ExpressionWalker):
+    pass

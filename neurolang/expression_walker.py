@@ -408,11 +408,12 @@ class ResolveSymbolMixin(PatternMatcher):
                 raise ValueError(f"{symbol} not in symbol table")
 
 
-class TypedSymbolTableEvaluator(
-    ResolveSymbolMixin, TypedSymbolTableMixin, ExpressionWalker
+class TypedSymbolTableMixin(
+    ResolveSymbolMixin, TypedSymbolTableMixin, PatternWalker
 ):
     @add_match(Statement)
     def statement(self, statement):
+        print(f"Procesing statement {statement}")
         rhs = self.walk(statement.rhs)
         return_type = unify_types(statement.type, rhs.type)
         rhs.change_type(return_type)
@@ -422,6 +423,10 @@ class TypedSymbolTableEvaluator(
             return statement
         else:
             return self.walk(Statement[statement.type](statement.lhs, rhs))
+
+
+class TypedSymbolTableEvaluator(TypedSymbolTableMixin, ExpressionWalker):
+    pass
 
 
 class ExpressionBasicEvaluator(ExpressionWalker):
