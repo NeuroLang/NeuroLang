@@ -324,3 +324,32 @@ def test_builtin_aggregations():
     result = solution[Q]
     expected = Constant[AbstractSet]({(10,)})
     assert result == expected
+
+
+def test_multiple_aggregations():
+    class DatalogWithBuiltinAggregation(
+        BuiltinAggregationMixin,
+        DatalogWithAggregationMixin,
+        DatalogProgram,
+        ExpressionBasicEvaluator,
+    ):
+        pass
+
+    dl = DatalogWithBuiltinAggregation()
+
+    P = S_('P')
+    Q = S_('Q')
+    x = S_('x')
+    edb = Eb_(tuple(F_(P(C_(i))) for i in range(10)))
+    dl.walk(edb)
+    agg_rule = Imp_(
+        Q(Fa_(AGG_COUNT, (x,)), Fa_(AGG_MAX, (x,))),
+        P(x)
+    )
+    dl.walk(agg_rule)
+    chase = Chase(dl)
+    solution = chase.build_chase_solution()
+    assert Q in solution
+    result = solution[Q]
+    expected = Constant[AbstractSet]({(10, 9)})
+    assert result == expected
