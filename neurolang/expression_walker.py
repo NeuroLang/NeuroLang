@@ -413,7 +413,6 @@ class TypedSymbolTableMixin(
 ):
     @add_match(Statement)
     def statement(self, statement):
-        print(f"Procesing statement {statement}")
         rhs = self.walk(statement.rhs)
         return_type = unify_types(statement.type, rhs.type)
         rhs.change_type(return_type)

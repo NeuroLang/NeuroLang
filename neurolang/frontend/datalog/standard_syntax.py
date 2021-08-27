@@ -83,7 +83,8 @@ GRAMMAR = u"""
 
     lambda_expression = 'lambda' arguments ':' argument;
 
-    function_application = int_ext_identifier'(' [ arguments ] ')';
+    function_application = '(' @:lambda_expression ')' '(' [ @:arguments ] ')'
+                         | @:int_ext_identifier '(' [ @:arguments ] ')' ;
 
     arithmetic_operation = term [ ('+' | '-') term ] ;
 
@@ -317,7 +318,7 @@ class DatalogSemantics:
             f = Symbol(ast[0])
         else:
             f = ast[0]
-        return FunctionApplication(f, args=ast[2])
+        return FunctionApplication(f, args=ast[1])
 
     def signed_int_ext_identifier(self, ast):
         if isinstance(ast, Expression):
