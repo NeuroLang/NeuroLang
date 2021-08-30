@@ -1,6 +1,6 @@
 import './symbols.css'
 import $ from '../jquery-bundler'
-import { PapayaViewer } from '../papaya/viewer'
+import { createMiniColorBar, PapayaViewer } from '../papaya/viewer'
 import { API_ROUTE, DATA_TYPES, PUBMED_BASE_URL } from '../constants'
 
 export class SymbolsController {
@@ -267,6 +267,8 @@ export class SymbolsController {
       lastResort: 'top center'
     })
     $('.nl-image-download').on('click', (evt) => this.onImageDownloadClicked(evt))
+    $('.nl-mini-colorbar').on('click', (evt) => this.onMiniColorBarClicked(evt))
+    $('.nl-mini-colorbar').popup()
   }
 
   /**
@@ -284,10 +286,16 @@ export class SymbolsController {
     $('#nlPapayaContainer .nl-papaya-alert').hide()
     if (evt.target.checked) {
       if (this.viewer.canAdd()) {
-        const hex = this.viewer.addImage(imageID, imageData.image, imageData.min, imageData.max)
-        if (hex !== null) {
-          elmt.siblings('label').attr('style', 'color: ' + hex + ' !important')
+        const imageParams = this.viewer.addImage(imageID, imageData.image, imageData.min, imageData.max, imageData.q95)
+        if ('hex' in imageParams) {
+          elmt.siblings('label').attr('style', 'color: ' + imageParams.hex + ' !important')
           parentDiv.addClass('region-label')
+        } else {
+          const miniCBDiv = elmt.parents('.nl-vbr-overlay-controls').find('.nl-mini-colorbar')
+          const canvas = createMiniColorBar(imageParams.lut)
+          canvas.style.height = '100%'
+          miniCBDiv.empty()
+          miniCBDiv.append(canvas)
         }
         parentDiv.addClass('displayed')
       } else {
@@ -347,6 +355,17 @@ export class SymbolsController {
     url += `?symbol=${this.activeSymbol}&col=${col}&idx=${idx}`
     elmt.attr('href', url)
   }
+
+  onMiniColorBarClicked (evt) {
+    let elmt = $(evt.target)
+    if (elmt.is('canvas')) {
+      elmt = elmt.parent()
+    }
+    const col = elmt.data('col')
+    const row = elmt.data('row')
+    const imageID = `image_${row}_${col}`
+    this.viewer.showColorBar(imageID)
+  }
 }
 
 /**
@@ -378,6 +397,8 @@ function renderVBROverlay (data, type, row, meta) {
       <div class="ui toggle checkbox nl-vbr-overlay-switch">
       <input type="checkbox" data-row=${meta.row} data-col=${meta.col}>
       <label>Show region</label></div>
+      <div class="nl-mini-colorbar" data-content="Display the colorbar for this image"
+      data-row=${meta.row} data-col=${meta.col}></div>
       <button class="ui tiny icon button nl-vbr-overlay-center nl-overlay-control"
       data-row=${meta.row} data-col=${meta.col} data-tooltip="Center on region">
       <i class="crosshairs icon"></i></button>

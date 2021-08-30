@@ -4,7 +4,6 @@ import { API_ROUTE } from '../constants'
 import Plotly from 'plotly.js-dist-min'
 import { lab, rgb } from 'd3-color'
 import * as d3chromatic from 'd3-scale-chromatic'
-import * as d3array from 'd3-array'
 
 const LUTS = [
   { name: 'red', data: [[0, 0.96, 0.26, 0.21], [1, 0.96, 0.26, 0.21]], gradation: false, hex: '#f44336' }, // #f44336
@@ -57,7 +56,8 @@ export class PapayaViewer {
     this.resultsContainer = $('#symbolsContainer')
     this.papayaContainer = $('#nlPapayaContainer')
     this.cbContainer = $('#nlColorbarContainer')
-    this.colorSchemes = ['Turbo', 'Viridis', 'Inferno', 'Magma', 'Plasma', 'Cividis', 'Warm', 'Cool', 'BrBG', 'PRGn', 'Blues', 'Greens', 'Greys', 'BuGn', 'BuPu', 'YlGn', 'YlOrBr', 'YlOrRd'].map(s => scaleChromaticToLUT(s))
+    // this.colorSchemes = ['Turbo', 'Viridis', 'Inferno', 'Magma', 'Plasma', 'Cividis', 'Warm', 'Cool', 'BrBG', 'PRGn', 'Blues', 'Greens', 'Greys', 'BuGn', 'BuPu', 'YlGn', 'YlOrBr', 'YlOrRd'].map(s => scaleChromaticToLUT(s))
+    this.colorSchemes = ['YlOrRd', 'YlGnBu', 'Cividis', 'Greens', 'Viridis', 'Purples', 'Cool', 'Warm'].map(s => scaleChromaticToLUT(s))
     this.colorIndex = 0
   }
 
@@ -94,9 +94,8 @@ export class PapayaViewer {
     params.worldSpace = true
     params.kioskMode = true
     params.showControlBar = true
-    params.showImageButtons = true
-    // params.luts = this.colorSchemes.concat(...LUTS)
-    params.luts = LUTS
+    params.showImageButtons = false
+    params.luts = this.colorSchemes.concat(...LUTS)
     this.params = params
   }
 
@@ -115,6 +114,7 @@ export class PapayaViewer {
     } else {
     // reset the first (only) viewer
       papaya.Container.resetViewer(0, this.params)
+      this.cbContainer.empty()
     }
     this.imageIds = ['atlas']
   }
@@ -126,17 +126,17 @@ export class PapayaViewer {
    * @param {*} image the image data (base64 encoded)
    * @param {*} min the min value for the image
    * @param {*} max the max value for the image
+   * @param {*} q95 the 95 quantile
    */
-  addImage (name, image, min, max) {
+  addImage (name, image, min, max, q95) {
     let res = null
     if (this.canAdd()) {
       window[name] = image
-      const imageParams = this._getImageParams(name, image, min, max)
+      const imageParams = this._getImageParams(name, image, min, max, q95)
       papaya.Container.addImage(0, name, imageParams)
       this.imageIds.push(name)
-      if ('hex' in imageParams[name]) {
-        res = imageParams[name].hex
-      }
+      res = imageParams[name]
+      this.showColorBar(name)
     }
     return res
   }
@@ -146,6 +146,7 @@ export class PapayaViewer {
     if (idx > -1) {
       papaya.Container.removeImage(0, idx)
       this.imageIds.splice(idx, 1)
+      this.hideColorBar(name)
     }
   }
 
@@ -168,16 +169,16 @@ export class PapayaViewer {
     )
   }
 
-  onImageLoaded (params) {
-    // this.showImageHistogram(this.imageIds.length - 1)
-    const screenVolume = papayaContainers[0].viewer.screenVolumes[this.imageIds.length - 1]
-    const imageData = screenVolume.volume.imageData.data.filter((elt) => elt !== 0)
-    const q95 = d3array.quantile(imageData, 0.95)
-    if (screenVolume.screenMin !== q95) {
-      screenVolume.screenMin = Number(q95.toFixed(3))
-      papayaContainers[0].viewer.drawViewer(true, false)
-    }
-    createColorBar(this.cbContainer, screenVolume.lutName, screenVolume.screenMin, screenVolume.screenMax)
+  onImageLoaded () {
+  }
+
+  showColorBar (imageId) {
+    this.cbContainer.find('.nl-color-bar').hide()
+    this.cbContainer.find('#cb_' + imageId).show()
+  }
+
+  hideColorBar (imageId) {
+    this.cbContainer.find('#cb_' + imageId).hide()
   }
 
   showImageHistogram (imageId) {
@@ -196,7 +197,7 @@ export class PapayaViewer {
     Plotly.newPlot('nlHistogramContainer', data, layout)
   }
 
-  _getImageParams (name, image, min, max) {
+  _getImageParams (name, image, min, max, q95) {
     const imageParams = {}
     if (typeof min !== 'undefined' && typeof max !== 'undefined' && min === max) {
       // showing a segmented region
@@ -207,20 +208,39 @@ export class PapayaViewer {
       imageParams.alpha = 0.8
     } else {
       // showing an overlay
-      if (typeof min !== 'undefined') {
-        imageParams.min = Number(min.toFixed(2))
-      }
       if (typeof max !== 'undefined') {
-        imageParams.max = Number(max.toFixed(2))
+        imageParams.max = Number(max.toFixed(4))
       }
-      // const lut = this.colorSchemes[this.colorIndex]
-      // imageParams.lut = lut.name
-      // this.colorIndex = (this.colorIndex + 1) % this.colorSchemes.length
-      // imageParams.loadingComplete = () => this.onImageLoaded()
+      if (typeof q95 !== 'undefined') {
+        imageParams.min = Number(q95.toFixed(4))
+      } else if (typeof min !== 'undefined') {
+        imageParams.min = Number(min.toFixed(4))
+      }
+      const lut = this.colorSchemes[this.colorIndex]
+      imageParams.lut = lut.name
+      this.colorIndex = (this.colorIndex + 1) % this.colorSchemes.length
+      imageParams.loadingComplete = () => this.onImageLoaded()
+      const colorBar = createColorBar(this.cbContainer, name, lut.name, min, max, q95, max)
+      colorBar.find('input').on('change', (evt) => this.onThresholdChange(evt))
     }
     const params = []
     params[name] = imageParams
     return params
+  }
+
+  onThresholdChange (evt) {
+    const elmt = $(evt.target)
+    const imageID = elmt.data('name')
+    const val = elmt.val()
+    const min = elmt.hasClass('nl-min-threshold')
+    const idx = this.imageIds.indexOf(imageID)
+    const screenVolume = papayaContainers[0].viewer.screenVolumes[idx]
+    if (min) {
+      screenVolume.screenMin = val
+    } else {
+      screenVolume.screenMax = val
+    }
+    papayaContainers[0].viewer.drawViewer(true, false)
   }
 }
 
@@ -263,38 +283,70 @@ function getDiscreteScheme (name, n) {
       colors.push(rgb(interpolate(i / (n - 1))).hex())
     }
   }
-  return { colors, dark0, dark1 }
+  return { colors: colors.reverse(), dark0, dark1 }
 }
 
-function createColorBar (container, name, minValue, maxValue, n = 256) {
-  const { colors, dark0, dark1 } = getDiscreteScheme(name, n)
+/**
+ * Create a color bar for an image and add it to the given container.
+ * @param {*} container the container in which to add the color bar
+ * @param {*} imageName the image id
+ * @param {*} colorScheme the name of the d3 colorScheme
+ * @param {*} minValue the minimum value of image data
+ * @param {*} maxValue the maximum value of image data
+ * @param {*} min the minimum threshold value
+ * @param {*} max the maximum threshold value
+ * @param {*} n the number of steps in the color bar
+ */
+function createColorBar (container, imageName, colorScheme, minValue, maxValue, min, max, n = 256) {
+  const { colors, dark0, dark1 } = getDiscreteScheme(colorScheme, n)
+  const canvas = createColorBarCanvas(colors, n)
+
+  const minDiv = $(`<div class="ui mini transparent labeled input">
+  <div class="ui label" data-content="Minimum non-zero image value">${Number(minValue.toFixed(3))}</div>
+  <input class="nl-min-threshold" type="number" step="0.001" value=${Number(min.toFixed(3))}
+  data-name=${imageName} data-content="Minimum displayed value"></div>`)
+  if (dark1) {
+    minDiv.addClass('inverted')
+  }
+  minDiv.find('.ui.label').popup()
+  minDiv.find('input').popup()
+
+  const maxDiv = $(`<div class="ui mini transparent right labeled input">
+  <input class="nl-max-threshold" type="number" step="0.001" value=${Number(max.toFixed(3))}
+  data-name=${imageName} data-content="Maximum displayed value">
+  <div class="ui label" data-content="Maximum image value">${Number(maxValue.toFixed(3))}</div></div>`)
+  if (dark0) {
+    maxDiv.addClass('inverted')
+  }
+  maxDiv.find('.ui.label').popup()
+  maxDiv.find('input').popup()
+
+  const colorBar = $(`<div class="nl-color-bar" id="cb_${imageName}"></div>`)
+  colorBar.append(minDiv.get())
+  colorBar.append(canvas)
+  colorBar.append(maxDiv.get())
+
+  container.find('#cb_' + imageName).remove()
+  container.append(colorBar.get())
+  return colorBar
+}
+
+function createColorBarCanvas (colors, n) {
   const canvas = document.createElement('canvas')
   canvas.width = n
   canvas.height = 1
   const context = canvas.getContext('2d')
   canvas.style.margin = '0'
   canvas.style.width = '100%'
-  canvas.style.height = '25px'
   for (let i = 0; i < n; ++i) {
     context.fillStyle = colors[i]
     context.fillRect(i, 0, 1, 1)
   }
+  return canvas
+}
 
-  const minLabel = document.createElement('div')
-  minLabel.textContent = minValue
-  minLabel.style.position = 'absolute'
-  minLabel.style.top = '4px'
-  minLabel.style.color = dark0 ? '#fff' : '#000'
-
-  const maxLabel = document.createElement('div')
-  maxLabel.textContent = maxValue
-  maxLabel.style.position = 'absolute'
-  maxLabel.style.top = '4px'
-  maxLabel.style.right = '4px'
-  maxLabel.style.color = dark1 ? '#fff' : '#000'
-
-  container.empty()
-  container.append(canvas)
-  container.append(minLabel)
-  container.append(maxLabel)
+export function createMiniColorBar (colorScheme) {
+  const n = 128
+  const scheme = getDiscreteScheme(colorScheme, n)
+  return createColorBarCanvas(scheme.colors, n)
 }

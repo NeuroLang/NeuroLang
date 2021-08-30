@@ -86,10 +86,12 @@ def serializeVBR(image_row: pd.Series):
     flattened = image.get_fdata().flatten()
     min = flattened[flattened != 0].min()
     max = flattened.max()
+    q95 = np.quantile(flattened[flattened != 0], 0.95)
     hash = hashlib.sha224(image.dataobj.tobytes()).hexdigest()
     return {
         "min": min,
         "max": max,
+        "q95": q95,
         "image": base64_encode_spatial(image),
         "hash": hash,
         "center": calculate_image_center(image),

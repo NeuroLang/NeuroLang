@@ -1,6 +1,7 @@
 .nl-papaya-container {
     display: none;
     width: 50%;
+    position: relative;
 }
 
 .nl-papaya-alert {
@@ -9,8 +10,21 @@
 }
 
 .nl-colorbar-container {
-    position: relative;
-    top: -19.5%;
-    width: 25%;
-    right: -65%;
+    position: absolute;
+    width: 22%;
+    bottom: 4.8em;
+    right: 5em;
+}
+
+.nl-colorbar-container .nl-color-bar {
+    display: flex;
+    flex-direction: row;
+}
+
+.nl-colorbar-container .ui.labeled.input {
+    margin: 0 -4em;
+}
+
+.nl-colorbar-container .ui.labeled.input input {
+    width: 4em;
 }

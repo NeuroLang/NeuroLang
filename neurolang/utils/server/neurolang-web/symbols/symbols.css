@@ -5,6 +5,7 @@
 .nl-symbols-viewer-container {
     margin: 2rem 0;
     display: flex !important;
+    align-items: flex-start;
 }
 
 .nl-symbols-container {
@@ -12,8 +13,10 @@
     width: 100%;
 }
 
-.nl-symbols-container .ui.label.segment.secondary {
+.nl-symbols-container .ui.label.segment.nl-symbols-header {
     display: block;
+    background-color: #e8e8e8;
+    color: rgba(0,0,0,.6);
 }
 
 .nl-vbr-overlay-controls .ui.button.nl-overlay-control {
@@ -27,6 +30,22 @@
 
 .nl-vbr-overlay-controls.region-label .ui.button.nl-vbr-overlay-hist {
     display: none;
+}
+
+.nl-vbr-overlay-controls .nl-mini-colorbar {
+    display: none;
+    vertical-align: middle;
+    width: 2rem;
+    height: 2rem;
+    border: 1px;
+    overflow: hidden;
+    border-radius: .28571429rem;
+    margin: 0 .25em;
+    cursor: pointer;
+}
+
+.nl-vbr-overlay-controls.displayed .nl-mini-colorbar {
+    display: inline-block;
 }
 
 #nlHistogramContainer {
