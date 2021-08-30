@@ -488,7 +488,7 @@ def test_forbidden_extended_proj_missing_nonprov_cols():
         solver.walk(proj)
 
 
-def testforbidden_extended_proj_on_provcol():
+def test_forbidden_extended_proj_on_provcol():
     provset = testing.build_ra_provenance_set_from_named_ra_set(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
