@@ -285,17 +285,12 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
             for atom in atoms_with_constants_in_all_key_positions
         )
     )
-    symbol_table = symbol_table.copy()
     for atom in atoms_with_constants_in_all_key_positions:
         if not isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet):
             raise NeuroLangException(
                 "Any atom with constants in all its key positions should be "
                 "a probabilistic choice atom"
             )
-        symbol_table[atom.functor] = ProbabilisticFactSet(
-            symbol_table[atom.functor].relation,
-            symbol_table[atom.functor].probability_column,
-        )
     conjunctive_query = add_existentials_except(
         query, free_variables | nonkey_variables
     )
