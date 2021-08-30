@@ -382,7 +382,6 @@ def test_neurolange_dl_deterministic_negation():
     assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i != j}
 
 
-@pytest.mark.skip
 def test_neurolange_dl_probabilistic_negation():
     neurolang = NeurolangPDL()
     s = neurolang.new_symbol(name="s")
@@ -1250,7 +1249,6 @@ def test_probchoice_disjunction():
     assert_almost_equal(sol, expected)
 
 
-@pytest.mark.skip(reason="issue in dalvi/suciu algorithm to be fixed")
 def test_probchoice_disjunction_probfact_probchoice():
     nl = NeurolangPDL()
     nl.add_probabilistic_choice_from_tuples(
@@ -1288,7 +1286,6 @@ def test_probchoice_disjunction_probfact_probchoice():
     assert_almost_equal(sol, expected)
 
 
-@pytest.mark.skip(reason="issue in dalvi/suciu algorithm to be fixed")
 def test_simple_disjunction_probfacts():
     nl = NeurolangPDL()
     nl.add_probabilistic_facts_from_tuples(

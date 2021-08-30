@@ -661,7 +661,8 @@ def flatten_query(query, program):
     try:
         res = FlattenQueryInNonRecursiveUCQ(program).walk(query)
         res = RemoveTrivialOperations().walk(res)
-        res = GuaranteeConjunction().walk(res)
+        if not isinstance(res, Constant):
+            return GuaranteeConjunction().walk(res)
     except RecursionError:
         raise UnsupportedProgramError(
             "Flattening of recursive programs is not supported."
