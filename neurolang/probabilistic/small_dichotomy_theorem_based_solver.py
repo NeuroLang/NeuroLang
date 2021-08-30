@@ -57,7 +57,7 @@ from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
 )
 from .query_resolution import (
-    generate_provenance_query_compiler,
+    generate_provenance_query_solver,
     lift_solve_marg_query,
     reintroduce_unified_head_terms
 )
@@ -215,12 +215,12 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             ra_query, flat_query, unified_query
         )
 
-    query_compiler = generate_provenance_query_compiler(
+    query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver
     )
 
     with log_performance(LOG, "Run RAP query"):
-        prob_set_result = query_compiler.walk(ra_query)
+        prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
 

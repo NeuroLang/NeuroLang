@@ -174,8 +174,7 @@ def _solve_for_probabilistic_rule(
     succ_prob_solver: typing.Callable,
 ):
     provset = succ_prob_solver(rule, cpl)
-    relation = provset.relation
-    return relation
+    return provset.relation
 
 
 def compute_probabilistic_solution(
@@ -255,8 +254,8 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
     denominator_provset = succ_solver(
         denominator_rule, cpl, run_relational_algebra_solver=False
     )
-    query_compiler = generate_provenance_query_compiler({}, True)
-    provset = query_compiler.walk(
+    query_solver = generate_provenance_query_solver({}, True)
+    provset = query_solver.walk(
         Projection(
             NaturalJoinInverse(joint_provset, denominator_provset),
             tuple(str2columnstr_constant(s.name) for s in res_args),
@@ -361,12 +360,12 @@ class RAQueryOptimiser(
     pass
 
 
-def generate_provenance_query_compiler(
+def generate_provenance_query_solver(
     symbol_table, run_relational_algebra_solver,
     solver_class=ProbSemiringToRelationalAlgebraSolver
 ):
     """
-    Generate a walker that compiles a RAP query.
+    Generate a walker that solves a RAP query.
 
     Parameters
     ----------
