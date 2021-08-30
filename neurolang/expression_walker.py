@@ -315,7 +315,7 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
             return symbol
 
     @add_match(Constant[typing.AbstractSet])
-    def constant_abstract_set(self, constant_abstract_set):
+    def process_constant_abstract_set(self, constant_abstract_set):
         return constant_abstract_set.__class__(
             type(constant_abstract_set.value)(
                 self.walk(expression)
@@ -324,7 +324,7 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
         )
 
     @add_match(Constant[typing.Tuple])
-    def constant_tuple(self, constant_tuple):
+    def process_constant_tuple(self, constant_tuple):
         return constant_tuple.__class__(
             tuple(self.walk(expression) for expression in constant_tuple.value)
         )
@@ -345,7 +345,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
             )
 
     @add_match(Constant[typing.AbstractSet])
-    def constant_abstract_set(self, constant_abstract_set):
+    def process_constant_abstract_set(self, constant_abstract_set):
         value = constant_abstract_set.value
         if len(value) > 0 and isinstance(
             next(iter(value)), (Expression, tuple)
@@ -354,7 +354,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         return value
 
     @add_match(Constant[typing.Tuple])
-    def constant_tuple(self, constant_tuple):
+    def process_constant_tuple(self, constant_tuple):
         value = constant_tuple.value
         if len(value) > 0 and isinstance(value[0], (Expression, tuple)):
             value = constant_tuple.value
@@ -364,7 +364,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         return value
 
     @add_match(Constant[typing.Iterable])
-    def constant_iterable(self, constant_iterable):
+    def process_constant_iterable(self, constant_iterable):
         value = constant_iterable.value
         it1, it2 = tee(value)
         (

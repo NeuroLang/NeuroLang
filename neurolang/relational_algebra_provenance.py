@@ -712,7 +712,7 @@ class RelationalAlgebraProvenanceCountingSolver(
         return self.walk(result)
 
     @add_match(Constant[AbstractSet])
-    def constant_relation_or_provenance_set(self, relation):
+    def process_constant_relation_or_provenance_set(self, relation):
         return relation
 
 
