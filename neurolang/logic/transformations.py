@@ -471,7 +471,7 @@ class MakeExistentialsImplicit(LogicExpressionWalker):
         return self.walk(expression.body)
 
 
-class MakeExistentialOnVariablesImplicit(LogicExpressionWalker):
+class RemoveExistentialOnVariables(LogicExpressionWalker):
     def __init__(self, variables_to_eliminate):
         self._variables_to_eliminate = variables_to_eliminate
 
