@@ -200,13 +200,9 @@ def compute_probabilistic_solution(
             relation = _solve_within_language_prob_query(
                 cpl, rule, succ_prob_solver, marg_prob_solver
             )
-        else:
-            relation = _solve_for_probabilistic_rule(
-                cpl, rule, succ_prob_solver
+            solution[rule.consequent.functor] = Constant[AbstractSet](
+                relation.value.to_unnamed()
             )
-        solution[rule.consequent.functor] = Constant[AbstractSet](
-            relation.value.to_unnamed()
-        )
     return solution
 
 
