@@ -658,28 +658,28 @@ class StringArithmeticWalker(ew.PatternWalker):
         )
 
     @ew.add_match(Constant[ColumnStr])
-    def constant_column_str(self, cst_col_str):
+    def process_constant_column_str(self, cst_col_str):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(cst_col_str.value),
             auto_infer_type=False,
         )
 
     @ew.add_match(Constant[int])
-    def constant_int(self, cst):
+    def process_constant_int(self, cst):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(cst.value),
             auto_infer_type=False,
         )
 
     @ew.add_match(Constant[float])
-    def constant_float(self, cst):
+    def process_constant_float(self, cst):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(cst.value),
             auto_infer_type=False,
         )
 
     @ew.add_match(Constant[str])
-    def constant_str(self, cst):
+    def process_constant_str(self, cst):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(cst.value),
             auto_infer_type=False,

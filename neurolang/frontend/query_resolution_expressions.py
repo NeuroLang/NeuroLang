@@ -809,7 +809,7 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
         return expression.value
 
     @add_match(ir.FunctionApplication)
-    def function_application(self, expression: ir.Expression) -> Any:
+    def walk_function_application(self, expression: ir.Expression) -> Any:
         functor = self.walk(expression.functor)
         args = tuple(self.walk(arg) for arg in expression.args)
         return functor(*args)
