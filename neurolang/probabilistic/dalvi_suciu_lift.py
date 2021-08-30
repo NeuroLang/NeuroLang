@@ -40,6 +40,7 @@ from ..logic.transformations import (
     CollapseDisjunctions,
     GuaranteeConjunction,
     MakeExistentialsImplicit,
+    MakeExistentialOnVariablesImplicit,
     RemoveTrivialOperations,
 )
 from ..relational_algebra import (
@@ -267,12 +268,9 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
 
     """
     free_variables = extract_logic_free_variables(conjunctive_query)
-    query = MakeExistentialsImplicit().walk(conjunctive_query)
-    query = CollapseConjunctions().walk(query)
-    query = GuaranteeConjunction().walk(query)
     atoms_with_constants_in_all_key_positions = set(
         atom
-        for atom in query.formulas
+        for atom in extract_logic_atoms(conjunctive_query)
         if is_probabilistic_atom_with_constants_in_all_key_positions(
             atom, symbol_table
         )
@@ -291,8 +289,9 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
                 "Any atom with constants in all its key positions should be "
                 "a probabilistic choice atom"
             )
-    conjunctive_query = add_existentials_except(
-        query, free_variables | nonkey_variables
+    conjunctive_query = (
+        MakeExistentialOnVariablesImplicit(nonkey_variables)
+        .walk(conjunctive_query)
     )
     plan = dalvi_suciu_lift(conjunctive_query, symbol_table)
     attributes = tuple(
