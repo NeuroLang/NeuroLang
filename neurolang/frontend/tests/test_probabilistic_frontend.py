@@ -1323,3 +1323,31 @@ def test_simple_disjunction_probfacts():
         ("d", 0.2),
     }
     assert_almost_equal(sol, expected)
+
+
+def test_pchoice_with_both_eqvar_and_free_var():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (0.7, "a", "b"),
+            (0.2, "a", "c"),
+            (0.1, "b", "b"),
+        ],
+        name="Pchoice",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.9, "a"),
+            (0.2, "b"),
+            (1.0, "c"),
+        ],
+        name="Pfact",
+    )
+    with nl.scope as e:
+        e.Query[e.x, e.PROB(e.x)] = e.Pchoice(e.x, e.y) & e.Pfact(e.y)
+        result = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 0.7 * 0.2 + 0.2 * 1.0),
+        ("b", 0.1 * 0.2),
+    }
+    assert_almost_equal(result, expected)
