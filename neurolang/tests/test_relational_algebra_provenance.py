@@ -16,7 +16,7 @@ from ..relational_algebra import (
     RenameColumns,
     Selection,
     eq_,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
     ConcatenateConstantColumn,
@@ -27,11 +27,12 @@ from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     Union,
-    WeightedNaturalJoin
+    WeightedNaturalJoin,
+    WeightedNaturalJoinSolverMixin,
 )
 from ..utils import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression
+    RelationalAlgebraStringExpression,
 )
 
 C_ = Constant
@@ -377,7 +378,7 @@ def test_extended_projection():
 
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            iterable=[(6, 1), (8, 2), (10, 2), (4, 1), (3, 1),],
+            iterable=[(6, 1), (8, 2), (10, 2), (4, 1), (3, 1)],
             columns=["sum_", "__provenance__"],
         ),
         ColumnStr("__provenance__"),
@@ -552,6 +553,11 @@ def test_selection_between_columnints():
 
 
 def test_weightednaturaljoin_provenance_name():
+    class TestRAPWeightedNaturalJoinSolver(
+        WeightedNaturalJoinSolverMixin,
+        RelationalAlgebraProvenanceCountingSolver,
+    ):
+        pass
     RA1 = NamedRelationalAlgebraFrozenSet(
         columns=("col1", "__provenance__1"),
         iterable=[(i * 2, i) for i in range(10)],
@@ -565,7 +571,7 @@ def test_weightednaturaljoin_provenance_name():
     pset_r2 = ProvenanceAlgebraSet(RA2, ColumnStr("__provenance__2"))
 
     s = WeightedNaturalJoin((pset_r1, pset_r2), (Constant(1), Constant(-1)))
-    sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
+    sol = TestRAPWeightedNaturalJoinSolver().walk(s)
 
     expected = RA1.naturaljoin(RA2).extended_projection(
         {

@@ -6,7 +6,7 @@ import tatsu
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
 from ...expressions import Constant, Expression, FunctionApplication, Query, Symbol
-from ...probabilistic.expressions import Condition, ProbabilisticPredicate
+from ...probabilistic.expressions import Condition, ProbabilisticPredicate, PROB
 
 
 GRAMMAR = u"""
@@ -17,13 +17,14 @@ GRAMMAR = u"""
 
     start = expressions $ ;
 
-    expressions = ( newline ).{ probabilistic_expression | expression };
+    expressions = ( newline ).{ expression };
 
 
-    probabilistic_expression = ( arithmetic_operation | int_ext_identifier ) '::' expression ;
-    expression = rule | constraint | fact;
+    expression = rule | constraint | fact | probabilistic_rule | probabilistic_fact ;
     fact = constant_predicate ;
+    probabilistic_fact = ( arithmetic_operation | int_ext_identifier ) '::' constant_predicate ;
     rule = (head | query) implication (condition | body) ;
+    probabilistic_rule = head '::' ( arithmetic_operation | int_ext_identifier ) implication (condition | body) ;
     constraint = body right_implication head ;
     head = head_predicate ;
     body = conjunction ;
@@ -52,7 +53,7 @@ GRAMMAR = u"""
     constant_predicate = identifier'(' ','.{ literal } ')' ;
 
     negated_predicate = ('~' | '\u00AC' ) predicate ;
-    existential_body = arguments such_that composite_predicate;
+    existential_body = arguments such_that ( conjunction_symbol ).{ predicate }+ ;
     existential_predicate = \
         exists '(' @:existential_body ')' ;
 
@@ -63,6 +64,7 @@ GRAMMAR = u"""
              | function_application
              | '...' ;
 
+    signed_int_ext_identifier = [ '-' ] int_ext_identifier ;
     int_ext_identifier = identifier | ext_identifier ;
     ext_identifier = '@'identifier;
 
@@ -78,7 +80,7 @@ GRAMMAR = u"""
 
     exponent = literal
              | function_application
-             | int_ext_identifier
+             | signed_int_ext_identifier
              | '(' @:argument ')' ;
 
     literal = number
@@ -148,20 +150,14 @@ class DatalogSemantics:
             ast = (ast,)
         return Union(ast)
 
-    def probabilistic_expression(self, ast):
-        probability = ast[0]
-        expression = ast[2]
-
-        if isinstance(expression, Implication):
-            return Implication(
-                ProbabilisticPredicate(probability, expression.consequent),
-                expression.antecedent,
-            )
-        else:
-            raise ValueError("Invalid rule")
-
     def fact(self, ast):
         return Fact(ast)
+
+    def probabilistic_fact(self, ast):
+        return Implication(
+            ProbabilisticPredicate(ast[0], ast[2]),
+            Constant(True),
+        )
 
     def constant_predicate(self, ast):
         return ast[0](*ast[2])
@@ -172,6 +168,15 @@ class DatalogSemantics:
             return Query(ast[0], ast[2])
         else:
             return Implication(ast[0], ast[2])
+
+    def probabilistic_rule(self, ast):
+        head = ast[0]
+        probability = ast[2]
+        body = ast[4]
+        return Implication(
+            ProbabilisticPredicate(probability, head),
+            body,
+        )
 
     def constraint(self, ast):
         return RightImplication(ast[0], ast[2])
@@ -198,6 +203,19 @@ class DatalogSemantics:
                 for arg in ast[2]:
                     arguments.append(arg)
 
+                if PROB in arguments:
+                    ix_prob = arguments.index(PROB)
+                    arguments_not_prob = (
+                        arguments[:ix_prob] +
+                        arguments[ix_prob + 1:]
+                    )
+                    prob_arg = PROB(*arguments_not_prob)
+                    arguments = (
+                        arguments[:ix_prob] +
+                        [prob_arg] +
+                        arguments[ix_prob + 1:]
+                    )
+
                 ast = ast[0](*arguments)
             else:
                 ast = ast[0]()
@@ -208,7 +226,7 @@ class DatalogSemantics:
             # Query head has arguments
             arguments = ast[1]
             return Symbol("ans")(*arguments)
-        else :
+        else:
             # Query head has no arguments
             return Symbol("ans")()
 
@@ -222,7 +240,9 @@ class DatalogSemantics:
 
     def existential_predicate(self, ast):
         exp = ast[2]
-        if isinstance(exp, list):
+        if len(exp) == 1:
+            exp = exp[0]
+        else:
             exp = Conjunction(tuple(exp))
 
         for arg in ast[0]:
@@ -277,6 +297,12 @@ class DatalogSemantics:
         else:
             f = ast[0]
         return FunctionApplication(f, args=ast[2])
+
+    def signed_int_ext_identifier(self, ast):
+        if isinstance(ast, Expression):
+            return ast
+        else:
+            return Constant(mul)(Constant(-1), ast[1])
 
     def identifier(self, ast):
         return Symbol(ast)

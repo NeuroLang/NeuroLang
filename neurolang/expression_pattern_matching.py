@@ -7,6 +7,7 @@ import inspect
 from inspect import isclass
 from functools import lru_cache
 import logging
+from neurolang.exceptions import NeuroLangException
 from typing import Any, Tuple, TypeVar
 import types
 from warnings import warn
@@ -227,6 +228,15 @@ def add_match(pattern, guard=None):
     :py:meth:`PatternMatcher.pattern_match` for more details on patterns.
     """
     def bind_match(f):
+        if (
+            f.__name__.startswith("constant_") or
+            f.__name__.startswith("function_")
+        ):
+            raise NeuroLangException(
+                f"Method {f.__name__} is using one of the "
+                "name prefixes reserved to embed functions "
+                " and constants in the solver"
+            )
         f.pattern = pattern
         f.guard = guard
         return f
@@ -254,6 +264,9 @@ def add_entry_point_match(pattern, guard=None):
 
 class PatternMatcher(metaclass=PatternMatchingMetaClass):
     """Class for expression pattern matching."""
+
+    def __init__(self, *args, **kwargs):
+        pass
 
     @property
     def patterns(self):

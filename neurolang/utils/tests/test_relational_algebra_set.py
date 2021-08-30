@@ -746,6 +746,10 @@ def test_rename_column(ra_module):
         for el_a, el_b in zip(ras_a, ras_b)
     )
 
+    ras_c = ra_module.NamedRelationalAlgebraFrozenSet.dum()
+    ras_c = ras_c.rename_column("x", "y")
+    assert ras_c.is_dum()
+
 
 def test_named_to_unnamed(ra_module):
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
@@ -1051,6 +1055,10 @@ def test_rename_columns(ra_module):
     assert first.rename_columns({"x": "y", "y": "x"}) == second
     with pytest.raises(ValueError, match=r"non-existing columns: {'z'}"):
         first.rename_columns({"z": "w"})
+
+    ras_c = ra_module.NamedRelationalAlgebraFrozenSet.dum()
+    ras_c = ras_c.rename_columns({"x": "y"})
+    assert ras_c.is_dum()
 
 
 def test_rename_columns_duplicates(ra_module):

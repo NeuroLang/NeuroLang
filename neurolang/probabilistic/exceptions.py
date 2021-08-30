@@ -16,7 +16,7 @@ class MalformedProbabilisticTupleError(NeuroLangException):
     pass
 
 
-class NotHierarchicalQueryException(NeuroLangException):
+class NotHierarchicalQueryException(UnsupportedSolverError):
     pass
 
 

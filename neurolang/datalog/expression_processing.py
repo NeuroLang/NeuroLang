@@ -39,7 +39,7 @@ from ..logic import (
     Union,
 )
 from ..logic import expression_processing as elp
-from ..logic.transformations import CollapseConjunctions, GuaranteeConjunction
+from ..logic.transformations import CollapseConjunctions, GuaranteeConjunction, RemoveTrivialOperations
 from ..logic.unification import most_general_unifier
 from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
@@ -660,8 +660,8 @@ def flatten_query(query, program):
         )
     try:
         res = FlattenQueryInNonRecursiveUCQ(program).walk(query)
-        if isinstance(res, FunctionApplication):
-            res = Conjunction((res,))
+        res = RemoveTrivialOperations().walk(res)
+        res = GuaranteeConjunction().walk(res)
     except RecursionError:
         raise UnsupportedProgramError(
             "Flattening of recursive programs is not supported."
