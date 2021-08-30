@@ -1,17 +1,26 @@
 from operator import add, eq, lt, mul, pow, sub, truediv
 
 import pytest
-from neurolang.logic import ExistentialPredicate
 from tatsu.exceptions import FailedParse
 
+from neurolang.logic import ExistentialPredicate
+
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
-from ....expressions import Constant, FunctionApplication, Query, Symbol
+from ....expressions import (
+    Constant,
+    FunctionApplication,
+    Lambda,
+    Query,
+    Statement,
+    Symbol
+)
 from ....probabilistic.expressions import (
     PROB,
     Condition,
-    ProbabilisticPredicate,
+    ProbabilisticPredicate
 )
 from ..standard_syntax import ExternalSymbol, parser
+
 
 def test_facts():
     res = parser('A(3)')
@@ -350,3 +359,34 @@ def test_prob_explicit():
     assert res == Union(
         (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
     )
+
+
+def test_lambda_definition():
+    c = Symbol("c")
+    x = Symbol("x")
+
+    res = parser("c := lambda x: x + 1")
+    expression = Lambda((x,), FunctionApplication(
+        Constant(add), (x, Constant[int](1))
+    ))
+    expected = Union((
+        Statement(c, expression),
+    ))
+    assert expected == res
+
+
+def test_lambda_application():
+    c = Symbol("c")
+    x = Symbol("x")
+
+    res = parser("c := (lambda x: x + 1)(2)")
+    expression = FunctionApplication(
+        Lambda((x,), FunctionApplication(
+            Constant(add), (x, Constant[int](1))
+        )),
+        (Constant[int](2),)
+    )
+    expected = Union((
+        Statement(c, expression),
+    ))
+    assert expected == res
