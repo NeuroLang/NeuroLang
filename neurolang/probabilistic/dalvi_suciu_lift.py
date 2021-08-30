@@ -332,14 +332,11 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
 def _get_disjuncts_containing_atom_with_all_key_attributes(ucq, symbol_table):
     matching_disjuncts = set()
     for disjunct in ucq.formulas:
-        rewritten_ucq = MakeExistentialsImplicit().walk(disjunct)
-        rewritten_ucq = CollapseDisjunctions().walk(rewritten_ucq)
-        rewritten_ucq = GuaranteeConjunction().walk(rewritten_ucq)
         if any(
             is_probabilistic_atom_with_constants_in_all_key_positions(
                 atom, symbol_table
             )
-            for atom in rewritten_ucq.formulas
+            for atom in extract_logic_atoms(disjunct)
         ):
             matching_disjuncts.add(disjunct)
     return matching_disjuncts
