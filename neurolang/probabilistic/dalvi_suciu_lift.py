@@ -38,6 +38,9 @@ from ..logic.expression_processing import (
     extract_logic_predicates
 )
 from ..logic.transformations import (
+    CollapseConjunctions,
+    CollapseDisjunctions,
+    GuaranteeConjunction,
     MakeExistentialsImplicit,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
