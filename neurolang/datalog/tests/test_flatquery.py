@@ -128,9 +128,6 @@ def test_flatten_with_top_level_disjunction():
     program = TestDatalogProgram()
     program.walk(code)
     result = flatten_query(Q(x), program)
-    assert isinstance(result, Conjunction)
-    assert len(result.formulas) == 1
-    result = result.formulas[0]
     assert isinstance(result, Disjunction)
     assert len(result.formulas) == 2
     assert P(x) in result.formulas
