@@ -1,8 +1,5 @@
-from neurolang.datalog.negation import is_conjunctive_negation
-
 from ..exceptions import (
     NeuroLangException,
-    UnexpectedExpressionError,
     UnsupportedQueryError,
     UnsupportedSolverError,
 )
@@ -16,7 +13,7 @@ class MalformedProbabilisticTupleError(NeuroLangException):
     pass
 
 
-class NotHierarchicalQueryException(NeuroLangException):
+class NotHierarchicalQueryException(UnsupportedSolverError):
     pass
 
 
