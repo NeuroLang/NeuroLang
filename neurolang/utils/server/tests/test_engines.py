@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 from neurolang import NeurolangDL
 from neurolang.frontend.probabilistic_frontend import NeurolangPDL
 from neurolang.utils.server.engines import (
@@ -48,7 +49,8 @@ def test_neurosynth_engine_configuration():
     `PeakReported`, `Study`, `TermInStudyTFIDF`, `SelectedStudy` & `Voxel`
     symbols.
     """
-    conf = NeurosynthEngineConf()
+    data_dir = Path("neurolang_data")
+    conf = NeurosynthEngineConf(data_dir)
     assert conf.key == "neurosynth"
 
     engine = conf.create()

@@ -196,6 +196,7 @@ def test_query_results_can_serialize_to_json(future, result, data):
         "results": {
             "ans": {
                 "columns": ["a", "b", "c"],
+                'probabilistic': False,
                 "row_type": [
                     str(t) for t in (float, str, AbstractSet[Unknown])
                 ],
