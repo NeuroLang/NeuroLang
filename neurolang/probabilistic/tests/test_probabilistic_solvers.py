@@ -7,7 +7,7 @@ from ...config import config
 from ...datalog import Fact
 from ...exceptions import NonLiftableException, UnsupportedSolverError
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Implication, Negation, Union
+from ...logic import Conjunction, Implication, Union
 from ...relational_algebra import (
     ColumnStr,
     ExtendedProjection,
@@ -799,31 +799,6 @@ def test_empty_result_program(solver):
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
-def test_simple_negation(solver):
-    cpl = CPLogicProgram()
-    cpl.add_probabilistic_facts_from_tuples(
-        Q,
-        [(0.2, 'a'), (0.1, 'b')]
-    )
-    cpl.add_probabilistic_facts_from_tuples(
-        R,
-        [(0.1, 'a'), (0.3, 'c')]
-    )
-    rule = Implication(P(x), Conjunction((Q(x), Negation(R(x)))))
-    cpl.walk(rule)
-    query = Implication(ans(x), P(x))
-    result = solver.solve_succ_query(query, cpl)
-    expected = testing.make_prov_set([(.18, 'a'), (.10, 'b')], ("_p_", "x"))
-    assert testing.eq_prov_relations(result, expected)
-
-
-@pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
-    small_dichotomy_theorem_based_solver,
-    dalvi_suciu_lift,
-])
 def test_program_with_probchoice_selfjoin(solver):
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
@@ -1006,75 +981,6 @@ def test_simple_boolean_query(solver):
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0,)], ("_p_",))
     assert testing.eq_prov_relations(result, expected)
-
-
-def test_dalvi_suciu_fails_unate():
-    cpl = CPLogicProgram()
-    cpl.add_probabilistic_facts_from_tuples(
-        Q,
-        [(0.2, 'a'), (0.1, 'b')]
-    )
-    cpl.add_probabilistic_facts_from_tuples(
-        R,
-        [(0.1, 'a'), (0.3, 'c')]
-    )
-    rule = Implication(P(x), Conjunction((R(y), Q(x), Negation(R(x)))))
-    cpl.walk(rule)
-    query = Implication(ans(x), P(x))
-    with pytest.raises(NonLiftableException):
-        dalvi_suciu_lift.solve_succ_query(query, cpl)
-
-
-@pytest.mark.parametrize("solver", [
-    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-        reason="WMC issue to be resolved"
-    )),
-    small_dichotomy_theorem_based_solver,
-    dalvi_suciu_lift,
-])
-def test_nested_negation(solver):
-    cpl = CPLogicProgram()
-    cpl.add_probabilistic_facts_from_tuples(
-        Q,
-        [
-            (0.2, 'a', 1, 2),
-            (0.8, 'b', 1, 5),
-            (0.1, 'b', 2, 2),
-        ]
-    )
-    cpl.add_probabilistic_facts_from_tuples(
-        R,
-        [(0.1, 'a'), (0.3, 'c')]
-    )
-    program = Union((
-        Implication(Z(x, y), Q(x, y, z)),
-    ))
-    query = Implication(ans(x), Conjunction((
-            R(x),
-            Negation(Z(x, Constant(1)))
-        )))
-    cpl.walk(program)
-
-    if solver is small_dichotomy_theorem_based_solver:
-        context = pytest.raises(NotHierarchicalQueryException)
-    else:
-        context = nullcontext()
-
-    with context:
-        res = solver.solve_succ_query(query, cpl)
-
-        expected = ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(
-                ("_p_", "x"),
-                [
-                    (0.08, "a"),
-                    (0.30, "c"),
-                ],
-            ),
-            ColumnStr("_p_"),
-        )
-
-        assert testing.eq_prov_relations(res, expected)
 
 
 @pytest.mark.skip(reason="issue in dalvi/suciu algorithm to be fixed")

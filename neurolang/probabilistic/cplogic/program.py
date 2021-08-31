@@ -2,7 +2,6 @@ import typing
 
 from ...datalog import DatalogProgram
 from ...datalog.basic_representation import UnionOfConjunctiveQueries
-from ...datalog.negation import DatalogProgramNegationMixin
 from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
@@ -360,8 +359,5 @@ class CPLogicMixin(PatternWalker):
             )
 
 
-class CPLogicProgram(
-    CPLogicMixin, DatalogProgramNegationMixin,
-    DatalogProgram, ExpressionWalker
-):
+class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):
     pass

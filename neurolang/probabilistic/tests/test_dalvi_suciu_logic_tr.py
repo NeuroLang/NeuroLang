@@ -3,8 +3,7 @@ from ...logic import (
     Conjunction,
     Disjunction,
     ExistentialPredicate,
-    Implication,
-    Negation
+    Implication
 )
 from .. import transforms
 
@@ -77,27 +76,3 @@ def test_unify_existential_variables():
         ))
     )
     assert res == expected
-
-
-def test_rule_with_negation_to_ucq():
-    R = Symbol('R')
-    S = Symbol('S')
-    T = Symbol('T')
-    x = Symbol('x')
-    y = Symbol('y')
-
-    rule = Implication(R(x), Conjunction((S(x, y), Negation(T(y)))))
-
-    expected = ExistentialPredicate(y, Conjunction((S(x, y), Negation(T(y)))))
-    res = transforms.convert_rule_to_ucq(rule)
-
-    assert expected == res
-
-    rule = Implication(R(x), Conjunction((S(x, y), S(x, x), Negation(T(y)))))
-    expected = Conjunction((
-        ExistentialPredicate(y, Conjunction((S(x, y), Negation(T(y))))),
-        S(x, x)
-    ))
-    res = transforms.convert_rule_to_ucq(rule)
-
-    assert expected == res

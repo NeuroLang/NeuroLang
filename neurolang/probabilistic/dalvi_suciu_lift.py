@@ -7,20 +7,20 @@ import numpy as np
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
-    flatten_query
+    flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NeuroLangException, NonLiftableException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
-    add_match
+    add_match,
 )
 from ..expressions import (
     Constant,
     FunctionApplication,
     Symbol,
-    TypedSymbolTableMixin
+    TypedSymbolTableMixin,
 )
 from ..logic import (
     FALSE,
@@ -29,13 +29,11 @@ from ..logic import (
     ExistentialPredicate,
     Implication,
     NaryLogicOperator,
-    Negation,
-    Union
+    Union,
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
-    extract_logic_predicates
 )
 from ..logic.transformations import (
     CollapseConjunctions,
@@ -44,7 +42,6 @@ from ..logic.transformations import (
     MakeExistentialsImplicit,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
-    convert_to_pnf_with_dnf_matrix
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -52,7 +49,7 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
@@ -63,24 +60,24 @@ from .probabilistic_ra_utils import (
     NonLiftable,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query
+    generate_probabilistic_symbol_table_for_query,
 )
 from .probabilistic_semiring_solver import ProbSemiringSolver
 from .query_resolution import (
     lift_solve_marg_query,
-    reintroduce_unified_head_terms
+    reintroduce_unified_head_terms,
 )
 from .shattering import shatter_easy_probfacts
 from .small_dichotomy_theorem_based_solver import (
     RAQueryOptimiser,
-    lift_optimization_for_choice_predicates
+    lift_optimization_for_choice_predicates,
 )
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
-    unify_existential_variables
+    unify_existential_variables,
 )
 
 LOG = logging.getLogger(__name__)
@@ -147,7 +144,6 @@ def solve_succ_query(query, cpl_program):
             flat_query_body, cpl_program
         )
         flat_query = Implication(query.consequent, flat_query_body)
-        _verify_that_the_query_is_unate(flat_query)
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
         )
@@ -176,25 +172,6 @@ def solve_succ_query(query, cpl_program):
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result
-
-
-def _verify_that_the_query_is_unate(query):
-    positive_relational_symbols = set()
-    negative_relational_symbols = set()
-
-    query = convert_rule_to_ucq(query)
-    query = convert_to_pnf_with_dnf_matrix(query)
-
-    for predicate in extract_logic_predicates(query):
-        if isinstance(predicate, Negation):
-            while isinstance(predicate, Negation):
-                predicate = predicate.formula
-            negative_relational_symbols.add(predicate.functor)
-        else:
-            positive_relational_symbols.add(predicate.functor)
-
-    if not positive_relational_symbols.isdisjoint(negative_relational_symbols):
-        raise NonLiftableException(f"Query {query} is not unate")
 
 
 def solve_marg_query(rule, cpl):
@@ -231,8 +208,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
         return components_plan(
-            connected_components, rap.NaturalJoin, symbol_table,
-            negative_operation=rap.Difference
+            connected_components, rap.NaturalJoin, symbol_table
         )
     elif len(rule_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
@@ -709,31 +685,11 @@ def variable_co_occurrence_graph(expression):
     return c_matrix
 
 
-def components_plan(
-    components, operation, symbol_table,
-    negative_operation=None
-):
-    positive_formulas = []
-    negative_formulas = []
+def components_plan(components, operation, symbol_table):
+    formulas = []
     for component in components:
-        component = RTO.walk(component)
-        if isinstance(component, Negation):
-            formula = dalvi_suciu_lift(component.formula, symbol_table)
-            negative_formulas.append(formula)
-        else:
-
-            formula = dalvi_suciu_lift(component, symbol_table)
-            positive_formulas.append(formula)
-    output = reduce(operation, positive_formulas[1:], positive_formulas[0])
-
-    if len(negative_formulas) > 0 and negative_operation is None:
-        raise ValueError(
-            "If negative components are included,"
-            " a negative operation should be provided"
-        )
-    output = reduce(negative_operation, negative_formulas, output)
-
-    return output
+        formulas.append(dalvi_suciu_lift(component, symbol_table))
+    return reduce(operation, formulas[1:], formulas[0])
 
 
 def inclusion_exclusion_conjunction(expression, symbol_table):
