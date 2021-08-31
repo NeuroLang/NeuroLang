@@ -3,9 +3,10 @@ import '@testing-library/jest-dom/extend-expect'
 import $ from '../jquery-bundler'
 import 'datatables.net'
 import dt from 'datatables.net-se'
-import 'semantic-ui-css'
+import 'fomantic-ui-css/semantic'
 import { SymbolsController } from './symbols'
 import { API_ROUTE } from '../constants'
+import { createMiniColorBar } from '../papaya/viewer'
 
 const mockShowViewer = jest.fn()
 const mockHideViewer = jest.fn()
@@ -25,7 +26,8 @@ jest.mock('../papaya/viewer', () => ({
       setCoordinates: mockCenter,
       showImageHistogram: mockHist
     }
-  })
+  }),
+  createMiniColorBar: jest.fn()
 }))
 
 dt(window, $)
@@ -58,7 +60,7 @@ const mockResults = {
         row_type: ["<class 'neurolang.regions.ExplicitVBROverlay'>"],
         columns: ['agg_create_region'],
         size: 2,
-        values: [[{ image: 'someEncodedImageData', hash: '89er8798awre', center: [], max: 0.008, min: 0 }], [{ image: 'anotherEncodedImage', hash: '456eras8098ert', center: [], max: 0.009, min: 0.00002 }]]
+        values: [[{ image: 'someEncodedImageData', hash: '89er8798awre', center: [], max: 0.008, min: 0, q95: 0.001 }], [{ image: 'anotherEncodedImage', hash: '456eras8098ert', center: [], max: 0.009, min: 0.00002, q95: 0.00025 }]]
       }
     }
   }
@@ -94,6 +96,7 @@ function getTestHTML () {
       </div>
       <div id="nlPapayaContainer" class="nl-papaya-container">
         <div id="nlPapayaParent" class="nl-papaya-parent"></div>
+        <div class="nl-colorbar-container" id="nlColorbarContainer"></div>
         <div class="ui message warning nl-papaya-alert">
           <div class="header">You cannot add more than 8 overlays</div>
           <p>Please unselect an overlay to add a new one</p>
@@ -243,6 +246,7 @@ describe('SymbolsController', () => {
           recordsFiltered: 1,
           data: mockResults.data.results.RegionImage.values
         }
+        createMiniColorBar.mockReturnValueOnce(document.createElement('canvas'))
       })
 
       it('should show papaya viewer when tab has VBROverlay type', () => {
@@ -270,6 +274,7 @@ describe('SymbolsController', () => {
         // trigger click on 2nd menu item which contains images
         $('.nl-symbols-dropdown .item').eq(1).trigger('click')
         mockCanAdd.mockReturnValueOnce(true)
+        mockAddImage.mockReturnValueOnce({ lut: 'Viridis' })
 
         // click on second image checkbox
         const chkbox = $('.nl-vbr-overlay-switch input').last()
@@ -278,7 +283,7 @@ describe('SymbolsController', () => {
 
         const expectedImage = mockResults.data.results.RegionImage.values[1][0]
         expect(mockCanAdd).toHaveBeenCalled()
-        expect(mockAddImage).toHaveBeenCalledWith('image_1_0', expectedImage.image, expectedImage.min, expectedImage.max)
+        expect(mockAddImage).toHaveBeenCalledWith('image_1_0', expectedImage.image, expectedImage.min, expectedImage.max, expectedImage.q95)
       })
 
       it('should not add image if max images already added', () => {
@@ -299,7 +304,7 @@ describe('SymbolsController', () => {
 
       it('should set the color and hide histogram for region labels', () => {
         mockCanAdd.mockReturnValueOnce(true)
-        mockAddImage.mockReturnValueOnce('#f44336')
+        mockAddImage.mockReturnValueOnce({ hex: '#f44336' })
         // trigger click on 2nd menu item which contains images
         $('.nl-symbols-dropdown .item').eq(1).trigger('click')
         // click on first image checkbox
@@ -308,7 +313,7 @@ describe('SymbolsController', () => {
         chkbox.trigger('change')
 
         const expectedImage = mockResults.data.results.RegionImage.values[0][0]
-        expect(mockAddImage).toHaveBeenCalledWith('image_0_0', expectedImage.image, expectedImage.min, expectedImage.max)
+        expect(mockAddImage).toHaveBeenCalledWith('image_0_0', expectedImage.image, expectedImage.min, expectedImage.max, expectedImage.q95)
         expect($('.nl-vbr-overlay-hist').first().is(':visible')).toBe(false)
         expect($('.nl-vbr-overlay-switch label').first().css('color')).toBe('rgb(244, 67, 54)') // #f44336 = rgb(244, 67, 54)
       })
@@ -316,9 +321,10 @@ describe('SymbolsController', () => {
       it('should set center when center btn is clicked', () => {
         // trigger click on 2nd menu item which contains images
         $('.nl-symbols-dropdown .item').eq(1).trigger('click')
-
+        
         // click on first image checkbox
         mockCanAdd.mockReturnValueOnce(true)
+        mockAddImage.mockReturnValueOnce({ lut: 'Viridis' })
         const chkbox = $('.nl-vbr-overlay-switch input').first()
         chkbox.prop('checked', true)
         chkbox.trigger('change')
@@ -334,6 +340,7 @@ describe('SymbolsController', () => {
 
         // click on second image checkbox
         mockCanAdd.mockReturnValueOnce(true)
+        mockAddImage.mockReturnValueOnce({ lut: 'Viridis' })
         const chkbox = $('.nl-vbr-overlay-switch input').last()
         chkbox.prop('checked', true)
         chkbox.trigger('change')
