@@ -5,7 +5,11 @@ import Plotly from 'plotly.js-dist-min'
 import { lab, rgb } from 'd3-color'
 import * as d3chromatic from 'd3-scale-chromatic'
 
-const LUTS = [
+/**
+ * Custom color tables for the Papaya viewer. The following are constant color tables,
+ * used to display "label" regions (where all the data points have the same value).
+ */
+const CONSTANT_COLORS = [
   { name: 'red', data: [[0, 0.96, 0.26, 0.21], [1, 0.96, 0.26, 0.21]], gradation: false, hex: '#f44336' }, // #f44336
   { name: 'pink', data: [[0, 0.91, 0.12, 0.39], [1, 0.91, 0.12, 0.39]], gradation: false, hex: '#e91e63' }, // #e91e63
   { name: 'deep purple', data: [[0, 0.4, 0.23, 0.72], [1, 0.4, 0.23, 0.72]], gradation: false, hex: '#673ab7' }, // #673ab7
@@ -19,6 +23,12 @@ const LUTS = [
   { name: 'orange', data: [[0, 1, 0.60, 0], [1, 1, 0.60, 0]], gradation: false, hex: '#ff9800' }, // #ff9800
   { name: 'blue gray', data: [[0, 0.38, 0.49, 0.55], [1, 0.38, 0.49, 0.55]], gradation: false, hex: '#607d8b' } // #607d8b
 ]
+
+/**
+ * Custom color tables for the Papaya viewer.
+ * These are d3 color scales transformed to the Papaya LUT format.
+ */
+const COLOR_SCALES = ['YlOrRd', 'YlGnBu', 'Cividis', 'Greens', 'Viridis', 'Purples', 'Cool', 'Warm'].map(s => scaleChromaticToLUT(s))
 
 class AtlasCache {
   constructor () {
@@ -52,13 +62,10 @@ export class PapayaViewer {
   constructor (atlasKey) {
     this.atlasKey = atlasKey
     this.imageIds = []
-    this.lutIndex = 0
     this.resultsContainer = $('#symbolsContainer')
     this.papayaContainer = $('#nlPapayaContainer')
     this.cbContainer = $('#nlColorbarContainer')
-    // this.colorSchemes = ['Turbo', 'Viridis', 'Inferno', 'Magma', 'Plasma', 'Cividis', 'Warm', 'Cool', 'BrBG', 'PRGn', 'Blues', 'Greens', 'Greys', 'BuGn', 'BuPu', 'YlGn', 'YlOrBr', 'YlOrRd'].map(s => scaleChromaticToLUT(s))
-    this.colorSchemes = ['YlOrRd', 'YlGnBu', 'Cividis', 'Greens', 'Viridis', 'Purples', 'Cool', 'Warm'].map(s => scaleChromaticToLUT(s))
-    this.colorIndex = 0
+    this.usedColorTables = []
   }
 
   showViewer () {
@@ -95,7 +102,7 @@ export class PapayaViewer {
     params.kioskMode = true
     params.showControlBar = true
     params.showImageButtons = false
-    params.luts = this.colorSchemes.concat(...LUTS)
+    params.luts = COLOR_SCALES.concat(...CONSTANT_COLORS)
     this.params = params
   }
 
@@ -117,6 +124,7 @@ export class PapayaViewer {
       this.cbContainer.empty()
     }
     this.imageIds = ['atlas']
+    this.usedColorTables = []
   }
 
   /**
@@ -136,6 +144,7 @@ export class PapayaViewer {
       papaya.Container.addImage(0, name, imageParams)
       this.imageIds.push(name)
       res = imageParams[name]
+      this.usedColorTables.push(res.lut)
       this.showColorBar(name)
     }
     return res
@@ -144,9 +153,13 @@ export class PapayaViewer {
   removeImage (name) {
     const idx = this.imageIds.indexOf(name)
     if (idx > -1) {
+      const lutIdx = this.usedColorTables.indexOf(papayaContainers[0].viewer.screenVolumes[idx].lutName)
       papaya.Container.removeImage(0, idx)
       this.imageIds.splice(idx, 1)
       this.hideColorBar(name)
+      if (lutIdx > -1) {
+        this.usedColorTables.splice(lutIdx, 1)
+      }
     }
   }
 
@@ -201,10 +214,9 @@ export class PapayaViewer {
     const imageParams = {}
     if (typeof min !== 'undefined' && typeof max !== 'undefined' && min === max) {
       // showing a segmented region
-      const lut = LUTS[this.lutIndex]
+      const lut = this._getNextColorTable(true)
       imageParams.lut = lut.name
       imageParams.hex = lut.hex
-      this.lutIndex = (this.lutIndex + 1) % LUTS.length
       imageParams.alpha = 0.8
     } else {
       // showing an overlay
@@ -216,9 +228,8 @@ export class PapayaViewer {
       } else if (typeof min !== 'undefined') {
         imageParams.min = Number(min.toFixed(4))
       }
-      const lut = this.colorSchemes[this.colorIndex]
+      const lut = this._getNextColorTable(false)
       imageParams.lut = lut.name
-      this.colorIndex = (this.colorIndex + 1) % this.colorSchemes.length
       imageParams.loadingComplete = () => this.onImageLoaded()
       const colorBar = createColorBar(this.cbContainer, name, lut.name, min, max, q95, max)
       colorBar.find('input').on('change', (evt) => this.onThresholdChange(evt))
@@ -241,6 +252,15 @@ export class PapayaViewer {
       screenVolume.screenMax = val
     }
     papayaContainers[0].viewer.drawViewer(true, false)
+  }
+
+  _getNextColorTable (constant) {
+    const luts = constant ? CONSTANT_COLORS : COLOR_SCALES
+    for (const c of luts) {
+      if (this.usedColorTables.indexOf(c.name) < 0) {
+        return c
+      }
+    }
   }
 }
 
