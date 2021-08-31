@@ -37,11 +37,9 @@ from ..logic.expression_processing import (
     extract_logic_free_variables
 )
 from ..logic.transformations import (
-    CollapseConjunctions,
-    CollapseDisjunctions,
-    GuaranteeConjunction,
     MakeExistentialsImplicit,
-    RemoveTrivialOperations
+    RemoveExistentialOnVariables,
+    RemoveTrivialOperations,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -278,12 +276,9 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
 
     """
     free_variables = extract_logic_free_variables(conjunctive_query)
-    query = MakeExistentialsImplicit().walk(conjunctive_query)
-    query = CollapseConjunctions().walk(query)
-    query = GuaranteeConjunction().walk(query)
     atoms_with_constants_in_all_key_positions = set(
         atom
-        for atom in query.formulas
+        for atom in extract_logic_atoms(conjunctive_query)
         if is_probabilistic_atom_with_constants_in_all_key_positions(
             atom, symbol_table
         )
@@ -296,19 +291,15 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
             for atom in atoms_with_constants_in_all_key_positions
         )
     )
-    symbol_table = symbol_table.copy()
     for atom in atoms_with_constants_in_all_key_positions:
         if not isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet):
             raise NeuroLangException(
                 "Any atom with constants in all its key positions should be "
                 "a probabilistic choice atom"
             )
-        symbol_table[atom.functor] = ProbabilisticFactSet(
-            symbol_table[atom.functor].relation,
-            symbol_table[atom.functor].probability_column,
-        )
-    conjunctive_query = add_existentials_except(
-        query, free_variables | nonkey_variables
+    conjunctive_query = (
+        RemoveExistentialOnVariables(nonkey_variables)
+        .walk(conjunctive_query)
     )
     plan = dalvi_suciu_lift(conjunctive_query, symbol_table)
     attributes = tuple(
@@ -349,14 +340,11 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
 def _get_disjuncts_containing_atom_with_all_key_attributes(ucq, symbol_table):
     matching_disjuncts = set()
     for disjunct in ucq.formulas:
-        rewritten_ucq = MakeExistentialsImplicit().walk(disjunct)
-        rewritten_ucq = CollapseDisjunctions().walk(rewritten_ucq)
-        rewritten_ucq = GuaranteeConjunction().walk(rewritten_ucq)
         if any(
             is_probabilistic_atom_with_constants_in_all_key_positions(
                 atom, symbol_table
             )
-            for atom in rewritten_ucq.formulas
+            for atom in extract_logic_atoms(disjunct)
         ):
             matching_disjuncts.add(disjunct)
     return matching_disjuncts
