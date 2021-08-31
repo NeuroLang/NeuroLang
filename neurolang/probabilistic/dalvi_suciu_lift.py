@@ -74,6 +74,7 @@ from .small_dichotomy_theorem_based_solver import (
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
+    convert_to_dnf_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables
@@ -144,10 +145,13 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
-        flat_query = Implication(query.consequent, flat_query_body)
-        flat_query_body = lift_optimization_for_choice_predicates(
-            flat_query_body, cpl_program
-        )
+        flat_query_body = convert_to_dnf_ucq(flat_query_body)
+        flat_query_body = Disjunction(tuple(
+            lift_optimization_for_choice_predicates(
+                cq, cpl_program
+            ) for cq in flat_query_body.formulas
+        ))
+        flat_query_body = RTO.walk(flat_query_body)
         flat_query = Implication(query.consequent, flat_query_body)
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body

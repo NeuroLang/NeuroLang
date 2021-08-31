@@ -592,7 +592,9 @@ def _build_empty_result_set(variables_to_project):
     )
 
 
-def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
+def solve_succ_query_boolean_diagram(
+    query_predicate, cpl_program, run_relational_algebra_solver=False
+):
     """
     Obtain the solution of a SUCC query on a CP-Logic program.
 
@@ -835,8 +837,9 @@ def build_global_sdd_model_rows(solver, literal_probabilities):
 def sdd_compilation(prob_set_result):
     result_symbols = (
         prob_set_result
-        .relations
-        .projection(prob_set_result.provenance_column)
+        .relation
+        .value
+        .projection(prob_set_result.provenance_column.value)
     )
     if result_symbols.is_empty():
         result_symbols = tuple()
@@ -876,21 +879,23 @@ def perform_wmc(
         probs[prob_set_program.expressions[i]] = prob
 
     provenance_column = 'prob'
-    while provenance_column in prob_set_result.value.columns:
+    while str2columnstr_constant(provenance_column) in prob_set_result.columns():
         provenance_column += '_'
+    provenance_column = ColumnStr(provenance_column)
 
-    res = prob_set_result.value.extended_projection(
-        dict(
-            [
-                (c, RelationalAlgebraStringExpression(c))
-                for c in prob_set_result.value.columns
-                if c != prob_set_result.provenance_column
-            ] +
-            [(
-                provenance_column,
-                lambda x: probs[x[prob_set_result.provenance_column]]
-            )]
-        )
+    extended_projections = dict(
+        [
+            (c.value, RelationalAlgebraStringExpression(c.value))
+            for c in prob_set_result.columns()
+            if c != prob_set_result.provenance_column
+        ] +
+        [(
+            provenance_column,
+            lambda x: probs[x[prob_set_result.provenance_column.value]]
+        )]
+    )
+    res = prob_set_result.relation.value.extended_projection(
+        extended_projections
     )
     return res, provenance_column
 
