@@ -24,8 +24,6 @@ from ...relational_algebra_provenance import (
     DisjointProjection,
     IndependentProjection
 )
-from ...relational_algebra import str2columnstr_constant, ColumnStr
-from ...relational_algebra_provenance import DisjointProjection
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
 from ..probabilistic_ra_utils import (

@@ -171,7 +171,7 @@ def solve_succ_query(query, cpl_program):
             )
         )
         flat_query = Implication(query.consequent, flat_query_body)
-        
+
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
         )
