@@ -171,6 +171,7 @@ def solve_succ_query(query, cpl_program):
             )
         )
         flat_query = Implication(query.consequent, flat_query_body)
+        
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
         )
@@ -183,6 +184,10 @@ def solve_succ_query(query, cpl_program):
         if not isinstance(
             shattered_query_antecedent,
             (Conjunction, FunctionApplication)
+        ) or any(
+            isinstance(predicate, Negation)
+            for predicate
+            in extract_logic_predicates(shattered_query_antecedent)
         ):
             raise NotHierarchicalQueryException(
                 f"Query {query} not a hierarchical conjunctive query"

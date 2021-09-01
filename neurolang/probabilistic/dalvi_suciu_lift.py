@@ -78,6 +78,7 @@ from .small_dichotomy_theorem_based_solver import (
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
+    convert_to_dnf_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables
@@ -143,19 +144,7 @@ def solve_succ_query(query, cpl_program):
 
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
-        flat_query_body = lift_optimization_for_choice_predicates(
-            flat_query_body, cpl_program
-        )
-        flat_query = Implication(query.consequent, flat_query_body)
-        _verify_that_the_query_is_unate(flat_query)
-        symbol_table = generate_probabilistic_symbol_table_for_query(
-            cpl_program, flat_query_body
-        )
-        unified_query = UnifyVariableEqualities().walk(flat_query)
-        try:
-            shattered_query = symbolic_shattering(unified_query, symbol_table)
-        except NotEasilyShatterableError:
-            shattered_query = unified_query
+        shattered_query, symbol_table = _prepare_and_optimise_query(flat_query, cpl_program)
         ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -167,7 +156,7 @@ def solve_succ_query(query, cpl_program):
                 query
             )
         ra_query = reintroduce_unified_head_terms(
-            ra_query, flat_query, unified_query
+            ra_query, flat_query, shattered_query
         )
         ra_query = RAQueryOptimiser().walk(ra_query)
 
@@ -176,6 +165,25 @@ def solve_succ_query(query, cpl_program):
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result
+
+
+def _prepare_and_optimise_query(flat_query, cpl_program):
+    flat_query_body = convert_to_dnf_ucq(flat_query.antecedent)
+    flat_query_body = RTO.walk(Disjunction(tuple(
+        lift_optimization_for_choice_predicates(f, cpl_program)
+        for f in flat_query_body.formulas
+    )))
+    flat_query = Implication(flat_query.consequent, flat_query_body)
+    unified_query = UnifyVariableEqualities().walk(flat_query)
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, unified_query.antecedent
+    )
+    try:
+        shattered_query = symbolic_shattering(unified_query, symbol_table)
+    except NotEasilyShatterableError:
+        shattered_query = unified_query
+    _verify_that_the_query_is_unate(shattered_query)
+    return shattered_query, symbol_table
 
 
 def _verify_that_the_query_is_unate(query):

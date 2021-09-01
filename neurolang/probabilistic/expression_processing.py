@@ -14,7 +14,7 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import TRUE, Conjunction, Implication, Union
+from ..logic import TRUE, Conjunction, Implication, Negation, Union
 from ..logic.transformations import GuaranteeConjunction
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
@@ -342,7 +342,11 @@ def lift_optimization_for_choice_predicates(query, program):
     if len(program.pchoice_pred_symbs) == 0:
         return query
     pchoice_eqs = get_probchoice_variable_equalities(
-        extract_logic_atoms(query), program.pchoice_pred_symbs
+        [
+            pred for pred in extract_logic_predicates(query)
+            if not isinstance(pred, Negation)
+        ],
+        program.pchoice_pred_symbs
     )
     if len(pchoice_eqs) == 0:
         return query
