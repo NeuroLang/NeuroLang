@@ -889,9 +889,16 @@ def test_simple_negation(solver):
     rule = Implication(P(x), Conjunction((Q(x), Negation(R(x)))))
     cpl.walk(rule)
     query = Implication(ans(x), P(x))
-    result = solver.solve_succ_query(query, cpl)
-    expected = testing.make_prov_set([(.18, 'a'), (.10, 'b')], ("_p_", "x"))
-    assert testing.eq_prov_relations(result, expected)
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl)
+        expected = testing.make_prov_set([(.18, 'a'), (.10, 'b')], ("_p_", "x"))
+        assert testing.eq_prov_relations(result, expected)
 
 
 @pytest.mark.parametrize("solver", [
