@@ -1,26 +1,27 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
+from typing import AbstractSet
 
 import numpy as np
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
-    flatten_query,
+    flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NeuroLangException, NonLiftableException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
-    add_match,
+    add_match
 )
 from ..expressions import (
     Constant,
     FunctionApplication,
     Symbol,
-    TypedSymbolTableMixin,
+    TypedSymbolTableMixin
 )
 from ..logic import (
     FALSE,
@@ -29,16 +30,13 @@ from ..logic import (
     ExistentialPredicate,
     Implication,
     NaryLogicOperator,
-    Union,
+    Union
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
-    extract_logic_free_variables,
+    extract_logic_free_variables
 )
 from ..logic.transformations import (
-    CollapseConjunctions,
-    CollapseDisjunctions,
-    GuaranteeConjunction,
     MakeExistentialsImplicit,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
@@ -49,7 +47,7 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
@@ -60,24 +58,26 @@ from .probabilistic_ra_utils import (
     NonLiftable,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query,
+    generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import ProbSemiringSolver
+from .probabilistic_semiring_solver import \
+    ProbSemiringToRelationalAlgebraSolver
 from .query_resolution import (
+    generate_provenance_query_solver,
     lift_solve_marg_query,
-    reintroduce_unified_head_terms,
+    reintroduce_unified_head_terms
 )
 from .shattering import shatter_easy_probfacts
 from .small_dichotomy_theorem_based_solver import (
-    RAQueryOptimiser,
-    lift_optimization_for_choice_predicates,
+    lift_optimization_for_choice_predicates
 )
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
+    convert_to_dnf_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
-    unify_existential_variables,
+    unify_existential_variables
 )
 
 LOG = logging.getLogger(__name__)
@@ -92,15 +92,15 @@ __all__ = [
 RTO = RemoveTrivialOperations()
 
 
-class LiftedQueryProcessingSolver(
-    rap.DisjointProjectMixin,
+class ExtendedRAPToRAWalker(
+    rap.IndependentDisjointProjectionsAndUnionMixin,
     rap.WeightedNaturalJoinSolverMixin,
-    ProbSemiringSolver,
+    ProbSemiringToRelationalAlgebraSolver,
 ):
     pass
 
 
-def solve_succ_query(query, cpl_program):
+def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     """
     Solve a SUCC query on a CP-Logic program.
 
@@ -110,6 +110,10 @@ def solve_succ_query(query, cpl_program):
         SUCC query of the form `ans(x) :- P(x)`.
     cpl_program : CPLogicProgram
         CP-Logic program on which the query should be solved.
+    run_relational_algebra_solver: bool
+        When true the result's `relation` attribute is a NamedRelationalAlgebraFrozenSet,
+        when false the attribute is the relational algebra expression that
+        produces the such set.
 
     Returns
     -------
@@ -134,15 +138,20 @@ def solve_succ_query(query, cpl_program):
             if isinstance(term, Symbol)
         )
         return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names),
-            ColumnStr("_p_"),
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                ("_p_",) + head_var_names
+            )),
+            str2columnstr_constant("_p_"),
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
-        flat_query = Implication(query.consequent, flat_query_body)
-        flat_query_body = lift_optimization_for_choice_predicates(
-            flat_query_body, cpl_program
-        )
+        flat_query_body = convert_to_dnf_ucq(flat_query_body)
+        flat_query_body = Disjunction(tuple(
+            lift_optimization_for_choice_predicates(
+                cq, cpl_program
+            ) for cq in flat_query_body.formulas
+        ))
+        flat_query_body = RTO.walk(flat_query_body)
         flat_query = Implication(query.consequent, flat_query_body)
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
@@ -165,11 +174,14 @@ def solve_succ_query(query, cpl_program):
         ra_query = reintroduce_unified_head_terms(
             ra_query, flat_query, unified_query
         )
-        ra_query = RAQueryOptimiser().walk(ra_query)
+
+    query_solver = generate_provenance_query_solver(
+        symbol_table, run_relational_algebra_solver,
+        solver_class=ExtendedRAPToRAWalker
+    )
 
     with log_performance(LOG, "Run RAP query"):
-        solver = LiftedQueryProcessingSolver(symbol_table)
-        prob_set_result = solver.walk(ra_query)
+        prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
 
