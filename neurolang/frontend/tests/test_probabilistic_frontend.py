@@ -1003,10 +1003,10 @@ def test_cbma_prob_query_with_negation():
         res = nl.query((e.t, e.n, e.p), e.ProbTermAssociation[e.t, e.n, e.p])
     expected = RelationalAlgebraFrozenSet(
         [
-            ("t1", "nA", 0.482963),
-            ("t1", "nB", 0.419524),
-            ("t2", "nA", 0.637037),
-            ("t2", "nB", 0.554921),
+            ("t1", "nA", 0.344444),
+            ("t1", "nB", 0.338095),
+            ("t2", "nA", 0.444444),
+            ("t2", "nB", 0.438095),
         ]
     )
     assert_almost_equal(res, expected)

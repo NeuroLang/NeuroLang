@@ -584,6 +584,24 @@ class PushExistentialsDown(LogicExpressionWalker):
             res = expression
         return res
 
+    @add_match(
+        ExistentialPredicate(..., Conjunction),
+        lambda expression: any(
+            isinstance(formula, Negation) and
+            expression.head in extract_logic_free_variables(formula)
+            for formula in expression.body.formulas
+        )
+    )
+    def dont_push_when_it_can_be_unsafe(self, expression):
+        new_body = self.walk(expression.body)
+        if new_body is expression.body:
+            return expression
+        else:
+            return ExistentialPredicate(
+                expression.head,
+                new_body
+            )
+
     @add_match(ExistentialPredicate(..., Conjunction))
     def push_existential_down(self, expression):
         variable = expression.head
