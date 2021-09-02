@@ -1,6 +1,7 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
+from typing import AbstractSet
 
 import numpy as np
 
@@ -38,9 +39,6 @@ from ..logic.expression_processing import (
     extract_logic_predicates
 )
 from ..logic.transformations import (
-    CollapseConjunctions,
-    CollapseDisjunctions,
-    GuaranteeConjunction,
     MakeExistentialsImplicit,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
@@ -58,6 +56,7 @@ from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .exceptions import NotEasilyShatterableError
+from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     NonLiftable,
@@ -65,14 +64,16 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import ProbSemiringSolver
+from .probabilistic_semiring_solver import (
+    ProbSemiringToRelationalAlgebraSolver
+)
 from .query_resolution import (
+    generate_provenance_query_solver,
     lift_solve_marg_query,
     reintroduce_unified_head_terms
 )
 from .shattering import shatter_easy_probfacts
 from .small_dichotomy_theorem_based_solver import (
-    RAQueryOptimiser,
     lift_optimization_for_choice_predicates
 )
 from .transforms import (
@@ -96,15 +97,15 @@ __all__ = [
 RTO = RemoveTrivialOperations()
 
 
-class LiftedQueryProcessingSolver(
-    rap.DisjointProjectMixin,
+class ExtendedRAPToRAWalker(
+    rap.IndependentDisjointProjectionsAndUnionMixin,
     rap.WeightedNaturalJoinSolverMixin,
-    ProbSemiringSolver,
+    ProbSemiringToRelationalAlgebraSolver,
 ):
     pass
 
 
-def solve_succ_query(query, cpl_program):
+def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     """
     Solve a SUCC query on a CP-Logic program.
 
@@ -114,6 +115,10 @@ def solve_succ_query(query, cpl_program):
         SUCC query of the form `ans(x) :- P(x)`.
     cpl_program : CPLogicProgram
         CP-Logic program on which the query should be solved.
+    run_relational_algebra_solver: bool
+        When true the result's `relation` attribute is a NamedRelationalAlgebraFrozenSet,
+        when false the attribute is the relational algebra expression that
+        produces the such set.
 
     Returns
     -------
@@ -138,8 +143,10 @@ def solve_succ_query(query, cpl_program):
             if isinstance(term, Symbol)
         )
         return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names),
-            ColumnStr("_p_"),
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                ("_p_",) + head_var_names
+            )),
+            str2columnstr_constant("_p_"),
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
@@ -158,11 +165,14 @@ def solve_succ_query(query, cpl_program):
         ra_query = reintroduce_unified_head_terms(
             ra_query, flat_query, shattered_query
         )
-        ra_query = RAQueryOptimiser().walk(ra_query)
+
+    query_solver = generate_provenance_query_solver(
+        symbol_table, run_relational_algebra_solver,
+        solver_class=ExtendedRAPToRAWalker
+    )
 
     with log_performance(LOG, "Run RAP query"):
-        solver = LiftedQueryProcessingSolver(symbol_table)
-        prob_set_result = solver.walk(ra_query)
+        prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
 

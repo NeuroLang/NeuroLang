@@ -3,6 +3,8 @@ from typing import AbstractSet, Iterable
 
 import numpy
 
+from neurolang.relational_algebra import str2columnstr_constant
+
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
     EQ,
@@ -10,12 +12,13 @@ from ..datalog.expression_processing import (
     conjunct_formulas,
     extract_logic_atoms,
     extract_logic_predicates,
-    reachable_code,
+    reachable_code
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Negation, Union
 from ..logic.transformations import GuaranteeConjunction
+from ..relational_algebra import Projection, RelationalAlgebraSolver
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -242,10 +245,12 @@ def construct_within_language_succ_result(provset, rule):
     proj_cols = list()
     for arg in rule.consequent.args:
         if isinstance(arg, Symbol):
-            proj_cols.append(arg.name)
+            proj_cols.append(str2columnstr_constant(arg.name))
         elif isinstance(arg, ProbabilisticQuery) and arg.functor == PROB:
             proj_cols.append(provset.provenance_column)
-    return Constant[AbstractSet](provset.value.projection(*proj_cols))
+    return RelationalAlgebraSolver().walk(
+        Projection(provset.relation, proj_cols)
+    )
 
 
 def group_preds_by_functor(predicates, filter_set=None):

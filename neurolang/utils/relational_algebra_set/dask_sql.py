@@ -446,7 +446,11 @@ class DaskRelationalAlgebraBaseSet:
             return super().__eq__(other)
 
     def _equal_sets_structure(self, other):
-        return set(self.columns) == set(other.columns)
+        if isinstance(self, abc.NamedRelationalAlgebraFrozenSet) or isinstance(
+            other, abc.NamedRelationalAlgebraFrozenSet
+        ):
+            return set(self.columns) == set(other.columns)
+        return self.arity == other.arity
 
     def __repr__(self):
         t = self._table

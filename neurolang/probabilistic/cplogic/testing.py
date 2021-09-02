@@ -1,5 +1,6 @@
 import contextlib
 import itertools
+from typing import AbstractSet
 
 import numpy as np
 
@@ -8,16 +9,17 @@ from ...expression_walker import PatternWalker
 from ...expressions import Constant, Symbol
 from ...relational_algebra import (
     ColumnStr,
+    NameColumns,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
     Projection,
     RenameColumn,
     Selection,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceCountingSolver,
+    RelationalAlgebraProvenanceCountingSolver
 )
 from .cplogic_to_gm import CPLogicGroundingToGraphicalModelTranslator
 from .gm_provenance_solver import (
@@ -29,7 +31,7 @@ from .gm_provenance_solver import (
     TupleSymbol,
     UnionOverTuples,
     UnionRemover,
-    rename_columns_for_args_to_match,
+    rename_columns_for_args_to_match
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
 
@@ -47,21 +49,43 @@ def get_named_relation_tuples(relation):
     return set(tuple(x) for x in relation)
 
 
-def eq_prov_relations(pas1, pas2):
-    assert isinstance(pas1, ProvenanceAlgebraSet)
-    assert isinstance(pas2, ProvenanceAlgebraSet)
-    pas1_sorted_np_cols = sorted(pas1.non_provenance_columns)
-    pas2_sorted_np_cols = sorted(pas2.non_provenance_columns)
-    assert pas1_sorted_np_cols == pas2_sorted_np_cols
-    assert (
-        pas1.value.projection(*pas1.non_provenance_columns).to_unnamed()
-        == pas2.value.projection(*pas1.non_provenance_columns).to_unnamed()
+def build_ra_provenance_set_from_named_ra_set(nas, provenance_column):
+    uas = nas.to_unnamed()
+    res = NameColumns(
+        Constant[AbstractSet](uas),
+        tuple(str2columnstr_constant(c) for c in nas.columns)
     )
+
+    return ProvenanceAlgebraSet(
+        res,
+        str2columnstr_constant(provenance_column)
+    )
+
+
+def eq_prov_relations(pas1, pas2):
+    if not (
+        isinstance(pas1, ProvenanceAlgebraSet) and
+        isinstance(pas2, ProvenanceAlgebraSet)
+    ):
+        return False
+
+    if pas1.non_provenance_columns != pas2.non_provenance_columns:
+        return False
+
+    columns = [v.value for v in pas1.non_provenance_columns]
+
+    if not (
+        pas1.relation.value.projection_to_unnamed(*columns)
+        ==
+        pas2.relation.value.projection_to_unnamed(*columns)
+    ):
+        return False
+
     # ensure the prov col names are different so we can join the sets
     c1 = Symbol.fresh().name
     c2 = Symbol.fresh().name
-    x1 = pas1.value.rename_column(pas1.provenance_column, c1)
-    x2 = pas2.value.rename_column(pas2.provenance_column, c2)
+    x1 = pas1.relation.value.rename_column(pas1.provenance_column.value, c1)
+    x2 = pas2.relation.value.rename_column(pas2.provenance_column.value, c2)
     joined = x1.naturaljoin(x2)
     probs = list(joined.projection(*(c1, c2)))
     for p1, p2 in probs:
@@ -75,8 +99,10 @@ def eq_prov_relations(pas1, pas2):
 
 def make_prov_set(iterable, columns):
     return ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(columns, iterable),
-        ColumnStr(columns[0]),
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns, iterable
+        )),
+        str2columnstr_constant(columns[0]),
     )
 
 
@@ -217,7 +243,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
                 "stored in __debug_expression__ attribute"
             )
         pred = get_grounding_predicate(prov_set.__debug_expression__)
-        string = f"\\mathcal{{{pred.functor.name}}}"
+        string = f"\\mathcal{{{pred.relation.functor.name}}}"
         if hasattr(prov_set, "__debug_alway_true__"):
             string += "_1"
         return string

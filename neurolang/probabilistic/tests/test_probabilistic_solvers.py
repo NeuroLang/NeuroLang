@@ -1,4 +1,5 @@
 import operator
+from typing import AbstractSet
 
 import numpy as np
 import pytest
@@ -8,13 +9,7 @@ from ...datalog import Fact
 from ...exceptions import NonLiftableException, UnsupportedSolverError
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Negation, Union
-from ...relational_algebra import (
-    ColumnStr,
-    ExtendedProjection,
-    FunctionApplicationListMember,
-    NamedRelationalAlgebraFrozenSet,
-    str2columnstr_constant
-)
+from ...relational_algebra import ColumnStr, NamedRelationalAlgebraFrozenSet, str2columnstr_constant
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
@@ -27,7 +22,6 @@ from ..exceptions import (
     NotEasilyShatterableError,
     NotHierarchicalQueryException
 )
-from ..probabilistic_semiring_solver import ProbSemiringSolver
 
 try:
     from contextlib import nullcontext
@@ -130,7 +124,7 @@ def test_deterministic_conjunction_varying_arity_empty(solver):
     cpl_program.walk(code)
     query = Implication(ans(x, y), Z(x, y))
     result = solver.solve_succ_query(query, cpl_program)
-    assert result.value.is_empty()
+    assert result.relation.value.is_empty()
 
 
 def test_simple_bernoulli(solver):
@@ -984,101 +978,6 @@ def test_probchoice_selfjoin_multiple_variables_shared_var(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_probsemiring_extended_proj():
-    provset = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            ("_p_", "x", "y"),
-            [
-                (0.2, "a", "b"),
-                (0.3, "b", "a"),
-                (0.5, "c", "c"),
-            ],
-        ),
-        ColumnStr("_p_"),
-    )
-    proj_list = [
-        FunctionApplicationListMember(
-            str2columnstr_constant("x"), str2columnstr_constant("x")
-        ),
-        FunctionApplicationListMember(
-            str2columnstr_constant("y"), str2columnstr_constant("y")
-        ),
-        FunctionApplicationListMember(
-            Constant("d"), str2columnstr_constant("z")
-        ),
-    ]
-    proj = ExtendedProjection(provset, proj_list)
-    solver = ProbSemiringSolver()
-    result = solver.walk(proj)
-    expected = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            ("_p_", "x", "y", "z"),
-            [
-                (0.2, "a", "b", "d"),
-                (0.3, "b", "a", "d"),
-                (0.5, "c", "c", "d"),
-            ],
-        ),
-        ColumnStr("_p_"),
-    )
-    assert testing.eq_prov_relations(result, expected)
-
-
-def test_probsemiring_forbidden_extended_proj_missing_nonprov_cols():
-    provset = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            ("_p_", "x", "y"),
-            [
-                (0.2, "a", "b"),
-                (0.3, "b", "a"),
-                (0.5, "c", "c"),
-            ],
-        ),
-        ColumnStr("_p_"),
-    )
-    proj_list = [
-        FunctionApplicationListMember(
-            str2columnstr_constant("x"), str2columnstr_constant("x")
-        ),
-        FunctionApplicationListMember(
-            Constant("d"), str2columnstr_constant("z")
-        ),
-    ]
-    proj = ExtendedProjection(provset, proj_list)
-    solver = ProbSemiringSolver()
-    with pytest.raises(ValueError):
-        solver.walk(proj)
-
-
-def test_probsemiring_forbidden_extended_proj_on_provcol():
-    provset = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            ("_p_", "x", "y"),
-            [
-                (0.2, "a", "b"),
-                (0.3, "b", "a"),
-                (0.5, "c", "c"),
-            ],
-        ),
-        ColumnStr("_p_"),
-    )
-    proj_list = [
-        FunctionApplicationListMember(
-            str2columnstr_constant("x"), str2columnstr_constant("x")
-        ),
-        FunctionApplicationListMember(
-            str2columnstr_constant("y"), str2columnstr_constant("y")
-        ),
-        FunctionApplicationListMember(
-            Constant("d"), str2columnstr_constant("_p_")
-        ),
-    ]
-    proj = ExtendedProjection(provset, proj_list)
-    solver = ProbSemiringSolver()
-    with pytest.raises(ValueError):
-        solver.walk(proj)
-
-
 def test_simple_boolean_query(solver):
     pchoice_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
     cpl_program = CPLogicProgram()
@@ -1148,14 +1047,14 @@ def test_nested_negation(solver):
         res = solver.solve_succ_query(query, cpl)
 
         expected = ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
                 ("_p_", "x"),
                 [
                     (0.08, "a"),
                     (0.30, "c"),
                 ],
-            ),
-            ColumnStr("_p_"),
+            )),
+            str2columnstr_constant("_p_"),
         )
 
         assert testing.eq_prov_relations(res, expected)
