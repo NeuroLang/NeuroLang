@@ -471,6 +471,19 @@ class MakeExistentialsImplicit(LogicExpressionWalker):
         return self.walk(expression.body)
 
 
+class RemoveExistentialOnVariables(LogicExpressionWalker):
+    def __init__(self, variables_to_eliminate):
+        self._variables_to_eliminate = variables_to_eliminate
+
+    @add_match(ExistentialPredicate)
+    def existential(self, expression):
+        body = self.walk(expression.body)
+        if expression.head in self._variables_to_eliminate:
+            return body
+        else:
+            return ExistentialPredicate(expression.head, body)
+
+
 def convert_to_pnf_with_cnf_matrix(expression):
     walker = ChainedWalker(
         EliminateImplications,

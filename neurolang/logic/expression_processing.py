@@ -348,7 +348,7 @@ def has_existential_quantifiers(query):
 
 class HasExistentialPredicates(PatternWalker):
     @add_match(FunctionApplication)
-    def function_application(self, expression):
+    def walk_function_application(self, expression):
         return False
 
     @add_match(ExistentialPredicate)

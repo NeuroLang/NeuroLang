@@ -1,22 +1,28 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
+from typing import AbstractSet
 
 import numpy as np
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
-    flatten_query,
+    flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..exceptions import NonLiftableException
+from ..exceptions import NeuroLangException, NonLiftableException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
-    add_match,
+    add_match
 )
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..expressions import (
+    Constant,
+    FunctionApplication,
+    Symbol,
+    TypedSymbolTableMixin
+)
 from ..logic import (
     FALSE,
     Conjunction,
@@ -24,51 +30,54 @@ from ..logic import (
     ExistentialPredicate,
     Implication,
     NaryLogicOperator,
+    Union
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
-    extract_logic_free_variables,
+    extract_logic_free_variables
 )
 from ..logic.transformations import (
     MakeExistentialsImplicit,
+    RemoveExistentialOnVariables,
     RemoveTrivialOperations,
-    GuaranteeConjunction,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
-    Projection,
     UnaryRelationalAlgebraOperation,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
-from .small_dichotomy_theorem_based_solver import (
-    RAQueryOptimiser,
-    lift_optimization_for_choice_predicates,
-)
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     NonLiftable,
+    ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query,
+    generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import ProbSemiringSolver
-from .query_resolution import lift_solve_marg_query
+from .probabilistic_semiring_solver import \
+    ProbSemiringToRelationalAlgebraSolver
+from .query_resolution import (
+    generate_provenance_query_solver,
+    lift_solve_marg_query,
+    reintroduce_unified_head_terms
+)
 from .shattering import shatter_easy_probfacts
+from .small_dichotomy_theorem_based_solver import (
+    lift_optimization_for_choice_predicates
+)
 from .transforms import (
+    add_existentials_except,
     convert_rule_to_ucq,
+    convert_to_dnf_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
-    unify_existential_variables,
-)
-from .small_dichotomy_theorem_based_solver import (
-    _project_on_query_head,
-    _maybe_reintroduce_head_variables,
+    unify_existential_variables
 )
 
 LOG = logging.getLogger(__name__)
@@ -83,7 +92,15 @@ __all__ = [
 RTO = RemoveTrivialOperations()
 
 
-def solve_succ_query(query, cpl_program):
+class ExtendedRAPToRAWalker(
+    rap.IndependentDisjointProjectionsAndUnionMixin,
+    rap.WeightedNaturalJoinSolverMixin,
+    ProbSemiringToRelationalAlgebraSolver,
+):
+    pass
+
+
+def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     """
     Solve a SUCC query on a CP-Logic program.
 
@@ -93,6 +110,10 @@ def solve_succ_query(query, cpl_program):
         SUCC query of the form `ans(x) :- P(x)`.
     cpl_program : CPLogicProgram
         CP-Logic program on which the query should be solved.
+    run_relational_algebra_solver: bool
+        When true the result's `relation` attribute is a NamedRelationalAlgebraFrozenSet,
+        when false the attribute is the relational algebra expression that
+        produces the such set.
 
     Returns
     -------
@@ -117,16 +138,20 @@ def solve_succ_query(query, cpl_program):
             if isinstance(term, Symbol)
         )
         return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names),
-            ColumnStr("_p_"),
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                ("_p_",) + head_var_names
+            )),
+            str2columnstr_constant("_p_"),
         )
 
-    with log_performance(LOG, "Translation and lifted optimisation"):
-        flat_query_body = GuaranteeConjunction().walk(
+    with log_performance(LOG, "Translation to extensional plan"):
+        flat_query_body = convert_to_dnf_ucq(flat_query_body)
+        flat_query_body = Disjunction(tuple(
             lift_optimization_for_choice_predicates(
-                flat_query_body, cpl_program
-            )
-        )
+                cq, cpl_program
+            ) for cq in flat_query_body.formulas
+        ))
+        flat_query_body = RTO.walk(flat_query_body)
         flat_query = Implication(query.consequent, flat_query_body)
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
@@ -146,17 +171,17 @@ def solve_succ_query(query, cpl_program):
                 "Query %s not liftable, algorithm can't be applied",
                 query
             )
-        # project on query's head variables
-        ra_query = _project_on_query_head(ra_query, shattered_query)
-        # re-introduce head variables potentially removed by unification
-        ra_query = _maybe_reintroduce_head_variables(
+        ra_query = reintroduce_unified_head_terms(
             ra_query, flat_query, unified_query
         )
-        ra_query = RAQueryOptimiser().walk(ra_query)
+
+    query_solver = generate_provenance_query_solver(
+        symbol_table, run_relational_algebra_solver,
+        solver_class=ExtendedRAPToRAWalker
+    )
 
     with log_performance(LOG, "Run RAP query"):
-        solver = ProbSemiringSolver(symbol_table)
-        prob_set_result = solver.walk(ra_query)
+        prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
 
@@ -177,8 +202,9 @@ def dalvi_suciu_lift(rule, symbol_table):
     if isinstance(rule, Implication):
         rule = convert_rule_to_ucq(rule)
     rule = RTO.walk(rule)
-    if (
-        isinstance(rule, FunctionApplication) or
+    if isinstance(rule, FunctionApplication):
+        return TranslateToNamedRA().walk(rule)
+    elif (
         all(
             is_atom_a_deterministic_relation(atom, symbol_table)
             for atom in extract_logic_atoms(rule)
@@ -188,7 +214,7 @@ def dalvi_suciu_lift(rule, symbol_table):
         rule = MakeExistentialsImplicit().walk(rule)
         result = TranslateToNamedRA().walk(rule)
         proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
-        return Projection(result, proj_cols)
+        return rap.Projection(result, proj_cols)
 
     rule_cnf = minimize_ucq_in_cnf(rule)
     connected_components = symbol_connected_components(rule_cnf)
@@ -207,8 +233,169 @@ def dalvi_suciu_lift(rule, symbol_table):
         has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
         if has_svs:
             return plan
+        else:
+            has_safe_plan, plan = disjoint_project(rule_dnf, symbol_table)
+            if has_safe_plan:
+                return plan
 
     return NonLiftable(rule)
+
+
+def disjoint_project(rule_dnf, symbol_table):
+    """
+    Rule that extends the lifted query processing algorithm to handle
+    Block-Independent Disjoint (BID) tables which encode mutual exclusivity
+    assumptions on top of the tuple-independent assumption of probabilistic
+    tables.
+
+    Modifications to the lifted query processing algorithm that are necessary
+    to extend it to BID tables are detailed in section 4.3.1 of [1]_.
+
+    Two variants of the rule exist: one for conjunctive queries, and one for
+    disjunctive queries.
+
+    [1] Suciu, Dan, Dan Olteanu, Christopher Ré, and Christoph Koch, eds.
+    Probabilistic Databases. Synthesis Lectures on Data Management 16. San
+    Rafael, Calif.: Morgan & Claypool Publ, 2011.
+
+    """
+    if len(rule_dnf.formulas) == 1:
+        conjunctive_query = rule_dnf.formulas[0]
+        return disjoint_project_conjunctive_query(
+            conjunctive_query, symbol_table
+        )
+    return disjoint_project_disjunctive_query(rule_dnf, symbol_table)
+
+
+def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
+    """
+    First variant of the disjoint project on a CQ in CNF.
+
+    A disjoint project operator is applied whenever any of the atoms in the CQ
+    has only constants in its key positions and has at least one variable in a
+    non-key position.
+
+    Note: as variables are removed through shattering, this only applies to
+    all probabilistic choice variables.
+
+    """
+    free_variables = extract_logic_free_variables(conjunctive_query)
+    atoms_with_constants_in_all_key_positions = set(
+        atom
+        for atom in extract_logic_atoms(conjunctive_query)
+        if is_probabilistic_atom_with_constants_in_all_key_positions(
+            atom, symbol_table
+        )
+    )
+    if not atoms_with_constants_in_all_key_positions:
+        return False, None
+    nonkey_variables = set.union(
+        *(
+            extract_nonkey_variables(atom, symbol_table)
+            for atom in atoms_with_constants_in_all_key_positions
+        )
+    )
+    for atom in atoms_with_constants_in_all_key_positions:
+        if not isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet):
+            raise NeuroLangException(
+                "Any atom with constants in all its key positions should be "
+                "a probabilistic choice atom"
+            )
+    conjunctive_query = (
+        RemoveExistentialOnVariables(nonkey_variables)
+        .walk(conjunctive_query)
+    )
+    plan = dalvi_suciu_lift(conjunctive_query, symbol_table)
+    attributes = tuple(
+        str2columnstr_constant(v.name)
+        for v in free_variables
+    )
+    plan = rap.DisjointProjection(plan, attributes)
+    return True, plan
+
+
+def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
+    """
+    Second variant of the disjoint project on a UCQ in DNF.
+
+    This rule applies whenever the given query Q can be written as Q = Q1 v Q',
+    where the conjunctive query Q1 has an atom where all key attribute are
+    constants, and Q' is any other UCQ.
+
+    Then we return P(Q) = P(Q1) + P(Q') - P(Q1 ∧ Q') with subsequent recursive
+    calls to the resolution algorithms. Note that a disjoint project should be
+    applied during the calculation of P(Q1) and P(Q1 ∧ Q').
+
+    """
+    matching_disjuncts = (
+        _get_disjuncts_containing_atom_with_all_key_attributes(
+            disjunctive_query, symbol_table
+        )
+    )
+    for disjunct in matching_disjuncts:
+        has_safe_plan, plan = _apply_disjoint_project_ucq_rule(
+            disjunctive_query, disjunct, symbol_table
+        )
+        if has_safe_plan:
+            return plan
+    return False, None
+
+
+def _get_disjuncts_containing_atom_with_all_key_attributes(ucq, symbol_table):
+    matching_disjuncts = set()
+    for disjunct in ucq.formulas:
+        if any(
+            is_probabilistic_atom_with_constants_in_all_key_positions(
+                atom, symbol_table
+            )
+            for atom in extract_logic_atoms(disjunct)
+        ):
+            matching_disjuncts.add(disjunct)
+    return matching_disjuncts
+
+
+def _apply_disjoint_project_ucq_rule(
+    disjunctive_query: Union,
+    disjunct: Conjunction,
+    symbol_table: TypedSymbolTableMixin,
+):
+    free_vars = extract_logic_free_variables(disjunctive_query)
+    head = add_existentials_except(disjunct, free_vars)
+    head_plan = dalvi_suciu_lift(head, symbol_table)
+    if isinstance(head_plan, NonLiftable):
+        return False, None
+    tail = add_existentials_except(
+        Conjunction(tuple(disjunctive_query.formulas[:1])),
+        free_vars,
+    )
+    tail_plan = dalvi_suciu_lift(tail, symbol_table)
+    if isinstance(tail_plan, NonLiftable):
+        return False, None
+    head_and_tail = add_existentials_except(
+        Conjunction(disjunctive_query.formulas), free_vars
+    )
+    head_and_tail_plan = dalvi_suciu_lift(head_and_tail, symbol_table)
+    if isinstance(head_and_tail_plan, NonLiftable):
+        return False, None
+    return True, rap.WeightedNaturalJoin(
+        (head_plan, tail_plan, head_and_tail_plan),
+        (Constant(1), Constant(1), Constant(-1)),
+    )
+
+
+def extract_nonkey_variables(atom, symbol_table):
+    """
+    Get all variables in the atom that occur on non-key attributes.
+
+    Makes the assumption that the atom is probabilistic.
+
+    As we only support probabilistic choices and not all BID tables, this can
+    only be a variable occurring in a probabilistic choice.
+
+    """
+    if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
+        return {arg for arg in atom.args if isinstance(arg, Symbol)}
+    return set()
 
 
 def has_separator_variables(query, symbol_table):
@@ -319,6 +506,18 @@ def extract_probabilistic_root_variables(formulas, symbol_table):
             probabilistic_atoms[1:],
             set(probabilistic_atoms[0].args)
         )
+        pchoice_atoms = OrderedSet(
+            atom
+            for atom in probabilistic_atoms
+            if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+        )
+        # all variables occurring in probabilistic choices cannot occur in key
+        # positions, as probabilistic choice relations have no key attribute
+        # (making their respective tuples mutually exclusive)
+        nonkey_variables = set().union(*(set(a.args) for a in pchoice_atoms))
+        # variables occurring in non-key positions cannot be root variables
+        # because root variables must occur in every atom in a key position
+        root_variables -= nonkey_variables
         if candidates is None:
             candidates = root_variables
         else:
@@ -388,7 +587,7 @@ def separator_variable_plan(expression, separator_variables, symbol_table):
     )
     for v in existentials_to_add:
         expression = ExistentialPredicate(v, expression)
-    return rap.Projection(
+    return rap.IndependentProjection(
         dalvi_suciu_lift(expression, symbol_table),
         tuple(
             str2columnstr_constant(v.name)
@@ -623,7 +822,42 @@ def symbolic_shattering(unified_query, symbol_table):
 
 
 def is_atom_a_deterministic_relation(atom, symbol_table):
-    return isinstance(
-        symbol_table.get(atom.functor, None),
-        DeterministicFactSet
+    return (
+        isinstance(atom.functor, Symbol)
+        and atom.functor in symbol_table
+        and isinstance(symbol_table[atom.functor], DeterministicFactSet)
+    )
+
+
+def is_atom_a_probabilistic_choice_relation(atom, symbol_table):
+    return (
+        isinstance(atom.functor, Symbol)
+        and atom.functor in symbol_table
+        and isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet)
+    )
+
+
+def is_probabilistic_atom_with_constants_in_all_key_positions(
+    atom, symbol_table
+):
+    """
+    As we only handle probabilistic choice relations (and not more general BID
+    tables), which are relations with no key attribute, there are only two
+    cases:
+    (1) if the atom is a probabilistic choice, then it validates the
+    requirement of having constants in all key positions (it has no key
+    attribute), or
+    (2) if the atom is a tuple-independent relation, all its attributes are key
+    attributes, and so all its terms must be constants for the requirement to
+    be validated.
+
+    """
+    return is_atom_a_probabilistic_choice_relation(atom, symbol_table) or (
+        not is_atom_a_deterministic_relation(atom, symbol_table)
+        and (
+            isinstance(atom.functor, Symbol)
+            and atom.functor in symbol_table
+            and isinstance(symbol_table[atom.functor], ProbabilisticFactSet)
+            and all(isinstance(arg, Constant) for arg in atom.args)
+        )
     )
