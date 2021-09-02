@@ -8,6 +8,7 @@ from ..logic.expression_processing import (
 )
 from ..logic.transformations import (
     MakeExistentialsImplicit,
+    PushExistentialsDown,
     RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix
 )
@@ -98,8 +99,9 @@ def convert_pos_logic_query_to_datalog_rules(query, head):
     '''
     ruq = RemoveUniversalPredicates()
     mei = MakeExistentialsImplicit()
+    ped = PushExistentialsDown()
     q_args = set(extract_logic_free_variables(query))
-    antecedent = mei.walk(ruq.walk(convert_to_pnf_with_dnf_matrix(query)))
+    antecedent = ped.walk(ruq.walk(convert_to_pnf_with_dnf_matrix(query)))
     if isinstance(antecedent, Disjunction):
         program = antecedent.formulas
     else:
@@ -107,7 +109,7 @@ def convert_pos_logic_query_to_datalog_rules(query, head):
     program = [
         Implication(
             head(*(q_args & extract_logic_free_variables(formula))),
-            formula
+            mei.walk(formula)
         )
         for formula in program
     ]
