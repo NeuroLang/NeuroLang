@@ -1,13 +1,18 @@
+from typing import AbstractSet
+
 import pytest
 
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication
-from ...relational_algebra import ColumnStr, NamedRelationalAlgebraFrozenSet
+from ...relational_algebra import (
+    NamedRelationalAlgebraFrozenSet,
+    str2columnstr_constant
+)
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
-    weighted_model_counting,
+    weighted_model_counting
 )
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
@@ -70,15 +75,15 @@ def test_marg_query_ground_conditioning(solver):
     cpl.walk(query)
     result = solver.solve_marg_query(query, cpl)
     expected = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"),
             [
                 (0.5, "b"),
                 (0.3, "a"),
                 (0.2, "c"),
             ],
-        ),
-        ColumnStr("_p_"),
+        )),
+        str2columnstr_constant("_p_"),
     )
     assert testing.eq_prov_relations(result, expected)
 
@@ -109,7 +114,7 @@ def test_marg_query_two_vars_conditioning(solver):
     cpl.walk(query)
     result = solver.solve_marg_query(query, cpl)
     expected = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [
                 (0.3, "a", "a"),
@@ -118,8 +123,8 @@ def test_marg_query_two_vars_conditioning(solver):
                 (0.2, "c", "a"),
                 (0.2, "c", "b"),
             ],
-        ),
-        ColumnStr("_p_"),
+        )),
+        str2columnstr_constant("_p_"),
     )
     assert testing.eq_prov_relations(result, expected)
 
@@ -174,14 +179,14 @@ def test_marg_query_conjunctive_conditioned_and_conditioning(solver):
     cpl.walk(query)
     result = solver.solve_marg_query(query, cpl)
     expected = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [
                 (0.2 * 0.01 * 0.3, "a", "a"),
                 (0.4 * 0.01 * 0.3, "a", "b"),
                 (0.9 * 0.01 * 0.3, "a", "c"),
             ],
-        ),
-        ColumnStr("_p_"),
+        )),
+        str2columnstr_constant("_p_"),
     )
     assert testing.eq_prov_relations(result, expected)

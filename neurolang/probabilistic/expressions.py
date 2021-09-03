@@ -34,7 +34,7 @@ class ProbabilisticPredicate(Definition):
 
     def __repr__(self):
         return "ProbabilisticPredicate{{{} :: {} : {}}}".format(
-            self.probability, self.body, self.type
+            self.body, self.probability, self.type
         )
 
 

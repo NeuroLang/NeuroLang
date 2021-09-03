@@ -76,6 +76,7 @@ from .datalog.sugar import (
 )
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
+from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
@@ -88,6 +89,7 @@ class RegionFrontendCPLogicSolver(
     QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
     RegionSolver,
+    NumpyFunctionsMixin,
     CPLogicMixin,
     DatalogWithAggregationMixin,
     BuiltinAggregationMixin,
@@ -109,10 +111,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         self,
         chase_class: Type[Chase] = Chase,
         probabilistic_solvers: Tuple[Callable] = (
+            small_dichotomy_theorem_based_solver.solve_succ_query,
             dalvi_suciu_lift.solve_succ_query,
             wmc_solve_succ_query,
         ),
         probabilistic_marg_solvers: Tuple[Callable] = (
+            small_dichotomy_theorem_based_solver.solve_marg_query,
             dalvi_suciu_lift.solve_marg_query,
             wmc_solve_marg_query,
         ),

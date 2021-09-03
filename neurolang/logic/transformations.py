@@ -471,6 +471,19 @@ class MakeExistentialsImplicit(LogicExpressionWalker):
         return self.walk(expression.body)
 
 
+class RemoveExistentialOnVariables(LogicExpressionWalker):
+    def __init__(self, variables_to_eliminate):
+        self._variables_to_eliminate = variables_to_eliminate
+
+    @add_match(ExistentialPredicate)
+    def existential(self, expression):
+        body = self.walk(expression.body)
+        if expression.head in self._variables_to_eliminate:
+            return body
+        else:
+            return ExistentialPredicate(expression.head, body)
+
+
 def convert_to_pnf_with_cnf_matrix(expression):
     walker = ChainedWalker(
         EliminateImplications,
@@ -581,6 +594,45 @@ class PushExistentialsDown(
             res = self.walk(Disjunction(new_formulas))
         else:
             res = expression
+        return res
+
+    @add_match(
+        ExistentialPredicate(..., Conjunction),
+        lambda expression: any(
+            isinstance(formula, Negation) and
+            expression.head in extract_logic_free_variables(formula)
+            for formula in expression.body.formulas
+        )
+    )
+    def dont_push_when_it_can_be_unsafe(self, expression):
+        variable = expression.head
+        in_ = tuple()
+        out_ = tuple()
+        negative_logic_free_variables = set()
+        for formula in expression.body.formulas:
+            if isinstance(formula, Negation):
+                negative_logic_free_variables |= extract_logic_free_variables(
+                    formula
+                )
+
+        for formula in expression.body.formulas:
+            if (
+                negative_logic_free_variables &
+                extract_logic_free_variables(formula)
+            ):
+                in_ += (formula,)
+            else:
+                out_ += (formula,)
+
+        if len(out_) == 0:
+            res = ExistentialPredicate(variable, self.walk(Conjunction(in_)))
+        else:
+            res = self.walk(
+                Conjunction((
+                    ExistentialPredicate(variable, Conjunction(in_)),
+                    Conjunction(out_)
+                ))
+            )
         return res
 
     @add_match(ExistentialPredicate(..., Conjunction))

@@ -149,11 +149,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return tuple()
 
     def as_numpy_array(self):
+        self._drop_duplicates_if_needed()
         res = self._container.values.view()
         res.setflags(write=False)
         return res
 
     def as_pandas_dataframe(self):
+        self._drop_duplicates_if_needed()
         return self._container
 
     def _empty_set_same_structure(self):
@@ -646,6 +648,8 @@ class NamedRelationalAlgebraFrozenSet(
         return res
 
     def rename_column(self, src, dst):
+        if self.is_dum():
+            return self
         if src not in self._columns:
             raise ValueError(f"{src} not in columns")
         if src == dst:
@@ -664,6 +668,8 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def rename_columns(self, renames):
+        if self.is_dum():
+            return self
         # prevent duplicated destination columns
         self._check_for_duplicated_columns(renames.values())
         if not set(renames).issubset(self.columns):

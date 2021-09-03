@@ -446,7 +446,11 @@ class DaskRelationalAlgebraBaseSet:
             return super().__eq__(other)
 
     def _equal_sets_structure(self, other):
-        return set(self.columns) == set(other.columns)
+        if isinstance(self, abc.NamedRelationalAlgebraFrozenSet) or isinstance(
+            other, abc.NamedRelationalAlgebraFrozenSet
+        ):
+            return set(self.columns) == set(other.columns)
+        return self.arity == other.arity
 
     def __repr__(self):
         t = self._table
@@ -802,6 +806,10 @@ class NamedRelationalAlgebraFrozenSet(
     def rename_columns(self, renames):
         # prevent duplicated destination columns
         self._check_for_duplicated_columns(renames.values())
+
+        if self.is_dum():
+            return self
+
         if not set(renames).issubset(self.columns):
             # get the missing source columns
             # for a more convenient error message
