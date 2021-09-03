@@ -140,7 +140,7 @@ def convert_rule_to_ucq(implication):
     )
     for a in existential_vars:
         antecedent = ExistentialPredicate(a, antecedent)
-    return RTO.walk(antecedent)
+    return RTO.walk(PED.walk(antecedent))
 
 
 def convert_to_cnf_ucq(expression):
