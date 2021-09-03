@@ -172,6 +172,12 @@ class NeurolangQueryManager:
                             res[s]._is_probabilistic = True
                         except KeyError:
                             pass
+                    if engine.current_program:
+                        try:
+                            last_parsed_symbol = engine.current_program[-1].expression.consequent.functor
+                            res[last_parsed_symbol.name]._last_parsed_symbol = True
+                        except Exception:
+                            pass
                     return res
             except Exception as e:
                 LOG.debug(

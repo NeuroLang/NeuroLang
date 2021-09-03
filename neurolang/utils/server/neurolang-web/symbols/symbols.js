@@ -27,10 +27,10 @@ export class SymbolsController {
    * Set the results of a query execution
    * @param {*} data
    */
-  setQueryResults (data, defaultSymbol) {
+  setQueryResults (data) {
     this.resultsContainer.show()
     this.results = data.data
-    this._updateSymbolsList(defaultSymbol)
+    this._updateSymbolsList()
   }
 
   /**
@@ -75,7 +75,7 @@ export class SymbolsController {
    * of query result symbols if available, and symbols & functions
    * present on the engine.
    */
-  _updateSymbolsList (defaultSymbol) {
+  _updateSymbolsList () {
     const menu = this.dropdown.find('.menu')
     menu.empty()
     let selected = null
@@ -86,7 +86,10 @@ export class SymbolsController {
       resultKeys.sort()
       const probClasses = resultKeys.map((val) => this.results.results[val].probabilistic ? 'probabilistic' : '')
       addItemsToDropdownMenu(menu, resultKeys, 'Query symbols', 'symbol query-symbol', probClasses)
-      selected = resultKeys.indexOf(defaultSymbol) > 0 ? defaultSymbol : resultKeys[0]
+      selected = resultKeys.find(val => this.results.results[val].last_parsed_symbol)
+      if (!selected) {
+        selected = resultKeys[0]
+      }
     }
     // Then add the base symbols and functions
     if (this.symbols) {

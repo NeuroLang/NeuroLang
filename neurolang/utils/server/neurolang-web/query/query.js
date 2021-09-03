@@ -51,7 +51,6 @@ export class QueryController {
   _submitQuery () {
     const query = this.editor.getValue().trim()
     if (query) {
-      const defaultSymbol = parseLastQuerySymbol(query)
       const msg = { query: query }
       if (this.engine) {
         msg.engine = this.engine
@@ -59,7 +58,7 @@ export class QueryController {
       // create a new WebSocket and set the event listeners on it
       this.socket = new WebSocket(API_ROUTE.statementsocket)
       this.socket.onerror = this._onerror
-      this.socket.onmessage = (event) => this._onmessage(event, defaultSymbol)
+      this.socket.onmessage = (event) => this._onmessage(event)
       this.socket.onopen = () => {
         this.runQueryBtn.addClass('loading')
         this.runQueryBtn.prop('disabled', true)
@@ -72,7 +71,7 @@ export class QueryController {
     this._setAlert('warning', 'An error occured while connecting to the server.')
   }
 
-  _onmessage (event, defaultSymbol) {
+  _onmessage (event) {
     const msg = JSON.parse(event.data)
     if (!('status' in msg) || msg.status !== 'ok') {
       this._setAlert('error', msg, 'An error occured while submitting your query.')
@@ -96,7 +95,7 @@ export class QueryController {
           // query was sucessfull
           this._clearAlert()
           this._finishQuery()
-          this.sc.setQueryResults(msg, defaultSymbol)
+          this.sc.setQueryResults(msg)
         }
       } else {
         // query is either still running or has not yet started
@@ -160,12 +159,4 @@ export class QueryController {
     this.editor.clearGutter('marks')
     this.editor.getAllMarks().forEach((elt) => elt.clear())
   }
-}
-
-function parseLastQuerySymbol (query) {
-  const lines = query.split(/\r?\n/)
-  const lastLine = lines[lines.length - 1]
-  const parenthese = lastLine.indexOf('(')
-  const head = parenthese > 0 ? lastLine.substring(0, parenthese) : undefined
-  return head
 }

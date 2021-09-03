@@ -321,7 +321,7 @@ describe('SymbolsController', () => {
       it('should set center when center btn is clicked', () => {
         // trigger click on 2nd menu item which contains images
         $('.nl-symbols-dropdown .item').eq(1).trigger('click')
-        
+
         // click on first image checkbox
         mockCanAdd.mockReturnValueOnce(true)
         mockAddImage.mockReturnValueOnce({ lut: 'Viridis' })
