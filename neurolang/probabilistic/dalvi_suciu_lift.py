@@ -3,7 +3,6 @@ from functools import reduce
 from itertools import chain, combinations
 
 import numpy as np
-from typing_inspect import NEW_TYPING
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
@@ -28,17 +27,14 @@ from ..logic import (
     NaryLogicOperator,
 )
 from ..logic.expression_processing import (
-    ExtractFreeVariablesWalker,
     extract_logic_atoms,
     extract_logic_free_variables,
 )
 from ..logic.transformations import (
-    CollapseConjunctions,
     GuaranteeDisjunction,
     IdentifyPureConjunctions,
     MakeExistentialsImplicit,
     PushExistentialsDown,
-    RemoveExistentialPredicates,
     RemoveTrivialOperations,
     GuaranteeConjunction,
 )
@@ -83,7 +79,6 @@ from .small_dichotomy_theorem_based_solver import (
     _project_on_query_head,
     _maybe_reintroduce_head_variables,
 )
-from neurolang.logic import transformations
 
 LOG = logging.getLogger(__name__)
 
@@ -230,6 +225,7 @@ def dalvi_suciu_lift(rule, symbol_table):
 
 
 def convert_ucq_to_ccq(rule, transformation='CNF'):
+    rule = PED.walk(rule)
     free_vars = extract_logic_free_variables(rule)
     existential_vars = set()
     for atom in extract_logic_atoms(rule):
@@ -252,6 +248,7 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
 
     final_expression = fresh_symbols_to_components(dic_components, fresh_symbols_expression)
     final_expression = minimize(final_expression)
+    #final_expression = RTO.walk(PED.walk(final_expression))
 
     return GCD.walk(final_expression)
 
@@ -292,7 +289,7 @@ def minimize_dnf(rule):
 def extract_connected_components(list_of_conjunctions, existential_vars):
     transformations = {}
     for f in list_of_conjunctions:
-        c_matrix = args_co_occurence_graph(f)
+        c_matrix = args_co_occurence_graph(f, existential_vars)
         components = connected_components(c_matrix)
 
         if isinstance(f, ExistentialPredicate):
@@ -370,7 +367,7 @@ def symbol_co_occurence_graph(expression):
     return c_matrix
 
 
-def args_co_occurence_graph(expression):
+def args_co_occurence_graph(expression, variable_to_use=None):
     """Arguments co-ocurrence graph expressed as
     an adjacency matrix.
 
@@ -386,6 +383,7 @@ def args_co_occurence_graph(expression):
         shared predicate symbol between two subformulas of the
         logic expression.
     """
+
     if isinstance(expression, ExistentialPredicate):
         return np.ones((1,))
 
@@ -393,8 +391,12 @@ def args_co_occurence_graph(expression):
     for i, formula in enumerate(expression.formulas):
         #f_args = ExtractFreeVariables()
         f_args = set(b for a in extract_logic_atoms(formula) for b in a.args)
+        if variable_to_use is not None:
+            f_args &= variable_to_use
         for j, formula_ in enumerate(expression.formulas[i + 1:]):
             f_args_ = set(b for a in extract_logic_atoms(formula_) for b in a.args)
+            if variable_to_use is not None:
+                f_args_ &= variable_to_use
             if not f_args.isdisjoint(f_args_):
                 c_matrix[i, i + 1 + j] = 1
                 c_matrix[i + 1 + j, i] = 1

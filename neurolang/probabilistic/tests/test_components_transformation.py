@@ -1,10 +1,14 @@
 
 from neurolang.logic.expression_processing import extract_logic_free_variables
-from numpy import isin
-from neurolang.logic.transformations import CheckPureConjunction, GuaranteeConjunction, IdentifyPureConjunctions, PushExistentialsDown, RemoveExistentialPredicates, RemoveTrivialOperations
+from neurolang.logic.transformations import (
+    CheckPureConjunction, GuaranteeConjunction, IdentifyPureConjunctions,
+    PushExistentialsDown, RemoveExistentialPredicates, RemoveTrivialOperations
+)
 from neurolang.probabilistic.dalvi_suciu_lift import convert_ucq_to_ccq
-from neurolang.probabilistic.transforms import convert_rule_to_ucq, convert_to_cnf_ucq
-from neurolang.logic import Conjunction, Disjunction, ExistentialPredicate, Implication
+from neurolang.probabilistic.transforms import convert_rule_to_ucq
+from neurolang.logic import (
+    Conjunction, Disjunction, ExistentialPredicate, Implication
+)
 from neurolang.expressions import Symbol
 
 IPC = IdentifyPureConjunctions()
@@ -387,10 +391,10 @@ def test_ccq_transformation_example_2_12():
 
     expected = Conjunction((
         Disjunction((
-            c0, c1, c2
+            c0, c1, c3
         )),
         Disjunction((
-            c0, c1, c3
+            c0, c1, c2
         )),
     ))
 
@@ -398,9 +402,6 @@ def test_ccq_transformation_example_2_12():
 
 
 def test_ccq_no_transformation_conjunction():
-
-    from neurolang.config import config
-    config.disable_expression_type_printing()
 
     Q = Symbol('Q')
     R = Symbol('R')
