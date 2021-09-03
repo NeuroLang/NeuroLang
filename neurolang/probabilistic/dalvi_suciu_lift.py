@@ -13,6 +13,7 @@ from ..datalog.expression_processing import (
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NonLiftableException
 from ..expression_walker import (
+    ChainedWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match,
@@ -68,9 +69,12 @@ from .probabilistic_semiring_solver import ProbSemiringSolver
 from .query_resolution import lift_solve_marg_query
 from .shattering import shatter_easy_probfacts
 from .transforms import (
+    add_existentials_except,
     convert_rule_to_ucq,
     convert_to_cnf_ucq,
     convert_to_dnf_ucq,
+    minimize_component_conjunction,
+    minimize_component_disjunction,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables,
@@ -186,7 +190,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
     if isinstance(rule, Implication):
-        rule = convert_ucq_to_ccq(rule)
+        rule = convert_rule_to_ucq(rule)
     rule = RTO.walk(rule)
     if (
         isinstance(rule, FunctionApplication) or
@@ -201,58 +205,89 @@ def dalvi_suciu_lift(rule, symbol_table):
         proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
         return Projection(result, proj_cols)
 
-    rule_cnf = minimize_ucq_in_cnf(rule)
+    rule_cnf = convert_ucq_to_ccq(rule, transformation='CNF')
     connected_components = symbol_connected_components(rule_cnf)
-    if len(connected_components) > 1:
+    if len(connected_components) > 1 :
         return components_plan(
             connected_components, rap.NaturalJoin, symbol_table
         )
-    elif len(rule_cnf.formulas) > 1:
-        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
-    rule_dnf = minimize_ucq_in_dnf(rule)
+    rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
-        return components_plan(connected_components, rap.Union, symbol_table)
-    else:
-        has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
-        if has_svs:
-            return plan
+        return components_plan(
+            connected_components, rap.Union, symbol_table
+        )
+
+    has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
+    if has_svs:
+        return plan
+
+    if len(rule_cnf.formulas) > 1:
+        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule)
 
 
 def convert_ucq_to_ccq(rule, transformation='CNF'):
-    implication = RTO.walk(rule)
-    consequent, antecedent = implication.unapply()
-    head_vars = set(consequent.args)
-    existential_vars = set(
-        extract_logic_free_variables(antecedent) -
-        set(head_vars)
-    )
+    free_vars = extract_logic_free_variables(rule)
+    existential_vars = set()
+    for atom in extract_logic_atoms(rule):
+        existential_vars.update(set(atom.args) - set(free_vars))
 
-    for a in existential_vars:
-        antecedent = ExistentialPredicate(a, antecedent)
-    expression = RTO.walk(PED.walk(antecedent))
-
-    conjunctions = IdentifyPureConjunctions().walk(expression)
+    conjunctions = IdentifyPureConjunctions().walk(rule)
     dic_components = extract_connected_components(conjunctions, existential_vars)
 
-    fresh_symbols_expression = ReplaceExpressionWalker(dic_components).walk(expression)
+    fresh_symbols_expression = ReplaceExpressionWalker(dic_components).walk(rule)
     if transformation == 'CNF':
         fresh_symbols_expression = convert_to_cnf_ucq(fresh_symbols_expression)
+        minimize = minimize_cnf
         GCD = GuaranteeConjunction()
     elif transformation == 'DNF':
-        GCD = GuaranteeDisjunction()
         fresh_symbols_expression = convert_to_dnf_ucq(fresh_symbols_expression)
+        minimize = minimize_dnf
+        GCD = GuaranteeDisjunction()
     else:
-        raise ValueError('Invalid transformation type')
+        raise ValueError(f'Invalid transformation type: {transformation}')
 
     final_expression = fresh_symbols_to_components(dic_components, fresh_symbols_expression)
-    final_expression = GCD.walk(final_expression)
+    final_expression = minimize(final_expression)
 
-    return final_expression
+    return GCD.walk(final_expression)
 
+def minimize_cnf(rule):
+    head_variables = extract_logic_free_variables(rule)
+    cq_d_min = Conjunction(tuple(
+        minimize_component_disjunction(c)
+        for c in rule.formulas
+    ))
+
+    simplify = ChainedWalker(
+        PushExistentialsDown,
+        RemoveTrivialOperations,
+        GuaranteeConjunction,
+    )
+
+    cq_min = minimize_component_conjunction(cq_d_min)
+    cq_min = add_existentials_except(cq_min, head_variables)
+    return simplify.walk(cq_min)
+
+def minimize_dnf(rule):
+    head_variables = extract_logic_free_variables(rule)
+    cq_d_min = Disjunction(tuple(
+        minimize_component_conjunction(c)
+        for c in rule.formulas
+    ))
+
+    simplify = ChainedWalker(
+        PushExistentialsDown,
+        RemoveTrivialOperations,
+        GuaranteeDisjunction
+    )
+
+    cq_min = minimize_component_disjunction(cq_d_min)
+    cq_min = add_existentials_except(cq_min, head_variables)
+    return simplify.walk(cq_min)
 
 def extract_connected_components(list_of_conjunctions, existential_vars):
     transformations = {}

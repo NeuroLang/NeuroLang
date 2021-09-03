@@ -363,6 +363,7 @@ def test_ccq_transformation_example_2_12():
         )),
     )))
 
+    rule = convert_rule_to_ucq(rule)
     rule = convert_ucq_to_ccq(rule)
 
     c0 = ExistentialPredicate(x1,
@@ -415,7 +416,8 @@ def test_ccq_no_transformation_conjunction():
          R(z, x1), S(x1, y1), T(z, x2), S(x2, y2)
     )))
 
-    rule_ccq = convert_ucq_to_ccq(rule)
+    rule_ucq = convert_rule_to_ucq(rule)
+    rule_ccq = convert_ucq_to_ccq(rule_ucq)
 
     RTO = RemoveTrivialOperations()
     implication = RTO.walk(rule)
