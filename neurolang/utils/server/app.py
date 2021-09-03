@@ -32,7 +32,7 @@ from tornado.options import define, options
 define("port", default=8888, help="run on the given port", type=int)
 define(
     "data_dir",
-    default="neurolang_data",
+    default=str(Path.home() / "neurolang_data"),
     help="path of a directory where the downloaded datasets are stored",
     type=str,
 )
@@ -512,6 +512,7 @@ def main():
     tornado.options.parse_command_line()
     setup_logs()
     data_dir = Path(options.data_dir)
+    LOG.info(f"Neurolang data directory set to {data_dir}")
     opts = {
         NeurosynthEngineConf(data_dir, resolution=2): 2,
         DestrieuxEngineConf(data_dir): 2,
