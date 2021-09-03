@@ -755,7 +755,7 @@ class IdentifyPureConjunctions(LogicExpressionWalker):
         return []
 
     @add_match(FunctionApplication)
-    def function_application(self, fa):
+    def function_app(self, fa):
         return []
 
 class CheckPureConjunction(LogicExpressionWalker):
