@@ -149,11 +149,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return tuple()
 
     def as_numpy_array(self):
+        self._drop_duplicates_if_needed()
         res = self._container.values.view()
         res.setflags(write=False)
         return res
 
     def as_pandas_dataframe(self):
+        self._drop_duplicates_if_needed()
         return self._container
 
     def _empty_set_same_structure(self):
