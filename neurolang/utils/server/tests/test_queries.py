@@ -6,8 +6,8 @@ from uuid import uuid4
 import pytest
 import tatsu
 from neurolang.frontend.probabilistic_frontend import NeurolangPDL
-from neurolang.utils.server.app import NeurolangQueryManager
-from neurolang.utils.server.engines import NeurolangEngineConfiguration
+from ..app import NeurolangQueryManager
+from ..engines import NeurolangEngineConfiguration
 
 
 @pytest.fixture

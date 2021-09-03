@@ -10,7 +10,7 @@ from neurolang.type_system import Unknown
 from neurolang.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
 )
-from neurolang.utils.server.responses import (
+from ..responses import (
     CustomQueryResultsEncoder,
     QueryResults,
 )
