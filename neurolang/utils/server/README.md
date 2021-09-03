@@ -16,13 +16,14 @@ To be able to build the frontend application, you need to install [Node.js](http
 
 The frontend application can be built for production by running the command
 
-```
+```bash
+$ npm install
 $ npm run build
 ```
 
 from the `neurolang-web` directory. This command will process the various javascript, html and css files and bundle them together in production-ready files. The `npm run build` command will output the built files in a `dist` directory.
 
-The backend [server application](app.py) is configured to serve static files from this directory, so that if you build the frontend application with `npm run build -- --mode dev` and then start the backend server, you should be able to see the built frontend application by navigating to [http://localhost:8888/](http://localhost:8888/) (note the port, 8888, which is the one for the tornado server and not the one used by the development frontend server) (also note that we build the application with a specific mode `-- --mode dev`, since by default running `npm run build` will build the application for production, replacing the base api url with the url for the production server, i.e. `http://neurolang-u18.saclay.inria.fr, which would not work on a local machine).
+The backend [server application](app.py) is configured to serve static files from this directory, so that if you build the frontend application with `npm run build -- --mode dev` and then start the backend server, you should be able to see the built frontend application by navigating to [http://localhost:8888/](http://localhost:8888/) (note the port, 8888, which is the one for the tornado server and not the one used by npm's development frontend server) (also note that we build the application with a specific mode `-- --mode dev`, since by default running `npm run build` will build the application for production, replacing the base api url with the url for the production server, i.e. `http://neurolang-u18.saclay.inria.fr, which would not work on a local machine).
 
 ## Development
 
@@ -37,6 +38,10 @@ Alternatively, the server can also be started with this command :
 $ python -m neurolang.utils.server.app
 ```
 executed from the root directory of the Neurolang project.
+
+You can specify some command line options to the `neuro-server` executable. Notably, `--port` lets you specify the port on which the tornado server will listen, while `--data-dir` lets you specify the directory where downloaded datasets (Neurosynth, etc.) will be stored.
+
+Run `neuro-server --help` for a full list of options.
 
 To serve the frontend application, run the following commands to install the required libraries and start a development server :
 
