@@ -17,12 +17,12 @@ import tornado.web
 import tornado.websocket
 import yaml
 from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
-from neurolang.utils.server.engines import (
+from .engines import (
     DestrieuxEngineConf,
     NeurosynthEngineConf,
 )
-from neurolang.utils.server.queries import NeurolangQueryManager
-from neurolang.utils.server.responses import (
+from .queries import NeurolangQueryManager
+from .responses import (
     CustomQueryResultsEncoder,
     QueryResults,
     base64_encode_nifti,
@@ -134,7 +134,7 @@ class CancelHandler(tornado.web.RequestHandler):
     """
 
     def delete(self, uuid: str):
-        LOG.debug(f"Canceling the request with uuid {uuid}.")
+        LOG.debug("Canceling the request with uuid %s.", uuid)
         result = self.application.nqm.cancel(uuid)
         return self.write_json_reponse({"cancelled": result})
 
@@ -187,7 +187,7 @@ class StatusHandler(JSONRequestHandler):
         tornado.web.HTTPError
             raises 404 if query id does not exist.
         """
-        LOG.debug(f"Accessing status for request {uuid}.")
+        LOG.debug("Accessing status for request %s.", uuid)
         try:
             future = self.application.nqm.get_result(uuid)
         except KeyError:
@@ -233,7 +233,7 @@ class SymbolsHandler(JSONRequestHandler):
         tornado.web.HTTPError
             raises 404 if engine id does not exist
         """
-        LOG.debug(f"Accessing symbols for engine {engine}.")
+        LOG.debug("Accessing symbols for engine %s.", engine)
         try:
             symbols = self.application.nqm.get_symbols(engine)
             # Block until results are available
@@ -281,7 +281,7 @@ class QuerySocketHandler(tornado.websocket.WebSocketHandler):
         engine = parsed.get("engine", "neurosynth")
         self.uuid = str(uuid4())
 
-        LOG.debug(f"Submitting query with uuid {self.uuid}.")
+        LOG.debug("Submitting query with uuid %s.", self.uuid)
         future = self.application.nqm.submit_query(self.uuid, query, engine)
         tornado.ioloop.IOLoop.current().add_future(
             future, self.send_query_update
@@ -313,7 +313,7 @@ class QueryHandler(JSONRequestHandler):
         query = self.get_argument("query")
         engine = self.get_argument("engine", "neurosynth")
         uuid = str(uuid4())
-        LOG.debug(f"Submitting query with uuid {uuid}.")
+        LOG.debug("Submitting query with uuid %s.", uuid)
         self.application.nqm.submit_query(uuid, query, engine)
         return self.write_json_reponse({"query": query, "uuid": uuid})
 
@@ -405,13 +405,15 @@ class DownloadsHandler(tornado.web.RequestHandler):
         try:
             future = self.application.nqm.get_result(key)
             LOG.debug(
-                f"Preparing image file for query {key} and symbol {symbol}."
+                "Preparing image file for query %s and symbol %s.", key, symbol
             )
         except KeyError:
             try:
                 future = self.application.nqm.get_symbols(key)
                 LOG.debug(
-                    f"Preparing image file for engine {key} and symbol {symbol}."
+                    f"Preparing image file for engine %s and symbol %s.",
+                    key,
+                    symbol,
                 )
             except KeyError:
                 raise tornado.web.HTTPError(
@@ -467,7 +469,8 @@ class EnginesHandler(JSONRequestHandler):
             queries_file = os.path.join(d, "queries.yaml")
             if os.path.isfile(queries_file):
                 LOG.info(
-                    f"Reading queries configuration file for Neurolang: {queries_file}"
+                    "Reading queries configuration file for Neurolang: %s",
+                    queries_file,
                 )
                 with open(queries_file, "r") as stream:
                     queries = yaml.safe_load(stream)
@@ -496,6 +499,7 @@ def setup_logs():
 
     logger = logging.getLogger("neurolang")
     logger.propagate = False
+    LOG.setLevel(logging.DEBUG)
 
 
 def main():

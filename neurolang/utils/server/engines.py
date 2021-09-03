@@ -1,8 +1,6 @@
 from abc import abstractmethod, abstractproperty
 from contextlib import contextmanager
 from multiprocessing import BoundedSemaphore
-from neurolang.regions import ExplicitVBR, ExplicitVBROverlay, region_union
-from neurolang.frontend.neurosynth_utils import StudyID
 from pathlib import Path
 from typing import Callable, Iterable, Union
 
@@ -10,6 +8,8 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 from neurolang.frontend import NeurolangDL, NeurolangPDL
+from neurolang.frontend.neurosynth_utils import StudyID
+from neurolang.regions import ExplicitVBR, ExplicitVBROverlay, region_union
 from nilearn import datasets, image
 
 
@@ -192,7 +192,7 @@ def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
         var_name="term",
         id_vars="id",
         value_name="tfidf",
-    ).query("tfidf > 1e-3")[["term", "tfidf", "id"]]
+    ).query("tfidf > 0")[["term", "tfidf", "id"]]
     term_data["id"] = term_data["id"].apply(StudyID)
 
     nl.add_tuple_set(peak_data, name="PeakReported")
