@@ -9,7 +9,10 @@ from ...datalog import Fact
 from ...exceptions import NonLiftableException, UnsupportedSolverError
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Negation, Union
-from ...relational_algebra import ColumnStr, NamedRelationalAlgebraFrozenSet, str2columnstr_constant
+from ...relational_algebra import (
+    NamedRelationalAlgebraFrozenSet,
+    str2columnstr_constant
+)
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
