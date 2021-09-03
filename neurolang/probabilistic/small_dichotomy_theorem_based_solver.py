@@ -28,19 +28,18 @@ from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     extract_logic_atoms,
     extract_logic_free_variables,
+    extract_logic_predicates,
     flatten_query,
     remove_conjunction_duplicates
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import UnsupportedSolverError
-from ..expressions import Constant, Symbol
-from ..logic import (
-    FALSE,
-    Conjunction,
-    Disjunction,
-    Implication,
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..logic import FALSE, Conjunction, Disjunction, Implication, Negation
+from ..logic.transformations import (
+    GuaranteeConjunction,
+    convert_to_pnf_with_dnf_matrix
 )
-from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     Projection,
@@ -54,7 +53,7 @@ from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query,
+    generate_probabilistic_symbol_table_for_query
 )
 from .query_resolution import (
     generate_provenance_query_solver,
@@ -167,20 +166,36 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             )
         )
         flat_query = Implication(query.consequent, flat_query_body)
+
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
         shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
-        shattered_query_probabilistic_body = Conjunction(
-            tuple(
-                atom
-                for atom in extract_logic_atoms(shattered_query.antecedent)
-                if isinstance(
-                    atom.functor,
-                    (ProbabilisticChoiceSet, ProbabilisticFactSet),
-                )
+
+        shattered_query_antecedent = convert_to_pnf_with_dnf_matrix(
+            shattered_query.antecedent
+        )
+        if not isinstance(
+            shattered_query_antecedent,
+            (Conjunction, FunctionApplication)
+        ) or any(
+            isinstance(predicate, Negation)
+            for predicate
+            in extract_logic_predicates(shattered_query_antecedent)
+        ):
+            raise NotHierarchicalQueryException(
+                f"Query {query} not a hierarchical conjunctive query"
             )
+
+        shattered_query = Implication(
+            shattered_query.consequent,
+            shattered_query_antecedent
+        )
+        probabilistic_predicates = \
+            _extract_antecedent_probabilistic_predicates(shattered_query)
+        shattered_query_probabilistic_body = Conjunction(
+            tuple(probabilistic_predicates)
         )
         if (
             isinstance(shattered_query.antecedent, Disjunction)
@@ -223,6 +238,20 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
+
+
+def _extract_antecedent_probabilistic_predicates(datalog_rule):
+    probabilistic_predicates = []
+    for predicate in extract_logic_predicates(datalog_rule.antecedent):
+        atom = predicate
+        while isinstance(atom, Negation):
+            atom = atom.formula
+        if isinstance(
+            atom.functor,
+            (ProbabilisticChoiceSet, ProbabilisticFactSet)
+        ):
+            probabilistic_predicates.append(predicate)
+    return probabilistic_predicates
 
 
 def _project_on_query_head(provset, query):

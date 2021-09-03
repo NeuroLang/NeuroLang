@@ -30,16 +30,19 @@ from ..logic import (
     ExistentialPredicate,
     Implication,
     NaryLogicOperator,
+    Negation,
     Union
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
-    extract_logic_free_variables
+    extract_logic_free_variables,
+    extract_logic_predicates
 )
 from ..logic.transformations import (
     MakeExistentialsImplicit,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
+    convert_to_pnf_with_dnf_matrix
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -53,6 +56,7 @@ from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .exceptions import NotEasilyShatterableError
+from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     NonLiftable,
@@ -60,8 +64,9 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import \
+from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
+)
 from .query_resolution import (
     generate_provenance_query_solver,
     lift_solve_marg_query,
@@ -145,22 +150,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
-        flat_query_body = convert_to_dnf_ucq(flat_query_body)
-        flat_query_body = Disjunction(tuple(
-            lift_optimization_for_choice_predicates(
-                cq, cpl_program
-            ) for cq in flat_query_body.formulas
-        ))
-        flat_query_body = RTO.walk(flat_query_body)
         flat_query = Implication(query.consequent, flat_query_body)
-        symbol_table = generate_probabilistic_symbol_table_for_query(
-            cpl_program, flat_query_body
-        )
-        unified_query = UnifyVariableEqualities().walk(flat_query)
-        try:
-            shattered_query = symbolic_shattering(unified_query, symbol_table)
-        except NotEasilyShatterableError:
-            shattered_query = unified_query
+        shattered_query, symbol_table = _prepare_and_optimise_query(flat_query, cpl_program)
         ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -172,7 +163,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
                 query
             )
         ra_query = reintroduce_unified_head_terms(
-            ra_query, flat_query, unified_query
+            ra_query, flat_query, shattered_query
         )
 
     query_solver = generate_provenance_query_solver(
@@ -184,6 +175,44 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
+
+
+def _prepare_and_optimise_query(flat_query, cpl_program):
+    flat_query_body = convert_to_dnf_ucq(flat_query.antecedent)
+    flat_query_body = RTO.walk(Disjunction(tuple(
+        lift_optimization_for_choice_predicates(f, cpl_program)
+        for f in flat_query_body.formulas
+    )))
+    flat_query = Implication(flat_query.consequent, flat_query_body)
+    unified_query = UnifyVariableEqualities().walk(flat_query)
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, unified_query.antecedent
+    )
+    try:
+        shattered_query = symbolic_shattering(unified_query, symbol_table)
+    except NotEasilyShatterableError:
+        shattered_query = unified_query
+    _verify_that_the_query_is_unate(shattered_query)
+    return shattered_query, symbol_table
+
+
+def _verify_that_the_query_is_unate(query):
+    positive_relational_symbols = set()
+    negative_relational_symbols = set()
+
+    query = convert_rule_to_ucq(query)
+    query = convert_to_pnf_with_dnf_matrix(query)
+
+    for predicate in extract_logic_predicates(query):
+        if isinstance(predicate, Negation):
+            while isinstance(predicate, Negation):
+                predicate = predicate.formula
+            negative_relational_symbols.add(predicate.functor)
+        else:
+            positive_relational_symbols.add(predicate.functor)
+
+    if not positive_relational_symbols.isdisjoint(negative_relational_symbols):
+        raise NonLiftableException(f"Query {query} is not unate")
 
 
 def solve_marg_query(rule, cpl):
@@ -220,7 +249,8 @@ def dalvi_suciu_lift(rule, symbol_table):
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
         return components_plan(
-            connected_components, rap.NaturalJoin, symbol_table
+            connected_components, rap.NaturalJoin, symbol_table,
+            negative_operation=rap.Difference
         )
     elif len(rule_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
@@ -697,11 +727,31 @@ def variable_co_occurrence_graph(expression):
     return c_matrix
 
 
-def components_plan(components, operation, symbol_table):
-    formulas = []
+def components_plan(
+    components, operation, symbol_table,
+    negative_operation=None
+):
+    positive_formulas = []
+    negative_formulas = []
     for component in components:
-        formulas.append(dalvi_suciu_lift(component, symbol_table))
-    return reduce(operation, formulas[1:], formulas[0])
+        component = RTO.walk(component)
+        if isinstance(component, Negation):
+            formula = dalvi_suciu_lift(component.formula, symbol_table)
+            negative_formulas.append(formula)
+        else:
+
+            formula = dalvi_suciu_lift(component, symbol_table)
+            positive_formulas.append(formula)
+    output = reduce(operation, positive_formulas[1:], positive_formulas[0])
+
+    if len(negative_formulas) > 0 and negative_operation is None:
+        raise ValueError(
+            "If negative components are included,"
+            " a negative operation should be provided"
+        )
+    output = reduce(negative_operation, negative_formulas, output)
+
+    return output
 
 
 def inclusion_exclusion_conjunction(expression, symbol_table):

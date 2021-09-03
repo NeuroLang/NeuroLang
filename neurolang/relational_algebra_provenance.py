@@ -149,7 +149,13 @@ class DisjointProjection(LiftedPlanProjection):
 
 
 class WeightedNaturalJoinSolverMixin(PatternWalker):
-    @add_match(WeightedNaturalJoin)
+    @add_match(
+        WeightedNaturalJoin,
+        lambda join_op: all(
+            isinstance(relation, ProvenanceAlgebraSet)
+            for relation in join_op.relations
+        )
+    )
     def prov_weighted_join(self, join_op):
         relations = join_op.relations
         weights = join_op.weights

@@ -1,4 +1,5 @@
 import operator
+from typing import AbstractSet
 
 import numpy as np
 import pytest
@@ -7,7 +8,12 @@ from ...config import config
 from ...datalog import Fact
 from ...exceptions import NonLiftableException, UnsupportedSolverError
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Implication, Union
+from ...logic import Conjunction, Implication, Negation, Union
+from ...relational_algebra import (
+    NamedRelationalAlgebraFrozenSet,
+    str2columnstr_constant
+)
+from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -311,6 +317,83 @@ def test_mutual_exclusivity(solver):
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_fact_negation_choice(solver):
+    pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
+    pfact_sets = {Q: {(0.5, "a", "b")}}
+    code = Union((
+        Implication(
+            Z(x, y),
+            Conjunction((Negation(P(y)), Q(x, y)))
+        ),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    query = Implication(ans(x, y), Z(x, y))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set([(0.1, "a", "b")], ("_p_", "x", "y"))
+        assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+    pytest.param(dalvi_suciu_lift, marks=pytest.mark.xfail(
+        reason="Connected component issue addressed by PR #660"
+    )),
+])
+def test_negation_fact_choice(solver):
+    pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
+    pfact_sets = {Q: {(0.4, "a", "a")}}
+    code = Union((
+        Implication(
+            Z(x),
+            Conjunction((P(x), Negation(Q(x, x))))
+        ),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set([(.12, "a"), (.8, "b")], ("_p_", "x"))
+        assert testing.eq_prov_relations(result, expected)
 
 
 def test_multiple_probchoices_mutual_exclusivity(solver):
@@ -790,6 +873,38 @@ def test_empty_result_program(solver):
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
+def test_simple_negation(solver):
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.2, 'a'), (0.1, 'b')]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [(0.1, 'a'), (0.3, 'c')]
+    )
+    rule = Implication(P(x), Conjunction((Q(x), Negation(R(x)))))
+    cpl.walk(rule)
+    query = Implication(ans(x), P(x))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl)
+        expected = testing.make_prov_set([(.18, 'a'), (.10, 'b')], ("_p_", "x"))
+        assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
 def test_program_with_probchoice_selfjoin(solver):
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(
@@ -877,6 +992,75 @@ def test_simple_boolean_query(solver):
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0,)], ("_p_",))
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_dalvi_suciu_fails_unate():
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.2, 'a'), (0.1, 'b')]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [(0.1, 'a'), (0.3, 'c')]
+    )
+    rule = Implication(P(x), Conjunction((R(y), Q(x), Negation(R(x)))))
+    cpl.walk(rule)
+    query = Implication(ans(x), P(x))
+    with pytest.raises(NonLiftableException):
+        dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_nested_negation(solver):
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [
+            (0.2, 'a', 1, 2),
+            (0.8, 'b', 1, 5),
+            (0.1, 'b', 2, 2),
+        ]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [(0.1, 'a'), (0.3, 'c')]
+    )
+    program = Union((
+        Implication(Z(x, y), Q(x, y, z)),
+    ))
+    query = Implication(ans(x), Conjunction((
+            R(x),
+            Negation(Z(x, Constant(1)))
+        )))
+    cpl.walk(program)
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        res = solver.solve_succ_query(query, cpl)
+
+        expected = ProvenanceAlgebraSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                ("_p_", "x"),
+                [
+                    (0.08, "a"),
+                    (0.30, "c"),
+                ],
+            )),
+            str2columnstr_constant("_p_"),
+        )
+
+        assert testing.eq_prov_relations(res, expected)
 
 
 @pytest.mark.skip(reason="issue in dalvi/suciu algorithm to be fixed")

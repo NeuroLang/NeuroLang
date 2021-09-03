@@ -5,8 +5,7 @@ from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import (
     EQ,
     conjunct_formulas,
-    extract_logic_free_variables,
-    extract_logic_predicates
+    extract_logic_free_variables
 )
 from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
 from ..expression_pattern_matching import add_match
@@ -227,9 +226,9 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
     res_args = tuple(s for s in rule.consequent.args if isinstance(s, Symbol))
 
     joint_antecedent = Conjunction(
-        tuple(
-            extract_logic_predicates(rule.antecedent.conditioned)
-            | extract_logic_predicates(rule.antecedent.conditioning)
+        (
+            rule.antecedent.conditioned,
+            rule.antecedent.conditioning
         )
     )
     joint_logic_variables = set(res_args)

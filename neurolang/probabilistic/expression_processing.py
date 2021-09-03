@@ -11,11 +11,12 @@ from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     conjunct_formulas,
     extract_logic_atoms,
+    extract_logic_predicates,
     reachable_code
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import TRUE, Conjunction, Implication, Union
+from ..logic import TRUE, Conjunction, Implication, Negation, Union
 from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import Projection, RelationalAlgebraSolver
 from .exceptions import DistributionDoesNotSumToOneError
@@ -346,12 +347,16 @@ def lift_optimization_for_choice_predicates(query, program):
     if len(program.pchoice_pred_symbs) == 0:
         return query
     pchoice_eqs = get_probchoice_variable_equalities(
-        extract_logic_atoms(query), program.pchoice_pred_symbs
+        [
+            pred for pred in extract_logic_predicates(query)
+            if not isinstance(pred, Negation)
+        ],
+        program.pchoice_pred_symbs
     )
     if len(pchoice_eqs) == 0:
         return query
     eq_conj = Conjunction(tuple(EQ(x, y) for x, y in pchoice_eqs))
-    grpd_preds = group_preds_by_functor(extract_logic_atoms(query))
+    grpd_preds = group_preds_by_functor(extract_logic_predicates(query))
     new_formulas = set(eq_conj.formulas)
     for functor, preds in grpd_preds.items():
         if functor not in program.pchoice_pred_symbs:
