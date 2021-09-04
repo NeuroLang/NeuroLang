@@ -1,0 +1,71 @@
+#tabTable_paginate .ui.pagination.menu {
+    flex-wrap: wrap;
+}
+
+.nl-symbols-viewer-container {
+    margin: 2rem 0;
+    display: flex !important;
+    align-items: flex-start;
+}
+
+.nl-symbols-container {
+    transition: width .5s;
+    width: 100%;
+}
+
+.nl-symbols-container .ui.label.segment.nl-symbols-header {
+    display: block;
+    background-color: #e8e8e8;
+    color: rgba(0,0,0,.6);
+}
+
+.nl-vbr-overlay-controls .ui.button.nl-overlay-control {
+    display: none;
+    margin-left: .5em;
+}
+
+.nl-vbr-overlay-controls.displayed .ui.button.nl-overlay-control {
+    display: inline-block;
+}
+
+.nl-vbr-overlay-controls.region-label .ui.button.nl-vbr-overlay-hist {
+    display: none;
+}
+
+.nl-vbr-overlay-controls .nl-mini-colorbar {
+    display: none;
+    vertical-align: middle;
+    width: 2rem;
+    height: 2rem;
+    border: 1px;
+    overflow: hidden;
+    border-radius: .28571429rem;
+    margin: 0 .25em;
+    cursor: pointer;
+}
+
+.nl-vbr-overlay-controls.displayed .nl-mini-colorbar {
+    display: inline-block;
+}
+
+#nlHistogramContainer {
+    width: 400px;
+    height: 400px;
+}
+
+.nl-symbols-dropdown .menu .item.function {
+    font-style: italic;
+    color: grey;
+}
+
+.nl-symbols-dropdown .menu .item.probabilistic {
+    color: #276f86;
+}
+
+.nl-symbols-help {
+    margin-left: .3em !important;
+}
+
+.nl-symbols-download {
+    float: right;
+}
