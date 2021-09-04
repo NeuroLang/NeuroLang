@@ -79,7 +79,7 @@ CodeMirror.defineMode('datalog', function (cmCfg, modeCfg) {
     const ch = stream.next()
 
     // comment
-    if (ch === '%') {
+    if (ch === '#') {
       stream.skipToEnd()
       return rval(state, stream, 'comment')
     }

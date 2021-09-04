@@ -10,7 +10,7 @@ from neurolang.type_system import Unknown
 from neurolang.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
 )
-from neurolang.utils.server.responses import (
+from ..responses import (
     CustomQueryResultsEncoder,
     QueryResults,
 )
@@ -196,6 +196,7 @@ def test_query_results_can_serialize_to_json(future, result, data):
         "results": {
             "ans": {
                 "columns": ["a", "b", "c"],
+                'last_parsed_symbol': False,
                 'probabilistic': False,
                 "row_type": [
                     str(t) for t in (float, str, AbstractSet[Unknown])

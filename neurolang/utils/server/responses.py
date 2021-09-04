@@ -228,6 +228,7 @@ class QueryResults:
         result["columns"] = [str(c) for c in symbol.columns]
         result["size"] = df.shape[0]
         result["probabilistic"] = hasattr(symbol, "_is_probabilistic") and symbol._is_probabilistic
+        result["last_parsed_symbol"] = hasattr(symbol, "_last_parsed_symbol") and symbol._last_parsed_symbol
         return result
 
     def get_result_item_values(

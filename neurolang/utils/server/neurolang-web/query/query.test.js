@@ -127,7 +127,7 @@ describe('QueryController', () => {
 
       await wsserver.closed
       expect(qc.socket.readyState).toBe(WebSocket.CLOSED)
-      expect(mockSetResults).toHaveBeenCalledWith(response, 'union')
+      expect(mockSetResults).toHaveBeenCalledWith(response)
       expect($('#runQueryBtn').is(':disabled')).toBe(false)
     })
   })

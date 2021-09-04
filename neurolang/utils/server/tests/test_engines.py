@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 from neurolang import NeurolangDL
 from neurolang.frontend.probabilistic_frontend import NeurolangPDL
-from neurolang.utils.server.engines import (
+from ..engines import (
     NeurolangEngineSet,
     NeurosynthEngineConf,
 )

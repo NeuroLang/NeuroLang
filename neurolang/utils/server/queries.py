@@ -11,7 +11,7 @@ from neurolang.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
 )
-from neurolang.utils.server.engines import (
+from .engines import (
     NeurolangEngineConfiguration,
     NeurolangEngineSet,
 )
@@ -80,7 +80,7 @@ class NeurolangQueryManager:
         self.configs = options
 
         nb_engines = sum(options.values())
-        LOG.debug(f"Creating query manager with {nb_engines} workers.")
+        LOG.debug("Creating query manager with %d workers.", nb_engines)
         self.executor = ThreadPoolExecutor(max_workers=nb_engines)
         self._init_engines(options)
 
@@ -104,7 +104,7 @@ class NeurolangQueryManager:
 
         # Dispatch the engine create tasks to the workers
         for config, nb in options.items():
-            LOG.debug(f"Starting creation of {nb} {config.key} engines...")
+            LOG.debug("Starting creation of %d %s engines...", nb, config.key)
             for _ in range(nb):
                 future = self.executor.submit(create_wrapper, config)
                 future.add_done_callback(self._engine_created)
@@ -127,7 +127,8 @@ class NeurolangQueryManager:
             else:
                 engine_set.add_engine(engine)
             LOG.debug(
-                f"Added a created engine of type {key}, got {engine_set.counter} of this type."
+                "Added a created engine of type %s, got %d of this type.",
+                key, engine_set.counter
             )
 
     def _execute_neurolang_query(
@@ -149,36 +150,43 @@ class NeurolangQueryManager:
         Dict[str, NamedRelationalAlgebraFrozenSet]
             the result of the query execution
         """
-        LOG.debug(f"[Thread - {get_ident()}] - Executing query...")
-        LOG.debug(f"[Thread - {get_ident()}] - Query :\n{query}")
+        LOG.debug("[Thread - %s] - Executing query...", get_ident())
+        LOG.debug("[Thread - %s] - Query :\n%s", get_ident(), query)
         engine_set = self.engines[engine_type]
         with engine_set.engine() as engine:
             LOG.debug(
-                f"[Thread - {get_ident()}] - Engine of type {engine_type} acquired."
+                "[Thread - %s] - Engine of type %s acquired.",
+                get_ident(), engine_type
             )
             try:
                 with engine.scope:
-                    LOG.debug(f"[Thread - {get_ident()}] - Solving query...")
+                    LOG.debug("[Thread - %s] - Solving query...", get_ident())
                     res = engine.execute_datalog_program(query)
                     if res is None:
                         res = engine.solve_all()
                     else:
                         res = {"ans": res}
-                    LOG.debug(f"[Thread - {get_ident()}] - Query solved.")
+                    LOG.debug("[Thread - %s] - Query solved.", get_ident())
                     for s in engine.program_ir.probabilistic_predicate_symbols:
                         try:
                             res[s]._is_probabilistic = True
                         except KeyError:
                             pass
+                    if engine.current_program:
+                        try:
+                            last_parsed_symbol = engine.current_program[-1].expression.consequent.functor
+                            res[last_parsed_symbol.name]._last_parsed_symbol = True
+                        except Exception:
+                            pass
                     return res
             except Exception as e:
                 LOG.debug(
-                    f"[Thread - {get_ident()}] - Query execution raised {e}."
+                    "[Thread - %s] - Query execution raised %s.", get_ident(), e
                 )
                 raise e
             finally:
                 LOG.debug(
-                    f"[Thread - {get_ident()}] - Engine of type {engine_type} released."
+                    "[Thread - %s] - Engine of type %s released.", get_ident(), engine_type
                 )
 
     def submit_query(self, uuid: str, query: str, engine_type: str) -> Future:
@@ -200,7 +208,8 @@ class NeurolangQueryManager:
             a future result for the query execution.
         """
         LOG.debug(
-            f"Submitting query with uuid {uuid} to executor pool of {engine_type} engines."
+            "Submitting query with uuid %s to executor pool of %s engines.",
+            uuid, engine_type
         )
 
         future_res = self.executor.submit(
@@ -278,10 +287,10 @@ class NeurolangQueryManager:
         Future
             the Future result for the symbols query
         """
-        LOG.debug(f"Requesting symbols for {engine_type} engine...")
+        LOG.debug("Requesting symbols for %s engine...", engine_type)
         key = f"ENGINE_SYMBOLS_{engine_type}"
         if key in self.results_cache:
-            LOG.debug(f"Returning cached symbols for {engine_type} engine.")
+            LOG.debug("Returning cached symbols for %s engine.", engine_type)
             return self.results_cache[key]
 
         # Raise a KeyError if engines are not yet available
@@ -312,16 +321,19 @@ class NeurolangQueryManager:
             the result of the query execution
         """
         LOG.debug(
-            f"[Thread - {get_ident()}] - Fetching symbols for {engine_type} engine..."
+            "[Thread - %s] - Fetching symbols for %s engine...",
+            get_ident(), engine_type
         )
         engine_set = self.engines[engine_type]
         with engine_set.engine() as engine:
             try:
                 LOG.debug(
-                    f"[Thread - {get_ident()}] - Engine of type {engine_type} acquired."
+                    "[Thread - %s] - Engine of type %s acquired.",
+                    get_ident(), engine_type
                 )
                 LOG.debug(
-                    f"[Thread - {get_ident()}] - Returning symbol_table."
+                    "[Thread - %s] - Returning symbol_table.",
+                    get_ident()
                 )
                 symbols = {}
                 for name in engine.symbols:
@@ -336,5 +348,6 @@ class NeurolangQueryManager:
                 return symbols
             finally:
                 LOG.debug(
-                    f"[Thread - {get_ident()}] - Engine of type {engine_type} released."
+                    "[Thread - %s] - Engine of type %s released.",
+                    get_ident(), engine_type
                 )
