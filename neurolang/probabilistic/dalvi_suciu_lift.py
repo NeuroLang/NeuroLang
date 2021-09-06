@@ -230,7 +230,7 @@ def solve_marg_query(rule, cpl):
 def dalvi_suciu_lift(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
-    to a safe plan according to [1]_. Non-liftable segments are identified
+    to a safe plan according to [1]. Non-liftable segments are identified
     by the `NonLiftable` expression.
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
@@ -282,6 +282,25 @@ def dalvi_suciu_lift(rule, symbol_table):
 
 
 def convert_ucq_to_ccq(rule, transformation='CNF'):
+    """Given a UCQ expression, this function transforms it into a connected
+    component expression following the definition provided by Dalvi Suciu[1]
+    in section 2.6 Special Query Expressions. The transformation can be
+    parameterized to apply a CNF or DNF transformation, as needed.
+
+    [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
+    for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
+
+    Parameters
+    ----------
+    rule : Definition
+        UCQ expression
+
+    Returns
+    -------
+    NAryLogicOperation
+        Transformation of the initial expression
+        in a connected component query.
+    """
     rule = PED.walk(rule)
     free_vars = extract_logic_free_variables(rule)
     existential_vars = set()
@@ -343,6 +362,28 @@ def minimize_dnf(rule):
     return simplify.walk(cq_min)
 
 def extract_connected_components(list_of_conjunctions, existential_vars):
+    """Given a list of conjunctions, this function is in charge of calculating
+    the connected components of each one. As a result, it returns a dictionary
+    with the necessary transformations so that these conjunctions are replaced
+    by symbols that preserve their free variables.
+
+    Parameters
+    ----------
+    list_of_conjunctions : list
+        List of conjunctions for which we want to
+        calculate the connected components
+
+    existential_vars : set
+        Set of variables associated with existentials
+        in the expressions that compose the list of conjunctions.
+
+    Returns
+    -------
+    dict
+        Dictionary of transformations where the keys are the expressions that
+        compose the list of conjunctions and the values are the components
+        by which they must be replaced
+    """
     transformations = {}
     for f in list_of_conjunctions:
         c_matrix = args_co_occurence_graph(f, existential_vars)
@@ -364,6 +405,23 @@ def extract_connected_components(list_of_conjunctions, existential_vars):
     return transformations
 
 def calc_new_fresh_symbol(formula, existential_vars):
+    """Given a formula and a list of variables, this function creates a new
+    symbol containing only the unbound variables of the formula.
+
+    Parameters
+    ----------
+    formula : Definition
+        Formula to be transformed.
+
+    existential_vars : set
+        Set of variables associated with existentials.
+
+    Returns
+    -------
+    Symbol
+        New symbol containing only the unbound variables of the formula.
+
+    """
     cvars = extract_logic_free_variables(formula) - existential_vars
 
     fresh_symbol = Symbol.fresh()
@@ -429,14 +487,14 @@ def args_co_occurence_graph(expression, variable_to_use=None):
 
     Parameters
     ----------
-    expression : NAryLogicExpression
+    expression : LogicOperator
         logic expression for which the adjacency matrix is computed.
 
     Returns
     -------
     numpy.ndarray
         squared binary array where a component is 1 if there is a
-        shared predicate symbol between two subformulas of the
+        shared argument between two formulas of the
         logic expression.
     """
 

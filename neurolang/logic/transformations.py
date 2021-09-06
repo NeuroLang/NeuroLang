@@ -788,7 +788,6 @@ class CheckPureConjunction(LogicExpressionWalker):
 
 
 class RemoveExistentialPredicates(LogicExpressionWalker):
-
     @add_match(ExistentialPredicate)
     def existential_predicate(self, existential_predicate):
         return self.walk(existential_predicate.body)
