@@ -758,6 +758,10 @@ class IdentifyPureConjunctions(LogicExpressionWalker):
     def f_app(self, fa):
         return []
 
+    @add_match(Negation)
+    def neg(self, expression):
+        return self.walk(expression.formula)
+
 class CheckPureConjunction(LogicExpressionWalker):
     @add_match(Conjunction)
     def conjunction(self, conjunction):
