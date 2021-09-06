@@ -342,7 +342,7 @@ def minimize_cnf(rule):
     Returns
     -------
     Definition
-        Minimized expression.
+        Minimized CNF expression.
     """
     head_variables = extract_logic_free_variables(rule)
     cq_d_min = Conjunction(tuple(
@@ -375,7 +375,7 @@ def minimize_dnf(rule):
     Returns
     -------
     Definition
-        Minimized expression.
+        Minimized DNF expression.
     """
     head_variables = extract_logic_free_variables(rule)
     cq_d_min = Disjunction(tuple(

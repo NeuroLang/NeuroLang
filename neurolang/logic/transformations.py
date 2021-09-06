@@ -762,6 +762,7 @@ class IdentifyPureConjunctions(LogicExpressionWalker):
     def neg(self, expression):
         return self.walk(expression.formula)
 
+
 class CheckPureConjunction(LogicExpressionWalker):
     @add_match(Conjunction)
     def conjunction(self, conjunction):
