@@ -720,23 +720,23 @@ class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
 
 class CheckPureConjunction(LogicExpressionWalker):
     @add_match(Conjunction)
-    def conjunction(self, conjunction):
-        for f in conjunction.formulas:
+    def conjunction(self, expression):
+        for f in expression.formulas:
             if isinstance(f, Conjunction) or not self.walk(f):
                 return False
 
         return True
 
     @add_match(FunctionApplication)
-    def f_app(self, fa):
+    def f_app(self, expression):
         return True
 
-    @add_match(ExistentialPredicate)
-    def existential_predicate(self, exist_predicate):
-        if isinstance(exist_predicate.body, Conjunction):
+    @add_match(Quantifier)
+    def existential_predicate(self, expression):
+        if isinstance(expression.body, Conjunction):
             return False
 
-        return self.walk(exist_predicate.body)
+        return self.walk(expression.body)
 
     @add_match(Negation)
     def negation(self, expression):
@@ -749,13 +749,13 @@ class CheckPureConjunction(LogicExpressionWalker):
 
 class ExtractPureConjunctions(LogicExpressionWalker):
     @add_match(Conjunction, CheckPureConjunction().walk)
-    def pure_conjunction(self, conjunction):
-        return [conjunction]
+    def pure_conjunction(self, expression):
+        return [expression]
 
     @add_match(Conjunction)
-    def conjunction(self, conjunction):
+    def conjunction(self, expression):
         conjunctions = []
-        for f in conjunction.formulas:
+        for f in expression.formulas:
             inner_f = self.walk(f)
             for inner_term in inner_f:
                 if inner_term:
@@ -764,9 +764,9 @@ class ExtractPureConjunctions(LogicExpressionWalker):
         return conjunctions
 
     @add_match(Disjunction)
-    def disjunction(self, disjunction):
+    def disjunction(self, expression):
         res = []
-        for f in disjunction.formulas:
+        for f in expression.formulas:
             walked_f = self.walk(f)
             for inner_f in walked_f:
                 if inner_f:
@@ -775,15 +775,15 @@ class ExtractPureConjunctions(LogicExpressionWalker):
         return res
 
     @add_match(Quantifier)
-    def existential_predicate(self, fa):
-        body = self.walk(fa.body)
+    def existential_predicate(self, expression):
+        body = self.walk(expression.body)
         if body:
-            return [fa]
+            return [expression]
 
         return []
 
     @add_match(FunctionApplication)
-    def f_app(self, fa):
+    def f_app(self, expression):
         return []
 
     @add_match(Negation)
