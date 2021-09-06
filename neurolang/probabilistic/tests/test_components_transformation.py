@@ -433,4 +433,14 @@ def test_ccq_no_transformation_conjunction():
         antecedent = ExistentialPredicate(a, antecedent)
     expected = RTO.walk(PED.walk(antecedent))
 
-    assert rule_ccq == GC.walk(expected)
+    assert isinstance(rule_ccq, Conjunction)
+    assert isinstance(expected, Conjunction)
+    assert len(expected.formulas) == len(rule_ccq.formulas)
+    # The formulas are not sorted, but they are always the same
+    assert (
+        (rule_ccq.formulas[0] == expected.formulas[0] and
+        rule_ccq.formulas[1] == expected.formulas[1]) or
+
+        (rule_ccq.formulas[0] == expected.formulas[1] and
+        rule_ccq.formulas[1] == expected.formulas[0])
+    )
