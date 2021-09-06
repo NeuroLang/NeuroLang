@@ -774,7 +774,7 @@ class ExtractPureConjunctions(LogicExpressionWalker):
 
         return res
 
-    @add_match(ExistentialPredicate)
+    @add_match(Quantifier)
     def existential_predicate(self, fa):
         body = self.walk(fa.body)
         if body:

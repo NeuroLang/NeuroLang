@@ -10,10 +10,6 @@ from ..logic.expression_processing import (
     extract_logic_free_variables,
     extract_logic_predicates
 )
-from ..logic.horn_clauses import (
-    NeuroLangTranslateToHornClauseException,
-    fol_query_to_datalog_program
-)
 from ..logic.transformations import (
     CollapseConjunctions,
     CollapseDisjunctions,
