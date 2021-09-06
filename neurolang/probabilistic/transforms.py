@@ -38,23 +38,6 @@ PED = PushExistentialsDown()
 RTO = RemoveTrivialOperations()
 
 
-def convert_to_union_cnf(query):
-    free_vars = extract_logic_free_variables(query)
-    try:
-        datalog_program = fol_query_to_datalog_program(
-            Symbol.fresh()(*free_vars),
-            query
-        )
-    except NeuroLangTranslateToHornClauseException:
-        return False, None
-    dpn = DatalogProgramNegation()
-    dpn.walk(datalog_program.expressions)
-    ans_query = datalog_program.expressions[-1].consequent
-    res = flatten_query(ans_query, dpn)
-    res = GD.walk(CC.walk(PED.walk(add_existentials_except(res, free_vars))))
-    return True, minimize_component_disjunction(res)
-
-
 def minimize_ucq_in_cnf(query):
     """Convert UCQ to CNF form
     and minimise.
