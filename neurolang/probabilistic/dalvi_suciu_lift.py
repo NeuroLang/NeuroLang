@@ -42,7 +42,7 @@ from ..logic.expression_processing import (
 from ..logic.transformations import (
     GuaranteeConjunction,
     GuaranteeDisjunction,
-    IdentifyPureConjunctions,
+    ExtractPureConjunctions,
     MakeExistentialsImplicit,
     PushExistentialsDown,
     RemoveExistentialOnVariables,
@@ -307,7 +307,7 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
     for atom in extract_logic_atoms(rule):
         existential_vars.update(set(atom.args) - set(free_vars))
 
-    conjunctions = IdentifyPureConjunctions().walk(rule)
+    conjunctions = ExtractPureConjunctions().walk(rule)
     dic_components = extract_connected_components(conjunctions, existential_vars)
 
     fresh_symbols_expression = ReplaceExpressionWalker(dic_components).walk(rule)
@@ -322,7 +322,9 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
     else:
         raise ValueError(f'Invalid transformation type: {transformation}')
 
-    final_expression = fresh_symbols_to_components(dic_components, fresh_symbols_expression)
+    final_expression = ReplaceExpressionWalker(
+        {v: k for k, v in dic_components.items()}
+    ).walk(fresh_symbols_expression)
     final_expression = minimize(final_expression)
 
     return GCD.walk(final_expression)
@@ -460,12 +462,6 @@ def calc_new_fresh_symbol(formula, existential_vars):
     new_symbol = fresh_symbol(tuple(cvars))
 
     return new_symbol
-
-def fresh_symbols_to_components(dic_replacements, expression):
-    dic_replacements = {v: k for k, v in dic_replacements.items()}
-    expression = ReplaceExpressionWalker(dic_replacements).walk(expression)
-
-    return expression
 
 
 def symbol_connected_components(expression):

@@ -719,8 +719,8 @@ class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
         return nary_op.apply(tuple(set(nary_op.formulas)))
 
 
-class IdentifyPureConjunctions(LogicExpressionWalker):
-    @add_match(Conjunction, lambda e: CheckPureConjunction().walk(e))
+class ExtractPureConjunctions(LogicExpressionWalker):
+    @add_match(Conjunction, CheckPureConjunction().walk)
     def pure_conjunction(self, conjunction):
         return [conjunction]
 

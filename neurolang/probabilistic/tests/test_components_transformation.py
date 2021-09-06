@@ -1,7 +1,7 @@
 
 from neurolang.logic.expression_processing import extract_logic_free_variables
 from neurolang.logic.transformations import (
-    CheckPureConjunction, GuaranteeConjunction, IdentifyPureConjunctions,
+    CheckPureConjunction, GuaranteeConjunction, ExtractPureConjunctions,
     PushExistentialsDown, RemoveExistentialPredicates, RemoveTrivialOperations
 )
 from neurolang.probabilistic.dalvi_suciu_lift import convert_ucq_to_ccq
@@ -11,7 +11,7 @@ from neurolang.logic import (
 )
 from neurolang.expressions import Symbol
 
-IPC = IdentifyPureConjunctions()
+IPC = ExtractPureConjunctions()
 CPC = CheckPureConjunction()
 REP = RemoveExistentialPredicates()
 PED = PushExistentialsDown()
