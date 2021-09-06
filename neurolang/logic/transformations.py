@@ -718,6 +718,34 @@ class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
     ) -> NaryLogicOperator:
         return nary_op.apply(tuple(set(nary_op.formulas)))
 
+class CheckPureConjunction(LogicExpressionWalker):
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        for f in conjunction.formulas:
+            if isinstance(f, Conjunction) or not self.walk(f):
+                return False
+
+        return True
+
+    @add_match(FunctionApplication)
+    def f_app(self, fa):
+        return True
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, exist_predicate):
+        if isinstance(exist_predicate.body, Conjunction):
+            return False
+
+        return self.walk(exist_predicate.body)
+
+    @add_match(Negation)
+    def negation(self, expression):
+        return self.walk(expression.formula)
+
+    @add_match(...)
+    def default(self, expression):
+        return False
+
 
 class ExtractPureConjunctions(LogicExpressionWalker):
     @add_match(Conjunction, CheckPureConjunction().walk)
@@ -761,31 +789,6 @@ class ExtractPureConjunctions(LogicExpressionWalker):
     @add_match(Negation)
     def neg(self, expression):
         return self.walk(expression.formula)
-
-
-class CheckPureConjunction(LogicExpressionWalker):
-    @add_match(Conjunction)
-    def conjunction(self, conjunction):
-        for f in conjunction.formulas:
-            if isinstance(f, Conjunction) or not self.walk(f):
-                return False
-
-        return True
-
-    @add_match(FunctionApplication)
-    def f_app(self, fa):
-        return True
-
-    @add_match(ExistentialPredicate)
-    def existential_predicate(self, exist_predicate):
-        if isinstance(exist_predicate.body, Conjunction):
-            return False
-
-        return self.walk(exist_predicate.body)
-
-    @add_match(...)
-    def default(self, expression):
-        return False
 
 
 class RemoveExistentialPredicates(LogicExpressionWalker):
