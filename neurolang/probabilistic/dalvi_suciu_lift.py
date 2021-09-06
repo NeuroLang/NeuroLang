@@ -328,6 +328,22 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
     return GCD.walk(final_expression)
 
 def minimize_cnf(rule):
+    """Function that receives a CNF expression and minimizes
+    it according to the definition provided by Abiteboul et al[1].
+
+    [1] Abiteboul, S., Hull, R. & Vianu, V.
+    "Foundations of databases." (Addison Wesley, 1995).
+
+    Parameters
+    ----------
+    rule : Definition
+        UCQ expression
+
+    Returns
+    -------
+    Definition
+        Minimized expression.
+    """
     head_variables = extract_logic_free_variables(rule)
     cq_d_min = Conjunction(tuple(
         minimize_component_disjunction(c)
@@ -345,6 +361,22 @@ def minimize_cnf(rule):
     return simplify.walk(cq_min)
 
 def minimize_dnf(rule):
+    """Function that receives a DNF expression and minimizes
+    it according to the definition provided by Abiteboul et al[1].
+
+    [1] Abiteboul, S., Hull, R. & Vianu, V.
+    "Foundations of databases." (Addison Wesley, 1995).
+
+    Parameters
+    ----------
+    rule : Definition
+        UCQ expression
+
+    Returns
+    -------
+    Definition
+        Minimized expression.
+    """
     head_variables = extract_logic_free_variables(rule)
     cq_d_min = Disjunction(tuple(
         minimize_component_conjunction(c)
