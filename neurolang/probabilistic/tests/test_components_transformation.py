@@ -40,12 +40,12 @@ def test_remove_inner_existential():
 
     rule = REP.walk(rule)
 
-    expected = rule = Conjunction((
+    expected = Conjunction((
         S(x, y),
     ))
     assert rule == expected
 
-def test_nested_existentials():
+def test_remove_nested_existentials():
     R = Symbol('R')
     S = Symbol('S')
     T = Symbol('T')
