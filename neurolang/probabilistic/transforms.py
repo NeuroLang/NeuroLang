@@ -1,6 +1,9 @@
 from functools import reduce
 
+from ..datalog.expression_processing import flatten_query
 from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
+from ..datalog.negation import DatalogProgramNegation
+from ..expressions import Symbol
 from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..logic.expression_processing import (
     extract_logic_atoms,
@@ -20,15 +23,36 @@ from ..logic.transformations import (
     RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix
 )
+from ..logic.horn_clauses import (
+    NeuroLangTranslateToHornClauseException,
+    fol_query_to_datalog_program
+)
 from ..logic.unification import compose_substitutions, most_general_unifier
 from .containment import is_contained
 
+CC = CollapseConjunctions()
 GC = GuaranteeConjunction()
 GD = GuaranteeDisjunction()
 MNA = MoveNegationsToAtomsInFONegE()
 PED = PushExistentialsDown()
 RTO = RemoveTrivialOperations()
 
+
+def convert_to_union_cnf(query):
+    free_vars = extract_logic_free_variables(query)
+    try:
+        datalog_program = fol_query_to_datalog_program(
+            Symbol.fresh()(*free_vars),
+            query
+        )
+    except NeuroLangTranslateToHornClauseException:
+        return False, None
+    dpn = DatalogProgramNegation()
+    dpn.walk(datalog_program.expressions)
+    ans_query = datalog_program.expressions[-1].consequent
+    res = flatten_query(ans_query, dpn)
+    res = GD.walk(CC.walk(PED.walk(add_existentials_except(res, free_vars))))
+    return True, minimize_component_disjunction(res)
 
 def minimize_ucq_in_cnf(query):
     """Convert UCQ to CNF form
