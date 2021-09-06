@@ -271,6 +271,10 @@ def dalvi_suciu_lift(rule, symbol_table):
     if has_svs:
         return plan
 
+    has_safe_plan, plan = disjoint_project(rule_dnf, symbol_table)
+    if has_safe_plan:
+        return plan
+
     if len(rule_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
@@ -301,7 +305,6 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
 
     final_expression = fresh_symbols_to_components(dic_components, fresh_symbols_expression)
     final_expression = minimize(final_expression)
-    #final_expression = RTO.walk(PED.walk(final_expression))
 
     return GCD.walk(final_expression)
 
@@ -442,7 +445,6 @@ def args_co_occurence_graph(expression, variable_to_use=None):
 
     c_matrix = np.zeros((len(expression.formulas),) * 2)
     for i, formula in enumerate(expression.formulas):
-        #f_args = ExtractFreeVariables()
         f_args = set(b for a in extract_logic_atoms(formula) for b in a.args)
         if variable_to_use is not None:
             f_args &= variable_to_use
@@ -485,6 +487,7 @@ def connected_components(adjacency_matrix):
         components.append(component)
         node_idxs -= component
     return components
+
 def disjoint_project(rule_dnf, symbol_table):
     """
     Rule that extends the lifted query processing algorithm to handle
