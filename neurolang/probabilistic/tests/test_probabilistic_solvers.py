@@ -1167,10 +1167,10 @@ def test_small_dichotomy_fails_on_noisy_or_projection_with_pchoice_in_query():
 
 def test_deterministic_simplification():
     pchoice_as_sets = {
-        Q: {(0.6, 'b'), (0.4, 'c')},
+        Q: [(0.6, 'b'), (0.4, 'c')],
     }
     deterministic_as_sets = {
-        P: {('a', 'b'), ('b', 'c')}
+        P: [('a', 'b'), ('b', 'c')]
     }
     cpl_program = CPLogicProgram()
     for k, v in pchoice_as_sets.items():

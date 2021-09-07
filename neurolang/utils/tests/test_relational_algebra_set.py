@@ -1112,6 +1112,27 @@ def test_extended_projection_ra_string_expression_empty_relation(ra_module):
     assert relation.extended_projection(eval_expressions) == expected
 
 
+def test_replace_null(ra_module):
+    relation_left = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x"],
+        iterable=[(0,), (1,)],
+    )
+
+    relation_right = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y"],
+        iterable=[(1, 2)],
+    )
+
+    relation = relation_left.left_naturaljoin(relation_right)
+
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y"],
+        iterable=[(0, -1), (1, 2)],
+    )
+
+    assert relation.replace_null("y", -1) == expected
+
+
 def test_aggregate_repeated_group_column(ra_module):
     relation = ra_module.NamedRelationalAlgebraFrozenSet(
         columns=["x", "y"],
