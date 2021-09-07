@@ -109,9 +109,14 @@ class ProbSemiringSolverMixin(
             return self.translated_probfact_sets[relation_symbol]
 
         relation = self.walk(relation_symbol)
-        named_columns = tuple(
-            str2columnstr_constant(f"col_{i}") for i in relation.value.columns
-        )
+        if isinstance(relation, Constant):
+            named_columns = tuple(
+                str2columnstr_constant(f"col_{i}") for i in relation.value.columns
+            )
+        else:
+            named_columns = tuple(
+                str2columnstr_constant(f"col_{i.value}") for i in relation.columns()
+            )
         relation = NameColumns(relation, named_columns)
         if len(named_columns) > 0:
             rap_column = named_columns[prob_fact_set.probability_column.value]
