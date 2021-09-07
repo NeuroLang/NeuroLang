@@ -1,4 +1,3 @@
-import math
 import operator
 
 from .exceptions import RelationalAlgebraError
@@ -30,6 +29,7 @@ from .relational_algebra import (
     RelationalAlgebraStringExpression,
     RenameColumn,
     RenameColumns,
+    ReplaceNull,
     Selection,
     UnaryRelationalAlgebraOperation,
     Union,
@@ -695,6 +695,11 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         )
         tmp_np_op_args = (tmp_left, tmp_right)
         tmp_non_prov_result = LeftNaturalJoin(*tmp_np_op_args)
+        tmp_non_prov_result = ReplaceNull(
+            tmp_non_prov_result,
+            tmp_right_prov_col,
+            Constant(0.)
+        )
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
@@ -715,10 +720,9 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         ))
 
     def _semiring_monus(self, left, right):
-        isnan = Constant(lambda x: 0 if math.isnan(x) else x)
         return MUL(
             left,
-            SUB(Constant(1), isnan(right))
+            SUB(Constant(1), right)
         )
 
 
