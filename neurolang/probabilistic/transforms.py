@@ -1,9 +1,6 @@
 from functools import reduce
 
-from ..datalog.expression_processing import flatten_query
-from ..datalog.negation import DatalogProgramNegation
 from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
-from ..expressions import Symbol
 from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..logic.expression_processing import (
     extract_logic_atoms,
