@@ -42,7 +42,7 @@ from ..logic.expression_processing import (
 from ..logic.transformations import (
     GuaranteeConjunction,
     GuaranteeDisjunction,
-    ExtractPureConjunctions,
+    ExtractConjunctiveQueryWithNegation,
     MakeExistentialsImplicit,
     PushExistentialsDown,
     RemoveExistentialOnVariables,
@@ -307,7 +307,7 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
     for atom in extract_logic_atoms(rule):
         existential_vars.update(set(atom.args) - set(free_vars))
 
-    conjunctions = ExtractPureConjunctions().walk(rule)
+    conjunctions = ExtractConjunctiveQueryWithNegation().walk(rule)
     dic_components = extract_connected_components(conjunctions, existential_vars)
 
     fresh_symbols_expression = ReplaceExpressionWalker(dic_components).walk(rule)

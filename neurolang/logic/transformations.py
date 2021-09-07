@@ -1,3 +1,4 @@
+from ..utils.orderedset import OrderedSet
 from ..exceptions import NotInFONegE
 from ..expression_walker import (
     ChainedWalker,
@@ -9,6 +10,7 @@ from ..expression_walker import (
 )
 from ..logic.expression_processing import (
     ExtractFreeVariablesWalker,
+    WalkLogicProgramAggregatingSets,
     extract_logic_free_variables
 )
 from . import (
@@ -718,7 +720,7 @@ class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
     ) -> NaryLogicOperator:
         return nary_op.apply(tuple(set(nary_op.formulas)))
 
-class CheckPureConjunction(LogicExpressionWalker):
+class CheckConjunctiveQueryWithNegation(LogicExpressionWalker):
     @add_match(Conjunction)
     def conjunction(self, expression):
         for f in expression.formulas:
@@ -738,39 +740,33 @@ class CheckPureConjunction(LogicExpressionWalker):
 
         return self.walk(expression.body)
 
-    @add_match(Negation)
+    @add_match(Negation(FunctionApplication))
     def negation(self, expression):
-        return self.walk(expression.formula)
+        return True
 
     @add_match(...)
     def default(self, expression):
         return False
 
 
-class ExtractPureConjunctions(LogicExpressionWalker):
-    @add_match(Conjunction, CheckPureConjunction().walk)
+class ExtractConjunctiveQueryWithNegation(WalkLogicProgramAggregatingSets):
+    @add_match(Conjunction, CheckConjunctiveQueryWithNegation().walk)
     def pure_conjunction(self, expression):
-        return [expression]
+        return OrderedSet([expression])
 
     @add_match(Conjunction)
     def conjunction(self, expression):
-        conjunctions = []
+        conjunctions = OrderedSet()
         for f in expression.formulas:
-            inner_f = self.walk(f)
-            for inner_term in inner_f:
-                if inner_term:
-                    conjunctions.append(inner_term)
+            conjunctions |= self.walk(f)
 
         return conjunctions
 
     @add_match(Disjunction)
     def disjunction(self, expression):
-        res = []
+        res = OrderedSet()
         for f in expression.formulas:
-            walked_f = self.walk(f)
-            for inner_f in walked_f:
-                if inner_f:
-                    res.append(inner_f)
+            res |= self.walk(f)
 
         return res
 
@@ -778,13 +774,12 @@ class ExtractPureConjunctions(LogicExpressionWalker):
     def existential_predicate(self, expression):
         body = self.walk(expression.body)
         if body:
-            return [expression]
+            return OrderedSet([expression])
 
-        return []
 
     @add_match(FunctionApplication)
     def f_app(self, expression):
-        return []
+        return OrderedSet()
 
     @add_match(Negation)
     def neg(self, expression):

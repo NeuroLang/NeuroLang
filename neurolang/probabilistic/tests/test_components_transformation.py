@@ -1,7 +1,8 @@
 
+from neurolang.utils.orderedset import OrderedSet
 from neurolang.logic.expression_processing import extract_logic_free_variables
 from neurolang.logic.transformations import (
-    CheckPureConjunction, GuaranteeConjunction, ExtractPureConjunctions,
+    CheckConjunctiveQueryWithNegation, GuaranteeConjunction, ExtractConjunctiveQueryWithNegation,
     PushExistentialsDown, RemoveExistentialPredicates, RemoveTrivialOperations
 )
 from neurolang.probabilistic.dalvi_suciu_lift import convert_ucq_to_ccq
@@ -11,8 +12,8 @@ from neurolang.logic import (
 )
 from neurolang.expressions import Symbol
 
-IPC = ExtractPureConjunctions()
-CPC = CheckPureConjunction()
+ECQ = ExtractConjunctiveQueryWithNegation()
+CPC = CheckConjunctiveQueryWithNegation()
 REP = RemoveExistentialPredicates()
 PED = PushExistentialsDown()
 GC = GuaranteeConjunction()
@@ -196,9 +197,9 @@ def test_identify_pure_conjunction():
          R(z, x1), S(x1, y1), T(z, x2), S(x2, y2)
     ))
 
-    expected = [rule]
+    expected = OrderedSet([rule])
 
-    conjunctions = IPC.walk(rule)
+    conjunctions = ECQ.walk(rule)
     assert conjunctions == expected
 
 
@@ -211,9 +212,9 @@ def test_identify_existential_conjunctions():
         ExistentialPredicate(y, S(x, y)),
     ))
 
-    expected = [rule]
+    expected = OrderedSet([rule])
 
-    conjunctions = IPC.walk(rule)
+    conjunctions = ECQ.walk(rule)
     assert conjunctions == expected
 
 
@@ -235,9 +236,9 @@ def test_basic_nested_conjunctions():
         R(y)
     ))
 
-    expected = [rule.formulas[0], rule.formulas[1]]
+    expected = OrderedSet([rule.formulas[0], rule.formulas[1]])
 
-    conjunctions = IPC.walk(rule)
+    conjunctions = ECQ.walk(rule)
     assert conjunctions == expected
 
 def test_basic_inner_disjunctions():
@@ -258,9 +259,9 @@ def test_basic_inner_disjunctions():
         R(y)
     ))
 
-    expected = []
+    expected = OrderedSet([])
 
-    conjunctions = IPC.walk(rule)
+    conjunctions = ECQ.walk(rule)
     assert conjunctions == expected
 
 def test_basic_nested_mixed():
@@ -281,9 +282,9 @@ def test_basic_nested_mixed():
         R(y)
     ))
 
-    expected = [rule.formulas[0]]
+    expected = OrderedSet([rule.formulas[0]])
 
-    conjunctions = IPC.walk(rule)
+    conjunctions = ECQ.walk(rule)
     assert conjunctions == expected
 
 def test_basic_nested_mixed_2():
@@ -302,9 +303,9 @@ def test_basic_nested_mixed_2():
         R(y)
     ))
 
-    expected = []
+    expected = OrderedSet([])
 
-    conjunctions = IPC.walk(rule)
+    conjunctions = ECQ.walk(rule)
     assert conjunctions == expected
 
 def test_nested_existentials():
@@ -334,9 +335,9 @@ def test_nested_existentials():
         )
     ))
 
-    expected = [rule.formulas[0], rule.formulas[1]]
+    expected = OrderedSet([rule.formulas[0], rule.formulas[1]])
 
-    conjunctions = IPC.walk(rule)
+    conjunctions = ECQ.walk(rule)
     assert conjunctions == expected
 
 
