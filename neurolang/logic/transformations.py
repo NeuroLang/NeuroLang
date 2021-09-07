@@ -758,10 +758,7 @@ class ExtractConjunctiveQueryWithNegation(WalkLogicProgramAggregatingSets):
     def conjunction(self, expression):
         conjunctions = OrderedSet([])
         for f in expression.formulas:
-            inner_f = self.walk(f)
-            for inner_term in inner_f:
-                if inner_term:
-                    conjunctions.add(inner_term)
+            conjunctions |= self.walk(f)
 
         return conjunctions
 
