@@ -754,21 +754,16 @@ class ExtractConjunctiveQueryWithNegation(WalkLogicProgramAggregatingSets):
     def pure_conjunction(self, expression):
         return OrderedSet([expression])
 
-    @add_match(Conjunction)
+    @add_match(NaryLogicOperator)
     def conjunction(self, expression):
-        conjunctions = OrderedSet()
+        conjunctions = OrderedSet([])
         for f in expression.formulas:
-            conjunctions |= self.walk(f)
+            inner_f = self.walk(f)
+            for inner_term in inner_f:
+                if inner_term:
+                    conjunctions.add(inner_term)
 
         return conjunctions
-
-    @add_match(Disjunction)
-    def disjunction(self, expression):
-        res = OrderedSet()
-        for f in expression.formulas:
-            res |= self.walk(f)
-
-        return res
 
     @add_match(Quantifier)
     def existential_predicate(self, expression):
@@ -776,10 +771,11 @@ class ExtractConjunctiveQueryWithNegation(WalkLogicProgramAggregatingSets):
         if body:
             return OrderedSet([expression])
 
+        return OrderedSet([])
 
     @add_match(FunctionApplication)
     def f_app(self, expression):
-        return OrderedSet()
+        return OrderedSet([])
 
     @add_match(Negation)
     def neg(self, expression):
