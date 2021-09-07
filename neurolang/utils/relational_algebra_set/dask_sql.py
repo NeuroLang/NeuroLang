@@ -1,4 +1,3 @@
-from sqlalchemy.sql.functions import coalesce
 from .dask_helpers import (
     DaskContextManager,
     convert_type_to_pandas_dtype,
