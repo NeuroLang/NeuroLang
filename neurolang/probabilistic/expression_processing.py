@@ -346,18 +346,22 @@ def lift_optimization_for_choice_predicates(query, program):
     """
     if len(program.pchoice_pred_symbs) == 0:
         return query
+    positive_predicates = set()
+    negative_predicates = set()
+    for pred in extract_logic_predicates(query):
+        if isinstance(pred, Negation):
+            negative_predicates.add(pred)
+        else:
+            positive_predicates.add(pred)
     pchoice_eqs = get_probchoice_variable_equalities(
-        [
-            pred for pred in extract_logic_predicates(query)
-            if not isinstance(pred, Negation)
-        ],
+        positive_predicates,
         program.pchoice_pred_symbs
     )
     if len(pchoice_eqs) == 0:
         return query
     eq_conj = Conjunction(tuple(EQ(x, y) for x, y in pchoice_eqs))
-    grpd_preds = group_preds_by_functor(extract_logic_predicates(query))
-    new_formulas = set(eq_conj.formulas)
+    grpd_preds = group_preds_by_functor(positive_predicates)
+    new_formulas = set(eq_conj.formulas) | set(negative_predicates)
     for functor, preds in grpd_preds.items():
         if functor not in program.pchoice_pred_symbs:
             new_formulas |= set(preds)

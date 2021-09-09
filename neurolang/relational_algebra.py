@@ -192,6 +192,19 @@ class LeftNaturalJoin(BinaryRelationalAlgebraOperation):
         )
 
 
+class ReplaceNull(UnaryRelationalAlgebraOperation):
+    def __init__(self, relation, column, value):
+        self.relation = relation
+        self.column = column
+        self.value = value
+
+    def __repr__(self):
+        return (
+            f"\N{GREEK SMALL LETTER RHO}_"
+            f"[NULL={self.value}][{self.relation}]"
+        )
+
+
 class Product(NAryRelationalAlgebraOperation):
     def __init__(self, relations):
         self.relations = tuple(relations)
@@ -979,6 +992,17 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             )
             result_set = result_set | new_set
         return self._build_relation_constant(result_set)
+
+    @ew.add_match(ReplaceNull(Constant, Constant, Constant))
+    def replace_null(self, expression):
+        relation = expression.relation.value
+        column = expression.column.value
+        value = expression.value.value
+
+        new_relation = relation.replace_null(column, value)
+        return self._build_relation_constant(
+            new_relation
+        )
 
     @ew.add_match(Constant)
     def ra_constant(self, constant):

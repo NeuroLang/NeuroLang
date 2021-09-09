@@ -73,9 +73,6 @@ from .query_resolution import (
     reintroduce_unified_head_terms
 )
 from .shattering import shatter_easy_probfacts
-from .small_dichotomy_theorem_based_solver import (
-    lift_optimization_for_choice_predicates
-)
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
@@ -171,7 +168,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         solver_class=ExtendedRAPToRAWalker
     )
 
-    with log_performance(LOG, "Run RAP query"):
+    with log_performance(LOG, "Run RAP query %s", init_args=(repr(ra_query),)):
         prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
@@ -192,18 +189,23 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         shattered_query = symbolic_shattering(unified_query, symbol_table)
     except NotEasilyShatterableError:
         shattered_query = unified_query
-    _verify_that_the_query_is_unate(shattered_query)
+    _verify_that_the_query_is_unate(shattered_query, symbol_table)
     return shattered_query, symbol_table
 
 
-def _verify_that_the_query_is_unate(query):
+def _verify_that_the_query_is_unate(query, symbol_table):
     positive_relational_symbols = set()
     negative_relational_symbols = set()
 
     query = convert_rule_to_ucq(query)
     query = convert_to_pnf_with_dnf_matrix(query)
-
     for predicate in extract_logic_predicates(query):
+        if isinstance(predicate, Negation):
+            atom = predicate.formula
+        else:
+            atom = predicate
+        if is_atom_a_deterministic_relation(atom, symbol_table):
+            continue
         if isinstance(predicate, Negation):
             while isinstance(predicate, Negation):
                 predicate = predicate.formula
@@ -854,11 +856,17 @@ def powerset(iterable):
 
 
 def symbolic_shattering(unified_query, symbol_table):
+    fact_set_classes = (
+        ProbabilisticFactSet, ProbabilisticChoiceSet, DeterministicFactSet
+    )
     shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
-    inverted_symbol_table = {v: k for k, v in symbol_table.items()}
+    inverted_symbol_table = {
+        v: k for k, v in symbol_table.items()
+        if isinstance(v, fact_set_classes)
+    }
     for atom in extract_logic_atoms(shattered_query):
         functor = atom.functor
-        if isinstance(functor, ProbabilisticFactSet):
+        if isinstance(functor, fact_set_classes):
             if functor not in inverted_symbol_table:
                 s = Symbol.fresh()
                 inverted_symbol_table[functor] = s

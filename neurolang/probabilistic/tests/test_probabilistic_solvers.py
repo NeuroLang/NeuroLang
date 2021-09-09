@@ -1163,3 +1163,28 @@ def test_small_dichotomy_fails_on_noisy_or_projection_with_pchoice_in_query():
     query = Implication(ans(x), Conjunction((Q(x), P(x, y))))
     with pytest.raises(UnsupportedSolverError):
         solver.solve_succ_query(query, cpl_program)
+
+
+def test_deterministic_simplification():
+    pchoice_as_sets = {
+        Q: [(0.6, 'b'), (0.4, 'c')],
+    }
+    deterministic_as_sets = {
+        P: [('a', 'b'), ('b', 'c')]
+    }
+    cpl_program = CPLogicProgram()
+    for k, v in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(k, v)
+    for k, v in deterministic_as_sets.items():
+        cpl_program.add_extensional_predicate_from_tuples(k, v)
+
+    query = Implication(
+        ans(x, y),
+        Conjunction((P(x, y), P(Constant('a'), y), Q(y)))
+    )
+
+    res = dalvi_suciu_lift.solve_succ_query(
+        query, cpl_program
+    )
+
+    assert testing.eq_prov_relations(res, testing.make_prov_set({(0.6, 'a', 'b')}, ['_p_', 'x', 'y']))
