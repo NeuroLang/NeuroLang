@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import os.path
+import shutil
+import subprocess
 import sys
 from concurrent.futures import Future
 from io import BytesIO
@@ -17,17 +19,15 @@ import tornado.web
 import tornado.websocket
 import yaml
 from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
-from .engines import (
-    DestrieuxEngineConf,
-    NeurosynthEngineConf,
-)
+from tornado.options import define, options
+
+from .engines import DestrieuxEngineConf, NeurosynthEngineConf
 from .queries import NeurolangQueryManager
 from .responses import (
     CustomQueryResultsEncoder,
     QueryResults,
     base64_encode_nifti,
 )
-from tornado.options import define, options
 
 define("port", default=8888, help="run on the given port", type=int)
 define(
@@ -35,6 +35,12 @@ define(
     default=str(Path.home() / "neurolang_data"),
     help="path of a directory where the downloaded datasets are stored",
     type=str,
+)
+define(
+    "npm_build",
+    default=False,
+    help="force a build of the frontend app",
+    type=bool,
 )
 
 LOG = logging.getLogger(__name__)
@@ -508,9 +514,74 @@ def setup_logs():
     LOG.setLevel(logging.DEBUG)
 
 
+def npm_build():
+    """
+    Execute the `npm run build` command to build the frontend javascript
+    application.
+
+    The `npm run build` command will create the html and js files which
+    constitute the frontend application and put them in the
+    `neurolang-web/dist` directory. The tornado server will then serve
+    those files when the user navigates to the default "/" url.
+
+    This method will return without building the application if
+    * npm binary cannot be found
+    * the neurolang-web directory does not exist in this module's parent dir
+    (i.e if neurolang was installed in an environment, the neurolang-web dir
+    is not copied with the python package)
+    * the dist directory already exists in the neurolang-web directory
+
+    This is a convenience method for a local dev setup only, not meant to be
+    used in a production environment. In a production environment the frontend
+    app should be built and served independently from the tornado python app.
+
+    To serve the frontend application using npm without having to build it
+    everytime, use the `npm run dev` command instead. See `Readme.md` file in
+    this module's parent dir.
+    """
+    web_dir = Path(__file__).resolve().parent / "neurolang-web"
+    if not web_dir.exists():
+        LOG.info(
+            f"{web_dir} directory does not exist, probably because neurolang"
+            " is not installed in editable mode. Skipping frontend build."
+        )
+        return
+
+    npm_command = shutil.which("npm")
+    if not npm_command:
+        LOG.warn(
+            "Could not find the npm binary required to build the frontend "
+            "app. NPM is Node.js' package manager and can be installed "
+            "with node from https://nodejs.org/en/download/."
+        )
+        return
+
+    force_build = options.npm_build
+    dist_dir = web_dir / "dist"
+    if dist_dir.exists() and not force_build:
+        LOG.info(
+            "Frontend app dist directory already exists. Not rebuilding."
+            " To force a rebuild use the --npm-build flag."
+        )
+        return
+
+    command = [npm_command, "install"]
+    LOG.info(
+        f"Running command: [{web_dir}]$ {' '.join(command)}",
+    )
+    subprocess.check_call(command, cwd=str(web_dir))
+
+    command = [npm_command, "run", "build", "--", "--mode", "dev"]
+    LOG.info(
+        f"Running command: [{web_dir}]$ {' '.join(command)}",
+    )
+    subprocess.check_call(command, cwd=str(web_dir))
+
+
 def main():
     tornado.options.parse_command_line()
     setup_logs()
+    npm_build()
     data_dir = Path(options.data_dir)
     LOG.info(f"Neurolang data directory set to {data_dir}")
     opts = {

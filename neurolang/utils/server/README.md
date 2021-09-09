@@ -25,6 +25,8 @@ from the `neurolang-web` directory. This command will process the various javasc
 
 The backend [server application](app.py) is configured to serve static files from this directory, so that if you build the frontend application with `npm run build -- --mode dev` and then start the backend server, you should be able to see the built frontend application by navigating to [http://localhost:8888/](http://localhost:8888/) (note the port, 8888, which is the one for the tornado server and not the one used by npm's development frontend server) (also note that we build the application with a specific mode `-- --mode dev`, since by default running `npm run build` will build the application for production, replacing the base api url with the url for the production server, i.e. `http://neurolang-u18.saclay.inria.fr, which would not work on a local machine).
 
+For convenience, if neurolang was installed in editable mode, running the tornado server (using `neuro-server` command or `python -m neurolang.utils.server.app`) will first trigger an execution of the `npm install & npm run build -- --mode dev` command. The built application will then be available from [http://localhost:8888/](http://localhost:8888/).
+
 ## Development
 
 Once Neurolang has been installed in a python environment, the server can be started by running
