@@ -105,6 +105,8 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
         self.data_dir = data_dir
         self.resolution = resolution
         self._mni_atlas = None
+        self._mni_brain_mask = None
+
 
     @property
     def key(self):
@@ -120,8 +122,18 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
             )
         return self._mni_atlas
 
+    @property
+    def brain_mask(self):
+        if self._mni_brain_mask is None:
+            self._mni_brain_mask = nib.load(
+                datasets.fetch_icbm152_2009(
+                    data_dir=str(self.data_dir / "icbm")
+                )["mask"]
+            )
+        return self._mni_brain_mask
+
     def create(self) -> NeurolangPDL:
-        mask = self.atlas
+        mask = self.brain_mask
         if self.resolution is not None:
             mask = image.resample_img(mask, np.eye(3) * self.resolution)
         nl = init_frontend(mask)
@@ -201,10 +213,14 @@ def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
     nl.add_uniform_probabilistic_choice_over_set(
         study_ids, name="SelectedStudy"
     )
+    nz_voxels = mni_mask.get_fdata().nonzero()
+    print("mask size", len(nz_voxels) / np.prod(mni_mask.shape))
     nl.add_tuple_set(
         np.round(
             nib.affines.apply_affine(
-                mni_mask.affine, np.transpose(mni_mask.get_fdata().nonzero())
+                mni_mask.affine, np.transpose(
+                    mni_mask.get_fdata().astype(int).nonzero()
+                )
             )
         ).astype(int),
         name="Voxel",
