@@ -1,4 +1,5 @@
 from functools import reduce
+import logging
 
 from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
 from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
@@ -22,6 +23,10 @@ from ..logic.transformations import (
 )
 from ..logic.unification import compose_substitutions, most_general_unifier
 from .containment import is_contained
+
+
+LOG = logging.getLogger(__name__)
+
 
 GC = GuaranteeConjunction()
 GD = GuaranteeDisjunction()
@@ -231,6 +236,8 @@ def minimize_component_conjunction(conjunction, head_vars=None):
         minimised conjunction.
     """
 
+    LOG.debug("About to minimize conjunction %s", conjunction)
+
     if head_vars is None:
         head_vars = {}
 
@@ -294,6 +301,7 @@ def minimise_formulas_containment(components, containment_op, head_vars):
             is_contained = containments.setdefault(
                 (i, j), containment_op(q_, q)
             )
+            LOG.debug("Checking containment %s <= %s: %s", q, q_, is_contained)
             if (
                 is_contained and
                 not (

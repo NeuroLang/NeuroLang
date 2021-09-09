@@ -1,3 +1,5 @@
+import logging
+
 from ..datalog import Fact, chase
 from ..datalog.negation import DatalogProgramNegation
 from ..expressions import Constant, Symbol
@@ -12,6 +14,10 @@ from ..logic.transformations import (
     RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix
 )
+
+
+LOG = logging.getLogger(__name__)
+
 
 __all__ = ['is_contained_rule', 'is_contained']
 
@@ -79,8 +85,15 @@ def is_contained(q1, q2):
     '''
     s = Symbol.fresh()
     programs = []
+    if (
+        len(extract_logic_free_variables(q1)) !=
+        len(extract_logic_free_variables(q2))
+    ):
+        LOG.debug("Number of free variables is different")
+        return False
     for query in (q1, q2):
         program = convert_pos_logic_query_to_datalog_rules(query, s)
+        LOG.debug("Canonical program for %s", query)
         programs.append(program)
 
     for q2_ in programs[1]:
