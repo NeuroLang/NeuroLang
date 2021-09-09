@@ -149,11 +149,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return tuple()
 
     def as_numpy_array(self):
+        self._drop_duplicates_if_needed()
         res = self._container.values.view()
         res.setflags(write=False)
         return res
 
     def as_pandas_dataframe(self):
+        self._drop_duplicates_if_needed()
         return self._container
 
     def _empty_set_same_structure(self):
@@ -598,6 +600,9 @@ class NamedRelationalAlgebraFrozenSet(
     def left_naturaljoin(self, other):
         on = [c for c in self.columns if c in other.columns]
 
+        self._drop_duplicates_if_needed()
+        other._drop_duplicates_if_needed()
+
         if len(on) == 0:
             return self
 
@@ -610,6 +615,17 @@ class NamedRelationalAlgebraFrozenSet(
             might_have_duplicates=(
                 self._might_have_duplicates | other._might_have_duplicates
             ),
+            columns=self.columns,
+        )
+
+    def replace_null(self, column, value):
+        if self._container is None:
+            return self.copy()
+
+        new_container = self._container.fillna({column: value})
+        return self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=self._might_have_duplicates,
             columns=self.columns,
         )
 

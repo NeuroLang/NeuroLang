@@ -1,0 +1,20 @@
+#queryContainer .CodeMirror{
+    height: 20em;
+    width: 100%;
+}
+
+#queryTextArea + .CodeMirror pre {
+    padding-bottom: .5em;
+}
+
+#queryContainer .query-segment {
+    padding: 0;
+}
+
+#queryAlert {
+    display: none;
+}
+
+#queryAlert .nl-query-message {
+    margin: 0;
+}

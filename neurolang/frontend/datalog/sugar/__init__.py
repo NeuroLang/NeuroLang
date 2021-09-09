@@ -73,7 +73,7 @@ class TranslateColumnsToAtoms(ew.PatternWalker):
         ir.FunctionApplication,
         lambda exp: any(isinstance(arg, Column) for arg in exp.args),
     )
-    def function_application_column_sugar(self, expression):
+    def application_column_sugar(self, expression):
         return self.walk(Conjunction((expression,)))
 
     @ew.add_match(Conjunction, lambda exp: _has_column_sugar(exp, Column))
@@ -171,7 +171,7 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
             isinstance(arg, SelectByFirstColumn) for arg in exp.args
         ),
     )
-    def function_application_column_sugar(self, expression):
+    def application_column_sugar(self, expression):
         return self.walk(Conjunction((expression,)))
 
     @ew.add_match(

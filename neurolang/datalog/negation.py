@@ -1,9 +1,19 @@
-from neurolang.exceptions import NotConjunctiveExpressionNegation
 from typing import AbstractSet, Callable, Tuple
 
-from ..expression_walker import add_match, PatternWalker
-from ..expressions import (Constant, FunctionApplication, NeuroLangException,
-                           NonConstant, Symbol, is_leq_informative)
+from ..exceptions import (
+    NotConjunctiveExpressionNegation,
+    ProtectedKeywordError
+)
+from ..expression_walker import PatternWalker, add_match
+from ..expressions import (
+    Constant,
+    FunctionApplication,
+    NeuroLangException,
+    NonConstant,
+    Symbol,
+    is_leq_informative
+)
+from ..logic import Conjunction, Implication, Negation, Union
 from ..type_system import Unknown
 from .basic_representation import DatalogProgram, UnionOfConjunctiveQueries
 from .expression_processing import extract_logic_free_variables
@@ -81,8 +91,8 @@ class DatalogProgramNegationMixin(PatternWalker):
 
     def _check_implication(self, consequent, antecedent):
         if consequent.functor.name in self.protected_keywords:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
+            raise ProtectedKeywordError(
+                f'symbol {consequent.functor.name} is protected'
             )
 
         if not is_conjunctive_negation(antecedent):

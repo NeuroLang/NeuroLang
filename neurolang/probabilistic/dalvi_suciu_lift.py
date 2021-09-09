@@ -1,26 +1,27 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
+from typing import AbstractSet
 
 import numpy as np
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
-    flatten_query,
+    flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NeuroLangException, NonLiftableException
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
-    add_match,
+    add_match
 )
 from ..expressions import (
     Constant,
     FunctionApplication,
     Symbol,
-    TypedSymbolTableMixin,
+    TypedSymbolTableMixin
 )
 from ..logic import (
     FALSE,
@@ -29,18 +30,19 @@ from ..logic import (
     ExistentialPredicate,
     Implication,
     NaryLogicOperator,
-    Union,
+    Negation,
+    Union
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
+    extract_logic_predicates
 )
 from ..logic.transformations import (
-    CollapseConjunctions,
-    CollapseDisjunctions,
-    GuaranteeConjunction,
     MakeExistentialsImplicit,
+    RemoveExistentialOnVariables,
     RemoveTrivialOperations,
+    convert_to_pnf_with_dnf_matrix
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -48,35 +50,36 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .exceptions import NotEasilyShatterableError
+from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     NonLiftable,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query,
+    generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import ProbSemiringSolver
+from .probabilistic_semiring_solver import (
+    ProbSemiringToRelationalAlgebraSolver
+)
 from .query_resolution import (
+    generate_provenance_query_solver,
     lift_solve_marg_query,
-    reintroduce_unified_head_terms,
+    reintroduce_unified_head_terms
 )
 from .shattering import shatter_easy_probfacts
-from .small_dichotomy_theorem_based_solver import (
-    RAQueryOptimiser,
-    lift_optimization_for_choice_predicates,
-)
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
+    convert_to_dnf_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
-    unify_existential_variables,
+    unify_existential_variables
 )
 
 LOG = logging.getLogger(__name__)
@@ -91,15 +94,15 @@ __all__ = [
 RTO = RemoveTrivialOperations()
 
 
-class LiftedQueryProcessingSolver(
-    rap.DisjointProjectMixin,
+class ExtendedRAPToRAWalker(
+    rap.IndependentDisjointProjectionsAndUnionMixin,
     rap.WeightedNaturalJoinSolverMixin,
-    ProbSemiringSolver,
+    ProbSemiringToRelationalAlgebraSolver,
 ):
     pass
 
 
-def solve_succ_query(query, cpl_program):
+def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     """
     Solve a SUCC query on a CP-Logic program.
 
@@ -109,6 +112,10 @@ def solve_succ_query(query, cpl_program):
         SUCC query of the form `ans(x) :- P(x)`.
     cpl_program : CPLogicProgram
         CP-Logic program on which the query should be solved.
+    run_relational_algebra_solver: bool
+        When true the result's `relation` attribute is a NamedRelationalAlgebraFrozenSet,
+        when false the attribute is the relational algebra expression that
+        produces the such set.
 
     Returns
     -------
@@ -133,24 +140,15 @@ def solve_succ_query(query, cpl_program):
             if isinstance(term, Symbol)
         )
         return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names),
-            ColumnStr("_p_"),
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                ("_p_",) + head_var_names
+            )),
+            str2columnstr_constant("_p_"),
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
-        flat_query_body = lift_optimization_for_choice_predicates(
-            flat_query_body, cpl_program
-        )
-        flat_query = Implication(query.consequent, flat_query_body)
-        symbol_table = generate_probabilistic_symbol_table_for_query(
-            cpl_program, flat_query_body
-        )
-        unified_query = UnifyVariableEqualities().walk(flat_query)
-        try:
-            shattered_query = symbolic_shattering(unified_query, symbol_table)
-        except NotEasilyShatterableError:
-            shattered_query = unified_query
+        shattered_query, symbol_table = _prepare_and_optimise_query(flat_query, cpl_program)
         ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -162,15 +160,61 @@ def solve_succ_query(query, cpl_program):
                 query
             )
         ra_query = reintroduce_unified_head_terms(
-            ra_query, flat_query, unified_query
+            ra_query, flat_query, shattered_query
         )
-        ra_query = RAQueryOptimiser().walk(ra_query)
 
-    with log_performance(LOG, "Run RAP query"):
-        solver = LiftedQueryProcessingSolver(symbol_table)
-        prob_set_result = solver.walk(ra_query)
+    query_solver = generate_provenance_query_solver(
+        symbol_table, run_relational_algebra_solver,
+        solver_class=ExtendedRAPToRAWalker
+    )
+
+    with log_performance(LOG, "Run RAP query %s", init_args=(repr(ra_query),)):
+        prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
+
+
+def _prepare_and_optimise_query(flat_query, cpl_program):
+    flat_query_body = convert_to_dnf_ucq(flat_query.antecedent)
+    flat_query_body = RTO.walk(Disjunction(tuple(
+        lift_optimization_for_choice_predicates(f, cpl_program)
+        for f in flat_query_body.formulas
+    )))
+    flat_query = Implication(flat_query.consequent, flat_query_body)
+    unified_query = UnifyVariableEqualities().walk(flat_query)
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, unified_query.antecedent
+    )
+    try:
+        shattered_query = symbolic_shattering(unified_query, symbol_table)
+    except NotEasilyShatterableError:
+        shattered_query = unified_query
+    _verify_that_the_query_is_unate(shattered_query, symbol_table)
+    return shattered_query, symbol_table
+
+
+def _verify_that_the_query_is_unate(query, symbol_table):
+    positive_relational_symbols = set()
+    negative_relational_symbols = set()
+
+    query = convert_rule_to_ucq(query)
+    query = convert_to_pnf_with_dnf_matrix(query)
+    for predicate in extract_logic_predicates(query):
+        if isinstance(predicate, Negation):
+            atom = predicate.formula
+        else:
+            atom = predicate
+        if is_atom_a_deterministic_relation(atom, symbol_table):
+            continue
+        if isinstance(predicate, Negation):
+            while isinstance(predicate, Negation):
+                predicate = predicate.formula
+            negative_relational_symbols.add(predicate.functor)
+        else:
+            positive_relational_symbols.add(predicate.functor)
+
+    if not positive_relational_symbols.isdisjoint(negative_relational_symbols):
+        raise NonLiftableException(f"Query {query} is not unate")
 
 
 def solve_marg_query(rule, cpl):
@@ -207,7 +251,8 @@ def dalvi_suciu_lift(rule, symbol_table):
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
         return components_plan(
-            connected_components, rap.NaturalJoin, symbol_table
+            connected_components, rap.NaturalJoin, symbol_table,
+            negative_operation=rap.Difference
         )
     elif len(rule_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
@@ -267,12 +312,9 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
 
     """
     free_variables = extract_logic_free_variables(conjunctive_query)
-    query = MakeExistentialsImplicit().walk(conjunctive_query)
-    query = CollapseConjunctions().walk(query)
-    query = GuaranteeConjunction().walk(query)
     atoms_with_constants_in_all_key_positions = set(
         atom
-        for atom in query.formulas
+        for atom in extract_logic_atoms(conjunctive_query)
         if is_probabilistic_atom_with_constants_in_all_key_positions(
             atom, symbol_table
         )
@@ -285,19 +327,15 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
             for atom in atoms_with_constants_in_all_key_positions
         )
     )
-    symbol_table = symbol_table.copy()
     for atom in atoms_with_constants_in_all_key_positions:
         if not isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet):
             raise NeuroLangException(
                 "Any atom with constants in all its key positions should be "
                 "a probabilistic choice atom"
             )
-        symbol_table[atom.functor] = ProbabilisticFactSet(
-            symbol_table[atom.functor].relation,
-            symbol_table[atom.functor].probability_column,
-        )
-    conjunctive_query = add_existentials_except(
-        query, free_variables | nonkey_variables
+    conjunctive_query = (
+        RemoveExistentialOnVariables(nonkey_variables)
+        .walk(conjunctive_query)
     )
     plan = dalvi_suciu_lift(conjunctive_query, symbol_table)
     attributes = tuple(
@@ -338,14 +376,11 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
 def _get_disjuncts_containing_atom_with_all_key_attributes(ucq, symbol_table):
     matching_disjuncts = set()
     for disjunct in ucq.formulas:
-        rewritten_ucq = MakeExistentialsImplicit().walk(disjunct)
-        rewritten_ucq = CollapseDisjunctions().walk(rewritten_ucq)
-        rewritten_ucq = GuaranteeConjunction().walk(rewritten_ucq)
         if any(
             is_probabilistic_atom_with_constants_in_all_key_positions(
                 atom, symbol_table
             )
-            for atom in rewritten_ucq.formulas
+            for atom in extract_logic_atoms(disjunct)
         ):
             matching_disjuncts.add(disjunct)
     return matching_disjuncts
@@ -694,11 +729,31 @@ def variable_co_occurrence_graph(expression):
     return c_matrix
 
 
-def components_plan(components, operation, symbol_table):
-    formulas = []
+def components_plan(
+    components, operation, symbol_table,
+    negative_operation=None
+):
+    positive_formulas = []
+    negative_formulas = []
     for component in components:
-        formulas.append(dalvi_suciu_lift(component, symbol_table))
-    return reduce(operation, formulas[1:], formulas[0])
+        component = RTO.walk(component)
+        if isinstance(component, Negation):
+            formula = dalvi_suciu_lift(component.formula, symbol_table)
+            negative_formulas.append(formula)
+        else:
+
+            formula = dalvi_suciu_lift(component, symbol_table)
+            positive_formulas.append(formula)
+    output = reduce(operation, positive_formulas[1:], positive_formulas[0])
+
+    if len(negative_formulas) > 0 and negative_operation is None:
+        raise ValueError(
+            "If negative components are included,"
+            " a negative operation should be provided"
+        )
+    output = reduce(negative_operation, negative_formulas, output)
+
+    return output
 
 
 def inclusion_exclusion_conjunction(expression, symbol_table):
@@ -801,11 +856,17 @@ def powerset(iterable):
 
 
 def symbolic_shattering(unified_query, symbol_table):
+    fact_set_classes = (
+        ProbabilisticFactSet, ProbabilisticChoiceSet, DeterministicFactSet
+    )
     shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
-    inverted_symbol_table = {v: k for k, v in symbol_table.items()}
+    inverted_symbol_table = {
+        v: k for k, v in symbol_table.items()
+        if isinstance(v, fact_set_classes)
+    }
     for atom in extract_logic_atoms(shattered_query):
         functor = atom.functor
-        if isinstance(functor, ProbabilisticFactSet):
+        if isinstance(functor, fact_set_classes):
             if functor not in inverted_symbol_table:
                 s = Symbol.fresh()
                 inverted_symbol_table[functor] = s
