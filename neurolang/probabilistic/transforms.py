@@ -306,7 +306,7 @@ def minimise_formulas_containment(components, containment_op, head_vars):
                 is_contained and
                 not (
                     j < i and
-                    containments[(j, i)]
+                    containments.get((j, i), False)
                 )
             ):
                 break
