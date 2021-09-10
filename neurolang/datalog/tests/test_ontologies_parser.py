@@ -1,5 +1,6 @@
 
 import io
+from neurolang.logic import Implication
 
 from ...expressions import Constant, Symbol
 from ...frontend import NeurolangPDL
@@ -669,3 +670,104 @@ def test_knowledge_property():
 
     res = f_term.as_pandas_dataframe().values
     assert (res == [['Chair']]).all()
+
+
+
+def test_entity_rules():
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <Ontology>
+            <versionInfo>0.3.1</versionInfo>
+        </Ontology>
+
+        <owl:Class rdf:ID="Chair">
+            <rdfs:label>chair</rdfs:label>
+            <rdfs:subClassOf>
+                <owl:Class>
+                    <owl:intersectionOf rdf:parseType="Collection">
+                        <owl:Class rdf:about="#Person" />
+                        <owl:Restriction>
+                            <owl:onProperty rdf:resource="#headOf" />
+                            <owl:someValuesFrom>
+                                <owl:Class rdf:about="#Department" />
+                            </owl:someValuesFrom>
+                        </owl:Restriction>
+                    </owl:intersectionOf>
+                </owl:Class>
+            </rdfs:subClassOf>
+            <rdfs:subClassOf rdf:resource="#Professor" />
+        </owl:Class>
+    </rdf:RDF>'''
+
+    onto = OntologyParser(io.StringIO(owl))
+    _, _, entity_rules = onto.parse_ontology()
+
+    chair = Symbol('Chair')
+    entity = Symbol('Entity')
+    keys = entity_rules.keys()
+    assert len(keys) == 1
+    assert chair in keys
+
+    rule = entity_rules[chair]
+    assert len(rule) == 1
+    rule = rule.pop()
+    assert isinstance(rule, Implication)
+    assert rule.consequent.functor == chair
+    assert len(rule.consequent.args) == 1 and rule.consequent.args[0].is_fresh
+
+    fresh_var = rule.consequent.args[0]
+    assert rule == Implication(chair(fresh_var), entity(fresh_var, Constant('chair')))
+
+
+def test_entity_rules_inclusion():
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <Ontology>
+            <versionInfo>0.3.1</versionInfo>
+        </Ontology>
+
+        <owl:Class rdf:ID="Chair">
+            <rdfs:label>chair</rdfs:label>
+            <rdfs:subClassOf>
+                <owl:Class>
+                    <owl:intersectionOf rdf:parseType="Collection">
+                        <owl:Class rdf:about="#Person" />
+                        <owl:Restriction>
+                            <owl:onProperty rdf:resource="#headOf" />
+                            <owl:someValuesFrom>
+                                <owl:Class rdf:about="#Department" />
+                            </owl:someValuesFrom>
+                        </owl:Restriction>
+                    </owl:intersectionOf>
+                </owl:Class>
+            </rdfs:subClassOf>
+            <rdfs:subClassOf rdf:resource="#Professor" />
+        </owl:Class>
+    </rdf:RDF>'''
+
+    nl = NeurolangPDL()
+
+    nl.add_tuple_set
+
+    nl.load_ontology(io.StringIO(owl))
+
+    chair = Symbol('Chair')
+    entity = Symbol('Entity')
+    assert chair in nl.symbol_table
+
+    assert len(nl.symbol_table[chair].formulas) == 1
+    rule = nl.symbol_table[chair].formulas[0]
+
+    assert isinstance(rule, Implication)
+    assert rule.consequent.functor == chair
+    assert len(rule.consequent.args) == 1 and rule.consequent.args[0].is_fresh
+
+    fresh_var = rule.consequent.args[0]
+    assert rule == Implication(chair(fresh_var), entity(fresh_var, Constant('chair')))
+

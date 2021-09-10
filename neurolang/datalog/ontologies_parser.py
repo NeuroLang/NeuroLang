@@ -6,7 +6,7 @@ from rdflib.namespace import OWL, RDF, RDFS, SKOS
 
 from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
 from ..expressions import Constant, Symbol
-from ..logic import Conjunction
+from ..logic import Conjunction, Implication
 from .constraints_representation import RightImplication
 
 
@@ -27,6 +27,7 @@ class OntologyParser:
         self.parsed_constraints = {}
         self.estructural_knowledge = {}
         self.existential_rules = {}
+        self.entity_rules = {}
 
     def _load_ontology(self, paths, load_format):
         rdfGraph = rdflib.Graph()
@@ -50,7 +51,7 @@ class OntologyParser:
         self._parse_classes()
         self._parse_related_individuals()
 
-        return self.parsed_constraints, self.estructural_knowledge
+        return self.parsed_constraints, self.estructural_knowledge, self.entity_rules
 
     def _parse_classes(self):
         '''This method obtains all the classes present in the ontology and
@@ -60,6 +61,7 @@ class OntologyParser:
         _all_classes = self._get_all_classes()
 
         for class_name in list(_all_classes):
+
             for entity, prop, value in self.rdfGraph.triples((class_name, None, None)):
 
                 if prop == RDF.type and value == OWL.Class:
@@ -496,6 +498,13 @@ class OntologyParser:
 
         self._categorize_constraints([RightImplication(ant, con)])
 
+        if prop == RDFS.label:
+            entity_class = Symbol('Entity')
+            x = Symbol.fresh()
+            lower_name = self._parse_name(value).lower()
+            rule = Implication(entity(x), entity_class(x, Constant(lower_name)))
+            self._add_rules([rule])
+
         prop_name = label.name.split(':')[-1]
         neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)
         est = neurolang_prop(Constant(entity.name), entity_name)
@@ -551,3 +560,13 @@ class OntologyParser:
             rules = self.existential_rules[entity]
             rules.append(rule)
             self.existential_rules[entity] = rules
+
+    def _add_rules(self, expressions):
+        for exp in expressions:
+            exp_functor = exp.consequent.functor
+            if exp_functor in self.entity_rules:
+                cons_set = self.entity_rules[exp_functor]
+                cons_set.add(exp)
+                self.entity_rules[exp_functor] = cons_set
+            else:
+                self.entity_rules[exp_functor] = set([exp])
