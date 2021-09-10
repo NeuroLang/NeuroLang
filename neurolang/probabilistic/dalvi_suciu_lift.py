@@ -44,6 +44,7 @@ from ..logic.transformations import (
     GuaranteeDisjunction,
     ExtractConjunctiveQueryWithNegation,
     MakeExistentialsImplicit,
+    MoveNegationsToAtomsInFONegE,
     PushExistentialsDown,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
@@ -350,17 +351,18 @@ def minimize_cnf(rule):
     """
     head_variables = extract_logic_free_variables(rule)
     cq_d_min = Conjunction(tuple(
-        minimize_component_disjunction(c)
+        minimize_component_disjunction(c, head_variables)
         for c in rule.formulas
     ))
 
     simplify = ChainedWalker(
+        MoveNegationsToAtomsInFONegE,
         PushExistentialsDown,
         RemoveTrivialOperations,
         GuaranteeConjunction,
     )
 
-    cq_min = minimize_component_conjunction(cq_d_min)
+    cq_min = minimize_component_conjunction(cq_d_min, head_variables)
     cq_min = add_existentials_except(cq_min, head_variables)
     return simplify.walk(cq_min)
 
@@ -383,17 +385,18 @@ def minimize_dnf(rule):
     """
     head_variables = extract_logic_free_variables(rule)
     cq_d_min = Disjunction(tuple(
-        minimize_component_conjunction(c)
+        minimize_component_conjunction(c, head_variables)
         for c in rule.formulas
     ))
 
     simplify = ChainedWalker(
+        MoveNegationsToAtomsInFONegE,
         PushExistentialsDown,
         RemoveTrivialOperations,
         GuaranteeDisjunction
     )
 
-    cq_min = minimize_component_disjunction(cq_d_min)
+    cq_min = minimize_component_disjunction(cq_d_min, head_variables)
     cq_min = add_existentials_except(cq_min, head_variables)
     return simplify.walk(cq_min)
 
