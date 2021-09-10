@@ -87,6 +87,8 @@ from .transforms import (
     minimize_component_conjunction,
     minimize_component_disjunction,
     convert_to_dnf_ucq,
+    minimize_ucq_in_cnf,
+    minimize_ucq_in_dnf,
     unify_existential_variables
 )
 
@@ -316,11 +318,11 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
     fresh_symbols_expression = ReplaceExpressionWalker(dic_components).walk(rule)
     if transformation == 'CNF':
         fresh_symbols_expression = convert_to_cnf_ucq(fresh_symbols_expression)
-        minimize = minimize_cnf
+        minimize = minimize_ucq_in_cnf
         GCD = GuaranteeConjunction()
     elif transformation == 'DNF':
         fresh_symbols_expression = convert_to_dnf_ucq(fresh_symbols_expression)
-        minimize = minimize_dnf
+        minimize = minimize_ucq_in_dnf
         GCD = GuaranteeDisjunction()
     else:
         raise ValueError(f'Invalid transformation type: {transformation}')
@@ -331,74 +333,6 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
     final_expression = minimize(final_expression)
 
     return GCD.walk(final_expression)
-
-def minimize_cnf(rule):
-    """Function that receives a CNF expression and minimizes
-    it according to the definition provided by Abiteboul et al[1].
-
-    [1] Abiteboul, S., Hull, R. & Vianu, V.
-    "Foundations of databases." (Addison Wesley, 1995).
-
-    Parameters
-    ----------
-    rule : Definition
-        UCQ expression
-
-    Returns
-    -------
-    Definition
-        Minimized CNF expression.
-    """
-    head_variables = extract_logic_free_variables(rule)
-    cq_d_min = Conjunction(tuple(
-        minimize_component_disjunction(c, head_variables)
-        for c in rule.formulas
-    ))
-
-    simplify = ChainedWalker(
-        MoveNegationsToAtomsInFONegE,
-        PushExistentialsDown,
-        RemoveTrivialOperations,
-        GuaranteeConjunction,
-    )
-
-    cq_min = minimize_component_conjunction(cq_d_min, head_variables)
-    cq_min = add_existentials_except(cq_min, head_variables)
-    return simplify.walk(cq_min)
-
-def minimize_dnf(rule):
-    """Function that receives a DNF expression and minimizes
-    it according to the definition provided by Abiteboul et al[1].
-
-    [1] Abiteboul, S., Hull, R. & Vianu, V.
-    "Foundations of databases." (Addison Wesley, 1995).
-
-    Parameters
-    ----------
-    rule : Definition
-        UCQ expression
-
-    Returns
-    -------
-    Definition
-        Minimized DNF expression.
-    """
-    head_variables = extract_logic_free_variables(rule)
-    cq_d_min = Disjunction(tuple(
-        minimize_component_conjunction(c, head_variables)
-        for c in rule.formulas
-    ))
-
-    simplify = ChainedWalker(
-        MoveNegationsToAtomsInFONegE,
-        PushExistentialsDown,
-        RemoveTrivialOperations,
-        GuaranteeDisjunction
-    )
-
-    cq_min = minimize_component_disjunction(cq_d_min, head_variables)
-    cq_min = add_existentials_except(cq_min, head_variables)
-    return simplify.walk(cq_min)
 
 def extract_connected_components(list_of_conjunctions, existential_vars):
     """Given a list of conjunctions, this function is in charge of calculating
