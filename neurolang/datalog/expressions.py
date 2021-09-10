@@ -6,7 +6,7 @@ Datalog program.
 from typing import Any
 
 from ..expression_walker import add_match
-from ..expressions import Constant, ExpressionBlock
+from ..expressions import Constant, ExpressionBlock, FunctionApplication
 from ..logic import (Conjunction, Implication, Negation, UnaryLogicOperator,
                      Union)
 from ..logic import expression_processing as ep
@@ -39,6 +39,20 @@ class Undefined(Constant):
 class NullConstant(Constant):
     def __repr__(self):
         return 'NULL'
+
+
+class AggregationApplication(FunctionApplication):
+    def __repr__(self):
+        r = u'\u03BB{{<{}>: {}}}'.format(self.functor, self.__type_repr__)
+        if self.args is ...:
+            r += '(...)'
+        elif self.args is not None:
+            r += (
+                '(' +
+                ', '.join(repr(arg) for arg in self.args)
+                + ')'
+                )
+        return r
 
 
 UNDEFINED = Undefined(None)

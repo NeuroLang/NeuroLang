@@ -2,9 +2,9 @@ from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....datalog.aggregation import AggregationApplication
-from ....expressions import Constant, Symbol
-from .. import ExternalSymbol
-from ..natural_syntax_datalog import parser
+from ....expressions import Constant, Query, Symbol
+from ..standard_syntax import ExternalSymbol
+from ..natural_syntax import parser
 from ....probabilistic.expressions import ProbabilisticPredicate
 
 
@@ -24,7 +24,7 @@ def test_facts():
     )
     assert res == Union((
         Fact(Symbol('A')(Constant('x'), Constant(3.))),
-        Implication(
+        Query(
             Symbol('ans')(),
             Conjunction((
                 Symbol('A')(Symbol('x'), Symbol('y')),
@@ -226,6 +226,24 @@ def test_aggregation_nsd():
             Conjunction((B(x, y),))
         ),
     ))
+
+
+def test_uri_nsd():
+    from rdflib import RDFS
+
+    label = Symbol(name=str(RDFS.label))
+    regional_part = Symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
+    x = Symbol('x')
+
+    res = parser(f'x is `{str(label.name)}` if x is `{str(regional_part.name)}`')
+    expected_result = Union((
+        Implication(
+            label(x),
+            Conjunction((regional_part(x),))
+        ),
+    ))
+
+    assert res == expected_result
 
 
 def test_probabilistic_fact():

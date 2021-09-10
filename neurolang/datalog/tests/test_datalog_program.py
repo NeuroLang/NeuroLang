@@ -1,4 +1,5 @@
-from typing import AbstractSet
+from neurolang.type_system import Unknown
+from typing import AbstractSet, Tuple
 
 import pytest
 
@@ -10,6 +11,9 @@ from ...logic import ExistentialPredicate, Implication, Union
 from .. import DatalogProgram, Fact
 from ..basic_representation import UnionOfConjunctiveQueries
 from ..expressions import TranslateToLogic
+from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
+from ..wrapped_collections import WrappedNamedRelationalAlgebraFrozenSet, WrappedRelationalAlgebraFrozenSet
+
 
 S_ = Symbol
 C_ = Constant
@@ -248,3 +252,56 @@ def test_not_conjunctive():
 
     with pytest.raises(NeuroLangException):
         dl.walk(Imp_(Q(x, y), R(Q(x))))
+
+
+def test_infer_iterable_type():
+    iterable = range(5)
+    type_, it = DatalogProgram.infer_iterable_type(iterable)
+    assert type_ is int
+    assert list(it) == list(range(5))
+
+    r = RelationalAlgebraFrozenSet([(2, 'a')])
+    type_, it = DatalogProgram.infer_iterable_type(r)
+    assert type_ is Tuple[int, str]
+    assert it is r
+
+    rw = WrappedRelationalAlgebraFrozenSet(r)
+    type_, it = DatalogProgram.infer_iterable_type(rw)
+    assert type_ is Tuple[int, str]
+    assert it is rw
+
+    dee = WrappedNamedRelationalAlgebraFrozenSet.dee()
+    type_, it = DatalogProgram.infer_iterable_type(dee)
+    assert type_ is Unknown
+    assert it is dee
+
+    dum = WrappedNamedRelationalAlgebraFrozenSet.dum()
+    type_, it = DatalogProgram.infer_iterable_type(dum)
+    assert type_ is Unknown
+    assert it is dum
+
+
+def test_add_extensional_preducate_from_tuples():
+    iterable = ((i,) for i in range(5))
+
+    Q = S_('Q')
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(Q, iterable)
+    q = dl.extensional_database()[Q]
+    assert q.type is AbstractSet[Tuple[int]]
+    assert q.value == {(i,) for i in range(5)}
+
+    dl = Datalog()
+    r = RelationalAlgebraFrozenSet([(2, 'a')])
+    dl.add_extensional_predicate_from_tuples(Q, r)
+    q = dl.extensional_database()[Q]
+    assert q.type is AbstractSet[Tuple[int, str]]
+    assert q.value == r
+
+    dl = Datalog()
+    rw = WrappedRelationalAlgebraFrozenSet(r)
+    dl.add_extensional_predicate_from_tuples(Q, rw)
+    q = dl.extensional_database()[Q]
+    assert q.type is AbstractSet[Tuple[int, str]]
+    assert q.value == rw

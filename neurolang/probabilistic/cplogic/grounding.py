@@ -6,14 +6,9 @@ from ...datalog.chase import (
     ChaseNaive,
     ChaseNamedRelationalAlgebraMixin,
 )
-from ...exceptions import NeuroLangException
+from ...exceptions import ForbiddenDisjunctionError
 from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import (
-    Constant,
-    ExpressionBlock,
-    FunctionApplication,
-    Symbol,
-)
+from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import Implication
 from ...logic.expression_processing import (
     TranslateToLogic,
@@ -49,6 +44,10 @@ def cplogic_to_datalog(cpl_program):
     dl = Datalog()
     for pred_symb in cpl_program.predicate_symbols:
         if pred_symb in cpl_program.intensional_database():
+            if len(cpl_program.symbol_table[pred_symb].formulas) > 1:
+                raise ForbiddenDisjunctionError(
+                    "CP-Logic programs do not support disjunctions"
+                )
             for formula in cpl_program.symbol_table[pred_symb].formulas:
                 dl.walk(formula)
         else:
@@ -146,40 +145,24 @@ class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
 
 
 def ground_cplogic_program(cpl_program):
-    for disjunction in cpl_program.intensional_database().values():
-        if len(disjunction.formulas) > 1:
-            raise NeuroLangException(
-                "Programs with several rules with the same head predicate "
-                "symbol are not currently supported"
-            )
     dl_program = cplogic_to_datalog(cpl_program)
     chase = Chase(dl_program)
     dl_instance = chase.build_chase_solution()
     return build_grounding(cpl_program, dl_instance)
 
 
-def get_predicate_from_grounded_expression(expression):
-    if isinstance(expression, FunctionApplication):
-        return expression
-    elif is_probabilistic_fact(expression):
-        return expression.consequent.body
-    elif isinstance(expression, FunctionApplication):
-        return expression
+def get_grounding_predicate(grounded_exp):
+    if is_probabilistic_fact(grounded_exp):
+        return grounded_exp.consequent.body
     else:
-        return expression.consequent
+        return grounded_exp.consequent
 
 
-def get_grounding_pred_symb(grounding):
-    if isinstance(grounding, ProbabilisticChoiceGrounding):
-        return grounding.expression.functor
-    elif isinstance(grounding.expression.consequent, ProbabilisticPredicate):
-        return grounding.expression.consequent.body.functor
-    return grounding.expression.consequent.functor
+def get_grounding_pred_symb(grounded_exp):
+    return get_grounding_predicate(grounded_exp).functor
 
 
 def get_grounding_dependencies(grounding):
-    if isinstance(grounding, ProbabilisticChoiceGrounding):
-        return set()
     predicates = extract_logic_predicates(grounding.expression.antecedent)
     return set(pred.functor for pred in predicates)
 
@@ -199,14 +182,13 @@ def topological_sort_groundings(groundings):
     dependencies = dict()
     pred_symb_to_grounding = dict()
     for grounding in groundings:
-        pred_symb = get_grounding_pred_symb(grounding)
+        pred_symb = get_grounding_pred_symb(grounding.expression)
         pred_symb_to_grounding[pred_symb] = grounding
         dependencies[pred_symb] = get_grounding_dependencies(grounding)
     result = list()
     visited = set()
-    for grounding in groundings:
-        pred_symb = get_grounding_pred_symb(grounding)
+    for pred_symb, grounding in pred_symb_to_grounding.items():
         topological_sort_groundings_util(
             pred_symb, dependencies, visited, result
         )
-    return [pred_symb_to_grounding.get(pred_symb) for pred_symb in result]
+    return [pred_symb_to_grounding[pred_symb] for pred_symb in result]

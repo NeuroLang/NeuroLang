@@ -1,6 +1,10 @@
 from collections import namedtuple
+from inspect import isclass
 from itertools import tee
-from typing import Tuple
+from functools import lru_cache
+from typing import Tuple, Iterable
+
+import numpy as np
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
@@ -11,6 +15,26 @@ from ..utils.relational_algebra_set import (
     RelationalAlgebraSet)
 
 REBV = ReplaceExpressionsByValues(dict())
+
+
+class WrappedTypeMap:
+    row_maps = {
+        np.integer: int,
+        np.float: float
+    }
+
+    @lru_cache(maxsize=256)
+    def backend_2_python(self, value):
+        for k, v in self.row_maps.items():
+            if (
+                (isclass(value) and issubclass(value, k)) or
+                value == k
+            ):
+                return v
+        return value
+
+
+TYPEMAP = WrappedTypeMap()
 
 
 class WrappedRelationalAlgebraSetBaseMixin:
@@ -26,7 +50,7 @@ class WrappedRelationalAlgebraSetBaseMixin:
     def _set_row_type(self, iterable, row_type, verify_row_type):
         if row_type is not Unknown:
             if verify_row_type:
-                raise NotImplemented()
+                raise NotImplementedError()
             self._row_type = row_type
         elif isinstance(iterable, WrappedRelationalAlgebraSetBaseMixin):
             self._row_type = iterable._row_type
@@ -130,9 +154,13 @@ class WrappedRelationalAlgebraSetBaseMixin:
         )
 
     def __eq__(self, other):
+        if not isinstance(other, Iterable):
+            return False
         return self._operator_wrapped('__eq__', other)
 
     def __ne__(self, other):
+        if not isinstance(other, Iterable):
+            return False
         return self._operator_wrapped('__ne__', other)
 
     def __lt__(self, other):
@@ -165,8 +193,13 @@ class WrappedRelationalAlgebraSetBaseMixin:
     @property
     def row_type(self):
         if self._row_type is None:
-            if self.arity > 0 and not self.is_null():
-                self._row_type = infer_type(super().fetch_one())
+            if hasattr(self, "set_row_type"):
+                self._row_type = self.set_row_type
+            elif self.arity > 0 and not self.is_empty():
+                self._row_type = Tuple[tuple(
+                    TYPEMAP.backend_2_python(t)
+                    for t in get_args(infer_type(super().fetch_one()))
+                )]
             else:
                 self._row_type = Tuple
 
@@ -242,7 +275,9 @@ class WrappedNamedRelationalAlgebraFrozenSetMixin(
     @property
     def row_type(self):
         if self._row_type is None:
-            if (self.arity > 0 and not self.is_null()):
+            if hasattr(self, "set_row_type"):
+                self._row_type = self.set_row_type
+            elif (self.arity > 0 and not self.is_empty()):
                 element = super().fetch_one()
                 self._row_type = Tuple[tuple(
                     Constant(getattr(element, c)).type

@@ -5,8 +5,19 @@ from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..utils import OrderedSet
-from . import (FALSE, TRUE, Conjunction, Disjunction, Implication, Negation,
-               Quantifier, Union, LogicOperator)
+from . import (
+    FALSE,
+    TRUE,
+    Conjunction,
+    Disjunction,
+    ExistentialPredicate,
+    Implication,
+    LogicOperator,
+    NaryLogicOperator,
+    Negation,
+    Quantifier,
+    Union
+)
 
 
 class LogicSolver(PatternWalker):
@@ -82,7 +93,7 @@ class LogicSolver(PatternWalker):
             )
 
         solved_consequent = self.walk(expression.consequent)
-        if (solved_consequent is not expression.consequent):
+        if solved_consequent is not expression.consequent:
             return self.walk(Implication(solved_consequent, solved_antecedent))
 
         return expression
@@ -128,20 +139,19 @@ class TranslateToLogic(PatternWalker):
     @add_match(
         LogicOperator,
         lambda expression: any(
-            isinstance(arg, FunctionApplication) and
-            is_logic_function_application(arg)
+            isinstance(arg, FunctionApplication)
+            and is_logic_function_application(arg)
             for arg in expression.unapply()
-        )
+        ),
     )
     def translate_logic_operator(self, expression):
         args = expression.unapply()
         new_args = tuple()
         changed = False
         for arg in args:
-            if (
-                isinstance(arg, FunctionApplication) and
-                is_logic_function_application(arg)
-            ):
+            if isinstance(
+                arg, FunctionApplication
+            ) and is_logic_function_application(arg):
                 new_arg = self.walk(arg)
             else:
                 new_arg = arg
@@ -176,6 +186,17 @@ class WalkLogicProgramAggregatingSets(PatternWalker):
     def negation(self, expression):
         return self.walk(expression.formula)
 
+    @add_match(Quantifier)
+    def quantifier(self, expression):
+        return self.walk(expression.body)
+
+    @add_match(LogicOperator)
+    def logic_operator(self, expression):
+        fvs = OrderedSet()
+        for arg in expression.unapply():
+            fvs |= self.walk(arg)
+        return fvs
+
 
 class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
     @add_match(FunctionApplication)
@@ -191,7 +212,7 @@ class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
             elif isinstance(a, Constant):
                 pass
             else:
-                raise NeuroLangException('Not a Datalog function application')
+                raise NeuroLangException("Not a Datalog function application")
         return variables
 
     @add_match(Quantifier)
@@ -200,14 +221,13 @@ class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
 
     @add_match(Implication)
     def extract_variables_s(self, expression):
-        return (
-            self.walk(expression.antecedent) -
-            self.walk(expression.consequent)
+        return self.walk(expression.antecedent) - self.walk(
+            expression.consequent
         )
 
     @add_match(Symbol)
     def extract_variables_symbol(self, expression):
-        return OrderedSet((expression, ))
+        return OrderedSet((expression,))
 
     @add_match(Constant)
     def _(self, expression):
@@ -251,7 +271,9 @@ class ExtractLogicPredicates(WalkLogicProgramAggregatingSets):
 
 def extract_logic_predicates(expression):
     """Extract predicates from expression
-    knowing that it's in logic format
+    knowing that it's in logic format, if
+    predicates are negated then (not predicate)
+    will be the result.ormat
 
     Parameters
     ----------
@@ -268,3 +290,81 @@ def extract_logic_predicates(expression):
     """
     edp = ExtractLogicPredicates()
     return edp.walk(expression)
+
+
+class ExtractLogicAtoms(WalkLogicProgramAggregatingSets):
+    @add_match(Symbol)
+    def symbol(self, expression):
+        return OrderedSet()
+
+    @add_match(Constant)
+    def constant(self, expression):
+        return OrderedSet()
+
+    @add_match(FunctionApplication)
+    def extract_predicates_fa(self, expression):
+        return OrderedSet([expression])
+
+
+def extract_logic_atoms(expression):
+    """Extract atoms from expression
+    knowing that it's in logic format
+
+    Parameters
+    ----------
+    expression : Expression
+        expression to extract predicates from
+
+
+    Returns
+    -------
+    OrderedSet
+        set of all atoms in the expression in lexicographical
+        order.
+
+    """
+    edp = ExtractLogicAtoms()
+    return edp.walk(expression)
+
+
+def has_existential_quantifiers(query):
+    """Check if the logic expression has
+    existentially-quantified variables
+
+    Parameters
+    ----------
+    query : LogicExpression
+        Logic expression to check wether existential
+        quantifiers exists inside.
+
+    Returns
+    -------
+    bool
+        True if and only if there is an existentially-quantified variable
+        in the expression.
+    """
+    return HasExistentialPredicates().walk(query)
+
+
+class HasExistentialPredicates(PatternWalker):
+    @add_match(FunctionApplication)
+    def walk_function_application(self, expression):
+        return False
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, expression):
+        return True
+
+    @add_match(NaryLogicOperator)
+    def nary(self, expression):
+        return any(
+            self.walk(f)
+            for f in expression.formulas
+        )
+
+    @add_match(LogicOperator)
+    def operator(self, expression):
+        return any(
+            self.walk(f)
+            for f in expression.unapply()
+        )

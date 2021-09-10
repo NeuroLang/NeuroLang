@@ -1,11 +1,17 @@
-from operator import add, eq, mul, pow, sub, truediv
+from operator import add, eq, lt, mul, pow, sub, truediv
+
+import pytest
+from neurolang.logic import ExistentialPredicate
+from tatsu.exceptions import FailedParse
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
-from ....datalog.aggregation import AggregationApplication
-from ....probabilistic.expressions import ProbabilisticPredicate
-from ....expressions import Constant, Symbol
-from .. import ExternalSymbol, parser
-
+from ....expressions import Constant, FunctionApplication, Query, Symbol
+from ....probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate,
+)
+from ..standard_syntax import ExternalSymbol, parser
 
 def test_facts():
     res = parser('A(3)')
@@ -25,7 +31,7 @@ def test_facts():
     assert res == Union((
         Fact(Symbol('A')(Constant('x'), Constant(3))),
         Fact(Symbol('http://uri#test-fact')(Constant('x'))),
-        Implication(
+        Query(
             Symbol('ans')(),
             Conjunction((
                 Symbol('A')(Symbol('x'), Symbol('y')),
@@ -147,12 +153,34 @@ def test_aggregation():
     x = Symbol('x')
     y = Symbol('y')
     res = parser('A(x, f(y)):-B(x, y)')
-    assert res == Union((
+    expected_result = Union((
         Implication(
-            A(x, AggregationApplication(f, (y,))),
+            A(x, FunctionApplication(f, (y,))),
             Conjunction((B(x, y),))
         ),
     ))
+    assert res == expected_result
+
+
+def test_uri():
+    from rdflib import RDFS
+
+    label = Symbol(name=str(RDFS.label))
+    regional_part = Symbol(
+        name='http://sig.biostr.washington.edu/fma3.0#regional_part_of'
+    )
+    x = Symbol('x')
+    y = Symbol('y')
+
+    res = parser(f'`{str(label.name)}`(x):-`{str(regional_part.name)}`(x, y)')
+    expected_result = Union((
+        Implication(
+            label(x),
+            Conjunction((regional_part(x, y),))
+        ),
+    ))
+
+    assert res == expected_result
 
 
 def test_probabilistic_fact():
@@ -176,3 +204,149 @@ def test_probabilistic_fact():
             Constant(True)
         ),
     ))
+
+    exp = Symbol("exp")
+    d = Symbol("d")
+    x = Symbol("x")
+    B = Symbol("B")
+    res = parser("B(x) :: exp(-d / 5.0) :- A(x, d) & (d < 0.8)")
+    expected = Union(
+        (
+            Implication(
+                ProbabilisticPredicate(
+                    FunctionApplication(
+                        exp,
+                        (
+                            Constant(truediv)(
+                                Constant(mul)(Constant(-1), d), Constant(5.0)
+                            ),
+                        ),
+                    ),
+                    B(x),
+                ),
+                Conjunction((A(x, d), Constant(lt)(d, Constant(0.8)))),
+            ),
+        )
+    )
+    assert res == expected
+
+
+def test_condition():
+    A = Symbol('A')
+    B = Symbol('B')
+    C = Symbol('C')
+    x = Symbol('x')
+    res = parser('C(x) :- A(x) // B(x)')
+
+    expected = Union((
+        Implication(
+            C(x),
+            Condition(A(x), B(x))
+        ),
+    ))
+
+    assert res == expected
+
+    res = parser('C(x) :- (A(x), B(x)) // B(x)')
+
+    expected = Union((
+        Implication(
+            C(x),
+            Condition(Conjunction((A(x), B(x))), B(x))
+        ),
+    ))
+
+    assert res == expected
+
+    res = parser('C(x) :- A(x) // (A(x), B(x))')
+
+    expected = Union((
+        Implication(
+            C(x),
+            Condition(A(x), Conjunction((A(x), B(x))))
+        ),
+    ))
+
+    assert res == expected
+
+
+def test_existential():
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    s1 = Symbol("s1")
+    s2 = Symbol("s2")
+
+    res = parser("C(x) :- B(x), exists(s1; A(s1))")
+    expected = Union(
+        (
+            Implication(
+                C(x), Conjunction((B(x), ExistentialPredicate(s1, A(s1))))
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser("C(x) :- B(x), ∃(s1 st A(s1))")
+    assert res == expected
+
+    res = parser("C(x) :- B(x), exists(s1, s2; A(s1), A(s2))")
+
+    expected = Union(
+        (
+            Implication(
+                C(x),
+                Conjunction(
+                    (
+                        B(x),
+                        ExistentialPredicate(
+                            s2,
+                            ExistentialPredicate(
+                                s1, Conjunction((A(s1), A(s2)))
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+    )
+
+    assert res == expected
+
+    with pytest.raises(FailedParse):
+        res = parser("C(x) :- B(x), exists(s1; )")
+
+
+def test_query():
+    ans = Symbol("ans")
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("ans(x) :- B(x, y), C(3, y)")
+    assert res == Union(
+        (Query(ans(x), Conjunction((B(x, y), C(Constant(3), y)))),)
+    )
+
+
+def test_prob_implicit():
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("B(x, PROB, y) :- C(x, y)")
+    assert res == Union(
+        (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
+    )
+
+
+def test_prob_explicit():
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("B(x, PROB(x, y), y) :- C(x, y)")
+    assert res == Union(
+        (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
+    )

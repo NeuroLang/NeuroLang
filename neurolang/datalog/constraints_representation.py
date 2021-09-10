@@ -8,7 +8,6 @@ sets and has support for constraints.
 
 from ..expression_walker import ExpressionWalker, add_match
 from ..logic import LogicOperator, NaryLogicOperator, Union
-from ..solver_datalog_naive import DatalogBasic
 from .basic_representation import DatalogProgram
 
 

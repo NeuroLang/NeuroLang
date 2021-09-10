@@ -13,45 +13,38 @@ from the chapter 4 of [1]_.
 
 .. [1] Abiteboul, Hull, and Vianu, Foundations of Databases: The Logical Level.
 """
-from functools import reduce
 import operator
+from functools import reduce
+from typing import Callable
+
+from ..datalog.expressions import Fact
+from ..datalog.negation import is_conjunctive_negation
+from ..exceptions import NeuroLangException
+from ..expression_walker import ChainedWalker, PatternWalker, add_match
+from ..expressions import ExpressionBlock
+from ..type_system import Unknown, is_leq_informative
 from . import (
-    Symbol,
+    FALSE,
+    TRUE,
+    Conjunction,
     Constant,
+    Disjunction,
+    ExistentialPredicate,
     FunctionApplication,
     Implication,
-    Union,
-    Conjunction,
-    Disjunction,
-    Negation,
-    UniversalPredicate,
-    ExistentialPredicate,
     LogicOperator,
+    Negation,
     Quantifier,
-    TRUE,
-    FALSE,
-)
-from ..datalog.expressions import Fact
-from ..exceptions import NeuroLangException
-from ..expressions import ExpressionBlock
-from ..expression_walker import (
-    add_match,
-    PatternWalker,
-    ChainedWalker,
+    Symbol,
+    Union
 )
 from .expression_processing import extract_logic_free_variables
-
-
 from .transformations import (
-    LogicExpressionWalker,
-    EliminateImplications,
-    MoveNegationsToAtoms,
-    MoveQuantifiersUp,
     DesambiguateQuantifiedVariables,
-    DistributeDisjunctions,
-    CollapseDisjunctions,
-    CollapseConjunctions,
-    RemoveUniversalPredicates,
+    EliminateImplications,
+    LogicExpressionWalker,
+    MoveNegationsToAtoms,
+    RemoveUniversalPredicates
 )
 
 
@@ -276,7 +269,7 @@ def convert_srnf_to_horn_clauses(head, expression):
         raise NeuroLangTranslateToHornClauseException(
             "Expression is not safe range: {}".format(expression)
         )
-    if set(head.args) != range_restricted_variables(expression):
+    if not set(head.args) <= range_restricted_variables(expression):
         raise NeuroLangTranslateToHornClauseException(
             "Variables in head ({}) must be present in body ({})".format(
                 head, expression
@@ -287,11 +280,11 @@ def convert_srnf_to_horn_clauses(head, expression):
     processed = []
 
     while stack:
-        head, exp, positive_atoms = stack.pop()
+        head, exp, restrictive_atoms = stack.pop()
         body, remainder = ConvertSRNFToHornClause().walk(exp)
-        body = _restrict_variables(head, body, positive_atoms)
-        positive_atoms |= _positive_atoms(body)
-        remainder = [r + (positive_atoms,) for r in remainder]
+        body = _restrict_variables(head, body, restrictive_atoms)
+        restrictive_atoms |= _restrictive_atoms(body)
+        remainder = [r + (restrictive_atoms,) for r in remainder]
         processed.append(_to_horn_clause(head, body))
         stack += remainder
 
@@ -308,10 +301,10 @@ def _to_horn_clause(head, body):
     return r
 
 
-def _restrict_variables(head, body, positive_atoms):
+def _restrict_variables(head, body, restrictive_atoms):
     while not set(head.args).issubset(_restricted_variables(body)):
         uv = set(head.args) - _restricted_variables(body)
-        new_atoms = _choose_restriction_atoms(uv, positive_atoms, head)
+        new_atoms = _choose_restriction_atoms(uv, restrictive_atoms, head)
         body = new_atoms + body
     return body
 
@@ -330,13 +323,25 @@ def _choose_restriction_atoms(unrestricted_variables, available_atoms, head):
 
 def _restricted_variables(body):
     r = set()
-    for a in _positive_atoms(body):
+    for a in _restrictive_atoms(body):
         r |= _atom_variables(a)
     return r
 
 
-def _positive_atoms(atoms):
-    return set(a for a in atoms if not isinstance(a, Negation))
+def _restrictive_atoms(atoms):
+    return set(a for a in atoms if _is_restriction(a))
+
+
+def _is_restriction(atom):
+    if isinstance(atom, FunctionApplication):
+        if is_leq_informative(atom.functor.type, Unknown):
+            return True
+        elif atom.functor == operator.eq and any(
+            isinstance(a, Constant) for a in atom.args
+        ):
+            return True
+        return not is_leq_informative(atom.functor.type, Callable)
+    return False
 
 
 def _atom_variables(atom):
@@ -437,3 +442,21 @@ def fol_query_to_datalog_program(head, exp):
     horn_clauses = convert_srnf_to_horn_clauses(head, exp)
     program = translate_horn_clauses_to_datalog(horn_clauses)
     return program
+
+
+class Fol2DatalogTranslationException(NeuroLangException):
+    pass
+
+
+class Fol2DatalogMixin(PatternWalker):
+    @add_match(
+        Implication, lambda imp: not is_conjunctive_negation(imp.antecedent)
+    )
+    def translate_implication(self, imp):
+        try:
+            program = fol_query_to_datalog_program(
+                imp.consequent, imp.antecedent
+            )
+        except NeuroLangException as e:
+            raise Fol2DatalogTranslationException from e
+        return self.walk(program)

@@ -7,13 +7,28 @@ version: 2.1
 commands:
   install:
     description: "Installs the necessary packages"
+    parameters:
+      dask:
+        type: boolean
+        default: false
     steps:
       # Download and cache dependencies
       - restore_cache:
           keys:
-            - v1-dependencies-{{ checksum "requirements.txt" }}
+            - v1-dependencies-{{ checksum "setup.cfg" }}
             # fallback to using the latest cache if no exact match is found
             - v1-dependencies-
+
+      - run:
+          name: Install maven
+          command: |
+            if
+              [ ${CIRCLE_JOB} == "docs" ]
+            then
+              echo "Not installing maven for docs jobs."
+            else
+              sudo apt update && sudo apt install maven
+            fi
 
       - run:
           name: install dependencies
@@ -21,13 +36,23 @@ commands:
             python -m venv venv
             . venv/bin/activate
             pip install --upgrade pip
-            pip install -r requirements.txt
-            pip install -r requirements-dev.txt
+
+            pip install setuptools_scm
+            pip install importlib_metadata
+            
             if
               [ ${CIRCLE_JOB} == "docs" ]
             then
-              pip install -r requirements-doc.txt
+              pip install -e .[doc]
+            else
+              pip install -e .[dev]
             fi
+
+            if << parameters.dask >>
+            then
+              pip install -e . --install-option="--dask"
+            fi
+
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
@@ -53,7 +78,7 @@ commands:
           paths:
             - ./venv
             - cc-test-reporter
-          key: v1-dependencies-{{ checksum "requirements.txt" }}
+          key: v1-dependencies-{{ checksum "setup.cfg" }}
 
   test:
     description: "Run the tests"
@@ -62,12 +87,17 @@ commands:
           name: run tests
           command: |
             . venv/bin/activate
-            export CODACY_PROJECT_TOKEN=819af61c85004229a83cb34b8089930c
+            export CODACY_PROJECT_TOKEN=3114b2d4ada742608ad962641f1c7e7a
             export CC_TEST_REPORTER_ID=8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
             ./cc-test-reporter before-build
             make test
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
+
+      - run:
+          name: store tests results
+          when: always
+          command: |
             mkdir -p test_reports/neurolang
             cp utest.xml test_reports/neurolang/results.xml
 
@@ -78,8 +108,6 @@ commands:
       - store_test_results:
           path: test_reports
           when: always
-
-
 jobs:
   py36:
     docker:
@@ -100,6 +128,18 @@ jobs:
     steps:
       - checkout
       - install
+      - test
+
+  py37dask:
+    docker:
+      - image: circleci/python:3.7
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - install:
+          dask: true
       - test
 
   benchmark:
@@ -143,17 +183,116 @@ jobs:
     working_directory: ~/repo
 
     steps:
+      - run:
+          name: Log memory usage
+          command: |
+            while true; do
+              sleep 5
+              ps auxwwf
+              echo "======"
+            done
+          background: true
       - checkout
       - install
+      - restore_cache:
+          keys:
+            - v1-docs-{{ .Branch }}--
+      - run:
+          name: Install Texlive and dvipng
+          command: 'sudo apt update && sudo apt install texlive texlive-xetex texlive-fonts-extra texlive-latex-extra texlive-plain-extra dvipng'
       - run:
           name: Install extra packages & build documentation
           command: |
             . venv/bin/activate
             cd doc
+            make api
             make html
           no_output_timeout: 7h
+
+      - save_cache:
+          paths:
+            - ./venv
+            - docs/auto_examples
+            - docs/_build
+          key: v1-docs-{{ .Branch }}--
+
       - store_artifacts:
+          destination: dev
           path: doc/_build/html
+      - persist_to_workspace:
+          root: doc/_build
+          paths:
+            - html
+
+
+
+
+  deploy_docs:
+    docker:
+      - image: circleci/python:3.7
+    steps:
+      - attach_workspace:
+          at: /tmp/build
+      - add_ssh_keys:
+          fingerprints:
+            - "b5:4f:45:48:f3:35:86:4b:fd:16:3d:f2:32:36:9b:19"
+      - checkout
+      - run:
+          name: Fetch docs
+          command: |
+            set -e
+            mkdir -p ~/.ssh
+            echo $(ssh-keyscan github.com) >> ~/.ssh/known_hosts
+            if [ ! -d ~/neurolang.github.io ]; then
+              git clone git@github.com:/neurolang/neurolang.github.io.git ~/neurolang.github.io
+            fi
+      - run:
+          name: Deploy docs
+          command: |
+            echo $PWD;
+            cd ~/project;
+            set +e;
+            TAG=$(git describe --tag --exact-match);
+            set -e;
+            cd ~/neurolang.github.io;
+            if [[ "${CIRCLE_BRANCH}" != "master" ]]; then
+              echo "No deployment (build: ${CIRCLE_BRANCH}).";
+            else
+              git config --global user.email "circle@neurolang.com";
+              git config --global user.name "Circle CI";
+              cd ~/neurolang.github.io;
+              git checkout master
+              git remote -v
+              git fetch origin
+              git reset --hard origin/master
+              git clean -xdf
+              if [[ -z $TAG ]]; then
+                MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
+                echo $MSG
+                DST=$PWD/dev
+              else
+                MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
+                echo $MSG
+                DST=$PWD
+              fi
+              cp -va /tmp/build/html/* $DST;
+              if [[ -z $(git diff) ]]; then
+                echo "Nothing to commit"
+              else
+                echo $MSG
+                echo "keys $(ssh-add -l)"
+                echo "cleaning keys"
+                ssh-add -D
+                # Add identities only from this job
+                ssh-add ~/.ssh/id_rsa_*
+                echo "keys $(ssh-add -l)"
+                touch .nojekyll;
+                git add -A;
+                git commit -m "${MSG}"
+                git push origin master;
+              fi
+            fi
+
 
 
 workflows:
@@ -162,9 +301,14 @@ workflows:
     jobs:
       - py36
       - py37
-      - benchmark:
-          requires:
-            - py37
-#      - docs:
-#          requires:
-#            - benchmark
+      - py37dask
+      - docs:
+         requires:
+          - py37
+      - deploy_docs:
+         requires:
+           - docs
+        
+        #      - benchmark:
+        #  requires:
+        #    - py37

@@ -5,7 +5,7 @@ from rdflib import OWL, RDF, RDFS, BNode
 
 from ..exceptions import NeuroLangNotImplementedError
 from ..expressions import Constant, Symbol
-from ..logic import Conjunction, Union
+from ..logic import Conjunction, Implication, Union
 from .constraints_representation import RightImplication
 
 
@@ -33,6 +33,7 @@ class OntologyParser:
             OWL.minCardinality,
             OWL.maxCardinality,
             OWL.cardinality,
+            OWL.someValuesFrom,
         ]
 
     def _load_ontology(self, paths, load_format):
@@ -67,13 +68,6 @@ class OntologyParser:
         return self._dom
 
     def _load_domain(self):
-        """
-        Function that generates the rules that compose the ontology
-        domain following the rules proposed by Gottlob et al[1].
-
-        [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
-        QL Entailment Regime: Rules to the Rescue.
-        """
         pointers = frozenset(
             (str(x),) for x in self.graph.subjects() if isinstance(x, BNode)
         )
@@ -82,9 +76,9 @@ class OntologyParser:
             (str(x[0]), str(x[1]), str(x[2])) for x in self.get_triples()
         )
 
-        x = Symbol("x")
-        y = Symbol("y")
-        z = Symbol("z")
+        x = Symbol.fresh()
+        y = Symbol.fresh()
+        z = Symbol.fresh()
 
         dom1 = RightImplication(self._triple(x, y, z), self._dom(x))
         dom2 = RightImplication(self._triple(x, y, z), self._dom(y))
@@ -103,8 +97,8 @@ class OntologyParser:
         Function that parse all the properties defined in
         the ontology.
         """
-        x = Symbol("x")
-        z = Symbol("z")
+        x = Symbol.fresh()
+        z = Symbol.fresh()
 
         constraints = ()
         for pred in set(self.graph.predicates()):
@@ -115,148 +109,7 @@ class OntologyParser:
                 RightImplication(self._triple(x, const, z), symbol(x, z)),
             )
 
-        constraints_subproperties = self._parse_subproperties()
-        constraints_subclasses = self._parse_subclasses()
-        constraints_disjoint = self._parse_disjoint()
-
-        union_of_constraints = Union(
-            constraints_subproperties.formulas
-            + constraints_subclasses.formulas
-            + constraints_disjoint.formulas
-            + constraints
-        )
-
-        return union_of_constraints
-
-    def _parse_subproperties(self):
-        """
-        Function that parse the relationships between
-        subproperties following the rules proposed by Gottlob et al[1].
-
-        [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
-        QL Entailment Regime: Rules to the Rescue.
-        """
-        rdf_schema_subPropertyOf = Symbol(str(RDFS.subPropertyOf))
-        rdf_schema_subPropertyOf2 = Symbol(str(RDFS.subPropertyOf) + "2")
-
-        w = Symbol("w")
-        x = Symbol("x")
-        y = Symbol("y")
-        z = Symbol("z")
-
-        subProperty = RightImplication(
-            rdf_schema_subPropertyOf2(x, y), rdf_schema_subPropertyOf(x, y)
-        )
-        subProperty2 = RightImplication(
-            Conjunction(
-                (
-                    rdf_schema_subPropertyOf2(x, y),
-                    rdf_schema_subPropertyOf(y, z),
-                )
-            ),
-            rdf_schema_subPropertyOf(x, z),
-        )
-
-        owl_inverseOf = Symbol(str(OWL.inverseOf))
-        inverseOf = RightImplication(
-            Conjunction(
-                (
-                    rdf_schema_subPropertyOf(x, y),
-                    owl_inverseOf(w, x),
-                    owl_inverseOf(z, y),
-                )
-            ),
-            rdf_schema_subPropertyOf(w, z),
-        )
-
-        rdf_syntax_ns_type = Symbol(str(RDF.type))
-        objectProperty = RightImplication(
-            rdf_syntax_ns_type(x, Constant(str(OWL.ObjectProperty))),
-            rdf_schema_subPropertyOf(x, x),
-        )
-
-        union_of_constraints = Union(
-            (subProperty, subProperty2, inverseOf, objectProperty)
-        )
-
-        return union_of_constraints
-
-    def _parse_subclasses(self):
-        """
-        Function that parse the relationships between
-        subclasses following the rules proposed by Gottlob et al[1].
-
-        [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
-        QL Entailment Regime: Rules to the Rescue.
-        """
-        rdf_schema_subClassOf = Symbol(str(RDFS.subClassOf))
-        rdf_schema_subClassOf2 = Symbol(str(RDFS.subClassOf) + "2")
-        w = Symbol("w")
-        x = Symbol("x")
-        y = Symbol("y")
-        z = Symbol("z")
-
-        subClass = RightImplication(
-            rdf_schema_subClassOf2(x, y), rdf_schema_subClassOf(x, y)
-        )
-        subClass2 = RightImplication(
-            Conjunction(
-                (rdf_schema_subClassOf2(x, y), rdf_schema_subClassOf(y, z))
-            ),
-            rdf_schema_subClassOf(x, z),
-        )
-
-        rdf_syntax_ns_rest = Symbol(str(RDF.rest))
-        ns_rest = RightImplication(
-            Conjunction(
-                (
-                    rdf_schema_subClassOf(x, y),
-                    rdf_syntax_ns_rest(w, x),
-                    rdf_syntax_ns_rest(z, y),
-                )
-            ),
-            rdf_schema_subClassOf(w, z),
-        )
-
-        rdf_syntax_ns_type = Symbol(str(RDF.type))
-        class_sim = RightImplication(
-            rdf_syntax_ns_type(x, Constant(str(OWL.Class))),
-            rdf_schema_subClassOf(x, x),
-        )
-
-        union_of_constraints = Union((subClass, subClass2, ns_rest, class_sim))
-
-        return union_of_constraints
-
-    def _parse_disjoint(self):
-        """
-        Function that parse the disjunctions following
-        the rules proposed by Gottlob et al[1].
-
-        [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
-        QL Entailment Regime: Rules to the Rescue.
-        """
-        w = Symbol("w")
-        x = Symbol("x")
-        y = Symbol("y")
-        z = Symbol("z")
-
-        owl_disjointWith = Symbol(str(OWL.disjointWith))
-        rdf_schema_subClassOf = Symbol(str(RDFS.subClassOf))
-        disjoint = RightImplication(
-            Conjunction(
-                (
-                    owl_disjointWith(x, y),
-                    rdf_schema_subClassOf(w, x),
-                    rdf_schema_subClassOf(z, y),
-                )
-            ),
-            owl_disjointWith(w, z),
-        )
-
-        union_of_constraints = Union((disjoint,))
-
-        return union_of_constraints
+        return Union(constraints)
 
     def _load_constraints(self):
         """
@@ -264,9 +117,9 @@ class OntologyParser:
         It needs a function "_process_X", where X is the name of
         the restriction to be processed, to be defined.
         """
-        restriction_ids = []
-        for s, _, _ in self.graph.triples((None, None, OWL.Restriction)):
-            restriction_ids.append(s)
+        restriction_ids = [
+            s for s, _, _ in self.graph.triples((None, None, OWL.Restriction))
+        ]
 
         union_of_constraints = Union(())
         for rest in restriction_ids:
@@ -281,7 +134,7 @@ class OntologyParser:
                 union_of_constraints = Union(
                     union_of_constraints.formulas + constraints.formulas
                 )
-            except AttributeError:
+            except AttributeError as err:
                 raise NeuroLangNotImplementedError(
                     f"""Ontology parser doesn\'t handle
                     restrictions of type {res_type}"""
@@ -332,15 +185,14 @@ class OntologyParser:
             cut_graph
         )
 
-        rdf_type = Symbol(str(RDF.type))
-        property_symbol = Symbol(parsed_prop)
-
-        x = Symbol("x")
+        rdfs_type = Constant(str(RDF.type))
+        property_symbol = Symbol(str(parsed_prop))
+        x = Symbol.fresh()
 
         constraint = Union(
             (
                 RightImplication(
-                    rdf_type(x, Constant(str(restricted_node))),
+                    self._triple(x, rdfs_type, Constant(str(restricted_node))),
                     property_symbol(x, Constant(str(value))),
                 ),
             )
@@ -369,13 +221,13 @@ class OntologyParser:
         instances of the class must have a value for the property.
         """
 
-        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
+        _, restricted_node, _ = self._parse_restriction_nodes(
             cut_graph
         )
 
         warnings.warn(
-            f"""The restriction minCardinality has not
-            been parsed for {restricted_node}"""
+            f"""The restriction minCardinality cannot be
+            parsed for {restricted_node}."""
         )
 
         return Union(())
@@ -398,13 +250,13 @@ class OntologyParser:
         </owl:Restriction>
         """
 
-        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
+        _, restricted_node, _ = self._parse_restriction_nodes(
             cut_graph
         )
 
         warnings.warn(
-            f"""The restriction maxCardinality has not
-            been parsed for {parsed_restrictions}"""
+            f"""The restriction maxCardinality cannot be
+            parsed for {restricted_node}"""
         )
 
         return Union(())
@@ -431,16 +283,52 @@ class OntologyParser:
             </owl:cardinality>
         </owl:Restriction>
         """
-        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
+        _, restricted_node, _ = self._parse_restriction_nodes(
             cut_graph
         )
 
         warnings.warn(
-            f"""The restriction cardinality has not
-            been parsed for {restricted_node}"""
+            f"""The restriction cardinality cannot be
+            parsed for {restricted_node}"""
         )
 
         return Union(())
+
+    def _process_someValuesFrom(self, cut_graph):
+        """
+        It defines a class of individuals x for which there is at least one y
+        (either an instance of the class description or value of the data
+        range) such that the pair (x,y) is an instance of P. This does not
+        exclude that there are other instances (x,y') of P for which y' does
+        not belong to the class description or data range.
+
+        The following example defines a class of individuals which have at
+        least one parent who is a physician:
+
+        <owl:Restriction>
+            <owl:onProperty rdf:resource="#hasParent" />
+            <owl:someValuesFrom rdf:resource="#Physician" />
+        </owl:Restriction>
+        """
+        parsed_prop, restricted_node, _ = self._parse_restriction_nodes(
+            cut_graph
+        )
+
+        property_symbol = Symbol(str(parsed_prop))
+        rdfs_type = Constant(str(RDF.type))
+        y = Symbol.fresh()
+
+        constraints = Union((
+                RightImplication(
+                    self._triple(
+                        y, rdfs_type, Constant(str(restricted_node))
+                    ),
+                    property_symbol(y, Symbol.fresh()),
+                ),
+            )
+        )
+
+        return constraints
 
     def _process_allValuesFrom(self, cut_graph):
         """
@@ -466,10 +354,11 @@ class OntologyParser:
 
         constraints = Union(())
 
-        property_symbol = Symbol(parsed_prop)
-        rdf_type = Symbol(str(RDF.type))
-        x = Symbol("x")
-        y = Symbol("y")
+        property_symbol = Symbol(str(parsed_prop))
+        rdf_type = Constant(str(RDF.type))
+        rdf_symbol = Symbol(str(RDF.type))
+        y = Symbol.fresh()
+        x = Symbol.fresh()
 
         for value in allValuesFrom:
             constraints = Union(
@@ -478,11 +367,13 @@ class OntologyParser:
                     RightImplication(
                         Conjunction(
                             (
-                                rdf_type(y, Constant(str(restricted_node))),
+                                self._triple(
+                                    y, rdf_type, Constant(str(restricted_node))
+                                ),
                                 property_symbol(y, x),
                             )
                         ),
-                        rdf_type(x, Constant(str(value))),
+                        rdf_symbol(x, Constant(str(value))),
                     ),
                 )
             )
@@ -502,20 +393,20 @@ class OntologyParser:
 
         Returns
         -------
-        parsed_property : str
-            The URI of the property.
+        parsed_property : URIRef
+            The node of the property.
         restricted_node : URIRef
             The node restricted by the property.
         value : URIRef
             The value of the property
         """
-        restricted_node = cut_graph[0][0]
         restricted_node = list(
-            self.graph.triples((None, None, restricted_node))
+            self.graph.triples((None, None, cut_graph[0][0]))
         )[0][0]
+
         for triple in cut_graph:
             if OWL.onProperty == triple[1]:
-                parsed_property = str(triple[2])
+                parsed_property = triple[2]
             elif triple[1] in self.parsed_restrictions:
                 value = triple[2]
 
@@ -537,6 +428,9 @@ class OntologyParser:
         values : list
             Array of nodes that are part of the list.
         """
+        if not isinstance(initial_node, BNode):
+            return [initial_node]
+
         list_node = RDF.nil
         values = []
         for node_triples in self.graph.triples((initial_node, None, None)):
@@ -545,7 +439,7 @@ class OntologyParser:
             else:
                 values.append(node_triples[0])
 
-        while list_node != RDF.nil:
+        while list_node != RDF.nil and list_node is not None:
             list_iter = self.graph.triples((list_node, None, None))
             values.append(self._get_list_first_value(list_iter))
             list_node = self._get_list_rest_value(list_iter)

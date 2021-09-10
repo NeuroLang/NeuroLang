@@ -1,14 +1,14 @@
+from collections import defaultdict
 from pytest import raises
 
 from .. import expression_walker
 from .. import expressions
-from .. import neurolang as nl
 
 from typing import Callable, AbstractSet, Tuple
 
-S_ = nl.Symbol
-C_ = nl.Constant
-F_ = nl.FunctionApplication
+S_ = expressions.Symbol
+C_ = expressions.Constant
+F_ = expressions.FunctionApplication
 
 
 def test_symbol_table_as_parameter():
@@ -49,7 +49,7 @@ def test_evaluating_embedded_functions():
     f = S_[Callable[[AbstractSet[int]], int]]('add_set')
 
     assert f in w.symbol_table
-    assert isinstance(w.symbol_table[f], nl.Constant)
+    assert isinstance(w.symbol_table[f], expressions.Constant)
     assert w.symbol_table[f].value == w.function_add_set
 
     res = w.walk(F_[int](f, (a,)))
@@ -165,3 +165,81 @@ def test_chained_walker():
     exp = S_("A")
     res = walker.walk(exp)
     assert res == S_("C")
+
+
+def test_convert_to_lambda():
+    add = C_(lambda x, y: x + y)
+    func = add(S_('x'), C_(1))
+
+    fa2pl = expression_walker.FunctionApplicationToPythonLambda()
+
+    l0, args = fa2pl.walk(func)
+    assert l0(x=3) == 4
+    assert args == {'x'}
+
+    func = add(S_('x'), S_('y'))
+    l1, args = fa2pl.walk(func)
+    assert l1(x=3, y=1) == 4
+    assert args == {'x', 'y'}
+
+    sub = C_(lambda x, y: x - y)
+    func = sub(add(S_('x'), C_(1)), C_(2))
+    l2, args = fa2pl.walk(func)
+    assert l2(x=3) == 2
+    assert args == {'x'}
+
+    one = C_(lambda: 1)
+    func = sub(add(S_('x'), one()), C_(2))
+    l3, args = fa2pl.walk(func)
+    assert l3(x=3) == 2
+    assert args == {'x'}
+
+
+def test_expression_walker_keep_fresh():
+    s = S_.fresh()
+    assert s.is_fresh
+    walker = expression_walker.ExpressionWalker()
+    result = walker.walk(s)
+    assert result is s
+
+
+def test_replace_expression_maintains_symbol_fresh():
+    s = S_.fresh()
+    assert s.is_fresh
+    replacer = expression_walker.ReplaceExpressionWalker({})
+    result = replacer.walk(s)
+    assert result is s
+
+
+def test_replace_expression_with_tuple():
+    s1 = S_.fresh()
+    s2 = S_.fresh()
+    s3 = S_("s3")
+    replacer = expression_walker.ReplaceExpressionWalker({s1: s3})
+    result = replacer.walk((s2, (s1, s2)))
+    assert isinstance(result, Tuple)
+    assert result[0] is s2 and result[0].is_fresh
+    assert isinstance(result[1], Tuple)
+    assert result[1][0] == s3
+    assert result[1][1] is s2 and result[1][1].is_fresh
+
+
+def test_resolve_symbol_mixin():
+    class ResolveSymbols(
+        expression_walker.ResolveSymbolMixin,
+        expression_walker.ExpressionWalker
+    ):
+        def __init__(self, symbol_table):
+            self.symbol_table = symbol_table
+
+    rs = ResolveSymbols({S_('a'): C_('a')})
+
+    assert rs.walk(S_('a')) == C_('a')
+    assert rs.walk(S_('b')) == S_('b')
+
+    symbol_table = defaultdict(lambda: C_(0))
+    symbol_table[S_('a')] = C_('a')
+    rs = ResolveSymbols(symbol_table)
+
+    assert rs.walk(S_('a')) == C_('a')
+    assert rs.walk(S_('b')) == C_(0)

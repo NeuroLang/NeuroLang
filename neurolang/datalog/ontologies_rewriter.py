@@ -4,12 +4,9 @@ from ..expression_walker import (
     add_match,
 )
 from ..expressions import Symbol
-from ..logic import (
-    Constant,
-    Implication,
-    NaryLogicOperator,
-)
+from ..logic import Constant, Implication, NaryLogicOperator
 from ..logic.expression_processing import ExtractFreeVariablesWalker
+from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import apply_substitution, most_general_unifier
 from .ontologies_parser import RightImplication
 
@@ -118,22 +115,18 @@ class OntologyRewriter:
     def _get_factorizable(self, sigma, q):
         factorizable = []
         for free_var in sigma[1]._list:
-            existential_position = self._get_position_existential(
-                sigma[0].consequent, free_var
-            )
+            pos = self._get_position_existential(sigma[0].consequent, free_var)
             S = self._get_term(q, sigma[0].consequent)
             if (
                 S
-                and self._is_factorizable(S, existential_position)
-                and self._var_same_position(
-                    existential_position, free_var, q, S
-                )
+                and self._is_factorizable(S, pos)
+                and self._var_same_position(pos, q, S)
             ):
                 factorizable.append(S)
 
         return sum(factorizable, [])
 
-    def _var_same_position(self, pos, free_var, q, S):
+    def _var_same_position(self, pos, q, S):
         eq_vars = self._equivalent_var(pos, S)
         for var in eq_vars:
             if self._free_var_other_term(var, q, S):
@@ -204,7 +197,7 @@ class OntologyRewriter:
         ) and self._not_in_existential(q, S, sigma)
 
     def _is_factorizable(self, S, pos):
-        return any(most_general_unifier(term, S[0]) for term in S) or pos
+        return all(most_general_unifier(term, S[0]) for term in S) or pos
 
     def _unifies(self, S, sigma):
         return all(most_general_unifier(term, sigma) for term in S)
@@ -268,6 +261,7 @@ class OntologyRewriter:
         replace = dict({S: sigma_ant})
         rsw = ReplaceExpressionWalker(replace)
         sigma_ant = rsw.walk(q.antecedent)
+        sigma_ant = CollapseConjunctions().walk(sigma_ant)
 
         q_cons = apply_substitution(q.consequent, qS[0])
 

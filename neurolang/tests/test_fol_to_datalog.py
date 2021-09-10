@@ -29,6 +29,7 @@ from ..logic.transformations import (
     CollapseDisjunctions,
     CollapseConjunctions,
     convert_to_pnf_with_cnf_matrix,
+    convert_to_pnf_with_dnf_matrix,
 )
 from ..logic.horn_clauses import (
     MoveNegationsToAtomsOrExistentialQuantifiers,
@@ -41,10 +42,12 @@ from ..logic.horn_clauses import (
     NeuroLangTranslateToHornClauseException,
     translate_horn_clauses_to_datalog,
     fol_query_to_datalog_program,
+    Fol2DatalogMixin,
+    Fol2DatalogTranslationException,
 )
 from ..datalog.negation import DatalogProgramNegation
 from ..expression_walker import ExpressionBasicEvaluator
-from ..datalog.expressions import TranslateToLogic
+from ..datalog.expressions import TranslateToLogic, Fact
 from ..datalog.chase import Chase as Chase_
 from ..datalog.chase.negation import NegativeFactConstraints
 
@@ -374,6 +377,25 @@ def test_transform_to_cnf():
             Disjunction((P, A, Q)),
             Disjunction((P, B, Q)),
             Disjunction((P, C, D, Q)),
+        )
+    )
+
+
+def test_transform_to_dnf():
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol("C")
+    D = Symbol("D")
+    P = Symbol("P")
+    Q = Symbol("Q")
+    exp = Disjunction((P, Conjunction((A, B, Disjunction((C, D)))), Q))
+    res = convert_to_pnf_with_dnf_matrix(exp)
+    assert res == Disjunction(
+        (
+            P,
+            Conjunction((A, B, C)),
+            Conjunction((A, B, D)),
+            Q
         )
     )
 
@@ -1068,3 +1090,185 @@ def test_safe_range_queries_in_datalog_solver_3():
     solution_instance = dc.build_chase_solution()
 
     assert solution_instance["Ans"].value == {("Hitchcock",)}
+
+
+class Datalog2(
+    TranslateToLogic,
+    Fol2DatalogMixin,
+    DatalogProgramNegation,
+    ExpressionBasicEvaluator,
+):
+    pass
+
+
+def test_fol2datalog_mixin_trivial_case():
+    x = Symbol("x")
+    G = Symbol("G")
+    T = Symbol("T")
+    V = Symbol("V")
+
+    dl = Datalog2()
+    dl.walk(
+        ExpressionBlock(
+            (
+                Fact(T(Constant(1))),
+                Fact(T(Constant(4))),
+                Fact(V(Constant(1))),
+                Fact(V(Constant(2))),
+                Fact(V(Constant(3))),
+                Implication(G(x), Conjunction((V(x), Negation(T(x))))),
+            )
+        )
+    )
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["V"].value == {(1,), (2,), (3,)}
+    assert solution_instance["T"].value == {(1,), (4,)}
+    assert solution_instance["G"].value == {(2,), (3,)}
+
+
+def test_fol2datalog_mixin_disjunction():
+    x = Symbol("x")
+    G = Symbol("G")
+    T = Symbol("T")
+    V = Symbol("V")
+
+    dl = Datalog2()
+    dl.walk(
+        ExpressionBlock(
+            (
+                Fact(T(Constant(1))),
+                Fact(T(Constant(4))),
+                Fact(V(Constant(1))),
+                Fact(V(Constant(2))),
+                Fact(V(Constant(3))),
+                Implication(G(x), Disjunction((V(x), T(x)))),
+            )
+        )
+    )
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["V"].value == {(1,), (2,), (3,)}
+    assert solution_instance["T"].value == {(1,), (4,)}
+    assert solution_instance["G"].value == {(1,), (2,), (3,), (4,)}
+
+
+def test_fol2datalog_mixin_complex_formula():
+    x = Symbol("x")
+    y = Symbol("y")
+    G = Symbol("G")
+    T = Symbol("T")
+    R = Symbol("R")
+    V = Symbol("V")
+
+    dl = Datalog2()
+    dl.walk(
+        ExpressionBlock(
+            (
+                Fact(T(Constant(1))),
+                Fact(T(Constant(4))),
+                Fact(V(Constant(1))),
+                Fact(V(Constant(2))),
+                Fact(V(Constant(3))),
+                Fact(R(Constant(4), Constant(5))),
+                Fact(R(Constant(2), Constant(6))),
+                Implication(
+                    G(x),
+                    Disjunction(
+                        (
+                            T(x),
+                            ExistentialPredicate(
+                                y, Conjunction((V(y), R(y, x),))
+                            ),
+                        )
+                    ),
+                ),
+            )
+        )
+    )
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["V"].value == {(1,), (2,), (3,)}
+    assert solution_instance["T"].value == {(1,), (4,)}
+    assert solution_instance["R"].value == {(4, 5), (2, 6)}
+    assert solution_instance["G"].value == {(1,), (4,), (6,)}
+
+
+def test_fol2datalog_unsafe_disjunction():
+    x = Symbol("x")
+    y = Symbol("y")
+    G = Symbol("G")
+    T = Symbol("T")
+    V = Symbol("V")
+
+    dl = Datalog2()
+    with pytest.raises(Fol2DatalogTranslationException):
+        dl.walk(
+            ExpressionBlock((Implication(G(x), Disjunction((V(y), T(x)))),))
+        )
+
+
+def test_fol2datalog_safe_universal_usage():
+    x = Symbol("x")
+    y = Symbol("y")
+    G = Symbol("G")
+    T = Symbol("T")
+    R = Symbol("R")
+    V = Symbol("V")
+
+    dl = Datalog2()
+    dl.walk(
+        ExpressionBlock(
+            (
+                Fact(V(Constant(1))),
+                Fact(V(Constant(2))),
+                Fact(V(Constant(3))),
+                Fact(T(Constant(1))),
+                Fact(T(Constant(4))),
+                Fact(R(Constant(2), Constant(1))),
+                Fact(R(Constant(2), Constant(4))),
+                Implication(
+                    G(x),
+                    Conjunction(
+                        (
+                            V(x),
+                            UniversalPredicate(y, Implication(R(x, y), T(y))),
+                        )
+                    ),
+                ),
+            )
+        )
+    )
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["G"].value == {(2,)}
+
+
+def test_fol2datalog_unsafe_complex_formula():
+    x = Symbol("x")
+    y = Symbol("y")
+    G = Symbol("G")
+    T = Symbol("T")
+    R = Symbol("R")
+
+    dl = Datalog2()
+    with pytest.raises(Fol2DatalogTranslationException):
+        dl.walk(
+            ExpressionBlock(
+                (
+                    Implication(
+                        G(x),
+                        Disjunction(
+                            (
+                                T(x),
+                                UniversalPredicate(y, Conjunction((R(y, x),))),
+                            )
+                        ),
+                    ),
+                )
+            )
+        )

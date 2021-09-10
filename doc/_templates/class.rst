@@ -1,4 +1,6 @@
 {{ fullname }}
+--------------
+
 {{ underline }}
 
 .. currentmodule:: {{ module }}

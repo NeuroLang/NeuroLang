@@ -1,26 +1,47 @@
-API
-===
-
-
-Classes
--------
+.. _api_ref:
 
 .. currentmodule:: neurolang
 
+User Guide
+==========
+
+End-User Frontend
+-----------------
+
 .. autosummary::
-   :template: class.rst
+   :toctree: gen_api
+   :nosignatures:
+
+    NeurolangDL
+    NeurolangPDL
+
+Intermediate Representation Infrastructure
+------------------------------------------
+
+.. autosummary::
    :toctree: gen_api
   
-   PatternMatcher
-   Expression
+   expressions
+   expression_pattern_matching
+   expression_walker
+   exceptions
 
 
-Functions
----------
+Intermediate Language Representations
+-------------------------------------
 
 .. autosummary::
-   :template: function.rst
    :toctree: gen_api
+    
+   logic
+   datalog
+   probabilistic
+   relational_algebra
+   relational_algebra_provenance 
 
-   add_match
 
+Indices and tables
+------------------
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`

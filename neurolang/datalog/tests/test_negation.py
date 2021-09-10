@@ -10,7 +10,7 @@ from .. import Fact, Implication
 from .. import negation as sdn
 from ..expressions import TranslateToLogic
 from ..chase import Chase as Chase_
-from ..chase.negation import NegativeFactConstraints
+from ..chase.negation import NegativeFactConstraints, DatalogChaseNegation
 
 
 C_ = expressions.Constant
@@ -237,3 +237,29 @@ def test_symbol_order_in_datalog_solver():
     solution_instance = dc.build_chase_solution()
 
     assert solution_instance["Ans"].value == {("a",)}
+
+
+def test_negative_predicates_race_in_chase():
+    x = S_("x")
+    F = S_("F")
+    G = S_("G")
+    R = S_("R")
+    S = S_("S")
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(
+        F, {(1,), (2,), (3,)}
+    )
+    dl.add_extensional_predicate_from_tuples(
+        G, {(1,), (2,), (3,), (4,), (5,)}
+    )
+    program = Eb_((
+        Implication(R(x), F(x)),
+        Implication(S(x), G(x) & ~R(x)),
+    ))
+    dl.walk(program)
+
+    dc = DatalogChaseNegation(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["S"].value == {(4,), (5,)}

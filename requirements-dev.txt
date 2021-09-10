@@ -1,8 +1,0 @@
-# In addition to requirements.txt; packages required to develop for the application.
-
-# + requirements.txt
-nilearn==0.5.0
-codacy-coverage
-pytest
-pytest-benchmark
-pytest-cov

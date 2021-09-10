@@ -1,15 +1,29 @@
 from typing import AbstractSet
 
 import pytest
+import numpy as np
+
+from neurolang.exceptions import ForbiddenUnstratifiedAggregation
 
 from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import (Constant, ExpressionBlock, NeuroLangException,
-                            Symbol)
+from ...expressions import (
+    Constant,
+    ExpressionBlock,
+    NeuroLangException,
+    Symbol,
+)
 from ...type_system import Unknown
 from .. import DatalogProgram, Fact, Implication
-from ..aggregation import (AggregationApplication, Chase,
-                           DatalogWithAggregationMixin,
-                           TranslateToLogicWithAggregation)
+from ..aggregation import (
+    AGG_COUNT,
+    AGG_MAX,
+    AGG_MEAN,
+    AggregationApplication,
+    BuiltinAggregationMixin,
+    DatalogWithAggregationMixin,
+    TranslateToLogicWithAggregation,
+)
+from ..chase import Chase, ChaseAggregationSN
 from ..expressions import Union
 
 S_ = Symbol
@@ -32,7 +46,7 @@ class Datalog(
     def function_sum2(self, x: AbstractSet, y: AbstractSet) -> Unknown:
         return sum(v + w for v, w in zip(x, y))
 
-    def function_set_create(self, x: AbstractSet) -> Unknown:
+    def function_set_create(self, x: AbstractSet) -> np.object_:
         return frozenset(x)
 
 
@@ -65,6 +79,29 @@ def test_aggregation_parsing():
         ]))
 
 
+def test_aggregation_non_stratified():
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    x = S_('x')
+
+    edb = [
+        F_(P(C_(i)))
+        for i in range(3)
+    ]
+
+    code = Eb_(edb + [
+        Imp_(Q(Fa_(S_('sum'), (x,))), Q(x)),
+    ])
+
+    dl = Datalog()
+    dl.walk(code)
+
+    chase = ChaseAggregationSN(dl)
+
+    with pytest.raises(ForbiddenUnstratifiedAggregation):
+        chase.build_chase_solution()
+
+
 def test_aggregation_chase_no_grouping():
 
     P = S_('P')  # noqa: N806
@@ -95,7 +132,6 @@ def test_aggregation_chase_no_grouping():
     assert solution[Q] == res
 
 
-@pytest.mark.skip("Aggregation with 2 args not implemented")
 def test_aggregation_chase_no_grouping_2args():
 
     P = S_('P')  # noqa: N806
@@ -144,6 +180,45 @@ def test_aggregation_chase_single_grouping():
 
     code = Eb_(edb + [
         Imp_(Q(x, Fa_(S_('sum'), (y,))), P(x, y)),
+    ])
+
+    dl.walk(code)
+
+    chase = Chase(dl)
+
+    solution = chase.build_chase_solution()
+
+    dl.add_extensional_predicate_from_tuples(
+        R,
+        {
+            (0, 0),
+            (1, 3),
+            (2, 6)
+        }
+    )
+    res = dl.extensional_database()['R']
+
+    assert solution[Q] == res
+
+
+def test_aggregation_chase_single_grouping_muliple_columns():
+    dl = Datalog()
+
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    edb = [
+        F_(P(C_(i), C_(i * j), C_(0)))
+        for i in range(3)
+        for j in range(3)
+    ]
+
+    code = Eb_(edb + [
+        Imp_(Q(x, Fa_(S_('sum2'), (y, z))), P(x, y, z)),
     ])
 
     dl.walk(code)
@@ -220,3 +295,32 @@ def test_aggregation_emptyset():
     solution = chase.build_chase_solution()
 
     assert Q not in solution or solution[Q] == set()
+
+
+def test_builtin_aggregations():
+    class DatalogWithBuiltinAggregation(
+        BuiltinAggregationMixin,
+        DatalogWithAggregationMixin,
+        DatalogProgram,
+        ExpressionBasicEvaluator,
+    ):
+        pass
+
+    dl = DatalogWithBuiltinAggregation()
+    assert AGG_MAX in dl.symbol_table
+    assert AGG_MEAN in dl.symbol_table
+    assert AGG_COUNT in dl.symbol_table
+
+    P = S_('P')
+    Q = S_('Q')
+    x = S_('x')
+    edb = Eb_(tuple(F_(P(C_(i))) for i in range(10)))
+    dl.walk(edb)
+    agg_rule = Imp_(Q(Fa_(S_('count'), (x,))), P(x))
+    dl.walk(agg_rule)
+    chase = Chase(dl)
+    solution = chase.build_chase_solution()
+    assert Q in solution
+    result = solution[Q]
+    expected = Constant[AbstractSet]({(10,)})
+    assert result == expected

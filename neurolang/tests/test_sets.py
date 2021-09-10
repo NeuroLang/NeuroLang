@@ -1,8 +1,7 @@
 from typing import AbstractSet
 
-from .. import solver
-from .. import neurolang as nl
-from .. import expressions
+from .. import expressions, solver
+from ..neurolang_compiler import NeuroLangIntermediateRepresentationCompiler
 
 C_ = expressions.Constant
 
@@ -16,7 +15,7 @@ def test_union_monoid_ir():
     }
     symbols['null'] = C_[AbstractSet[int]](null_element)
 
-    nli = nl.NeuroLangIntermediateRepresentationCompiler(
+    nli = NeuroLangIntermediateRepresentationCompiler(
         solver.FirstOrderLogicSolver(), symbols=symbols
     )
 
@@ -39,7 +38,7 @@ def test_intersection_monoid_ir():
     }
     symbols['null'] = C_[AbstractSet[int]](null_element)
 
-    nli = nl.NeuroLangIntermediateRepresentationCompiler(
+    nli = NeuroLangIntermediateRepresentationCompiler(
         solver.FirstOrderLogicSolver(), symbols=symbols
     )
 

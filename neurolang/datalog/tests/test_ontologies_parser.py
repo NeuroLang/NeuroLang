@@ -22,7 +22,6 @@ def test_all_values_from():
     """
     Test case acquired from:
     http://owl.semanticweb.org/page/TestCase:WebOnt-allValuesFrom-001.html
-
     Since the original test is a test of entailment, a query is derived that
     simulates the information implied by the Conclusion ontology
     """
@@ -107,6 +106,79 @@ def test_all_values_from():
     ) in resp
 
 
+def test_some_values_from():
+    premise_ontology = """
+    <rdf:RDF 
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:first="http://www.w3.org/2002/03owlt/someValuesFrom/premises001#"
+        xml:base="http://www.w3.org/2002/03owlt/someValuesFrom/premises001" >
+        <owl:Ontology/>
+        <owl:Class rdf:ID="r">
+            <rdfs:subClassOf>
+                <owl:Restriction>
+                    <owl:onProperty rdf:resource="#p2"/>
+                    <owl:someValuesFrom rdf:resource="#c"/>
+                </owl:Restriction>
+            </rdfs:subClassOf>
+        </owl:Class>
+        <owl:ObjectProperty rdf:ID="p"/>
+        <owl:Class rdf:ID="c"/>
+        <first:r rdf:ID="i1">
+            <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+            <first:p>
+                <owl:Thing rdf:ID="o1" />
+            </first:p>
+        </first:r>
+        <first:q rdf:ID="i2">
+            <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+            <first:p>
+                <owl:Thing rdf:ID="o2" />
+            </first:p>
+        </first:q>
+        </rdf:RDF>
+    """
+
+    p2 = Symbol("http://www.w3.org/2002/03owlt/someValuesFrom/premises001#p2")
+    answer = Symbol("answer")
+    x = Symbol("x")
+    y = Symbol("y")
+    test_base_q = Union((Implication(answer(x), p2(x, y)),))
+
+    onto = OntologyParser(io.StringIO(premise_ontology))
+    predicate_tuples, union_of_constraints = onto.parse_ontology()
+
+    triples = predicate_tuples[onto.get_triples_symbol()]
+    pointers = predicate_tuples[onto.get_pointers_symbol()]
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(
+        onto.get_triples_symbol(), triples
+    )
+    dl.add_extensional_predicate_from_tuples(
+        onto.get_pointers_symbol(), pointers
+    )
+
+    orw = OntologyRewriter(test_base_q, union_of_constraints)
+    rewrite = orw.Xrewrite()
+
+    uc = ()
+    for imp in rewrite:
+        uc += (imp[0],)
+    uc = Union(uc)
+
+    dl.walk(uc)
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    resp = list(solution_instance["answer"].value.unwrapped_iter())
+
+    assert (
+        "http://www.w3.org/2002/03owlt/someValuesFrom/premises001#i1",
+    ) in resp
+
+
 def test_has_value():
     test_case = """
     <rdf:RDF
@@ -128,10 +200,10 @@ def test_has_value():
         <owl:ObjectProperty rdf:ID="p2"/>
         <owl:Class rdf:ID="c"/>
         <first:r rdf:ID="i">
-        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
-        <first:p>
-            <owl:Thing rdf:ID="o" />
-        </first:p>
+            <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+            <first:p>
+                <owl:Thing rdf:ID="o" />
+            </first:p>
         </first:r>
     </rdf:RDF>
     """
@@ -308,31 +380,3 @@ def test_max_cardinality():
     solution_instance = dc.build_chase_solution()
 
     resp = list(solution_instance["answer"].value.unwrapped_iter())
-
-
-def test_not_implemented():
-
-    test_case = """
-    <rdf:RDF
-    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-    xmlns:owl="http://www.w3.org/2002/07/owl#"
-    xmlns:first="http://www.w3.org/2002/03owlt/someValuesFrom/premises001#"
-    xml:base="http://www.w3.org/2002/03owlt/someValuesFrom/premises001" >
-        <owl:Class rdf:ID="r">
-        <rdfs:subClassOf>
-            <owl:Restriction>
-                <owl:onProperty rdf:resource="#p"/>
-                <owl:someValuesFrom rdf:resource="#c"/>
-            </owl:Restriction>
-        </rdfs:subClassOf>
-        </owl:Class>
-        <owl:ObjectProperty rdf:ID="p"/>
-        <owl:Class rdf:ID="c"/>
-        <first:r rdf:ID="i"/>
-    </rdf:RDF>
-    """
-    onto = OntologyParser(io.StringIO(test_case))
-
-    with pytest.raises(NeuroLangNotImplementedError):
-        predicate_tuples, union_of_constraints = onto.parse_ontology()

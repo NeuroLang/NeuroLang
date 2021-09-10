@@ -1,22 +1,40 @@
-from ..exceptions import NeuroLangException
-from ..expressions import Constant, Definition, FunctionApplication, Symbol
+from ..expressions import Definition, FunctionApplication, Symbol
+from ..logic import BinaryLogicOperator
+
+PROB = Symbol("PROB")
+
+
+class ProbabilisticBinaryLogicOperator(BinaryLogicOperator):
+    pass
+
+
+class Condition(ProbabilisticBinaryLogicOperator):
+    def __init__(self, conditioned, conditioning):
+        self.conditioned = conditioned
+        self.conditioning = conditioning
+        self._symbols = conditioned._symbols | conditioning._symbols
+
+    def __repr__(self):
+        return f"[{self.conditioned} | {self.conditioning}]"
 
 
 class ProbabilisticPredicate(Definition):
     def __init__(self, probability, body):
-        if not isinstance(probability, (Constant, Symbol)):
-            raise NeuroLangException(
-                "Probability must be a symbol or constant"
-            )
-        if not isinstance(body, FunctionApplication):
-            raise NeuroLangException("Body must be a function application")
         self.probability = probability
         self.body = body
         self._symbols = body._symbols | self.probability._symbols
 
+    @property
+    def functor(self):
+        return self.body.functor
+
+    @property
+    def args(self):
+        return self.body.args
+
     def __repr__(self):
         return "ProbabilisticPredicate{{{} :: {} : {}}}".format(
-            self.probability, self.body, self.type
+            self.body, self.probability, self.type
         )
 
 
@@ -39,8 +57,5 @@ class ProbabilisticChoiceGrounding(Grounding):
     """
 
 
-class GraphicalModel(Definition):
-    def __init__(self, edges, cpd_factories, expressions):
-        self.edges = edges
-        self.cpd_factories = cpd_factories
-        self.expressions = expressions
+class ProbabilisticQuery(FunctionApplication):
+    pass

@@ -1,12 +1,22 @@
 from typing import AbstractSet, Callable, Tuple
 
-from ..expression_walker import add_match, PatternWalker
-from ..expressions import (Constant, FunctionApplication, NeuroLangException,
-                           NonConstant, Symbol, is_leq_informative)
+from ..exceptions import (
+    NotConjunctiveExpressionNegation,
+    ProtectedKeywordError
+)
+from ..expression_walker import PatternWalker, add_match
+from ..expressions import (
+    Constant,
+    FunctionApplication,
+    NeuroLangException,
+    NonConstant,
+    Symbol,
+    is_leq_informative
+)
+from ..logic import Conjunction, Implication, Negation, Union
 from ..type_system import Unknown
 from .basic_representation import DatalogProgram, UnionOfConjunctiveQueries
 from .expression_processing import extract_logic_free_variables
-from ..logic import Conjunction, Union, Implication, Negation, Quantifier
 
 
 class NegativeFact(Implication):
@@ -78,12 +88,12 @@ class DatalogProgramNegationMixin(PatternWalker):
 
     def _check_implication(self, consequent, antecedent):
         if consequent.functor.name in self.protected_keywords:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
+            raise ProtectedKeywordError(
+                f'symbol {consequent.functor.name} is protected'
             )
 
         if not is_conjunctive_negation(antecedent):
-            raise NeuroLangException(
+            raise NotConjunctiveExpressionNegation(
                 f'Expression {antecedent} is not conjunctive'
             )
 
@@ -164,8 +174,6 @@ def is_conjunctive_negation(expression):
             stack += exp.formulas
         elif isinstance(exp, Negation):
             stack.append(exp.formula)
-        elif isinstance(exp, Quantifier):
-            stack.append(exp.body)
         else:
             return False
 

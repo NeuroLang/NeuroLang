@@ -1,0 +1,18 @@
+name: Trigger test on neurolang
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  trigger_test_on_neurolang:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post request to neurolang
+        run: |
+          curl \
+          -XPOST -u "token:${{ secrets.CI_TRIGGER_TOKEN }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/NeuroLang/neurolang_web/dispatches \
+          -d '{"event_type":"NeuroLang"}'

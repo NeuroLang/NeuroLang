@@ -1,18 +1,19 @@
 import numpy as np
 
-from ..exceptions import NeuroLangException
+from ..exceptions import NeuroLangNotImplementedError
+from .exceptions import UncomparableDistributionsError
 
 
 class Distribution:
     def probability(self, value):
-        raise NeuroLangException("Not implemented for abstract class")
+        raise NeuroLangNotImplementedError()
 
     @property
     def support(self):
-        raise NeuroLangException("Not implemented for abstract class")
+        raise NeuroLangNotImplementedError()
 
     def expectation(self, fun):
-        raise NeuroLangException("Not implemented for abstract class")
+        raise NeuroLangNotImplementedError()
 
 
 class DiscreteDistribution(Distribution):
@@ -57,7 +58,7 @@ class TableDistribution(DiscreteDistribution):
 
     def __eq__(self, other):
         if not isinstance(other, TableDistribution):
-            raise NeuroLangException(
+            raise UncomparableDistributionsError(
                 "Can only compare with other TableDistribution"
             )
         return set(other.table.keys()) == set(self.table.keys()) and not any(

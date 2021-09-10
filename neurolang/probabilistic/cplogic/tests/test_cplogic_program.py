@@ -1,13 +1,30 @@
+import operator
 import typing
 
 import pytest
 
+from ....datalog.basic_representation import DatalogProgram
 from ....datalog.expressions import Fact
-from ....exceptions import NeuroLangException
+from ....datalog.negation import DatalogProgramNegationMixin
+from ....exceptions import (
+    ForbiddenDisjunctionError,
+    ForbiddenExpressionError,
+    ProtectedKeywordError,
+)
+from ....expression_walker import ExpressionWalker
 from ....expressions import Constant, Symbol
-from ....logic import Conjunction, Implication, Union
-from ...expressions import ProbabilisticPredicate
-from ..program import CPLogicProgram
+from ....logic import TRUE, Conjunction, Implication, Negation, Union
+from ...exceptions import (
+    DistributionDoesNotSumToOneError,
+    MalformedProbabilisticTupleError,
+)
+from ...expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate,
+    ProbabilisticQuery,
+)
+from ..program import CPLogicMixin, CPLogicProgram
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -34,15 +51,10 @@ def test_probfact():
     assert probfact.consequent.probability == Constant[float](0.2)
     assert probfact.consequent.body == P(x)
 
-    with pytest.raises(
-        NeuroLangException, match=r"must be a symbol or constant"
-    ):
-        Implication(ProbabilisticPredicate(0.3, P(x)), Constant[bool](True))
-
 
 def test_deterministic_program():
     code = Union(
-        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)),)
+        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)))
     )
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
@@ -87,6 +99,33 @@ def test_cplogic_program():
     }
 
 
+class CPLogicNegationProgram(
+    CPLogicMixin,
+    DatalogProgramNegationMixin,
+    DatalogProgram,
+    ExpressionWalker,
+):
+    pass
+
+
+def test_negated_predicate_in_antecedent():
+    cpl = CPLogicNegationProgram()
+    rule_with_negation = Implication(Q(x), Conjunction((P(x), Negation(R(x)))))
+    code = Union(
+        (
+            rule_with_negation,
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.2), P(a)), TRUE
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.7), R(a)), TRUE
+            ),
+        )
+    )
+    cpl.walk(code)
+    assert rule_with_negation in cpl.intensional_database()[Q].formulas
+
+
 def test_multiple_probfact_same_pred_symb():
     cpl = CPLogicProgram()
     code = Union(
@@ -121,7 +160,7 @@ def test_add_probfacts_from_tuple():
     cpl = CPLogicProgram()
     cpl.walk(Union(tuple()))
     cpl.add_probabilistic_facts_from_tuples(
-        P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia"),},
+        P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia")}
     )
     assert P in cpl.pfact_pred_symbs
     assert (
@@ -134,9 +173,9 @@ def test_add_probfacts_from_tuple():
 def test_add_probfacts_from_tuple_no_probability():
     cpl = CPLogicProgram()
     cpl.walk(Union(tuple()))
-    with pytest.raises(NeuroLangException, match=r"probability"):
+    with pytest.raises(MalformedProbabilisticTupleError):
         cpl.add_probabilistic_facts_from_tuples(
-            P, {("hello", "gaston"), ("hello", "antonia"),},
+            P, {("hello", "gaston"), ("hello", "antonia")}
         )
 
 
@@ -158,7 +197,7 @@ def test_add_probchoice_from_tuple():
 
 def test_add_probchoice_from_tuple_no_probability():
     cpl = CPLogicProgram()
-    with pytest.raises(NeuroLangException, match=r"probability"):
+    with pytest.raises(MalformedProbabilisticTupleError):
         cpl.add_probabilistic_choice_from_tuples(P, {("a", "b"), ("b", "b")})
 
 
@@ -166,7 +205,7 @@ def test_add_probchoice_from_tuple_twice_same_pred_symb():
     probchoice_as_tuples_iterable = {(1.0, "a", "a")}
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(P, probchoice_as_tuples_iterable)
-    with pytest.raises(NeuroLangException):
+    with pytest.raises(ForbiddenDisjunctionError):
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
@@ -179,7 +218,89 @@ def test_add_probchoice_does_not_sum_to_one():
         (0.1, "b", "b"),
     }
     cpl = CPLogicProgram()
-    with pytest.raises(NeuroLangException, match=r"sum"):
+    with pytest.raises(DistributionDoesNotSumToOneError):
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
+
+
+def test_within_language_succ_query():
+    rule = Implication(
+        P(x, y, ProbabilisticQuery(PROB, (x, y))), Conjunction((Q(x), Z(y, z)))
+    )
+    cpl = CPLogicProgram()
+    cpl.walk(rule)
+    assert P in cpl.intensional_database()
+
+
+def test_prob_protected_keyword():
+    cpl = CPLogicProgram()
+    with pytest.raises(ProtectedKeywordError):
+        cpl.walk(Implication(PROB(x), Z(x)))
+
+
+def test_within_language_succ_query_no_disjunction():
+    q1 = Implication(
+        P(x, ProbabilisticQuery(PROB, (x,))), Conjunction((Z(x), Q(x)))
+    )
+    q2 = Implication(
+        P(x, ProbabilisticQuery(PROB, (x,))), Conjunction((Z(x), Y(y)))
+    )
+    cpl = CPLogicProgram()
+    cpl.walk(q1)
+    with pytest.raises(ForbiddenDisjunctionError):
+        cpl.walk(q2)
+
+
+def test_within_language_succ_query_invalid():
+    q = Implication(
+        P(x, y, ProbabilisticQuery(PROB, (x,))), Conjunction((Z(x), Q(y)))
+    )
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenExpressionError):
+        cpl.walk(q)
+    q = Implication(
+        P(x, ProbabilisticQuery(PROB, (x, y))), Conjunction((Z(x), Q(y)))
+    )
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenExpressionError):
+        cpl.walk(q)
+    q = Implication(
+        P(x, ProbabilisticQuery(PROB, (a, x))), Conjunction((Z(x), Q(y)))
+    )
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenExpressionError):
+        cpl.walk(q)
+
+
+def test_wlq_marg_conditioned_conditioning_shared_var():
+    """
+    MARG task: Prob[ P(x) | Z(x) ] where variable x is shared by the
+    conditioned predicate P(x) and by the conditioning predicate Z(x)
+    """
+    wlq = Implication(
+        Q(x, ProbabilisticQuery(PROB, (x,))), Condition(P(x), Z(x))
+    )
+    cpl = CPLogicProgram()
+    cpl.walk(wlq)
+    assert Q in cpl.within_language_prob_queries()
+
+
+def test_wlq_marg_conditioning_empty_conjunction():
+    wlq = Implication(
+        Q(x, ProbabilisticQuery(PROB, (x,))),
+        Condition(P(x), Conjunction(tuple())),
+    )
+    cpl = CPLogicProgram()
+    cpl.walk(wlq)
+    assert Q in cpl.within_language_prob_queries()
+
+
+def test_wlq_marg_conjunctive_conditioning():
+    wlq = Implication(
+        Q(x, y, ProbabilisticQuery(PROB, (x, y))),
+        Condition(P(x), Conjunction((R(x), Q(y)))),
+    )
+    cpl = CPLogicProgram()
+    cpl.walk(wlq)
+    assert Q in cpl.within_language_prob_queries()

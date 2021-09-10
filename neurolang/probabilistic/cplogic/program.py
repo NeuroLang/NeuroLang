@@ -1,19 +1,28 @@
 import typing
 
 from ...datalog import DatalogProgram
-from ...exceptions import NeuroLangException
+from ...datalog.basic_representation import UnionOfConjunctiveQueries
+from ...datalog.negation import DatalogProgramNegationMixin
+from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Symbol
-from ...logic import Implication, Union
+from ...logic import TRUE, Implication, Union
+from ..exceptions import (
+    ForbiddenConditionalQueryNoProb,
+    MalformedProbabilisticTupleError,
+    UnsupportedProbabilisticQueryError,
+)
 from ..expression_processing import (
-    union_contains_probabilistic_facts,
+    add_to_union,
     build_probabilistic_fact_set,
     check_probabilistic_choice_set_probabilities_sum_to_one,
-    add_to_union,
+    get_within_language_prob_query_prob_term,
     group_probabilistic_facts_by_pred_symb,
-    is_probabilistic_fact,
+    is_within_language_prob_query,
+    union_contains_probabilistic_facts,
 )
+from ..expressions import Condition, ProbabilisticPredicate
 
 
 class CPLogicMixin(PatternWalker):
@@ -29,6 +38,7 @@ class CPLogicMixin(PatternWalker):
 
     pfact_pred_symb_set_symb = Symbol("__pfact_pred_symb_set_symb__")
     pchoice_pred_symb_set_symb = Symbol("__pchoice_pred_symb_set_symb__")
+    protected_keywords = {"PROB"}
 
     @property
     def predicate_symbols(self):
@@ -40,6 +50,14 @@ class CPLogicMixin(PatternWalker):
         )
 
     @property
+    def probabilistic_predicate_symbols(self):
+        return (
+            self.pfact_pred_symbs
+            | self.pchoice_pred_symbs
+            | set(self.within_language_prob_queries())
+        )
+
+    @property
     def pfact_pred_symbs(self):
         return self._get_pred_symbs(self.pfact_pred_symb_set_symb)
 
@@ -47,12 +65,28 @@ class CPLogicMixin(PatternWalker):
     def pchoice_pred_symbs(self):
         return self._get_pred_symbs(self.pchoice_pred_symb_set_symb)
 
+    def within_language_prob_queries(self):
+        return {
+            pred_symb: union.formulas[0]
+            for pred_symb, union in self.intensional_database().items()
+            if len(union.formulas) == 1
+            and is_within_language_prob_query(union.formulas[0])
+        }
+
     def probabilistic_facts(self):
         """Return probabilistic facts of the symbol table."""
         return {
             k: v
             for k, v in self.symbol_table.items()
             if k in self.pfact_pred_symbs
+        }
+
+    def probabilistic_choices(self):
+        """Return probabilistic choices of the symbol table."""
+        return {
+            k: v
+            for k, v in self.symbol_table.items()
+            if k in self.pchoice_pred_symbs
         }
 
     def _get_pred_symbs(self, set_symb):
@@ -97,9 +131,10 @@ class CPLogicMixin(PatternWalker):
             symbol, self.pfact_pred_symb_set_symb
         )
         type_, iterable = self.infer_iterable_type(iterable)
-        self._check_iterable_prob_type(type_)
+        if not hasattr(iterable, '__len__') or len(iterable) > 0:
+            self._check_iterable_prob_type(type_)
         constant = Constant[typing.AbstractSet[type_]](
-            self.new_set(iterable), auto_infer_type=False, verify_type=False,
+            self.new_set(iterable), auto_infer_type=False, verify_type=False
         )
         symbol = symbol.cast(constant.type)
         self.symbol_table[symbol] = constant
@@ -132,9 +167,12 @@ class CPLogicMixin(PatternWalker):
         type_, iterable = self.infer_iterable_type(iterable)
         self._check_iterable_prob_type(type_)
         if symbol in self.symbol_table:
-            raise NeuroLangException("Symbol already used")
-        ra_set = Constant[typing.AbstractSet](
-            self.new_set(iterable), auto_infer_type=False, verify_type=False,
+            raise ForbiddenDisjunctionError(
+                "Cannot define multiple probabilistic choices with the same "
+                f"predicate symbol. Predicate symbol was: {symbol}"
+            )
+        ra_set = Constant[typing.AbstractSet[type_]](
+            self.new_set(iterable), auto_infer_type=False, verify_type=False
         )
         check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
         self.symbol_table[symbol] = ra_set
@@ -145,7 +183,7 @@ class CPLogicMixin(PatternWalker):
             issubclass(iterable_type.__origin__, typing.Tuple)
             and iterable_type.__args__[0] is float
         ):
-            raise NeuroLangException(
+            raise MalformedProbabilisticTupleError(
                 "Expected tuples to have a probability as their first element"
             )
 
@@ -175,16 +213,155 @@ class CPLogicMixin(PatternWalker):
             self.symbol_table[set_symb].value | {pred_symb}
         )
 
-    @add_match(Implication, is_probabilistic_fact)
+    @add_match(Implication(ProbabilisticPredicate, TRUE))
     def probabilistic_fact(self, expression):
         pred_symb = expression.consequent.body.functor
+        self._register_prob_pred_symb_set_symb(
+            pred_symb, self.pfact_pred_symb_set_symb
+        )
         if pred_symb not in self.symbol_table:
             self.symbol_table[pred_symb] = Union(tuple())
+        elif isinstance(
+            self.symbol_table[pred_symb], Constant[typing.AbstractSet]
+        ):
+            raise ForbiddenDisjunctionError(
+                "Probabilistic facts cannot be defined both from sets and "
+                "from rules"
+            )
         self.symbol_table[pred_symb] = add_to_union(
             self.symbol_table[pred_symb], [expression]
         )
         return expression
 
+    @add_match(Implication(ProbabilisticPredicate, ...))
+    def query_based_probabilistic_fact(self, implication):
+        """
+        Construct probabilistic facts from deterministic queries.
 
-class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):
+        This extends the syntax with rules such as
+
+            P(x) : f(x) :- Q(x)
+
+        where x is a set of variables, f(x) is an arithmetic expression
+        yielding a probability between [0, 1] that may use built-ins, and where
+        Q(x) is a conjunction of predicates.
+
+        Only deterministic antecedents are allowed. Declarativity makes it
+        impossible to enforce that at declaration time. Thus, if a query-based
+        probabilistic fact has a dependency on a probabilistic predicate, this
+        will be discovered at query-resolution time, after the program has been
+        fully declared.
+
+        """
+        pred_symb = implication.consequent.body.functor
+        pred_symb = pred_symb.cast(UnionOfConjunctiveQueries)
+        self._register_prob_pred_symb_set_symb(
+            pred_symb, self.pfact_pred_symb_set_symb
+        )
+        if pred_symb in self.symbol_table:
+            raise ForbiddenDisjunctionError(
+                "Probabilistic predicate {} already defined".format(pred_symb)
+            )
+        self.symbol_table[pred_symb] = Union((implication,))
+        return implication
+
+    @add_match(Implication(..., Condition), is_within_language_prob_query)
+    def within_language_marg_query(self, implication):
+        self._validate_within_language_marg_query(implication)
+        pred_symb = implication.consequent.functor.cast(
+            UnionOfConjunctiveQueries
+        )
+        if pred_symb in self.symbol_table:
+            raise ForbiddenDisjunctionError(
+                "Disjunctive within-language probabilistic queries "
+                "are not allowed"
+            )
+        self.symbol_table[pred_symb] = Union((implication,))
+        return implication
+
+    @add_match(Implication(..., Condition))
+    def marg_implication(self, implication):
+        raise ForbiddenConditionalQueryNoProb(
+            "Conditional queries which don't have PROB in "
+            "the head (within-language probabilistic) "
+            "are forbidden"
+        )
+
+    @add_match(Implication, is_within_language_prob_query)
+    def within_language_succ_query(self, implication):
+        self._validate_within_language_succ_query(implication)
+        pred_symb = implication.consequent.functor.cast(
+            UnionOfConjunctiveQueries
+        )
+        if pred_symb in self.symbol_table:
+            raise ForbiddenDisjunctionError(
+                "Disjunctive within-language probabilistic queries "
+                "are not allowed"
+            )
+        self.symbol_table[pred_symb] = Union((implication,))
+        return implication
+
+    @staticmethod
+    def _validate_within_language_succ_query(implication):
+        csqt_vars = set(
+            arg
+            for arg in implication.consequent.args
+            if isinstance(arg, Symbol)
+        )
+        prob_term = get_within_language_prob_query_prob_term(implication)
+        if not prob_term.args:
+            raise UnsupportedProbabilisticQueryError(
+                "Probabilistic boolean queries are not currently supported"
+            )
+        if not all(isinstance(arg, Symbol) for arg in prob_term.args):
+            bad_vars = (
+                repr(arg)
+                for arg in prob_term.args
+                if not isinstance(arg, Symbol)
+            )
+            raise ForbiddenExpressionError(
+                "All terms in PROB(...) should be variables. "
+                "Found these terms: {}".format(", ".join(bad_vars))
+            )
+        prob_vars = set(prob_term.args)
+        if csqt_vars != prob_vars:
+            raise ForbiddenExpressionError(
+                "Variables of the set-based query and variables in the "
+                "PROB(...) term should be the same variables"
+            )
+
+    @staticmethod
+    def _validate_within_language_marg_query(implication):
+        csqt_vars = set(
+            arg
+            for arg in implication.consequent.args
+            if isinstance(arg, Symbol)
+        )
+        prob_term = get_within_language_prob_query_prob_term(implication)
+        if not prob_term.args:
+            raise UnsupportedProbabilisticQueryError(
+                "Probabilistic boolean queries are not currently supported"
+            )
+        if not all(isinstance(arg, Symbol) for arg in prob_term.args):
+            bad_vars = (
+                repr(arg)
+                for arg in prob_term.args
+                if not isinstance(arg, Symbol)
+            )
+            raise ForbiddenExpressionError(
+                "All terms in PROB(...) should be variables. "
+                "Found these terms: {}".format(", ".join(bad_vars))
+            )
+        prob_vars = set(prob_term.args)
+        if csqt_vars != prob_vars:
+            raise ForbiddenExpressionError(
+                "Variables of the set-based query and variables in the "
+                "PROB(...) term should be the same variables"
+            )
+
+
+class CPLogicProgram(
+    CPLogicMixin, DatalogProgramNegationMixin,
+    DatalogProgram, ExpressionWalker
+):
     pass

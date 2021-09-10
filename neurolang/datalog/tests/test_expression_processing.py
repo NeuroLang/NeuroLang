@@ -1,13 +1,23 @@
-from operator import eq
+from pytest import raises
 
-from ...expression_walker import ExpressionBasicEvaluator
+from operator import eq
+import typing
+
+import numpy as np
+
+from ...exceptions import SymbolNotFoundError
+from ...expression_walker import ExpressionBasicEvaluator, ExpressionWalker
 from ...expressions import Constant, ExpressionBlock, Symbol
-from ...logic import ExistentialPredicate, Implication, Negation, Conjunction
+from ...logic import (
+    ExistentialPredicate, Implication,
+    Negation, Conjunction, Union
+)
 from .. import DatalogProgram, Fact
 from ..expression_processing import (
     TranslateToDatalogSemantics,
     is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates,
+    dependency_matrix,
     stratify, reachable_code, is_linear_rule,
     implication_has_existential_variable_in_antecedent,
     is_ground_predicate,
@@ -15,7 +25,13 @@ from ..expression_processing import (
     extract_logic_predicates,
     conjunct_if_needed,
     conjunct_formulas,
+    program_has_loops,
+    is_rule_with_builtin,
+    HeadConstantToBodyEquality,
+    HeadRepeatedVariableToBodyEquality,
+    maybe_deconjunct_single_pred,
 )
+from ..instance import MapInstance
 
 S_ = Symbol
 C_ = Constant
@@ -23,6 +39,8 @@ Imp_ = Implication
 B_ = ExpressionBlock
 EP_ = ExistentialPredicate
 T_ = Fact
+
+EQ = Constant(eq)
 
 
 DT = TranslateToDatalogSemantics()
@@ -215,6 +233,47 @@ def test_stratification():
     ]
 
 
+def test_stratification_with_consequent_in_multiple_rules():
+    x = S_('X')
+    y = S_('Y')
+    z = S_('Z')
+    anc = S_('anc')
+    par = S_('par')
+    q = S_('q')
+    M = S_('M')
+    N = S_('N')
+    O = S_('O')
+    a = C_('a')
+    b = C_('b')
+    c = C_('c')
+    d = C_('d')
+
+    code = DT.walk(B_([
+        Fact(par(a, b)),
+        Fact(par(b, c)),
+        Fact(par(c, d)),
+        Fact(M(a)),
+        Imp_(N(a), M(a)),
+        Imp_(anc(x, y), par(x, y)),
+        Imp_(O(x), N(x)),
+        Imp_(q(x), anc(a, x)),
+        Imp_(anc(x, y), anc(x, z) & par(z, y) & O(a)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    strata, stratifyiable = stratify(code, datalog)
+
+    assert stratifyiable
+    assert strata == [
+        list(code.formulas[:4]),
+        list(code.formulas[4:6]),
+        list((code.formulas[6],)),
+        list(code.formulas[7:]),
+    ]
+
+
 def test_reachable():
     Q = S_('Q')  # noqa: N806
     R = S_('R')  # noqa: N806
@@ -236,6 +295,155 @@ def test_reachable():
     reached = reachable_code(code.formulas[-2], datalog)
 
     assert set(reached.formulas) == set(code.formulas[:-1])
+
+
+def test_dependency_matrix():
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    T = S_('T')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & S(y) & C_(eq)(x, y)),
+        Imp_(T(x), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    idb_symbols, dep_matrix = dependency_matrix(datalog)
+
+    assert idb_symbols == (R, S, T)
+    assert np.array_equiv(dep_matrix, np.array(
+        [
+            [0, 0, 1],
+            [1, 1, 0],
+            [0, 0, 0]
+        ]
+    ))
+
+    rules = Union(
+        datalog.intensional_database()[R].formulas +
+        datalog.intensional_database()[T].formulas
+    )
+
+    idb_symbols_2, dep_matrix_2 = dependency_matrix(
+       datalog, rules=rules
+    )
+
+    assert idb_symbols_2 == (R, T)
+    assert np.array_equiv(dep_matrix[(0, 2), :][:, (0, 2)], dep_matrix_2)
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & S_('X')(y) & C_(eq)(x, y)),
+        Imp_(T(x), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    with raises(SymbolNotFoundError):
+        dependency_matrix(datalog)
+
+
+def test_dependency_matrix_with_instance_update():
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    T = S_('T')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & S_('X')(y) & C_(eq)(x, y)),
+        Imp_(T(x), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    # Assume X was solved in previous stratum of program
+    instance = MapInstance({S_('X'): datalog.new_set([(0,)])})
+    idb_symbols, dep_matrix = dependency_matrix(
+        datalog, instance=instance
+    )
+    assert idb_symbols == (R, S, T)
+    assert np.array_equiv(dep_matrix, np.array(
+        [
+            [0, 0, 1],
+            [1, 0, 0],
+            [0, 0, 0]
+        ]
+    ))
+
+    code = DT.walk(B_([
+        Imp_(R(x, y), R(x, z) & Q(z, y)),
+        Imp_(S(x), R(C_(0), x)),
+    ]))
+    datalog = Datalog()
+    datalog.walk(code)
+
+    instance = MapInstance({
+        Q: datalog.new_set([(0, 1), (1, 2), (2, 3)]),
+        R: datalog.new_set([(0, 1), (1, 2), (2, 3)])
+    })
+    idb_symbols, dep_matrix = dependency_matrix(
+        datalog, instance=instance
+    )
+    assert idb_symbols == (R, S)
+    assert np.array_equiv(dep_matrix, np.array(
+        [
+            [1, 0],
+            [1, 0],
+        ]
+    ))
+
+
+def test_program_has_loops():
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    T = S_('T')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y) & S(x)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & C_(eq)(x, y)),
+        Imp_(T(x, y), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    assert program_has_loops(datalog)
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, x), T(x, x)),
+        Imp_(S(x), R(x, y) & C_(eq)(x, y)),
+        Imp_(T(x), Q(x, x))
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    assert not program_has_loops(datalog)
 
 
 def test_implication_has_existential_variable_in_antecedent():
@@ -280,3 +488,75 @@ def test_conjunct_formulas():
         (P(x), Q(x, x), Q(x, y), Q(y, y))
     )
     assert conjunct_formulas(P(x), Q(x)) == Conjunction((P(x), Q(x)))
+
+
+
+def test_is_rule_with_builtin():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    y = Symbol("y")
+    some_builtin = Constant(eq)
+    rule = Implication(P(x), Conjunction((some_builtin(x, y), Q(x), Q(y))))
+    assert is_rule_with_builtin(rule)
+    rule = Implication(Q(x), P(x))
+    assert not is_rule_with_builtin(rule)
+    dl = Datalog()
+    some_builtin = Symbol[typing.Callable[[int, int], str]]("some_builtin")
+    my_builtin_fun = lambda u, v: str(u + v)
+    dl.symbol_table[some_builtin] = Constant[typing.Callable[[int, int], str]](
+        my_builtin_fun, auto_infer_type=False, verify_type=False,
+    )
+    rule = Implication(Q(x), some_builtin(x, y))
+    assert is_rule_with_builtin(rule, known_builtins=dl.builtins())
+
+
+class TestHeadConstantToBodyEquality(
+    HeadConstantToBodyEquality,
+    ExpressionWalker
+):
+    pass
+
+
+class TestHeadRepeatedVariableToBodyEquality(
+    HeadRepeatedVariableToBodyEquality,
+    ExpressionWalker
+):
+    pass
+
+
+def test_head_constant_to_body_equality():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    a = Constant("a")
+    walker = TestHeadConstantToBodyEquality()
+    rule = Implication(P(x, a), Q(x))
+    result = walker.walk(rule)
+    assert result.consequent.args[1].is_fresh
+    assert EQ(result.consequent.args[1], a) in result.antecedent.formulas
+
+
+def test_head_repeated_variable_to_body_equality():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    walker = TestHeadRepeatedVariableToBodyEquality()
+    rule = Implication(P(x, x), Q(x))
+    result = walker.walk(rule)
+    assert result.consequent.args[1].is_fresh
+    assert EQ(result.consequent.args[1], x) in result.antecedent.formulas
+
+
+
+def test_maybe_deconjunct():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    assert maybe_deconjunct_single_pred(Conjunction(tuple())) == Conjunction(
+        tuple()
+    )
+    assert maybe_deconjunct_single_pred(
+        Conjunction((P(x), Q(x)))
+    ) == Conjunction((P(x), Q(x)))
+    assert maybe_deconjunct_single_pred(Conjunction((P(x),))) == P(x)

@@ -11,6 +11,7 @@ from typing import AbstractSet, Any, Callable, Tuple
 from warnings import warn
 
 from ..expression_walker import PatternWalker, add_match
+from ..exceptions import NotConjunctiveExpression, NotConjunctiveExpressionNestedPredicates, ProtectedKeywordError
 from ..expressions import (Constant, Expression, FunctionApplication,
                            NeuroLangException, Symbol, TypedSymbolTableMixin,
                            is_leq_informative)
@@ -77,11 +78,11 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         else:
             return new_expression
 
-    @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
+    @add_match(Fact(FunctionApplication(Symbol, ...)))
     def fact(self, expression):
         fact = expression.fact
         if fact.functor.name in self.protected_keywords:
-            raise NeuroLangException(
+            raise ProtectedKeywordError(
                 f'symbol {self.constant_set_name} is protected'
             )
 
@@ -172,9 +173,9 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         return disj
 
     def _validate_implication_syntax(self, consequent, antecedent):
-        if consequent.functor in self.protected_keywords:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
+        if consequent.functor.name in self.protected_keywords:
+            raise ProtectedKeywordError(
+                f'symbol {consequent.functor} is protected'
             )
 
         if any(
@@ -194,12 +195,12 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             )
 
         if not is_conjunctive_expression(consequent):
-            raise NeuroLangException(
+            raise NotConjunctiveExpression(
                 f'Expression {consequent} is not conjunctive'
             )
 
         if not is_conjunctive_expression_with_nested_predicates(antecedent):
-            raise NeuroLangException(
+            raise NotConjunctiveExpressionNestedPredicates(
                 f'Expression {antecedent} is not conjunctive'
             )
 
@@ -280,14 +281,36 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
     @staticmethod
     def infer_iterable_type(iterable):
+        """Infer the type of iterable elements
+        without modifying the iterable.
+
+        Parameters
+        ----------
+        iterable : Iterable
+            iterable from which to infer
+            element's type
+
+        Returns
+        -------
+        type, iterable
+            the inferred type and the iterable.
+        """
         type_ = Unknown
-        try:
-            iterable_, iterable = tee(iterable)
-            first = next(iterable_)
-            if isinstance(first, Expression):
-                type_ = first.type
+        if hasattr(iterable, 'fetch_one'):
+            if iterable.is_empty():
+                first = None
             else:
-                type_ = infer_type(first)
-        except StopIteration:
-            pass
+                first = iterable.fetch_one()
+                if first == tuple():
+                    first = None
+        else:
+            iterable_, iterable = tee(iterable)
+            try:
+                first = next(iterable_)
+            except StopIteration:
+                first = None
+        if isinstance(first, Expression):
+            type_ = first.type
+        elif first is not None:
+            type_ = infer_type(first)
         return type_, iterable

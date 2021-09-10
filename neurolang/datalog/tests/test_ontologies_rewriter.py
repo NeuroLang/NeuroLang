@@ -1,6 +1,15 @@
+from rdflib import OWL, RDF, RDFS
+
 from ... import expression_walker as ew
+from ...expression_walker import ReplaceExpressionWalker
 from ...expressions import Constant, ExpressionBlock, Symbol
-from ...logic import ExistentialPredicate, FunctionApplication, Implication
+from ...logic import (
+    Conjunction,
+    ExistentialPredicate,
+    FunctionApplication,
+    Implication,
+)
+from ...logic.transformations import CollapseConjunctions
 from ..aggregation import DatalogWithAggregationMixin
 from ..expressions import TranslateToLogic
 from ..ontologies_parser import RightImplication
@@ -217,3 +226,29 @@ def test_example_4_3():
     rewrite = orw.Xrewrite()
 
     assert len(rewrite) == 4
+
+
+def test_infinite_walker():
+
+    subClassOf = Symbol(str(RDFS.subClassOf))
+    rest = Symbol(str(OWL.rest))
+    reg = Symbol("reg")
+
+    x1 = Symbol("x1")
+    y1 = Symbol("y1")
+    x = Symbol("x")
+    y = Symbol("y")
+
+    sigma_ant = Conjunction((subClassOf(x1, y1), rest(x1, y1), rest(y1, y1)))
+    S = subClassOf(x1, y1)
+    q_ant = Conjunction((subClassOf(x1, y1), rest(y, x1), rest(x, y1), reg(x)))
+
+    replace = dict({S: sigma_ant})
+    rsw = ReplaceExpressionWalker(replace)
+    sigma_rep = rsw.walk(q_ant)
+    sigma_rep = CollapseConjunctions().walk(sigma_rep)
+
+    expected = Conjunction((sigma_ant, rest(y, x1), rest(x, y1), reg(x)))
+    expected = CollapseConjunctions().walk(expected)
+
+    assert sigma_rep == expected

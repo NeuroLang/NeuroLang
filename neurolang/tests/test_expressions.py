@@ -2,11 +2,17 @@ import inspect
 import operator as op
 from typing import AbstractSet, Callable, Mapping, Sequence, Tuple
 
+import pickle
 import pytest
+import numpy
 
+
+from ..config import config
 from .. import expressions, logic
-from ..expression_walker import (ExpressionBasicEvaluator,
-                                 TypedSymbolTableEvaluator)
+from ..expression_walker import (
+    ExpressionBasicEvaluator,
+    TypedSymbolTableEvaluator,
+)
 from ..expressions import Expression, Unknown, expressions_behave_as_objects
 
 C_ = expressions.Constant
@@ -46,14 +52,32 @@ def test_build_constants():
     assert C_(1) in b.value.values()
 
 
+def test_pickle_constants():
+    a = C_('ab')
+    assert pickle.loads(pickle.dumps(a)) == a
+    b = C_(['a'])
+    assert pickle.loads(pickle.dumps(b)) == b
+    c = C_(('a', 1))
+    assert pickle.loads(pickle.dumps(c)) == c
+    d = C_({'a'})
+    assert pickle.loads(pickle.dumps(d)) == d
+    e = C_({'a': 1})
+    assert pickle.loads(pickle.dumps(e)) == e
+
+
 def test_fresh_symbol():
     s1 = S_.fresh()
     s2 = S_.fresh()
     s3 = S_[int].fresh()
+    s4 = S_('a')
 
     assert isinstance(s1, S_) and s1.type is Unknown
     assert s1 != s2
     assert s1 != s2 and s2 != s3 and s3.type is int
+    assert s1.is_fresh
+    assert s2.is_fresh
+    assert s3.is_fresh
+    assert not s4.is_fresh
 
 
 def test_fresh_symbol_2():
@@ -301,3 +325,29 @@ def test_nested_universals():
     exp = U_(x, U_(y, P(x) & Q(y)))
 
     assert exp._symbols == {Q, P}
+
+
+def test_fresh_symbol_subclass():
+    class TestSymbol(expressions.Symbol):
+        pass
+
+    assert isinstance(TestSymbol.fresh(), TestSymbol)
+    assert isinstance(TestSymbol[int].fresh(), TestSymbol[int])
+
+
+def test_numpy_ufunc_no_qualname_repr():
+    exp = C_(numpy.exp)
+    repr(exp)
+
+
+def test_type_printing_option():
+    x = S_[int]('x')
+    a = C_[str]('a')
+
+    config.enable_expression_type_printing()
+    assert repr(x) == "S{x: int}"
+    assert repr(a) == "C{'a': str}"
+
+    config.disable_expression_type_printing()
+    assert repr(x) == "S{x}"
+    assert repr(a) == "C{'a'}"
