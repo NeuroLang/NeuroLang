@@ -778,6 +778,44 @@ class NamedRelationalAlgebraFrozenSet(
             projections[col] = None
         return self.extended_projection(projections)
 
+    def replace_null(self, dst_column, value):
+        columns = self.columns
+        if len(columns) == 0 or self.arity == 0:
+            new = type(self)()
+            if len(self) > 0:
+                new._count = 1
+            return new
+
+        if self._table is None:
+            return type(self)(columns=columns, iterable=[])
+
+        sql_dst_column = self.sql_columns.get(dst_column)
+        columns_without_change = [
+            c for c in self.sql_columns if c != sql_dst_column
+        ]
+        if isinstance(value, RelationalAlgebraStringExpression):
+            if str(value) != str(dst_column):
+                value = literal_column(value)
+            else:
+                value = self.sql_columns.get(str(value))
+        elif isinstance(value, abc.RelationalAlgebraColumn):
+            value = self.sql_columns.get(str(value))
+        else:
+            value = literal(value)
+
+        proj_column = func.coalesce(sql_dst_column, value).label(dst_column)
+        query = (
+            select(
+                columns_without_change +
+                [proj_column]
+            )
+            .select_from(self._table)
+        )
+
+        return self._create_view_from_query(
+            query, row_types=self.row_types
+        )
+
     def equijoin(self, other, join_indices):
         raise NotImplementedError()
 

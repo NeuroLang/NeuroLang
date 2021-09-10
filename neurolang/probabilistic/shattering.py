@@ -14,6 +14,7 @@ from ..logic.transformations import (
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 from .transforms import convert_to_dnf_ucq
+from ..relational_algebra import Projection, Selection, int2columnint_constant
 
 EQ = Constant(operator.eq)
 
@@ -110,27 +111,29 @@ class Shatterer(ExpressionWalker):
                 for i, arg in enumerate(shatter.args)
                 if isinstance(arg, Constant)
             )
-            new_relation = self.symbol_table[shatter.functor.relation].value
-            new_relation = new_relation.selection(
-                {
-                    new_relation.columns[i + 1]: shatter.args[i].value
-                    for i in const_idxs
-                }
-            )
+            columns = [
+                int2columnint_constant(c)
+                for c in self.symbol_table[shatter.functor.relation]
+                .value.columns
+            ]
+            new_relation = shatter.functor.relation
+            for i in const_idxs:
+                new_relation = Selection(
+                    new_relation,
+                    EQ(columns[i + 1], shatter.args[i])
+                )
             non_prob_columns = tuple(
                 c
-                for c in new_relation.columns
-                if str(c) != str(shatter.functor.probability_column.value)
+                for c in columns
+                if c != shatter.functor.probability_column
             )
-            proj_cols = (shatter.functor.probability_column.value,) + tuple(
+            proj_cols = (shatter.functor.probability_column,) + tuple(
                 non_prob_columns[i]
                 for i, arg in enumerate(shatter.args)
                 if not isinstance(arg, Constant)
             )
-            new_relation = new_relation.projection(*proj_cols)
-            self.symbol_table[new_pred_symb] = Constant[AbstractSet](
-                new_relation
-            )
+            new_relation = Projection(new_relation, proj_cols)
+            self.symbol_table[new_pred_symb] = new_relation
             self._cached[cache_key] = new_pred_symb
         new_tagged = ProbabilisticFactSet(
             new_pred_symb, shatter.functor.probability_column

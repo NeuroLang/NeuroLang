@@ -182,6 +182,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         pass
 
     @abstractmethod
+    def replace_null(self, dst_column, value):
+        pass
+
+    @abstractmethod
     def __iter__(self):
         pass
 
