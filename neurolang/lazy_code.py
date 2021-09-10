@@ -16,7 +16,7 @@ class Evaluate(Expression):
         self.expression = expression
 
 
-class LazyCodeEvaluationMixin(ew.TypedSymbolTableMixin, ew.PatternWalker):
+class LazyCodeEvaluationMixin(ew.PatternWalker):
     @ew.add_match(Statement)
     def statement(self, expression):
         if expression.lhs.type is Unknown:

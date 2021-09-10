@@ -2,15 +2,27 @@ import operator
 
 from .. import lazy_code
 from ..expression_walker import ExpressionBasicEvaluator, ExpressionWalker
-from ..expressions import (Constant, ExpressionBlock, Statement, Symbol)
+from ..expressions import (
+    Constant,
+    ExpressionBlock,
+    Statement,
+    Symbol,
+    TypedSymbolTableMixin
+)
 
 
-class LazyCode(lazy_code.LazyCodeEvaluationMixin, ExpressionWalker):
+class LazyCode(
+    lazy_code.LazyCodeEvaluationMixin,
+    TypedSymbolTableMixin,
+    ExpressionWalker
+):
     pass
 
 
 class LazyCodeBasicExpressionEvaluator(
-    lazy_code.LazyCodeEvaluationMixin, ExpressionBasicEvaluator
+    lazy_code.LazyCodeEvaluationMixin,
+    TypedSymbolTableMixin,
+    ExpressionBasicEvaluator
 ):
     pass
 
