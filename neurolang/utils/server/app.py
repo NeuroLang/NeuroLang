@@ -60,9 +60,8 @@ class Application(tornado.web.Application):
         uuid_pattern = (
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
         )
-        static_path = os.path.join(
-            os.path.dirname(__file__), "neurolang-web/dist"
-        )
+        static_path = str(Path(__file__).resolve().parent / "neurolang-web" / "dist")
+        print(f"Serving static files from {static_path}")
 
         handlers = [
             (r"/v1/empty", EmptyHandler),

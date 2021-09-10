@@ -141,11 +141,13 @@ class NPMBuildCommand(distutils.cmd.Command):
     """Run the npm build command"""
 
     description = "run the npm build command for the web server"
-    user_options = []
+    user_options = [
+        ("force", "f", "force npm build even if dist directory already exists")
+    ]
 
     def initialize_options(self):
         """Set default values for options."""
-        pass
+        self.force = False
 
     def finalize_options(self):
         """Post-process options."""
@@ -170,6 +172,14 @@ class NPMBuildCommand(distutils.cmd.Command):
         )
         if not web_dir.exists():
             raise OSError(f"{web_dir} directory does not exist.")
+
+        dist_dir = web_dir / "dist"
+        if dist_dir.exists() and not self.force:
+            self.announce(
+                f"Build directory already exists for frontend app. Not rebuilding.",
+                level=distutils.log.INFO,
+            )
+            return
 
         command = [npm_command, "install"]
         self.announce(
@@ -197,7 +207,7 @@ class BuildPyCommand(build_py):
         """Run the npm build before the normal build"""
         try:
             self.run_command("npm_build")
-        except OSError as e:
+        except (OSError, subprocess.CalledProcessError) as e:
             self.announce(
                 f"Skipping build of frontend app because: {e}.",
                 level=distutils.log.WARN,
