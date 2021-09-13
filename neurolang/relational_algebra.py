@@ -563,6 +563,9 @@ def _get_evaluatable_operations_and_string_translations():
         "arcsinh": "asinh",
         "arccosh": "acosh",
         "arctanh": "atanh",
+        "exp": "exp",
+        "log": "log",
+        "log10": "log10"
     }
     for op_name in pandas.core.computation.ops._unary_math_ops:
         eval_op_to_str[getattr(numpy, op_name)] = op_name
@@ -1448,6 +1451,22 @@ class EliminateTrivialProjections(ew.PatternWalker):
             tuple(p.dst_column for p in expression.projection_list)
         ))
 
+    @ew.add_match(
+        ExtendedProjection,
+        lambda e: all(
+            isinstance(p.fun_exp, Constant[ColumnStr])
+            for p in e.projection_list
+        )
+    )
+    def convert_extended_projection_2_rename(self, expression):
+        return self.walk(RenameColumns(
+            expression.relation,
+            tuple(
+                (p.src_column, p.dst_column)
+                for p in expression.projection_list
+            )
+        ))
+
 
 class RenameOptimizations(ew.PatternWalker):
     @ew.add_match(RenameColumn)
@@ -1517,21 +1536,34 @@ class RenameOptimizations(ew.PatternWalker):
                 )
                 del renames[old_dst]
             new_aggregate_functions.append(falm)
-        return self.walk(
-            RenameColumns(
-                GroupByAggregation(
-                    expression.relation.relation,
-                    expression.relation.groupby,
-                    tuple(new_aggregate_functions)
-                ),
-                tuple((src, dst) for src, dst in renames.items())
-            )
+
+        new_groupby_agg = GroupByAggregation(
+            expression.relation.relation,
+            expression.relation.groupby,
+            tuple(new_aggregate_functions)
         )
+
+        if len(renames) > 0:
+            return self.walk(
+                RenameColumns(
+                    new_groupby_agg,
+                    tuple((src, dst) for src, dst in renames.items())
+                )
+            )
+        else:
+            return self.walk(new_groupby_agg)
 
     @ew.add_match(
         RenameColumns(GroupByAggregation, ...),
-        lambda exp: {src for src, _ in exp.renames} <= set(
-            exp.relation.groupby
+        lambda exp: (
+            (
+                {src for src, _ in exp.renames} <= set(
+                    exp.relation.groupby
+                )
+            ) and all(
+                isinstance(agg.fun_exp, (Constant, FunctionApplication))
+                for agg in exp.relation.aggregate_functions
+            )
         )
     )
     def push_rename_past_groupby(self, expression):
@@ -1539,7 +1571,7 @@ class RenameOptimizations(ew.PatternWalker):
         new_groupby = tuple(
             renames.get(col, col) for col in expression.relation.groupby
         )
-
+        rew = ew.ReplaceExpressionWalker(renames)
         return self.walk(
             GroupByAggregation(
                 RenameColumns(
@@ -1547,7 +1579,7 @@ class RenameOptimizations(ew.PatternWalker):
                     expression.renames
                 ),
                 new_groupby,
-                expression.relation.aggregate_functions
+                rew.walk(expression.relation.aggregate_functions)
             )
         )
 

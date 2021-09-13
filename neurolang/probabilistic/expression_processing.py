@@ -89,7 +89,13 @@ def build_probabilistic_fact_set(pred_symb, pfacts):
 
 
 def check_probabilistic_choice_set_probabilities_sum_to_one(ra_set):
-    probs_sum = sum(v.value[0].value for v in ra_set.value)
+    ra_set = ra_set.value
+    probs_sum = (
+        ra_set
+        .as_pandas_dataframe()
+        .iloc[:, ra_set.columns[0]]
+        .sum()
+    )
     if not numpy.isclose(probs_sum, 1.0):
         raise DistributionDoesNotSumToOneError(
             "Probability labels of a probabilistic choice should sum to 1. "

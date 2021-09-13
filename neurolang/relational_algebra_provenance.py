@@ -1,3 +1,4 @@
+import math
 import operator
 
 from .exceptions import RelationalAlgebraError
@@ -43,6 +44,9 @@ ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
 SUB = Constant(operator.sub)
 SUM = Constant(sum)
+LOG = Constant(math.log)
+EXP = Constant(math.exp)
+ONE = Constant(1.)
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -223,11 +227,7 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         ]
         proj_list.append(
             FunctionApplicationListMember(
-                Constant(
-                    RelationalAlgebraStringExpression(
-                        "log(1 - {})".format(prov_col.value)
-                    )
-                ),
+                LOG(ONE - prov_col),
                 prov_col,
             )
         )
@@ -248,11 +248,7 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         ]
         proj_list.append(
             FunctionApplicationListMember(
-                Constant(
-                    RelationalAlgebraStringExpression(
-                        "1 - exp({})".format(prov_col.value)
-                    )
-                ),
+                ONE - EXP(prov_col),
                 prov_col,
             )
         )

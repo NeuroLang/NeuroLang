@@ -213,8 +213,6 @@ def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
     nl.add_uniform_probabilistic_choice_over_set(
         study_ids, name="SelectedStudy"
     )
-    nz_voxels = mni_mask.get_fdata().nonzero()
-    print("mask size", len(nz_voxels) / np.prod(mni_mask.shape))
     nl.add_tuple_set(
         np.round(
             nib.affines.apply_affine(

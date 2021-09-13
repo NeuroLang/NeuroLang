@@ -687,8 +687,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         probability = 1 / len(iterable)
         projections = collections.OrderedDict()
         projections[prob_col] = probability
+        columns_to_project = []
         for col in columns:
             projections[col] = RelationalAlgebraColumnStr(col)
-        ra_set = ra_set.extended_projection(projections)
+            columns_to_project.append(col)
+        ra_set = ra_set.extended_projection(projections).projection_to_unnamed(
+            *((prob_col,) + tuple(columns_to_project))
+        )
         self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return fe.Symbol(self, name)
