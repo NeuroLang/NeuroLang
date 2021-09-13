@@ -4,7 +4,9 @@ Magic Sets [1] rewriting implementation for Datalog.
 [1] F. Bancilhon, D. Maier, Y. Sagiv, J. D. Ullman, in ACM PODS ’86, pp. 1–15.
 '''
 
-from ..expressions import Constant, Symbol
+from typing import Iterable, Tuple
+from ..config import config
+from ..expressions import Constant, Expression, Symbol
 from ..type_system import Unknown
 from . import expression_processing, extract_logic_predicates
 from .expressions import Conjunction, Implication, Union
@@ -51,13 +53,36 @@ class AdornedExpression(Symbol):
         else:
             subindex = ''
 
-        return (
-            f'S{{{rep}{superindex}{subindex}: '
-            f'{self.__type_repr__}}}'
-        )
+        if config.expression_type_printing():
+            return (
+                f'S{{{rep}{superindex}{subindex}: '
+                f'{self.__type_repr__}}}'
+            )
+        else:
+            return f'S{{{rep}{superindex}{subindex}}}'
 
 
-def magic_rewrite(query, datalog):
+def magic_rewrite_ceri(
+    query: Symbol, datalog: Iterable[Expression]
+) -> Tuple[Symbol, Union]:
+    """
+    Implementation of the Magic Sets method of optimization for datalog
+    programs using Ceri et al [1] algorithm.
+
+    .. [1] Stefano Ceri, Georg Gottlob, and Letizia Tanca. 1990.
+       Logic programming and databases. Springer-Verlag, Berlin, Heidelberg.
+       p. 168.
+
+    query : Symbol
+        the head symbol of the query rule in the program
+    datalog : Iterable[Expression]
+        a datalog program to optimize
+
+    Returns
+    -------
+    Tuple[Symbol, Union]
+        the rewritten query symbol and program
+    """
     adorned_code = reachable_adorned_code(query, datalog)
     # assume that the query rule is the last
     adorned_query = adorned_code.formulas[-1]
@@ -68,12 +93,121 @@ def magic_rewrite(query, datalog):
     magic_rules = create_magic_rules(adorned_code, idb, edb)
     modified_rules = create_modified_rules(adorned_code, edb)
     complementary_rules = create_complementary_rules(adorned_code, idb)
+    return goal, Union(magic_rules + modified_rules + complementary_rules)
 
-    return goal, Union(
-        magic_rules +
-        modified_rules +
-        complementary_rules
-    )
+
+def magic_rewrite(
+    query: Symbol, datalog: Iterable[Expression]
+) -> Tuple[Symbol, Union]:
+    """
+    Implementation of the Magic Sets method of optimization for datalog
+    programs using Balbin et al [1] algorithm.
+
+    .. [1] Isaac Balbin, Graeme S. Port, Kotagiri Ramamohanarao, 
+       Krishnamurthy Meenakshi. 1991. Efficient Bottom-UP Computation of
+       Queries on Stratified Databases. J. Log. Program. 11(3&4). p. 311.
+
+    query : Symbol
+        the head symbol of the query rule in the program
+    datalog : Iterable[Expression]
+        a datalog program to optimize
+
+    Returns
+    -------
+    Tuple[Symbol, Union]
+        the rewritten query symbol and program
+    """
+    adorned_code = reachable_adorned_code(query, datalog)
+    # assume that the query rule is the last
+    adorned_query = adorned_code.formulas[-1]
+    goal = adorned_query.consequent.functor
+
+    edb = datalog.extensional_database()
+
+    magic_rules = create_balbin_magic_rules(adorned_code.formulas[:-1], edb)
+    magic_inits = create_magic_query_inits(adorned_query)
+    return goal, Union(magic_inits + [adorned_query] + magic_rules,)
+
+
+def create_magic_query_inits(adorned_query):
+    """
+    Create magic initialization predicates from the adorned query.
+    For each adorned predicate p^a(t) in the query's antecedent, return an
+    initialization rule of the form magic_p^a(t_d) :- True, where t_d is the
+    vector of arguments which are bound in the adornment a of p.
+    
+    Parameters
+    ----------
+    adorned_query : Expression
+        the adorned query rule
+
+    Returns
+    -------
+    Iterable[Expression]
+        the set of magic initialization rules
+    """
+    magic_init_rules = []
+    for predicate in extract_logic_predicates(adorned_query.antecedent):
+        magic_init_rules.append(
+            Implication(magic_predicate(predicate), Constant(True),)
+        )
+    return magic_init_rules
+
+
+def create_balbin_magic_rules(adorned_rules, edb):
+    """
+    Create the set of Magic Set rules according to Algorithm 2 of
+    Balbin et al.
+
+    This method creates the ensemble Pm of rewritten rules from the ensemble
+    P^a of adorned rules in the program (not including the adorned query rule).
+
+    The pseudo-code algorithm for this method is:
+
+    ```
+    for each adorned rule Ra in P^a of the form head :- body
+        add the rule head :- Magic(head), body to Pm
+        for each adorned predicate p in body :
+            add the rule Magic(p) :- Magic(h), ^(body predicates left of p)
+    ```
+    """
+    magic_rules = []
+    for rule in adorned_rules:
+        consequent = rule.consequent
+        magic_head = magic_predicate(consequent)
+        body_predicates = (magic_head,)
+        for predicate in extract_logic_predicates(rule.antecedent):
+            functor = predicate.functor
+            if isinstance(functor, AdornedExpression) and isinstance(
+                functor.expression, Constant
+            ):
+                body_predicates += (functor.expression(*predicate.args),)
+            elif functor.name in edb:
+                body_predicates += (Symbol(functor.name)(*predicate.args),)
+            elif (
+                isinstance(functor, AdornedExpression)
+                and "b" in functor.adornment
+            ):
+                new_predicate = magic_predicate(predicate)
+                if not (
+                    len(body_predicates) == 1
+                    and new_predicate == body_predicates[0]
+                ):
+                    # avoid adding rules of the form magic_p(x) :- magic_p(x)
+                    magic_rules.append(
+                        Implication(
+                            new_predicate, Conjunction(body_predicates)
+                        )
+                    )
+                body_predicates += (predicate,)
+            else:
+                body_predicates += (predicate,)
+
+        magic_rules.append(
+            Implication(consequent, Conjunction(body_predicates))
+        )
+
+    return magic_rules
 
 
 def create_complementary_rules(adorned_code, idb):

@@ -11,7 +11,6 @@ from ..aggregation import (
     TranslateToLogicWithAggregation
 )
 from ..chase import Chase
-from ..expressions import TranslateToLogic
 from ..negation import DatalogProgramNegationMixin
 
 C_ = expressions.Constant
@@ -186,7 +185,6 @@ def test_resolution_works_aggregation():
     b = C_('b')
     c = C_('c')
     d = C_('d')
-    eq = C_(operator.eq)
 
     edb = Eb_([
         F_(par(a, b)),
@@ -211,4 +209,4 @@ def test_resolution_works_aggregation():
     dl.walk(edb)
 
     solution = Chase(dl).build_chase_solution()
-    assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
+    assert solution[goal].value == {(3,)}
