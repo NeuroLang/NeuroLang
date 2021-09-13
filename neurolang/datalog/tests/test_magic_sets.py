@@ -8,7 +8,7 @@ from ..aggregation import (
     AGG_COUNT,
     BuiltinAggregationMixin,
     DatalogWithAggregationMixin,
-    TranslateToLogicWithAggregation
+    TranslateToLogicWithAggregation,
 )
 from ..chase import Chase
 from ..negation import DatalogProgramNegationMixin
@@ -94,6 +94,68 @@ def test_resolution_works():
 
     solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
+
+
+def test_resolution_works_2():
+    """
+    Reverse Same Generation from Abiteboul et al. 1995.
+    Foundations of databases. p.312
+
+    l0:  l  m   n   o   p
+    l1:  e  f   g   h   i   j   k
+    l2:  a  b   c   d
+    """
+    x = S_("x")
+    y = S_("y")
+    x1 = S_("x1")
+    y1 = S_("y1")
+    rsg = S_("rsg")
+    up = S_("up")
+    down = S_("down")
+    flat = S_("flat")
+    q = S_("q")
+
+    edb = Eb_(
+        [
+            F_(up(C_("a"), C_("e"))),
+            F_(up(C_("a"), C_("f"))),
+            F_(up(C_("f"), C_("m"))),
+            F_(up(C_("g"), C_("n"))),
+            F_(up(C_("h"), C_("n"))),
+            F_(up(C_("i"), C_("o"))),
+            F_(up(C_("j"), C_("o"))),
+            F_(flat(C_("g"), C_("f"))),
+            F_(flat(C_("m"), C_("n"))),
+            F_(flat(C_("m"), C_("o"))),
+            F_(flat(C_("p"), C_("m"))),
+            F_(down(C_("l"), C_("f"))),
+            F_(down(C_("m"), C_("f"))),
+            F_(down(C_("g"), C_("b"))),
+            F_(down(C_("h"), C_("c"))),
+            F_(down(C_("i"), C_("d"))),
+            F_(down(C_("p"), C_("k"))),
+        ]
+    )
+
+    code = Eb_(
+        [
+            Imp_(q(y), rsg(C_("a"), y)),
+            Imp_(rsg(x, y), flat(x, y)),
+            Imp_(rsg(x, y), up(x, x1) & rsg(y1, x1) & down(y1, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {(C_("b"),), (C_("c"),), (C_("d"),)}
 
 
 def test_resolution_works_query_constant():
