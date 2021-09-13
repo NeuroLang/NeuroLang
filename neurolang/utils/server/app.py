@@ -17,17 +17,15 @@ import tornado.web
 import tornado.websocket
 import yaml
 from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
-from .engines import (
-    DestrieuxEngineConf,
-    NeurosynthEngineConf,
-)
+from tornado.options import define, options
+
+from .engines import DestrieuxEngineConf, NeurosynthEngineConf
 from .queries import NeurolangQueryManager
 from .responses import (
     CustomQueryResultsEncoder,
     QueryResults,
     base64_encode_nifti,
 )
-from tornado.options import define, options
 
 define("port", default=8888, help="run on the given port", type=int)
 define(
@@ -35,6 +33,12 @@ define(
     default=str(Path.home() / "neurolang_data"),
     help="path of a directory where the downloaded datasets are stored",
     type=str,
+)
+define(
+    "npm_build",
+    default=False,
+    help="force a build of the frontend app",
+    type=bool,
 )
 
 LOG = logging.getLogger(__name__)
@@ -56,9 +60,8 @@ class Application(tornado.web.Application):
         uuid_pattern = (
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
         )
-        static_path = os.path.join(
-            os.path.dirname(__file__), "neurolang-web/dist"
-        )
+        static_path = str(Path(__file__).resolve().parent / "neurolang-web" / "dist")
+        print(f"Serving static files from {static_path}")
 
         handlers = [
             (r"/v1/empty", EmptyHandler),
