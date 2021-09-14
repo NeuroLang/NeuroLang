@@ -841,18 +841,11 @@ class NamedRelationalAlgebraFrozenSet(
         for dst_column, operation in eval_expressions.items():
             if isinstance(operation, RelationalAlgebraStringExpression):
                 if str(operation) != str(dst_column):
-                    try:
-                        new_container.eval(
-                            "{}={}".format(str(dst_column), str(operation)),
-                            engine="numexpr",
-                            inplace=True
-                        )
-                    except ValueError:
-                        new_container.eval(
-                            "{}={}".format(str(dst_column), str(operation)),
-                            engine="python",
-                            inplace=True
-                        )
+                    new_container.eval(
+                        "{}={}".format(str(dst_column), str(operation)),
+                        engine="python",
+                        inplace=True
+                    )
             elif isinstance(operation, abc.RelationalAlgebraColumn):
                 new_container[dst_column] = new_container.get(operation)
             elif callable(operation):
