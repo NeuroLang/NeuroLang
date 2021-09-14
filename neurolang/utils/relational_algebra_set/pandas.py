@@ -606,10 +606,10 @@ class NamedRelationalAlgebraFrozenSet(
         if len(on) == 0:
             return self
 
-        new_container = self._container.set_index(on).join(
-            other._container.set_index(on), how="left"
+        new_container = self._container.merge(
+            other._container,
+            how="left"
         )
-        new_container = new_container.reset_index()
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=(
