@@ -6,7 +6,7 @@ import numpy
 import pandas.core.computation.ops
 
 from . import expression_walker as ew, type_system
-from .exceptions import NeuroLangException, ProjectionOverMissingColumnsError
+from .exceptions import NeuroLangException, NeuroLangNotImplementedError, ProjectionOverMissingColumnsError
 from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
@@ -30,6 +30,7 @@ from .utils.relational_algebra_set import (
 )
 
 eq_ = Constant(operator.eq)
+and_ = Constant(operator.and_)
 
 
 class Column:
@@ -97,6 +98,8 @@ def _get_columns_for_RA_or_constant(expression):
                 int2columnint_constant(c)
                 for c in expression.value.columns
             )
+    elif isinstance(expression, Symbol):
+        return None
     raise NotImplementedError()
 
 
@@ -530,11 +533,14 @@ OPERATOR_STRING = {
     operator.mul: "*",
     operator.truediv: "/",
     operator.eq: "==",
+    operator.ne: "!=",
     operator.gt: ">",
     operator.lt: "<",
     operator.ge: ">=",
     operator.le: "<=",
     operator.pow: "**",
+    operator.and_: "and",
+    operator.or_: "or"
 }
 
 
@@ -678,6 +684,12 @@ class StringArithmeticWalker(ew.PatternWalker):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(cst_col_str.value),
             auto_infer_type=False,
+        )
+
+    @ew.add_match(Constant[ColumnInt])
+    def process_constant_column_int(self, cst_col_str):
+        raise NeuroLangPatternMatchingNoMatch(
+            "Cant convert integer column to str expression"
         )
 
     @ew.add_match(Constant[int])
@@ -1678,3 +1690,72 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
             Selection(expression.relation.relation, expression.formula),
             expression.relation.attributes
         )
+
+    @ew.add_match(
+        Selection(ExtendedProjection, ...),
+        lambda exp: (
+            get_expression_columns(exp.formula) <= set(
+                proj.dst_column
+                for proj in exp.relation.projection_list
+                if isinstance(
+                    proj.fun_exp,
+                    Constant[ColumnStr]
+                )
+            )
+        )
+    )
+    def push_in_extended_projection(self, expression):
+        replacements = {
+            proj.dst_column: proj.fun_exp
+            for proj in expression.relation.projection_list
+            if isinstance(proj.fun_exp, Constant[ColumnStr])
+        }
+        rew = ew.ReplaceExpressionWalker(replacements)
+        new_formula = rew.walk(expression.formula)
+        return self.walk(
+            ExtendedProjection(
+                Selection(expression.relation.relation, new_formula),
+                expression.relation.projection_list
+            )
+        )
+
+    @ew.add_match(
+        Selection(Selection, ...),
+        lambda exp: not any(
+            isinstance(c, Constant[ColumnInt])
+            for c in (
+                get_expression_columns(exp.formula) |
+                get_expression_columns(exp.relation.formula)
+            )
+        )
+    )
+    def merge_selections(self, expression):
+        res = Selection(
+           expression.relation.relation,
+           and_(expression.formula, expression.relation.formula)
+        )
+        return self.walk(res)
+
+    @ew.add_match(
+        Selection(RelationalAlgebraOperation, ...),
+        lambda exp: (
+            any(
+                isinstance(col, Constant[ColumnInt])
+                for col in get_expression_columns(exp.formula)
+            ) and exp.relation.columns() is not None
+            and all(
+                not isinstance(col, Constant[ColumnInt])
+                for col in exp.relation.columns()
+            )
+        )
+    )
+    def replace_positional_selections_by_named(self, expression):
+        columns = expression.relation.columns()
+        replacements = {
+            int2columnint_constant(i): c
+            for i, c in enumerate(columns)
+        }
+        return self.walk(Selection(
+            expression.relation,
+            ew.ReplaceExpressionWalker(replacements).walk(expression.formula)
+        ))
