@@ -594,7 +594,7 @@ class Constant(Expression):
             )
 
     def __hash__(self):
-        return hash((self.type, self.value))
+        return hash(self.value)
 
     def __repr__(self):
         if self.value is ...:
