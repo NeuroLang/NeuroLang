@@ -13,16 +13,25 @@ class ProbabilisticFactSet(RelationalAlgebraOperation):
         self.relation = relation
         self.probability_column = probability_column
 
+    def columns(self):
+        return None
+
 
 class ProbabilisticChoiceSet(RelationalAlgebraOperation):
     def __init__(self, relation, probability_column):
         self.relation = relation
         self.probability_column = probability_column
 
+    def columns(self):
+        return None
+
 
 class DeterministicFactSet(RelationalAlgebraOperation):
     def __init__(self, relation):
         self.relation = relation
+
+    def columns(self):
+        return None
 
 
 class NonLiftable(RelationalAlgebraOperation):

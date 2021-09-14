@@ -74,13 +74,7 @@ class ProbSemiringSolverMixin(
             str2columnstr_constant(f"col_{i}") for i in relation.value.columns
         )
         projection_list = [
-            FunctionApplicationListMember(
-                Constant[RelationalAlgebraStringExpression](
-                    RelationalAlgebraStringExpression(c.value),
-                    verify_type=False,
-                ),
-                c,
-            )
+            FunctionApplicationListMember(c, c)
             for c in named_columns
         ]
 
