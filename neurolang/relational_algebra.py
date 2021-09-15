@@ -1707,7 +1707,7 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
         new_formula = rew.walk(expression.formula)
         return self.walk(ExtendedProjection(
             Selection(expression.relation.relation, new_formula),
-            expression.relation.projections
+            expression.relation.projection_list
         ))
 
     @ew.add_match(
