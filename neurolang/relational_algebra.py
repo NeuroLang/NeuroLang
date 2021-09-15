@@ -1635,6 +1635,46 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
         )
 
     @ew.add_match(
+        Selection(LeftNaturalJoin, ...),
+        lambda exp: (
+            len(
+                get_expression_columns(exp.formula) &
+                get_expression_columns(exp.relation.relation_right)
+            ) == 0
+        )
+    )
+    def push_selection_in_leftnaturaljoin_left(self, expression):
+        return self.walk(
+            NaturalJoin(
+                Selection(
+                    expression.relation.relation_left,
+                    expression.formula
+                ),
+                expression.relation.relation_right
+            )
+        )
+
+    @ew.add_match(
+        Selection(LeftNaturalJoin, ...),
+        lambda exp: (
+            len(
+                get_expression_columns(exp.formula) &
+                get_expression_columns(exp.relation.relation_left)
+            ) == 0
+        )
+    )
+    def push_selection_in_leftnaturaljoin_right(self, expression):
+        return self.walk(
+            LeftNaturalJoin(
+                expression.relation.relation_left,
+                Selection(
+                    expression.relation.relation_right,
+                    expression.formula
+                )
+            )
+        )
+
+    @ew.add_match(
         Selection(Projection, ...),
         lambda exp: len(
             set(exp.relation.attributes) &
@@ -1642,7 +1682,49 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
         ) == 0
     )
     def push_selection_in_projection(self, expression):
-        return Projection(
+        return self.walk(Projection(
             Selection(expression.relation.relation, expression.formula),
             expression.relation.attributes
+        ))
+
+    @ew.add_match(
+        Selection(ExtendedProjection, ...),
+        lambda exp: (
+            get_expression_columns(exp.formula) <
+            {
+                projection.dst_column
+                for projection in exp.relation.projection_list
+                if isinstance(projection.fun_exp, Constant[Column])
+            }
+        )
+    )
+    def push_selection_in_extended_projection(self, expression):
+        rew = ew.ReplaceExpressionWalker({
+            projection.dst_column: projection.fun_exp
+            for projection in expression.relation.projection_list
+            if isinstance(projection.fun_exp, Constant[Column])
+        })
+        new_formula = rew.walk(expression.formula)
+        return self.walk(ExtendedProjection(
+            Selection(expression.relation.relation, new_formula),
+            expression.relation.projections
+        ))
+
+    @ew.add_match(
+        Selection(GroupByAggregation, ...),
+        lambda exp: (
+            get_expression_columns(exp.formula) <
+            set(exp.relation.groupby)
+        )
+    )
+    def push_selection_in_groupby(self, expression):
+        return self.walk(
+            GroupByAggregation(
+                Selection(
+                    expression.relation.relation,
+                    expression.formula
+                ),
+                expression.relation.groupby,
+                expression.relation.aggregate_functions
+            )
         )

@@ -3,7 +3,6 @@ from typing import Iterable, Callable, Dict, Union
 from uuid import uuid1
 
 import pandas as pd
-
 from . import abstract as abc
 
 
@@ -842,19 +841,20 @@ class NamedRelationalAlgebraFrozenSet(
         for dst_column, operation in eval_expressions.items():
             if isinstance(operation, RelationalAlgebraStringExpression):
                 if str(operation) != str(dst_column):
-                    new_container = new_container.eval(
+                    new_container.eval(
                         "{}={}".format(str(dst_column), str(operation)),
                         engine="python",
+                        inplace=True
                     )
             elif isinstance(operation, abc.RelationalAlgebraColumn):
-                new_container[dst_column] = new_container[operation]
+                new_container[dst_column] = new_container.loc[:, operation]
             elif callable(operation):
                 new_container[dst_column] = new_container.apply(
                     operation, axis=1
                 )
             else:
                 new_container[dst_column] = operation
-        new_container = new_container[proj_columns]
+        new_container = new_container.loc[:, proj_columns]
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
