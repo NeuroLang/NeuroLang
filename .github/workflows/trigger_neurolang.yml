@@ -10,17 +10,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger deploy of neurolang on stage server
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TRIGGER_TOKEN }}
         run: |
           echo "Deploying to stage server on branch $GITHUB_REF"
           curl --request POST 'https://gitlab.inria.fr/api/v4/projects/25219/trigger/pipeline' \
-          --form token=${{ secrets.DEPLOY_TRIGGER_TOKEN }} \
+          --form token=$DEPLOY_TOKEN \
           --form 'ref="master"' \
           --form 'variables[RELEASE]="stage"'
       - name: Trigger deploy of neurolang on production server
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TRIGGER_TOKEN }}
         if: startsWith(github.ref, 'refs/tags/')
         run: |
         echo "Deploying to production server on branch $GITHUB_REF"
           curl --request POST 'https://gitlab.inria.fr/api/v4/projects/25219/trigger/pipeline' \
-          --form token=${{ secrets.DEPLOY_TRIGGER_TOKEN }} \
+          --form token=$DEPLOY_TOKEN \
           --form 'ref="master"' \
           --form 'variables[RELEASE]="production"'
