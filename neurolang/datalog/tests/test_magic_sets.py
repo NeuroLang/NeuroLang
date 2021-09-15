@@ -1,5 +1,6 @@
 import operator
 
+import pytest
 from pytest import raises
 
 from ... import expression_walker, expressions
@@ -11,6 +12,7 @@ from ..aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..chase import Chase
+from ..exceptions import BoundAggregationApplicationError
 from ..negation import DatalogProgramNegationMixin
 
 C_ = expressions.Constant
@@ -272,3 +274,34 @@ def test_resolution_works_aggregation():
 
     solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {(3,)}
+
+
+def test_bound_aggregation_raises_error():
+    x = S_("X")
+    y = S_("Y")
+    z = S_("Z")
+    anc = S_("anc")
+    par = S_("par")
+    anc2 = S_("anc2")
+    q = S_("q")
+    a = C_("a")
+    b = C_("b")
+    c = C_("c")
+    d = C_("d")
+
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d)),])
+
+    code = Eb_(
+        [
+            Imp_(q(x), anc2(x, C_(3))),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+            Imp_(anc2(x, AGG_COUNT(y)), anc(x, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    with pytest.raises(BoundAggregationApplicationError):
+        magic_sets.magic_rewrite(q(x), dl)

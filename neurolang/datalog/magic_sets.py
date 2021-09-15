@@ -4,12 +4,13 @@ Magic Sets [1] rewriting implementation for Datalog.
 [1] F. Bancilhon, D. Maier, Y. Sagiv, J. D. Ullman, in ACM PODS ’86, pp. 1–15.
 '''
 
-from typing import Iterable, Tuple, Type
+from typing import Tuple, Type
 from ..config import config
 from ..expressions import Constant, Expression, Symbol
 from ..type_system import Unknown
 from . import expression_processing, extract_logic_predicates, DatalogProgram
-from .expressions import Conjunction, Implication, Union
+from .exceptions import BoundAggregationApplicationError
+from .expressions import AggregationApplication, Conjunction, Implication, Union
 
 
 class AdornedExpression(Symbol):
@@ -84,6 +85,19 @@ class SIPS:
             for arg, ad in zip(rule.consequent.args, adornment)
             if isinstance(arg, Symbol) and ad == "b"
         }
+        bounded_aggregates = {
+            arg
+            for arg, ad in zip(rule.consequent.args, adornment)
+            if isinstance(arg, AggregationApplication) and ad == "b"
+        }
+        if len(bounded_aggregates) > 0:
+            bounded_aggregate = AdornedExpression(rule.consequent.functor, adornment, None)
+            bounded_aggregate = bounded_aggregate(*rule.consequent.args)
+            raise BoundAggregationApplicationError(
+                "Magic Sets rewrite would lead to aggregation application"
+                " being bound. Problematic adorned expression is: "
+                f"{bounded_aggregate}"
+            )
 
     def adorn_predicate(self, predicate, predicate_number, in_edb):
         adornment = ""
@@ -155,7 +169,7 @@ class CeriSIPS(SIPS):
     
 
 def magic_rewrite_ceri(
-    query: Symbol, datalog: Iterable[Expression]
+    query: Expression, datalog: DatalogProgram
 ) -> Tuple[Symbol, Union]:
     """
     Implementation of the Magic Sets method of optimization for datalog
@@ -165,10 +179,10 @@ def magic_rewrite_ceri(
        Logic programming and databases. Springer-Verlag, Berlin, Heidelberg.
        p. 168.
 
-    query : Symbol
+    query : Expression
         the head symbol of the query rule in the program
-    datalog : Iterable[Expression]
-        a datalog program to optimize
+    datalog : DatalogProgram
+        a processed datalog program to optimize
 
     Returns
     -------
@@ -189,7 +203,7 @@ def magic_rewrite_ceri(
 
 
 def magic_rewrite(
-    query: Symbol, datalog: DatalogProgram
+    query: Expression, datalog: DatalogProgram
 ) -> Tuple[Symbol, Union]:
     """
     Implementation of the Magic Sets method of optimization for datalog
@@ -199,10 +213,10 @@ def magic_rewrite(
        Krishnamurthy Meenakshi. 1991. Efficient Bottom-UP Computation of
        Queries on Stratified Databases. J. Log. Program. 11(3&4). p. 311.
 
-    query : Symbol
+    query : Expression
         the head symbol of the query rule in the program
-    datalog : Iterable[Expression]
-        a datalog program to optimize
+    datalog : DatalogProgram
+        a processed datalog program to optimize
 
     Returns
     -------
@@ -458,22 +472,28 @@ def reachable_adorned_code(query, datalog, sips_class: Type[SIPS]):
     return expression_processing.reachable_code(adorned_query, adorned_datalog)
 
 
-def adorn_code(query, datalog, sips_class: Type[SIPS]):
+def adorn_code(
+    query: Expression, datalog: DatalogProgram, sips_class: Type[SIPS]
+) -> Union:
     """
     Produce the rewritten datalog program according to the
     Magic Sets technique.
 
-    :param query Implication: query to solve
-    :param datalog DatalogBasic: processed datalog program.
+    Parameters
+    ----------
+    query : Expression
+        query to solve
+    datalog : DatalogProgram
+        processed datalog program
+    sips_class : Type[SIPS]
+        the SIPS class to use for adornment of predicates
 
     Returns
     -------
     Union
-
         adorned code where the query rule is the first expression
         in the block.
     """
-
     adornment = ''
     for a in query.args:
         if isinstance(a, Symbol):
