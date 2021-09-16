@@ -987,6 +987,23 @@ def test_push_in_optimiser():
 
     assert res == exp_res
 
+    exp9 = Selection(
+        Projection(
+            NameColumns(r1, (a, b, c)),
+            (a, c)
+        ),
+        op(a)
+    )
+    res = opt.walk(exp9)
+    exp_res = Projection(
+        Selection(
+            NameColumns(r1, (a, b, c)),
+            op(a)
+        ),
+        (a, c)
+    )
+    assert res == exp_res
+
 
 def test_eliminate_trivial_projections_optimiser(R1):
     class Opt(EliminateTrivialProjections, ExpressionWalker):

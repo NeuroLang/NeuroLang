@@ -1676,10 +1676,10 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
 
     @ew.add_match(
         Selection(Projection, ...),
-        lambda exp: len(
-            set(exp.relation.attributes) &
-            get_expression_columns(exp.formula)
-        ) == 0
+        lambda exp: (
+            get_expression_columns(exp.formula) <=
+            set(exp.relation.attributes)
+        )
     )
     def push_selection_in_projection(self, expression):
         return self.walk(Projection(
