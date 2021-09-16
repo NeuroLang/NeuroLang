@@ -22,6 +22,7 @@ from ..relational_algebra import (
     FunctionApplicationListMember,
     GroupByAggregation,
     Intersection,
+    LeftNaturalJoin,
     NameColumns,
     NaturalJoin,
     Product,
@@ -883,6 +884,7 @@ def test_push_in_optimiser():
     r2 = Symbol('r2')
     a = Constant[ColumnStr](ColumnStr('a'))
     b = Constant[ColumnStr](ColumnStr('b'))
+    c = Constant[ColumnStr](ColumnStr('c'))
     op = Symbol('op')
 
     exp1 = NaturalJoin(r1, r2)
@@ -905,6 +907,84 @@ def test_push_in_optimiser():
             RenameColumn(r1, b, a), formula
         )
     )
+    assert res == exp_res
+
+    formula = op(a)
+    exp4 = Selection(LeftNaturalJoin(RenameColumn(r1, b, a), r2), formula)
+    res = opt.walk(exp4)
+    exp_res = LeftNaturalJoin(Selection(
+        RenameColumn(r1, b, a), formula),
+        r2
+    )
+    assert res == exp_res
+
+    exp5 = Selection(LeftNaturalJoin(r2, RenameColumn(r1, b, a)), formula)
+    res = opt.walk(exp5)
+    exp_res = LeftNaturalJoin(
+        r2,
+        Selection(
+            RenameColumn(r1, b, a), formula
+        )
+    )
+    assert res == exp_res
+
+    exp6 = Selection(
+        ExtendedProjection(
+                NameColumns(r1, (c,)),
+                (
+                    FunctionApplicationListMember(c, a),
+                    FunctionApplicationListMember(Constant(1), b)
+                )
+        ),
+        op(a)
+    )
+    res = opt.walk(exp6)
+    exp_res = ExtendedProjection(
+        Selection(
+            NameColumns(r1, (c,)),
+            op(c)
+        ),
+        (
+            FunctionApplicationListMember(c, a),
+            FunctionApplicationListMember(Constant(1), b)
+        )
+    )
+    assert res == exp_res
+
+    exp7 = Selection(
+        ExtendedProjection(
+                NameColumns(r1, (c,)),
+                (
+                    FunctionApplicationListMember(c, a),
+                    FunctionApplicationListMember(Constant(1), b)
+                )
+        ),
+        op(b)
+    )
+    res = opt.walk(exp7)
+
+    assert res == exp7
+
+    exp8 = Selection(
+        GroupByAggregation(
+                NameColumns(r1, (a, b)),
+                (a,),
+                (
+                    FunctionApplicationListMember(op, b),
+                )
+        ),
+        op(a)
+    )
+    res = opt.walk(exp8)
+
+    exp_res = GroupByAggregation(
+        Selection(NameColumns(r1, (a, b)), op(a)),
+        (a,),
+        (
+            FunctionApplicationListMember(op, b),
+        )
+    )
+
     assert res == exp_res
 
 

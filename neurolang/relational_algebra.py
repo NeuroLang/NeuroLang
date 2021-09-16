@@ -1645,7 +1645,7 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
     )
     def push_selection_in_leftnaturaljoin_left(self, expression):
         return self.walk(
-            NaturalJoin(
+            LeftNaturalJoin(
                 Selection(
                     expression.relation.relation_left,
                     expression.formula
@@ -1690,7 +1690,7 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
     @ew.add_match(
         Selection(ExtendedProjection, ...),
         lambda exp: (
-            get_expression_columns(exp.formula) <
+            get_expression_columns(exp.formula) <=
             {
                 projection.dst_column
                 for projection in exp.relation.projection_list
@@ -1713,7 +1713,7 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
     @ew.add_match(
         Selection(GroupByAggregation, ...),
         lambda exp: (
-            get_expression_columns(exp.formula) <
+            get_expression_columns(exp.formula) <=
             set(exp.relation.groupby)
         )
     )
