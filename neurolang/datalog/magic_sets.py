@@ -4,10 +4,14 @@ Magic Sets [1] rewriting implementation for Datalog.
 [1] F. Bancilhon, D. Maier, Y. Sagiv, J. D. Ullman, in ACM PODS ’86, pp. 1–15.
 '''
 
-from ..expressions import Constant, Symbol
+from typing import Iterable, Tuple, Type
+from ..config import config
+from ..expressions import Constant, Expression, Symbol
+from ..logic import Negation
 from ..type_system import Unknown
-from . import expression_processing, extract_logic_predicates
-from .expressions import Conjunction, Implication, Union
+from . import expression_processing, extract_logic_predicates, DatalogProgram
+from .exceptions import BoundAggregationApplicationError, NegationInMagicSetsRewriteError
+from .expressions import AggregationApplication, Conjunction, Implication, Union
 
 
 class AdornedExpression(Symbol):
@@ -51,14 +55,142 @@ class AdornedExpression(Symbol):
         else:
             subindex = ''
 
-        return (
-            f'S{{{rep}{superindex}{subindex}: '
-            f'{self.__type_repr__}}}'
+        if config.expression_type_printing():
+            return (
+                f'S{{{rep}{superindex}{subindex}: '
+                f'{self.__type_repr__}}}'
+            )
+        else:
+            return f'S{{{rep}{superindex}{subindex}}}'
+
+
+class SIPS:
+    """
+    Sideways Information Passing Strategy (SIPS). A SIPS defines how
+    bounded variables are passed from the head of a rule to the body
+    predicates of the rule. SIPS formally describe what information
+    (bounded variables) is passed by one literal, or a conjunction of
+    literals, to another literal.
+
+    This default SIPS considers that for a body predicate P, and head
+    predicate H with adornment a, a variable v of P is bound iif it
+    corresponds to a bound variable of H in a.
+    """
+
+    def __init__(self, rule, adornment, edb) -> None:
+        self.rule = rule
+        self.adornment = adornment
+        self.edb = edb
+        self.bound_variables = {
+            arg
+            for arg, ad in zip(rule.consequent.args, adornment)
+            if isinstance(arg, Symbol) and ad == "b"
+        }
+        bounded_aggregates = {
+            arg
+            for arg, ad in zip(rule.consequent.args, adornment)
+            if isinstance(arg, AggregationApplication) and ad == "b"
+        }
+        if len(bounded_aggregates) > 0:
+            bounded_aggregate = AdornedExpression(rule.consequent.functor, adornment, None)
+            bounded_aggregate = bounded_aggregate(*rule.consequent.args)
+            raise BoundAggregationApplicationError(
+                "Magic Sets rewrite would lead to aggregation application"
+                " being bound. Problematic adorned expression is: "
+                f"{bounded_aggregate}"
+            )
+
+    def adorn_predicate(self, predicate, predicate_number, in_edb):
+        adornment = ""
+        has_b = False
+        for arg in predicate.args:
+            if isinstance(arg, Constant) or arg in self.bound_variables:
+                adornment += "b"
+                has_b = True
+            else:
+                adornment += "f"
+
+        if in_edb and has_b:
+            adornment = "b" * len(adornment)
+
+        if not has_b:
+            adornment = ""
+
+        p = AdornedExpression(predicate.functor, adornment, predicate_number)
+        return p(*predicate.args)
+
+
+class LeftToRightSIPS(SIPS):
+    """
+    LeftToRightSIPS which corresponds to the default SIPS as specified in
+    Balbin et al. [1].
+
+    For a given body predicate P and head predicate H with adornment a,
+    a variable v of P is bound iif:
+        - it corresponds to a bound variable of H in a.
+        - or it is a variable of a positive body literal left of P in the
+          rule.
+
+    .. [1] Isaac Balbin, Graeme S. Port, Kotagiri Ramamohanarao,
+       Krishnamurthy Meenakshi. 1991. Efficient Bottom-UP Computation of
+       Queries on Stratified Databases. J. Log. Program. 11(3&4). p. 305.
+    """
+
+    def __init__(self, rule, adornment, edb) -> None:
+        super().__init__(rule, adornment, edb)
+
+    def adorn_predicate(self, predicate, predicate_number, in_edb):
+        adorned_predicate = super().adorn_predicate(
+            predicate, predicate_number, in_edb
         )
+        self.bound_variables.update(
+            arg for arg in predicate.args if isinstance(arg, Symbol)
+        )
+        return adorned_predicate
 
 
-def magic_rewrite(query, datalog):
-    adorned_code = reachable_adorned_code(query, datalog)
+class CeriSIPS(SIPS):
+    """
+    In this SIPS, the initial set of bounded variables in the head predicate H
+    with adornment a is augmented with all the variables of EDB predicates and
+    constants of the rule.
+    """
+
+    def __init__(self, rule, adornment, edb) -> None:
+        super().__init__(rule, adornment, edb)
+
+        for predicate in extract_logic_predicates(rule.antecedent):
+            if (
+                isinstance(predicate.functor, Constant)
+                or predicate.functor.name in edb
+            ) and len(self.bound_variables.intersection(predicate.args)) > 0:
+                self.bound_variables.update(
+                    arg for arg in predicate.args if isinstance(arg, Symbol)
+                )
+
+
+def magic_rewrite_ceri(
+    query: Expression, datalog: DatalogProgram
+) -> Tuple[Symbol, Union]:
+    """
+    Implementation of the Magic Sets method of optimization for datalog
+    programs using Ceri et al [1] algorithm.
+
+    .. [1] Stefano Ceri, Georg Gottlob, and Letizia Tanca. 1990.
+       Logic programming and databases. Springer-Verlag, Berlin, Heidelberg.
+       p. 168.
+
+    query : Expression
+        the head symbol of the query rule in the program
+    datalog : DatalogProgram
+        a processed datalog program to optimize
+
+    Returns
+    -------
+    Tuple[Symbol, Union]
+        the rewritten query symbol and program
+    """
+    adorned_code, _ = reachable_adorned_code(query, datalog, CeriSIPS)
     # assume that the query rule is the last
     adorned_query = adorned_code.formulas[-1]
     goal = adorned_query.consequent.functor
@@ -68,12 +200,126 @@ def magic_rewrite(query, datalog):
     magic_rules = create_magic_rules(adorned_code, idb, edb)
     modified_rules = create_modified_rules(adorned_code, edb)
     complementary_rules = create_complementary_rules(adorned_code, idb)
+    return goal, Union(magic_rules + modified_rules + complementary_rules)
 
-    return goal, Union(
-        magic_rules +
-        modified_rules +
-        complementary_rules
-    )
+
+def magic_rewrite(
+    query: Expression, datalog: DatalogProgram
+) -> Tuple[Symbol, Union]:
+    """
+    Implementation of the Magic Sets method of optimization for datalog
+    programs using Balbin et al [1] algorithm.
+
+    .. [1] Isaac Balbin, Graeme S. Port, Kotagiri Ramamohanarao,
+       Krishnamurthy Meenakshi. 1991. Efficient Bottom-UP Computation of
+       Queries on Stratified Databases. J. Log. Program. 11(3&4). p. 311.
+
+    query : Expression
+        the head symbol of the query rule in the program
+    datalog : DatalogProgram
+        a processed datalog program to optimize
+
+    Returns
+    -------
+    Tuple[Symbol, Union]
+        the rewritten query symbol and program
+    """
+    adorned_code, constant_predicates = reachable_adorned_code(query, datalog, LeftToRightSIPS)
+    # assume that the query rule is the last
+    adorned_query = adorned_code.formulas[-1]
+    goal = adorned_query.consequent.functor
+
+    edb = datalog.extensional_database()
+
+    magic_rules = create_balbin_magic_rules(adorned_code.formulas[:-1], edb)
+    magic_inits = create_magic_query_inits(constant_predicates)
+    return goal, Union(magic_inits + [adorned_query] + magic_rules,)
+
+
+def create_magic_query_inits(constant_predicates: Iterable[AdornedExpression]):
+    """
+    Create magic initialization predicates from the set of adorned predicates
+    with at least one argument constant, according to Balbin et al.'s magic
+    set algorithm.
+    For each adorned predicate p^a(t) in the set, return an
+    initialization rule of the form magic_p^a(t_d) :- True, where t_d is the
+    vector of arguments which are bound in the adornment a of p.
+
+    Parameters
+    ----------
+    constant_predicates : Iterable[AdornedExpression]
+        the set of adorned predicates where at least one argument is a constant
+
+    Returns
+    -------
+    Iterable[Expression]
+        the set of magic initialization rules
+    """
+    magic_init_rules = []
+    for predicate in constant_predicates:
+        magic_init_rules.append(
+            Implication(magic_predicate(predicate), Constant(True),)
+        )
+    return magic_init_rules
+
+
+def create_balbin_magic_rules(adorned_rules, edb):
+    """
+    Create the set of Magic Set rules according to Algorithm 2 of
+    Balbin et al.
+
+    This method creates the ensemble Pm of rewritten rules from the ensemble
+    P^a of adorned rules in the program (not including the adorned query rule).
+
+    The pseudo-code algorithm for this method is:
+
+    ```
+    for each adorned rule Ra in P^a of the form head :- body
+        add the rule head :- Magic(head), body to Pm
+        for each adorned predicate p in body :
+            add the rule Magic(p) :- Magic(h), ^(body predicates left of p)
+    ```
+    """
+    magic_rules = []
+    for rule in adorned_rules:
+        consequent = rule.consequent
+        magic_head = magic_predicate(consequent)
+        if len(magic_head.args) == 0:
+            magic_rules.append(rule)
+            continue
+        body_predicates = (magic_head,)
+        for predicate in extract_logic_predicates(rule.antecedent):
+            functor = predicate.functor
+            if isinstance(functor, AdornedExpression) and isinstance(
+                functor.expression, Constant
+            ):
+                body_predicates += (functor.expression(*predicate.args),)
+            elif functor.name in edb:
+                body_predicates += (Symbol(functor.name)(*predicate.args),)
+            elif (
+                isinstance(functor, AdornedExpression)
+                and "b" in functor.adornment
+            ):
+                new_predicate = magic_predicate(predicate)
+                if not (
+                    len(body_predicates) == 1
+                    and new_predicate == body_predicates[0]
+                ):
+                    # avoid adding rules of the form magic_p(x) :- magic_p(x)
+                    magic_rules.append(
+                        Implication(
+                            new_predicate, Conjunction(body_predicates)
+                        )
+                    )
+                body_predicates += (predicate,)
+            else:
+                body_predicates += (predicate,)
+
+        magic_rules.append(
+            Implication(consequent, Conjunction(body_predicates))
+        )
+
+    return magic_rules
 
 
 def create_complementary_rules(adorned_code, idb):
@@ -222,31 +468,37 @@ def magic_predicate(predicate, i=None):
     return new_functor(*new_args)
 
 
-def reachable_adorned_code(query, datalog):
-    adorned_code = adorn_code(query, datalog)
+def reachable_adorned_code(query, datalog, sips_class: Type[SIPS]):
+    adorned_code, constant_predicates = adorn_code(query, datalog, sips_class)
     adorned_datalog = type(datalog)()
     adorned_datalog.walk(adorned_code)
     # assume that the query rule is the first
     adorned_query = adorned_code.formulas[0]
-    return expression_processing.reachable_code(adorned_query, adorned_datalog)
+    return expression_processing.reachable_code(adorned_query, adorned_datalog), constant_predicates
 
 
-def adorn_code(query, datalog):
+def adorn_code(
+    query: Expression, datalog: DatalogProgram, sips_class: Type[SIPS]
+) -> Union:
     """
     Produce the rewritten datalog program according to the
     Magic Sets technique.
 
-    :param query Implication: query to solve
-    :param datalog DatalogBasic: processed datalog program.
+    Parameters
+    ----------
+    query : Expression
+        query to solve
+    datalog : DatalogProgram
+        processed datalog program
+    sips_class : Type[SIPS]
+        the SIPS class to use for adornment of predicates
 
     Returns
     -------
     Union
-
         adorned code where the query rule is the first expression
         in the block.
     """
-
     adornment = ''
     for a in query.args:
         if isinstance(a, Symbol):
@@ -261,6 +513,7 @@ def adorn_code(query, datalog):
     idb = datalog.intensional_database()
     rewritten_program = []
     rewritten_rules = set()
+    constant_predicates = set()
 
     while adorn_stack:
         consequent = adorn_stack.pop()
@@ -279,7 +532,7 @@ def adorn_code(query, datalog):
         for rule in rules.formulas:
             adorned_antecedent, to_adorn = adorn_antecedent(
                 rule, adornment,
-                edb, rewritten_rules
+                edb, rewritten_rules, sips_class
             )
             adorn_stack += to_adorn
             new_consequent = consequent.functor(*rule.consequent.args)
@@ -287,40 +540,31 @@ def adorn_code(query, datalog):
                 Implication(new_consequent, adorned_antecedent)
             )
             rewritten_rules.add(consequent.functor)
+            for predicate in to_adorn:
+                for arg in predicate.args:
+                    if isinstance(arg, Constant):
+                        constant_predicates.add(predicate)
 
-    return Union(rewritten_program)
+    return Union(rewritten_program), constant_predicates
 
 
 def adorn_antecedent(
-    rule, adornment, edb, rewritten_rules
+    rule, adornment, edb, rewritten_rules, sips_class: Type[SIPS]
 ):
-    consequent = rule.consequent
     antecedent = rule.antecedent
     to_adorn = []
 
-    bound_variables = {
-        arg for arg, ad in zip(consequent.args, adornment)
-        if isinstance(arg, Symbol) and ad == 'b'
-    }
+    sips = sips_class(rule, adornment, edb)
 
     predicates = extract_logic_predicates(antecedent)
     checked_predicates = {}
     adorned_antecedent = None
 
     for predicate in predicates:
-        if (
-            (
-                isinstance(predicate.functor, Constant) or
-                predicate.functor.name in edb
-            ) and
-            len(bound_variables.intersection(predicate.args)) > 0
-        ):
-            bound_variables.update(
-                arg for arg in predicate.args
-                if isinstance(arg, Symbol)
+        if isinstance(predicate, Negation):
+            raise NegationInMagicSetsRewriteError(
+                "Magic sets rewrite does not work with negative predicates."
             )
-
-    for predicate in predicates:
         predicate_number = checked_predicates.get(predicate, 0)
         checked_predicates[predicate] = predicate_number + 1
         in_edb = (
@@ -328,9 +572,7 @@ def adorn_antecedent(
             predicate.functor.name in edb
         )
 
-        adorned_predicate = adorn_predicate(
-            predicate, bound_variables, predicate_number, in_edb
-        )
+        adorned_predicate = sips.adorn_predicate(predicate, predicate_number, in_edb)
 
         is_adorned = isinstance(adorned_predicate.functor, AdornedExpression)
         if (
@@ -349,30 +591,3 @@ def adorn_antecedent(
     else:
         adorned_antecedent = Conjunction(adorned_antecedent)
     return adorned_antecedent, to_adorn
-
-
-def adorn_predicate(
-    predicate, bound_consequent_variables,
-    predicate_number, in_edb
-):
-
-    adornment = ''
-    has_b = False
-    for arg in predicate.args:
-        if (
-            isinstance(arg, Constant) or
-            arg in bound_consequent_variables
-        ):
-            adornment += 'b'
-            has_b = True
-        else:
-            adornment += 'f'
-
-    if in_edb and has_b:
-        adornment = 'b' * len(adornment)
-
-    if not has_b:
-        adornment = ''
-
-    p = AdornedExpression(predicate.functor, adornment, predicate_number)
-    return p(*predicate.args)
