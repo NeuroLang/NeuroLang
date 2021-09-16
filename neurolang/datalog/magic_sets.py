@@ -7,9 +7,10 @@ Magic Sets [1] rewriting implementation for Datalog.
 from typing import Tuple, Type
 from ..config import config
 from ..expressions import Constant, Expression, Symbol
+from ..logic import Negation
 from ..type_system import Unknown
 from . import expression_processing, extract_logic_predicates, DatalogProgram
-from .exceptions import BoundAggregationApplicationError
+from .exceptions import BoundAggregationApplicationError, NegationInMagicSetsRewriteError
 from .expressions import AggregationApplication, Conjunction, Implication, Union
 
 
@@ -255,9 +256,11 @@ def create_magic_query_inits(adorned_query):
     """
     magic_init_rules = []
     for predicate in extract_logic_predicates(adorned_query.antecedent):
-        magic_init_rules.append(
-            Implication(magic_predicate(predicate), Constant(True),)
-        )
+        functor = predicate.functor
+        if isinstance(functor, AdornedExpression) and "b" in functor.adornment:
+            magic_init_rules.append(
+                Implication(magic_predicate(predicate), Constant(True),)
+            )
     return magic_init_rules
 
 
@@ -551,6 +554,10 @@ def adorn_antecedent(
     adorned_antecedent = None
 
     for predicate in predicates:
+        if isinstance(predicate, Negation):
+            raise NegationInMagicSetsRewriteError(
+                "Magic sets rewrite does not work with negative predicates."
+            )
         predicate_number = checked_predicates.get(predicate, 0)
         checked_predicates[predicate] = predicate_number + 1
         in_edb = (
