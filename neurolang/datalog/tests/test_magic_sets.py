@@ -28,15 +28,32 @@ class Datalog(
     DatalogWithAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogProgram,
-    expression_walker.ExpressionBasicEvaluator
+    expression_walker.ExpressionBasicEvaluator,
 ):
     pass
 
 
-def test_adorned_expression():
-    x = S_('x')
-    a = C_('a')
+x = S_("x")
+y = S_("y")
+z = S_("z")
+x1 = S_("x1")
+y1 = S_("y1")
+rsg = S_("rsg")
+up = S_("up")
+down = S_("down")
+flat = S_("flat")
+anc = S_("anc")
+par = S_("par")
+anc2 = S_("anc2")
+q = S_("q")
+a = C_("a")
+b = C_("b")
+c = C_("c")
+d = C_("d")
+eq = C_(operator.eq)
 
+
+def test_adorned_expression():
     ax = magic_sets.AdornedExpression(x, 'b', 1)
     ax_ = magic_sets.AdornedExpression(x, 'b', 1)
     ax__ = magic_sets.AdornedExpression(a, 'b', 1)
@@ -62,17 +79,6 @@ def test_adorned_expression():
 
 
 def test_resolution_works():
-    x = S_('X')
-    y = S_('Y')
-    z = S_('Z')
-    anc = S_('anc')
-    par = S_('par')
-    q = S_('q')
-    a = C_('a')
-    b = C_('b')
-    c = C_('c')
-    d = C_('d')
-
     edb = Eb_([
         F_(par(a, b)),
         F_(par(b, c)),
@@ -107,16 +113,6 @@ def test_resolution_works_2():
     l1:  e  f   g   h   i   j   k
     l2:  a  b   c   d
     """
-    x = S_("x")
-    y = S_("y")
-    x1 = S_("x1")
-    y1 = S_("y1")
-    rsg = S_("rsg")
-    up = S_("up")
-    down = S_("down")
-    flat = S_("flat")
-    q = S_("q")
-
     edb = Eb_(
         [
             F_(up(C_("a"), C_("e"))),
@@ -161,17 +157,6 @@ def test_resolution_works_2():
 
 
 def test_resolution_works_query_constant():
-    x = S_('X')
-    y = S_('Y')
-    z = S_('Z')
-    anc = S_('anc')
-    par = S_('par')
-    q = S_('q')
-    a = C_('a')
-    b = C_('b')
-    c = C_('c')
-    d = C_('d')
-
     edb = Eb_([
         F_(par(a, b)),
         F_(par(b, c)),
@@ -197,20 +182,34 @@ def test_resolution_works_query_constant():
     assert solution[goal].value == {C_((e, a)) for e in (b, c, d)}
 
 
-def test_resolution_works_builtin():
-    x = S_('X')
-    y = S_('Y')
-    z = S_('Z')
-    anc = S_('anc')
-    par = S_('par')
-    anc2 = S_('anc2')
-    q = S_('q')
-    a = C_('a')
-    b = C_('b')
-    c = C_('c')
-    d = C_('d')
-    eq = C_(operator.eq)
+def test_resolution_works_query_free():
+    edb = Eb_([
+        F_(par(a, b)),
+        F_(par(b, c)),
+        F_(par(c, d)),
+    ])
 
+    code = Eb_([
+        Imp_(q(x), anc2(x)),
+        Imp_(anc(x, y), par(x, y)),
+        Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        Imp_(anc2(x), anc(a, x))
+    ])
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
+
+
+def test_resolution_works_builtin():
     edb = Eb_([
         F_(par(a, b)),
         F_(par(b, c)),
@@ -238,18 +237,6 @@ def test_resolution_works_builtin():
 
 
 def test_resolution_works_aggregation():
-    x = S_('X')
-    y = S_('Y')
-    z = S_('Z')
-    anc = S_('anc')
-    par = S_('par')
-    anc2 = S_('anc2')
-    q = S_('q')
-    a = C_('a')
-    b = C_('b')
-    c = C_('c')
-    d = C_('d')
-
     edb = Eb_([
         F_(par(a, b)),
         F_(par(b, c)),
@@ -277,18 +264,6 @@ def test_resolution_works_aggregation():
 
 
 def test_bound_aggregation_raises_error():
-    x = S_("X")
-    y = S_("Y")
-    z = S_("Z")
-    anc = S_("anc")
-    par = S_("par")
-    anc2 = S_("anc2")
-    q = S_("q")
-    a = C_("a")
-    b = C_("b")
-    c = C_("c")
-    d = C_("d")
-
     edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d)),])
 
     code = Eb_(
@@ -308,18 +283,6 @@ def test_bound_aggregation_raises_error():
 
 
 def test_negation_raises_error():
-    x = S_("X")
-    y = S_("Y")
-    z = S_("Z")
-    anc = S_("anc")
-    par = S_("par")
-    anc2 = S_("anc2")
-    q = S_("q")
-    a = C_("a")
-    b = C_("b")
-    c = C_("c")
-    d = C_("d")
-
     edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d)),])
 
     code = Eb_(

@@ -4,7 +4,7 @@ Magic Sets [1] rewriting implementation for Datalog.
 [1] F. Bancilhon, D. Maier, Y. Sagiv, J. D. Ullman, in ACM PODS ’86, pp. 1–15.
 '''
 
-from typing import Tuple, Type
+from typing import Iterable, Tuple, Type
 from ..config import config
 from ..expressions import Constant, Expression, Symbol
 from ..logic import Negation
@@ -190,7 +190,7 @@ def magic_rewrite_ceri(
     Tuple[Symbol, Union]
         the rewritten query symbol and program
     """
-    adorned_code = reachable_adorned_code(query, datalog, CeriSIPS)
+    adorned_code, _ = reachable_adorned_code(query, datalog, CeriSIPS)
     # assume that the query rule is the last
     adorned_query = adorned_code.formulas[-1]
     goal = adorned_query.consequent.functor
@@ -224,7 +224,7 @@ def magic_rewrite(
     Tuple[Symbol, Union]
         the rewritten query symbol and program
     """
-    adorned_code = reachable_adorned_code(query, datalog, LeftToRightSIPS)
+    adorned_code, constant_predicates = reachable_adorned_code(query, datalog, LeftToRightSIPS)
     # assume that the query rule is the last
     adorned_query = adorned_code.formulas[-1]
     goal = adorned_query.consequent.functor
@@ -232,22 +232,23 @@ def magic_rewrite(
     edb = datalog.extensional_database()
 
     magic_rules = create_balbin_magic_rules(adorned_code.formulas[:-1], edb)
-    magic_inits = create_magic_query_inits(adorned_query)
+    magic_inits = create_magic_query_inits(constant_predicates)
     return goal, Union(magic_inits + [adorned_query] + magic_rules,)
 
 
-def create_magic_query_inits(adorned_query):
+def create_magic_query_inits(constant_predicates: Iterable[AdornedExpression]):
     """
-    Create magic initialization predicates from the adorned query rule,
-    according to Balbin et al.'s magic set algorithm.
-    For each adorned predicate p^a(t) in the query's antecedent, return an
+    Create magic initialization predicates from the set of adorned predicates
+    with at least one argument constant, according to Balbin et al.'s magic
+    set algorithm.
+    For each adorned predicate p^a(t) in the set, return an
     initialization rule of the form magic_p^a(t_d) :- True, where t_d is the
     vector of arguments which are bound in the adornment a of p.
 
     Parameters
     ----------
-    adorned_query : Expression
-        the adorned query rule
+    constant_predicates : Iterable[AdornedExpression]
+        the set of adorned predicates where at least one argument is a constant
 
     Returns
     -------
@@ -255,12 +256,10 @@ def create_magic_query_inits(adorned_query):
         the set of magic initialization rules
     """
     magic_init_rules = []
-    for predicate in extract_logic_predicates(adorned_query.antecedent):
-        functor = predicate.functor
-        if isinstance(functor, AdornedExpression) and "b" in functor.adornment:
-            magic_init_rules.append(
-                Implication(magic_predicate(predicate), Constant(True),)
-            )
+    for predicate in constant_predicates:
+        magic_init_rules.append(
+            Implication(magic_predicate(predicate), Constant(True),)
+        )
     return magic_init_rules
 
 
@@ -285,6 +284,9 @@ def create_balbin_magic_rules(adorned_rules, edb):
     for rule in adorned_rules:
         consequent = rule.consequent
         magic_head = magic_predicate(consequent)
+        if len(magic_head.args) == 0:
+            magic_rules.append(rule)
+            continue
         body_predicates = (magic_head,)
         for predicate in extract_logic_predicates(rule.antecedent):
             functor = predicate.functor
@@ -467,12 +469,12 @@ def magic_predicate(predicate, i=None):
 
 
 def reachable_adorned_code(query, datalog, sips_class: Type[SIPS]):
-    adorned_code = adorn_code(query, datalog, sips_class)
+    adorned_code, constant_predicates = adorn_code(query, datalog, sips_class)
     adorned_datalog = type(datalog)()
     adorned_datalog.walk(adorned_code)
     # assume that the query rule is the first
     adorned_query = adorned_code.formulas[0]
-    return expression_processing.reachable_code(adorned_query, adorned_datalog)
+    return expression_processing.reachable_code(adorned_query, adorned_datalog), constant_predicates
 
 
 def adorn_code(
@@ -511,6 +513,7 @@ def adorn_code(
     idb = datalog.intensional_database()
     rewritten_program = []
     rewritten_rules = set()
+    constant_predicates = set()
 
     while adorn_stack:
         consequent = adorn_stack.pop()
@@ -537,8 +540,12 @@ def adorn_code(
                 Implication(new_consequent, adorned_antecedent)
             )
             rewritten_rules.add(consequent.functor)
+            for predicate in to_adorn:
+                for arg in predicate.args:
+                    if isinstance(arg, Constant):
+                        constant_predicates.add(predicate)
 
-    return Union(rewritten_program)
+    return Union(rewritten_program), constant_predicates
 
 
 def adorn_antecedent(
