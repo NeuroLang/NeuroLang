@@ -130,7 +130,7 @@ class LeftToRightSIPS(SIPS):
         - or it is a variable of a positive body literal left of P in the
           rule.
 
-    .. [1] Isaac Balbin, Graeme S. Port, Kotagiri Ramamohanarao, 
+    .. [1] Isaac Balbin, Graeme S. Port, Kotagiri Ramamohanarao,
        Krishnamurthy Meenakshi. 1991. Efficient Bottom-UP Computation of
        Queries on Stratified Databases. J. Log. Program. 11(3&4). p. 305.
     """
@@ -166,7 +166,7 @@ class CeriSIPS(SIPS):
                 self.bound_variables.update(
                     arg for arg in predicate.args if isinstance(arg, Symbol)
                 )
-    
+
 
 def magic_rewrite_ceri(
     query: Expression, datalog: DatalogProgram
