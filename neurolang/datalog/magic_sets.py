@@ -209,7 +209,7 @@ def magic_rewrite(
     Implementation of the Magic Sets method of optimization for datalog
     programs using Balbin et al [1] algorithm.
 
-    .. [1] Isaac Balbin, Graeme S. Port, Kotagiri Ramamohanarao, 
+    .. [1] Isaac Balbin, Graeme S. Port, Kotagiri Ramamohanarao,
        Krishnamurthy Meenakshi. 1991. Efficient Bottom-UP Computation of
        Queries on Stratified Databases. J. Log. Program. 11(3&4). p. 311.
 
@@ -242,7 +242,7 @@ def create_magic_query_inits(adorned_query):
     For each adorned predicate p^a(t) in the query's antecedent, return an
     initialization rule of the form magic_p^a(t_d) :- True, where t_d is the
     vector of arguments which are bound in the adornment a of p.
-    
+
     Parameters
     ----------
     adorned_query : Expression
