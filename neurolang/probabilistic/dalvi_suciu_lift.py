@@ -179,7 +179,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         solver_class=ExtendedRAPToRAWalker
     )
 
-    with log_performance(LOG, "Run RAP query %s", init_args=(repr(ra_query),)):
+    with log_performance(LOG, "Run RAP query %s", init_args=(ra_query,)):
         prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
