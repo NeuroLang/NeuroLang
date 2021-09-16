@@ -807,3 +807,22 @@ def test_nested_function_application(chase_class):
         C_(((2 ** 2 + 1 ** 2) // 2,)),
         C_(((2 ** 2 + 2 ** 2) // 2,)),
     }
+
+
+def test_var_to_const_eq_antecedent(chase_class):
+    P = S_("P")
+    x = S_("x")
+    y = S_("y")
+    code = Union(
+        (
+            Implication(
+                P(x, y),
+                Conjunction((C_(op.eq)(x, C_(0)), C_(op.eq)(y, C_(1)))),
+            ),
+        )
+    )
+    dl = Datalog()
+    dl.walk(code)
+    solution = chase_class(dl).build_chase_solution()
+    assert P in solution
+    assert solution[P].value == {(C_(0), C_(1))}
