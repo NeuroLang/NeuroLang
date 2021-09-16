@@ -807,3 +807,28 @@ def test_nested_function_application(chase_class):
         C_(((2 ** 2 + 1 ** 2) // 2,)),
         C_(((2 ** 2 + 2 ** 2) // 2,)),
     }
+
+
+def test_infinite_recursion(chase_class):
+    Next = S_("Next")
+    # add auxilary symbol due to issue with rule
+    #   Next(x, y) :- (x = 0) & (x = 1)
+    # which does not seem to be resolved properly
+    Aux = S_("Aux")
+    x = S_("x")
+    y = S_("y")
+    z = S_("z")
+    code = Union(
+        (
+            Implication(Next(x, y), Aux(x, y)),
+            Implication(
+                Next(x, y),
+                Conjunction((Next(z, y), C_(op.eq)(y, C_(op.add)(x, C_(1))))),
+            ),
+        )
+    )
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(Aux, {(0, 1)})
+    dl.walk(code)
+    with raises(Exception):
+        chase_class(dl).build_chase_solution()
