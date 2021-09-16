@@ -764,3 +764,22 @@ def test_numpy_mixin_adds_functions():
         assert set(res["q"]) == {
             (i, getattr(np, func)(i)) for i in np.arange(1, 10)
         }
+
+
+def test_infinite_tuple_construction():
+    nl = frontend.NeurolangDL()
+
+    @nl.add_symbol
+    def add_zero_to_tuple(l: tuple) -> tuple:
+        return l + (0,)
+
+    nl.add_tuple_set({(tuple(),)}, name='Aux')
+
+    with nl.scope as e:
+        e.P[e.start_tuple] = e.Aux(e.start_tuple)
+        e.P[e.new_tuple] = (
+            e.P(e.old_tuple)
+            & (e.new_tuple == e.add_zero_to_tuple(e.old_tuple))
+        )
+        with pytest.raises(Exception):
+            nl.solve_all()
