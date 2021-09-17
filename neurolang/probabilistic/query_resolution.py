@@ -1,3 +1,4 @@
+import logging
 import typing
 from typing import AbstractSet
 
@@ -21,6 +22,7 @@ from ..relational_algebra import (
     RelationalAlgebraPushInSelections,
     RelationalAlgebraSolver,
     RenameOptimizations,
+    SimplifyExtendedProjectionsWithConstants,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import NaturalJoinInverse
@@ -52,6 +54,9 @@ def _qbased_probfact_needs_translation(formula: Implication) -> bool:
         isinstance(antecedent_pred.functor, Symbol)
         and antecedent_pred.functor.is_fresh
     )
+
+
+LOG = logging.getLogger(__name__)
 
 
 class QueryBasedProbFactToDetRule(PatternWalker):
@@ -350,6 +355,7 @@ class RAQueryOptimiser(
     EliminateTrivialProjections,
     RelationalAlgebraPushInSelections,
     RenameOptimizations,
+#    SimplifyExtendedProjectionsWithConstants,
     ExpressionWalker,
 ):
     pass
@@ -376,10 +382,23 @@ def generate_provenance_query_solver(
         Default is `ProbSemiringToRelationalAlgebraSolver`.
     """
 
+    class LogExpression(PatternWalker):
+        def __init__(self, logger, message, level):
+            self.logger = logger
+            self.message = message
+            self.level = level
+
+        @add_match(...)
+        def log_exp(self, expression):
+            LOG.log(self.level, self.message, expression)
+            return expression
+
     steps = [
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
-        RAQueryOptimiser()
+        LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
+        RAQueryOptimiser(),
+        LogExpression(LOG, "Optimised RA query %s", logging.INFO)
     ]
 
     if run_relational_algebra_solver:

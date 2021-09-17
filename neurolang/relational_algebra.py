@@ -30,6 +30,7 @@ from .utils.relational_algebra_set import (
 )
 
 eq_ = Constant(operator.eq)
+COUNT = Constant(len)
 
 
 class Column:
@@ -353,7 +354,8 @@ class GroupByAggregation(RelationalAlgebraOperation):
 
     def __repr__(self):
         join_str = "," if len(self.aggregate_functions) < 2 else ",\n"
-        return "γ_[{}]({})".format(
+        return "γ_[{}, {}]({})".format(
+            repr(self.groupby),
             join_str.join(
                 [repr(member) for member in self.aggregate_functions]
             ),
@@ -929,7 +931,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         groupby = list(c.value for c in agg_op.groupby)
         aggregate_functions = []
         for member in agg_op.aggregate_functions:
-            fun_args = [arg.value for arg in member.fun_exp.args]
+            fun_args = tuple(arg.value for arg in member.fun_exp.args)
             if len(fun_args) == 1:
                 fun_args = fun_args[0]
             aggregate_functions.append(
@@ -1447,6 +1449,199 @@ class EliminateTrivialProjections(ew.PatternWalker):
             expression.relation,
             tuple(p.dst_column for p in expression.projection_list)
         ))
+
+    @ew.add_match(
+        ExtendedProjection,
+        lambda e: all(
+            isinstance(p.fun_exp, Constant[ColumnStr])
+            for p in e.projection_list
+        ) and (
+            len(set(p.fun_exp for p in e.projection_list))
+            == len(e.projection_list)
+        )
+    )
+    def convert_extended_projection_2_rename(self, expression):
+        return self.walk(RenameColumns(
+            expression.relation,
+            tuple(
+                (p.fun_exp, p.dst_column)
+                for p in expression.projection_list
+            )
+        ))
+
+
+class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
+    @ew.add_match(
+        ExtendedProjection(
+            ExtendedProjection,
+            ...
+        ),
+        lambda expression: all(
+            isinstance(int_proj.fun_exp, Constant)
+            for int_proj in expression.relation.projection_list
+        )
+    )
+    def nested_extended_projection_constant(self, expression):
+        rew = ew.ReplaceExpressionWalker({
+            p.dst_column: p.fun_exp
+            for p in expression.relation.relation.projection_list
+        })
+        new_projections = rew.walk(expression.projection_list)
+        return self.walk(
+            ExtendedProjection(
+                expression.relation.relation,
+                new_projections
+            )
+        )
+
+    @ew.add_match(
+        ExtendedProjection(
+            NaturalJoin(ExtendedProjection, ...),
+            ...
+        ),
+        lambda expression: any(
+            _function_application_list_member_has_constant_exp(int_proj)
+            for int_proj in expression.relation.relation_left.projection_list
+        )
+    )
+    def nested_extended_projection_naturaljoin_constant_l(self, expression):
+        return self._nested_ep_join_constant_left(expression, NaturalJoin)
+
+    @ew.add_match(
+        ExtendedProjection(
+            LeftNaturalJoin(ExtendedProjection, ...),
+            ...
+        ),
+        lambda expression: any(
+           _function_application_list_member_has_constant_exp(int_proj)
+           for int_proj in expression.relation.relation_left.projection_list
+        )
+    )
+    def nested_extended_projection_leftnaturaljoin_constant(self, expression):
+        return self._nested_ep_join_constant_left(expression, LeftNaturalJoin)
+
+    @ew.add_match(
+        ExtendedProjection(
+            NaturalJoin(..., ExtendedProjection),
+            ...
+        ),
+        lambda expression: any(
+            _function_application_list_member_has_constant_exp(int_proj)
+            for int_proj in expression.relation.relation_right.projection_list
+        )
+    )
+    def nested_extended_projection_naturaljoin_constantr(self, expression):
+        return self.walk(
+            ExtendedProjection(
+                NaturalJoin(
+                    expression.relation.relation_right,
+                    expression.relation.relation_left
+                ),
+                expression.projection_list
+            )
+        )
+
+    @ew.add_match(
+        ExtendedProjection(
+            LeftNaturalJoin(..., ExtendedProjection),
+            ...
+        ),
+        lambda expression: any(
+           _function_application_list_member_has_constant_exp(int_proj)
+           for int_proj in expression.relation.relation_right.projection_list
+        )
+    )
+    def nested_extended_projection_leftnaturaljoin_constantr(self, expression):
+        return self.walk(
+            ExtendedProjection(
+                LeftNaturalJoin(
+                    expression.relation.relation_right,
+                    expression.relation.relation_left
+                ),
+                expression.projection_list
+            )
+        )
+
+    def _nested_ep_join_constant_left(self, expression, joinop):
+        new_inner_projections = []
+        replacements = {}
+        for proj in expression.relation.relation_left.projection_list:
+            if (
+                isinstance(proj.fun_exp, Constant) and
+                not isinstance(proj.fun_exp, Constant[Column])
+            ):
+                replacements[proj.dst_column] = proj.fun_exp
+            else:
+                new_inner_projections.append(proj)
+
+        rew = ew.ReplaceExpressionWalker(replacements)
+        new_external_projections = tuple(
+            FunctionApplicationListMember(rew.walk(p.fun_exp), p.dst_column)
+            for p in expression.projection_list
+        )
+        return self.walk(
+            ExtendedProjection(
+                joinop(
+                    ExtendedProjection(
+                        expression.relation.relation_left.relation,
+                        tuple(new_inner_projections)
+                    ),
+                    expression.relation.relation_right
+                ),
+                new_external_projections
+            )
+        )
+
+    @ew.add_match(
+        GroupByAggregation(
+            ExtendedProjection, ...,
+            (
+                FunctionApplicationListMember(
+                    FunctionApplication(Constant(sum), ...),
+                    ...
+                ),
+            )
+        ),
+        lambda expression: any(
+            (
+                proj.dst_column ==
+                expression.aggregate_functions[0].fun_exp.args[0]
+            ) &
+            (proj.fun_exp == Constant[float](1.))
+            for proj in expression.relation.projection_list
+        )
+    )
+    def replace_trivial_agg_groupby(self, expression):
+        new_projections = tuple(
+            proj for proj in expression.relation.projection_list
+            if proj.dst_column != expression.aggregate_functions[0].fun_exp.args[0]
+        )
+        return self.walk(
+            GroupByAggregation(
+                ExtendedProjection(
+                    expression.relation.relation,
+                    new_projections
+                ),
+                expression.groupby,
+                (
+                    FunctionApplicationListMember(
+                        COUNT(),
+                        expression.aggregate_functions[0].dst_column
+                    ),
+                )
+
+            )
+        )
+
+
+def _function_application_list_member_has_constant_exp(int_proj):
+    return (
+        isinstance(int_proj.fun_exp, Constant) and
+        not isinstance(
+            int_proj.fun_exp,
+            (Constant[Column], Constant[RelationalAlgebraStringExpression])
+        )
+    )
 
 
 class RenameOptimizations(ew.PatternWalker):
