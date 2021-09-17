@@ -3,6 +3,7 @@ import warnings
 import rdflib
 from rdflib import BNode, Literal
 from rdflib.namespace import OWL, RDF, RDFS, SKOS
+from rdflib.extras.infixowl import EnumeratedClass, AllDifferent
 
 from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
 from ..expressions import Constant, Symbol
@@ -74,10 +75,10 @@ class OntologyParser:
                 elif prop == OWL.equivalentClass:
                     self._parseEquivalentClass(entity, prop, value)
 
-                elif prop == OWL.EnumeratedClass:
+                elif prop == EnumeratedClass:
                     self._parseEnumeratedClass(entity, prop, value)
 
-                elif prop == OWL.DisjointClass:
+                elif prop == AllDifferent:
                     self._parseDisjointClass(entity, prop, value)
                 else:
                     if not isinstance(value, BNode):

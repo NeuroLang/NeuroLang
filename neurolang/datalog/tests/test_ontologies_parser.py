@@ -70,7 +70,7 @@ def test_1():
     imp_label5 = RightImplication(Article(x), label(x, Constant('article')))
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, _ = onto.parse_ontology()
+    constraints, _, _ = onto.parse_ontology()
 
     assert set(constraints.keys()) == set(['Employee', 'Publication', 'Professor', 'rdf-schema:label'])
 
@@ -191,7 +191,7 @@ def test_2():
     imp_label4 = RightImplication(Course(x), label(x, Constant('teaching course')))
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, _ = onto.parse_ontology()
+    constraints, _, _ = onto.parse_ontology()
 
     assert set(constraints.keys()) == set(['AdministrativeStaff', 'Organization', 'Article', 'Work', 'rdf-schema:label'])
 
@@ -295,7 +295,7 @@ def test_3():
     label = Symbol('rdf-schema:label')
 
     onto = OntologyParser(io.StringIO(owl))
-    constraints, _ = onto.parse_ontology()
+    constraints, _, _ = onto.parse_ontology()
 
     for c in constraints:
         if c.startswith('fresh'):
