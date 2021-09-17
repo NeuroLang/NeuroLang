@@ -134,7 +134,7 @@ def test_probabilistic_ontology_code():
     )
 
     onto = OntologyParser(io.StringIO(test_case))
-    constraints = onto.parse_ontology()
+    constraints, _ = onto.parse_ontology()
     prob_onto_solver.set_constraints(constraints)
 
     iterable = [
