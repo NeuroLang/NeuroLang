@@ -1,4 +1,5 @@
 import logging
+import operator
 import typing
 from typing import AbstractSet
 
@@ -11,7 +12,7 @@ from ..datalog.expression_processing import (
 from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ChainedWalker, ExpressionWalker, PatternWalker
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
 from ..relational_algebra import (
     EliminateTrivialProjections,
@@ -351,11 +352,31 @@ def _build_probabilistic_program(
     return cpl, prob_idb
 
 
+class FloatArithmeticSimplifier(PatternWalker):
+    @add_match(
+        FunctionApplication(
+            Constant[typing.Any](operator.mul),
+            (Constant[float](1.0), Expression[typing.Any]))
+        )
+    def simplify_mul_left(self, expression):
+        return self.walk(expression.args[1])
+
+    @add_match(
+        FunctionApplication(
+            Constant[typing.Any](operator.mul),
+            (Expression[typing.Any], Constant[float](1.0))
+        )
+    )
+    def simplify_mul_right(self, expression):
+        return self.walk(expression.args[0])
+
+
 class RAQueryOptimiser(
     EliminateTrivialProjections,
     RelationalAlgebraPushInSelections,
     RenameOptimizations,
-#    SimplifyExtendedProjectionsWithConstants,
+    SimplifyExtendedProjectionsWithConstants,
+    FloatArithmeticSimplifier,
     ExpressionWalker,
 ):
     pass
