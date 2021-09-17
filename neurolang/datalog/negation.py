@@ -69,10 +69,10 @@ class DatalogProgramNegationMixin(PatternWalker):
                 "All variables on the consequent need to be on the antecedent"
             )
 
-        if consequent.functor.name in self.symbol_table:
-            value = self.symbol_table[consequent.functor.name]
+        if consequent.functor in self.symbol_table:
+            value = self.symbol_table[consequent.functor]
             self._is_previously_defined(value)
-            disj = self.symbol_table[consequent.functor.name].formulas
+            disj = self.symbol_table[consequent.functor].formulas
             self._is_in_idb(expression, disj)
 
         else:
