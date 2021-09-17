@@ -6,7 +6,7 @@ import numpy
 import pandas.core.computation.ops
 
 from . import expression_walker as ew, type_system
-from .exceptions import NeuroLangException, ProjectionOverMissingColumnsError
+from .exceptions import NeuroLangException
 from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
@@ -18,9 +18,9 @@ from .expressions import (
     sure_is_not_pattern
 )
 from .utils import (
-    RelationalAlgebraFrozenSet,
     NamedRelationalAlgebraFrozenSet,
     OrderedSet,
+    RelationalAlgebraFrozenSet,
     RelationalAlgebraSet
 )
 from .utils.relational_algebra_set import (
