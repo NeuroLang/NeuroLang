@@ -73,8 +73,6 @@ class OntologyParser:
                 elif prop == EnumeratedClass:
                     self._parseEnumeratedClass(entity, prop, value)
 
-                elif prop == OWL.AllDisjointClasses:
-                    self._parseDisjointClass(entity, prop, value)
                 else:
                     if not isinstance(value, BNode):
                         self._parseProperty(entity, prop, value)
@@ -482,10 +480,6 @@ class OntologyParser:
     def _parseEquivalentClass(self, entity, prop, value):
         # <->
         warnings.warn("Not implemented yet: EquivalentClass")
-
-    def _parseDisjointClass(self, entity, prop, value):
-        # inconsistent(C, D) :− disjointWith(C, D), type(X, C), type(X, D).
-        warnings.warn("Not implemented yet: DisjointClass")
 
     def _categorize_constraints(self, formulas):
         for sigma in formulas:
