@@ -170,9 +170,12 @@ class NeurolangPDL(QueryBuilderDatalog):
             where the ontology files are stored
         """
         onto = OntologyParser(paths)
-        constraints = onto.parse_ontology()
+        constraints, entity_rules = onto.parse_ontology()
         self.program_ir.set_constraints(constraints)
         self.program_ir.add_existential_rules(onto.existential_rules)
+        for symbol, expressions in entity_rules.items():
+            for e in expressions:
+                self.program_ir.walk(e)
 
     @property
     def current_program(self) -> List[fe.Expression]:

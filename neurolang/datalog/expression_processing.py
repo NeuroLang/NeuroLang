@@ -10,6 +10,7 @@ import typing
 from typing import Iterable
 
 import numpy as np
+from scipy import sparse
 
 from ..exceptions import (
     ForbiddenExpressionError,
@@ -469,9 +470,10 @@ def dependency_matrix(datalog, rules=None, instance=None):
 def program_has_loops(program_representation):
     if not isinstance(program_representation, np.ndarray):
         _, program_representation = dependency_matrix(program_representation)
+    program_representation = sparse.csr_matrix(program_representation)
     reachable = program_representation
-    for _ in range(len(program_representation)):
-        if any(np.diag(reachable)):
+    for _ in range(program_representation.shape[0]):
+        if any(reachable.diagonal()):
             return True
         else:
             reachable = np.dot(reachable, program_representation)

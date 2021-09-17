@@ -6,7 +6,7 @@ from rdflib.namespace import OWL, RDF, RDFS
 
 from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
 from ..expressions import Constant, Symbol
-from ..logic import Conjunction
+from ..logic import Conjunction, Implication
 from .constraints_representation import RightImplication
 
 
@@ -24,6 +24,7 @@ class OntologyParser:
 
         self.parsed_constraints = {}
         self.existential_rules = {}
+        self.entity_rules = {}
 
     def _load_ontology(self, paths, load_format):
         rdfGraph = rdflib.Graph()
@@ -46,7 +47,7 @@ class OntologyParser:
         '''
         self._parse_classes()
 
-        return self.parsed_constraints
+        return self.parsed_constraints, self.entity_rules
 
     def _parse_classes(self):
         '''This method obtains all the classes present in the ontology and
@@ -464,6 +465,13 @@ class OntologyParser:
         label = Symbol(self._parse_name(prop))
         con = label(x, entity_name)
 
+        if prop == RDFS.label:
+            entity_class = Symbol('Entity')
+            x = Symbol.fresh()
+            lower_name = self._parse_name(value).lower()
+            rule = Implication(entity(x), entity_class(x, Constant(lower_name)))
+            self._add_rules([rule])
+
         self._categorize_constraints([RightImplication(ant, con)])
         #self._categorize_constraints([Implication(con, ant)])
 
@@ -495,3 +503,13 @@ class OntologyParser:
             rules = self.existential_rules[entity]
             rules.append(rule)
             self.existential_rules[entity] = rules
+
+    def _add_rules(self, expressions):
+        for exp in expressions:
+            exp_functor = exp.consequent.functor
+            if exp_functor in self.entity_rules:
+                cons_set = self.entity_rules[exp_functor]
+                cons_set.add(exp)
+                self.entity_rules[exp_functor] = cons_set
+            else:
+                self.entity_rules[exp_functor] = set([exp])
