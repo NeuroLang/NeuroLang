@@ -771,3 +771,4 @@ def test_entity_rules_inclusion():
     fresh_var = rule.consequent.args[0]
     assert rule == Implication(chair(fresh_var), entity(fresh_var, Constant('chair')))
 
+
