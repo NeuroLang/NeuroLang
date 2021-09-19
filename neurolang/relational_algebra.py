@@ -6,7 +6,8 @@ import numpy
 import pandas.core.computation.ops
 
 from . import expression_walker as ew, type_system
-from .exceptions import NeuroLangException
+from .exceptions import ProjectionOverMissingColumnsError, NeuroLangException
+from .expression_walker import expression_iterator
 from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
@@ -307,7 +308,8 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
     def columns(self):
         columns = _get_columns_for_RA_or_constant(self.relation).copy()
         for rename in self.renames:
-            columns.replace(rename[0], rename[1])
+            if rename[0] in columns:
+                columns.replace(rename[0], rename[1])
         return columns
 
     def __repr__(self):
@@ -353,7 +355,7 @@ class GroupByAggregation(RelationalAlgebraOperation):
         )
 
     def __repr__(self):
-        join_str = "," if len(self.aggregate_functions) < 2 else ",\n"
+        join_str = ","
         return "γ_[{}, {}]({})".format(
             repr(self.groupby),
             join_str.join(
@@ -396,7 +398,7 @@ class ExtendedProjection(RelationalAlgebraOperation):
         ])
 
     def __repr__(self):
-        join_str = "," if len(self.projection_list) < 2 else ",\n"
+        join_str = ","
         return "π_[{}]({})".format(
             join_str.join([repr(member) for member in self.projection_list]),
             repr(self.relation),
@@ -1477,16 +1479,19 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
             ...
         ),
         lambda expression: all(
-            isinstance(int_proj.fun_exp, Constant)
+            isinstance(int_proj.fun_exp, (Constant, FunctionApplication))
             for int_proj in expression.relation.projection_list
         )
     )
     def nested_extended_projection_constant(self, expression):
         rew = ew.ReplaceExpressionWalker({
             p.dst_column: p.fun_exp
-            for p in expression.relation.relation.projection_list
+            for p in expression.relation.projection_list
         })
-        new_projections = rew.walk(expression.projection_list)
+        new_projections = (
+            FunctionApplicationListMember(rew.walk(p.fun_exp), p.dst_column)
+            for p in expression.projection_list
+        )
         return self.walk(
             ExtendedProjection(
                 expression.relation.relation,
@@ -1614,7 +1619,10 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
     def replace_trivial_agg_groupby(self, expression):
         new_projections = tuple(
             proj for proj in expression.relation.projection_list
-            if proj.dst_column != expression.aggregate_functions[0].fun_exp.args[0]
+            if (
+                proj.dst_column !=
+                expression.aggregate_functions[0].fun_exp.args[0]
+            )
         )
         return self.walk(
             GroupByAggregation(
@@ -1786,6 +1794,35 @@ class RenameOptimizations(ew.PatternWalker):
         return self.walk(
             NameColumns(expression.relation.relation, tuple(new_names))
         )
+
+    @ew.add_match(RenameColumns(NaturalJoin, ...))
+    def split_rename_naturaljoin(self, expression):
+        return self._rename_joinop(expression, NaturalJoin)
+
+    @ew.add_match(RenameColumns(LeftNaturalJoin, ...))
+    def split_rename_left_naturaljoin(self, expression):
+        return self._rename_joinop(expression, LeftNaturalJoin)
+
+    def _rename_joinop(self, expression, joinop):
+        left_renames = []
+        right_renames = []
+        left_columns = expression.relation.relation_left.columns()
+        right_columns = expression.relation.relation_right.columns()
+        for src, dst in expression.renames:
+            if src in left_columns:
+                left_renames.append((src, dst))
+            if src in right_columns:
+                right_renames.append((src, dst))
+        return self.walk(joinop(
+            RenameColumns(
+                expression.relation.relation_left,
+                tuple(left_renames)
+            ),
+            RenameColumns(
+                expression.relation.relation_right,
+                tuple(right_renames)
+            )
+        ))
 
 
 class RelationalAlgebraPushInSelections(ew.PatternWalker):
