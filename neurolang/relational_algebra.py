@@ -7,7 +7,7 @@ import pandas.core.computation.ops
 
 from . import expression_walker as ew, type_system
 from .exceptions import ProjectionOverMissingColumnsError, NeuroLangException
-from .expression_walker import ReplaceExpressionWalker, expression_iterator
+from .expression_walker import ReplaceExpressionWalker
 from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
@@ -202,8 +202,8 @@ class ReplaceNull(UnaryRelationalAlgebraOperation):
 
     def __repr__(self):
         return (
-            f"\N{GREEK SMALL LETTER RHO}_"
-            f"[NULL={self.value}][{self.relation}]"
+            f"\N{GREEK SMALL LETTER KAPPA}_"
+            f"[{self.column}, NULL={self.value}][{self.relation}]"
         )
 
 
@@ -814,14 +814,38 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         left = naturaljoin.relation_left.value
         right = naturaljoin.relation_right.value
         res = left.naturaljoin(right)
-        return self._build_relation_constant(res)
+        row_type = self._compute_join_type(naturaljoin, res, left, right)
+
+        return self._build_relation_constant(res, type_=AbstractSet[row_type])
+
+    def _compute_join_type(self, join, res, left, right):
+        left_type_args = type_system.get_args(type_system.get_args(
+            join.relation_left.type
+        )[0])
+        right_type_args = type_system.get_args(type_system.get_args(
+            join.relation_right.type
+        )[0])
+
+        row_type = tuple()
+        for column in res.columns:
+            column_type = Unknown
+            if column in left.columns and len(left_type_args) > 0:
+                column_type = left_type_args[left.columns.index(column)]
+            if column in right.columns and len(right_type_args) > 0:
+                right_type = right_type_args[right.columns.index(column)]
+                column_type = type_system.unify_types(
+                    column_type, right_type
+                )
+            row_type += (column_type,)
+        return Tuple[row_type]
 
     @ew.add_match(LeftNaturalJoin(Constant, Constant))
     def ra_left_naturaljoin(self, naturaljoin):
         left = naturaljoin.relation_left.value
         right = naturaljoin.relation_right.value
         res = left.left_naturaljoin(right)
-        return self._build_relation_constant(res)
+        row_type = self._compute_join_type(naturaljoin, res, left, right)
+        return self._build_relation_constant(res, type_=AbstractSet[row_type])
 
     @ew.add_match(Difference(Constant, Constant))
     def ra_difference(self, difference):
@@ -1005,7 +1029,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
         new_relation = relation.replace_null(column, value)
         return self._build_relation_constant(
-            new_relation
+            new_relation, type_=expression.relation.type
         )
 
     @ew.add_match(Constant)
@@ -1929,6 +1953,23 @@ class RenameOptimizations(ew.PatternWalker):
                 tuple(right_renames)
             )
         ))
+
+    @ew.add_match(RenameColumns(ReplaceNull, ...))
+    def switch_rename_replace_null(self, expression):
+        renames = {src: dst for src, dst in expression.renames}
+        return self.walk(
+            ReplaceNull(
+                RenameColumns(
+                    expression.relation.relation,
+                    expression.renames
+                ),
+                renames.get(
+                    expression.relation.column,
+                    expression.relation.column
+                ),
+                expression.relation.value
+            )
+        )
 
 
 class RelationalAlgebraPushInSelections(ew.PatternWalker):
