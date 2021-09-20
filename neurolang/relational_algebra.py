@@ -7,7 +7,7 @@ import pandas.core.computation.ops
 
 from . import expression_walker as ew, type_system
 from .exceptions import ProjectionOverMissingColumnsError, NeuroLangException
-from .expression_walker import expression_iterator
+from .expression_walker import ReplaceExpressionWalker, expression_iterator
 from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
@@ -1510,7 +1510,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         )
     )
     def nested_extended_projection_naturaljoin_constant_l(self, expression):
-        return self._nested_ep_join_constant_left(expression, NaturalJoin)
+        return self._nested_ep_join_constant_left(expression)
 
     @ew.add_match(
         ExtendedProjection(
@@ -1523,7 +1523,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         )
     )
     def nested_extended_projection_leftnaturaljoin_constant(self, expression):
-        return self._nested_ep_join_constant_left(expression, LeftNaturalJoin)
+        return self._nested_ep_join_constant_left(expression)
 
     @ew.add_match(
         ExtendedProjection(
@@ -1536,15 +1536,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         )
     )
     def nested_extended_projection_naturaljoin_constantr(self, expression):
-        return self.walk(
-            ExtendedProjection(
-                NaturalJoin(
-                    expression.relation.relation_right,
-                    expression.relation.relation_left
-                ),
-                expression.projection_list
-            )
-        )
+        return self._nested_ep_join_constant_left(expression, flip=True)
 
     @ew.add_match(
         ExtendedProjection(
@@ -1557,25 +1549,25 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         )
     )
     def nested_extended_projection_leftnaturaljoin_constantr(self, expression):
-        return self.walk(
-            ExtendedProjection(
-                LeftNaturalJoin(
-                    expression.relation.relation_right,
-                    expression.relation.relation_left
-                ),
-                expression.projection_list
-            )
-        )
+        return self._nested_ep_join_constant_left(expression, flip=True)
 
-    def _nested_ep_join_constant_left(self, expression, joinop):
+    def _nested_ep_join_constant_left(self, expression, flip=False):
+        if flip:
+            right, left = expression.relation.unapply()
+        else:
+            left, right = expression.relation.unapply()
         new_inner_projections = []
         replacements = {}
-        for proj in expression.relation.relation_left.projection_list:
+        selections = []
+        right_columns = right.columns()
+        for proj in left.projection_list:
             if (
                 isinstance(proj.fun_exp, Constant) and
                 not isinstance(proj.fun_exp, Constant[Column])
             ):
                 replacements[proj.dst_column] = proj.fun_exp
+                if proj.dst_column in right_columns:
+                    selections.append(eq_(proj.dst_column, proj.fun_exp))
             else:
                 new_inner_projections.append(proj)
 
@@ -1584,18 +1576,132 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
             FunctionApplicationListMember(rew.walk(p.fun_exp), p.dst_column)
             for p in expression.projection_list
         )
+        for selection in selections:
+            right = Selection(right, selection)
+
+        left = ExtendedProjection(left.relation, tuple(new_inner_projections))
+
+        if flip:
+            new_join = expression.relation.apply(right, left)
+        else:
+            new_join = expression.relation.apply(left, right)
+
         return self.walk(
             ExtendedProjection(
-                joinop(
-                    ExtendedProjection(
-                        expression.relation.relation_left.relation,
-                        tuple(new_inner_projections)
-                    ),
-                    expression.relation.relation_right
-                ),
+                new_join,
                 new_external_projections
             )
         )
+
+    @ew.add_match(
+        NaturalJoin(ExtendedProjection, ...),
+        lambda expression: (
+            set(
+                proj.dst_column
+                for proj in expression.relation_left.projection_list
+                if not isinstance(proj.fun_exp, Constant[Column])
+            ) - expression.relation_right.columns()
+        )
+    )
+    def push_computed_columns_up(self, expression, flip=False):
+        if flip:
+            right, left = expression.unapply()
+        else:
+            left, right = expression.unapply()
+
+        right_columns = right.columns()
+        projections_to_push_up = []
+        projections_to_keep = []
+        new_columns = {
+            proj.dst_column: proj.dst_column
+            for proj in left.projection_list
+            if proj.dst_column == proj.fun_exp
+        }
+        for proj in left.projection_list:
+            if (
+                proj.dst_column not in right_columns and
+                not isinstance(proj.fun_exp, Constant[Column])
+            ):
+                fun_columns = [
+                    c
+                    for _, c in ew.expression_iterator(proj.fun_exp)
+                    if isinstance(c, Constant[Column])
+                ]
+                for c in fun_columns:
+                    if c not in new_columns:
+                        new_columns[c] = str2columnstr_constant(
+                            Symbol.fresh().name
+                        )
+
+                projections_to_push_up.append(FunctionApplicationListMember(
+                    ReplaceExpressionWalker(new_columns).walk(proj.fun_exp),
+                    proj.dst_column
+                ))
+                projections_to_keep += [
+                    FunctionApplicationListMember(c, new_columns[c])
+                    for _, c in ew.expression_iterator(proj.fun_exp)
+                    if isinstance(c, Constant[Column])
+                ]
+            else:
+                projections_to_keep.append(proj)
+
+        if len(projections_to_keep) > 0:
+            left = ExtendedProjection(
+                left.relation,
+                tuple(projections_to_keep)
+            )
+        if flip:
+            new_join = expression.apply(right, left)
+        else:
+            new_join = expression.apply(left, right)
+
+        res = ExtendedProjection(
+            new_join,
+            tuple(
+                FunctionApplicationListMember(c, c)
+                for c in new_join.columns()
+            ) + tuple(projections_to_push_up)
+        )
+        return self.walk(res)
+
+    @ew.add_match(
+        LeftNaturalJoin(ExtendedProjection, ...),
+        lambda expression: (
+            set(
+                proj.dst_column
+                for proj in expression.relation_left.projection_list
+                if not isinstance(proj.fun_exp, Constant[Column])
+            ) - expression.relation_right.columns()
+        )
+    )
+    def push_computed_columns_up_left(self, expression):
+        return self.push_computed_columns_up(expression)
+
+    @ew.add_match(
+        NaturalJoin(..., ExtendedProjection),
+        lambda expression: (
+            set(
+                proj.dst_column
+                for proj in expression.relation_right.projection_list
+                if not isinstance(proj.fun_exp, Constant[Column])
+            ) - expression.relation_left.columns()
+        )
+    )
+    def push_computed_columns_up_flip(self, expression):
+        return self.push_computed_columns_up(expression, True)
+
+    @ew.add_match(
+        LeftNaturalJoin(..., ExtendedProjection),
+        lambda expression: (
+            set(
+                proj.dst_column
+                for proj in expression.relation_right.projection_list
+                if not isinstance(proj.fun_exp, Constant[Column])
+            ) - expression.relation_left.columns()
+        )
+    )
+    def push_computed_columns_up_flip_left(self, expression):
+        return self.push_computed_columns_up(expression, True)
 
     @ew.add_match(
         GroupByAggregation(
