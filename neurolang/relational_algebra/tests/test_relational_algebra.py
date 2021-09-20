@@ -5,12 +5,12 @@ import numpy
 import pandas as pd
 import pytest
 
-from ..config import config
-from ..datalog.basic_representation import WrappedRelationalAlgebraSet
-from ..exceptions import NeuroLangException
-from ..expression_walker import ExpressionWalker
-from ..expressions import Constant, FunctionApplication, Symbol
-from ..relational_algebra import (
+from ...config import config
+from ...datalog.basic_representation import WrappedRelationalAlgebraSet
+from ...exceptions import NeuroLangException
+from ...expression_walker import ExpressionWalker
+from ...expressions import Constant, FunctionApplication, Symbol
+from ...relational_algebra import (
     EVAL_OP_TO_STR,
     ColumnInt,
     ColumnStr,
@@ -34,20 +34,21 @@ from ..relational_algebra import (
     RenameColumns,
     Selection,
     Union,
+    eq_,
+    str2columnstr_constant
+)
+from ...utils import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+    RelationalAlgebraSet
+)
+from ...utils.relational_algebra_set import RelationalAlgebraStringExpression
+from ..relational_algebra import (
     _const_relation_type_is_known,
     _get_const_relation_type,
     _infer_relation_type,
-    _sort_typed_const_named_relation_tuple_type_args,
-    eq_,
-    str2columnstr_constant,
+    _sort_typed_const_named_relation_tuple_type_args
 )
-from ..utils import (
-    NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraFrozenSet,
-    RelationalAlgebraSet,
-)
-from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
-
 
 C_ = Constant
 
