@@ -11,7 +11,6 @@ from ...exceptions import NeuroLangException
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...relational_algebra import (
-    EVAL_OP_TO_STR,
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
@@ -37,6 +36,7 @@ from ...relational_algebra import (
     eq_,
     str2columnstr_constant
 )
+from ..relational_algebra import EVAL_OP_TO_STR
 from ...utils import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
