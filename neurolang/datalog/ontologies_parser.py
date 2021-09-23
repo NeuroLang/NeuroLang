@@ -501,13 +501,6 @@ class OntologyParser:
         label = Symbol(self._parse_name(prop))
         con = label(x, entity_name)
 
-        if prop == RDFS.label:
-            entity_class = Symbol('Entity')
-            x = Symbol.fresh()
-            lower_name = self._parse_name(value).lower()
-            rule = Implication(entity(x), entity_class(x, Constant(lower_name)))
-            self._add_rules([rule])
-
         self._categorize_constraints([RightImplication(ant, con)])
 
         if prop == RDFS.label:
