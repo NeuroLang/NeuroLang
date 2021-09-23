@@ -5,6 +5,7 @@ Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
+from neurolang.datalog.magic_sets import magic_rewrite
 from neurolang.exceptions import UnsupportedProgramError
 from typing import (
     AbstractSet,
@@ -417,15 +418,24 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             raise ValueError("Wrong head syntax")
         query_expression = self._declare_implication(new_head, predicate)
 
-        reachable_rules = reachable_code(query_expression, self.program_ir)
-        solution = self.chase_class(
-            self.program_ir, rules=reachable_rules
-        ).build_chase_solution()
+        try:
+            with self.scope:
+                magic_query_expression = self.magic_sets_rewrite_program(query_expression)
+                reachable_rules = reachable_code(magic_query_expression, self.program_ir)
+                solution = self.chase_class(
+                    self.program_ir, rules=reachable_rules
+                ).build_chase_solution()
+                self.program_ir.symbol_table = self.symbol_table.enclosing_scope
+        except Exception:
+            reachable_rules = reachable_code(query_expression, self.program_ir)
+            solution = self.chase_class(
+                self.program_ir, rules=reachable_rules
+            ).build_chase_solution()
+            self.program_ir.symbol_table = self.symbol_table.enclosing_scope
 
         solution_set = solution.get(
             functor.name, ir.Constant(WrappedRelationalAlgebraFrozenSet())
         )
-        self.program_ir.symbol_table = self.symbol_table.enclosing_scope
 
         if isinstance(head, tuple):
             row_type = solution_set.value.row_type
@@ -435,6 +445,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 )
             solution_set.row_type = row_type
         return solution_set, functor_orig
+
+    def magic_sets_rewrite_program(self, query_expression):
+        goal, mr = magic_rewrite(query_expression.consequent, self.program_ir)
+        self.program_ir.walk(mr)
+        new_query_expression = self.program_ir.symbol_table[goal].formulas[0]
+        return new_query_expression
 
     def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """

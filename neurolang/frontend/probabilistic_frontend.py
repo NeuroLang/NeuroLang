@@ -305,7 +305,14 @@ class NeurolangPDL(QueryBuilderDatalog):
                 "Queries on probabilistic predicates are not supported"
             )
         query = self.program_ir.symbol_table[query_pred_symb].formulas[0]
-        solution = self._solve(query)
+
+        try:
+            with self.scope:
+                magic_query = self.magic_sets_rewrite_program(query)
+                solution = self._solve(magic_query)
+        except Exception:
+            solution = self._solve(query)
+
         if not isinstance(head, tuple):
             # assumes head is a predicate e.g. r(x, y)
             head_symbols = tuple(head.expression.args)

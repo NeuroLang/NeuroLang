@@ -140,6 +140,8 @@ class LeftToRightSIPS(SIPS):
         super().__init__(rule, adornment, edb)
 
     def adorn_predicate(self, predicate, predicate_number, in_edb):
+        if in_edb or isinstance(predicate.functor, Constant):
+            return predicate
         adorned_predicate = super().adorn_predicate(
             predicate, predicate_number, in_edb
         )
@@ -224,16 +226,20 @@ def magic_rewrite(
     Tuple[Symbol, Union]
         the rewritten query symbol and program
     """
-    adorned_code, constant_predicates = reachable_adorned_code(query, datalog, LeftToRightSIPS)
+    adorned_code, constant_predicates = reachable_adorned_code(
+        query, datalog, LeftToRightSIPS
+    )
     # assume that the query rule is the last
     adorned_query = adorned_code.formulas[-1]
     goal = adorned_query.consequent.functor
 
-    edb = datalog.extensional_database()
+    edb = edb_with_prob_symbols(datalog)
 
     magic_rules = create_balbin_magic_rules(adorned_code.formulas[:-1], edb)
     magic_inits = create_magic_query_inits(constant_predicates)
-    return goal, Union(magic_inits + [adorned_query] + magic_rules,)
+    return goal, Union(
+        magic_inits + [adorned_query] + magic_rules,
+    )
 
 
 def create_magic_query_inits(constant_predicates: Iterable[AdornedExpression]):
@@ -294,8 +300,6 @@ def create_balbin_magic_rules(adorned_rules, edb):
                 functor.expression, Constant
             ):
                 body_predicates += (functor.expression(*predicate.args),)
-            elif functor.name in edb:
-                body_predicates += (Symbol(functor.name)(*predicate.args),)
             elif (
                 isinstance(functor, AdornedExpression)
                 and "b" in functor.adornment
@@ -474,7 +478,10 @@ def reachable_adorned_code(query, datalog, sips_class: Type[SIPS]):
     adorned_datalog.walk(adorned_code)
     # assume that the query rule is the first
     adorned_query = adorned_code.formulas[0]
-    return expression_processing.reachable_code(adorned_query, adorned_datalog), constant_predicates
+    return (
+        expression_processing.reachable_code(adorned_query, adorned_datalog),
+        constant_predicates,
+    )
 
 
 def adorn_code(
@@ -509,7 +516,7 @@ def adorn_code(
     query = AdornedExpression(query.functor, adornment, 0)(*query.args)
     adorn_stack = [query]
 
-    edb = datalog.extensional_database()
+    edb = edb_with_prob_symbols(datalog)
     idb = datalog.intensional_database()
     rewritten_program = []
     rewritten_rules = set()
@@ -568,16 +575,19 @@ def adorn_antecedent(
         predicate_number = checked_predicates.get(predicate, 0)
         checked_predicates[predicate] = predicate_number + 1
         in_edb = (
-            isinstance(predicate.functor, Constant) or
-            predicate.functor.name in edb
+            isinstance(predicate.functor, Constant)
+            or predicate.functor.name in edb
         )
 
-        adorned_predicate = sips.adorn_predicate(predicate, predicate_number, in_edb)
+        adorned_predicate = sips.adorn_predicate(
+            predicate, predicate_number, in_edb
+        )
 
         is_adorned = isinstance(adorned_predicate.functor, AdornedExpression)
         if (
-            not in_edb and is_adorned and
-            adorned_predicate.functor not in rewritten_rules
+            not in_edb
+            and is_adorned
+            and adorned_predicate.functor not in rewritten_rules
         ):
             to_adorn.append(adorned_predicate)
 
@@ -591,3 +601,16 @@ def adorn_antecedent(
     else:
         adorned_antecedent = Conjunction(adorned_antecedent)
     return adorned_antecedent, to_adorn
+
+
+def edb_with_prob_symbols(datalog: DatalogProgram) -> Iterable[Symbol]:
+    edb = set(datalog.extensional_database())
+    try:
+        edb = (
+            edb
+            | set(datalog.probabilistic_facts())
+            | set(datalog.probabilistic_choices())
+        )
+    except AttributeError:
+        pass
+    return edb

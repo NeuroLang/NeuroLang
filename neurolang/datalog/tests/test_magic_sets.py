@@ -1,9 +1,14 @@
 import operator
+from pathlib import Path
 
+import nibabel as nib
+import numpy as np
 import pytest
+from nilearn import datasets, image
 from pytest import raises
 
 from ... import expression_walker, expressions
+from ...frontend.probabilistic_frontend import NeurolangPDL
 from .. import DatalogProgram, Fact, Implication, magic_sets
 from ..aggregation import (
     AGG_COUNT,
@@ -300,3 +305,47 @@ def test_negation_raises_error():
 
     with pytest.raises(NegationInMagicSetsRewriteError):
         magic_sets.magic_rewrite(q(x), dl)
+
+
+@pytest.fixture
+def nspdl():
+    nl = NeurolangPDL()
+    data_dir = Path.home() / "neurolang_data"
+    nl.load_neurosynth_mni_peaks_reported(data_dir, "PeakReported")
+    studies = nl.load_neurosynth_study_ids(data_dir, "Study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        studies.value.as_pandas_dataframe(), name="SelectedStudy"
+    )
+    nl.load_neurosynth_term_study_associations(data_dir, "TermInStudyTFIDF")
+    mni_mask = nib.load(
+        datasets.fetch_icbm152_2009(data_dir=str(data_dir / "icbm"))["mask"]
+    )
+    resolution = 2
+    mni_mask = image.resample_img(mni_mask, np.eye(3) * resolution)
+    nl.add_tuple_set(
+        np.round(
+            nib.affines.apply_affine(
+                mni_mask.affine,
+                np.transpose(mni_mask.get_fdata().nonzero()),
+            )
+        ).astype(int),
+        name="Voxel",
+    )
+    return nl
+
+
+def test_neurosynth_magic_sets(nspdl):
+    query = """
+    TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(study, term, tfidf)
+    TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
+    Activation(x, y, z) :- SelectedStudy(s) & PeakReported(x, y, z, s)
+    ActivationGivenTerm(x, y, z, t, PROB) :- Activation(x, y, z) & TermAssociation(t)
+    QueryActivation(x, y, z, p) :- ActivationGivenTerm(x, y, z, "emotion", p)
+    ans(x, y, z, p) :- QueryActivation(x, y, z, p)
+    """
+
+    with nspdl.scope as s:
+        res = nspdl.execute_datalog_program(query)
+        # nspdl.query(s.ans[s.x, s.y, s.z, s.t, s.p], s.ActivationGivenTerm[s.x, s.y, s.z, "emotion", s.p])
+
+    assert res is not None
