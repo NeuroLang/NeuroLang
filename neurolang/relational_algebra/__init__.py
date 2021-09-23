@@ -1,3 +1,9 @@
+"""Module containing the intermediate representation implementation of
+relational algebra. It includes, expressions representing the operations,
+a solver, to execute the expressions on `RelationalAlgebraSet` objects.
+and different static optimisers.
+"""
+
 from .optimisers import (
     EliminateTrivialProjections,
     RelationalAlgebraOptimiser,
