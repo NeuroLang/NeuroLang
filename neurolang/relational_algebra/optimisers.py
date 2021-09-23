@@ -1,3 +1,5 @@
+import operator
+
 from .. import expression_walker as ew
 from ..expressions import Constant, FunctionApplication, Symbol
 from .relational_algebra import (
@@ -23,6 +25,9 @@ from .relational_algebra import (
     get_expression_columns,
     str2columnstr_constant
 )
+
+
+AND = Constant(operator.and_)
 
 
 class RelationalAlgebraSimplification(ew.ExpressionWalker):
@@ -274,6 +279,24 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
             )
         )
 
+    # @ew.add_match(
+    #    Selection(Selection, ...),
+    #    lambda exp: all(
+    #        isinstance(col, Constant[ColumnStr])
+    #        for col in (
+    #            get_expression_columns(exp.formula) |
+    #            get_expression_columns(exp.relation.formula)
+    #        )
+    #    )
+    # )
+    def merge_selections(self, expression):
+        return self.walk(
+            Selection(
+                expression.relation.relation, 
+                AND(expression.formula, expression.relation.formula)
+            )
+        )
+
     @staticmethod
     def split_relations_column(relations, column):
         accum_arity = 0
@@ -306,20 +329,6 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
             return RelationalAlgebraRewriteSelections.get_arity(
                 expression.relation
             )
-
-
-class RelationalAlgebraOptimiser(
-    RelationalAlgebraRewriteSelections,
-    RelationalAlgebraSimplification,
-    ew.ExpressionWalker,
-):
-    """
-    Mixing that optimises through relational algebra expressions by
-    rewriting.
-    equi-selection/product compositions into equijoins.
-    """
-
-    pass
 
 
 class EliminateTrivialProjections(ew.PatternWalker):
@@ -662,6 +671,29 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
             )
         )
 
+    @ew.add_match(
+        ReplaceNull(ExtendedProjection, ..., ...),
+        lambda exp: all(
+            isinstance(proj.fun_exp, Constant[ColumnStr])
+            for proj in exp.relation.projection_list
+            if exp.column == proj.dst_column
+        )
+    )
+    def push_replace_null_in_ext_proj(self, expression):
+        for proj in expression.relation.projection_list:
+            if proj.dst_column == expression.column:
+                replacement = proj.fun_exp
+                break
+
+        return self.walk(ExtendedProjection(
+            ReplaceNull(
+                expression.relation.relation,
+                replacement,
+                expression.value
+            ),
+            expression.relation.projection_list
+        ))
+
 
 def _function_application_list_member_has_constant_exp(int_proj):
     return (
@@ -998,3 +1030,37 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
                 expression.relation.aggregate_functions
             )
         )
+
+    @ew.add_match(
+        Selection(ReplaceNull, ...),
+        lambda exp: (
+            exp.relation.column not in get_expression_columns(exp.formula)
+        )
+    )
+    def push_selection_in_replace_null(self, expression):
+        return ReplaceNull(
+            Selection(
+                expression.relation.relation,
+                expression.formula
+            ),
+            expression.relation.column,
+            expression.re
+        )
+
+
+class RelationalAlgebraOptimiser(
+    RelationalAlgebraRewriteSelections,
+    RelationalAlgebraSimplification,
+    EliminateTrivialProjections,
+    RelationalAlgebraPushInSelections,
+    RenameOptimizations,
+    ew.ExpressionWalker,
+):
+    """
+    Mixing that optimises through relational algebra expressions by
+    rewriting.
+    equi-selection/product compositions into equijoins.
+    """
+
+    pass
+
