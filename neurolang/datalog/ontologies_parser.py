@@ -2,11 +2,7 @@ import warnings
 
 import rdflib
 from rdflib import BNode, Literal
-<<<<<<< HEAD
 from rdflib.namespace import OWL, RDF, RDFS, SKOS
-=======
-from rdflib.namespace import OWL, RDF, RDFS
->>>>>>> rewrite_contraints
 from rdflib.extras.infixowl import EnumeratedClass
 
 from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
