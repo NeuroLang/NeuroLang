@@ -682,7 +682,6 @@ def test_entity_rules():
         <Ontology>
             <versionInfo>0.3.1</versionInfo>
         </Ontology>
-
         <owl:Class rdf:ID="Chair">
             <rdfs:label>chair</rdfs:label>
             <rdfs:subClassOf>
@@ -703,7 +702,7 @@ def test_entity_rules():
     </rdf:RDF>'''
 
     onto = OntologyParser(io.StringIO(owl))
-    _, _, entity_rules = onto.parse_ontology()
+    _, _, entity_rules, _ = onto.parse_ontology()
 
     chair = Symbol('Chair')
     entity = Symbol('Entity')
@@ -731,7 +730,6 @@ def test_entity_rules_inclusion():
         <Ontology>
             <versionInfo>0.3.1</versionInfo>
         </Ontology>
-
         <owl:Class rdf:ID="Chair">
             <rdfs:label>chair</rdfs:label>
             <rdfs:subClassOf>
@@ -770,5 +768,3 @@ def test_entity_rules_inclusion():
 
     fresh_var = rule.consequent.args[0]
     assert rule == Implication(chair(fresh_var), entity(fresh_var, Constant('chair')))
-
-
