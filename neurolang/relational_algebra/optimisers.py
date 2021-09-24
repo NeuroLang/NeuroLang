@@ -354,13 +354,25 @@ class EliminateTrivialProjections(ew.PatternWalker):
             Projection(expression.relation.relation, expression.attributes)
         )
 
-    @ew.add_match(Projection(ExtendedProjection, ...))
-    def try_simplify_projection_extended_projection(self, expression):
-        new_relation = self.walk(expression.relation)
-        if new_relation is not expression.relation:
-            return self.walk(Projection(new_relation, expression.attributes))
-        else:
-            return expression
+    @ew.add_match(
+        Projection(ExtendedProjection, ...),
+        lambda exp: set(
+            proj.dst_column
+            for proj in exp.relation.projection_list
+        ) <= set(exp.attributes)
+    )
+    def simplify_projection_extended_projection(self, expression):
+        new_projections = tuple(
+            proj for proj in expression.relation.projection_list
+            if proj.dst_column in expression.attributes
+        )
+        new_relation = self.walk(
+            ExtendedProjection(
+                expression.relation.relation,
+                new_projections
+            )
+        )
+        return new_relation
 
     @ew.add_match(
         ExtendedProjection,
@@ -384,6 +396,7 @@ class EliminateTrivialProjections(ew.PatternWalker):
         ) and (
             len(set(p.fun_exp for p in e.projection_list))
             == len(e.projection_list)
+            == len(e.relation.columns())
         )
     )
     def convert_extended_projection_2_rename(self, expression):
