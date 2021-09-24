@@ -1,4 +1,5 @@
 import operator
+import logging
 from pathlib import Path
 
 import nibabel as nib
@@ -334,6 +335,36 @@ def nspdl():
     return nl
 
 
+LOGGING_CONFIG = {
+    "version": 1,
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        },
+    },
+    "handlers": {
+        "default": {
+            "level": "DEBUG",
+            "formatter": "standard",
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        "": {  # root logger
+            "handlers": ["default"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "neurolang": {
+            "handlers": ["default"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+# logging.config.dictConfig(LOGGING_CONFIG)
+
+
 def test_neurosynth_magic_sets(nspdl):
     query = """
     TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(study, term, tfidf)
@@ -343,9 +374,7 @@ def test_neurosynth_magic_sets(nspdl):
     QueryActivation(x, y, z, p) :- ActivationGivenTerm(x, y, z, "emotion", p)
     ans(x, y, z, p) :- QueryActivation(x, y, z, p)
     """
-
-    with nspdl.scope as s:
-        res = nspdl.execute_datalog_program(query)
-        # nspdl.query(s.ans[s.x, s.y, s.z, s.t, s.p], s.ActivationGivenTerm[s.x, s.y, s.z, "emotion", s.p])
-
+    res = nspdl.execute_datalog_program(query)
+    # print(res)
     assert res is not None
+    assert len(res) == 27279

@@ -93,7 +93,7 @@ def classify_and_wrap_symbols(
     ra_set_dict, query_predicate, symbol_table, wrapper
 ):
     for predicate_symbol, facts in ra_set_dict.items():
-        if predicate_symbol not in query_predicate._symbols:
+        if predicate_symbol.name not in query_predicate._symbols:
             continue
 
         fresh_symbol = Symbol.fresh()

@@ -300,6 +300,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         """
         query_pred_symb = predicate.expression.functor
+        query_pred_args = predicate.expression.args
         if is_probabilistic_predicate_symbol(query_pred_symb, self.program_ir):
             raise UnsupportedQueryError(
                 "Queries on probabilistic predicates are not supported"
@@ -310,6 +311,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             with self.scope:
                 magic_query = self.magic_sets_rewrite_program(query)
                 solution = self._solve(magic_query)
+                query_pred_symb = magic_query.consequent.functor
         except Exception:
             solution = self._solve(query)
 
@@ -321,7 +323,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             head_symbols = tuple(t.expression for t in head)
             functor_orig = None
         solution = self._restrict_to_query_solution(
-            head_symbols, predicate, solution
+            head_symbols, query_pred_symb, query_pred_args, solution
         )
         if functor_orig is None:
             solution = solution.value
@@ -447,12 +449,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     @staticmethod
-    def _restrict_to_query_solution(head_symbols, predicate, solution):
+    def _restrict_to_query_solution(
+        head_symbols, pred_symb, pred_args, solution
+    ):
         """
-        Based on a solution instance and a query predicate, retrieve the
-        relation whose columns correspond to symbols in the head of the query.
+        Based on a solution instance and a query predicate symbol and args,
+        retrieve the relation whose columns correspond to symbols in the head
+        of the query.
         """
-        pred_symb = predicate.expression.functor
         # return dum when empty solution (reported in GH481)
         if pred_symb not in solution:
             return ir.Constant[AbstractSet](
@@ -462,7 +466,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         query_row_type = solution[pred_symb].value.row_type
         cols = list(
             arg.name
-            for arg in predicate.expression.args
+            for arg in pred_args
             if isinstance(arg, ir.Symbol)
         )
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
