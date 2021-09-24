@@ -426,6 +426,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     self.program_ir, rules=reachable_rules
                 ).build_chase_solution()
                 self.program_ir.symbol_table = self.symbol_table.enclosing_scope
+                functor = magic_query_expression.consequent.functor
         except Exception:
             reachable_rules = reachable_code(query_expression, self.program_ir)
             solution = self.chase_class(
