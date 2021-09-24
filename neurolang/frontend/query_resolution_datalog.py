@@ -435,7 +435,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.program_ir.symbol_table = self.symbol_table.enclosing_scope
 
         solution_set = solution.get(
-            functor.name, ir.Constant(WrappedRelationalAlgebraFrozenSet())
+            functor, ir.Constant(WrappedRelationalAlgebraFrozenSet())
         )
 
         if isinstance(head, tuple):
