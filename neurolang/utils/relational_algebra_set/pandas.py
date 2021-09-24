@@ -777,7 +777,7 @@ class NamedRelationalAlgebraFrozenSet(
 
         output = self._light_init_same_structure(
             new_container,
-            might_have_duplicates=self._might_have_duplicates,
+            might_have_duplicates=False,
             columns=list(new_container.columns),
         )
         return output
@@ -880,6 +880,7 @@ class NamedRelationalAlgebraFrozenSet(
         container.columns = range(len(container.columns))
         output = RelationalAlgebraFrozenSet()
         output._container = container
+        output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def __sub__(self, other):
@@ -952,7 +953,9 @@ class NamedRelationalAlgebraFrozenSet(
         self._keep_column_types(new_container)
         output = self._light_init_same_structure(
             new_container,
-            might_have_duplicates=self._might_have_duplicates,
+            might_have_duplicates=(
+                self._might_have_duplicates & other._might_have_duplicates
+            ),
         )
         return output
 
