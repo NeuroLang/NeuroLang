@@ -263,7 +263,7 @@ class NameColumns(UnaryRelationalAlgebraOperation):
 
     def __repr__(self):
         return (
-            f"\N{GREEK SMALL LETTER DELTA}"
+            f"\N{GREEK SMALL LETTER RHO}"
             f"_{self.column_names}({self.relation})"
         )
 
@@ -281,7 +281,7 @@ class RenameColumn(UnaryRelationalAlgebraOperation):
 
     def __repr__(self):
         return (
-            f"\N{GREEK SMALL LETTER DELTA}"
+            f"\N{GREEK SMALL LETTER RHO}"
             f"_({self.src}\N{RIGHTWARDS ARROW}{self.dst})"
             f"({self.relation})"
         )
@@ -313,7 +313,7 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
 
     def __repr__(self):
         return (
-            "\N{GREEK SMALL LETTER DELTA}"
+            "\N{GREEK SMALL LETTER RHO}"
             + "_({})".format(
                 ", ".join(
                     "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)

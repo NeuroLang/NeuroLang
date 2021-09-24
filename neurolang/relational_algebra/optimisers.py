@@ -292,7 +292,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
     def merge_selections(self, expression):
         return self.walk(
             Selection(
-                expression.relation.relation, 
+                expression.relation.relation,
                 AND(expression.formula, expression.relation.formula)
             )
         )
@@ -642,7 +642,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
                 proj.dst_column ==
                 expression.aggregate_functions[0].fun_exp.args[0]
             ) &
-            (proj.fun_exp == Constant[float](1.))
+            (proj.fun_exp == Constant[float](1))
             for proj in expression.relation.projection_list
         )
     )
@@ -1044,7 +1044,7 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
                 expression.formula
             ),
             expression.relation.column,
-            expression.re
+            expression.relation.value
         )
 
 
@@ -1063,4 +1063,3 @@ class RelationalAlgebraOptimiser(
     """
 
     pass
-
