@@ -1,4 +1,3 @@
-from neurolang.relational_algebra.optimisers import SimplifyExtendedProjectionsWithConstants
 import operator
 from typing import AbstractSet, Tuple
 
@@ -7,10 +6,17 @@ import pytest
 from ...datalog.basic_representation import WrappedRelationalAlgebraSet
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...relational_algebra import (
+from ...utils import NamedRelationalAlgebraFrozenSet
+from ..optimisers import (
+    EliminateTrivialProjections,
+    RelationalAlgebraOptimiser,
+    RelationalAlgebraPushInSelections,
+    RenameOptimizations,
+    SimplifyExtendedProjectionsWithConstants
+)
+from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
-    EliminateTrivialProjections,
     EquiJoin,
     ExtendedProjection,
     FunctionApplicationListMember,
@@ -20,8 +26,6 @@ from ...relational_algebra import (
     NaturalJoin,
     Product,
     Projection,
-    RelationalAlgebraOptimiser,
-    RelationalAlgebraPushInSelections,
     RenameColumn,
     RenameColumns,
     ReplaceNull,
@@ -29,7 +33,6 @@ from ...relational_algebra import (
     eq_,
     str2columnstr_constant
 )
-from ...utils import NamedRelationalAlgebraFrozenSet
 
 C_ = Constant
 
@@ -42,6 +45,11 @@ def R1():
 @pytest.fixture
 def R2():
     return WrappedRelationalAlgebraSet([(i * 2, i * 3) for i in range(10)])
+
+
+@pytest.fixture
+def RS():
+    return Symbol[AbstractSet]('R')
 
 
 @pytest.fixture
@@ -426,6 +434,42 @@ def test_eliminate_trivial_projections_optimiser(R1):
     exp = Projection(exp, (a,))
     res = opt.walk(exp)
     assert res == Projection(r0, (a,))
+
+
+def test_simple_extended_projection_to_rename(RS, str_columns):
+    class Opt(EliminateTrivialProjections, ExpressionWalker):
+        pass
+
+    a, b, c, d, _ = str_columns
+
+    exp = ExtendedProjection(
+        NameColumns(RS, (a, c)),
+        (
+            FunctionApplicationListMember(a, b),
+            FunctionApplicationListMember(c, d)
+        )
+    )
+
+    res = Opt().walk(exp)
+
+    assert res == RenameColumns(
+        exp.relation,
+        (
+            (a, b),
+            (c, d)
+        )
+    )
+
+    exp = ExtendedProjection(
+        NameColumns(RS, (a, c)),
+        (
+            FunctionApplicationListMember(a, b),
+        )
+    )
+
+    res = Opt().walk(exp)
+
+    assert res == res
 
 
 def test_composite_extended_projection_join(R1, str_columns):
@@ -819,3 +863,83 @@ def test_extended_projection_groupby_trivial(R1, str_columns):
         (FunctionApplicationListMember(Constant(len)(), d),)
     )
     assert res == exp
+
+
+def test_rename_column_to_rename_columns(RS, str_columns):
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    opt = Opt()
+
+    exp = RenameColumn(RS, str_columns[0], str_columns[1])
+
+    res = opt.walk(exp)
+
+    assert res == RenameColumns(RS, ((str_columns[0], str_columns[1]),))
+
+
+def test_trivial_rename_columns(RS, str_columns):
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    opt = Opt()
+
+    exp = RenameColumns(RS, tuple())
+
+    res = opt.walk(exp)
+
+    assert res == RS
+
+    exp = RenameColumns(RS, tuple((s, s) for s in str_columns))
+
+    res = opt.walk(exp)
+
+    assert res == RS
+
+
+def test_nested_rename_columns(RS, str_columns):
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    a, b, c, d, e = str_columns
+
+    opt = Opt()
+
+    exp = RenameColumns(
+        RenameColumns(RS, ((a, b), (d, e))),
+        ((b, c),)
+    )
+
+    res = opt.walk(exp)
+
+    assert res == RenameColumns(RS, ((a, c), (d, e)))
+
+
+def test_nested_rename_columns_extended_projection(RS, str_columns):
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    a, b, c, d, e = str_columns
+
+    opt = Opt()
+
+    exp = RenameColumns(
+        ExtendedProjection(
+            RS,
+            (
+                FunctionApplicationListMember(a, b),
+                FunctionApplicationListMember(Constant(1), c)
+            )
+        ),
+        ((b, c), (c, d))
+    )
+
+    res = opt.walk(exp)
+
+    assert res == ExtendedProjection(
+        RS,
+        (
+            FunctionApplicationListMember(a, c),
+            FunctionApplicationListMember(Constant(1), d)
+        )
+    )

@@ -332,35 +332,26 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
 
 
 class EliminateTrivialProjections(ew.PatternWalker):
-    @ew.add_match(Projection(Constant, ...))
-    def eliminate_trivial_projection(self, expression):
-        if (
+    @ew.add_match(
+        Projection(Constant, ...),
+        lambda expression: (
             tuple(c.value for c in expression.attributes)
             == tuple(c for c in expression.relation.value.columns)
         ) or (
             tuple(str(c.value) for c in expression.attributes)
             == tuple(c for c in expression.relation.value.columns)
-        ):
-            return expression.relation
-        else:
-            return expression
-
-    @ew.add_match(
-        Projection(Projection, ...),
-        lambda e: set(e.attributes) <= set(e.relation.attributes)
+        )
     )
+    def eliminate_trivial_projection(self, expression):
+        return expression.relation
+
+    @ew.add_match(Projection(Projection, ...))
     def eliminate_trivial_nested_projection(self, expression):
         return self.walk(
             Projection(expression.relation.relation, expression.attributes)
         )
 
-    @ew.add_match(
-        Projection(ExtendedProjection, ...),
-        lambda exp: set(
-            proj.dst_column
-            for proj in exp.relation.projection_list
-        ) <= set(exp.attributes)
-    )
+    @ew.add_match(Projection(ExtendedProjection, ...))
     def simplify_projection_extended_projection(self, expression):
         new_projections = tuple(
             proj for proj in expression.relation.projection_list
@@ -726,7 +717,12 @@ class RenameOptimizations(ew.PatternWalker):
             ((expression.src, expression.dst),)
         ))
 
-    @ew.add_match(RenameColumns, lambda exp: len(exp.renames) == 0)
+    @ew.add_match(
+        RenameColumns,
+        lambda exp: (
+            all(s == d for s, d in exp.renames)
+        )
+    )
     def remove_trivial_rename(self, expression):
         return self.walk(expression.relation)
 
@@ -740,7 +736,8 @@ class RenameOptimizations(ew.PatternWalker):
                     (src, outer_renames[dst])
                 )
                 del outer_renames[dst]
-            new_renames.append((src, dst))
+            else:
+                new_renames.append((src, dst))
         new_renames += [
             (src, dst)
             for src, dst in outer_renames.items()
