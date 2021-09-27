@@ -31,13 +31,13 @@ from .relational_algebra import (
 AND = Constant(operator.and_)
 
 
-class RelationalAlgebraSimplification(ew.ExpressionWalker):
+class ProductSimplification(ew.ExpressionWalker):
     @ew.add_match(Product, lambda x: len(x.relations) == 1)
     def single_product(self, product):
         return self.walk(product.relations[0])
 
 
-class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
+class RewriteSelections(ew.ExpressionWalker):
     """
     Mixing that optimises through relational algebra expressions.
 
@@ -70,8 +70,8 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
 
     @ew.add_match(
         Selection(
-            Selection(..., FunctionApplication(eq_, ...)),
-            FunctionApplication(eq_, ...),
+            Selection(..., FunctionApplication(eq_, (Constant[Column], ...))),
+            FunctionApplication(eq_, (Constant[Column], ...)),
         ),
         lambda s: s.formula.args[0].value > s.relation.formula.args[0].value,
     )
@@ -88,7 +88,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
         ),
         lambda s: (
             s.formula.args[0].value
-            >= RelationalAlgebraRewriteSelections.get_arity(
+            >= RewriteSelections.get_arity(
                 s.relation.relations[0]
             )
         ),
@@ -126,8 +126,8 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
         lambda s: (
             s.formula.args[1].value
             < (
-                RelationalAlgebraRewriteSelections.get_arity(s.relation)
-                - RelationalAlgebraRewriteSelections.get_arity(
+                RewriteSelections.get_arity(s.relation)
+                - RewriteSelections.get_arity(
                     s.relation.relations[-1]
                 )
             )
@@ -280,21 +280,21 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
             )
         )
 
-    # @ew.add_match(
-    #    Selection(Selection, ...),
-    #    lambda exp: all(
-    #        isinstance(col, Constant[ColumnStr])
-    #        for col in (
-    #            get_expression_columns(exp.formula) |
-    #            get_expression_columns(exp.relation.formula)
-    #        )
-    #    )
-    # )
+    @ew.add_match(
+       Selection(Selection, ...),
+       lambda exp: all(
+           isinstance(col, Constant[ColumnStr])
+           for col in (
+               get_expression_columns(exp.formula) |
+               get_expression_columns(exp.relation.formula)
+           )
+       )
+    )
     def merge_selections(self, expression):
         return self.walk(
             Selection(
                 expression.relation.relation,
-                AND(expression.formula, expression.relation.formula)
+                AND(expression.relation.formula, expression.formula)
             )
         )
 
@@ -302,7 +302,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
     def split_relations_column(relations, column):
         accum_arity = 0
         for i, relation in enumerate(relations):
-            current_arity = RelationalAlgebraRewriteSelections.get_arity(
+            current_arity = RewriteSelections.get_arity(
                 relation
             )
             if column < current_arity:
@@ -317,17 +317,17 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
             return expression.value.arity
         elif isinstance(expression, Product):
             return sum(
-                RelationalAlgebraRewriteSelections.get_arity(r)
+                RewriteSelections.get_arity(r)
                 for r in expression.relations
             )
         elif isinstance(expression, EquiJoin):
-            return RelationalAlgebraRewriteSelections.get_arity(
+            return RewriteSelections.get_arity(
                 expression.relation_left
-            ) + RelationalAlgebraRewriteSelections.get_arity(
+            ) + RewriteSelections.get_arity(
                 expression.relation_right
             )
         else:
-            return RelationalAlgebraRewriteSelections.get_arity(
+            return RewriteSelections.get_arity(
                 expression.relation
             )
 
@@ -909,7 +909,7 @@ class RenameOptimizations(ew.PatternWalker):
         )
 
 
-class RelationalAlgebraPushInSelections(ew.PatternWalker):
+class PushInSelections(ew.PatternWalker):
     @ew.add_match(
         Selection(NaturalJoin, ...),
         lambda exp: (
@@ -1063,10 +1063,10 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
 
 
 class RelationalAlgebraOptimiser(
-    RelationalAlgebraRewriteSelections,
-    RelationalAlgebraSimplification,
+    RewriteSelections,
+    ProductSimplification,
     EliminateTrivialProjections,
-    RelationalAlgebraPushInSelections,
+    PushInSelections,
     RenameOptimizations,
     ew.ExpressionWalker,
 ):

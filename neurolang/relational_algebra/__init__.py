@@ -7,7 +7,7 @@ and different static optimisers.
 from .optimisers import (
     EliminateTrivialProjections,
     RelationalAlgebraOptimiser,
-    RelationalAlgebraPushInSelections,
+    PushInSelections,
     RenameOptimizations,
     SimplifyExtendedProjectionsWithConstants
 )
@@ -75,7 +75,7 @@ __all__ = [
     "RelationalAlgebraColumnStr",
     "RelationalAlgebraOperation",
     "RelationalAlgebraOptimiser",
-    "RelationalAlgebraPushInSelections",
+    "PushInSelections",
     "RelationalAlgebraSet",
     "RelationalAlgebraSolver",
     "RelationalAlgebraStringExpression",

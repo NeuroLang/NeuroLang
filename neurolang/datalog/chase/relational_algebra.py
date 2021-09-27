@@ -13,7 +13,7 @@ from ...expression_walker import ExpressionWalker, ReplaceSymbolWalker
 from ...logic.unification import apply_substitution_arguments
 from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
-                                   RelationalAlgebraPushInSelections,
+                                   PushInSelections,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import Unknown, is_leq_informative
 from ...utils import NamedRelationalAlgebraFrozenSet
@@ -143,7 +143,7 @@ class ChaseRelationalAlgebraPlusCeriMixin:
 
 
 class NamedRelationalAlgebraOptimiser(
-    RelationalAlgebraPushInSelections,
+    PushInSelections,
     ExpressionWalker
 ):
     pass

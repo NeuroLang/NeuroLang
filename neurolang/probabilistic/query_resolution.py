@@ -20,7 +20,7 @@ from ..relational_algebra import (
     FunctionApplicationListMember,
     Projection,
     RelationalAlgebraOperation,
-    RelationalAlgebraPushInSelections,
+    PushInSelections,
     RelationalAlgebraSolver,
     RenameOptimizations,
     SimplifyExtendedProjectionsWithConstants,
@@ -373,7 +373,7 @@ class FloatArithmeticSimplifier(PatternWalker):
 
 class RAQueryOptimiser(
     EliminateTrivialProjections,
-    RelationalAlgebraPushInSelections,
+    PushInSelections,
     RenameOptimizations,
     SimplifyExtendedProjectionsWithConstants,
     FloatArithmeticSimplifier,

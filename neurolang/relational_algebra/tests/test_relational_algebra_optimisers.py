@@ -9,9 +9,10 @@ from ...expressions import Constant, FunctionApplication, Symbol
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..optimisers import (
     EliminateTrivialProjections,
+    PushInSelections,
     RelationalAlgebraOptimiser,
-    RelationalAlgebraPushInSelections,
     RenameOptimizations,
+    RewriteSelections,
     SimplifyExtendedProjectionsWithConstants
 )
 from ..relational_algebra import (
@@ -38,17 +39,17 @@ C_ = Constant
 
 
 @pytest.fixture
-def R1():
+def r1():
     return WrappedRelationalAlgebraSet([(i, i * 2) for i in range(10)])
 
 
 @pytest.fixture
-def R2():
+def r2():
     return WrappedRelationalAlgebraSet([(i * 2, i * 3) for i in range(10)])
 
 
 @pytest.fixture
-def RS():
+def rs():
     return Symbol[AbstractSet]('R')
 
 
@@ -57,61 +58,61 @@ def str_columns():
     return tuple(str2columnstr_constant(n) for n in ('a', 'b', 'c', 'd', 'e'))
 
 
-def test_selection_reorder(R1):
+def test_selection_reorder(r1):
     raop = RelationalAlgebraOptimiser()
-    s = Selection(C_(R1), eq_(C_(ColumnInt(0)), C_(1)))
+    s = Selection(C_(r1), eq_(C_(ColumnInt(0)), C_(1)))
     assert raop.walk(s) is s
 
-    s1 = Selection(C_(R1), eq_(C_(1), C_(ColumnInt(0))))
+    s1 = Selection(C_(r1), eq_(C_(1), C_(ColumnInt(0))))
     assert raop.walk(s1) == s
 
-    s = Selection(C_(R1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1))))
+    s = Selection(C_(r1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1))))
     assert raop.walk(s) is s
 
-    s1 = Selection(C_(R1), eq_(C_(ColumnInt(1)), C_(ColumnInt(0))))
+    s1 = Selection(C_(r1), eq_(C_(ColumnInt(1)), C_(ColumnInt(0))))
     assert raop.walk(s1) == s
 
-    s_in = Selection(C_(R1), eq_(C_(ColumnInt(1)), C_(ColumnInt(1))))
+    s_in = Selection(C_(r1), eq_(C_(ColumnInt(1)), C_(ColumnInt(1))))
     s_out = Selection(s_in, eq_(C_(ColumnInt(0)), C_(ColumnInt(1))))
     assert raop.walk(s_out) is s_out
 
-    s_in1 = Selection(C_(R1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1))))
+    s_in1 = Selection(C_(r1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1))))
     s_out1 = Selection(s_in1, eq_(C_(ColumnInt(1)), C_(ColumnInt(1))))
     assert raop.walk(s_out1) == s_out
 
 
-def test_push_selection_equijoins(R1, R2):
+def test_push_selection_equijoins(r1, r2):
     raop = RelationalAlgebraOptimiser()
     s2 = Selection(
         EquiJoin(
-            C_(R1), (C_(ColumnInt(0)),),
-            C_(R2), (C_(ColumnInt(0)),)
+            C_(r1), (C_(ColumnInt(0)),),
+            C_(r2), (C_(ColumnInt(0)),)
         ),
         eq_(C_(ColumnInt(0)), C_(1))
     )
     s2_res = EquiJoin(
         Selection(
-            C_(R1),
+            C_(r1),
             eq_(C_(ColumnInt(0)), C_(1))
         ),
         (C_(ColumnInt(0)),),
-        C_(R2), (C_(ColumnInt(0)),)
+        C_(r2), (C_(ColumnInt(0)),)
     )
 
     assert raop.walk(s2) == s2_res
 
     s2 = Selection(
         EquiJoin(
-            C_(R1), (C_(ColumnInt(0)),),
-            C_(R2), (C_(ColumnInt(0)),)
+            C_(r1), (C_(ColumnInt(0)),),
+            C_(r2), (C_(ColumnInt(0)),)
         ),
         eq_(C_(ColumnInt(2)), C_(1))
     )
     s2_res = EquiJoin(
-        C_(R1),
+        C_(r1),
         (C_(ColumnInt(0)),),
         Selection(
-            C_(R2),
+            C_(r2),
             eq_(C_(ColumnInt(0)), C_(1))
         ),
         (C_(ColumnInt(0)),)
@@ -121,18 +122,18 @@ def test_push_selection_equijoins(R1, R2):
 
     s2 = Selection(
         EquiJoin(
-            C_(R1), (C_(ColumnInt(0)),),
-            C_(R2), (C_(ColumnInt(0)),)
+            C_(r1), (C_(ColumnInt(0)),),
+            C_(r2), (C_(ColumnInt(0)),)
         ),
         eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))
     )
     s2_res = EquiJoin(
         Selection(
-            C_(R1),
+            C_(r1),
             eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))
         ),
         (C_(ColumnInt(0)),),
-        C_(R2),
+        C_(r2),
         (C_(ColumnInt(0)),)
     )
 
@@ -140,16 +141,16 @@ def test_push_selection_equijoins(R1, R2):
 
     s2 = Selection(
         EquiJoin(
-            C_(R1), (C_(ColumnInt(0)),),
-            C_(R2), (C_(ColumnInt(0)),)
+            C_(r1), (C_(ColumnInt(0)),),
+            C_(r2), (C_(ColumnInt(0)),)
         ),
         eq_(C_(ColumnInt(2)), C_(ColumnInt(3)))
     )
     s2_res = EquiJoin(
-        C_(R1),
+        C_(r1),
         (C_(ColumnInt(0)),),
         Selection(
-            C_(R2),
+            C_(r2),
             eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))
         ),
         (C_(ColumnInt(0)),)
@@ -159,72 +160,72 @@ def test_push_selection_equijoins(R1, R2):
 
     s2 = Selection(
         EquiJoin(
-            C_(R1), (C_(ColumnInt(0)),),
-            C_(R2), (C_(ColumnInt(0)),)
+            C_(r1), (C_(ColumnInt(0)),),
+            C_(r2), (C_(ColumnInt(0)),)
         ),
         eq_(C_(ColumnInt(1)), C_(ColumnInt(2)))
     )
     assert raop.walk(s2) == s2
 
 
-def test_push_and_infer_equijoins(R1, R2):
+def test_push_and_infer_equijoins(r1, r2):
     raop = RelationalAlgebraOptimiser()
-    inner = Product((C_(R1), C_(R2)))
+    inner = Product((C_(r1), C_(r2)))
     formula1 = eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))
     s = Selection(inner, formula1)
-    assert raop.walk(s) == Product((Selection(C_(R1), formula1), C_(R2)))
+    assert raop.walk(s) == Product((Selection(C_(r1), formula1), C_(r2)))
 
-    inner = Product((C_(R1), C_(R2)))
+    inner = Product((C_(r1), C_(r2)))
     formula2 = eq_(C_(ColumnInt(2)), C_(ColumnInt(3)))
     s = Selection(inner, formula2)
     res = raop.walk(s)
-    expected_res = Product((C_(R1), Selection(C_(R2), formula1)))
+    expected_res = Product((C_(r1), Selection(C_(r2), formula1)))
     assert res == expected_res
 
-    inner = Product((C_(R1), C_(R2)))
+    inner = Product((C_(r1), C_(r2)))
     formula3 = eq_(C_(ColumnInt(0)), C_(ColumnInt(3)))
     s = Selection(inner, formula3)
     assert raop.walk(s) == EquiJoin(
-        C_(R1),
+        C_(r1),
         (C_(ColumnInt(0)),),
-        C_(R2),
+        C_(r2),
         (C_(ColumnInt(1)),),
     )
 
-    inner = Product((C_(R1), C_(R2), C_(R1)))
+    inner = Product((C_(r1), C_(r2), C_(r1)))
     formula3 = eq_(C_(ColumnInt(0)), C_(ColumnInt(3)))
     s = Selection(inner, formula3)
     assert raop.walk(s) == Product((
         EquiJoin(
-            C_(R1),
+            C_(r1),
             (C_(ColumnInt(0)),),
-            C_(R2),
+            C_(r2),
             (C_(ColumnInt(1)),),
         ),
-        C_(R1)
+        C_(r1)
     ))
 
     raop = RelationalAlgebraOptimiser()
-    inner = Product((C_(R1), C_(R2)))
+    inner = Product((C_(r1), C_(r2)))
     formula4 = eq_(C_(ColumnInt(0)), C_(1))
     s = Selection(inner, formula4)
     assert raop.walk(s) == Product(
-        (Selection(C_(R1), formula4), C_(R2))
+        (Selection(C_(r1), formula4), C_(r2))
     )
 
     raop = RelationalAlgebraOptimiser()
-    inner = Product((C_(R1), C_(R2)))
+    inner = Product((C_(r1), C_(r2)))
     formula5 = eq_(C_(ColumnInt(2)), C_(1))
     s = Selection(inner, formula5)
     res = raop.walk(s)
     theoretical_res = Product(
-        (C_(R1), Selection(C_(R2), formula4))
+        (C_(r1), Selection(C_(r2), formula4))
     )
     assert res == theoretical_res
 
 
 def test_push_in_optimiser():
-    class Opt(RelationalAlgebraPushInSelections, ExpressionWalker):
+    class Opt(PushInSelections, ExpressionWalker):
         pass
 
     opt = Opt()
@@ -384,29 +385,29 @@ def test_push_in_optimiser():
     assert res == exp_res
 
 
-def test_eliminate_trivial_projections_optimiser(R1):
+def test_eliminate_trivial_projections_optimiser(r1):
     class Opt(EliminateTrivialProjections, ExpressionWalker):
         pass
 
     opt = Opt()
 
-    r1 = Constant(R1)
+    rc = Constant(r1)
     exp = Projection(
-        r1,
+        rc,
         (Constant[ColumnInt](ColumnInt(0)), Constant[ColumnInt](ColumnInt(1)))
     )
 
     res = opt.walk(exp)
-    assert res is r1
+    assert res is rc
 
     a = Constant[ColumnStr](ColumnStr('a'))
     b = Constant[ColumnStr](ColumnStr('b'))
-    R = NamedRelationalAlgebraFrozenSet(
+    rv = NamedRelationalAlgebraFrozenSet(
         columns=('a', 'b'),
-        iterable=R1
+        iterable=r1
     )
 
-    r = C_[AbstractSet[Tuple[int, int]]](R)
+    r = C_[AbstractSet[Tuple[int, int]]](rv)
 
     exp1 = Projection(r, (a, b))
     res1 = opt.walk(exp1)
@@ -436,14 +437,14 @@ def test_eliminate_trivial_projections_optimiser(R1):
     assert res == Projection(r0, (a,))
 
 
-def test_simple_extended_projection_to_rename(RS, str_columns):
+def test_simple_extended_projection_to_rename(rs, str_columns):
     class Opt(EliminateTrivialProjections, ExpressionWalker):
         pass
 
     a, b, c, d, _ = str_columns
 
     exp = ExtendedProjection(
-        NameColumns(RS, (a, c)),
+        NameColumns(rs, (a, c)),
         (
             FunctionApplicationListMember(a, b),
             FunctionApplicationListMember(c, d)
@@ -461,7 +462,7 @@ def test_simple_extended_projection_to_rename(RS, str_columns):
     )
 
     exp = ExtendedProjection(
-        NameColumns(RS, (a, c)),
+        NameColumns(rs, (a, c)),
         (
             FunctionApplicationListMember(a, b),
         )
@@ -472,14 +473,14 @@ def test_simple_extended_projection_to_rename(RS, str_columns):
     assert res == res
 
 
-def test_composite_extended_projection_join(R1, str_columns):
+def test_composite_extended_projection_join(r1, str_columns):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
 
     opt = Opt()
 
     a, b, c, d, _ = str_columns
-    r1 = NameColumns(Constant(R1), (a, b))
+    r1 = NameColumns(Constant(r1), (a, b))
 
     exp = ExtendedProjection(
         NaturalJoin(
@@ -554,14 +555,14 @@ def test_composite_extended_projection_join(R1, str_columns):
     assert res == exp
 
 
-def test_composite_extended_projection_leftjoin(R1, str_columns):
+def test_composite_extended_projection_leftjoin(r1, str_columns):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
 
     opt = Opt()
 
     a, b, c, d, _ = str_columns
-    r1 = NameColumns(Constant(R1), (a, b))
+    r1 = NameColumns(Constant(r1), (a, b))
 
     exp = ExtendedProjection(
         LeftNaturalJoin(
@@ -636,14 +637,14 @@ def test_composite_extended_projection_leftjoin(R1, str_columns):
     assert res == exp
 
 
-def test_composite_extended_projection_constant_join(R1, str_columns):
+def test_composite_extended_projection_constant_join(r1, str_columns):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
 
     opt = Opt()
 
     a, b, c, d, _ = str_columns
-    r1 = NameColumns(Constant(R1), (a, b))
+    r1 = NameColumns(Constant(r1), (a, b))
 
     exp = ExtendedProjection(
         LeftNaturalJoin(
@@ -683,14 +684,14 @@ def test_composite_extended_projection_constant_join(R1, str_columns):
     assert res == exp
 
 
-def test_composite_extended_projection_function_join(R1, str_columns):
+def test_composite_extended_projection_function_join(r1, str_columns):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
 
     opt = Opt()
 
     a, b, c, d, _ = str_columns
-    r1 = NameColumns(Constant(R1), (a, b))
+    r1 = NameColumns(Constant(r1), (a, b))
 
     exp = ExtendedProjection(
         LeftNaturalJoin(
@@ -740,14 +741,14 @@ def test_composite_extended_projection_function_join(R1, str_columns):
     assert res == exp
 
 
-def test_composite_extended_projection_function_join_flip(R1, str_columns):
+def test_composite_extended_projection_function_join_flip(r1, str_columns):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
 
     opt = Opt()
 
     a, b, c, d, _ = str_columns
-    r1 = NameColumns(Constant(R1), (a, b))
+    r1 = NameColumns(Constant(r1), (a, b))
 
     exp = ExtendedProjection(
         LeftNaturalJoin(
@@ -797,14 +798,14 @@ def test_composite_extended_projection_function_join_flip(R1, str_columns):
     assert res == exp
 
 
-def test_composite_extended_projection_replacenull(R1, str_columns):
+def test_composite_extended_projection_replacenull(r1, str_columns):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
 
     opt = Opt()
 
     a, b, c, _, _ = str_columns
-    r1 = NameColumns(Constant(R1), (a, b))
+    r1 = NameColumns(Constant(r1), (a, b))
 
     exp = ReplaceNull(
         ExtendedProjection(
@@ -832,14 +833,14 @@ def test_composite_extended_projection_replacenull(R1, str_columns):
     assert res == exp
 
 
-def test_extended_projection_groupby_trivial(R1, str_columns):
+def test_extended_projection_groupby_trivial(r1, str_columns):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
 
     opt = Opt()
 
     a, b, c, d, _ = str_columns
-    r1 = NameColumns(Constant(R1), (a, b))
+    r1 = NameColumns(Constant(r1), (a, b))
 
     exp = GroupByAggregation(
         ExtendedProjection(
@@ -865,39 +866,39 @@ def test_extended_projection_groupby_trivial(R1, str_columns):
     assert res == exp
 
 
-def test_rename_column_to_rename_columns(RS, str_columns):
+def test_rename_column_to_rename_columns(rs, str_columns):
     class Opt(RenameOptimizations, ExpressionWalker):
         pass
 
     opt = Opt()
 
-    exp = RenameColumn(RS, str_columns[0], str_columns[1])
+    exp = RenameColumn(rs, str_columns[0], str_columns[1])
 
     res = opt.walk(exp)
 
-    assert res == RenameColumns(RS, ((str_columns[0], str_columns[1]),))
+    assert res == RenameColumns(rs, ((str_columns[0], str_columns[1]),))
 
 
-def test_trivial_rename_columns(RS, str_columns):
+def test_trivial_rename_columns(rs, str_columns):
     class Opt(RenameOptimizations, ExpressionWalker):
         pass
 
     opt = Opt()
 
-    exp = RenameColumns(RS, tuple())
+    exp = RenameColumns(rs, tuple())
 
     res = opt.walk(exp)
 
-    assert res == RS
+    assert res == rs
 
-    exp = RenameColumns(RS, tuple((s, s) for s in str_columns))
+    exp = RenameColumns(rs, tuple((s, s) for s in str_columns))
 
     res = opt.walk(exp)
 
-    assert res == RS
+    assert res == rs
 
 
-def test_nested_rename_columns(RS, str_columns):
+def test_nested_rename_columns(rs, str_columns):
     class Opt(RenameOptimizations, ExpressionWalker):
         pass
 
@@ -906,16 +907,16 @@ def test_nested_rename_columns(RS, str_columns):
     opt = Opt()
 
     exp = RenameColumns(
-        RenameColumns(RS, ((a, b), (d, e))),
+        RenameColumns(rs, ((a, b), (d, e))),
         ((b, c),)
     )
 
     res = opt.walk(exp)
 
-    assert res == RenameColumns(RS, ((a, c), (d, e)))
+    assert res == RenameColumns(rs, ((a, c), (d, e)))
 
 
-def test_nested_rename_columns_extended_projection(RS, str_columns):
+def test_nested_rename_columns_extended_projection(rs, str_columns):
     class Opt(RenameOptimizations, ExpressionWalker):
         pass
 
@@ -925,7 +926,7 @@ def test_nested_rename_columns_extended_projection(RS, str_columns):
 
     exp = RenameColumns(
         ExtendedProjection(
-            RS,
+            rs,
             (
                 FunctionApplicationListMember(a, b),
                 FunctionApplicationListMember(Constant(1), c)
@@ -937,7 +938,7 @@ def test_nested_rename_columns_extended_projection(RS, str_columns):
     res = opt.walk(exp)
 
     assert res == ExtendedProjection(
-        RS,
+        rs,
         (
             FunctionApplicationListMember(a, c),
             FunctionApplicationListMember(Constant(1), d)
@@ -945,7 +946,7 @@ def test_nested_rename_columns_extended_projection(RS, str_columns):
     )
 
 
-def test_nested_rename_columns_groupby_agg(RS, str_columns):
+def test_nested_rename_columns_groupby_agg(rs, str_columns):
     class Opt(RenameOptimizations, ExpressionWalker):
         pass
 
@@ -955,7 +956,7 @@ def test_nested_rename_columns_groupby_agg(RS, str_columns):
 
     exp = RenameColumns(
         GroupByAggregation(
-            RS,
+            rs,
             (a,),
             (
                 FunctionApplicationListMember(Constant(sum)(c), b),
@@ -967,7 +968,7 @@ def test_nested_rename_columns_groupby_agg(RS, str_columns):
     res = opt.walk(exp)
 
     assert res == GroupByAggregation(
-        RenameColumns(RS, ((a, e),)),
+        RenameColumns(rs, ((a, e),)),
         (e,),
         (
             FunctionApplicationListMember(Constant(sum)(c), b),
@@ -976,7 +977,7 @@ def test_nested_rename_columns_groupby_agg(RS, str_columns):
 
     exp = RenameColumns(
         GroupByAggregation(
-            RS,
+            rs,
             (a,),
             (FunctionApplicationListMember(Constant(sum)(c), b),)
         ),
@@ -986,7 +987,7 @@ def test_nested_rename_columns_groupby_agg(RS, str_columns):
     res = opt.walk(exp)
 
     assert res == GroupByAggregation(
-        RenameColumns(RS, ((a, b),)),
+        RenameColumns(rs, ((a, b),)),
         (b,),
         (
             FunctionApplicationListMember(Constant(sum)(c), c),
@@ -995,7 +996,7 @@ def test_nested_rename_columns_groupby_agg(RS, str_columns):
 
     exp = RenameColumns(
         GroupByAggregation(
-            RS,
+            rs,
             (a,),
             (FunctionApplicationListMember(Constant(sum)(b), b),)
         ),
@@ -1006,9 +1007,92 @@ def test_nested_rename_columns_groupby_agg(RS, str_columns):
 
     assert res == RenameColumns(
         GroupByAggregation(
-            RS,
+            rs,
             (a,),
             (FunctionApplicationListMember(Constant(sum)(b), c),)
         ),
         ((a, b),)
     )
+
+
+def test_rename_name(rs, str_columns):
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    a, b, c, _, _ = str_columns
+
+    opt = Opt()
+
+    exp = RenameColumns(NameColumns(rs, (a, b)), ((a, c), (b, a)))
+
+    res = opt.walk(exp)
+
+    assert res == NameColumns(rs, ((c, a)))
+
+
+def test_rename_selection(rs, str_columns):
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    a, _, c, _, _ = str_columns
+
+    opt = Opt()
+
+    one = Constant(1)
+    two = Constant(2)
+
+    exp = RenameColumns(Selection(rs, eq_(a + two, one)), ((a, c),))
+
+    res = opt.walk(exp)
+
+    assert res == Selection(RenameColumns(rs, ((a, c),)), eq_(c + two, one))
+
+
+def test_rename_projection(rs, str_columns):
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    a, b, c, _, _ = str_columns
+
+    opt = Opt()
+
+    exp = RenameColumns(Projection(rs, (a, b)), ((a, c),))
+
+    res = opt.walk(exp)
+
+    assert res == Projection(RenameColumns(rs, ((a, c),)), (c, b))
+
+
+def test_rename_replacenull(rs, str_columns):
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    a, _, c, _, _ = str_columns
+
+    opt = Opt()
+
+    zero = Constant(0)
+
+    exp = RenameColumns(ReplaceNull(rs, a, zero), ((a, c),))
+
+    res = opt.walk(exp)
+
+    assert res == ReplaceNull(RenameColumns(rs, ((a, c),)), c, zero)
+
+
+def test_nested_selections(rs, str_columns):
+    class Opt(RewriteSelections, ExpressionWalker):
+        pass
+
+    a, b, c, d, e = str_columns
+
+    opt = Opt()
+
+    and_ = Constant(operator.and_)
+    one = Constant(1)
+
+    exp = Selection(Selection(rs, eq_(a, one)), eq_(b + one, one))
+
+    res = opt.walk(exp)
+
+    assert res == Selection(rs, and_(eq_(a, one), eq_(b + one, one)))
