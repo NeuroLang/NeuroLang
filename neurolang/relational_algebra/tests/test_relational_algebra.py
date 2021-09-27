@@ -246,9 +246,6 @@ def test_name_columns_after_projection():
 
 
 def test_name_columns_symbolic_column_name():
-    relation = Constant[AbstractSet](
-        RelationalAlgebraSet([("hello", "world"), ("foo", "bar"),])
-    )
     symbol_table = {
         Symbol("my_column_name_symbol"): Constant[ColumnStr](
             ColumnStr("a_column_name")
