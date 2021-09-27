@@ -8,20 +8,17 @@ import pytest
 from ...config import config
 from ...datalog.basic_representation import WrappedRelationalAlgebraSet
 from ...exceptions import NeuroLangException
-from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...relational_algebra import (
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
     Destroy,
-    EliminateTrivialProjections,
     EquiJoin,
     ExtendedProjection,
     FunctionApplicationListMember,
     GroupByAggregation,
     Intersection,
-    LeftNaturalJoin,
     NameColumns,
     NaturalJoin,
     Product,

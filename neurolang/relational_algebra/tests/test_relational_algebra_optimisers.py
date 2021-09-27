@@ -920,7 +920,7 @@ def test_nested_rename_columns_extended_projection(rs, str_columns):
     class Opt(RenameOptimizations, ExpressionWalker):
         pass
 
-    a, b, c, d, e = str_columns
+    a, b, c, d, _ = str_columns
 
     opt = Opt()
 
