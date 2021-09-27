@@ -12,7 +12,6 @@ from ..relational_algebra import (
     NameColumns,
     Projection,
     RelationalAlgebraSolver,
-    RelationalAlgebraStringExpression,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
@@ -74,13 +73,7 @@ class ProbSemiringSolverMixin(
             str2columnstr_constant(f"col_{i}") for i in relation.value.columns
         )
         projection_list = [
-            FunctionApplicationListMember(
-                Constant[RelationalAlgebraStringExpression](
-                    RelationalAlgebraStringExpression(c.value),
-                    verify_type=False,
-                ),
-                c,
-            )
+            FunctionApplicationListMember(c, c)
             for c in named_columns
         ]
 
