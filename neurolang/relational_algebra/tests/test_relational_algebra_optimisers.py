@@ -950,7 +950,7 @@ def test_nested_rename_columns_groupby_agg(rs, str_columns):
     class Opt(RenameOptimizations, ExpressionWalker):
         pass
 
-    a, b, c, d, e = str_columns
+    a, b, c, _, e = str_columns
 
     opt = Opt()
 
