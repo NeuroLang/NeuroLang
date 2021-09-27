@@ -27,7 +27,6 @@ from .relational_algebra import (
     Projection,
     RelationalAlgebraOperation,
     RelationalAlgebraSolver,
-    RelationalAlgebraStringExpression,
     RenameColumn,
     RenameColumns,
     ReplaceNull,
@@ -46,7 +45,7 @@ SUB = Constant(operator.sub)
 SUM = Constant(sum)
 LOG = Constant(math.log)
 EXP = Constant(math.exp)
-ONE = Constant(1.)
+ONE = Constant[float](1.)
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -248,8 +247,8 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         ]
         proj_list.append(
             FunctionApplicationListMember(
-                ONE - EXP(prov_col),
-                prov_col,
+               ONE - EXP(prov_col),
+               prov_col,
             )
         )
         relation = ExtendedProjection(relation, proj_list)

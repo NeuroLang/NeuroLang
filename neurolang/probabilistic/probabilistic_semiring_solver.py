@@ -12,7 +12,6 @@ from ..relational_algebra import (
     NameColumns,
     Projection,
     RelationalAlgebraSolver,
-    RelationalAlgebraStringExpression,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (

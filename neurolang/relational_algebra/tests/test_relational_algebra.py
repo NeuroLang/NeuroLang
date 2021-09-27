@@ -5,18 +5,15 @@ import numpy
 import pandas as pd
 import pytest
 
-from ..config import config
-from ..datalog.basic_representation import WrappedRelationalAlgebraSet
-from ..exceptions import NeuroLangException
-from ..expression_walker import ExpressionWalker
-from ..expressions import Constant, FunctionApplication, Symbol
-from ..relational_algebra import (
-    EVAL_OP_TO_STR,
+from ...config import config
+from ...datalog.basic_representation import WrappedRelationalAlgebraSet
+from ...exceptions import NeuroLangException
+from ...expressions import Constant, FunctionApplication, Symbol
+from ...relational_algebra import (
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
     Destroy,
-    EliminateTrivialProjections,
     EquiJoin,
     ExtendedProjection,
     FunctionApplicationListMember,
@@ -26,27 +23,26 @@ from ..relational_algebra import (
     NaturalJoin,
     Product,
     Projection,
-    RelationalAlgebraOptimiser,
-    RelationalAlgebraPushInSelections,
     RelationalAlgebraSolver,
     RenameColumn,
     RenameColumns,
     Selection,
     Union,
+    eq_,
+    str2columnstr_constant
+)
+from ...utils import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet
+)
+from ...utils.relational_algebra_set import RelationalAlgebraStringExpression
+from ..relational_algebra import (
+    EVAL_OP_TO_STR,
     _const_relation_type_is_known,
     _get_const_relation_type,
     _infer_relation_type,
-    _sort_typed_const_named_relation_tuple_type_args,
-    eq_,
-    str2columnstr_constant,
+    _sort_typed_const_named_relation_tuple_type_args
 )
-from ..utils import (
-    NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraFrozenSet,
-    RelationalAlgebraSet,
-)
-from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
-
 
 C_ = Constant
 
@@ -214,172 +210,6 @@ def test_product(R1, R2):
     assert len(sol) == 0
 
 
-def test_selection_reorder(R1):
-    raop = RelationalAlgebraOptimiser()
-    s = Selection(C_(R1), eq_(C_(ColumnInt(0)), C_(1)))
-    assert raop.walk(s) is s
-
-    s1 = Selection(C_(R1), eq_(C_(1), C_(ColumnInt(0))))
-    assert raop.walk(s1) == s
-
-    s = Selection(C_(R1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1))))
-    assert raop.walk(s) is s
-
-    s1 = Selection(C_(R1), eq_(C_(ColumnInt(1)), C_(ColumnInt(0))))
-    assert raop.walk(s1) == s
-
-    s_in = Selection(C_(R1), eq_(C_(ColumnInt(1)), C_(ColumnInt(1))))
-    s_out = Selection(s_in, eq_(C_(ColumnInt(0)), C_(ColumnInt(1))))
-    assert raop.walk(s_out) is s_out
-
-    s_in1 = Selection(C_(R1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1))))
-    s_out1 = Selection(s_in1, eq_(C_(ColumnInt(1)), C_(ColumnInt(1))))
-    assert raop.walk(s_out1) == s_out
-
-
-def test_push_selection_equijoins(R1, R2):
-    raop = RelationalAlgebraOptimiser()
-    s2 = Selection(
-        EquiJoin(
-            C_(R1), (C_(ColumnInt(0)),),
-            C_(R2), (C_(ColumnInt(0)),)
-        ),
-        eq_(C_(ColumnInt(0)), C_(1))
-    )
-    s2_res = EquiJoin(
-        Selection(
-            C_(R1),
-            eq_(C_(ColumnInt(0)), C_(1))
-        ),
-        (C_(ColumnInt(0)),),
-        C_(R2), (C_(ColumnInt(0)),)
-    )
-
-    assert raop.walk(s2) == s2_res
-
-    s2 = Selection(
-        EquiJoin(
-            C_(R1), (C_(ColumnInt(0)),),
-            C_(R2), (C_(ColumnInt(0)),)
-        ),
-        eq_(C_(ColumnInt(2)), C_(1))
-    )
-    s2_res = EquiJoin(
-        C_(R1),
-        (C_(ColumnInt(0)),),
-        Selection(
-            C_(R2),
-            eq_(C_(ColumnInt(0)), C_(1))
-        ),
-        (C_(ColumnInt(0)),)
-    )
-
-    assert raop.walk(s2) == s2_res
-
-    s2 = Selection(
-        EquiJoin(
-            C_(R1), (C_(ColumnInt(0)),),
-            C_(R2), (C_(ColumnInt(0)),)
-        ),
-        eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))
-    )
-    s2_res = EquiJoin(
-        Selection(
-            C_(R1),
-            eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))
-        ),
-        (C_(ColumnInt(0)),),
-        C_(R2),
-        (C_(ColumnInt(0)),)
-    )
-
-    assert raop.walk(s2) == s2_res
-
-    s2 = Selection(
-        EquiJoin(
-            C_(R1), (C_(ColumnInt(0)),),
-            C_(R2), (C_(ColumnInt(0)),)
-        ),
-        eq_(C_(ColumnInt(2)), C_(ColumnInt(3)))
-    )
-    s2_res = EquiJoin(
-        C_(R1),
-        (C_(ColumnInt(0)),),
-        Selection(
-            C_(R2),
-            eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))
-        ),
-        (C_(ColumnInt(0)),)
-    )
-
-    assert raop.walk(s2) == s2_res
-
-    s2 = Selection(
-        EquiJoin(
-            C_(R1), (C_(ColumnInt(0)),),
-            C_(R2), (C_(ColumnInt(0)),)
-        ),
-        eq_(C_(ColumnInt(1)), C_(ColumnInt(2)))
-    )
-    assert raop.walk(s2) == s2
-
-
-def test_push_and_infer_equijoins(R1, R2):
-    raop = RelationalAlgebraOptimiser()
-    inner = Product((C_(R1), C_(R2)))
-    formula1 = eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))
-    s = Selection(inner, formula1)
-    assert raop.walk(s) == Product((Selection(C_(R1), formula1), C_(R2)))
-
-    inner = Product((C_(R1), C_(R2)))
-    formula2 = eq_(C_(ColumnInt(2)), C_(ColumnInt(3)))
-    s = Selection(inner, formula2)
-    res = raop.walk(s)
-    expected_res = Product((C_(R1), Selection(C_(R2), formula1)))
-    assert res == expected_res
-
-    inner = Product((C_(R1), C_(R2)))
-    formula3 = eq_(C_(ColumnInt(0)), C_(ColumnInt(3)))
-    s = Selection(inner, formula3)
-    assert raop.walk(s) == EquiJoin(
-        C_(R1),
-        (C_(ColumnInt(0)),),
-        C_(R2),
-        (C_(ColumnInt(1)),),
-    )
-
-    inner = Product((C_(R1), C_(R2), C_(R1)))
-    formula3 = eq_(C_(ColumnInt(0)), C_(ColumnInt(3)))
-    s = Selection(inner, formula3)
-    assert raop.walk(s) == Product((
-        EquiJoin(
-            C_(R1),
-            (C_(ColumnInt(0)),),
-            C_(R2),
-            (C_(ColumnInt(1)),),
-        ),
-        C_(R1)
-    ))
-
-    raop = RelationalAlgebraOptimiser()
-    inner = Product((C_(R1), C_(R2)))
-    formula4 = eq_(C_(ColumnInt(0)), C_(1))
-    s = Selection(inner, formula4)
-    assert raop.walk(s) == Product(
-        (Selection(C_(R1), formula4), C_(R2))
-    )
-
-    raop = RelationalAlgebraOptimiser()
-    inner = Product((C_(R1), C_(R2)))
-    formula5 = eq_(C_(ColumnInt(2)), C_(1))
-    s = Selection(inner, formula5)
-    res = raop.walk(s)
-    theoretical_res = Product(
-        (C_(R1), Selection(C_(R2), formula4))
-    )
-    assert res == theoretical_res
-
-
 def test_named_columns_projection():
     s = NamedRelationalAlgebraFrozenSet(
         columns=("x", "y"), iterable=[("c", "g"), ("b", "h"), ("a", "a")]
@@ -415,9 +245,6 @@ def test_name_columns_after_projection():
 
 
 def test_name_columns_symbolic_column_name():
-    relation = Constant[AbstractSet](
-        RelationalAlgebraSet([("hello", "world"), ("foo", "bar"),])
-    )
     symbol_table = {
         Symbol("my_column_name_symbol"): Constant[ColumnStr](
             ColumnStr("a_column_name")
@@ -871,93 +698,6 @@ def test_columns():
 
     rc2 = NameColumns(r2, (b,))
     assert NaturalJoin(rc, rc2).columns() == set((a, b))
-
-
-def test_push_in_optimiser():
-    class Opt(RelationalAlgebraPushInSelections, ExpressionWalker):
-        pass
-
-    opt = Opt()
-
-    r1 = Symbol('r1')
-    r2 = Symbol('r2')
-    a = Constant[ColumnStr](ColumnStr('a'))
-    b = Constant[ColumnStr](ColumnStr('b'))
-    op = Symbol('op')
-
-    exp1 = NaturalJoin(r1, r2)
-    assert opt.walk(exp1) is exp1
-
-    formula = op(a)
-    exp2 = Selection(NaturalJoin(RenameColumn(r1, b, a), r2), formula)
-    res = opt.walk(exp2)
-    exp_res = NaturalJoin(Selection(
-        RenameColumn(r1, b, a), formula),
-        r2
-    )
-    assert res == exp_res
-
-    exp3 = Selection(NaturalJoin(r2, RenameColumn(r1, b, a)), formula)
-    res = opt.walk(exp3)
-    exp_res = NaturalJoin(
-        r2,
-        Selection(
-            RenameColumn(r1, b, a), formula
-        )
-    )
-    assert res == exp_res
-
-
-def test_eliminate_trivial_projections_optimiser(R1):
-    class Opt(EliminateTrivialProjections, ExpressionWalker):
-        pass
-
-    opt = Opt()
-
-    r1 = Constant(R1)
-    exp = Projection(
-        r1,
-        (Constant[ColumnInt](ColumnInt(0)), Constant[ColumnInt](ColumnInt(1)))
-    )
-
-    res = opt.walk(exp)
-    assert res is r1
-
-    a = Constant[ColumnStr](ColumnStr('a'))
-    b = Constant[ColumnStr](ColumnStr('b'))
-    R = NamedRelationalAlgebraFrozenSet(
-        columns=('a', 'b'),
-        iterable=R1
-    )
-
-    r = C_[AbstractSet[Tuple[int, int]]](R)
-
-    exp1 = Projection(r, (a, b))
-    res1 = opt.walk(exp1)
-    assert res1 is r
-
-    r0 = Symbol('r0')
-    exp = Projection(Projection(r0, (a, b)), (a,))
-    res = opt.walk(exp)
-    assert res == Projection(r0, (a,))
-
-    exp = Projection(Projection(r0, (a, b)), (a, b))
-    res = opt.walk(exp)
-    assert res == Projection(r0, (a, b))
-
-    exp = ExtendedProjection(
-        r0,
-        (
-            FunctionApplicationListMember(a, a),
-            FunctionApplicationListMember(b, b)
-        )
-    )
-    res = opt.walk(exp)
-    assert res == Projection(r0, (a, b))
-
-    exp = Projection(exp, (a,))
-    res = opt.walk(exp)
-    assert res == Projection(r0, (a,))
 
 
 def test_numpy_log():
