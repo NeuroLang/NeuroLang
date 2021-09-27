@@ -1,3 +1,4 @@
+from itertools import chain
 import operator
 
 from .. import expression_walker as ew
@@ -796,8 +797,11 @@ class RenameOptimizations(ew.PatternWalker):
 
     @ew.add_match(
         RenameColumns(GroupByAggregation, ...),
-        lambda exp: {src for src, _ in exp.renames} <= set(
-            exp.relation.groupby
+        lambda exp: set(chain(*exp.renames)).isdisjoint(
+            chain(*(
+                get_expression_columns(agg.fun_exp)
+                for agg in exp.relation.aggregate_functions
+            ))
         )
     )
     def push_rename_past_groupby(self, expression):

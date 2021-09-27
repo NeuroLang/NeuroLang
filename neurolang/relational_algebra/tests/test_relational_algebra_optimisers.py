@@ -943,3 +943,72 @@ def test_nested_rename_columns_extended_projection(RS, str_columns):
             FunctionApplicationListMember(Constant(1), d)
         )
     )
+
+
+def test_nested_rename_columns_groupby_agg(RS, str_columns):
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    a, b, c, d, e = str_columns
+
+    opt = Opt()
+
+    exp = RenameColumns(
+        GroupByAggregation(
+            RS,
+            (a,),
+            (
+                FunctionApplicationListMember(Constant(sum)(c), b),
+            )
+        ),
+        ((a, e),)
+    )
+
+    res = opt.walk(exp)
+
+    assert res == GroupByAggregation(
+        RenameColumns(RS, ((a, e),)),
+        (e,),
+        (
+            FunctionApplicationListMember(Constant(sum)(c), b),
+        )
+    )
+
+    exp = RenameColumns(
+        GroupByAggregation(
+            RS,
+            (a,),
+            (FunctionApplicationListMember(Constant(sum)(c), b),)
+        ),
+        ((a, b), (b, c))
+    )
+
+    res = opt.walk(exp)
+
+    assert res == GroupByAggregation(
+        RenameColumns(RS, ((a, b),)),
+        (b,),
+        (
+            FunctionApplicationListMember(Constant(sum)(c), c),
+        )
+    )
+
+    exp = RenameColumns(
+        GroupByAggregation(
+            RS,
+            (a,),
+            (FunctionApplicationListMember(Constant(sum)(b), b),)
+        ),
+        ((a, b), (b, c))
+    )
+
+    res = opt.walk(exp)
+
+    assert res == RenameColumns(
+        GroupByAggregation(
+            RS,
+            (a,),
+            (FunctionApplicationListMember(Constant(sum)(b), c),)
+        ),
+        ((a, b),)
+    )
