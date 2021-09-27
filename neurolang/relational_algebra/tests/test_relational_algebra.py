@@ -31,14 +31,13 @@ from ...relational_algebra import (
     eq_,
     str2columnstr_constant
 )
-from ..relational_algebra import EVAL_OP_TO_STR
 from ...utils import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraFrozenSet,
-    RelationalAlgebraSet
+    RelationalAlgebraFrozenSet
 )
 from ...utils.relational_algebra_set import RelationalAlgebraStringExpression
 from ..relational_algebra import (
+    EVAL_OP_TO_STR,
     _const_relation_type_is_known,
     _get_const_relation_type,
     _infer_relation_type,

@@ -1084,7 +1084,7 @@ def test_nested_selections(rs, str_columns):
     class Opt(RewriteSelections, ExpressionWalker):
         pass
 
-    a, b, c, d, e = str_columns
+    a, b, _, _, _ = str_columns
 
     opt = Opt()
 
