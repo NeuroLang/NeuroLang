@@ -8,6 +8,7 @@ from typing import Iterable, Tuple, Type
 from ..config import config
 from ..expressions import Constant, Expression, Symbol
 from ..logic import Negation
+from ..probabilistic.expressions import ProbabilisticQuery
 from ..type_system import Unknown
 from . import expression_processing, extract_logic_predicates, DatalogProgram
 from .exceptions import BoundAggregationApplicationError, NegationInMagicSetsRewriteError
@@ -33,7 +34,8 @@ class AdornedSymbol(Symbol):
     def __eq__(self, other):
         return (
             hash(self) == hash(other) and
-            isinstance(other, AdornedSymbol)
+            isinstance(other, AdornedSymbol) and
+            self.unapply() == other.unapply()
         )
 
     def __hash__(self):
@@ -508,7 +510,7 @@ def adorn_code(
     """
     adornment = ''
     for a in query.args:
-        if isinstance(a, Symbol):
+        if isinstance(a, Symbol) or isinstance(a, ProbabilisticQuery):
             adornment += 'f'
         else:
             adornment += 'b'

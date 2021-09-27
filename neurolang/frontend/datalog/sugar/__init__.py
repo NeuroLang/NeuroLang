@@ -2,6 +2,7 @@
 Set of syntactic sugar processors at the intermediate level.
 """
 
+from neurolang.utils.orderedset import OrderedSet
 import operator as op
 import typing
 from typing import AbstractSet, Any, Callable, DefaultDict
@@ -11,6 +12,7 @@ from .... import expressions as ir
 from ....datalog.expression_processing import (
     conjunct_formulas,
     extract_logic_atoms,
+    extract_logic_free_variables,
 )
 from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
 from ....expression_walker import ReplaceExpressionWalker
@@ -440,6 +442,31 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         consequent = implication.consequent.functor(*csqt_args)
         return self.walk(Implication(consequent, implication.antecedent))
 
+    @ew.add_match(Implication(..., Condition), 
+        lambda impl: 
+        isinstance(impl.antecedent.conditioned, Conjunction) or isinstance(impl.antecedent.conditioning, Conjunction)
+    )
+    def rewrite_conditional_query(self, impl):
+        left = impl.antecedent.conditioned
+        right = impl.antecedent.conditioning
+        
+        head_args = extract_logic_free_variables(impl.consequent)
+        new_left_args = extract_logic_free_variables(left) & head_args
+        new_left = self.walk(Implication(
+            ir.Symbol.fresh()(*new_left_args),
+            left
+        ))
+
+        new_right_args = extract_logic_free_variables(right) & head_args
+        new_right = self.walk(Implication(
+            ir.Symbol.fresh()(*new_right_args),
+            right
+        ))
+
+        new_cond = self.walk(Implication(impl.consequent, Condition(new_left.consequent, new_right.consequent)))
+
+        return (new_left, new_right, new_cond)
+
 
 class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):
     """
@@ -473,3 +500,52 @@ class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):
         body = pred_symb(*impl.consequent.args)
         new_consequent = ProbabilisticPredicate(probability, body)
         return self.walk(Implication(new_consequent, impl.antecedent))
+
+
+class TranslateConditionalRuleMixin(ew.PatternWalker):
+    """
+    Translate an expression of the form
+
+        P(x, y) :- Q(x) // R(y)
+
+    to its equivalent expression
+
+        PDENUM(y) :- R(y)
+        PNUM(x, y) :- Q(x) & R(y)
+        P(x, y) :- PNUM(x, y) // PDENUM(y)
+
+    This is useful to propagate constants using magic sets algorithm
+    to the numerator and denominator of the conditional rule.
+    """
+
+    @ew.add_match(Implication(..., Condition))
+    def rewrite_conditional_query(self, impl):
+        left = impl.antecedent.conditioned
+        right = impl.antecedent.conditioning
+        if not (isinstance(left, Conjunction) or isinstance(right, Conjunction)):
+            return impl
+        
+        formulas = tuple()
+        head_args = extract_logic_free_variables(impl.consequent)
+        new_left_args = extract_logic_free_variables(left) & head_args
+        num_args = (arg for arg in impl.consequent.args if not isinstance(arg, ProbabilisticQuery))
+        new_num = self.walk(Implication(
+            ir.Symbol.fresh()(*num_args),
+            conjunct_formulas(left, right)
+        ))
+        formulas += (new_num,)
+
+        denum_args = OrderedSet()
+        for atom in extract_logic_atoms(right):
+            for arg in atom.args:
+                if not isinstance(arg, ir.Constant):
+                    denum_args.add(arg)
+        
+        if len(denum_args) > 0:
+            new_denum = self.walk(Implication(ir.Symbol.fresh()(*tuple(denum_args)), right))
+            formulas += (new_num,)
+            new_impl = Implication(impl.consequent, Condition(new_num.consequent, new_denum.consequent))
+        else :
+            new_impl = Implication(impl.consequent, )
+        
+        return self.walk(Implication(impl.consequent, Condition(new_num.consequent, right)))
