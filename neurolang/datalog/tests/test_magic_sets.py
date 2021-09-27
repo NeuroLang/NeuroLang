@@ -59,10 +59,10 @@ d = C_("d")
 eq = C_(operator.eq)
 
 
-def test_adorned_expression():
-    ax = magic_sets.AdornedExpression(x, 'b', 1)
-    ax_ = magic_sets.AdornedExpression(x, 'b', 1)
-    ax__ = magic_sets.AdornedExpression(a, 'b', 1)
+def test_adorned_symbol():
+    ax = magic_sets.AdornedSymbol(x, 'b', 1)
+    ax_ = magic_sets.AdornedSymbol(x, 'b', 1)
+    ax__ = magic_sets.AdornedSymbol(a, 'b', 1)
 
     assert ax.expression == x
     assert ax.adornment == 'b'
@@ -70,9 +70,9 @@ def test_adorned_expression():
     assert ax == ax_
     assert ax != ax__
 
-    ax = magic_sets.AdornedExpression(a, 'b', 1)
-    ax_ = magic_sets.AdornedExpression(a, 'b', 1)
-    ax__ = magic_sets.AdornedExpression(a, 'b', 2)
+    ax = magic_sets.AdornedSymbol(a, 'b', 1)
+    ax_ = magic_sets.AdornedSymbol(a, 'b', 1)
+    ax__ = magic_sets.AdornedSymbol(a, 'b', 2)
 
     assert ax.expression == a
     assert ax.adornment == 'b'
@@ -81,7 +81,7 @@ def test_adorned_expression():
     assert ax != ax__
 
     with raises(NotImplementedError):
-        magic_sets.AdornedExpression(a, 'b', 1).name
+        magic_sets.AdornedSymbol(a, 'b', 1).name
 
 
 def test_resolution_works():
@@ -370,7 +370,7 @@ def test_neurosynth_magic_sets(nspdl):
     TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(study, term, tfidf)
     TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
     Activation(x, y, z) :- SelectedStudy(s) & PeakReported(x, y, z, s)
-    ActivationGivenTerm(x, y, z, t, PROB) :- Activation(x, y, z) & TermAssociation(t)
+    ActivationGivenTerm(x, y, z, t, PROB) :- Activation(x, y, z) // TermAssociation(t)
     QueryActivation(x, y, z, p) :- ActivationGivenTerm(x, y, z, "emotion", p)
     ans(x, y, z, p) :- QueryActivation(x, y, z, p)
     """

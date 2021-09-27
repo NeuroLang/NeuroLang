@@ -235,7 +235,7 @@ class Expression(object):
         """
         if isinstance(self.expression, ir.Constant):
             return self._repr_constant(self.expression)
-        elif isinstance(self.expression, dl.magic_sets.AdornedExpression):
+        elif isinstance(self.expression, dl.magic_sets.AdornedSymbol):
             name = f"{self.expression.expression.name}"
             if self.expression.adornment:
                 name += f"^{self.expression.adornment}"

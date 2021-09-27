@@ -14,12 +14,12 @@ from .exceptions import BoundAggregationApplicationError, NegationInMagicSetsRew
 from .expressions import AggregationApplication, Conjunction, Implication, Union
 
 
-class AdornedExpression(Symbol):
+class AdornedSymbol(Symbol):
     def __init__(self, expression, adornment, number):
         self.expression = expression
         self.adornment = adornment
         self.number = number
-        self._symbols = expression._symbols
+        self._symbols = {self}
         if self.type is Unknown:
             self.type = self.expression.type
 
@@ -33,7 +33,7 @@ class AdornedExpression(Symbol):
     def __eq__(self, other):
         return (
             hash(self) == hash(other) and
-            isinstance(other, AdornedExpression)
+            isinstance(other, AdornedSymbol)
         )
 
     def __hash__(self):
@@ -92,7 +92,7 @@ class SIPS:
             if isinstance(arg, AggregationApplication) and ad == "b"
         }
         if len(bounded_aggregates) > 0:
-            bounded_aggregate = AdornedExpression(rule.consequent.functor, adornment, None)
+            bounded_aggregate = AdornedSymbol(rule.consequent.functor, adornment, None)
             bounded_aggregate = bounded_aggregate(*rule.consequent.args)
             raise BoundAggregationApplicationError(
                 "Magic Sets rewrite would lead to aggregation application"
@@ -116,7 +116,7 @@ class SIPS:
         if not has_b:
             adornment = ""
 
-        p = AdornedExpression(predicate.functor, adornment, predicate_number)
+        p = AdornedSymbol(predicate.functor, adornment, predicate_number)
         return p(*predicate.args)
 
 
@@ -242,7 +242,7 @@ def magic_rewrite(
     )
 
 
-def create_magic_query_inits(constant_predicates: Iterable[AdornedExpression]):
+def create_magic_query_inits(constant_predicates: Iterable[AdornedSymbol]):
     """
     Create magic initialization predicates from the set of adorned predicates
     with at least one argument constant, according to Balbin et al.'s magic
@@ -296,12 +296,12 @@ def create_balbin_magic_rules(adorned_rules, edb):
         body_predicates = (magic_head,)
         for predicate in extract_logic_predicates(rule.antecedent):
             functor = predicate.functor
-            if isinstance(functor, AdornedExpression) and isinstance(
+            if isinstance(functor, AdornedSymbol) and isinstance(
                 functor.expression, Constant
             ):
                 body_predicates += (functor.expression(*predicate.args),)
             elif (
-                isinstance(functor, AdornedExpression)
+                isinstance(functor, AdornedSymbol)
                 and "b" in functor.adornment
             ):
                 new_predicate = magic_predicate(predicate)
@@ -332,7 +332,7 @@ def create_complementary_rules(adorned_code, idb):
         for predicate in extract_logic_predicates(rule.antecedent):
             if (
                 not (
-                    isinstance(predicate.functor, AdornedExpression) and
+                    isinstance(predicate.functor, AdornedSymbol) and
                     isinstance(predicate.functor.expression, Constant)
                 ) and
                 predicate.functor.name in idb
@@ -383,7 +383,7 @@ def create_magic_rules_create_edb_antecedent(predicates, edb):
                 isinstance(functor.expression, Constant) or
                 functor.name in edb
             ) and
-            isinstance(functor, AdornedExpression) and
+            isinstance(functor, AdornedSymbol) and
             'b' in functor.adornment
         ):
             predicate = Symbol(predicate.functor.name)(*predicate.args)
@@ -395,7 +395,7 @@ def create_magic_rules_create_rules(new_antecedent, predicates, idb, i):
     magic_rules = []
     for predicate in predicates:
         functor = predicate.functor
-        is_adorned = isinstance(functor, AdornedExpression)
+        is_adorned = isinstance(functor, AdornedSymbol)
         if (
             is_adorned and
             not isinstance(functor.expression, Constant) and
@@ -435,7 +435,7 @@ def obtain_new_antecedent(rule, edb, rule_number):
     for predicate in extract_logic_predicates(rule.antecedent):
         functor = predicate.functor
         if (
-            isinstance(functor, AdornedExpression) and
+            isinstance(functor, AdornedSymbol) and
             isinstance(functor.expression, Constant)
         ):
             new_antecedent.append(functor.expression(*predicate.args))
@@ -466,7 +466,7 @@ def magic_predicate(predicate, i=None):
         zip(predicate.args, adornment)
         if ad == 'b'
     ]
-    new_functor = AdornedExpression(
+    new_functor = AdornedSymbol(
         Symbol(new_name), adornment, predicate.functor.number
     )
     return new_functor(*new_args)
@@ -513,7 +513,7 @@ def adorn_code(
         else:
             adornment += 'b'
 
-    query = AdornedExpression(query.functor, adornment, 0)(*query.args)
+    query = AdornedSymbol(query.functor, adornment, 0)(*query.args)
     adorn_stack = [query]
 
     edb = edb_with_prob_symbols(datalog)
@@ -525,7 +525,7 @@ def adorn_code(
     while adorn_stack:
         consequent = adorn_stack.pop()
 
-        if isinstance(consequent.functor, AdornedExpression):
+        if isinstance(consequent.functor, AdornedSymbol):
             adornment = consequent.functor.adornment
             name = consequent.functor.expression.name
         else:
@@ -583,7 +583,7 @@ def adorn_antecedent(
             predicate, predicate_number, in_edb
         )
 
-        is_adorned = isinstance(adorned_predicate.functor, AdornedExpression)
+        is_adorned = isinstance(adorned_predicate.functor, AdornedSymbol)
         if (
             not in_edb
             and is_adorned
