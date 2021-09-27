@@ -451,21 +451,33 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         right = impl.antecedent.conditioning
         
         head_args = extract_logic_free_variables(impl.consequent)
-        new_left_args = extract_logic_free_variables(left) & head_args
         new_left = self.walk(Implication(
-            ir.Symbol.fresh()(*new_left_args),
-            left
+            ir.Symbol.fresh()(*impl.consequent.args),
+            conjunct_formulas(left, right)
         ))
 
         new_right_args = extract_logic_free_variables(right) & head_args
+        new_right_prob_arg = ProbabilisticQuery(PROB, tuple(new_right_args))
+        new_right_args.add(new_right_prob_arg)
         new_right = self.walk(Implication(
             ir.Symbol.fresh()(*new_right_args),
             right
         ))
 
-        new_cond = self.walk(Implication(impl.consequent, Condition(new_left.consequent, new_right.consequent)))
+        new_impl = self.walk(Implication(
+            self._replace_prob_query_arg_by_var(impl.consequent, ir.Symbol("p")),
+            Conjunction((
+                self._replace_prob_query_arg_by_var(new_left.consequent, ir.Symbol("p1")),
+                self._replace_prob_query_arg_by_var(new_right.consequent, ir.Symbol("p2")),
+                EQ(ir.Symbol("p"), Constant(op.truediv)(ir.Symbol("p1"), ir.Symbol("p2")))
+            ))
+        ))
 
-        return (new_left, new_right, new_cond)
+        return (new_left, new_right, new_impl)
+
+    def _replace_prob_query_arg_by_var(self, expr, var):
+        new_args = (arg if not isinstance(arg, ProbabilisticQuery) else var for arg in expr.args)
+        return expr.functor(new_args)
 
 
 class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):
