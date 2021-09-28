@@ -189,6 +189,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         new_container.columns = pd.RangeIndex(len(columns))
         output = self._empty_set_same_structure()
         output._container = new_container
+        if (len(columns) == self.arity):
+            output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def selection(
@@ -231,6 +233,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         output = self._empty_set_same_structure()
         output._container = new_container
+        output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def _selection_dict(self, select_criteria):
@@ -289,6 +292,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         new_container = self._container[ix]
         output = self._empty_set_same_structure()
         output._container = new_container
+        output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def equijoin(self, other, join_indices):
