@@ -442,41 +442,53 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         consequent = implication.consequent.functor(*csqt_args)
         return self.walk(Implication(consequent, implication.antecedent))
 
-    @ew.add_match(Implication(..., Condition), 
-        lambda impl: 
-        isinstance(impl.antecedent.conditioned, Conjunction) or isinstance(impl.antecedent.conditioning, Conjunction)
+    @ew.add_match(
+        Implication(..., Condition),
+        lambda impl: isinstance(impl.antecedent.conditioned, Conjunction)
+        or isinstance(impl.antecedent.conditioning, Conjunction),
     )
     def rewrite_conditional_query(self, impl):
+        """
+        Translate an expression of the form
+            P(x, y, z) :- Q(x) & R(y) // T(z)
+
+        where at least one of the args of the condition is a conjunction
+        to its equivalent expression
+            F1(z) :- T(z)
+            F2(x, y) :- Q(x) & R(y)
+            P(x, y, z) :- F1(x, y) // F2(z)
+
+        This is useful to propagate constants using magic sets algorithm
+        to both parts of the condition, without rewriting the condition itself.
+        """
         left = impl.antecedent.conditioned
         right = impl.antecedent.conditioning
-        
+
         head_args = extract_logic_free_variables(impl.consequent)
-        new_left = self.walk(Implication(
-            ir.Symbol.fresh()(*impl.consequent.args),
-            conjunct_formulas(left, right)
-        ))
+        new_left_args = extract_logic_free_variables(left) & head_args
+        new_left = self.walk(
+            Implication(ir.Symbol.fresh()(*new_left_args), left)
+        )
 
         new_right_args = extract_logic_free_variables(right) & head_args
-        new_right_prob_arg = ProbabilisticQuery(PROB, tuple(new_right_args))
-        new_right_args.add(new_right_prob_arg)
-        new_right = self.walk(Implication(
-            ir.Symbol.fresh()(*new_right_args),
-            right
-        ))
+        new_right = self.walk(
+            Implication(ir.Symbol.fresh()(*new_right_args), right)
+        )
 
-        new_impl = self.walk(Implication(
-            self._replace_prob_query_arg_by_var(impl.consequent, ir.Symbol("p")),
-            Conjunction((
-                self._replace_prob_query_arg_by_var(new_left.consequent, ir.Symbol("p1")),
-                self._replace_prob_query_arg_by_var(new_right.consequent, ir.Symbol("p2")),
-                EQ(ir.Symbol("p"), Constant(op.truediv)(ir.Symbol("p1"), ir.Symbol("p2")))
-            ))
-        ))
+        new_cond = self.walk(
+            Implication(
+                impl.consequent,
+                Condition(new_left.consequent, new_right.consequent),
+            )
+        )
 
-        return (new_left, new_right, new_impl)
+        return (new_left, new_right, new_cond)
 
     def _replace_prob_query_arg_by_var(self, expr, var):
-        new_args = (arg if not isinstance(arg, ProbabilisticQuery) else var for arg in expr.args)
+        new_args = (
+            arg if not isinstance(arg, ProbabilisticQuery) else var
+            for arg in expr.args
+        )
         return expr.functor(new_args)
 
 
@@ -512,52 +524,3 @@ class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):
         body = pred_symb(*impl.consequent.args)
         new_consequent = ProbabilisticPredicate(probability, body)
         return self.walk(Implication(new_consequent, impl.antecedent))
-
-
-class TranslateConditionalRuleMixin(ew.PatternWalker):
-    """
-    Translate an expression of the form
-
-        P(x, y) :- Q(x) // R(y)
-
-    to its equivalent expression
-
-        PDENUM(y) :- R(y)
-        PNUM(x, y) :- Q(x) & R(y)
-        P(x, y) :- PNUM(x, y) // PDENUM(y)
-
-    This is useful to propagate constants using magic sets algorithm
-    to the numerator and denominator of the conditional rule.
-    """
-
-    @ew.add_match(Implication(..., Condition))
-    def rewrite_conditional_query(self, impl):
-        left = impl.antecedent.conditioned
-        right = impl.antecedent.conditioning
-        if not (isinstance(left, Conjunction) or isinstance(right, Conjunction)):
-            return impl
-        
-        formulas = tuple()
-        head_args = extract_logic_free_variables(impl.consequent)
-        new_left_args = extract_logic_free_variables(left) & head_args
-        num_args = (arg for arg in impl.consequent.args if not isinstance(arg, ProbabilisticQuery))
-        new_num = self.walk(Implication(
-            ir.Symbol.fresh()(*num_args),
-            conjunct_formulas(left, right)
-        ))
-        formulas += (new_num,)
-
-        denum_args = OrderedSet()
-        for atom in extract_logic_atoms(right):
-            for arg in atom.args:
-                if not isinstance(arg, ir.Constant):
-                    denum_args.add(arg)
-        
-        if len(denum_args) > 0:
-            new_denum = self.walk(Implication(ir.Symbol.fresh()(*tuple(denum_args)), right))
-            formulas += (new_num,)
-            new_impl = Implication(impl.consequent, Condition(new_num.consequent, new_denum.consequent))
-        else :
-            new_impl = Implication(impl.consequent, )
-        
-        return self.walk(Implication(impl.consequent, Condition(new_num.consequent, right)))

@@ -8,12 +8,20 @@ from typing import Iterable, Tuple, Type
 from ..config import config
 from ..expressions import Constant, Expression, Symbol
 from ..logic import Negation
-from ..probabilistic.expressions import ProbabilisticQuery
+from ..probabilistic.expressions import Condition, ProbabilisticQuery
 from ..type_system import Unknown
 from . import expression_processing, extract_logic_predicates, DatalogProgram
-from .exceptions import BoundAggregationApplicationError, NegationInMagicSetsRewriteError
-from .expressions import AggregationApplication, Conjunction, Implication, Union
-
+from .exceptions import (
+    BoundAggregationApplicationError,
+    NegationInMagicSetsRewriteError,
+    NonConjunctiveAntecedentInMagicSetsError,
+)
+from .expressions import (
+    AggregationApplication,
+    Conjunction,
+    Implication,
+    Union,
+)
 
 class AdornedSymbol(Symbol):
     def __init__(self, expression, adornment, number):
@@ -291,6 +299,9 @@ def create_balbin_magic_rules(adorned_rules, edb):
     magic_rules = []
     for rule in adorned_rules:
         consequent = rule.consequent
+        if isinstance(rule.antecedent, Condition):
+            magic_rules.append(rule)
+            continue
         magic_head = magic_predicate(consequent)
         if len(magic_head.args) == 0:
             magic_rules.append(rule)
@@ -600,6 +611,15 @@ def adorn_antecedent(
 
     if len(adorned_antecedent) == 1:
         adorned_antecedent = adorned_antecedent[0]
+    elif len(adorned_antecedent) == 2 and isinstance(antecedent, Condition):
+        adorned_antecedent = Condition(
+            adorned_antecedent[0], adorned_antecedent[1]
+        )
+    elif not isinstance(antecedent, Conjunction):
+        raise NonConjunctiveAntecedentInMagicSetsError(
+            "Magic Set rewrite does not work with "
+            f"non-conjunctive antecedent {antecedent}"
+        )
     else:
         adorned_antecedent = Conjunction(adorned_antecedent)
     return adorned_antecedent, to_adorn

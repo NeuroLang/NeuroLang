@@ -11,3 +11,7 @@ class BoundAggregationApplicationError(ForbiddenExpressionError):
 
 class NegationInMagicSetsRewriteError(ForbiddenExpressionError):
     pass
+
+
+class NonConjunctiveAntecedentInMagicSetsError(ForbiddenExpressionError):
+    pass
