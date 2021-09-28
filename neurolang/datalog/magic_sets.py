@@ -248,7 +248,7 @@ def magic_rewrite(
     magic_rules = create_balbin_magic_rules(adorned_code.formulas[:-1], edb)
     magic_inits = create_magic_query_inits(constant_predicates)
     return goal, Union(
-        magic_inits + [adorned_query] + magic_rules,
+        magic_inits + (adorned_query,) + magic_rules,
     )
 
 

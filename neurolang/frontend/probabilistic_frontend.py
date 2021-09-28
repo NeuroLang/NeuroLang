@@ -41,7 +41,11 @@ from ..datalog.expression_processing import (
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
-from ..exceptions import UnsupportedQueryError, UnsupportedSolverError
+from ..exceptions import (
+    ForbiddenExpressionError,
+    UnsupportedQueryError,
+    UnsupportedSolverError,
+)
 from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
 from ..probabilistic import (
@@ -312,7 +316,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                 magic_query = self.magic_sets_rewrite_program(query)
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
-        except Exception:
+        except ForbiddenExpressionError:
             solution = self._solve(query)
 
         if not isinstance(head, tuple):

@@ -30,6 +30,7 @@ from ..datalog.expression_processing import (
     TranslateToDatalogSemantics,
     reachable_code,
 )
+from ..exceptions import ForbiddenExpressionError
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.standard_syntax import parser as datalog_parser
@@ -427,7 +428,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 ).build_chase_solution()
                 self.program_ir.symbol_table = self.symbol_table.enclosing_scope
                 functor = magic_query_expression.consequent.functor
-        except Exception:
+        except ForbiddenExpressionError:
             reachable_rules = reachable_code(query_expression, self.program_ir)
             solution = self.chase_class(
                 self.program_ir, rules=reachable_rules
