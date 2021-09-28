@@ -538,6 +538,8 @@ OPERATOR_STRING = {
     operator.ge: ">=",
     operator.le: "<=",
     operator.pow: "**",
+    operator.and_: "and",
+    operator.or_: "or"
 }
 
 
@@ -566,6 +568,9 @@ def _get_evaluatable_operations_and_string_translations():
         "arcsinh": "asinh",
         "arccosh": "acosh",
         "arctanh": "atanh",
+        "exp": "exp",
+        "log": "log",
+        "log10": "log10"
     }
     for op_name in pandas.core.computation.ops._unary_math_ops:
         eval_op_to_str[getattr(numpy, op_name)] = op_name
