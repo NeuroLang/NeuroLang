@@ -4,12 +4,15 @@ from pathlib import Path
 
 import nibabel as nib
 import numpy as np
+import pandas as pd
 import pytest
 from nilearn import datasets, image
 from pytest import raises
 
 from ... import expression_walker, expressions
 from ...frontend.probabilistic_frontend import NeurolangPDL
+from ...probabilistic.expressions import PROB
+from ...frontend.datalog.sugar import TranslateProbabilisticQueryMixin
 from .. import DatalogProgram, Fact, Implication, magic_sets
 from ..aggregation import (
     AGG_COUNT,
@@ -29,6 +32,7 @@ Eb_ = expressions.ExpressionBlock
 
 
 class Datalog(
+    TranslateProbabilisticQueryMixin,
     TranslateToLogicWithAggregation,
     BuiltinAggregationMixin,
     DatalogWithAggregationMixin,
@@ -309,63 +313,106 @@ def test_negation_raises_error():
 
 
 @pytest.fixture
-def nspdl():
+def nl():
     nl = NeurolangPDL()
-    data_dir = Path.home() / "neurolang_data"
-    nl.load_neurosynth_mni_peaks_reported(data_dir, "PeakReported")
-    studies = nl.load_neurosynth_study_ids(data_dir, "Study")
+    studies = (
+        10191322,
+        10227106,
+        10349031,
+        10402199,
+        10571235,
+        10407201,
+        10197540,
+        10022496,
+        10022494,
+        9819274,
+        11430815,
+        11275483,
+        10913505,
+        10808134,
+        10751455,
+    )
     nl.add_uniform_probabilistic_choice_over_set(
-        studies.value.as_pandas_dataframe(), name="SelectedStudy"
+        list(map(lambda x: (x,), studies)), name="SelectedStudy"
     )
-    nl.load_neurosynth_term_study_associations(data_dir, "TermInStudyTFIDF")
-    mni_mask = nib.load(
-        datasets.fetch_icbm152_2009(data_dir=str(data_dir / "icbm"))["mask"]
+    peaks_data = (
+        (-48, -74, 34, 10349031),
+        (-33, 28, 7, 10191322),
+        (21, 52, 20, 10349031),
+        (-42, 28, 9, 10191322),
+        (42, -24, 12, 10022496),
+        (-38, 15, 26, 10191322),
+        (-36, 26, 9, 10191322),
+        (-53, -26, -21, 10349031),
+        (-42, 12, 17, 10191322),
+        (0, -73, 6, 10913505),
+        (10, 41, 1, 10349031),
+        (-40, 22, 32, 10191322),
+        (-52, -28, 52, 9819274),
+        (-48, -30, 12, 10022496),
+        (-44, 27, 18, 10191322),
+        (-48, -24, 12, 10022496),
+        (-30, -31, -2, 10197540),
+        (-35, 16, 39, 10191322),
+        (18, -76, -16, 10022494),
+        (-48, 14, 36, 10227106),
+        (-48, 32, -16, 10808134),
+        (-48, 26, 27, 10402199),
+        (38, -84, 0, 10751455),
+        (-40, 16, 19, 10191322),
+        (23, -53, -19, 10913505),
+        (48, -20, 57, 10197540),
+        (32, -72, -20, 10022494),
+        (-35, 24, 27, 10402199),
+        (-42, -26, 12, 10022496),
+        (-33, 9, 29, 10191322),
+        (2, 4, -2, 10349031),
+        (22, 44, 32, 10349031),
+        (-60, -36, 16, 10571235),
+        (-53, -61, -29, 10913505),
+        (-31, -18, 46, 10913505),
+        (-40, 16, 19, 10191322),
+        (14, -13, -10, 10197540),
+        (-52, -28, 12, 10407201),
+        (32, 61, -16, 10913505),
+        (40, -16, 12, 10022496),
+        (-58, -41, -20, 10913505),
+        (26, -93, 2, 10227106),
+        (-52, -16, 8, 10407201),
+        (59, -19, -12, 10197540),
+        (-29, -31, -2, 10197540),
+        (-56, -43, 19, 10197540),
+        (55, -3, -1, 10913505),
+        (-49, 28, 4, 10227106),
+        (-42, -26, 8, 10022496),
+        (5, -39, 22, 10913505),
     )
-    resolution = 2
-    mni_mask = image.resample_img(mni_mask, np.eye(3) * resolution)
-    nl.add_tuple_set(
-        np.round(
-            nib.affines.apply_affine(
-                mni_mask.affine,
-                np.transpose(mni_mask.get_fdata().nonzero()),
-            )
-        ).astype(int),
-        name="Voxel",
+    peaks = pd.DataFrame(peaks_data, columns=("x", "y", "z", "tfidf"))
+
+    terms_data = (
+        (10751455, "emotion", 0.052538),
+        (10808134, "emotion", 0.244368),
+        (10913505, "emotion", 0.059463),
+        (11275483, "emotion", 0.123356),
+        (11430815, "emotion", 0.065204),
+        (9819274, "auditory", 0.059705),
+        (10022494, "auditory", 0.10052),
+        (10022496, "auditory", 0.28146),
+        (10197540, "auditory", 0.38657),
+        (10407201, "auditory", 0.16817),
+        (10191322, "language", 0.28298),
+        (10227106, "language", 0.05432),
+        (10349031, "language", 0.05329),
+        (10402199, "language", 0.18801),
+        (10571235, "language", 0.08257),
     )
+    terms = pd.DataFrame(terms_data, columns=("study", "term", "tfidf"))
+    nl.add_tuple_set(peaks, name="PeakReported")
+    nl.add_tuple_set(terms, name="TermInStudyTFIDF")
     return nl
 
 
-LOGGING_CONFIG = {
-    "version": 1,
-    "formatters": {
-        "standard": {
-            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-        },
-    },
-    "handlers": {
-        "default": {
-            "level": "DEBUG",
-            "formatter": "standard",
-            "class": "logging.StreamHandler",
-        },
-    },
-    "loggers": {
-        "": {  # root logger
-            "handlers": ["default"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "neurolang": {
-            "handlers": ["default"],
-            "level": "INFO",
-            "propagate": False,
-        },
-    },
-}
-# logging.config.dictConfig(LOGGING_CONFIG)
-
-
-def test_neurosynth_magic_sets(nspdl):
+def test_neurosynth_query(nl):
     query = """
     TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(study, term, tfidf)
     TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
@@ -374,7 +421,24 @@ def test_neurosynth_magic_sets(nspdl):
     QueryActivation(x, y, z, p) :- ActivationGivenTerm(x, y, z, "emotion", p)
     ans(x, y, z, p) :- QueryActivation(x, y, z, p)
     """
-    res = nspdl.execute_datalog_program(query)
-    # print(res)
+    res = nl.execute_datalog_program(query)
+    print(res)
+    expected = (
+        (-58, -41, -20, 0.2),
+        (-53, -61, -29, 0.2),
+        (-48, 32, -16, 0.2),
+        (-31, -18, 46, 0.2),
+        (0, -73, 6, 0.2),
+        (5, -39, 22, 0.2),
+        (23, -53, -19, 0.2),
+        (32, 61, -16, 0.2),
+        (38, -84, 0, 0.2),
+        (55, -3, -1, 0.2),
+    )
     assert res is not None
-    assert len(res) == 27279
+    assert len(res) == len(expected)
+    p = res.as_pandas_dataframe()
+    assert set(tuple(x) for x in p[["x", "y", "z"]].values) == set(
+        (x, y, z) for x, y, z, _ in expected
+    )
+    np.testing.assert_almost_equal(p.p.values, np.full((10,), 0.2))
