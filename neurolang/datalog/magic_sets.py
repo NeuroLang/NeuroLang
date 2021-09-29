@@ -243,9 +243,7 @@ def magic_rewrite(
     adorned_query = adorned_code.formulas[-1]
     goal = adorned_query.consequent.functor
 
-    edb = edb_with_prob_symbols(datalog)
-
-    magic_rules = create_balbin_magic_rules(adorned_code.formulas[:-1], edb)
+    magic_rules = create_balbin_magic_rules(adorned_code.formulas[:-1])
     magic_inits = create_magic_query_inits(constant_predicates)
     return goal, Union(
         magic_inits + [adorned_query] + magic_rules,
@@ -274,12 +272,15 @@ def create_magic_query_inits(constant_predicates: Iterable[AdornedSymbol]):
     magic_init_rules = []
     for predicate in constant_predicates:
         magic_init_rules.append(
-            Implication(magic_predicate(predicate), Constant(True),)
+            Implication(
+                magic_predicate(predicate, adorned=False),
+                Constant(True),
+            )
         )
     return magic_init_rules
 
 
-def create_balbin_magic_rules(adorned_rules, edb):
+def create_balbin_magic_rules(adorned_rules):
     """
     Create the set of Magic Set rules according to Algorithm 2 of
     Balbin et al.
@@ -302,7 +303,7 @@ def create_balbin_magic_rules(adorned_rules, edb):
         if isinstance(rule.antecedent, Condition):
             magic_rules.append(rule)
             continue
-        magic_head = magic_predicate(consequent)
+        magic_head = magic_predicate(consequent, adorned=False)
         if len(magic_head.args) == 0:
             magic_rules.append(rule)
             continue
@@ -317,7 +318,7 @@ def create_balbin_magic_rules(adorned_rules, edb):
                 isinstance(functor, AdornedSymbol)
                 and "b" in functor.adornment
             ):
-                new_predicate = magic_predicate(predicate)
+                new_predicate = magic_predicate(predicate, adorned=False)
                 if not (
                     len(body_predicates) == 1
                     and new_predicate == body_predicates[0]
@@ -466,22 +467,48 @@ def obtain_new_antecedent(rule, edb, rule_number):
     return new_antecedent
 
 
-def magic_predicate(predicate, i=None):
+def magic_predicate(predicate, i=None, adorned=True):
+    """
+    Given a predicate of the form P^bf(x, y), create a magic predicate of the
+    form magic_P^bf(x).
+    If adorned is True, the magic predicate returned is an AdornedSymbol,
+    otherwise it is a Symbol with the name magic_P^bf.
+
+    Parameters
+    ----------
+    predicate : Expression
+        a predicate with an adorned symbol
+    i : int, optional
+        a rule number, by default None
+    adorned : bool, optional
+        whether to return an AdornedSymbol, by default True
+
+    Returns
+    -------
+    Expression
+        a new predicate.
+    """
     name = predicate.functor.name
     adornment = predicate.functor.adornment
     if i is not None:
-        new_name = f'magic_r{i}_{name}'
+        new_name = f"magic_r{i}_{name}"
     else:
-        new_name = f'magic_{name}'
+        new_name = f"magic_{name}"
 
-    new_args = [
-        arg for arg, ad in
-        zip(predicate.args, adornment)
-        if ad == 'b'
-    ]
-    new_functor = AdornedSymbol(
-        Symbol(new_name), adornment, predicate.functor.number
-    )
+    new_args = [arg for arg, ad in zip(predicate.args, adornment) if ad == "b"]
+    if adorned:
+        new_functor = AdornedSymbol(
+            Symbol(new_name), adornment, predicate.functor.number
+        )
+    else:
+        superindex = f"^{adornment}" if len(adornment) > 0 else ""
+        subindex = (
+            f"_{predicate.functor.number}"
+            if predicate.functor.number is not None
+            else ""
+        )
+        new_name = f"{new_name}{superindex}{subindex}"
+        new_functor = Symbol(new_name)
     return new_functor(*new_args)
 
 
