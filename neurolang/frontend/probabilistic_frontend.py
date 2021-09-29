@@ -35,6 +35,7 @@ from ..datalog.aggregation import (
 )
 from ..datalog.chase import Chase
 from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
 )
@@ -42,7 +43,6 @@ from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import (
-    ForbiddenExpressionError,
     UnsupportedQueryError,
     UnsupportedSolverError,
 )
@@ -316,7 +316,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                 magic_query = self.magic_sets_rewrite_program(query)
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
-        except ForbiddenExpressionError:
+        except InvalidMagicSetError:
             solution = self._solve(query)
 
         if not isinstance(head, tuple):

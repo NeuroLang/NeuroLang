@@ -26,11 +26,11 @@ from .. import expressions as ir
 from .. import logic
 from ..datalog.chase import Chase
 from ..datalog.constraints_representation import RightImplication
+from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
     TranslateToDatalogSemantics,
     reachable_code,
 )
-from ..exceptions import ForbiddenExpressionError
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.standard_syntax import parser as datalog_parser
@@ -428,7 +428,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 ).build_chase_solution()
                 self.program_ir.symbol_table = self.symbol_table.enclosing_scope
                 functor = magic_query_expression.consequent.functor
-        except ForbiddenExpressionError:
+        except InvalidMagicSetError:
             reachable_rules = reachable_code(query_expression, self.program_ir)
             solution = self.chase_class(
                 self.program_ir, rules=reachable_rules
@@ -450,8 +450,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def magic_sets_rewrite_program(self, query_expression):
         goal, mr = magic_rewrite(query_expression.consequent, self.program_ir)
-        if goal is None or mr is None:
-            return query_expression
         self.program_ir.walk(mr)
         new_query_expression = self.program_ir.symbol_table[goal].formulas[0]
         return new_query_expression
