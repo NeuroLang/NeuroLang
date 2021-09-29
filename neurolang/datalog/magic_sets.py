@@ -239,6 +239,9 @@ def magic_rewrite(
     adorned_code, constant_predicates = reachable_adorned_code(
         query, datalog, LeftToRightSIPS
     )
+    if len(constant_predicates) == 0:
+        # No constants present in the code, magic sets is not usefull
+        return None, None
     # assume that the query rule is the last
     adorned_query = adorned_code.formulas[-1]
     goal = adorned_query.consequent.functor

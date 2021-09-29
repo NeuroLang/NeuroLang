@@ -444,52 +444,66 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
 
     @ew.add_match(
         Implication(..., Condition),
-        lambda impl: isinstance(impl.antecedent.conditioned, Conjunction)
-        or isinstance(impl.antecedent.conditioning, Conjunction),
     )
     def rewrite_conditional_query(self, impl):
         """
         Translate an expression of the form
             P(x, y, z) :- Q(x) & R(y) // T(z)
 
-        where at least one of the args of the condition is a conjunction
         to its equivalent expression
-            F1(z) :- T(z)
-            F2(x, y) :- Q(x) & R(y)
-            P(x, y, z) :- F1(x, y) // F2(z)
-
-        This is useful to propagate constants using magic sets algorithm
-        to both parts of the condition, without rewriting the condition itself.
+            F1(x, y, z, PROB) :- Q(x) & R(y) &T(z)
+            F2(z, PROB) :- T(z)
+            P(x, y, z, p) :- F1(x, y, z, p1) & F2(z, p2) & (p == p1 / p2)
         """
         left = impl.antecedent.conditioned
         right = impl.antecedent.conditioning
 
         head_args = extract_logic_free_variables(impl.consequent)
-        new_left_args = extract_logic_free_variables(left) & head_args
-        new_left = self.walk(
-            Implication(ir.Symbol.fresh()(*new_left_args), left)
-        )
-
-        new_right_args = extract_logic_free_variables(right) & head_args
-        new_right = self.walk(
-            Implication(ir.Symbol.fresh()(*new_right_args), right)
-        )
-
-        new_cond = self.walk(
+        new_num = self.walk(
             Implication(
-                impl.consequent,
-                Condition(new_left.consequent, new_right.consequent),
+                ir.Symbol.fresh()(*impl.consequent.args),
+                conjunct_formulas(left, right),
             )
         )
 
-        return (new_left, new_right, new_cond)
+        new_denum_args = extract_logic_free_variables(right) & head_args
+        new_denum_prob_arg = ProbabilisticQuery(PROB, tuple(new_denum_args))
+        new_denum_args.add(new_denum_prob_arg)
+        new_denum = self.walk(
+            Implication(ir.Symbol.fresh()(*new_denum_args), right)
+        )
+
+        p = Symbol.fresh()
+        p1 = Symbol.fresh()
+        p2 = Symbol.fresh()
+        new_impl = self.walk(
+            Implication(
+                self._replace_prob_query_arg_by_var(impl.consequent, p),
+                Conjunction(
+                    (
+                        self._replace_prob_query_arg_by_var(
+                            new_num.consequent, p1
+                        ),
+                        self._replace_prob_query_arg_by_var(
+                            new_denum.consequent, p2
+                        ),
+                        EQ(
+                            p,
+                            Constant(op.truediv)(p1, p2),
+                        ),
+                    )
+                ),
+            )
+        )
+
+        return (new_num, new_denum, new_impl)
 
     def _replace_prob_query_arg_by_var(self, expr, var):
-        new_args = (
+        new_args = tuple(
             arg if not isinstance(arg, ProbabilisticQuery) else var
             for arg in expr.args
         )
-        return expr.functor(new_args)
+        return expr.functor(*new_args)
 
 
 class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):

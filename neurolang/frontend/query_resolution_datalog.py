@@ -450,6 +450,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def magic_sets_rewrite_program(self, query_expression):
         goal, mr = magic_rewrite(query_expression.consequent, self.program_ir)
+        if goal is None or mr is None:
+            return query_expression
         self.program_ir.walk(mr)
         new_query_expression = self.program_ir.symbol_table[goal].formulas[0]
         return new_query_expression
