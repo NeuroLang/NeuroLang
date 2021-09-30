@@ -39,6 +39,7 @@ from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
 )
+from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
@@ -58,7 +59,7 @@ from ..probabilistic.expression_processing import (
     is_within_language_prob_query,
 )
 from ..probabilistic.magic_sets_processing import (
-    probabilistic_postprocess_magic_sets
+    probabilistic_postprocess_magic_rules,
 )
 from ..probabilistic.query_resolution import (
     QueryBasedProbFactToDetRule,
@@ -316,10 +317,19 @@ class NeurolangPDL(QueryBuilderDatalog):
 
         try:
             with self.scope:
-                magic_query = self.magic_sets_rewrite_program(query)
-                magic_query, mr = probabilistic_postprocess_magic_sets(self.program_ir, magic_query)
+                goal, magic_rules = magic_rewrite(
+                    query.consequent, self.program_ir
+                )
+                self.program_ir.walk(magic_rules)
+                magic_query = self.program_ir.symbol_table[goal].formulas[0]
+                (
+                    magic_query,
+                    magic_rules,
+                ) = probabilistic_postprocess_magic_rules(
+                    self.program_ir, magic_query, magic_rules
+                )
             with self.scope:
-                self.program_ir.walk(mr)
+                self.program_ir.walk(magic_rules)
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
         except InvalidMagicSetError:

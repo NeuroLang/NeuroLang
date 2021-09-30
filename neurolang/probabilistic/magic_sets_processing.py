@@ -11,7 +11,9 @@ from .expressions import PROB, ProbabilisticQuery
 from .stratification import reachable_code_from_query
 
 
-def probabilistic_postprocess_magic_sets(program: DatalogProgram, query):
+def probabilistic_postprocess_magic_rules(
+    program: DatalogProgram, query: Implication, magic_rules: Union
+):
     """
     Within language probabilistic queries (wlq) cannot be solved when they
     depend on one another, which is something that Magic Sets rewrite can
@@ -45,26 +47,39 @@ def probabilistic_postprocess_magic_sets(program: DatalogProgram, query):
         for to_replace in wlq_symb_deps:
             wlq_symb = idb_symbs[to_replace]
             if wlq_symb not in replaced:
-                wlq_exprs.add(program.within_language_prob_queries()[
-                    wlq_symb
-                ].consequent)
+                wlq_exprs.add(
+                    program.within_language_prob_queries()[wlq_symb].consequent
+                )
                 code = reachable_code_from_query(
                     program.within_language_prob_queries()[wlq_symb],
                     program,
                 )
                 for rule in code.formulas:
-                    rules_to_update.add(idb.index(rule))
+                    try:
+                        rules_to_update.add(magic_rules.formulas.index(rule))
+                    except ValueError:
+                        pass
 
-    processed_idb = update_rules_with_new_prob_expressions(idb, rules_to_update, wlq_exprs)
+    processed_idb = update_rules_with_new_prob_expressions(
+        magic_rules,
+        rules_to_update,
+        wlq_exprs,
+    )
     query_predicate = query.consequent
-    processed_query = next(r for r in processed_idb if r.consequent.functor == query_predicate.functor)
+    processed_query = next(
+        r
+        for r in processed_idb
+        if r.consequent.functor == query_predicate.functor
+    )
     return processed_query, Union(processed_idb)
 
 
-def update_rules_with_new_prob_expressions(idb, rules_to_update, wlq_exprs):
+def update_rules_with_new_prob_expressions(
+    magic_rules, rules_to_update, wlq_exprs
+):
     processed = []
     walker = ReplaceWLQWalker(wlq_exprs)
-    for idx, rule in enumerate(idb):
+    for idx, rule in enumerate(magic_rules.formulas):
         if idx in rules_to_update:
             updated = walker.walk(rule)
             if isinstance(updated, tuple):
@@ -144,7 +159,9 @@ class ReplaceWLQWalker(ExpressionWalker):
     @add_match(FunctionApplication)
     def replace_probabilistic_predicate(self, expr):
         if expr.functor in self.symbols:
-            wlq_expr = next(e for e in self.wlq_expressions if e.functor == expr.functor)
+            wlq_expr = next(
+                e for e in self.wlq_expressions if e.functor == expr.functor
+            )
             non_prob_args = tuple(
                 arg
                 for arg, wlq_arg in zip(expr.args, wlq_expr.args)
