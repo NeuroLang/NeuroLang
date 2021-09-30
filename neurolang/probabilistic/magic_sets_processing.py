@@ -5,7 +5,7 @@ from ..datalog.expression_processing import dependency_matrix
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import FunctionApplication, Symbol
-from ..logic import Implication
+from ..logic import Implication, Union
 from ..type_system import get_generic_type
 from .expressions import PROB, ProbabilisticQuery
 from .stratification import reachable_code_from_query
@@ -38,20 +38,42 @@ def probabilistic_postprocess_magic_sets(program: DatalogProgram, query):
     )
     wlq_symb_idxs = {idb_symbs.index(wlq_symb) for wlq_symb in wlq_symbs}
     replaced = set()
+    wlq_exprs = set()
+    rules_to_update = set()
     for wlq_symb_idx in wlq_symb_idxs:
         wlq_symb_deps = _wlq_dependencies(wlq_symb_idx, dep_mat, wlq_symb_idxs)
         for to_replace in wlq_symb_deps:
             wlq_symb = idb_symbs[to_replace]
             if wlq_symb not in replaced:
-                wlq_expr = program.within_language_prob_queries()[
+                wlq_exprs.add(program.within_language_prob_queries()[
                     wlq_symb
-                ].consequent
+                ].consequent)
                 code = reachable_code_from_query(
                     program.within_language_prob_queries()[wlq_symb],
                     program,
-                ).formulas
+                )
+                for rule in code.formulas:
+                    rules_to_update.add(idb.index(rule))
 
-                replaced_code = ReplaceWLQWalker(wlq_expr).walk(code)
+    processed_idb = update_rules_with_new_prob_expressions(idb, rules_to_update, wlq_exprs)
+    query_predicate = query.consequent
+    processed_query = next(r for r in processed_idb if r.consequent.functor == query_predicate.functor)
+    return processed_query, Union(processed_idb)
+
+
+def update_rules_with_new_prob_expressions(idb, rules_to_update, wlq_exprs):
+    processed = []
+    walker = ReplaceWLQWalker(wlq_exprs)
+    for idx, rule in enumerate(idb):
+        if idx in rules_to_update:
+            updated = walker.walk(rule)
+            if isinstance(updated, tuple):
+                processed.extend(updated)
+            else:
+                processed.append(updated)
+        else:
+            processed.append(rule)
+    return processed
 
 
 def _wlq_dependencies(wlq_symb_idx, dep_mat, wlq_symb_idxs):
@@ -87,10 +109,9 @@ class ReplaceWLQWalker(ExpressionWalker):
     D2(x, y) :- A(x, y)
     """
 
-    def __init__(self, wlq_expression):
-        self.wlq_expression = wlq_expression
-        self.symbol = wlq_expression.functor
-        self.new_symbol = Symbol(f"{self.symbol.name}_noprob")
+    def __init__(self, wlq_expressions):
+        self.wlq_expressions = wlq_expressions
+        self.symbols = {expr.functor for expr in self.wlq_expressions}
 
     @add_match(
         Implication,
@@ -101,18 +122,19 @@ class ReplaceWLQWalker(ExpressionWalker):
     )
     def replace_probabilistic_queries(self, impl):
         functor = impl.consequent.functor
-        if functor == self.symbol:
+        if functor in self.symbols:
+            new_symbol = Symbol(f"{functor.name}_noprob")
             non_prob_args = tuple(
                 arg for arg in impl.consequent.args if not _is_prob_arg(arg)
             )
             new_wlq = Implication(
                 impl.consequent.functor(*impl.consequent.args),
-                self.new_symbol(*non_prob_args),
+                new_symbol(*non_prob_args),
             )
             new_non_wlq = Implication(
-                self.new_symbol(*non_prob_args), impl.antecedent
+                new_symbol(*non_prob_args), impl.antecedent
             )
-            return (new_wlq, new_non_wlq)
+            return (new_non_wlq, new_wlq)
         return impl
 
     @add_match(Implication)
@@ -121,12 +143,13 @@ class ReplaceWLQWalker(ExpressionWalker):
 
     @add_match(FunctionApplication)
     def replace_probabilistic_predicate(self, expr):
-        if expr.functor == self.symbol:
+        if expr.functor in self.symbols:
+            wlq_expr = next(e for e in self.wlq_expressions if e.functor == expr.functor)
             non_prob_args = tuple(
                 arg
-                for arg, expr_arg in zip(expr.args, self.wlq_expression.args)
-                if not _is_prob_arg(expr_arg)
+                for arg, wlq_arg in zip(expr.args, wlq_expr.args)
+                if not _is_prob_arg(wlq_arg)
             )
-            new_expr = self.new_symbol(*non_prob_args)
+            new_expr = Symbol(f"{expr.functor.name}_noprob")(*non_prob_args)
             return new_expr
         return self.process_expression(expr)
