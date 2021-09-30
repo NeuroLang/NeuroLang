@@ -57,6 +57,9 @@ from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
 )
+from ..probabilistic.magic_sets_processing import (
+    probabilistic_postprocess_magic_sets
+)
 from ..probabilistic.query_resolution import (
     QueryBasedProbFactToDetRule,
     compute_probabilistic_solution,
@@ -314,6 +317,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         try:
             with self.scope:
                 magic_query = self.magic_sets_rewrite_program(query)
+                # probabilistic_postprocess_magic_sets(self.program_ir, magic_query)
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
         except InvalidMagicSetError:
