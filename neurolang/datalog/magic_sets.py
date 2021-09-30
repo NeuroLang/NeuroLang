@@ -7,6 +7,8 @@ Magic Sets [1] rewriting implementation for Datalog.
 from typing import Iterable, Tuple, Type
 from ..config import config
 from ..expressions import Constant, Expression, Symbol
+from ..expression_walker import ExpressionWalker
+from ..expression_pattern_matching import add_match
 from ..logic import Negation
 from ..probabilistic.expressions import ProbabilisticQuery
 from ..type_system import Unknown
@@ -73,6 +75,28 @@ class AdornedSymbol(Symbol):
             )
         else:
             return f'S{{{rep}{superindex}{subindex}}}'
+
+
+class ReplaceAdornedSymbolWalker(ExpressionWalker):
+    @add_match(Symbol)
+    def replace_adorned_symbol(self, symbol):
+        if isinstance(symbol, AdornedSymbol) and isinstance(
+            symbol.expression, Symbol
+        ):
+            superindex = (
+                f"^{symbol.adornment}" if len(symbol.adornment) > 0 else ""
+            )
+            subindex = f"_{symbol.number}" if symbol.number is not None else ""
+            new_name = f"{symbol.name}{superindex}{subindex}"
+            return Symbol(new_name)
+        else:
+            return symbol
+
+    @add_match(Implication)
+    def implication(self, exp):
+        return Implication(
+            self.walk(exp.consequent), self.walk(exp.antecedent)
+        )
 
 
 class SIPS:
@@ -251,9 +275,12 @@ def magic_rewrite(
 
     magic_rules = create_balbin_magic_rules(adorned_code.formulas[:-1])
     magic_inits = create_magic_query_inits(constant_predicates)
-    return goal, Union(
-        magic_inits + [adorned_query] + magic_rules,
+
+    unadorned_code = ReplaceAdornedSymbolWalker().walk(
+        tuple(magic_inits) + tuple(magic_rules) + (adorned_query,)
     )
+    goal = unadorned_code[-1].consequent.functor
+    return goal, Union(unadorned_code)
 
 
 def create_magic_query_inits(constant_predicates: Iterable[AdornedSymbol]):

@@ -317,7 +317,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         try:
             with self.scope:
                 magic_query = self.magic_sets_rewrite_program(query)
-                # probabilistic_postprocess_magic_sets(self.program_ir, magic_query)
+                probabilistic_postprocess_magic_sets(self.program_ir, magic_query)
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
         except InvalidMagicSetError:
