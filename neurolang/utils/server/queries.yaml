@@ -126,22 +126,22 @@ yeo:
     title: "fpcn_reverse TITLE"
     shortTitle: "fpcn_reverse SHORTTITLE"
     query: |
-      TermInStudy(t, s) :: tfidf :- NeuroQueryTFIDF(tfidf, t, s)
-      TopicAssociation(topic, s) :- TermInStudy(term, s) & TopicTerm(topic, term)
       # a region is reported if a study reports a peak activation within it
       RegionReported(r, s) :- PeakReported(i, j, k, s) & RegionVoxel(r, i, j, k)
-      RegionVolume(r, agg_count(i, j, k)) :- RegionVoxel(r, i, j, k)
-      NetworkVolume(n, agg_sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
-      NetworkReportedVolume(network, study, agg_sum(volume)) :- NetworkRegion(network, region) & RegionReported(region, study) & RegionVolume(region, volume)
-      NetworkReported(network, study) :: prob :- NetworkVolume(network, nv) & NetworkReportedVolume(network, study, nrv) & (prob == nrv / nv)
+      RegionVolume(r, count(i, j, k)) :- RegionVoxel(r, i, j, k)
+      NetworkVolume(n, sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
+      NetworkReportedVolume(network, study, sum(volume)) :- NetworkRegion(network, region) & RegionReported(region, study) & RegionVolume(region, volume)
+      NetworkReported(network, study) :: p :- NetworkVolume(network, nv) & NetworkReportedVolume(network, study, nrv) & (prob == nrv / nv)
       ProbTopicAssociationGivenNetworkActivation(t, n, PROB(t, n)) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (NetworkReported(n, s) & SelectedStudy(s))
       ProbTopicAssociationGivenNoNetworkActivation(t, n, PROB(t, n)) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (~NetworkReported(n, s) & Network(n) & SelectedStudy(s))
       ProbTopicAssociation(t, PROB(t)) :- TopicAssociation(t, s) & SelectedStudy(s)
-      CountStudies(agg_count(s)) :- Study(s)
+      CountStudies(count(s)) :- Study(s)
       CountStudiesTopicAssociation(t, count) :- ProbTopicAssociation(t, prob) & CountStudies(N) & (count == prob * N)
       ProbNetworkReported(n, PROB(n)) :- NetworkReported(n, s) & SelectedStudy(s)
       CountStudiesNetworkReported(n, count) :- ProbNetworkReported(n, prob) & CountStudies(N) & (count == prob * N)
       ProbTopicAssociationAndNetworkReported(t, n, PROB(t, n)) :- TopicAssociation(t, s) & NetworkReported(n, s) & SelectedStudy(s)
       CountStudiesTopicAssociationAndNetworkReported(t, n, count) :- ProbTopicAssociationAndNetworkReported(t, n, prob) & CountStudies(N) & (count == prob * N)
-      Counts(topic, network, N, n, m, k) :- CountStudies(N) & CountStudiesTopicAssociation(topic, m) & CountStudiesNetworkReported(network, n)& CountStudiesTopicAssociationAndNetworkReported(topic, network, k)
-      Query(topic, network, p_topic, p_network, p0, p1, llr, N, n, m, k) :- ProbTopicAssociation(topic, p_topic) & ProbNetworkReported(network, p_network) & ProbTopicAssociationGivenNoNetworkActivation(topic, network, p0) & ProbTopicAssociationGivenNetworkActivation(topic, network, p1) & Counts(topic, network, N, n, m, k) & (llr == ((k * log(p1)+ (n - k) * log(1 - p1)+ (m - k) * log(p0)+ (N - n - m + k) * log(1 - p0))- (k * log(p_topic)+ (n - k) * log(1 - p_topic)+ (m - k) * log(p_topic)+ (N - n - m + k) * log(1 - p_topic))))
+      Counts(topic, network, N, n, m, k) :- CountStudies(N) & CountStudiesTopicAssociation(topic, m) & CountStudiesNetworkReported(network, n) & CountStudiesTopicAssociationAndNetworkReported(topic, network, k)
+      Query(topic, network, p_topic, p_network, p0, p1, llr, N, n, m, k) :- ProbTopicAssociation(topic, p_topic) & ProbNetworkReported(network, p_network) & ProbTopicAssociationGivenNoNetworkActivation(topic, network, p0) & ProbTopicAssociationGivenNetworkActivation(topic, network, p1) & Counts(topic, network, N, n, m, k) &
+      (llr == ((k * log(p1)+ (n - k) * log(1 - p1)+ (m - k) * log(p0)+ (N - n - m + k) * log(1 - p0))-(k * log(p_topic)+ (n - k) * log(1 - p_topic)+ (m - k) * log(p_topic)+ (N - n - m + k) * log(1 - p_topic))))
+

@@ -1,4 +1,5 @@
 import os
+import tarfile
 from abc import abstractmethod, abstractproperty
 from contextlib import contextmanager
 from multiprocessing import BoundedSemaphore
@@ -450,12 +451,10 @@ class YeoEngineConf(NeurolangEngineConfiguration):
         nl = init_frontend(mask)
         load_neuroquery(self.data_dir, nl, mask)
         load_neurosynth_data(self.data_dir, nl, mask)
-        load_difumo(self.data_dir, nl, mask, n_components=self._n_components)
-
-        load_topics(nl)
+        load_difumo(self.data_dir, nl, mask, n_components=self._n_components, coord_type='ijk')
 
         #load_cognitive_terms(None)
-        #load_neurosynth_topic_associations()
+        load_neurosynth_topic_associations(self.data_dir, nl, 100)
         #load_difumo_meta(self.data_dir, nl, self._n_components)
 
 
@@ -548,24 +547,24 @@ def load_difumo(
         name="NetworkRegion",
     )
 
-def load_cognitive_terms(filename: str) -> pd.Series:
-    if filename is None:
-        path = Path(__file__).parent / "cognitive_terms.txt"
-    else:
-        path = Path(__file__).parent / f"{filename}.txt"
-    return pd.read_csv(path, header=None, names=["term"]).drop_duplicates()
+#def load_cognitive_terms(filename: str) -> pd.Series:
+#    if filename is None:
+#        path = Path(__file__).parent / "cognitive_terms.txt"
+#    else:
+#        path = Path(__file__).parent / f"{filename}.txt"
+#    return pd.read_csv(path, header=None, names=["term"]).drop_duplicates()
 
-def load_topics(nl) -> None:
-    path = Path(__file__).parent / "v4-topics-60.txt"
-    topic_term = pd.read_csv(path, delimiter="\t")
-    topic_term.drop(columns=["loading", "topic_number"], inplace=True)
-    topic_term = topic_term.melt("nickname")[["nickname", "value"]]
-    topic_term.rename(columns={"nickname": "topic", "value": "term"}, inplace=True)
-    topic_term.drop_duplicates(inplace=True)
+#def load_topics(nl) -> None:
+#    path = Path(__file__).parent / "v4-topics-60.txt"
+#    topic_term = pd.read_csv(path, delimiter="\t")
+#    topic_term.drop(columns=["loading", "topic_number"], inplace=True)
+#    topic_term = topic_term.melt("nickname")[["nickname", "value"]]
+#    topic_term.rename(columns={"nickname": "topic", "value": "term"}, inplace=True)
+#    topic_term.drop_duplicates(inplace=True)
+#
+#    nl.add_tuple_set(topic_term, name="TopicTerm")
 
-    nl.add_tuple_set(topic_term, name="TopicTerm")
-
-def load_neurosynth_topic_associations(n_topics: int, data_dir) -> pd.DataFrame:
+def load_neurosynth_topic_associations(data_dir, nl, n_topics: int) -> pd.DataFrame:
     if n_topics not in {50, 100, 200, 400}:
         raise ValueError(f"Unexpected number of topics: {n_topics}")
     ns_dir = data_dir / "neurosynth"
@@ -575,18 +574,24 @@ def load_neurosynth_topic_associations(n_topics: int, data_dir) -> pd.DataFrame:
         [
             (
                 f"analyses/v5-topics-{n_topics}.txt",
-                ns_data_url + "topics/v5-topics.tar.gz",
+                ns_data_url + "topics/v5-topics.tar.gz?raw=true",
                 {"uncompress": True},
             ),
         ],
     )[0]
+    #file = tarfile.open(topic_data, mode="r|gz")
+    #file.extractall(path=datasets.utils._get_dataset_dir('neurosynth'))
+    #ta = pd.read_csv(datasets.utils._get_dataset_dir('neurosynth')+'/analyses/v5-topics-50.txt', sep='\t', index_col=0)
     ta = pd.read_csv(topic_data, sep="\t")
     ta.set_index("id", inplace=True)
     ta = ta.unstack().reset_index()
     ta.columns = ("topic", "study_id", "prob")
     ta = ta[["prob", "topic", "study_id"]]
 
-    return ta
+    nl.add_probabilistic_facts_from_tuples(
+        set(ta.itertuples(index=False, name=None)),
+        name="TopicAssociation",
+    )
 
 def xyz_to_ijk(xyz, mask):
     voxels = nib.affines.apply_affine(
