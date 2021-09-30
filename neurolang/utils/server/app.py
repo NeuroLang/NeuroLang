@@ -19,7 +19,7 @@ import yaml
 from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
 from tornado.options import define, options
 
-from .engines import DestrieuxEngineConf, NeurosynthEngineConf
+from .engines import DestrieuxEngineConf, NeurosynthEngineConf, YeoEngineConf
 from .queries import NeurolangQueryManager
 from .responses import (
     CustomQueryResultsEncoder,
@@ -519,6 +519,7 @@ def main():
     opts = {
         NeurosynthEngineConf(data_dir, resolution=2): 2,
         DestrieuxEngineConf(data_dir): 2,
+        YeoEngineConf(data_dir, resolution=3): 2,
     }
     nqm = NeurolangQueryManager(opts)
 

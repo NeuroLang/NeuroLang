@@ -1,16 +1,25 @@
+import os
 from abc import abstractmethod, abstractproperty
 from contextlib import contextmanager
 from multiprocessing import BoundedSemaphore
 from pathlib import Path
-from typing import Callable, Iterable, Union
+from token import NL
+from typing import Callable, Iterable, Tuple, Union, Optional
 
 import nibabel as nib
 import numpy as np
 import pandas as pd
+import scipy.sparse
 from neurolang.frontend import NeurolangDL, NeurolangPDL
 from neurolang.frontend.neurosynth_utils import StudyID
 from neurolang.regions import ExplicitVBR, ExplicitVBROverlay, region_union
 from nilearn import datasets, image
+
+DIFUMO_N_COMPONENTS_TO_DOWNLOAD_ID = {
+    256: "3vrct",
+    512: "9b76y",
+    1024: "34792",
+}
 
 
 class NeurolangEngineSet:
@@ -344,6 +353,10 @@ def init_frontend(mni_mask):
             main_dir = c[sort_dir[-1]]
         return (direction == main_dir) or (direction[::-1] == main_dir)
 
+    @nl.add_symbol
+    def agg_count(*iterables) -> int:
+        return len(next(iter(iterables)))
+
     return nl
 
 
@@ -402,3 +415,252 @@ def load_destrieux_atlas(data_dir, nl):
             )
         )
     nl.add_tuple_set(destrieux_set, name="destrieux")
+
+
+class YeoEngineConf(NeurolangEngineConfiguration):
+    def __init__(
+        self,
+        data_dir: Path,
+        resolution=None,
+        n_components=256,
+        neuroquery_subsample_proportion: float = 0.5
+    ) -> None:
+        super().__init__()
+        self.data_dir = data_dir
+        self.resolution = resolution
+        self._mni_mask = None
+        self._n_components = n_components
+        self._neuroquery_subsample_proportion = neuroquery_subsample_proportion
+
+    @property
+    def key(self):
+        return "yeo"
+
+    @property
+    def atlas(self):
+        if self._mni_mask is None:
+            self._mni_mask = nib.load(datasets.fetch_icbm152_2009()["gm"])
+        return self._mni_mask
+
+    def create(self) -> NeurolangPDL:
+        mask = self.atlas
+        if self.resolution is not None:
+            mask = image.resample_img(mask, np.eye(3) * self.resolution)
+
+        nl = init_frontend(mask)
+        load_neuroquery(self.data_dir, nl, mask)
+        load_neurosynth_data(self.data_dir, nl, mask)
+        load_difumo(self.data_dir, nl, mask, n_components=self._n_components)
+
+        load_topics(nl)
+
+        #load_cognitive_terms(None)
+        #load_neurosynth_topic_associations()
+        #load_difumo_meta(self.data_dir, nl, self._n_components)
+
+
+        nl.add_symbol(
+            np.log,
+            name="log",
+            type_=Callable[[float], float],
+        )
+
+        nl.add_symbol(
+            lambda it: float(sum(it)),
+            name="agg_sum",
+            type_=Callable[[Iterable], float],
+        )
+
+        return nl
+
+
+def load_difumo_meta(data_dir, nl, n_components: int = 256):
+    out_dir = data_dir / "difumo"
+    download_id = DIFUMO_N_COMPONENTS_TO_DOWNLOAD_ID[n_components]
+    url = f"https://osf.io/{download_id}/download"
+    labels_path = os.path.join(
+        str(n_components), f"labels_{n_components}_dictionary.csv"
+    )
+    files = [
+        (labels_path, url, {"uncompress": True}),
+    ]
+    files = datasets.utils._fetch_files(out_dir, files, verbose=2)
+    labels = pd.DataFrame(pd.read_csv(files[0]))
+
+    return labels
+
+def load_difumo(
+    data_dir,
+    nl,
+    mask: nib.Nifti1Image,
+    component_filter_fun: Callable = lambda _: True,
+    coord_type: str = "xyz",
+    n_components: int = 256,
+    with_probabilities: bool = False,
+):
+    out_dir = data_dir / "difumo"
+    download_id = DIFUMO_N_COMPONENTS_TO_DOWNLOAD_ID[n_components]
+    url = f"https://osf.io/{download_id}/download"
+    csv_file = os.path.join(
+        str(n_components), f"labels_{n_components}_dictionary.csv"
+    )
+    nifti_file = os.path.join(str(n_components), "3mm/maps.nii.gz")
+    files = [
+        (csv_file, url, {"uncompress": True}),
+        (nifti_file, url, {"uncompress": True}),
+    ]
+    files = datasets.utils._fetch_files(out_dir, files, verbose=2)
+    labels = pd.DataFrame(pd.read_csv(files[0]))
+    img = image.load_img(files[1])
+    img = image.resample_img(
+        img,
+        target_affine=mask.affine,
+        interpolation="nearest",
+    )
+    img_data = img.get_fdata()
+    to_concat = list()
+    for i, label in enumerate(
+        labels.loc[labels.apply(component_filter_fun, axis=1)].Difumo_names
+    ):
+        coordinates = np.argwhere(img_data[:, :, :, i] > 0)
+        if coord_type == "xyz":
+            coordinates = nib.affines.apply_affine(img.affine, coordinates)
+        else:
+            assert coord_type == "ijk"
+        region_data = pd.DataFrame(coordinates, columns=list(coord_type))
+        region_data["region"] = label
+        cols = ["region"] + list(coord_type)
+        if with_probabilities:
+            probs = img_data[img_data[:, :, :, i] > 0, i] / img_data.max()
+            region_data["probability"] = probs
+            cols = ["probability"] + cols
+        to_concat.append(region_data[cols])
+    region_voxels = pd.concat(to_concat)
+
+    RegionVoxel = nl.add_tuple_set(region_voxels, name="RegionVoxel")
+    Network = nl.add_tuple_set({("ContA",), ("ContB",)}, name="Network")
+    NetworkRegion = nl.add_tuple_set(
+        set(
+            (row["Yeo_networks17"], row["Difumo_names"])
+            for _, row in labels.iterrows()
+            if row["Yeo_networks17"] in ("ContA", "ContB")
+        ),
+        name="NetworkRegion",
+    )
+
+def load_cognitive_terms(filename: str) -> pd.Series:
+    if filename is None:
+        path = Path(__file__).parent / "cognitive_terms.txt"
+    else:
+        path = Path(__file__).parent / f"{filename}.txt"
+    return pd.read_csv(path, header=None, names=["term"]).drop_duplicates()
+
+def load_topics(nl) -> None:
+    path = Path(__file__).parent / "v4-topics-60.txt"
+    topic_term = pd.read_csv(path, delimiter="\t")
+    topic_term.drop(columns=["loading", "topic_number"], inplace=True)
+    topic_term = topic_term.melt("nickname")[["nickname", "value"]]
+    topic_term.rename(columns={"nickname": "topic", "value": "term"}, inplace=True)
+    topic_term.drop_duplicates(inplace=True)
+
+    nl.add_tuple_set(topic_term, name="TopicTerm")
+
+def load_neurosynth_topic_associations(n_topics: int, data_dir) -> pd.DataFrame:
+    if n_topics not in {50, 100, 200, 400}:
+        raise ValueError(f"Unexpected number of topics: {n_topics}")
+    ns_dir = data_dir / "neurosynth"
+    ns_data_url = "https://github.com/neurosynth/neurosynth-data/blob/e8f27c4a9a44dbfbc0750366166ad2ba34ac72d6/"
+    topic_data = datasets.utils._fetch_files(
+        ns_dir,
+        [
+            (
+                f"analyses/v5-topics-{n_topics}.txt",
+                ns_data_url + "topics/v5-topics.tar.gz",
+                {"uncompress": True},
+            ),
+        ],
+    )[0]
+    ta = pd.read_csv(topic_data, sep="\t")
+    ta.set_index("id", inplace=True)
+    ta = ta.unstack().reset_index()
+    ta.columns = ("topic", "study_id", "prob")
+    ta = ta[["prob", "topic", "study_id"]]
+
+    return ta
+
+def xyz_to_ijk(xyz, mask):
+    voxels = nib.affines.apply_affine(
+        np.linalg.inv(mask.affine),
+        xyz,
+    ).astype(int)
+    return voxels
+
+def load_neuroquery(
+    data_dir,
+    nl,
+    mask: nib.Nifti1Image,
+    tfidf_threshold: Optional[float] = None,
+    coord_type: str = "xyz",
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    base_url = "https://raw.githubusercontent.com/neuroquery/neuroquery_data/"
+
+    tfidf_url = base_url + "8c2bd71acc6afd5e196c5bfc18bfbaf06749719d/training_data/corpus_tfidf.npz"
+    coordinates_url = base_url + "8c2bd71acc6afd5e196c5bfc18bfbaf06749719d/training_data/coordinates.csv"
+    feature_names_url = base_url + "8c2bd71acc6afd5e196c5bfc18bfbaf06749719d/training_data/feature_names.txt"
+    study_ids_url = base_url + "8c2bd71acc6afd5e196c5bfc18bfbaf06749719d/training_data/pmids.txt"
+    out_dir = data_dir / "neuroquery"
+    os.makedirs(out_dir, exist_ok=True)
+    (
+        tfidf_fn,
+        coordinates_fn,
+        feature_names_fn,
+        study_ids_fn,
+    ) = datasets.utils._fetch_files(
+        out_dir,
+        [
+            ("corpus_tfidf.npz", tfidf_url, dict()),
+            ("coordinates.csv", coordinates_url, dict()),
+            ("feature_names.txt", feature_names_url, dict()),
+            ("pmids.txt", study_ids_url, dict()),
+        ],
+    )
+    tfidf = scipy.sparse.load_npz(tfidf_fn)
+    coordinates = pd.read_csv(coordinates_fn)
+    assert coord_type in ("xyz", "ijk")
+    if coord_type == "ijk":
+        ijk = xyz_to_ijk(coordinates[["x", "y", "z"]], mask)
+        coordinates["i"] = ijk[:, 0]
+        coordinates["j"] = ijk[:, 1]
+        coordinates["k"] = ijk[:, 2]
+    coord_cols = list(coord_type)
+    peak_data = coordinates[coord_cols + ["pmid"]].rename(
+        columns={"pmid": "study_id"}
+    )
+    feature_names = pd.read_csv(feature_names_fn, header=None)
+    study_ids = pd.read_csv(study_ids_fn, header=None)
+    study_ids.rename(columns={0: "study_id"}, inplace=True)
+    tfidf = pd.DataFrame(tfidf.todense(), columns=feature_names[0])
+    tfidf["study_id"] = study_ids.iloc[:, 0]
+    if tfidf_threshold is None:
+        term_data = pd.melt(
+            tfidf,
+            var_name="term",
+            id_vars="study_id",
+            value_name="tfidf",
+        ).query("tfidf > 0")[["term", "tfidf", "study_id"]]
+    else:
+        term_data = pd.melt(
+            tfidf,
+            var_name="term",
+            id_vars="study_id",
+            value_name="tfidf",
+        ).query(f"tfidf > {tfidf_threshold}")[["term", "study_id"]]
+
+    nl.add_tuple_set(peak_data, name="PeakReportedNQ")
+    nl.add_tuple_set(study_ids, name="StudyNQ")
+    nl.add_uniform_probabilistic_choice_over_set(
+        study_ids, name="SelectedStudyNQ"
+    )
+    nl.add_tuple_set(
+        term_data[["tfidf", "term", "study_id"]], name="NeuroQueryTFIDF"
+    )

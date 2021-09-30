@@ -26,7 +26,7 @@ neurosynth:
         * **Study** is a relation, or tuple, with one variable corresponding to the *id* of each study.
         * **SelectedStudy** annotates each study with a probability equal to 1/N of it being chosen out of the whole dataset of size N.
 
-      We write a probabilistic program to query the probability of a peak coordinate being reported by a study given that
+      We write a probabilistic program to query the probability of a peak coordinate being reported by a study given thats
       this study mentions a specific term (i.e. **emotion**).
   - id: "neuro2"
     title: "Coordinate-based meta-analysis (CBMA) on the Neurosynth database"
@@ -52,7 +52,7 @@ neurosynth:
       ActivationGivenTerm(x, y, z, PROB) :- Activation(x, y, z) // TermAssociation("emotion")
       ActivationGivenTermImage(agg_create_region_overlay(x, y, z, p)) :- ActivationGivenTerm(x, y, z, p)
     description: |
-      This example illustrates how a spatial prior can be defined based on the distance between voxels 
+      This example illustrates how a spatial prior can be defined based on the distance between voxels
       and foci in a coordinate-based meta-analysis database.
 
       Here, each voxel's probability of being reported by a study is calculated based on whether that particular study
@@ -91,3 +91,57 @@ destrieux:
         * its principal direction is along the superior-inferior axis.
         * no other sulcus satisfying the same conditions is anterior to the PC.
 
+yeo:
+  - id: "fpcn_coactivation"
+    title: "fpcn_coactivation TITLE"
+    shortTitle: "fpcn_coactivation SHORTTITLE"
+    query: |
+      # a region is reported if a study reports a peak activation within it
+      RegionReported(r, s) :- PeakReportedNQ(i, j, k, s) & RegionVoxel(r, i, j, k)
+      RegionVolume(r, agg_count(i, j, k)) :- RegionVoxel(r, i, j, k)
+      NetworkVolume(n, agg_sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
+      NetworkReportedVolume(network, study, agg_sum(volume)) :- NetworkRegion(network, region) & RegionReported(region, study) & RegionVolume(region, volume)
+      NetworkReported(network, study) :: prob :- NetworkVolume(network, nv) & NetworkReportedVolume(network, study, nrv) & (prob == nrv / nv)
+      # conditional probability of region r being reported by studies
+      # reporting network n
+      ProbActivationGivenNetworkActivation(r, n, PROB(r, n)) :- (RegionReported(r, s) & SelectedStudyNQ(s)) // (NetworkReported(n, s) & SelectedStudyNQ(s))
+      # conditional probability of region r being reported by studies not
+      # reporting network n
+      ProbActivationGivenNoNetworkActivation(r, n, PROB(r, n)) :- (RegionReported(r, s) & SelectedStudyNQ(s)) // (~NetworkReported(n, s) & Network(n) & SelectedStudyNQ(s))
+      # marginal probability of a region being reported
+      ProbActivation(r, PROB(r)) :- RegionReported(r, s) & SelectedStudyNQ(s)
+      CountStudies(agg_count(s)) :- StudyNQ(s)
+      CountStudiesRegionReported(r, agg_count(s)) :- RegionReported(r, s)
+      # estimate nb of studies reporting network based on the marginal
+      # probability of a network being reported (proportion of studies
+      # reporting the network, multiplied by the total nb of studies)
+      ProbNetworkReported(n, PROB(n)) :- NetworkReported(n, s) & SelectedStudyNQ(s)
+      CountStudiesNetworkReported(n, count) :- ProbNetworkReported(n, prob) & CountStudies(N) & (count == prob * N)
+      # same but for network and region being reported at the same time
+      ProbRegionAndNetworkReported(r, n, PROB(r, n)) :- RegionReported(r, s) & NetworkReported(n, s) & SelectedStudyNQ(s)
+      CountStudiesRegionAndNetworkReported(r, n, count) :- ProbRegionAndNetworkReported(r, n, prob) & CountStudies(N) & (count == prob * N)
+      Counts(region, network, N, n, m, k) :- CountStudies(N) & CountStudiesRegionReported(region, m) & CountStudiesNetworkReported(network, n) & CountStudiesRegionAndNetworkReported(region, network, k)
+      Query(region, network, p, p0, p1, llr, Nu, n, m, k) :- ProbActivation(region, p) & ProbActivationGivenNoNetworkActivation(region, network, p0) & ProbActivationGivenNetworkActivation(region, network, p1) & Counts(region, network, Nu, n, m, k) & (llr == ( ( k * log(p1) + (n - k) * log(1 - p1) + (m - k) * log(p0) + (Nu - n - m + k) * log(1 - p0) ) - ( k * log(p) + (n - k) * log(1 - p) + (m - k) * log(p) + (Nu - n - m + k) * log(1 - p) ) ) )
+  - id: "fpcn_reverse"
+    title: "fpcn_reverse TITLE"
+    shortTitle: "fpcn_reverse SHORTTITLE"
+    query: |
+      TermInStudy(t, s) :: tfidf :- NeuroQueryTFIDF(tfidf, t, s)
+      TopicAssociation(topic, s) :- TermInStudy(term, s) & TopicTerm(topic, term)
+      # a region is reported if a study reports a peak activation within it
+      RegionReported(r, s) :- PeakReported(i, j, k, s) & RegionVoxel(r, i, j, k)
+      RegionVolume(r, agg_count(i, j, k)) :- RegionVoxel(r, i, j, k)
+      NetworkVolume(n, agg_sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
+      NetworkReportedVolume(network, study, agg_sum(volume)) :- NetworkRegion(network, region) & RegionReported(region, study) & RegionVolume(region, volume)
+      NetworkReported(network, study) :: prob :- NetworkVolume(network, nv) & NetworkReportedVolume(network, study, nrv) & (prob == nrv / nv)
+      ProbTopicAssociationGivenNetworkActivation(t, n, PROB(t, n)) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (NetworkReported(n, s) & SelectedStudy(s))
+      ProbTopicAssociationGivenNoNetworkActivation(t, n, PROB(t, n)) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (~NetworkReported(n, s) & Network(n) & SelectedStudy(s))
+      ProbTopicAssociation(t, PROB(t)) :- TopicAssociation(t, s) & SelectedStudy(s)
+      CountStudies(agg_count(s)) :- Study(s)
+      CountStudiesTopicAssociation(t, count) :- ProbTopicAssociation(t, prob) & CountStudies(N) & (count == prob * N)
+      ProbNetworkReported(n, PROB(n)) :- NetworkReported(n, s) & SelectedStudy(s)
+      CountStudiesNetworkReported(n, count) :- ProbNetworkReported(n, prob) & CountStudies(N) & (count == prob * N)
+      ProbTopicAssociationAndNetworkReported(t, n, PROB(t, n)) :- TopicAssociation(t, s) & NetworkReported(n, s) & SelectedStudy(s)
+      CountStudiesTopicAssociationAndNetworkReported(t, n, count) :- ProbTopicAssociationAndNetworkReported(t, n, prob) & CountStudies(N) & (count == prob * N)
+      Counts(topic, network, N, n, m, k) :- CountStudies(N) & CountStudiesTopicAssociation(topic, m) & CountStudiesNetworkReported(network, n)& CountStudiesTopicAssociationAndNetworkReported(topic, network, k)
+      Query(topic, network, p_topic, p_network, p0, p1, llr, N, n, m, k) :- ProbTopicAssociation(topic, p_topic) & ProbNetworkReported(network, p_network) & ProbTopicAssociationGivenNoNetworkActivation(topic, network, p0) & ProbTopicAssociationGivenNetworkActivation(topic, network, p1) & Counts(topic, network, N, n, m, k) & (llr == ((k * log(p1)+ (n - k) * log(1 - p1)+ (m - k) * log(p0)+ (N - n - m + k) * log(1 - p0))- (k * log(p_topic)+ (n - k) * log(1 - p_topic)+ (m - k) * log(p_topic)+ (N - n - m + k) * log(1 - p_topic))))
