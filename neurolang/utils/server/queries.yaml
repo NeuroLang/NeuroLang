@@ -107,9 +107,9 @@ fpcn:
       CountStudies(count(s)) :- StudyNQ(s)
       CountStudiesRegionReported(r, count(s)) :- RegionReported(r, s)
       ProbNetworkReported(n, PROB(n)) :- NetworkReported(n, s) & SelectedStudyNQ(s)
-      CountStudiesNetworkReported(n, count) :- ProbNetworkReported(n, prob) & CountStudies(N) & (count == prob * N)
+      CountStudiesNetworkReported(n, c) :- ProbNetworkReported(n, prob) & CountStudies(N) & (c == prob * N)
       ProbRegionAndNetworkReported(r, n, PROB(r, n)) :- RegionReported(r, s) & NetworkReported(n, s) & SelectedStudyNQ(s)
-      CountStudiesRegionAndNetworkReported(r, n, count) :- ProbRegionAndNetworkReported(r, n, prob) & CountStudies(N) & (count == prob * N)
+      CountStudiesRegionAndNetworkReported(r, n, c) :- ProbRegionAndNetworkReported(r, n, prob) & CountStudies(N) & (c == prob * N)
       Counts(region, network, N, n, m, k) :- CountStudies(N) & CountStudiesRegionReported(region, m) & CountStudiesNetworkReported(network, n) & CountStudiesRegionAndNetworkReported(region, network, k)
       Query(region, network, p, p0, p1, llr, N, n, m, k) :- ProbActivation(region, p) & ProbActivationGivenNoNetworkActivation(region, network, p0) & ProbActivationGivenNetworkActivation(region, network, p1) & Counts(region, network, N, n, m, k) & (llr == (((k * log(p1) + (n - k) * log(1 - p1)) + ((m - k) * log(p0) + ((N - n) - (m + k)) * log(1 - p0))) - ((k * log(p) + (n - k) * log(1 - p)) + ((m - k) * log(p) + ((N - n) - (m + k)) * log(1 - p)))))
   - id: "fpcn_reverse"
@@ -129,7 +129,7 @@ fpcn:
       ProbNetworkReported(n, PROB(n)) :- NetworkReported(n, s) & SelectedStudy(s)
       CountStudiesNetworkReported(n, c) :- ProbNetworkReported(n, prob) & CountStudies(N) & (c == prob * N)
       ProbTopicAssociationAndNetworkReported(t, n, PROB(t, n)) :- TopicAssociation(t, s) & NetworkReported(n, s) & SelectedStudy(s)
-      CountStudiesTopicAssociationAndNetworkReported(t, n, count) :- ProbTopicAssociationAndNetworkReported(t, n, prob) & CountStudies(N) & (count == prob * N)
+      CountStudiesTopicAssociationAndNetworkReported(t, n, c) :- ProbTopicAssociationAndNetworkReported(t, n, prob) & CountStudies(N) & (c == prob * N)
       Counts(topic, network, N, n, m, k) :- CountStudies(N) & CountStudiesTopicAssociation(topic, m) & CountStudiesNetworkReported(network, n)& CountStudiesTopicAssociationAndNetworkReported(topic, network, k)
       Query(topic, network, p_topic, p_network, p0, p1, llr, N, n, m, k) :- ProbTopicAssociation(topic, p_topic) & ProbNetworkReported(network, p_network) & ProbTopicAssociationGivenNoNetworkActivation(topic, network, p0)& ProbTopicAssociationGivenNetworkActivation(topic, network, p1)& Counts(topic, network, N, n, m, k) & (llr == (((k * log(p1)+ (n - k) * log(1 - p1))+ ((m - k) * log(p0)+ ((N - n) - (m + k)) * log(1 - p0)))- ((k * log(p_topic)+ (n - k) * log(1 - p_topic))+ ((m - k) * log(p_topic)+ ((N - n) - (m + k)) * log(1 - p_topic)))))
 
