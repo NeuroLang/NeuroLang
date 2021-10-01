@@ -452,10 +452,7 @@ class YeoEngineConf(NeurolangEngineConfiguration):
         load_neuroquery(self.data_dir, nl, mask)
         load_neurosynth_data(self.data_dir, nl, mask)
         load_difumo(self.data_dir, nl, mask, n_components=self._n_components, coord_type='ijk')
-
-        #load_cognitive_terms(None)
         load_neurosynth_topic_associations(self.data_dir, nl, 100)
-        #load_difumo_meta(self.data_dir, nl, self._n_components)
 
 
         nl.add_symbol(
@@ -468,6 +465,41 @@ class YeoEngineConf(NeurolangEngineConfiguration):
             lambda it: float(sum(it)),
             name="agg_sum",
             type_=Callable[[Iterable], float],
+        )
+
+        nl.add_tuple_set([("attention",), ("language",)], name="Network")
+        nl.add_tuple_set(
+            {
+                ("FEF", "attention"),
+                ("aIPS", "attention"),
+                ("pIPS", "attention"),
+                ("MT+", "attention"),
+                ("IFG", "language"),
+                ("SMG", "language"),
+                ("AG", "language"),
+                ("ITG", "language"),
+                ("aSTS", "language"),
+                ("mSTS", "language"),
+                ("pSTS", "language"),
+            },
+            name="RegionInNetwork",
+        )
+        nl.add_tuple_set(
+            {
+                ("VWFA", -45, -57, -12),
+                ("FEF", -26, -5, 50),
+                ("MT+", -45, -71, -1),
+                ("aIPS", -25, -62, 51),
+                ("pIPS", -25, -69, 34),
+                ("IFG", -53, 27, 16),
+                ("SMG", -56, -43, 31),
+                ("AG", -49, -57, 28),
+                ("ITG", -61, -33, -15),
+                ("aSTS", -54, -9, -20),
+                ("mSTS", -53, -18, -10),
+                ("pSTS", -52, -40, 5),
+            },
+            name="RegionSeedVoxel",
         )
 
         return nl
@@ -547,23 +579,6 @@ def load_difumo(
         name="NetworkRegion",
     )
 
-#def load_cognitive_terms(filename: str) -> pd.Series:
-#    if filename is None:
-#        path = Path(__file__).parent / "cognitive_terms.txt"
-#    else:
-#        path = Path(__file__).parent / f"{filename}.txt"
-#    return pd.read_csv(path, header=None, names=["term"]).drop_duplicates()
-
-#def load_topics(nl) -> None:
-#    path = Path(__file__).parent / "v4-topics-60.txt"
-#    topic_term = pd.read_csv(path, delimiter="\t")
-#    topic_term.drop(columns=["loading", "topic_number"], inplace=True)
-#    topic_term = topic_term.melt("nickname")[["nickname", "value"]]
-#    topic_term.rename(columns={"nickname": "topic", "value": "term"}, inplace=True)
-#    topic_term.drop_duplicates(inplace=True)
-#
-#    nl.add_tuple_set(topic_term, name="TopicTerm")
-
 def load_neurosynth_topic_associations(data_dir, nl, n_topics: int) -> pd.DataFrame:
     if n_topics not in {50, 100, 200, 400}:
         raise ValueError(f"Unexpected number of topics: {n_topics}")
@@ -579,15 +594,11 @@ def load_neurosynth_topic_associations(data_dir, nl, n_topics: int) -> pd.DataFr
             ),
         ],
     )[0]
-    #file = tarfile.open(topic_data, mode="r|gz")
-    #file.extractall(path=datasets.utils._get_dataset_dir('neurosynth'))
-    #ta = pd.read_csv(datasets.utils._get_dataset_dir('neurosynth')+'/analyses/v5-topics-50.txt', sep='\t', index_col=0)
     ta = pd.read_csv(topic_data, sep="\t")
     ta.set_index("id", inplace=True)
     ta = ta.unstack().reset_index()
     ta.columns = ("topic", "study_id", "prob")
     ta = ta[["prob", "topic", "study_id"]]
-
     nl.add_probabilistic_facts_from_tuples(
         set(ta.itertuples(index=False, name=None)),
         name="TopicAssociation",
@@ -668,4 +679,13 @@ def load_neuroquery(
     )
     nl.add_tuple_set(
         term_data[["tfidf", "term", "study_id"]], name="NeuroQueryTFIDF"
+    )
+
+    nl.add_probabilistic_facts_from_tuples(
+        set(
+            term_data[["tfidf", "term", "study_id"]].itertuples(
+                index=False, name=None
+            )
+        ),
+        name="TermAssociation",
     )

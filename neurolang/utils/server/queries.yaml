@@ -27,7 +27,7 @@ neurosynth:
         * **SelectedStudy** annotates each study with a probability equal to 1/N of it being chosen out of the whole dataset of size N.
 
       We write a probabilistic program to query the probability of a peak coordinate being reported by a study given thats
-      this study mentions a specific term (i.e. **emotion**).
+      this study mentions a specific term (i.e . **emotion**).
   - id: "neuro2"
     title: "Coordinate-based meta-analysis (CBMA) on the Neurosynth database"
     shortTitle: "CBMA Multiple Terms"
@@ -53,11 +53,11 @@ neurosynth:
       ActivationGivenTermImage(agg_create_region_overlay(x, y, z, p)) :- ActivationGivenTerm(x, y, z, p)
     description: |
       This example illustrates how a spatial prior can be defined based on the distance between voxels
-      and foci in a coordinate-based meta-analysis database.
+      and foci in a coordinate-based meta-analysis database .
 
       Here, each voxel's probability of being reported by a study is calculated based on whether that particular study
       reports a focus (peak activation) near the voxel. The probability is defined based on how far from the focus that
-      voxel happens to be.
+      voxel happens to be .
 
 destrieux:
   - id: "destrieux1"
@@ -84,7 +84,7 @@ destrieux:
         * the left hemisphere primary sulci, by name
         * the left frontal lobe sulcus as those
           - anterior to Destrieux's left central sulcus
-          - superior to Destrieux's left anterio-vertical section of the lateral fissure.
+          - superior to Destrieux's left anterio-vertical section of the lateral fissure .
 
       We then identify the left precentral sulcus (PC) as:
         * belonging to the left frontal lobe
@@ -96,37 +96,26 @@ yeo:
     title: "fpcn_coactivation TITLE"
     shortTitle: "fpcn_coactivation SHORTTITLE"
     query: |
-      # a region is reported if a study reports a peak activation within it
-      RegionReported(r, s) :- PeakReportedNQ(i, j, k, s) & RegionVoxel(r, i, j, k)
-      RegionVolume(r, agg_count(i, j, k)) :- RegionVoxel(r, i, j, k)
-      NetworkVolume(n, agg_sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
-      NetworkReportedVolume(network, study, agg_sum(volume)) :- NetworkRegion(network, region) & RegionReported(region, study) & RegionVolume(region, volume)
+      RegionReported(r, s) :- PeakReported(i, j, k, s) & RegionVoxel(r, i, j, k)
+      RegionVolume(r, count(i, j, k)) :- RegionVoxel(r, i, j, k)
+      NetworkVolume(n, sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
+      NetworkReportedVolume(network, study, sum(volume)) :- NetworkRegion(network, region) & RegionReported(region, study) & RegionVolume(region, volume)
       NetworkReported(network, study) :: prob :- NetworkVolume(network, nv) & NetworkReportedVolume(network, study, nrv) & (prob == nrv / nv)
-      # conditional probability of region r being reported by studies
-      # reporting network n
-      ProbActivationGivenNetworkActivation(r, n, PROB(r, n)) :- (RegionReported(r, s) & SelectedStudyNQ(s)) // (NetworkReported(n, s) & SelectedStudyNQ(s))
-      # conditional probability of region r being reported by studies not
-      # reporting network n
-      ProbActivationGivenNoNetworkActivation(r, n, PROB(r, n)) :- (RegionReported(r, s) & SelectedStudyNQ(s)) // (~NetworkReported(n, s) & Network(n) & SelectedStudyNQ(s))
-      # marginal probability of a region being reported
-      ProbActivation(r, PROB(r)) :- RegionReported(r, s) & SelectedStudyNQ(s)
-      CountStudies(agg_count(s)) :- StudyNQ(s)
-      CountStudiesRegionReported(r, agg_count(s)) :- RegionReported(r, s)
-      # estimate nb of studies reporting network based on the marginal
-      # probability of a network being reported (proportion of studies
-      # reporting the network, multiplied by the total nb of studies)
-      ProbNetworkReported(n, PROB(n)) :- NetworkReported(n, s) & SelectedStudyNQ(s)
+      ProbActivationGivenNetworkActivation(r, n, PROB(r, n)) :- (RegionReported(r, s) & SelectedStudy(s)) // (NetworkReported(n, s) & SelectedStudy(s))
+      ProbActivationGivenNoNetworkActivation(r, n, PROB(r, n)) :- (RegionReported(r, s) & SelectedStudy(s)) // (~NetworkReported(n, s) & Network(n) & SelectedStudy(s))
+      ProbActivation(r, PROB(r)) :- RegionReported(r, s) & SelectedStudy(s)
+      CountStudies(count(s)) :- Study(s)
+      CountStudiesRegionReported(r, count(s)) :- RegionReported(r, s)
+      ProbNetworkReported(n, PROB(n)) :- NetworkReported(n, s) & SelectedStudy(s)
       CountStudiesNetworkReported(n, count) :- ProbNetworkReported(n, prob) & CountStudies(N) & (count == prob * N)
-      # same but for network and region being reported at the same time
-      ProbRegionAndNetworkReported(r, n, PROB(r, n)) :- RegionReported(r, s) & NetworkReported(n, s) & SelectedStudyNQ(s)
+      ProbRegionAndNetworkReported(r, n, PROB(r, n)) :- RegionReported(r, s) & NetworkReported(n, s) & SelectedStudy(s)
       CountStudiesRegionAndNetworkReported(r, n, count) :- ProbRegionAndNetworkReported(r, n, prob) & CountStudies(N) & (count == prob * N)
       Counts(region, network, N, n, m, k) :- CountStudies(N) & CountStudiesRegionReported(region, m) & CountStudiesNetworkReported(network, n) & CountStudiesRegionAndNetworkReported(region, network, k)
-      Query(region, network, p, p0, p1, llr, Nu, n, m, k) :- ProbActivation(region, p) & ProbActivationGivenNoNetworkActivation(region, network, p0) & ProbActivationGivenNetworkActivation(region, network, p1) & Counts(region, network, Nu, n, m, k) & (llr == ( ( k * log(p1) + (n - k) * log(1 - p1) + (m - k) * log(p0) + (Nu - n - m + k) * log(1 - p0) ) - ( k * log(p) + (n - k) * log(1 - p) + (m - k) * log(p) + (Nu - n - m + k) * log(1 - p) ) ) )
+      Query(region, network, p, p0, p1, llr, N, n, m, k) :- ProbActivation(region, p) & ProbActivationGivenNoNetworkActivation(region, network, p0) & ProbActivationGivenNetworkActivation(region, network, p1) & Counts(region, network, N, n, m, k) & (llr == ((k * log(p1) + (n - k) * log(1 - p1) + (m - k) * log(p0) + (N - n - m + k) * log(1 - p0)) - (k * log(p) + (n - k) * log(1 - p) + (m - k) * log(p) + (N - n - m + k) * log(1 - p))))
   - id: "fpcn_reverse"
     title: "fpcn_reverse TITLE"
     shortTitle: "fpcn_reverse SHORTTITLE"
     query: |
-      # a region is reported if a study reports a peak activation within it
       RegionReported(r, s) :- PeakReported(i, j, k, s) & RegionVoxel(r, i, j, k)
       RegionVolume(r, count(i, j, k)) :- RegionVoxel(r, i, j, k)
       NetworkVolume(n, sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
@@ -142,6 +131,51 @@ yeo:
       ProbTopicAssociationAndNetworkReported(t, n, PROB(t, n)) :- TopicAssociation(t, s) & NetworkReported(n, s) & SelectedStudy(s)
       CountStudiesTopicAssociationAndNetworkReported(t, n, count) :- ProbTopicAssociationAndNetworkReported(t, n, prob) & CountStudies(N) & (count == prob * N)
       Counts(topic, network, N, n, m, k) :- CountStudies(N) & CountStudiesTopicAssociation(topic, m) & CountStudiesNetworkReported(network, n) & CountStudiesTopicAssociationAndNetworkReported(topic, network, k)
-      Query(topic, network, p_topic, p_network, p0, p1, llr, N, n, m, k) :- ProbTopicAssociation(topic, p_topic) & ProbNetworkReported(network, p_network) & ProbTopicAssociationGivenNoNetworkActivation(topic, network, p0) & ProbTopicAssociationGivenNetworkActivation(topic, network, p1) & Counts(topic, network, N, n, m, k) &
-      (llr == ((k * log(p1)+ (n - k) * log(1 - p1)+ (m - k) * log(p0)+ (N - n - m + k) * log(1 - p0))-(k * log(p_topic)+ (n - k) * log(1 - p_topic)+ (m - k) * log(p_topic)+ (N - n - m + k) * log(1 - p_topic))))
+      Query(topic, network, p_topic, p_network, p0, p1, llr, N, n, m, k) :- ProbTopicAssociation(topic, p_topic) & ProbNetworkReported(network, p_network) & ProbTopicAssociationGivenNoNetworkActivation(topic, network, p0) & ProbTopicAssociationGivenNetworkActivation(topic, network, p1) & Counts(topic, network, N, n, m, k) & (llr == 1)
+      #(llr == ((k * log(p1)+ (n - k) * log(1 - p1)+ (m - k) * log(p0)+ (N - n - m + k) * log(1 - p0))-(k * log(p_topic)+ (n - k) * log(1 - p_topic)+ (m - k) * log(p_topic)+ (N - n - m + k) * log(1 - p_topic))))
+  - id: "vwfa_term"
+    title: "vwfa_term TITLE"
+    shortTitle: "vwfa_term SHORTTITLE"
+    query: |
+      RegionReported(r, s) :- PeakReportedNQ(x1, y1, z1, s) & RegionSeedVoxel(r, x2, y2, z2) & (d == EUCLIDEAN(x1, y1, z1, x2, y2, z2)) & (d < 10.0)
+      NetworkReported(n, s) :- RegionReported(r, s) & RegionInNetwork(r, n)
+      StudyMatchingNetworkQuery(s, n) :- RegionReported("VWFA", s) & NetworkReported(n, s) & ~exists(n2; (n2 != n) & NetworkReported(n2, s) & Network(n2))
+      StudyNotMatchingSegregationQuery(s, n) :- ~StudyMatchingNetworkQuery(s, n) & StudyNQ(s) & Network(n)
+      PositiveReverseInferenceSegregationQuery(t, n, PROB(t, n)) :- (TermAssociation(t, s) & SelectedStudyNQ(s)) // (StudyMatchingNetworkQuery(s, n) & SelectedStudyNQ(s))
+      NegativeReverseInferenceSegregationQuery(t, n, PROB(t, n)) :- (TermAssociation(t, s) & SelectedStudyNQ(s)) // (StudyNotMatchingSegregationQuery(s, n) & SelectedStudyNQ(s))
+      MarginalTermAssociation(t, PROB(t)) :- SelectedStudyNQ(s) & TermAssociation(t, s)
+      CountStudies(count(s)) :- StudyNQ(s)
+      CountStudiesWithTerm(t, c) :- MarginalTermAssociation(t, prob) & (c == prob * N) & CountStudies(N)
+      CountStudiesMatchingQuery(n, count(s)) :- StudyMatchingNetworkQuery(s, n)
+      JointProb(t, n, PROB(t, n)) :- TermAssociation(t, s) & StudyMatchingNetworkQuery(s, n) & SelectedStudyNQ(s)
+      CountStudiesMatchingQueryWithTerm(t, n, c) :- JointProb(t, n, p)& CountStudies(N)& (c == N * p)
+      LikelihoodRatio(term, network, p1, p0, llr, m, n, k) :- PositiveReverseInferenceSegregationQuery(term, network, p1) & NegativeReverseInferenceSegregationQuery(term, network, p0) & MarginalTermAssociation(term, p) & CountStudies(N) & CountStudiesWithTerm(term, m) & CountStudiesMatchingQuery(network, n) & CountStudiesMatchingQueryWithTerm(term, network, k) & (llr== ((k * log(p1)+ (n - k) * log(1 - p1)+ (m - k) * log(p0)+ (N - n - m + k) * log(1 - p0)) - (k * log(p)+ (n - k) * log(1 - p)+ (m - k) * log(p)+ (N - n - m + k) * log(1 - p))))
+  - id: "vwfa_topic"
+    title: "vwfa_topic TITLE"
+    shortTitle: "vwfa_topic SHORTTITLE"
+    query: |
+      RegionReported(r, s) :- PeakReported(x1, y1, z1, s) & RegionSeedVoxel(r, x2, y2, z2) & (d == EUCLIDEAN(x1, y1, z1, x2, y2, z2)) & (d < 10.0)
+      NetworkReported(n, s) :- RegionReported(r, s) & RegionInNetwork(r, n)
+      StudyMatchingNetworkQuery(s, n) :- RegionReported("VWFA", s) & NetworkReported(n, s) & ~exists(n2; (n2 != n) & NetworkReported(n2, s) & Network(n2))
+      StudyNotMatchingSegregationQuery(s, n) :- ~StudyMatchingNetworkQuery(s, n) & Study(s) & Network(n)
+      PositiveReverseInferenceSegregationQuery(t, n, PROB(t, n)) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (StudyMatchingNetworkQuery(s, n) & SelectedStudy(s))
+      NegativeReverseInferenceSegregationQuery(t, n, PROB(t, n)) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (StudyNotMatchingSegregationQuery(s, n) & SelectedStudy(s))
+      MarginalTopicAssociation(t, PROB(t)) :- SelectedStudy(s) & TopicAssociation(t, s)
+      CountStudies(count(s)) :- Study(s)
+      CountStudiesWithTopic(t, c) :- MarginalTopicAssociation(t, prob) & (c == prob * N) & CountStudies(N)
+      CountStudiesMatchingQuery(n, count(s)) :- StudyMatchingNetworkQuery(s, n)
+      JointProb(t, n, PROB(t, n)) :- TopicAssociation(t, s) & StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
+      CountStudiesMatchingQueryWithTopic(t, n, c) :- JointProb(t, n, p) & CountStudies(N) & (c == N * p)
+      LikelihoodRatio(topic, network, p1, p0, llr, m, n, k) :- PositiveReverseInferenceSegregationQuery(topic, network, p1) & NegativeReverseInferenceSegregationQuery(topic, network, p0) & MarginalTopicAssociation(topic, p) & CountStudies(N) & CountStudiesWithTopic(topic, m) & CountStudiesMatchingQuery(network, n) & CountStudiesMatchingQueryWithTopic(topic, network, k) & (llr == ((k * log(p1) + (n - k) * log(1 - p1) + (m - k) * log(p0) + (N - n - m + k) * log(1 - p0)) - (k * log(p) + (n - k) * log(1 - p) + (m - k) * log(p) + (N - n - m + k) * log(1 - p))))
+  - id: "network_reverse"
+    title: "network_reverse TITLE"
+    shortTitle: "network_reverse SHORTTITLE"
+    query: |
+      RegionReported(r, s) :- PeakReported(x, y, z, s) & RegionVoxel(r, x, y, z)
+      RegionVolume(r, count(x, y, z)) :- RegionVoxel(r, x, y, z)
+      NetworkVolume(n, sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
+      NetworkReportedVolume(n, s, sum(v)) :- NetworkRegion(n, region) & RegionReported(region, s) & RegionVolume(region, v)
+      NetworkReported(n, s) :: (nrv / nv) :- NetworkVolume(n, nv) & NetworkReportedVolume(n, s, nrv)
+      StudyMatchingNetworkSegregationQuery(s, n) :- NetworkReported(n, s) & ~exists(n2; Network(n2) & (n2 != n) & NetworkReported(n2, s))
+      Query(topic, n, PROB(topic, n)) :- TopicAssociation(topic, s) // (StudyMatchingNetworkSegregationQuery(s, n) & SelectedStudy(s))
 

@@ -519,7 +519,7 @@ def main():
     opts = {
         NeurosynthEngineConf(data_dir, resolution=2): 2,
         DestrieuxEngineConf(data_dir): 2,
-        YeoEngineConf(data_dir, resolution=3): 2,
+        YeoEngineConf(data_dir, resolution=3): 5,
     }
     nqm = NeurolangQueryManager(opts)
 
