@@ -417,25 +417,37 @@ def load_destrieux_atlas(data_dir, nl):
         )
     nl.add_tuple_set(destrieux_set, name="destrieux")
 
-
-class YeoEngineConf(NeurolangEngineConfiguration):
+class FPCNEngineConf(NeurolangEngineConfiguration):
     def __init__(
         self,
         data_dir: Path,
         resolution=None,
         n_components=256,
-        neuroquery_subsample_proportion: float = 0.5
     ) -> None:
         super().__init__()
         self.data_dir = data_dir
         self.resolution = resolution
         self._mni_mask = None
         self._n_components = n_components
-        self._neuroquery_subsample_proportion = neuroquery_subsample_proportion
+
+    # fpcn_reverse:
+    # - cord_type = "ijk"
+    # - peak_reported (2) of NS, studies_id (3) NS
+    # - fetch_neurosynth_topic_associations with n_topics == 100
+    # - region_voxels (1) of Difumo
+    # - Network ("ContA",), ("ContB",)
+    # - NetworkRegion related to Network
+
+    # fpcn_coactivation:
+    # - cord_type = "ijk"
+    # - peak_reported (2) of NQ, studies_id (3) NQ
+    # - region_voxels (1) of Difumo
+    # - Network ("ContA",), ("ContB",)
+    # - NetworkRegion related to Network
 
     @property
     def key(self):
-        return "yeo"
+        return "fpcn"
 
     @property
     def atlas(self):
@@ -450,22 +462,67 @@ class YeoEngineConf(NeurolangEngineConfiguration):
 
         nl = init_frontend(mask)
         load_neuroquery(self.data_dir, nl, mask)
-        load_neurosynth_data(self.data_dir, nl, mask)
-        load_difumo(self.data_dir, nl, mask, n_components=self._n_components, coord_type='ijk')
+        region_voxels, difumo_meta = load_difumo(self.data_dir, nl, mask, n_components=self._n_components, coord_type='ijk')
+        nl.add_tuple_set(region_voxels, name="RegionVoxel")
+        nl.add_tuple_set({("ContA",), ("ContB",)}, name="Network")
+        nl.add_tuple_set(
+            set(
+                (row["Yeo_networks17"], row["Difumo_names"])
+                for _, row in difumo_meta.iterrows()
+                if row["Yeo_networks17"] in ("ContA", "ContB")
+            ),
+            name="NetworkRegion",
+        )
+
+        load_neurosynth_data_vc(self.data_dir, nl, mask, tfidf_threshold=1e-2)
         load_neurosynth_topic_associations(self.data_dir, nl, 100)
 
 
-        nl.add_symbol(
-            np.log,
-            name="log",
-            type_=Callable[[float], float],
-        )
+        return nl
 
-        nl.add_symbol(
-            lambda it: float(sum(it)),
-            name="agg_sum",
-            type_=Callable[[Iterable], float],
-        )
+class VWFAEngineConf(NeurolangEngineConfiguration):
+    def __init__(
+        self,
+        data_dir: Path,
+        resolution=None,
+        n_components=256,
+    ) -> None:
+        super().__init__()
+        self.data_dir = data_dir
+        self.resolution = resolution
+        self._mni_mask = None
+        self._n_components = n_components
+
+    # vwfa_topic:
+    # - fetch_neurosynth_topic_associations with n_topics == 100
+    # - peak_reported (2) of NS, studies_id (3) NS
+    # - Network ("attention",), ("language",)
+    # - RegionInNetwork and RegionSeedVoxel defined by hand
+
+    # vwfa_term:
+    # - term_association, peak_reported, study_ids of NeuroQuery
+    # - Network ("attention",), ("language",)
+    # - RegionInNetwork and RegionSeedVoxel defined by hand
+
+    @property
+    def key(self):
+        return "vwfa"
+
+    @property
+    def atlas(self):
+        if self._mni_mask is None:
+            self._mni_mask = nib.load(datasets.fetch_icbm152_2009()["gm"])
+        return self._mni_mask
+
+    def create(self) -> NeurolangPDL:
+        mask = self.atlas
+        if self.resolution is not None:
+            mask = image.resample_img(mask, np.eye(3) * self.resolution)
+
+        nl = init_frontend(mask)
+        load_neurosynth_topic_associations(self.data_dir, nl, 100)
+        load_neurosynth_data_vc(self.data_dir, nl, mask, tfidf_threshold=1e-2)
+        load_neuroquery(self.data_dir, nl, mask)
 
         nl.add_tuple_set([("attention",), ("language",)], name="Network")
         nl.add_tuple_set(
@@ -500,6 +557,63 @@ class YeoEngineConf(NeurolangEngineConfiguration):
                 ("pSTS", -52, -40, 5),
             },
             name="RegionSeedVoxel",
+        )
+
+        return nl
+
+
+class NetworkEngineConf(NeurolangEngineConfiguration):
+    def __init__(
+        self,
+        data_dir: Path,
+        resolution=None,
+        n_components=256,
+    ) -> None:
+        super().__init__()
+        self.data_dir = data_dir
+        self.resolution = resolution
+        self._mni_mask = None
+        self._n_components = n_components
+
+    # network_reverse:
+    # - load_topic_association defined by hand, labels and prob > 0.05
+    # - cord_type = "xyz"
+    # - peak_reported (2) of NS, studies_id (3) NS
+    # - region_voxels (1) of Difumo
+    # - Network ("DefaultB",), ("ContA",), ("DorsAttnB")
+    # - NetworkRegion related to Network
+
+    @property
+    def key(self):
+        return "network"
+
+    @property
+    def atlas(self):
+        if self._mni_mask is None:
+            self._mni_mask = nib.load(datasets.fetch_icbm152_2009()["gm"])
+        return self._mni_mask
+
+    def create(self) -> NeurolangPDL:
+        mask = self.atlas
+        if self.resolution is not None:
+            mask = image.resample_img(mask, np.eye(3) * self.resolution)
+
+        nl = init_frontend(mask)
+        load_neurosynth_data_vc(self.data_dir, nl, mask, tfidf_threshold=1e-2)
+        region_voxels, difumo_meta = load_difumo(self.data_dir, nl, mask, n_components=self._n_components, coord_type='xyz')
+        load_topic_associations(self.data_dir, nl, 100)
+
+        nl.add_tuple_set(
+            {("DefaultB",), ("ContA",), ("DorsAttnB",)}, name="Network"
+        )
+        nl.add_tuple_set(region_voxels, name="RegionVoxel")
+        nl.add_tuple_set(
+            set(
+                (row["Yeo_networks7"], row["Difumo_names"])
+                for _, row in difumo_meta.iterrows()
+                if row["Yeo_networks7"] in ("DefaultB", "ContA", "DorsAttnB")
+            ),
+            name="NetworkRegion",
         )
 
         return nl
@@ -568,16 +682,7 @@ def load_difumo(
         to_concat.append(region_data[cols])
     region_voxels = pd.concat(to_concat)
 
-    RegionVoxel = nl.add_tuple_set(region_voxels, name="RegionVoxel")
-    Network = nl.add_tuple_set({("ContA",), ("ContB",)}, name="Network")
-    NetworkRegion = nl.add_tuple_set(
-        set(
-            (row["Yeo_networks17"], row["Difumo_names"])
-            for _, row in labels.iterrows()
-            if row["Yeo_networks17"] in ("ContA", "ContB")
-        ),
-        name="NetworkRegion",
-    )
+    return region_voxels, labels
 
 def load_neurosynth_topic_associations(data_dir, nl, n_topics: int) -> pd.DataFrame:
     if n_topics not in {50, 100, 200, 400}:
@@ -688,4 +793,143 @@ def load_neuroquery(
             )
         ),
         name="TermAssociation",
+    )
+
+def load_topic_associations(data_dir, nl) -> pd.DataFrame:
+    topics_to_keep = [
+        12,
+        99,
+        182,
+        3,
+        68,
+        185,
+        147,
+        17,
+        78,
+        157,
+        85,
+        37,
+        39,
+        88,
+        69,
+        118,
+    ]
+    labels = [
+        "Face/Affective Processing",
+        "Social Cognition",
+        "Mentalizing",
+        "Declarative Memory",
+        "Subjective Experience",
+        "Spatial Location/Orientation",
+        "Task Switching",
+        "Task Difficulty",
+        "Performance Monitoring",
+        "Working Memory",
+        "Action",
+        "Response Inhibition",
+        "Conflict Monitoring",
+        "Eye Movements",
+        "Visual Attention",
+        "Decision Making",
+    ]
+    topic_association = load_neurosynth_topic_associations(data_dir, nl, 100)
+    topic_association = topic_association.iloc[topics_to_keep]
+    topic_association["topic"] = labels
+
+    topic_association = topic_association.loc[
+        topic_association.prob > 0.05, ["topic", "study_id"]
+    ]
+
+    nl.add_tuple_set(
+        topic_association,
+        name="TopicAssociation",
+    )
+
+def load_neurosynth_data_vc(
+    data_dir: Path,
+    nl,
+    mni_mask: nib.Nifti1Image,
+    tfidf_threshold: Optional[float] = None
+):
+    ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
+        data_dir / "neurosynth",
+        [
+            (
+                "database.txt",
+                "https://github.com/neurosynth/neurosynth-data/raw/e8f27c4a9a44dbfbc0750366166ad2ba34ac72d6/current_data.tar.gz",
+                {"uncompress": True},
+            ),
+            (
+                "features.txt",
+                "https://github.com/neurosynth/neurosynth-data/raw/e8f27c4a9a44dbfbc0750366166ad2ba34ac72d6/current_data.tar.gz",
+                {"uncompress": True},
+            ),
+        ],
+    )
+
+    features = pd.read_csv(ns_features_fn, sep="\t")
+    features.rename(columns={"pmid": "study_id"}, inplace=True)
+    term_data = pd.melt(
+        features,
+        var_name="term",
+        id_vars="study_id",
+        value_name="tfidf",
+    )
+    if tfidf_threshold is not None:
+        term_data = term_data.query("tfidf > {}".format(tfidf_threshold))[
+            ["term", "study_id"]
+        ]
+    else:
+        term_data = term_data.query("tfidf > 0")[["term", "tfidf", "study_id"]]
+    activations = pd.read_csv(ns_database_fn, sep="\t")
+    mni_peaks = activations.loc[activations.space == "MNI"][
+        ["x", "y", "z", "id"]
+    ].rename(columns={"id": "study_id"})
+    non_mni_peaks = activations.loc[activations.space != "MNI"][
+        ["x", "y", "z", "id"]
+    ].rename(columns={"id": "study_id"})
+    proj_mat = np.linalg.pinv(
+        np.array(
+            [
+                [0.9254, 0.0024, -0.0118, -1.0207],
+                [-0.0048, 0.9316, -0.0871, -1.7667],
+                [0.0152, 0.0883, 0.8924, 4.0926],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        ).T
+    )
+    projected = np.round(
+        np.dot(
+            np.hstack(
+                (
+                    non_mni_peaks[["x", "y", "z"]].values,
+                    np.ones((len(non_mni_peaks), 1)),
+                )
+            ),
+            proj_mat,
+        )[:, 0:3]
+    )
+    projected_df = pd.DataFrame(
+        np.hstack([projected, non_mni_peaks[["study_id"]].values]),
+        columns=["x", "y", "z", "study_id"],
+        dtype=int,
+    )
+    peak_data = pd.concat([projected_df, mni_peaks]).astype(int)
+    study_ids = peak_data[["study_id"]].drop_duplicates()
+
+    nl.add_tuple_set(peak_data, name="PeakReported")
+    nl.add_tuple_set(study_ids, name="Study")
+    nl.add_tuple_set(term_data, name="TermInStudyTFIDF")
+    nl.add_uniform_probabilistic_choice_over_set(
+        study_ids, name="SelectedStudy"
+    )
+    nl.add_tuple_set(
+        np.round(
+            nib.affines.apply_affine(
+                mni_mask.affine, np.transpose(
+                    mni_mask.get_fdata().astype(int).nonzero()
+                )
+            )
+        ).astype(int),
+        name="Voxel",
     )

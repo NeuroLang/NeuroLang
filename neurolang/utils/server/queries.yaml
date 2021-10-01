@@ -91,24 +91,24 @@ destrieux:
         * its principal direction is along the superior-inferior axis.
         * no other sulcus satisfying the same conditions is anterior to the PC.
 
-yeo:
+fpcn:
   - id: "fpcn_coactivation"
     title: "fpcn_coactivation TITLE"
     shortTitle: "fpcn_coactivation SHORTTITLE"
     query: |
-      RegionReported(r, s) :- PeakReported(i, j, k, s) & RegionVoxel(r, i, j, k)
+      RegionReported(r, s) :- PeakReportedNQ(i, j, k, s) & RegionVoxel(r, i, j, k)
       RegionVolume(r, count(i, j, k)) :- RegionVoxel(r, i, j, k)
       NetworkVolume(n, sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
       NetworkReportedVolume(network, study, sum(volume)) :- NetworkRegion(network, region) & RegionReported(region, study) & RegionVolume(region, volume)
-      NetworkReported(network, study) :: prob :- NetworkVolume(network, nv) & NetworkReportedVolume(network, study, nrv) & (prob == nrv / nv)
-      ProbActivationGivenNetworkActivation(r, n, PROB(r, n)) :- (RegionReported(r, s) & SelectedStudy(s)) // (NetworkReported(n, s) & SelectedStudy(s))
-      ProbActivationGivenNoNetworkActivation(r, n, PROB(r, n)) :- (RegionReported(r, s) & SelectedStudy(s)) // (~NetworkReported(n, s) & Network(n) & SelectedStudy(s))
-      ProbActivation(r, PROB(r)) :- RegionReported(r, s) & SelectedStudy(s)
-      CountStudies(count(s)) :- Study(s)
+      NetworkReported(network, study) :: (prob) :- NetworkVolume(network, nv) & NetworkReportedVolume(network, study, nrv) & (prob == nrv / nv)
+      ProbActivationGivenNetworkActivation(r, n, PROB(r, n)) :- (RegionReported(r, s) & SelectedStudyNQ(s)) // (NetworkReported(n, s) & SelectedStudyNQ(s))
+      ProbActivationGivenNoNetworkActivation(r, n, PROB(r, n)) :- (RegionReported(r, s) & SelectedStudyNQ(s)) // (~NetworkReported(n, s) & Network(n) & SelectedStudyNQ(s))
+      ProbActivation(r, PROB(r)) :- RegionReported(r, s) & SelectedStudyNQ(s)
+      CountStudies(count(s)) :- StudyNQ(s)
       CountStudiesRegionReported(r, count(s)) :- RegionReported(r, s)
-      ProbNetworkReported(n, PROB(n)) :- NetworkReported(n, s) & SelectedStudy(s)
+      ProbNetworkReported(n, PROB(n)) :- NetworkReported(n, s) & SelectedStudyNQ(s)
       CountStudiesNetworkReported(n, count) :- ProbNetworkReported(n, prob) & CountStudies(N) & (count == prob * N)
-      ProbRegionAndNetworkReported(r, n, PROB(r, n)) :- RegionReported(r, s) & NetworkReported(n, s) & SelectedStudy(s)
+      ProbRegionAndNetworkReported(r, n, PROB(r, n)) :- RegionReported(r, s) & NetworkReported(n, s) & SelectedStudyNQ(s)
       CountStudiesRegionAndNetworkReported(r, n, count) :- ProbRegionAndNetworkReported(r, n, prob) & CountStudies(N) & (count == prob * N)
       Counts(region, network, N, n, m, k) :- CountStudies(N) & CountStudiesRegionReported(region, m) & CountStudiesNetworkReported(network, n) & CountStudiesRegionAndNetworkReported(region, network, k)
       Query(region, network, p, p0, p1, llr, N, n, m, k) :- ProbActivation(region, p) & ProbActivationGivenNoNetworkActivation(region, network, p0) & ProbActivationGivenNetworkActivation(region, network, p1) & Counts(region, network, N, n, m, k) & (llr == ((k * log(p1) + (n - k) * log(1 - p1) + (m - k) * log(p0) + (N - n - m + k) * log(1 - p0)) - (k * log(p) + (n - k) * log(1 - p) + (m - k) * log(p) + (N - n - m + k) * log(1 - p))))
@@ -120,7 +120,7 @@ yeo:
       RegionVolume(r, count(i, j, k)) :- RegionVoxel(r, i, j, k)
       NetworkVolume(n, sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
       NetworkReportedVolume(network, study, sum(volume)) :- NetworkRegion(network, region) & RegionReported(region, study) & RegionVolume(region, volume)
-      NetworkReported(network, study) :: p :- NetworkVolume(network, nv) & NetworkReportedVolume(network, study, nrv) & (prob == nrv / nv)
+      NetworkReported(network, study) :: (prob) :- NetworkVolume(network, nv) & NetworkReportedVolume(network, study, nrv) & (prob == nrv / nv)
       ProbTopicAssociationGivenNetworkActivation(t, n, PROB(t, n)) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (NetworkReported(n, s) & SelectedStudy(s))
       ProbTopicAssociationGivenNoNetworkActivation(t, n, PROB(t, n)) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (~NetworkReported(n, s) & Network(n) & SelectedStudy(s))
       ProbTopicAssociation(t, PROB(t)) :- TopicAssociation(t, s) & SelectedStudy(s)
@@ -130,9 +130,10 @@ yeo:
       CountStudiesNetworkReported(n, count) :- ProbNetworkReported(n, prob) & CountStudies(N) & (count == prob * N)
       ProbTopicAssociationAndNetworkReported(t, n, PROB(t, n)) :- TopicAssociation(t, s) & NetworkReported(n, s) & SelectedStudy(s)
       CountStudiesTopicAssociationAndNetworkReported(t, n, count) :- ProbTopicAssociationAndNetworkReported(t, n, prob) & CountStudies(N) & (count == prob * N)
-      Counts(topic, network, N, n, m, k) :- CountStudies(N) & CountStudiesTopicAssociation(topic, m) & CountStudiesNetworkReported(network, n) & CountStudiesTopicAssociationAndNetworkReported(topic, network, k)
-      Query(topic, network, p_topic, p_network, p0, p1, llr, N, n, m, k) :- ProbTopicAssociation(topic, p_topic) & ProbNetworkReported(network, p_network) & ProbTopicAssociationGivenNoNetworkActivation(topic, network, p0) & ProbTopicAssociationGivenNetworkActivation(topic, network, p1) & Counts(topic, network, N, n, m, k) & (llr == 1)
-      #(llr == ((k * log(p1)+ (n - k) * log(1 - p1)+ (m - k) * log(p0)+ (N - n - m + k) * log(1 - p0))-(k * log(p_topic)+ (n - k) * log(1 - p_topic)+ (m - k) * log(p_topic)+ (N - n - m + k) * log(1 - p_topic))))
+      Counts(topic, network, N, n, m, k) :- CountStudies(N) & CountStudiesTopicAssociation(topic, m) & CountStudiesNetworkReported(network, n)& CountStudiesTopicAssociationAndNetworkReported(topic, network, k)
+      Query(topic, network, p_topic, p_network, p0, p1, llr, N, n, m, k,) :- ProbTopicAssociation(topic, p_topic) & ProbNetworkReported(network, p_network) & ProbTopicAssociationGivenNoNetworkActivation(topic, network, p0)& ProbTopicAssociationGivenNetworkActivation(topic, network, p1)& Counts(topic, network, N, n, m, k) & (llr == ((k * log(p1) + (n - k) * log(1 - p1) + (m - k) * log(p0) + (N - n - m + k) * log(1 - p0)) - (k * log(p_topic) + (n - k) * log(1 - p_topic) + (m - k) * log(p_topic) + (N - n - m + k) * log(1 - p_topic))))
+
+vwfa:
   - id: "vwfa_term"
     title: "vwfa_term TITLE"
     shortTitle: "vwfa_term SHORTTITLE"
@@ -167,6 +168,8 @@ yeo:
       JointProb(t, n, PROB(t, n)) :- TopicAssociation(t, s) & StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
       CountStudiesMatchingQueryWithTopic(t, n, c) :- JointProb(t, n, p) & CountStudies(N) & (c == N * p)
       LikelihoodRatio(topic, network, p1, p0, llr, m, n, k) :- PositiveReverseInferenceSegregationQuery(topic, network, p1) & NegativeReverseInferenceSegregationQuery(topic, network, p0) & MarginalTopicAssociation(topic, p) & CountStudies(N) & CountStudiesWithTopic(topic, m) & CountStudiesMatchingQuery(network, n) & CountStudiesMatchingQueryWithTopic(topic, network, k) & (llr == ((k * log(p1) + (n - k) * log(1 - p1) + (m - k) * log(p0) + (N - n - m + k) * log(1 - p0)) - (k * log(p) + (n - k) * log(1 - p) + (m - k) * log(p) + (N - n - m + k) * log(1 - p))))
+
+network:
   - id: "network_reverse"
     title: "network_reverse TITLE"
     shortTitle: "network_reverse SHORTTITLE"
