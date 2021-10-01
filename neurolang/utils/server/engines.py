@@ -475,7 +475,11 @@ class FPCNEngineConf(NeurolangEngineConfiguration):
         )
 
         load_neurosynth_data_vc(self.data_dir, nl, mask, tfidf_threshold=1e-2)
-        load_neurosynth_topic_associations(self.data_dir, nl, 100)
+        ta = load_neurosynth_topic_associations(self.data_dir, nl, 100)
+        nl.add_probabilistic_facts_from_tuples(
+            set(ta.itertuples(index=False, name=None)),
+            name="TopicAssociation",
+        )
 
 
         return nl
@@ -520,7 +524,11 @@ class VWFAEngineConf(NeurolangEngineConfiguration):
             mask = image.resample_img(mask, np.eye(3) * self.resolution)
 
         nl = init_frontend(mask)
-        load_neurosynth_topic_associations(self.data_dir, nl, 100)
+        ta = load_neurosynth_topic_associations(self.data_dir, nl, 100)
+        nl.add_probabilistic_facts_from_tuples(
+            set(ta.itertuples(index=False, name=None)),
+            name="TopicAssociation",
+        )
         load_neurosynth_data_vc(self.data_dir, nl, mask, tfidf_threshold=1e-2)
         load_neuroquery(self.data_dir, nl, mask)
 
@@ -601,7 +609,7 @@ class NetworkEngineConf(NeurolangEngineConfiguration):
         nl = init_frontend(mask)
         load_neurosynth_data_vc(self.data_dir, nl, mask, tfidf_threshold=1e-2)
         region_voxels, difumo_meta = load_difumo(self.data_dir, nl, mask, n_components=self._n_components, coord_type='xyz')
-        load_topic_associations(self.data_dir, nl, 100)
+        load_topic_associations(self.data_dir, nl)
 
         nl.add_tuple_set(
             {("DefaultB",), ("ContA",), ("DorsAttnB",)}, name="Network"
@@ -704,10 +712,8 @@ def load_neurosynth_topic_associations(data_dir, nl, n_topics: int) -> pd.DataFr
     ta = ta.unstack().reset_index()
     ta.columns = ("topic", "study_id", "prob")
     ta = ta[["prob", "topic", "study_id"]]
-    nl.add_probabilistic_facts_from_tuples(
-        set(ta.itertuples(index=False, name=None)),
-        name="TopicAssociation",
-    )
+
+    return ta
 
 def xyz_to_ijk(xyz, mask):
     voxels = nib.affines.apply_affine(

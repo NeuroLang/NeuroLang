@@ -111,7 +111,7 @@ fpcn:
       ProbRegionAndNetworkReported(r, n, PROB(r, n)) :- RegionReported(r, s) & NetworkReported(n, s) & SelectedStudyNQ(s)
       CountStudiesRegionAndNetworkReported(r, n, count) :- ProbRegionAndNetworkReported(r, n, prob) & CountStudies(N) & (count == prob * N)
       Counts(region, network, N, n, m, k) :- CountStudies(N) & CountStudiesRegionReported(region, m) & CountStudiesNetworkReported(network, n) & CountStudiesRegionAndNetworkReported(region, network, k)
-      Query(region, network, p, p0, p1, llr, N, n, m, k) :- ProbActivation(region, p) & ProbActivationGivenNoNetworkActivation(region, network, p0) & ProbActivationGivenNetworkActivation(region, network, p1) & Counts(region, network, N, n, m, k) & (llr == ((k * log(p1) + (n - k) * log(1 - p1) + (m - k) * log(p0) + (N - n - m + k) * log(1 - p0)) - (k * log(p) + (n - k) * log(1 - p) + (m - k) * log(p) + (N - n - m + k) * log(1 - p))))
+      Query(region, network, p, p0, p1, llr, N, n, m, k) :- ProbActivation(region, p) & ProbActivationGivenNoNetworkActivation(region, network, p0) & ProbActivationGivenNetworkActivation(region, network, p1) & Counts(region, network, N, n, m, k) & (llr == (((k * log(p1) + (n - k) * log(1 - p1)) + ((m - k) * log(p0) + ((N - n) - (m + k)) * log(1 - p0))) - ((k * log(p) + (n - k) * log(1 - p)) + ((m - k) * log(p) + ((N - n) - (m + k)) * log(1 - p)))))
   - id: "fpcn_reverse"
     title: "fpcn_reverse TITLE"
     shortTitle: "fpcn_reverse SHORTTITLE"
@@ -131,7 +131,7 @@ fpcn:
       ProbTopicAssociationAndNetworkReported(t, n, PROB(t, n)) :- TopicAssociation(t, s) & NetworkReported(n, s) & SelectedStudy(s)
       CountStudiesTopicAssociationAndNetworkReported(t, n, count) :- ProbTopicAssociationAndNetworkReported(t, n, prob) & CountStudies(N) & (count == prob * N)
       Counts(topic, network, N, n, m, k) :- CountStudies(N) & CountStudiesTopicAssociation(topic, m) & CountStudiesNetworkReported(network, n)& CountStudiesTopicAssociationAndNetworkReported(topic, network, k)
-      Query(topic, network, p_topic, p_network, p0, p1, llr, N, n, m, k,) :- ProbTopicAssociation(topic, p_topic) & ProbNetworkReported(network, p_network) & ProbTopicAssociationGivenNoNetworkActivation(topic, network, p0)& ProbTopicAssociationGivenNetworkActivation(topic, network, p1)& Counts(topic, network, N, n, m, k) & (llr == ((k * log(p1) + (n - k) * log(1 - p1) + (m - k) * log(p0) + (N - n - m + k) * log(1 - p0)) - (k * log(p_topic) + (n - k) * log(1 - p_topic) + (m - k) * log(p_topic) + (N - n - m + k) * log(1 - p_topic))))
+      Query(topic, network, p_topic, p_network, p0, p1, llr, N, n, m, k) :- ProbTopicAssociation(topic, p_topic) & ProbNetworkReported(network, p_network) & ProbTopicAssociationGivenNoNetworkActivation(topic, network, p0)& ProbTopicAssociationGivenNetworkActivation(topic, network, p1)& Counts(topic, network, N, n, m, k) & (llr == (((k * log(p1)+ (n - k) * log(1 - p1))+ ((m - k) * log(p0)+ ((N - n) - (m + k)) * log(1 - p0)))- ((k * log(p_topic)+ (n - k) * log(1 - p_topic))+ ((m - k) * log(p_topic)+ ((N - n) - (m + k)) * log(1 - p_topic)))))
 
 vwfa:
   - id: "vwfa_term"
@@ -150,7 +150,7 @@ vwfa:
       CountStudiesMatchingQuery(n, count(s)) :- StudyMatchingNetworkQuery(s, n)
       JointProb(t, n, PROB(t, n)) :- TermAssociation(t, s) & StudyMatchingNetworkQuery(s, n) & SelectedStudyNQ(s)
       CountStudiesMatchingQueryWithTerm(t, n, c) :- JointProb(t, n, p)& CountStudies(N)& (c == N * p)
-      LikelihoodRatio(term, network, p1, p0, llr, m, n, k) :- PositiveReverseInferenceSegregationQuery(term, network, p1) & NegativeReverseInferenceSegregationQuery(term, network, p0) & MarginalTermAssociation(term, p) & CountStudies(N) & CountStudiesWithTerm(term, m) & CountStudiesMatchingQuery(network, n) & CountStudiesMatchingQueryWithTerm(term, network, k) & (llr== ((k * log(p1)+ (n - k) * log(1 - p1)+ (m - k) * log(p0)+ (N - n - m + k) * log(1 - p0)) - (k * log(p)+ (n - k) * log(1 - p)+ (m - k) * log(p)+ (N - n - m + k) * log(1 - p))))
+      LikelihoodRatio(term, network, p1, p0, llr, m, n, k) :- PositiveReverseInferenceSegregationQuery(term, network, p1) & NegativeReverseInferenceSegregationQuery(term, network, p0) & MarginalTermAssociation(term, p) & CountStudies(N) & CountStudiesWithTerm(term, m) & CountStudiesMatchingQuery(network, n) & CountStudiesMatchingQueryWithTerm(term, network, k) & (llr == (((k * log(p1) + (n - k) * log(1 - p1)) + ((m - k) * log(p0) + ((N - n) - (m + k)) * log(1 - p0))) - ((k * log(p) + (n - k) * log(1 - p)) + ((m - k) * log(p) + ((N - n) - (m + k)) * log(1 - p)))))
   - id: "vwfa_topic"
     title: "vwfa_topic TITLE"
     shortTitle: "vwfa_topic SHORTTITLE"
@@ -167,7 +167,7 @@ vwfa:
       CountStudiesMatchingQuery(n, count(s)) :- StudyMatchingNetworkQuery(s, n)
       JointProb(t, n, PROB(t, n)) :- TopicAssociation(t, s) & StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
       CountStudiesMatchingQueryWithTopic(t, n, c) :- JointProb(t, n, p) & CountStudies(N) & (c == N * p)
-      LikelihoodRatio(topic, network, p1, p0, llr, m, n, k) :- PositiveReverseInferenceSegregationQuery(topic, network, p1) & NegativeReverseInferenceSegregationQuery(topic, network, p0) & MarginalTopicAssociation(topic, p) & CountStudies(N) & CountStudiesWithTopic(topic, m) & CountStudiesMatchingQuery(network, n) & CountStudiesMatchingQueryWithTopic(topic, network, k) & (llr == ((k * log(p1) + (n - k) * log(1 - p1) + (m - k) * log(p0) + (N - n - m + k) * log(1 - p0)) - (k * log(p) + (n - k) * log(1 - p) + (m - k) * log(p) + (N - n - m + k) * log(1 - p))))
+      LikelihoodRatio(topic, network, p1, p0, llr, m, n, k) :- PositiveReverseInferenceSegregationQuery(topic, network, p1) & NegativeReverseInferenceSegregationQuery(topic, network, p0) & MarginalTopicAssociation(topic, p) & CountStudies(N) & CountStudiesWithTopic(topic, m) & CountStudiesMatchingQuery(network, n) & CountStudiesMatchingQueryWithTopic(topic, network, k) & (llr == (((k * log(p1) + (n - k) * log(1 - p1)) + ((m - k) * log(p0) + ((N - n) - (m + k)) * log(1 - p0))) - ((k * log(p) + (n - k) * log(1 - p)) + ((m - k) * log(p) + ((N - n) - (m + k)) * log(1 - p)))))
 
 network:
   - id: "network_reverse"
@@ -179,6 +179,8 @@ network:
       NetworkVolume(n, sum(v)) :- RegionVolume(r, v) & NetworkRegion(n, r)
       NetworkReportedVolume(n, s, sum(v)) :- NetworkRegion(n, region) & RegionReported(region, s) & RegionVolume(region, v)
       NetworkReported(n, s) :: (nrv / nv) :- NetworkVolume(n, nv) & NetworkReportedVolume(n, s, nrv)
-      StudyMatchingNetworkSegregationQuery(s, n) :- NetworkReported(n, s) & ~exists(n2; Network(n2) & (n2 != n) & NetworkReported(n2, s))
-      Query(topic, n, PROB(topic, n)) :- TopicAssociation(topic, s) // (StudyMatchingNetworkSegregationQuery(s, n) & SelectedStudy(s))
+      NetworkNotReported(n, s) :: (1 - (nrv / nv)) :- NetworkVolume(n, nv) & NetworkReportedVolume(n, s, nrv)
+      NetworkTriplet(n1, n2, n3) :- Network(n1) & Network(n2) & Network(n3) & (n1 != n2) & (n1 != n3) & (n2 < n3)
+      StudyMatchingNetworkSegregationQuery(s, n) :- NetworkTriplet(n, n2, n3) & NetworkReported(n, s) & NetworkNotReported(n2, s) & NetworkNotReported(n3, s)
+      Query(topic, n, PROB(topic, n)) :- (TopicAssociation(topic, s)) // (StudyMatchingNetworkSegregationQuery(s, n) & SelectedStudy(s))
 
