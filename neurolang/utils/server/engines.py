@@ -354,10 +354,6 @@ def init_frontend(mni_mask):
             main_dir = c[sort_dir[-1]]
         return (direction == main_dir) or (direction[::-1] == main_dir)
 
-    @nl.add_symbol
-    def agg_count(*iterables) -> int:
-        return len(next(iter(iterables)))
-
     return nl
 
 
