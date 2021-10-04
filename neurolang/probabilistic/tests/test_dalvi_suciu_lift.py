@@ -1,4 +1,4 @@
-from operator import eq
+from operator import eq, ne
 from typing import AbstractSet
 
 import pytest
@@ -856,5 +856,51 @@ def test_interaction_deterministic_probfact_probchoice_safe():
             Conjunction((Det(x, y), Pchoice(y), Pfact(x))),
         )
     )
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+def test_negated_existential_segregation_query():
+    NetworkReported = Symbol("NetworkReported")
+    ans = Symbol("ans")
+    n = Symbol("n")
+    n2 = Symbol("n2")
+    s = Symbol("s")
+    not_equal = Constant(ne)
+    query = Implication(
+        ans(n, s),
+        Conjunction(
+            (
+                NetworkReported(n, s),
+                Negation(
+                    ExistentialPredicate(
+                        n2,
+                        Conjunction(
+                            (
+                                NetworkReported(n2, s),
+                                not_equal(n2, n),
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
+    symbol_table = {
+        NetworkReported: ProbabilisticFactSet(
+            NamedRelationalAlgebraFrozenSet(
+                iterable=[
+                    (0.1, "A", "s1"),
+                    (0.2, "B", "s1"),
+                    (0.7, "C", "s1"),
+                    (0.8, "A", "s2"),
+                    (0.3, "B", "s2"),
+                    (0.4, "C", "s2"),
+                ],
+                columns=("_p_", "n", "s"),
+            ),
+            Constant(ColumnStr("_p_")),
+        )
+    }
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
     assert dalvi_suciu_lift.is_pure_lifted_plan(plan)

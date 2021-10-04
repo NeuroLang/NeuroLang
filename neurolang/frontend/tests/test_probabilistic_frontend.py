@@ -9,9 +9,9 @@ import pytest
 from ...exceptions import (
     NegativeFormulaNotNamedRelationException,
     NegativeFormulaNotSafeRangeException,
+    NeuroLangException,
     UnsupportedProgramError,
     UnsupportedQueryError,
-    NeuroLangException,
 )
 from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
@@ -1346,5 +1346,40 @@ def test_pchoice_with_both_eqvar_and_free_var():
     expected = {
         ("a", 0.7 * 0.2 + 0.2 * 1.0),
         ("b", 0.1 * 0.2),
+    }
+    assert_almost_equal(result, expected)
+
+
+def test_segregation_query():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (1 / 3, "s1"),
+            (1 / 3, "s2"),
+            (1 / 3, "s3"),
+        ],
+        name="SelectedStudy",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.1, "A", "s1"),
+            (0.2, "B", "s1"),
+            (0.7, "C", "s1"),
+            (0.8, "A", "s2"),
+            (0.3, "B", "s2"),
+            (0.4, "C", "s2"),
+        ],
+        name="NetworkReported",
+    )
+    with nl.scope as e:
+        e.SegQuery[e.n, e.s] = e.NetworkReported(e.n, e.s) & ~nl.exists(
+            e.n2, (e.n2 != e.n) & e.NetworkReported(e.n2, e.s)
+        )
+        e.Query[e.n, e.PROB(e.n)] = e.SegQuery(e.n, e.s) & e.SelectedStudy(e.s)
+        result = nl.query((e.n, e.prob), e.Query(e.n, e.prob))
+    expected = {
+        ("A", 0.1 * 0.8 * 0.3),
+        ("B", 0.2 * 0.9 * 0.3),
+        ("C", 0.7 * 0.9 * 0.8),
     }
     assert_almost_equal(result, expected)
