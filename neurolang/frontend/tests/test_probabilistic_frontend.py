@@ -1371,9 +1371,30 @@ def test_segregation_query():
         ],
         name="NetworkReported",
     )
+    nl.add_tuple_set(
+        [
+            ("A",),
+            ("B",),
+            ("C",),
+        ],
+        name="Network",
+    )
+    nl.add_tuple_set(
+        [
+            ("s1",),
+            ("s2",),
+            ("s3",),
+        ],
+        name="Study",
+    )
     with nl.scope as e:
         e.SegQuery[e.n, e.s] = e.NetworkReported(e.n, e.s) & ~nl.exists(
-            e.n2, (e.n2 != e.n) & e.NetworkReported(e.n2, e.s)
+            e.n2,
+            e.Network(e.n)
+            & e.Network(e.n2)
+            & e.Study(e.s)
+            & (e.n2 != e.n)
+            & e.NetworkReported(e.n2, e.s),
         )
         e.Query[e.n, e.PROB(e.n)] = e.SegQuery(e.n, e.s) & e.SelectedStudy(e.s)
         result = nl.query((e.n, e.prob), e.Query(e.n, e.prob))
