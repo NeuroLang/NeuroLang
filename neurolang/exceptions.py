@@ -369,5 +369,5 @@ class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
         self.formula = formula
 
 
-class NonLiftableException(NeuroLangException):
+class NonLiftableException(UnsupportedSolverError):
     pass
