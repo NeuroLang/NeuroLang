@@ -1,3 +1,4 @@
+from typing import Tuple
 import pytest
 
 from ..relational_algebra_set import (
@@ -1135,8 +1136,8 @@ def test_replace_null(ra_module):
 
 def test_explode(ra_module):
     data = [
-        (5, frozenset({(1, 2), (5, 6)}), "dog"),
-        (10, frozenset({(5, 6), (8, 9)}), "cat"),
+        (5, frozenset({1, 2, 5, 6}), "dog"),
+        (10, frozenset({5, 9}), "cat"),
     ]
     relation = ra_module.NamedRelationalAlgebraFrozenSet(
         columns=["x", "y", "z"],
@@ -1146,13 +1147,19 @@ def test_explode(ra_module):
     expected = ra_module.NamedRelationalAlgebraFrozenSet(
         columns=["x", "y", "z"],
         iterable=[
-            (5, (1, 2), "dog"),
-            (5, (5, 6), "dog"),
-            (10, (5, 6), "cat"),
-            (10, (8, 9), "cat"),
+            (5, 1, "dog"),
+            (5, 2, "dog"),
+            (5, 5, "dog"),
+            (5, 6, "dog"),
+            (10, 5, "cat"),
+            (10, 9, "cat"),
         ],
     )
-    assert relation.explode("y") == expected
+    result = relation.explode("y")
+    print(result)
+    assert result == expected
+    if hasattr(result, "set_row_type"):
+        assert result.set_row_type == Tuple[int, int, str]
 
 
 def test_aggregate_repeated_group_column(ra_module):

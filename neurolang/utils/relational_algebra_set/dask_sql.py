@@ -1,3 +1,4 @@
+from typing_extensions import get_origin
 from .dask_helpers import (
     DaskContextManager,
     convert_type_to_pandas_dtype,
@@ -10,12 +11,10 @@ import logging
 import re
 import types
 import uuid
-from collections.abc import Iterable
-from typing import Tuple
+from typing import Tuple, Iterable
 
 import dask.dataframe as dd
 import numpy as np
-from neurolang.type_system import Unknown, get_args, infer_type
 from sqlalchemy import (
     and_,
     column,
@@ -30,6 +29,7 @@ from sqlalchemy.sql import FromClause, except_, intersect, table, union
 import pandas as pd
 
 from ...config import config
+from ...type_system import Unknown, get_args, infer_type, is_parameterized
 from . import abstract as abc
 
 LOG = logging.getLogger(__name__)
@@ -816,23 +816,77 @@ class NamedRelationalAlgebraFrozenSet(
             query, row_types=self.row_types
         )
 
-    def explode(self, src_column):
+    def explode(self, src_column: str):
+        """
+        Transform each element of a list-like column to a row.
+        
+        Since explode is not a standard SQL statement but is an operation
+        implemented on dask dataframes, this relational algebra operation
+        evaluates the dask container for the set on which it is applied, and
+        then calls the `explode` method on it.
+
+        Parameters
+        ----------
+        src_column : str
+            The column to explode
+
+        Returns
+        -------
+        NamedRelationalAlgebraFrozenSet
+            The set with exploded column
+        
+        Examples
+        --------
+        >>> ras = NamedRelationalAlgebraFrozenSet(
+        ...        columns=("x", "y", "z"),
+        ...        iterable=[
+        ...            (5, frozenset({1, 2, 5, 6}), "foo"),
+        ...            (10, frozenset({5, 9}), "bar"),
+        ...        ])
+        >>> ras.explode('y')
+            x  y    z
+        0   5  1  foo
+        1   5  2  foo
+        2   5  5  foo
+        3   5  6  foo
+        4  10  9  bar
+        5  10  5  bar
+        """
+        if self.is_dum() or self.is_dee():
+            return self
+
         if self._table is None:
             return type(self)(columns=self.columns, iterable=[])
 
-        sql_dst_column = column(src_column)
-        columns = [
-            c if c != self.sql_columns.get(src_column) else sql_dst_column for c in self.sql_columns 
-        ]
+        q = select(self._table)
+        ddf = DaskContextManager.sql(q)
+        exploded_ddf = ddf.explode(src_column)
 
-        query = (
-            select(columns)
-            .select_from(self._table).select_from(func.unnest(self.sql_columns.get(src_column)).alias(src_column))
-        )
-
-        return self._create_view_from_query(
-            query, row_types=self.row_types
-        )
+        output = type(self)(columns=self.columns)
+        output._is_empty = self._is_empty
+        output._count = None
+        col_type = self.row_types[src_column]
+        if (
+            is_parameterized(col_type)
+            and issubclass(get_origin(col_type), Iterable)
+            and len(get_args(col_type)) == 1
+        ):
+            col_type = get_args(col_type)[0]
+            if col_type != Unknown:
+                try:
+                    exploded_ddf[src_column] = exploded_ddf[src_column].astype(
+                        col_type
+                    )
+                except TypeError:
+                    LOG.warn(
+                        f"Unable to cast exploded column to type {col_type}"
+                    )
+        else:
+            col_type = Unknown
+        output.row_types = self.row_types.copy()
+        output.row_types[src_column] = col_type
+        output._set_container(exploded_ddf, persist=True, prefix="table_as_")
+        return output
 
     def equijoin(self, other, join_indices):
         raise NotImplementedError()
