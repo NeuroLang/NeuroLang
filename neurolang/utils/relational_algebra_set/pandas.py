@@ -632,6 +632,17 @@ class NamedRelationalAlgebraFrozenSet(
             columns=self.columns,
         )
 
+    def explode(self, src_column):
+        if self._container is None:
+            return self.copy()
+        
+        new_container = self._container.explode(src_column, ignore_index=True)
+        return self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=True,
+            columns=self.columns,
+        )
+
     def cross_product(self, other):
         res = self._dee_dum_product(other)
         if res is not None:

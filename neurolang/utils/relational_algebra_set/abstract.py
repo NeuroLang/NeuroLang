@@ -186,6 +186,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         pass
 
     @abstractmethod
+    def explode(self, src_column):
+        pass
+
+    @abstractmethod
     def __iter__(self):
         pass
 

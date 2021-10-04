@@ -1133,6 +1133,28 @@ def test_replace_null(ra_module):
     assert relation.replace_null("y", -1) == expected
 
 
+def test_explode(ra_module):
+    data = [
+        (5, frozenset({(1, 2), (5, 6)}), "dog"),
+        (10, frozenset({(5, 6), (8, 9)}), "cat"),
+    ]
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y", "z"],
+        iterable=data,
+    )
+
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y", "z"],
+        iterable=[
+            (5, (1, 2), "dog"),
+            (5, (5, 6), "dog"),
+            (10, (5, 6), "cat"),
+            (10, (8, 9), "cat"),
+        ],
+    )
+    assert relation.explode("y") == expected
+
+
 def test_aggregate_repeated_group_column(ra_module):
     relation = ra_module.NamedRelationalAlgebraFrozenSet(
         columns=["x", "y"],

@@ -816,6 +816,24 @@ class NamedRelationalAlgebraFrozenSet(
             query, row_types=self.row_types
         )
 
+    def explode(self, src_column):
+        if self._table is None:
+            return type(self)(columns=self.columns, iterable=[])
+
+        sql_dst_column = column(src_column)
+        columns = [
+            c if c != self.sql_columns.get(src_column) else sql_dst_column for c in self.sql_columns 
+        ]
+
+        query = (
+            select(columns)
+            .select_from(self._table).select_from(func.unnest(self.sql_columns.get(src_column)).alias(src_column))
+        )
+
+        return self._create_view_from_query(
+            query, row_types=self.row_types
+        )
+
     def equijoin(self, other, join_indices):
         raise NotImplementedError()
 
