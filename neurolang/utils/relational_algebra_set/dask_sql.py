@@ -11,9 +11,10 @@ import logging
 import re
 import types
 import uuid
-from typing import Tuple, Iterable
+from typing import Tuple, Iterable, Union
 
 import dask.dataframe as dd
+import dask.array as da
 import numpy as np
 from sqlalchemy import (
     and_,
@@ -816,10 +817,10 @@ class NamedRelationalAlgebraFrozenSet(
             query, row_types=self.row_types
         )
 
-    def explode(self, src_column: str):
+    def explode(self, src_column: str, dst_columns: Union[str, Tuple[str]]):
         """
         Transform each element of a list-like column to a row.
-        
+
         Since explode is not a standard SQL statement but is an operation
         implemented on dask dataframes, this relational algebra operation
         evaluates the dask container for the set on which it is applied, and
@@ -829,12 +830,14 @@ class NamedRelationalAlgebraFrozenSet(
         ----------
         src_column : str
             The column to explode
+        dst_columns: Union[str, Tuple[str]]
+            The destination columns
 
         Returns
         -------
         NamedRelationalAlgebraFrozenSet
             The set with exploded column
-        
+
         Examples
         --------
         >>> ras = NamedRelationalAlgebraFrozenSet(
@@ -860,12 +863,30 @@ class NamedRelationalAlgebraFrozenSet(
 
         q = select(self._table)
         ddf = DaskContextManager.sql(q)
-        exploded_ddf = ddf.explode(src_column)
 
-        output = type(self)(columns=self.columns)
-        output._is_empty = self._is_empty
-        output._count = None
-        col_type = self.row_types[src_column]
+        if dst_columns == src_column:
+            # 1. replace original column by exploded one
+            new_ddf = ddf.explode(src_column)
+            new_columns = self.columns
+            col_type = self.row_types[src_column]
+        elif not isinstance(dst_columns, tuple):
+            # 2. add new column with exploded values
+            new_ddf = ddf.assign(**{dst_columns: ddf[src_column]}).explode(
+                dst_columns
+            )
+            new_columns = self.columns + (dst_columns,)
+            col_type = self.row_types[src_column]
+        else:
+            # 3. explode values into multiple columns
+            new_ddf = ddf.assign(**{dst_columns[-1]: ddf[src_column]}).explode(
+                dst_columns[-1]
+            )
+            for c, v in zip(dst_columns, zip(*new_ddf[dst_columns[-1]])):
+                new_ddf[c] = da.from_array(v)
+            new_columns = self.columns + dst_columns
+            new_ddf = new_ddf[list(new_columns)]
+            col_type = None
+
         if (
             is_parameterized(col_type)
             and issubclass(get_origin(col_type), Iterable)
@@ -874,18 +895,14 @@ class NamedRelationalAlgebraFrozenSet(
             col_type = get_args(col_type)[0]
             if col_type != Unknown:
                 try:
-                    exploded_ddf[src_column] = exploded_ddf[src_column].astype(
+                    new_ddf[dst_columns] = new_ddf[dst_columns].astype(
                         col_type
                     )
                 except TypeError:
                     LOG.warn(
                         f"Unable to cast exploded column to type {col_type}"
                     )
-        else:
-            col_type = Unknown
-        output.row_types = self.row_types.copy()
-        output.row_types[src_column] = col_type
-        output._set_container(exploded_ddf, persist=True, prefix="table_as_")
+        output = type(self)(columns=new_columns, iterable=new_ddf.compute())
         return output
 
     def equijoin(self, other, join_indices):
