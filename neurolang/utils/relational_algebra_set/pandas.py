@@ -659,7 +659,7 @@ class NamedRelationalAlgebraFrozenSet(
             new_container = new_container[list(new_columns)]
 
         return self._light_init_same_structure(
-            new_container,
+            new_container.convert_dtypes(),
             might_have_duplicates=True,
             columns=new_columns,
         )
