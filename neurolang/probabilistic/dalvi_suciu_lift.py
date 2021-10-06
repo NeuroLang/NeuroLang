@@ -13,6 +13,7 @@ from ..datalog.expression_processing import (
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NeuroLangException, NonLiftableException
 from ..expression_walker import (
+    ChainedWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match
@@ -39,7 +40,12 @@ from ..logic.expression_processing import (
     extract_logic_predicates
 )
 from ..logic.transformations import (
+    GuaranteeConjunction,
+    GuaranteeDisjunction,
+    ExtractConjunctiveQueryWithNegation,
     MakeExistentialsImplicit,
+    MoveNegationsToAtomsInFONegE,
+    PushExistentialsDown,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
     convert_to_pnf_with_dnf_matrix
@@ -76,6 +82,10 @@ from .shattering import shatter_easy_probfacts
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
+    convert_to_cnf_ucq,
+    convert_to_dnf_ucq,
+    minimize_component_conjunction,
+    minimize_component_disjunction,
     convert_to_dnf_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
@@ -92,6 +102,7 @@ __all__ = [
 ]
 
 RTO = RemoveTrivialOperations()
+PED = PushExistentialsDown()
 
 
 class ExtendedRAPToRAWalker(
@@ -168,7 +179,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         solver_class=ExtendedRAPToRAWalker
     )
 
-    with log_performance(LOG, "Run RAP query %s", init_args=(repr(ra_query),)):
+    with log_performance(LOG, "Run RAP query %s", init_args=(ra_query,)):
         prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
@@ -224,9 +235,8 @@ def solve_marg_query(rule, cpl):
 def dalvi_suciu_lift(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
-    to a safe plan according to [1]_. Non-liftable segments are identified
+    to a safe plan according to [1]. Non-liftable segments are identified
     by the `NonLiftable` expression.
-
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
@@ -247,31 +257,261 @@ def dalvi_suciu_lift(rule, symbol_table):
         proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
         return rap.Projection(result, proj_cols)
 
-    rule_cnf = minimize_ucq_in_cnf(rule)
+    rule_cnf = convert_ucq_to_ccq(rule, transformation='CNF')
     connected_components = symbol_connected_components(rule_cnf)
-    if len(connected_components) > 1:
+    if len(connected_components) > 1 :
         return components_plan(
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
         )
-    elif len(rule_cnf.formulas) > 1:
-        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
-    rule_dnf = minimize_ucq_in_dnf(rule)
+    rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
-        return components_plan(connected_components, rap.Union, symbol_table)
-    else:
-        has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
-        if has_svs:
-            return plan
-        else:
-            has_safe_plan, plan = disjoint_project(rule_dnf, symbol_table)
-            if has_safe_plan:
-                return plan
+        return components_plan(
+            connected_components, rap.Union, symbol_table
+        )
+
+    has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
+    if has_svs:
+        return plan
+
+    has_safe_plan, plan = disjoint_project(rule_dnf, symbol_table)
+    if has_safe_plan:
+        return plan
+
+    if len(rule_cnf.formulas) > 1:
+        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule)
 
+
+def convert_ucq_to_ccq(rule, transformation='CNF'):
+    """Given a UCQ expression, this function transforms it into a connected
+    component expression following the definition provided by Dalvi Suciu[1]
+    in section 2.6 Special Query Expressions. The transformation can be
+    parameterized to apply a CNF or DNF transformation, as needed.
+
+    [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
+    for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
+
+    Parameters
+    ----------
+    rule : Definition
+        UCQ expression
+
+    Returns
+    -------
+    NAryLogicOperation
+        Transformation of the initial expression
+        in a connected component query.
+    """
+    rule = PED.walk(rule)
+    free_vars = extract_logic_free_variables(rule)
+    existential_vars = set()
+    for atom in extract_logic_atoms(rule):
+        existential_vars.update(set(atom.args) - set(free_vars))
+
+    conjunctions = ExtractConjunctiveQueryWithNegation().walk(rule)
+    dic_components = extract_connected_components(conjunctions, existential_vars)
+
+    fresh_symbols_expression = ReplaceExpressionWalker(dic_components).walk(rule)
+    if transformation == 'CNF':
+        fresh_symbols_expression = convert_to_cnf_ucq(fresh_symbols_expression)
+        minimize = minimize_ucq_in_cnf
+        GCD = GuaranteeConjunction()
+    elif transformation == 'DNF':
+        fresh_symbols_expression = convert_to_dnf_ucq(fresh_symbols_expression)
+        minimize = minimize_ucq_in_dnf
+        GCD = GuaranteeDisjunction()
+    else:
+        raise ValueError(f'Invalid transformation type: {transformation}')
+
+    final_expression = ReplaceExpressionWalker(
+        {v: k for k, v in dic_components.items()}
+    ).walk(fresh_symbols_expression)
+    final_expression = minimize(final_expression)
+
+    return GCD.walk(final_expression)
+
+def extract_connected_components(list_of_conjunctions, existential_vars):
+    """Given a list of conjunctions, this function is in charge of calculating
+    the connected components of each one. As a result, it returns a dictionary
+    with the necessary transformations so that these conjunctions are replaced
+    by symbols that preserve their free variables.
+
+    Parameters
+    ----------
+    list_of_conjunctions : list
+        List of conjunctions for which we want to
+        calculate the connected components
+
+    existential_vars : set
+        Set of variables associated with existentials
+        in the expressions that compose the list of conjunctions.
+
+    Returns
+    -------
+    dict
+        Dictionary of transformations where the keys are the expressions that
+        compose the list of conjunctions and the values are the components
+        by which they must be replaced
+    """
+    transformations = {}
+    for f in list_of_conjunctions:
+        c_matrix = args_co_occurence_graph(f, existential_vars)
+        components = connected_components(c_matrix)
+
+        if isinstance(f, ExistentialPredicate):
+            transformations[f] = calc_new_fresh_symbol(f, existential_vars)
+            continue
+
+        for c in components:
+            form = [f.formulas[i] for i in c]
+            if len(form) > 1:
+                form = Conjunction(form)
+                transformations[form] = calc_new_fresh_symbol(form, existential_vars)
+            else:
+                conj = Conjunction(form)
+                transformations[form[0]] = calc_new_fresh_symbol(conj, existential_vars)
+
+    return transformations
+
+def calc_new_fresh_symbol(formula, existential_vars):
+    """Given a formula and a list of variables, this function creates a new
+    symbol containing only the unbound variables of the formula.
+
+    Parameters
+    ----------
+    formula : Definition
+        Formula to be transformed.
+
+    existential_vars : set
+        Set of variables associated with existentials.
+
+    Returns
+    -------
+    Symbol
+        New symbol containing only the unbound variables of the formula.
+
+    """
+    cvars = extract_logic_free_variables(formula) - existential_vars
+
+    fresh_symbol = Symbol.fresh()
+    new_symbol = fresh_symbol(tuple(cvars))
+
+    return new_symbol
+
+
+def symbol_connected_components(expression):
+    if not isinstance(expression, NaryLogicOperator):
+        raise ValueError(
+            "Connected components can only be computed "
+            "for n-ary logic operators."
+        )
+    c_matrix = symbol_co_occurence_graph(expression)
+    components = connected_components(c_matrix)
+
+    operation = type(expression)
+    return [
+        operation(tuple(expression.formulas[i] for i in component))
+        for component in components
+    ]
+
+
+def symbol_co_occurence_graph(expression):
+    """Symbol co-ocurrence graph expressed as
+    an adjacency matrix.
+
+    Parameters
+    ----------
+    expression : NAryLogicExpression
+        logic expression for which the adjacency matrix is computed.
+
+    Returns
+    -------
+    numpy.ndarray
+        squared binary array where a component is 1 if there is a
+        shared predicate symbol between two subformulas of the
+        logic expression.
+    """
+    c_matrix = np.zeros((len(expression.formulas),) * 2)
+    for i, formula in enumerate(expression.formulas):
+        atom_symbols = set(a.functor for a in extract_logic_atoms(formula))
+        for j, formula_ in enumerate(expression.formulas[i + 1:]):
+            atom_symbols_ = set(
+                a.functor for a in extract_logic_atoms(formula_)
+            )
+            if not atom_symbols.isdisjoint(atom_symbols_):
+                c_matrix[i, i + 1 + j] = 1
+                c_matrix[i + 1 + j, i] = 1
+    return c_matrix
+
+
+def args_co_occurence_graph(expression, variable_to_use=None):
+    """Arguments co-ocurrence graph expressed as
+    an adjacency matrix.
+
+    Parameters
+    ----------
+    expression : LogicOperator
+        logic expression for which the adjacency matrix is computed.
+
+    Returns
+    -------
+    numpy.ndarray
+        squared binary array where a component is 1 if there is a
+        shared argument between two formulas of the
+        logic expression.
+    """
+
+    if isinstance(expression, ExistentialPredicate):
+        return np.ones((1,))
+
+    c_matrix = np.zeros((len(expression.formulas),) * 2)
+    for i, formula in enumerate(expression.formulas):
+        f_args = set(b for a in extract_logic_atoms(formula) for b in a.args)
+        if variable_to_use is not None:
+            f_args &= variable_to_use
+        for j, formula_ in enumerate(expression.formulas[i + 1:]):
+            f_args_ = set(b for a in extract_logic_atoms(formula_) for b in a.args)
+            if variable_to_use is not None:
+                f_args_ &= variable_to_use
+            if not f_args.isdisjoint(f_args_):
+                c_matrix[i, i + 1 + j] = 1
+                c_matrix[i + 1 + j, i] = 1
+
+    return c_matrix
+
+
+def connected_components(adjacency_matrix):
+    """Connected components of an undirected graph.
+
+    Parameters
+    ----------
+    adjacency_matrix : numpy.ndarray
+        squared array representing the adjacency
+        matrix of an undirected graph.
+
+    Returns
+    -------
+    list of integer sets
+        connected components of the graph.
+    """
+    node_idxs = set(range(adjacency_matrix.shape[0]))
+    components = []
+    while node_idxs:
+        idx = node_idxs.pop()
+        component = {idx}
+        component_follow = [idx]
+        while component_follow:
+            idx = component_follow.pop()
+            idxs = set(adjacency_matrix[idx].nonzero()[0]) - component
+            component |= idxs
+            component_follow += idxs
+        components.append(component)
+        node_idxs -= component
+    return components
 
 def disjoint_project(rule_dnf, symbol_table):
     """
@@ -626,81 +866,6 @@ def separator_variable_plan(expression, separator_variables, symbol_table):
             for v in variables_to_project
         )
     )
-
-
-def symbol_connected_components(expression):
-    if not isinstance(expression, NaryLogicOperator):
-        raise ValueError(
-            "Connected components can only be computed "
-            "for n-ary logic operators."
-        )
-    c_matrix = symbol_co_occurence_graph(expression)
-    components = connected_components(c_matrix)
-
-    operation = type(expression)
-    return [
-        operation(tuple(expression.formulas[i] for i in component))
-        for component in components
-    ]
-
-
-def connected_components(adjacency_matrix):
-    """Connected components of an undirected graph.
-
-    Parameters
-    ----------
-    adjacency_matrix : numpy.ndarray
-        squared array representing the adjacency
-        matrix of an undirected graph.
-
-    Returns
-    -------
-    list of integer sets
-        connected components of the graph.
-    """
-    node_idxs = set(range(adjacency_matrix.shape[0]))
-    components = []
-    while node_idxs:
-        idx = node_idxs.pop()
-        component = {idx}
-        component_follow = [idx]
-        while component_follow:
-            idx = component_follow.pop()
-            idxs = set(adjacency_matrix[idx].nonzero()[0]) - component
-            component |= idxs
-            component_follow += idxs
-        components.append(component)
-        node_idxs -= component
-    return components
-
-
-def symbol_co_occurence_graph(expression):
-    """Symbol co-ocurrence graph expressed as
-    an adjacency matrix.
-
-    Parameters
-    ----------
-    expression : NAryLogicExpression
-        logic expression for which the adjacency matrix is computed.
-
-    Returns
-    -------
-    numpy.ndarray
-        squared binary array where a component is 1 if there is a
-        shared predicate symbol between two subformulas of the
-        logic expression.
-    """
-    c_matrix = np.zeros((len(expression.formulas),) * 2)
-    for i, formula in enumerate(expression.formulas):
-        atom_symbols = set(a.functor for a in extract_logic_atoms(formula))
-        for j, formula_ in enumerate(expression.formulas[i + 1:]):
-            atom_symbols_ = set(
-                a.functor for a in extract_logic_atoms(formula_)
-            )
-            if not atom_symbols.isdisjoint(atom_symbols_):
-                c_matrix[i, i + 1 + j] = 1
-                c_matrix[i + 1 + j, i] = 1
-    return c_matrix
 
 
 def variable_co_occurrence_graph(expression):

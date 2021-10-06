@@ -1,3 +1,4 @@
+import math
 import operator
 
 from .exceptions import RelationalAlgebraError
@@ -26,7 +27,6 @@ from .relational_algebra import (
     Projection,
     RelationalAlgebraOperation,
     RelationalAlgebraSolver,
-    RelationalAlgebraStringExpression,
     RenameColumn,
     RenameColumns,
     ReplaceNull,
@@ -43,6 +43,9 @@ ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
 SUB = Constant(operator.sub)
 SUM = Constant(sum)
+EXP = Constant(math.exp)
+LOG = Constant(math.log)
+ONE = Constant[float](1.)
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -223,11 +226,7 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         ]
         proj_list.append(
             FunctionApplicationListMember(
-                Constant(
-                    RelationalAlgebraStringExpression(
-                        "log(1 - {})".format(prov_col.value)
-                    )
-                ),
+                LOG(ONE - prov_col),
                 prov_col,
             )
         )
@@ -248,12 +247,8 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         ]
         proj_list.append(
             FunctionApplicationListMember(
-                Constant(
-                    RelationalAlgebraStringExpression(
-                        "1 - exp({})".format(prov_col.value)
-                    )
-                ),
-                prov_col,
+               ONE - EXP(prov_col),
+               prov_col,
             )
         )
         relation = ExtendedProjection(relation, proj_list)

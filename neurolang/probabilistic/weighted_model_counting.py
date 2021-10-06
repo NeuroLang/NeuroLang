@@ -33,7 +33,7 @@ from ..relational_algebra import (
     FunctionApplicationListMember,
     NameColumns,
     Projection,
-    RelationalAlgebraPushInSelections,
+    PushInSelections,
     RelationalAlgebraStringExpression,
     str2columnstr_constant
 )
@@ -574,7 +574,7 @@ def generate_weights(symbol_probs, literals_to_symbols, extras=0):
 
 
 class RAQueryOptimiser(
-    RelationalAlgebraPushInSelections,
+    PushInSelections,
     ExpressionWalker
 ):
     pass

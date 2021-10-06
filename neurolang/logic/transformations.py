@@ -1,3 +1,4 @@
+from ..utils.orderedset import OrderedSet
 from ..exceptions import NotInFONegE
 from ..expression_walker import (
     ChainedWalker,
@@ -9,6 +10,7 @@ from ..expression_walker import (
 )
 from ..logic.expression_processing import (
     ExtractFreeVariablesWalker,
+    WalkLogicProgramAggregatingSets,
     extract_logic_free_variables
 )
 from . import (
@@ -567,7 +569,19 @@ class RemoveTrivialOperations(LogicExpressionWalker):
         return self.walk(expression.formula.formula)
 
 
-class PushExistentialsDown(LogicExpressionWalker):
+class PushExistentialsDown(
+    CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
+    LogicExpressionWalker
+):
+    @add_match(
+        ExistentialPredicate(..., NaryLogicOperator),
+        lambda e: len(e.body.formulas) == 1
+    )
+    def push_eliminate_trivial_operation(self, expression):
+        return self.walk(
+            ExistentialPredicate(expression.head, expression.body.formulas[0])
+        )
+
     @add_match(ExistentialPredicate(..., Disjunction))
     def push_existential_down_disjunction(self, expression):
         variable = expression.head
@@ -640,10 +654,11 @@ class PushExistentialsDown(LogicExpressionWalker):
             res = self.walk(Conjunction(out_))
         if len(in_) > 0 and len(out_) > 0:
             res = self.walk(
-                Conjunction((
-                    ExistentialPredicate(variable, Conjunction(in_)),
-                    Conjunction(out_)
-                ))
+                Conjunction(
+                    (
+                        ExistentialPredicate(variable, Conjunction(in_)),
+                    ) + out_
+                )
             )
         return res
 
@@ -704,3 +719,69 @@ class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
         nary_op: NaryLogicOperator,
     ) -> NaryLogicOperator:
         return nary_op.apply(tuple(set(nary_op.formulas)))
+
+class CheckConjunctiveQueryWithNegation(LogicExpressionWalker):
+    @add_match(Conjunction)
+    def conjunction(self, expression):
+        for f in expression.formulas:
+            if isinstance(f, Conjunction) or not self.walk(f):
+                return False
+
+        return True
+
+    @add_match(FunctionApplication)
+    def f_app(self, expression):
+        return True
+
+    @add_match(Quantifier)
+    def existential_predicate(self, expression):
+        if isinstance(expression.body, Conjunction):
+            return False
+
+        return self.walk(expression.body)
+
+    @add_match(Negation(FunctionApplication))
+    def negation(self, expression):
+        return True
+
+    @add_match(...)
+    def default(self, expression):
+        return False
+
+
+class ExtractConjunctiveQueryWithNegation(WalkLogicProgramAggregatingSets):
+    @add_match(Conjunction, CheckConjunctiveQueryWithNegation().walk)
+    def pure_conjunction(self, expression):
+        return OrderedSet([expression])
+
+    @add_match(NaryLogicOperator)
+    def conjunction(self, expression):
+        conjunctions = OrderedSet([])
+        for f in expression.formulas:
+            conjunctions |= self.walk(f)
+
+        return conjunctions
+
+    @add_match(Quantifier)
+    def existential_predicate(self, expression):
+        body = self.walk(expression.body)
+        if body:
+            return OrderedSet([expression])
+
+        return OrderedSet([])
+
+    @add_match(FunctionApplication)
+    def f_app(self, expression):
+        return OrderedSet([])
+
+    @add_match(Negation)
+    def neg(self, expression):
+        return self.walk(expression.formula)
+
+
+class RemoveExistentialPredicates(LogicExpressionWalker):
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, existential_predicate):
+        return self.walk(existential_predicate.body)
+
+

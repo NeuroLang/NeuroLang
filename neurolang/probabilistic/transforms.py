@@ -100,7 +100,6 @@ def minimize_ucq_in_dnf(query):
     cq_min = add_existentials_except(cq_min, head_variables)
     return simplify.walk(cq_min)
 
-
 def convert_rule_to_ucq(implication):
     """Convert datalog rule to logic UCQ.
     A UCQ is defined by a logic expression in
