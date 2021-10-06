@@ -866,7 +866,7 @@ def test_solve_marg_query_disjunction():
             ) // e.practice[e.p, e.sport]
 
 
-def test_query_without_safe_plan():
+def test_query_without_safe_plan_in_dalvi_suciu():
     nl = NeurolangPDL()
     nl.add_probabilistic_facts_from_tuples(
         [
@@ -879,8 +879,16 @@ def test_query_without_safe_plan():
     with nl.environment as e:
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
 
-    with pytest.raises(dalvi_suciu_lift.NonLiftableException):
-        nl.solve_all()
+        res = nl.solve_all()
+    expected = RelationalAlgebraFrozenSet(
+        [
+            ("alice", "alice", 0.2),
+            ("bob", "alice", 0.16),
+            ("alice", "bob", 0.16),
+            ("bob", "bob", 0.8),
+        ]
+    )
+    assert_almost_equal(res['q'], expected)
 
 
 def test_query_without_safe_fails():
