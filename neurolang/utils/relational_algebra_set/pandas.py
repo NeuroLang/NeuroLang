@@ -189,6 +189,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         new_container.columns = pd.RangeIndex(len(columns))
         output = self._empty_set_same_structure()
         output._container = new_container
+        if (len(columns) == self.arity):
+            output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def selection(
@@ -231,6 +233,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         output = self._empty_set_same_structure()
         output._container = new_container
+        output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def _selection_dict(self, select_criteria):
@@ -289,6 +292,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         new_container = self._container[ix]
         output = self._empty_set_same_structure()
         output._container = new_container
+        output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def equijoin(self, other, join_indices):
@@ -626,6 +630,38 @@ class NamedRelationalAlgebraFrozenSet(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
             columns=self.columns,
+        )
+
+    def explode(self, src_column, dst_columns):
+        if self._container is None:
+            return self.copy()
+
+        if dst_columns == src_column:
+            # 1. replace original column by exploded one
+            new_container = self._container.explode(
+                src_column, ignore_index=True
+            )
+            new_columns = self.columns
+        elif not isinstance(dst_columns, tuple):
+            # 2. add new column with exploded values
+            new_container = self._container.assign(
+                **{dst_columns: self._container[src_column]}
+            ).explode(dst_columns, ignore_index=True)
+            new_columns = self.columns + (dst_columns,)
+        else:
+            # 3. explode values into multiple columns
+            new_container = self._container.assign(
+                **{dst_columns[-1]: self._container[src_column]}
+            ).explode(dst_columns[-1], ignore_index=True)
+            for c, v in zip(dst_columns, zip(*new_container[dst_columns[-1]])):
+                new_container[c] = v
+            new_columns = self.columns + dst_columns
+            new_container = new_container[list(new_columns)]
+
+        return self._light_init_same_structure(
+            new_container.convert_dtypes(),
+            might_have_duplicates=True,
+            columns=new_columns,
         )
 
     def cross_product(self, other):

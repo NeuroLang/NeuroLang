@@ -538,6 +538,8 @@ OPERATOR_STRING = {
     operator.ge: ">=",
     operator.le: "<=",
     operator.pow: "**",
+    operator.and_: "and",
+    operator.or_: "or"
 }
 
 
@@ -566,6 +568,9 @@ def _get_evaluatable_operations_and_string_translations():
         "arcsinh": "asinh",
         "arccosh": "acosh",
         "arctanh": "atanh",
+        "exp": "exp",
+        "log": "log",
+        "log10": "log10"
     }
     for op_name in pandas.core.computation.ops._unary_math_ops:
         eval_op_to_str[getattr(numpy, op_name)] = op_name
@@ -994,31 +999,10 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                 "set's columns"
             )
 
-        cols = relation.columns
-        set_type = type(relation)
-        if not isinstance(dst_columns, tuple):
-            dst_columns = (dst_columns,)
-        dst_cols = cols + tuple(d for d in dst_columns if d not in cols)
-        result_set = set_type(columns=dst_cols)
-        if len(cols) > 0:
-            row_group_iterator = (t for _, t in relation.groupby(cols))
-        else:
-            row_group_iterator = (relation,)
-        for t in row_group_iterator:
-            destroyed_set = set_type(columns=dst_columns)
-            for row in t:
-                row_set = set_type(
-                    columns=dst_columns,
-                    iterable=getattr(row, src_column)
-                )
-                destroyed_set = destroyed_set | row_set
-            new_set = (
-                t
-                .projection(*cols)
-                .naturaljoin(destroyed_set)
-            )
-            result_set = result_set | new_set
-        return self._build_relation_constant(result_set)
+        new_relation = relation.explode(src_column, dst_columns)
+        return self._build_relation_constant(
+            new_relation
+        )
 
     @ew.add_match(ReplaceNull(Constant, Constant, Constant))
     def replace_null(self, expression):
