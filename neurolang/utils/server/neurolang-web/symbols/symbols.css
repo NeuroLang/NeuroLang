@@ -69,3 +69,8 @@
 .nl-symbols-download {
     float: right;
 }
+
+#nlMpltFigureContainer {
+    min-width: 5em;
+    min-height: 5em;
+}

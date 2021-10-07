@@ -148,6 +148,8 @@ export class SymbolsController {
           ret.render = renderPMID
         } else if (tab.row_type[idx] === DATA_TYPES.VBROverlay || tab.row_type[idx] === DATA_TYPES.VBR) {
           ret.render = renderVBROverlay
+        } else if (tab.row_type[idx] === DATA_TYPES.MpltFigure) {
+          ret.render = renderMpltFigure
         }
         return ret
       })
@@ -272,6 +274,14 @@ export class SymbolsController {
     $('.nl-image-download').on('click', (evt) => this.onImageDownloadClicked(evt))
     $('.nl-mini-colorbar').on('click', (evt) => this.onMiniColorBarClicked(evt))
     $('.nl-mini-colorbar').popup()
+    $('.nl-mplt-figure-toggle').on('click', (evt) => this.onShowFigureClicked(evt))
+    $('.nl-mplt-figure-toggle').popup({
+      on: 'manual',
+      html: '<div id="nlMpltFigureContainer" class="nl-mplt-figure-container">' +
+      '<div class="ui active inverted dimmer"><div class="ui text loader">Loading</div></div></div>',
+      position: 'right center',
+      lastResort: 'right center'
+    })
   }
 
   /**
@@ -369,6 +379,36 @@ export class SymbolsController {
     const imageID = `image_${row}_${col}`
     this.viewer.showColorBar(imageID)
   }
+
+  /**
+   * Listener for click events on show figure buttons.
+   *
+   * Gets the clicked item's row and col indices. Then fetches the data
+   * for the figure and adds it to the nlMpltFigureContainer figure container.
+   * @param {*} evt
+   */
+  onShowFigureClicked (evt) {
+    let elmt = $(evt.target)
+    if (elmt.is('i')) {
+      elmt = elmt.parent()
+    }
+    const row = elmt.data('row')
+    const col = elmt.data('col')
+    const vis = elmt.popup('is visible')
+    elmt.popup('toggle')
+    if (!vis) {
+      let url = (this.results && this.activeSymbol in this.results.results)
+        ? `${API_ROUTE.figure}/${this.results.uuid}`
+        : `${API_ROUTE.figure}/${this.engine}`
+      url += `?symbol=${this.activeSymbol}&col=${col}&row=${row}`
+      $.get(url)
+        .done((figureData) => {
+          const figContainer = $('#nlMpltFigureContainer')
+          figContainer.append(figureData.documentElement)
+          figContainer.find('.active.dimmer').removeClass('active')
+        })
+    }
+  }
 }
 
 /**
@@ -416,6 +456,25 @@ function renderVBROverlay (data, type, row, meta) {
     }
     // otherwise return the raw data (for ordering)
     return data.hash
+  }
+  return data
+}
+
+/**
+ * Custom renderer for Matplotlib figures
+ * @param {*} data
+ * @param {*} type
+ * @returns
+ */
+function renderMpltFigure (data, type, row, meta) {
+  if (type === 'display') {
+    // create a button to display the figure
+    const figDiv = `<div class="nl-mplt-figure-controls">
+      <button class="ui tiny icon button nl-mplt-figure-toggle nl-figure-control"
+      data-row=${meta.row} data-col=${meta.col} data-tooltip="Show figure">
+      <i class="chart area icon"></i></button>
+      </div>`
+    return figDiv
   }
   return data
 }
