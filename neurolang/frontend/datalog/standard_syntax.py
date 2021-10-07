@@ -32,13 +32,20 @@ GRAMMAR = u"""
     expressions = ( newline ).{ expression };
 
 
-    expression = rule | constraint | fact | probabilistic_rule | probabilistic_fact | statement ;
+    expression = rule
+               | constraint
+               | fact
+               | probabilistic_rule
+               | probabilistic_fact
+               | statement
+               | statement_function ;
     fact = constant_predicate ;
     probabilistic_fact = ( arithmetic_operation | int_ext_identifier ) '::' constant_predicate ;
     rule = (head | query) implication (condition | body) ;
     probabilistic_rule = head '::' ( arithmetic_operation | int_ext_identifier ) implication (condition | body) ;
     constraint = body right_implication head ;
     statement = identifier ':=' ( lambda_expression | arithmetic_operation | int_ext_identifier ) ;
+    statement_function = identifier'(' [ arguments ] ')' ':=' argument ;
     head = head_predicate ;
     body = conjunction ;
     condition = composite_predicate '//' composite_predicate ;
@@ -199,6 +206,12 @@ class DatalogSemantics:
 
     def statement(self, ast):
         return Statement(ast[0], ast[2])
+
+    def statement_function(self, ast):
+        return Statement(
+            ast[0],
+            Lambda(ast[2], ast[-1])
+        )
 
     def body(self, ast):
         return Conjunction(ast)

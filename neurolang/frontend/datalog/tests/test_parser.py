@@ -375,6 +375,21 @@ def test_lambda_definition():
     assert expected == res
 
 
+def test_lambda_definition_statement():
+    c = Symbol("c")
+    x = Symbol("x")
+    y = Symbol("y")
+
+    res = parser("c(x, y) := x + y")
+    expression = Lambda((x, y), FunctionApplication(
+        Constant(add), (x, y)
+    ))
+    expected = Union((
+        Statement(c, expression),
+    ))
+    assert expected == res
+
+
 def test_lambda_application():
     c = Symbol("c")
     x = Symbol("x")
