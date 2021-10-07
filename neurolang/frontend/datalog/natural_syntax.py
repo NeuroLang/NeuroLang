@@ -84,7 +84,7 @@ GRAMMAR = u"""
     int_ext_identifier = identifier | ext_identifier ;
     ext_identifier = '@'identifier;
 
-    function_application = int_ext_identifier'(' [ arguments ] ')';
+    function_application = @:int_ext_identifier'(' [ @:arguments ] ')';
 
     arithmetic_operation = term [ ('+' | '-') term ] ;
 

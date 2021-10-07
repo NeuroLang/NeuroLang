@@ -42,7 +42,7 @@ from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError, UnsupportedSolverError
-from ..expression_walker import ExpressionBasicEvaluator
+from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
 from ..logic import Union
 from ..probabilistic import (
     dalvi_suciu_lift,
@@ -95,6 +95,7 @@ class RegionFrontendCPLogicSolver(
     BuiltinAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
+    TypedSymbolTableMixin,
     ExpressionBasicEvaluator,
 ):
     pass
