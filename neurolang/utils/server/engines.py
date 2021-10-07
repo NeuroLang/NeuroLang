@@ -407,7 +407,7 @@ def load_destrieux_atlas(data_dir, nl):
 
 
 def add_ploting_functions(nl: Union[NeurolangDL, NeurolangPDL]):
-    plt.ioff()
+    matplotlib.use('Agg')
 
     @nl.add_symbol
     def agg_kde(terms: Iterable, probs: Iterable) -> matplotlib.figure.Figure:
