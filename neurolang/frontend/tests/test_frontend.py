@@ -473,6 +473,104 @@ def test_neurolang_dl_datalog_code():
     }
 
 
+def test_neurolang_dl_datalog_code_statement():
+    neurolang = frontend.NeurolangDL()
+    neurolang.execute_datalog_program(
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    five := 5
+    B(x,y) :- A(x, y)
+    B(x,y) :- B(x, z),A(z, y)
+    C(x) :- B(x, y), y == five
+    D("x")
+    """
+    )
+
+    res = neurolang.solve_all()
+
+    assert res["A"].row_type == Tuple[int, int]
+    assert res["A"].to_unnamed() == {(4, 5), (5, 6), (6, 5)}
+    assert res["B"].to_unnamed() == {
+        (4, 5),
+        (5, 6),
+        (6, 5),
+        (4, 6),
+        (5, 5),
+        (6, 6),
+    }
+    assert res["C"].to_unnamed() == {(4,), (5,), (6,)}
+    assert res["D"].to_unnamed() == {
+        ("x",),
+    }
+
+
+def test_neurolang_dl_datalog_code_lambda_def():
+    neurolang = frontend.NeurolangDL()
+    neurolang.execute_datalog_program(
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    plus_one := lambda x: x + 1
+    B(x,y) :- A(x, y)
+    B(x,y) :- B(x, z),A(z, y)
+    C(x) :- B(x, y), y == plus_one(4)
+    D("x")
+    """
+    )
+
+    res = neurolang.solve_all()
+
+    assert res["A"].row_type == Tuple[int, int]
+    assert res["A"].to_unnamed() == {(4, 5), (5, 6), (6, 5)}
+    assert res["B"].to_unnamed() == {
+        (4, 5),
+        (5, 6),
+        (6, 5),
+        (4, 6),
+        (5, 5),
+        (6, 6),
+    }
+    assert res["C"].to_unnamed() == {(4,), (5,), (6,)}
+    assert res["D"].to_unnamed() == {
+        ("x",),
+    }
+
+
+def test_neurolang_dl_datalog_code_lambda_app():
+    neurolang = frontend.NeurolangDL()
+    neurolang.execute_datalog_program(
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    B(x,y) :- A(x, y)
+    B(x,y) :- B(x, z),A(z, y)
+    C(x) :- B(x, y), y == (lambda x: x + 1)(4)
+    D("x")
+    """
+    )
+
+    res = neurolang.solve_all()
+
+    assert res["A"].row_type == Tuple[int, int]
+    assert res["A"].to_unnamed() == {(4, 5), (5, 6), (6, 5)}
+    assert res["B"].to_unnamed() == {
+        (4, 5),
+        (5, 6),
+        (6, 5),
+        (4, 6),
+        (5, 5),
+        (6, 6),
+    }
+    assert res["C"].to_unnamed() == {(4,), (5,), (6,)}
+    assert res["D"].to_unnamed() == {
+        ("x",),
+    }
+
+
 def test_neurolang_dl_datalog_code_with_query():
     prog = """
         A(4, 5)
@@ -747,3 +845,20 @@ def test_head_constant():
         res_all = qr.solve_all()
 
     assert set(res_all['r']) == {('one', 1)}
+
+
+def test_numpy_mixin_adds_functions():
+    nl = frontend.NeurolangDL()
+    functions = ["exp", "log", "log10", "cos", "sin", "tan"]
+
+    p = nl.add_tuple_set([(i,) for i in np.arange(1, 10)], name="P")
+
+    for func in functions:
+        assert exp.Symbol(func) in nl.symbol_table
+        with nl.scope as e:
+            e.q[e.x, e.y] = p[e.x] & (e.y == getattr(e, func)(e.x))
+            res = nl.solve_all()
+
+        assert set(res["q"]) == {
+            (i, getattr(np, func)(i)) for i in np.arange(1, 10)
+        }

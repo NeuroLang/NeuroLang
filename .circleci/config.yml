@@ -109,16 +109,6 @@ commands:
           path: test_reports
           when: always
 jobs:
-  py36:
-    docker:
-      - image: circleci/python:3.6
-
-    working_directory: ~/repo
-    steps:
-      - checkout
-      - install
-      - test
-
   py37:
     docker:
       - image: circleci/python:3.7
@@ -199,7 +189,7 @@ jobs:
             - v1-docs-{{ .Branch }}--
       - run:
           name: Install Texlive and dvipng
-          command: 'sudo apt update && sudo apt install texlive texlive-xetex texlive-fonts-extra texlive-latex-extra texlive-plain-extra dvipng'
+          command: 'sudo apt update && sudo apt install texlive texlive-xetex texlive-fonts-extra texlive-latex-extra texlive-plain-generic dvipng'
       - run:
           name: Install extra packages & build documentation
           command: |
@@ -299,7 +289,6 @@ workflows:
   version: 2
   test_benchmark_build:
     jobs:
-      - py36
       - py37
       - py37dask
       - docs:

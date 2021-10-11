@@ -25,6 +25,10 @@ from .expressions import (
 )
 from .utils import OrderedSet
 
+
+LOG = logging.getLogger(__name__)
+
+
 __all__ = [
     "expression_iterator",
     "PatternWalker",
@@ -122,7 +126,7 @@ def expression_iterator_constant(current_element):
 
 class PatternWalker(PatternMatcher):
     def walk(self, expression):
-        logging.debug("walking %(expression)s", {"expression": expression})
+        LOG.debug("walking %(expression)s", {"expression": expression})
         if isinstance(expression, tuple):
             result = [self.walk(e) for e in expression]
             result = tuple(result)
@@ -157,12 +161,12 @@ class EntryPointPatternWalker(PatternWalker):
             ):
                 pattern, guard, action = self.__entry_point__
                 name = "\033[1m\033[91m" + action.__qualname__ + "\033[0m"
-                logging.info("\tENTRY POINT MATCH %(name)s", {"name": name})
-                logging.info("\t\tpattern: %(pattern)s", {"pattern": pattern})
-                logging.info("\t\tguard: %(guard)s", {"guard": guard})
+                LOG.info("\tENTRY POINT MATCH %(name)s", {"name": name})
+                LOG.info("\t\tpattern: %(pattern)s", {"pattern": pattern})
+                LOG.info("\t\tguard: %(guard)s", {"guard": guard})
                 self._entry_point_walked = True
                 result_expression = action(self, expression)
-                logging.info(
+                LOG.info(
                     "\t\tresult: %(result_expression)s",
                     {"result_expression": result_expression},
                 )
@@ -237,8 +241,12 @@ class ChainedWalker:
 
     def walk(self, expression):
         for walker in self.walkers:
-            logging.debug(
-                "Walking over {} with {}".format(expression, walker.__class__)
+            LOG.debug(
+                "Walking %(expression)s with %(walker)s",
+                {
+                    "expression": expression,
+                    "walker": walker
+                }
             )
             expression = walker.walk(expression)
         return expression
@@ -307,7 +315,7 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
             return symbol
 
     @add_match(Constant[typing.AbstractSet])
-    def constant_abstract_set(self, constant_abstract_set):
+    def process_constant_abstract_set(self, constant_abstract_set):
         return constant_abstract_set.__class__(
             type(constant_abstract_set.value)(
                 self.walk(expression)
@@ -316,7 +324,7 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
         )
 
     @add_match(Constant[typing.Tuple])
-    def constant_tuple(self, constant_tuple):
+    def process_constant_tuple(self, constant_tuple):
         return constant_tuple.__class__(
             tuple(self.walk(expression) for expression in constant_tuple.value)
         )
@@ -337,7 +345,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
             )
 
     @add_match(Constant[typing.AbstractSet])
-    def constant_abstract_set(self, constant_abstract_set):
+    def process_constant_abstract_set(self, constant_abstract_set):
         value = constant_abstract_set.value
         if len(value) > 0 and isinstance(
             next(iter(value)), (Expression, tuple)
@@ -346,7 +354,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         return value
 
     @add_match(Constant[typing.Tuple])
-    def constant_tuple(self, constant_tuple):
+    def process_constant_tuple(self, constant_tuple):
         value = constant_tuple.value
         if len(value) > 0 and isinstance(value[0], (Expression, tuple)):
             value = constant_tuple.value
@@ -356,11 +364,12 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         return value
 
     @add_match(Constant[typing.Iterable])
-    def constant_iterable(self, constant_iterable):
+    def process_constant_iterable(self, constant_iterable):
         value = constant_iterable.value
         it1, it2 = tee(value)
         (
-            ReplaceExpressionsByValues._validate_iterable_for_constant_iterable_case(
+            ReplaceExpressionsByValues.
+            _validate_iterable_for_constant_iterable_case(
                 it1
             )
         )
@@ -389,7 +398,10 @@ class ResolveSymbolMixin(PatternMatcher):
     @add_match(Symbol)
     def symbol_from_table(self, symbol):
         try:
-            return self.symbol_table.get(symbol, symbol)
+            if hasattr(self.symbol_table, 'default_factory'):
+                return self.symbol_table[symbol]
+            else:
+                return self.symbol_table.get(symbol, symbol)
         except KeyError:
             if self.simplify_mode:
                 return symbol
@@ -397,8 +409,8 @@ class ResolveSymbolMixin(PatternMatcher):
                 raise ValueError(f"{symbol} not in symbol table")
 
 
-class TypedSymbolTableEvaluator(
-    ResolveSymbolMixin, TypedSymbolTableMixin, ExpressionWalker
+class TypedSymbolTableEvaluatorMixin(
+    ResolveSymbolMixin, TypedSymbolTableMixin, PatternWalker
 ):
     @add_match(Statement)
     def statement(self, statement):
@@ -411,6 +423,12 @@ class TypedSymbolTableEvaluator(
             return statement
         else:
             return self.walk(Statement[statement.type](statement.lhs, rhs))
+
+
+class TypedSymbolTableEvaluator(
+    TypedSymbolTableEvaluatorMixin, ExpressionWalker
+):
+    pass
 
 
 class ExpressionBasicEvaluator(ExpressionWalker):
@@ -460,8 +478,8 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         args = function_application.args
         lambda_args = lambda_.args
         if len(args) != len(lambda_args) or not all(
-            is_leq_informative(l.type, a.type)
-            for l, a in zip(lambda_args, args)
+            is_leq_informative(lambda_arg.type, arg.type)
+            for lambda_arg, arg in zip(lambda_args, args)
         ):
             raise NeuroLangTypeException(
                 f"{args} is not the appropriate "

@@ -3,19 +3,22 @@ from typing import AbstractSet, Iterable
 
 import numpy
 
+from neurolang.relational_algebra import str2columnstr_constant
+
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
     conjunct_formulas,
-    enforce_conjunction,
-    extract_logic_predicates,
     extract_logic_atoms,
-    reachable_code,
+    extract_logic_predicates,
+    reachable_code
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import TRUE, Conjunction, Implication, Union
+from ..logic import TRUE, Conjunction, Implication, Negation, Union
+from ..logic.transformations import GuaranteeConjunction
+from ..relational_algebra import Projection, RelationalAlgebraSolver
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -242,10 +245,12 @@ def construct_within_language_succ_result(provset, rule):
     proj_cols = list()
     for arg in rule.consequent.args:
         if isinstance(arg, Symbol):
-            proj_cols.append(arg.name)
+            proj_cols.append(str2columnstr_constant(arg.name))
         elif isinstance(arg, ProbabilisticQuery) and arg.functor == PROB:
             proj_cols.append(provset.provenance_column)
-    return Constant[AbstractSet](provset.value.projection(*proj_cols))
+    return RelationalAlgebraSolver().walk(
+        Projection(provset.relation, proj_cols)
+    )
 
 
 def group_preds_by_functor(predicates, filter_set=None):
@@ -341,14 +346,22 @@ def lift_optimization_for_choice_predicates(query, program):
     """
     if len(program.pchoice_pred_symbs) == 0:
         return query
+    positive_predicates = set()
+    negative_predicates = set()
+    for pred in extract_logic_predicates(query):
+        if isinstance(pred, Negation):
+            negative_predicates.add(pred)
+        else:
+            positive_predicates.add(pred)
     pchoice_eqs = get_probchoice_variable_equalities(
-        extract_logic_atoms(query), program.pchoice_pred_symbs
+        positive_predicates,
+        program.pchoice_pred_symbs
     )
     if len(pchoice_eqs) == 0:
         return query
     eq_conj = Conjunction(tuple(EQ(x, y) for x, y in pchoice_eqs))
-    grpd_preds = group_preds_by_functor(extract_logic_atoms(query))
-    new_formulas = set(eq_conj.formulas)
+    grpd_preds = group_preds_by_functor(positive_predicates)
+    new_formulas = set(eq_conj.formulas) | set(negative_predicates)
     for functor, preds in grpd_preds.items():
         if functor not in program.pchoice_pred_symbs:
             new_formulas |= set(preds)
@@ -356,7 +369,8 @@ def lift_optimization_for_choice_predicates(query, program):
             conj = conjunct_formulas(Conjunction(tuple(preds)), eq_conj)
             unifier = UnifyVariableEqualities()
             rule = Implication(Symbol.fresh()(tuple()), conj)
-            unified_conj = enforce_conjunction(unifier.walk(rule).antecedent)
+            unified_antecedent = unifier.walk(rule).antecedent
+            unified_conj = GuaranteeConjunction().walk(unified_antecedent)
             new_formulas |= set(unified_conj.formulas)
     new_query = Conjunction(tuple(new_formulas))
     return new_query

@@ -1,19 +1,16 @@
 import operator
+from typing import AbstractSet
 
 import numpy as np
 import pytest
 
 from ...config import config
 from ...datalog import Fact
-from ...exceptions import NonLiftableException
+from ...exceptions import NonLiftableException, UnsupportedSolverError
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Implication, Union
+from ...logic import Conjunction, Implication, Negation, Union
 from ...relational_algebra import (
-    ColumnStr,
-    ExtendedProjection,
-    FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
-    RenameColumn,
     str2columnstr_constant
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
@@ -130,7 +127,7 @@ def test_deterministic_conjunction_varying_arity_empty(solver):
     cpl_program.walk(code)
     query = Implication(ans(x, y), Z(x, y))
     result = solver.solve_succ_query(query, cpl_program)
-    assert result.value.is_empty()
+    assert result.relation.value.is_empty()
 
 
 def test_simple_bernoulli(solver):
@@ -176,6 +173,23 @@ def test_bernoulli_conjunction(solver):
     result = solver.solve_succ_query(query, cpl_program)
 
     expected = testing.make_prov_set([(0.9 * 0.9 * 0.5, "b")], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_probfact_existential():
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        P, {(0.7, 1, 2), (0.9, 1, 3), (0.88, 2, 4)}
+    )
+    query = Implication(ans(x), P(x, y))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            ((1 - (1 - 0.7) * (1 - 0.9)), 1),
+            (0.88, 2),
+        ],
+        ("_p_", "x"),
+    )
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -280,6 +294,13 @@ def test_simple_probchoice(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
 def test_mutual_exclusivity(solver):
     pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
     pfact_sets = {Q: {(0.5, "a", "b")}}
@@ -292,12 +313,87 @@ def test_mutual_exclusivity(solver):
     for pred_symb, pfact_set in pfact_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
-    qpred = Z(x, y)
-    exp, result = testing.inspect_resolution(qpred, cpl_program)
-    assert isinstance(exp, RenameColumn)
-    assert isinstance(exp.relation, RenameColumn)
+    query = Implication(ans(x, y), Z(x, y))
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_fact_negation_choice(solver):
+    pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
+    pfact_sets = {Q: {(0.5, "a", "b")}}
+    code = Union((
+        Implication(
+            Z(x, y),
+            Conjunction((Negation(P(y)), Q(x, y)))
+        ),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    query = Implication(ans(x, y), Z(x, y))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set([(0.1, "a", "b")], ("_p_", "x", "y"))
+        assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+    pytest.param(dalvi_suciu_lift, marks=pytest.mark.xfail(
+        reason="Connected component issue addressed by PR #660"
+    )),
+])
+def test_negation_fact_choice(solver):
+    pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
+    pfact_sets = {Q: {(0.4, "a", "a")}}
+    code = Union((
+        Implication(
+            Z(x),
+            Conjunction((P(x), Negation(Q(x, x))))
+        ),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set([(.12, "a"), (.8, "b")], ("_p_", "x"))
+        assert testing.eq_prov_relations(result, expected)
 
 
 def test_multiple_probchoices_mutual_exclusivity(solver):
@@ -313,10 +409,8 @@ def test_multiple_probchoices_mutual_exclusivity(solver):
             pred_symb, pchoice_as_set
         )
     cpl_program.walk(code)
-    qpred = Z(x, y)
-    exp, result = testing.inspect_resolution(qpred, cpl_program)
-    assert isinstance(exp, RenameColumn)
-    assert isinstance(exp.relation, RenameColumn)
+    query = Implication(ans(x, y), Z(x, y))
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [(0.2 * 0.1, "a", "b"), (0.8 * 0.1, "b", "b")], ("_p_", "x", "y")
     )
@@ -324,9 +418,10 @@ def test_multiple_probchoices_mutual_exclusivity(solver):
 
 
 def test_large_probabilistic_choice(solver):
-    if config["RAS"].get("backend", "pandas") == "dask":
-        # dask backend uses `weighted_model_counting.solve_succ_query_boolean_diagram`
-        # which does not handle too big prob sets.
+    if (
+        config["RAS"].get("backend", "pandas") == "dask"
+        or solver is weighted_model_counting
+    ):
         n = int(1000)
     else:
         n = int(10000)
@@ -356,18 +451,17 @@ def test_large_probabilistic_choice(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_simple_existential(solver):
+def test_simple_probchoice_existential(solver):
     """
     We define the following program
 
-        P(a, a) : 0.2 v P(a, b) : 0.8 <- T
-                           Q(x) <- ∃y, P(x, y)
+        P(a, a) : 0.2 v P(a, b) : 0.7 v P(c, c) : 0.1 <- T
+        Q(x) <- ∃y, P(x, y)
 
     We expect the following to hold
 
-        - Pr[P(a, a)] = 0.2
-        - Pr[P(a, b)] = 0.8
-        - Pr[Q(a)] = 1.0
+        - Pr[Q(a)] = 0.9
+        - Pr[Q(c)] = 0.1
 
     """
     pchoice_as_sets = {P: {(0.2, "a", "a"), (0.7, "a", "b"), (0.1, "c", "c")}}
@@ -378,7 +472,8 @@ def test_simple_existential(solver):
             pred_symb, pchoice_as_set
         )
     cpl_program.walk(code)
-    exp, result = testing.inspect_resolution(Q(x), cpl_program)
+    query = Implication(ans(x), Q(x))
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(0.9, "a"), (0.1, "c")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -395,7 +490,8 @@ def test_existential_in_conjunction(solver):
             pred_symb, pchoice_as_set
         )
     cpl_program.walk(code)
-    exp, result = testing.inspect_resolution(Q(x), cpl_program)
+    query = Implication(ans(x), Q(x))
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -476,6 +572,29 @@ def test_multilevel_existential(solver):
     )
     assert testing.eq_prov_relations(result, expected)
 
+
+def test_multilevel_existential_2(solver):
+    pchoice_as_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "c")},
+        R: {(0.1, "a"), (0.4, "b"), (0.5, "c")},
+        Q: {(0.9, "a"), (0.1, "c")},
+        Z: {(0.1, "b"), (0.9, "c")},
+    }
+    code = Union(
+        (
+            Implication(H(x, y), Conjunction((R(x), Z(y)))),
+            Implication(A(x), Conjunction((H(x, y), P(y, x)))),
+            Implication(B(x), Conjunction((A(x), Q(y)))),
+            Implication(C(x), H(x, y)),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+
     query = Implication(ans(z), B(z))
 
     if solver is small_dichotomy_theorem_based_solver:
@@ -490,7 +609,6 @@ def test_multilevel_existential(solver):
             ("_p_", "z"),
         )
         assert testing.eq_prov_relations(result, expected)
-
 
 def test_repeated_antecedent_predicate_symbol(solver):
     """
@@ -551,7 +669,7 @@ def test_repeated_antecedent_predicate_symbol(solver):
         assert testing.eq_prov_relations(result, expected)
 
 
-def test_fake_neurosynth(solver):
+def test_tiny_cbma_example(solver):
     TermInStudy = Symbol("TermInStudy")
     ActivationReported = Symbol("ActivationReported")
     SelectedStudy = Symbol("SelectedStudy")
@@ -715,6 +833,13 @@ def test_program_with_variable_equality(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.parametrize("solver", [
+    weighted_model_counting,
+    pytest.param(small_dichotomy_theorem_based_solver, marks=pytest.mark.xfail(
+        reason="Existential variable in probfact leads to unsupported noisy-or"
+    )),
+    dalvi_suciu_lift,
+])
 def test_repeated_variable_probabilistic_rule(solver):
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
@@ -761,6 +886,38 @@ def test_empty_result_program(solver):
     result = solver.solve_succ_query(query, cpl)
     expected = testing.make_prov_set([], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_simple_negation(solver):
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.2, 'a'), (0.1, 'b')]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [(0.1, 'a'), (0.3, 'c')]
+    )
+    rule = Implication(P(x), Conjunction((Q(x), Negation(R(x)))))
+    cpl.walk(rule)
+    query = Implication(ans(x), P(x))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl)
+        expected = testing.make_prov_set([(.18, 'a'), (.10, 'b')], ("_p_", "x"))
+        assert testing.eq_prov_relations(result, expected)
 
 
 @pytest.mark.parametrize("solver", [
@@ -846,102 +1003,6 @@ def test_probchoice_selfjoin_multiple_variables_shared_var(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_probsemiring_extended_proj():
-    provset = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            ("_p_", "x", "y"),
-            [
-                (0.2, "a", "b"),
-                (0.3, "b", "a"),
-                (0.5, "c", "c"),
-            ],
-        ),
-        ColumnStr("_p_"),
-    )
-    proj_list = [
-        FunctionApplicationListMember(
-            str2columnstr_constant("x"), str2columnstr_constant("x")
-        ),
-        FunctionApplicationListMember(
-            str2columnstr_constant("y"), str2columnstr_constant("y")
-        ),
-        FunctionApplicationListMember(
-            Constant("d"), str2columnstr_constant("z")
-        ),
-    ]
-    proj = ExtendedProjection(provset, proj_list)
-    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
-    result = solver.walk(proj)
-    expected = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            ("_p_", "x", "y", "z"),
-            [
-                (0.2, "a", "b", "d"),
-                (0.3, "b", "a", "d"),
-                (0.5, "c", "c", "d"),
-            ],
-        ),
-        ColumnStr("_p_"),
-    )
-    assert testing.eq_prov_relations(result, expected)
-
-
-def test_probsemiring_forbidden_extended_proj_missing_nonprov_cols():
-    provset = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            ("_p_", "x", "y"),
-            [
-                (0.2, "a", "b"),
-                (0.3, "b", "a"),
-                (0.5, "c", "c"),
-            ],
-        ),
-        ColumnStr("_p_"),
-    )
-    proj_list = [
-        FunctionApplicationListMember(
-            str2columnstr_constant("x"), str2columnstr_constant("x")
-        ),
-        FunctionApplicationListMember(
-            Constant("d"), str2columnstr_constant("z")
-        ),
-    ]
-    proj = ExtendedProjection(provset, proj_list)
-    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
-    with pytest.raises(ValueError):
-        solver.walk(proj)
-
-
-def test_probsemiring_forbidden_extended_proj_on_provcol():
-    provset = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            ("_p_", "x", "y"),
-            [
-                (0.2, "a", "b"),
-                (0.3, "b", "a"),
-                (0.5, "c", "c"),
-            ],
-        ),
-        ColumnStr("_p_"),
-    )
-    proj_list = [
-        FunctionApplicationListMember(
-            str2columnstr_constant("x"), str2columnstr_constant("x")
-        ),
-        FunctionApplicationListMember(
-            str2columnstr_constant("y"), str2columnstr_constant("y")
-        ),
-        FunctionApplicationListMember(
-            Constant("d"), str2columnstr_constant("_p_")
-        ),
-    ]
-    proj = ExtendedProjection(provset, proj_list)
-    solver = small_dichotomy_theorem_based_solver.ProbSemiringSolver()
-    with pytest.raises(ValueError):
-        solver.walk(proj)
-
-
-
 def test_simple_boolean_query(solver):
     pchoice_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
     cpl_program = CPLogicProgram()
@@ -953,3 +1014,198 @@ def test_simple_boolean_query(solver):
     result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0,)], ("_p_",))
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_dalvi_suciu_fails_unate():
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.2, 'a'), (0.1, 'b')]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [(0.1, 'a'), (0.3, 'c')]
+    )
+    rule = Implication(P(x), Conjunction((R(y), Q(x), Negation(R(x)))))
+    cpl.walk(rule)
+    query = Implication(ans(x), P(x))
+    with pytest.raises(NonLiftableException):
+        dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_nested_negation(solver):
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [
+            (0.2, 'a', 1, 2),
+            (0.8, 'b', 1, 5),
+            (0.1, 'b', 2, 2),
+        ]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [(0.1, 'a'), (0.3, 'c')]
+    )
+    program = Union((
+        Implication(Z(x, y), Q(x, y, z)),
+    ))
+    query = Implication(ans(x), Conjunction((
+            R(x),
+            Negation(Z(x, Constant(1)))
+        )))
+    cpl.walk(program)
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        res = solver.solve_succ_query(query, cpl)
+
+        expected = ProvenanceAlgebraSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                ("_p_", "x"),
+                [
+                    (0.08, "a"),
+                    (0.30, "c"),
+                ],
+            )),
+            str2columnstr_constant("_p_"),
+        )
+
+        assert testing.eq_prov_relations(res, expected)
+
+
+def test_disjunctive_query_with_probchoice():
+    pchoice_as_sets = {
+        Q: {(0.6, 1), (0.4, 2)},
+        A: {(0.7, 1), (0.2, 2), (0.1, 3)},
+    }
+    pfact_as_sets = {
+        P: {(0.9, 3), (0.8, 2)},
+        R: {(0.4, 1), (0.1, 2)},
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_as_set in pfact_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_as_set
+        )
+    code = Union((
+        Implication(Z(x), Conjunction((P(x), Q(x), A(y)))),
+        Implication(Z(x), Conjunction((R(x), Q(x)))),
+    ))
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x))
+    result = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            (0.6 * 0.4, 1),
+            (0.4 * (1 - (1 - 0.8) * (1 - 0.1)), 2),
+        ],
+        ("_p_", "x"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_small_dichotomy_fails_on_disjunctive_query():
+    solver = small_dichotomy_theorem_based_solver
+    pchoice_as_sets = {
+        Q: {(0.6, 1), (0.4, 2)},
+        A: {(0.7, 1), (0.2, 2), (0.1, 3)},
+    }
+    pfact_as_sets = {
+        P: {(0.9, 3), (0.8, 2)},
+        R: {(0.4, 1), (0.1, 2)},
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_as_set in pfact_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_as_set
+        )
+    code = Union((
+        Implication(Z(x), Conjunction((P(x), Q(x), A(y)))),
+        Implication(Z(x), Conjunction((R(x), Q(x)))),
+    ))
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x))
+    with pytest.raises(UnsupportedSolverError):
+        solver.solve_succ_query(query, cpl_program)
+
+
+def test_small_dichotomy_fails_on_noisy_or_projection():
+    solver = small_dichotomy_theorem_based_solver
+    pfact_as_sets = {
+        P: {(0.9, 3, 2), (0.8, 3, 1)},
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_as_set in pfact_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_as_set
+        )
+    query = Implication(ans(x), P(x, y))
+    with pytest.raises(UnsupportedSolverError):
+        solver.solve_succ_query(query, cpl_program)
+
+
+def test_small_dichotomy_fails_on_noisy_or_projection_with_pchoice_in_query():
+    solver = small_dichotomy_theorem_based_solver
+    pfact_as_sets = {
+        P: {(0.9, 3, 2), (0.8, 3, 1)},
+    }
+    pchoice_as_sets = {
+        Q: {(0.6, 1), (0.4, 2)},
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_as_set in pfact_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_as_set
+        )
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    query = Implication(ans(x), Conjunction((Q(x), P(x, y))))
+    with pytest.raises(UnsupportedSolverError):
+        solver.solve_succ_query(query, cpl_program)
+
+
+def test_deterministic_simplification():
+    pchoice_as_sets = {
+        Q: [(0.6, 'b'), (0.4, 'c')],
+    }
+    deterministic_as_sets = {
+        P: [('a', 'b'), ('b', 'c')]
+    }
+    cpl_program = CPLogicProgram()
+    for k, v in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(k, v)
+    for k, v in deterministic_as_sets.items():
+        cpl_program.add_extensional_predicate_from_tuples(k, v)
+
+    query = Implication(
+        ans(x, y),
+        Conjunction((P(x, y), P(Constant('a'), y), Q(y)))
+    )
+
+    res = dalvi_suciu_lift.solve_succ_query(
+        query, cpl_program
+    )
+
+    assert testing.eq_prov_relations(res, testing.make_prov_set({(0.6, 'a', 'b')}, ['_p_', 'x', 'y']))

@@ -1,0 +1,39 @@
+{
+  "name": "neurolang-web",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.14.9",
+    "@testing-library/dom": "^8.1.0",
+    "@testing-library/jest-dom": "^5.14.1",
+    "babel-plugin-transform-import-meta": "^2.0.0",
+    "eslint": "^7.31.0",
+    "eslint-config-standard": "^16.0.3",
+    "eslint-plugin-import": "^2.23.4",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^5.1.0",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^27.0.6",
+    "jest-canvas-mock": "^2.3.1",
+    "jest-websocket-mock": "^2.2.1",
+    "mock-socket": "^9.0.3",
+    "vite": "^2.4.3"
+  },
+  "dependencies": {
+    "codemirror": "^5.62.2",
+    "d3-array": "^3.0.2",
+    "d3-color": "^3.0.1",
+    "d3-scale-chromatic": "^3.0.0",
+    "datatables.net-dt": "^1.1.0",
+    "datatables.net-se": "^1.10.25",
+    "fomantic-ui-css": "^2.8.8",
+    "jquery": "^3.6.0",
+    "plotly.js-dist-min": "^2.3.1",
+    "showdown": "^1.9.1"
+  }
+}

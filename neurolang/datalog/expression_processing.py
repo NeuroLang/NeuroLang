@@ -13,7 +13,6 @@ import numpy as np
 from scipy import sparse
 
 from ..exceptions import (
-    ForbiddenExpressionError,
     RuleNotFoundError,
     SymbolNotFoundError,
     UnsupportedProgramError,
@@ -30,6 +29,7 @@ from ..expression_walker import (
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import (
+    ExistentialPredicate,
     FALSE,
     TRUE,
     Conjunction,
@@ -40,7 +40,7 @@ from ..logic import (
     Union,
 )
 from ..logic import expression_processing as elp
-from ..logic.transformations import CollapseConjunctions
+from ..logic.transformations import CollapseConjunctions, GuaranteeConjunction, RemoveTrivialOperations
 from ..logic.unification import most_general_unifier
 from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
@@ -512,23 +512,9 @@ def is_ground_predicate(predicate):
     return all(isinstance(arg, Constant) for arg in predicate.args)
 
 
-def enforce_conjunction(expression):
-    if isinstance(expression, Conjunction):
-        return expression
-    elif isinstance(expression, (FunctionApplication, Negation)):
-        return Conjunction((expression,))
-    raise ForbiddenExpressionError(
-        "Cannot conjunct expression of type {}".format(type(expression))
-    )
-
-
 def enforce_conjunctive_antecedent(implication):
-    return implication.apply(
-        implication.consequent,
-        remove_conjunction_duplicates(
-            enforce_conjunction(implication.antecedent)
-        ),
-    )
+    antecedent = GuaranteeConjunction().walk(implication.antecedent)
+    return implication.apply(implication.consequent, antecedent)
 
 
 def maybe_deconjunct_single_pred(expression):
@@ -578,7 +564,7 @@ class HeadConstantToBodyEquality(PatternWalker):
     )
     def implication_with_constant_term_in_head(self, implication):
         body_formulas = list(
-            enforce_conjunction(implication.antecedent).formulas
+            GuaranteeConjunction().walk(implication.antecedent).formulas
         )
         new_consequent_vars = list()
         for term in implication.consequent.args:
@@ -610,16 +596,16 @@ class HeadRepeatedVariableToBodyEquality(PatternWalker):
 
     @add_match(
         Implication(FunctionApplication, ...),
-        lambda implication: max(
-            collections.Counter(
+        lambda implication: (
+            len(implication.consequent.args) > 0 and
+            max(collections.Counter(
                 (
                     arg
                     for arg in implication.consequent.args
                     if isinstance(arg, Symbol)
                 )
-            ).values()
+            ).values()) > 1
         )
-        > 1,
     )
     def implication_with_repeated_variable_in_head(self, implication):
         seen_args = set()
@@ -683,8 +669,9 @@ def flatten_query(query, program):
         )
     try:
         res = FlattenQueryInNonRecursiveUCQ(program).walk(query)
-        if isinstance(res, FunctionApplication):
-            res = Conjunction((res,))
+        res = RemoveTrivialOperations().walk(res)
+        if not isinstance(res, Constant):
+            return GuaranteeConjunction().walk(res)
     except RecursionError:
         raise UnsupportedProgramError(
             "Flattening of recursive programs is not supported."
@@ -790,6 +777,18 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         else:
             res = new_formulas[0]
         return res
+
+    @add_match(Negation(FunctionApplication))
+    def negation_function_application(self, expression):
+        formula = expression.formula
+        flattened_formula = self.walk(formula)
+        existential_variables = (
+            extract_logic_free_variables(flattened_formula) -
+            extract_logic_free_variables(formula)
+        )
+        for e_var in existential_variables:
+            flattened_formula = ExistentialPredicate(e_var, flattened_formula)
+        return Negation(flattened_formula)
 
     @add_match(Negation)
     def negation(self, expression):

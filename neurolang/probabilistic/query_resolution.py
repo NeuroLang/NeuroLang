@@ -1,3 +1,5 @@
+import logging
+import operator
 import typing
 from typing import AbstractSet
 
@@ -5,28 +7,38 @@ from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import (
     EQ,
     conjunct_formulas,
-    extract_logic_free_variables,
-    extract_logic_predicates,
+    extract_logic_free_variables
 )
 from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
 from ..expression_pattern_matching import add_match
-from ..expression_walker import PatternWalker
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..expression_walker import ChainedWalker, ExpressionWalker, PatternWalker
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
-from ..relational_algebra import Projection, str2columnstr_constant
-from ..relational_algebra_provenance import (
-    NaturalJoinInverse,
-    RelationalAlgebraProvenanceCountingSolver,
+from ..relational_algebra import (
+    EliminateTrivialProjections,
+    ExtendedProjection,
+    FunctionApplicationListMember,
+    Projection,
+    RelationalAlgebraOperation,
+    PushInSelections,
+    RelationalAlgebraSolver,
+    RenameOptimizations,
+    SimplifyExtendedProjectionsWithConstants,
+    str2columnstr_constant
 )
+from ..relational_algebra_provenance import NaturalJoinInverse
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
     construct_within_language_succ_result,
     is_query_based_probfact,
     is_within_language_prob_query,
-    within_language_succ_query_to_intensional_rule,
+    within_language_succ_query_to_intensional_rule
 )
 from .expressions import Condition, ProbabilisticPredicate
+from .probabilistic_semiring_solver import (
+    ProbSemiringToRelationalAlgebraSolver
+)
 
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
@@ -43,6 +55,9 @@ def _qbased_probfact_needs_translation(formula: Implication) -> bool:
         isinstance(antecedent_pred.functor, Symbol)
         and antecedent_pred.functor.is_fresh
     )
+
+
+LOG = logging.getLogger(__name__)
 
 
 class QueryBasedProbFactToDetRule(PatternWalker):
@@ -164,12 +179,7 @@ def _solve_for_probabilistic_rule(
     succ_prob_solver: typing.Callable,
 ):
     provset = succ_prob_solver(rule, cpl)
-    relation = Constant[AbstractSet](
-        provset.value,
-        auto_infer_type=False,
-        verify_type=False,
-    )
-    return relation
+    return provset.relation
 
 
 def compute_probabilistic_solution(
@@ -194,13 +204,9 @@ def compute_probabilistic_solution(
             relation = _solve_within_language_prob_query(
                 cpl, rule, succ_prob_solver, marg_prob_solver
             )
-        else:
-            relation = _solve_for_probabilistic_rule(
-                cpl, rule, succ_prob_solver
+            solution[rule.consequent.functor] = Constant[AbstractSet](
+                relation.value.to_unnamed()
             )
-        solution[rule.consequent.functor] = Constant[AbstractSet](
-            relation.value.to_unnamed()
-        )
     return solution
 
 
@@ -226,16 +232,18 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
     res_args = tuple(s for s in rule.consequent.args if isinstance(s, Symbol))
 
     joint_antecedent = Conjunction(
-        tuple(
-            extract_logic_predicates(rule.antecedent.conditioned)
-            | extract_logic_predicates(rule.antecedent.conditioning)
+        (
+            rule.antecedent.conditioned,
+            rule.antecedent.conditioning
         )
     )
     joint_logic_variables = set(res_args)
     joint_rule = Implication(
         Symbol.fresh()(*joint_logic_variables), joint_antecedent
     )
-    joint_provset = succ_solver(joint_rule, cpl)
+    joint_provset = succ_solver(
+        joint_rule, cpl, run_relational_algebra_solver=False
+    )
 
     denominator_antecedent = rule.antecedent.conditioning
     denominator_logic_variables = (
@@ -244,9 +252,11 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
     denominator_rule = Implication(
         Symbol.fresh()(*denominator_logic_variables), denominator_antecedent
     )
-    denominator_provset = succ_solver(denominator_rule, cpl)
-    rapcs = RelationalAlgebraProvenanceCountingSolver()
-    provset = rapcs.walk(
+    denominator_provset = succ_solver(
+        denominator_rule, cpl, run_relational_algebra_solver=False
+    )
+    query_solver = generate_provenance_query_solver({}, True)
+    provset = query_solver.walk(
         Projection(
             NaturalJoinInverse(joint_provset, denominator_provset),
             tuple(str2columnstr_constant(s.name) for s in res_args),
@@ -340,3 +350,120 @@ def _build_probabilistic_program(
     prob_idb = _discard_query_based_probfacts(prob_idb)
     cpl.walk(prob_idb)
     return cpl, prob_idb
+
+
+class FloatArithmeticSimplifier(PatternWalker):
+    @add_match(
+        FunctionApplication(
+            Constant[typing.Any](operator.mul),
+            (Constant[float](1.0), Expression[typing.Any]))
+        )
+    def simplify_mul_left(self, expression):
+        return self.walk(expression.args[1])
+
+    @add_match(
+        FunctionApplication(
+            Constant[typing.Any](operator.mul),
+            (Expression[typing.Any], Constant[float](1.0))
+        )
+    )
+    def simplify_mul_right(self, expression):
+        return self.walk(expression.args[0])
+
+
+class RAQueryOptimiser(
+    EliminateTrivialProjections,
+    PushInSelections,
+    RenameOptimizations,
+    SimplifyExtendedProjectionsWithConstants,
+    FloatArithmeticSimplifier,
+    ExpressionWalker,
+):
+    pass
+
+
+def generate_provenance_query_solver(
+    symbol_table, run_relational_algebra_solver,
+    solver_class=ProbSemiringToRelationalAlgebraSolver
+):
+    """
+    Generate a walker that solves a RAP query.
+
+    Parameters
+    ----------
+    symbol_table : Mapping
+        Mapping from symbols to probabilistic or deterministic sets to
+        solve the query.
+    run_relational_algebra_solver : bool
+        if `true` the walker will return a ProvenanceAlgebraSet containing
+        a NamedAlgebraSet as `relation` attribute. If `false` the walker will
+        produce a relational algebra expression as `relation` attribute.
+    solver_class: PatternWalker
+        class to translate a provenance RA sets program into a RA program.
+        Default is `ProbSemiringToRelationalAlgebraSolver`.
+    """
+
+    class LogExpression(PatternWalker):
+        def __init__(self, logger, message, level):
+            self.logger = logger
+            self.message = message
+            self.level = level
+
+        @add_match(...)
+        def log_exp(self, expression):
+            LOG.log(self.level, self.message, expression)
+            return expression
+
+    steps = [
+        RAQueryOptimiser(),
+        solver_class(symbol_table=symbol_table),
+        LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
+        RAQueryOptimiser(),
+        LogExpression(LOG, "Optimised RA query %s", logging.INFO)
+    ]
+
+    if run_relational_algebra_solver:
+        steps.append(RelationalAlgebraSolver())
+
+    query_compiler = ChainedWalker(*steps)
+    return query_compiler
+
+
+def reintroduce_unified_head_terms(
+    ra_query: RelationalAlgebraOperation,
+    flat_query: Implication,
+    unified_query: Implication,
+) -> RelationalAlgebraOperation:
+    """
+    Reintroduce terms that have been removed through unification of the query.
+
+    There are two such cases:
+
+    1. A head variable was repeated, such as in `ans(y, y)` and the extensional
+    plan computes all possible values for `y` but will output only one column.
+    This function makes sure that a second column for `y` is outputed, and that
+    the resulting solution set will be a binary relation, as required.
+
+    2. The query's head contains a constant, such as in `ans(2, y)`, in which
+    case a constant column is added to the solution set.
+
+    """
+    proj_list = list()
+    for old, new in zip(
+        flat_query.consequent.args, unified_query.consequent.args
+    ):
+        dst_column = str2columnstr_constant(old.name)
+        fun_exp = dst_column
+        if new != old:
+            if isinstance(new, Symbol):
+                fun_exp = str2columnstr_constant(new.name)
+            elif isinstance(new, Constant):
+                fun_exp = new
+            else:
+                raise ValueError(
+                    f"Unexpected argument {new}. "
+                    "Expected symbol or constant"
+                )
+        member = FunctionApplicationListMember(fun_exp, dst_column)
+        proj_list.append(member)
+    return ExtendedProjection(ra_query, tuple(proj_list))

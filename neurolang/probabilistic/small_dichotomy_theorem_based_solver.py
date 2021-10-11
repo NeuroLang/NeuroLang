@@ -21,31 +21,31 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 
 import logging
 from collections import defaultdict
+from typing import AbstractSet
 
 from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
-    enforce_conjunction,
     extract_logic_atoms,
-    flatten_query
+    extract_logic_free_variables,
+    extract_logic_predicates,
+    flatten_query,
+    remove_conjunction_duplicates
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ExpressionWalker
-from ..expressions import Constant, Symbol
-from ..logic import FALSE, Conjunction, Implication
+from ..exceptions import UnsupportedSolverError
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..logic import FALSE, Conjunction, Disjunction, Implication, Negation
+from ..logic.transformations import (
+    GuaranteeConjunction,
+    convert_to_pnf_with_dnf_matrix
+)
 from ..relational_algebra import (
-    ColumnStr,
-    EliminateTrivialProjections,
-    ExtendedProjection,
-    FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     Projection,
-    RelationalAlgebraPushInSelections,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import (
-    ProvenanceAlgebraSet,
-)
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
@@ -55,9 +55,12 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
-from .probabilistic_semiring_solver import ProbSemiringSolver
+from .query_resolution import (
+    generate_provenance_query_solver,
+    lift_solve_marg_query,
+    reintroduce_unified_head_terms
+)
 from .shattering import shatter_easy_probfacts
-from .query_resolution import lift_solve_marg_query
 
 LOG = logging.getLogger(__name__)
 
@@ -108,15 +111,7 @@ def extract_atom_sets_and_detect_self_joins(query):
     return has_self_joins, atom_set
 
 
-class RAQueryOptimiser(
-    EliminateTrivialProjections,
-    RelationalAlgebraPushInSelections,
-    ExpressionWalker,
-):
-    pass
-
-
-def solve_succ_query(query, cpl_program):
+def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     """
     Solve a SUCC query on a CP-Logic program.
 
@@ -126,6 +121,10 @@ def solve_succ_query(query, cpl_program):
         SUCC query of the form `ans(x) :- P(x)`.
     cpl_program : CPLogicProgram
         CP-Logic program on which the query should be solved.
+    run_relational_algebra_solver: bool, default True
+        When true the result's `relation` attribute is a NamedRelationalAlgebraFrozenSet,
+        when false the attribute is the relational algebra expression that
+        produces the such set.
 
     Returns
     -------
@@ -151,32 +150,68 @@ def solve_succ_query(query, cpl_program):
             if isinstance(term, Symbol)
         )
         return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names),
-            ColumnStr("_p_"),
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+                ("_p_",) + head_var_names)
+            ),
+            str2columnstr_constant("_p_"),
         )
 
+    if isinstance(flat_query_body, Conjunction):
+        flat_query_body = remove_conjunction_duplicates(flat_query_body)
+
     with log_performance(LOG, "Translation and lifted optimisation"):
-        flat_query_body = enforce_conjunction(
+        flat_query_body = GuaranteeConjunction().walk(
             lift_optimization_for_choice_predicates(
                 flat_query_body, cpl_program
             )
         )
         flat_query = Implication(query.consequent, flat_query_body)
+
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
         shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
-        shattered_query_probabilistic_body = Conjunction(
-            tuple(
-                atom
-                for atom in extract_logic_atoms(shattered_query.antecedent)
-                if isinstance(
-                    atom.functor,
-                    (ProbabilisticChoiceSet, ProbabilisticFactSet),
-                )
-            )
+
+        shattered_query_antecedent = convert_to_pnf_with_dnf_matrix(
+            shattered_query.antecedent
         )
+        if not isinstance(
+            shattered_query_antecedent,
+            (Conjunction, FunctionApplication)
+        ) or any(
+            isinstance(predicate, Negation)
+            for predicate
+            in extract_logic_predicates(shattered_query_antecedent)
+        ):
+            raise NotHierarchicalQueryException(
+                f"Query {query} not a hierarchical conjunctive query"
+            )
+
+        shattered_query = Implication(
+            shattered_query.consequent,
+            shattered_query_antecedent
+        )
+        probabilistic_predicates = \
+            _extract_antecedent_probabilistic_predicates(shattered_query)
+        shattered_query_probabilistic_body = Conjunction(
+            tuple(probabilistic_predicates)
+        )
+        if (
+            isinstance(shattered_query.antecedent, Disjunction)
+            or
+            _get_eqvars_in_atoms_matching_functype(
+                shattered_query, ProbabilisticFactSet
+            )
+            - _get_eqvars_in_atoms_matching_functype(
+                shattered_query, ProbabilisticChoiceSet
+            )
+        ):
+            raise UnsupportedSolverError(
+                "Cannot solve queries with existentially quantified variable "
+                "occurring in probabilistic fact but not in any probabilistic "
+                "choice, or disjunctive queries"
+            )
         if not is_hierarchical_without_self_joins(
             shattered_query_probabilistic_body
         ):
@@ -191,16 +226,32 @@ def solve_succ_query(query, cpl_program):
         # project on query's head variables
         ra_query = _project_on_query_head(ra_query, shattered_query)
         # re-introduce head variables potentially removed by unification
-        ra_query = _maybe_reintroduce_head_variables(
+        ra_query = reintroduce_unified_head_terms(
             ra_query, flat_query, unified_query
         )
-        ra_query = RAQueryOptimiser().walk(ra_query)
 
-    with log_performance(LOG, "Run RAP query"):
-        solver = ProbSemiringSolver(symbol_table)
-        prob_set_result = solver.walk(ra_query)
+    query_solver = generate_provenance_query_solver(
+        symbol_table, run_relational_algebra_solver
+    )
+
+    with log_performance(LOG, "Run RAP query %s", init_args=(ra_query,)):
+        prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
+
+
+def _extract_antecedent_probabilistic_predicates(datalog_rule):
+    probabilistic_predicates = []
+    for predicate in extract_logic_predicates(datalog_rule.antecedent):
+        atom = predicate
+        while isinstance(atom, Negation):
+            atom = atom.formula
+        if isinstance(
+            atom.functor,
+            (ProbabilisticChoiceSet, ProbabilisticFactSet)
+        ):
+            probabilistic_predicates.append(predicate)
+    return probabilistic_predicates
 
 
 def _project_on_query_head(provset, query):
@@ -212,28 +263,6 @@ def _project_on_query_head(provset, query):
         )
     )
     return Projection(provset, proj_cols)
-
-
-def _maybe_reintroduce_head_variables(ra_query, flat_query, unified_query):
-    proj_list = list()
-    for old, new in zip(
-        flat_query.consequent.args, unified_query.consequent.args
-    ):
-        dst_column = str2columnstr_constant(old.name)
-        fun_exp = dst_column
-        if new != old:
-            if isinstance(new, Symbol):
-                fun_exp = str2columnstr_constant(new.name)
-            elif isinstance(new, Constant):
-                fun_exp = new
-            else:
-                raise ValueError(
-                    f"Unexpected argument {new}. "
-                    "Expected symbol or constant"
-                )
-        member = FunctionApplicationListMember(fun_exp, dst_column)
-        proj_list.append(member)
-    return ExtendedProjection(ra_query, tuple(proj_list))
 
 
 def solve_marg_query(rule, cpl):
@@ -253,3 +282,15 @@ def solve_marg_query(rule, cpl):
         set.
     """
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
+
+
+def _get_eqvars_in_atoms_matching_functype(query, functor_type):
+    eq_vars = set()
+    head_vars = set(extract_logic_free_variables(query.consequent))
+    for atom in extract_logic_atoms(query.antecedent):
+        if isinstance(atom.functor, functor_type):
+            eq_vars |= (
+                set(extract_logic_free_variables(atom))
+                - head_vars
+            )
+    return eq_vars

@@ -134,8 +134,8 @@ class ExistentialPredicate(Quantifier):
 
     def __repr__(self):
         r = (
-            u'\u2203{{{}: {} st {}}}'
-            .format(self.head, self.__type_repr__, self.body)
+            u'\u2203{{{} st {}}}'
+            .format(self.head, self.body)
         )
         return r
 
@@ -165,8 +165,8 @@ class UniversalPredicate(Quantifier):
 
     def __repr__(self):
         r = (
-            u'\u2200{{{}: {} st {}}}'
-            .format(self.head, self.__type_repr__, self.body)
+            u'\u2200{{{} st {}}}'
+            .format(self.head, self.body)
         )
         return r
 

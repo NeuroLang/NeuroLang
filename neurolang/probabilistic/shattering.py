@@ -3,17 +3,27 @@ import itertools
 import operator
 from typing import AbstractSet
 
-from ..datalog.expression_processing import (
-    enforce_conjunctive_antecedent,
-    extract_logic_predicates,
-)
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
+from ..logic import Implication
+from ..logic.transformations import (
+    RemoveTrivialOperations,
+    RemoveDuplicatedConjunctsDisjuncts,
+)
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
+from .transforms import convert_to_dnf_ucq
+from ..relational_algebra import Projection, Selection, int2columnint_constant
 
 EQ = Constant(operator.eq)
+
+
+def query_to_tagged_set_representation(query, symbol_table):
+    new_antecedent = ReplaceExpressionWalker(symbol_table).walk(
+        query.antecedent
+    )
+    return query.apply(query.consequent, new_antecedent)
 
 
 def terms_differ_by_constant_term(terms_a, terms_b):
@@ -77,10 +87,61 @@ class Shatter(FunctionApplication):
     pass
 
 
-class QueryEasyShatteringTagger(ExpressionWalker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class Shatterer(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
         self._cached_args = collections.defaultdict(set)
+        self._cached = dict()
+
+    @add_match(Shatter(ProbabilisticFactSet, ...))
+    def easy_shatter_probfact(self, shatter):
+        pred_symb = shatter.functor.relation
+        cache_key = (pred_symb,)
+        for i, arg in enumerate(shatter.args):
+            if isinstance(arg, Constant):
+                cache_key += (arg,)
+            else:
+                cache_key += (i,)
+        if cache_key in self._cached:
+            new_pred_symb = self._cached[cache_key]
+        else:
+            new_pred_symb = Symbol.fresh()
+            const_idxs = list(
+                i
+                for i, arg in enumerate(shatter.args)
+                if isinstance(arg, Constant)
+            )
+            columns = [
+                int2columnint_constant(c)
+                for c in self.symbol_table[shatter.functor.relation]
+                .value.columns
+            ]
+            new_relation = shatter.functor.relation
+            for i in const_idxs:
+                new_relation = Selection(
+                    new_relation,
+                    EQ(columns[i + 1], shatter.args[i])
+                )
+            non_prob_columns = tuple(
+                c
+                for c in columns
+                if c != shatter.functor.probability_column
+            )
+            proj_cols = (shatter.functor.probability_column,) + tuple(
+                non_prob_columns[i]
+                for i, arg in enumerate(shatter.args)
+                if not isinstance(arg, Constant)
+            )
+            new_relation = Projection(new_relation, proj_cols)
+            self.symbol_table[new_pred_symb] = new_relation
+            self._cached[cache_key] = new_pred_symb
+        new_tagged = ProbabilisticFactSet(
+            new_pred_symb, shatter.functor.probability_column
+        )
+        non_const_args = tuple(
+            arg for arg in shatter.args if not isinstance(arg, Constant)
+        )
+        return FunctionApplication(new_tagged, non_const_args)
 
     @add_match(
         FunctionApplication(ProbabilisticFactSet, ...),
@@ -92,7 +153,7 @@ class QueryEasyShatteringTagger(ExpressionWalker):
         self._cached_args[function_application.functor.relation].add(
             function_application.args
         )
-        return Shatter(*function_application.unapply())
+        return self.walk(Shatter(*function_application.unapply()))
 
     @add_match(
         FunctionApplication(ProbabilisticFactSet, ...),
@@ -115,71 +176,6 @@ class QueryEasyShatteringTagger(ExpressionWalker):
             raise NotEasilyShatterableError(
                 f"Cannot easily shatter {pred_symb}-predicates"
             )
-
-
-class EasyQueryShatterer(ExpressionWalker):
-    def __init__(self, symbol_table, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.symbol_table = symbol_table
-
-    @add_match(Shatter(ProbabilisticFactSet, ...))
-    def easy_shatter_probfact(self, shatter):
-        const_idxs = list(
-            i
-            for i, arg in enumerate(shatter.args)
-            if isinstance(arg, Constant)
-        )
-        new_relation = self.symbol_table[shatter.functor.relation].value
-        new_relation = new_relation.selection(
-            {
-                new_relation.columns[i + 1]: shatter.args[i].value
-                for i in const_idxs
-            }
-        )
-        non_prob_columns = tuple(
-            c
-            for c in new_relation.columns
-            if str(c) != str(shatter.functor.probability_column.value)
-        )
-        proj_cols = (shatter.functor.probability_column.value,) + tuple(
-            non_prob_columns[i]
-            for i, arg in enumerate(shatter.args)
-            if not isinstance(arg, Constant)
-        )
-        new_relation = new_relation.projection(*proj_cols)
-        new_pred_symb = Symbol.fresh()
-        self.symbol_table[new_pred_symb] = Constant[AbstractSet](new_relation)
-        non_const_args = tuple(
-            arg for arg in shatter.args if not isinstance(arg, Constant)
-        )
-        new_tagged = ProbabilisticFactSet(
-            new_pred_symb, shatter.functor.probability_column
-        )
-        return FunctionApplication(new_tagged, non_const_args)
-
-
-class EasyProbfactShatterer(
-    QueryEasyShatteringTagger,
-    EasyQueryShatterer,
-):
-    def __init__(self, symbol_table):
-        super().__init__(symbol_table)
-
-
-def query_to_tagged_set_representation(query, symbol_table):
-    query = enforce_conjunctive_antecedent(query)
-    new_antecedent = ReplaceExpressionWalker(symbol_table).walk(
-        query.antecedent
-    )
-    return query.apply(query.consequent, new_antecedent)
-
-
-def _check_shatter_fully_solved(shattered_query):
-    if any(
-        isinstance(formula, Shatter)
-        for formula in extract_logic_predicates(shattered_query.antecedent)
-    ):
-        raise NotEasilyShatterableError("Cannot easily shatter query")
 
 
 def shatter_easy_probfacts(query, symbol_table):
@@ -213,9 +209,13 @@ def shatter_easy_probfacts(query, symbol_table):
         An equivalent conjunctive query without constants.
 
     """
-    query = enforce_conjunctive_antecedent(query)
-    tagged_query = query_to_tagged_set_representation(query, symbol_table)
-    shatterer = EasyProbfactShatterer(symbol_table)
-    shattered_query = shatterer.walk(tagged_query)
-    _check_shatter_fully_solved(shattered_query)
-    return shattered_query
+    dnf_query_antecedent = convert_to_dnf_ucq(query.antecedent)
+    dnf_query_antecedent = RemoveDuplicatedConjunctsDisjuncts().walk(
+        dnf_query_antecedent
+    )
+    dnf_query = Implication(query.consequent, dnf_query_antecedent)
+    tagged_query = query_to_tagged_set_representation(dnf_query, symbol_table)
+    shatterer = Shatterer(symbol_table)
+    shattered = shatterer.walk(tagged_query)
+    shattered = RemoveTrivialOperations().walk(shattered)
+    return shattered

@@ -42,7 +42,7 @@ from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError, UnsupportedSolverError
-from ..expression_walker import ExpressionBasicEvaluator
+from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
 from ..logic import Union
 from ..probabilistic import (
     dalvi_suciu_lift,
@@ -76,6 +76,7 @@ from .datalog.sugar import (
 )
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
+from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
@@ -88,11 +89,13 @@ class RegionFrontendCPLogicSolver(
     QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
     RegionSolver,
+    NumpyFunctionsMixin,
     CPLogicMixin,
     DatalogWithAggregationMixin,
     BuiltinAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
+    TypedSymbolTableMixin,
     ExpressionBasicEvaluator,
 ):
     pass
@@ -109,10 +112,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         self,
         chase_class: Type[Chase] = Chase,
         probabilistic_solvers: Tuple[Callable] = (
+            small_dichotomy_theorem_based_solver.solve_succ_query,
             dalvi_suciu_lift.solve_succ_query,
             wmc_solve_succ_query,
         ),
         probabilistic_marg_solvers: Tuple[Callable] = (
+            small_dichotomy_theorem_based_solver.solve_marg_query,
             dalvi_suciu_lift.solve_marg_query,
             wmc_solve_marg_query,
         ),
@@ -688,11 +693,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         columns = tuple(ir.Symbol.fresh().name for _ in range(arity))
         ra_set = NamedRelationalAlgebraFrozenSet(columns, iterable)
         prob_col = ir.Symbol.fresh().name
-        probability = 1 / len(iterable)
+        probability = 1 / len(ra_set)
         projections = collections.OrderedDict()
         projections[prob_col] = probability
         for col in columns:
             projections[col] = RelationalAlgebraColumnStr(col)
         ra_set = ra_set.extended_projection(projections)
-        self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
+        self.program_ir.add_probabilistic_choice_from_tuples(
+            symbol,
+            ra_set.projection_to_unnamed(*projections.keys())
+        )
         return fe.Symbol(self, name)

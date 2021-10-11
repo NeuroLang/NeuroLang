@@ -6,21 +6,41 @@ the extensional, intensional, and builtin
 sets.
 """
 
+import operator as op
 from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 from warnings import warn
 
-from ..expression_walker import PatternWalker, add_match
-from ..exceptions import NotConjunctiveExpression, NotConjunctiveExpressionNestedPredicates, ProtectedKeywordError
-from ..expressions import (Constant, Expression, FunctionApplication,
-                           NeuroLangException, Symbol, TypedSymbolTableMixin,
-                           is_leq_informative)
+from ..exceptions import (
+    NotConjunctiveExpression,
+    NotConjunctiveExpressionNestedPredicates,
+    ProtectedKeywordError
+)
+from ..expression_walker import ExpressionWalker, PatternWalker, add_match
+from ..expressions import (
+    Constant,
+    Expression,
+    FunctionApplication,
+    NeuroLangException,
+    Symbol,
+    TypedSymbolTableMixin,
+    is_leq_informative
+)
 from ..type_system import Unknown, get_args, infer_type
 from .expression_processing import (
-    extract_logic_free_variables, is_conjunctive_expression,
-    is_conjunctive_expression_with_nested_predicates)
-from .expressions import (NULL, UNDEFINED, Fact, Implication, NullConstant,
-                          Undefined, Union)
+    extract_logic_free_variables,
+    is_conjunctive_expression,
+    is_conjunctive_expression_with_nested_predicates
+)
+from .expressions import (
+    NULL,
+    UNDEFINED,
+    Fact,
+    Implication,
+    NullConstant,
+    Undefined,
+    Union
+)
 from .wrapped_collections import WrappedRelationalAlgebraSet
 
 __all__ = [
@@ -34,7 +54,7 @@ class UnionOfConjunctiveQueries:
     pass
 
 
-class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
+class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
     '''
     Implementation of Datalog grammar in terms of
     Intermediate Representations. No query resolution implemented.
@@ -65,8 +85,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
     protected_keywords = set()
 
-    def function_equals(self, a: Any, b: Any) -> bool:
-        return a == b
+    constant_equals = Constant[Callable[[Any, Any], bool]](op.eq)
 
     @add_match(Symbol)
     def symbol(self, expression):
@@ -77,6 +96,17 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             return expression
         else:
             return new_expression
+
+    @add_match(Union)
+    def union_of_cq(self, expression):
+        """This pattern is here to avoid
+        processing the full program when one rule
+        is rewritten.
+        """
+        for formula in expression.formulas:
+            self.walk(formula)
+
+        return expression
 
     @add_match(Fact(FunctionApplication(Symbol, ...)))
     def fact(self, expression):
@@ -128,8 +158,10 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         Expression
     ))
     def statement_intensional(self, expression):
-        consequent = expression.consequent
-        antecedent = expression.antecedent
+        original_expression = expression
+        consequent = self.walk(expression.consequent)
+        antecedent = self.walk(expression.antecedent)
+        expression = Implication(consequent, antecedent)
 
         self._validate_implication_syntax(consequent, antecedent)
 
@@ -145,7 +177,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
         self.symbol_table[symbol] = Union(disj)
 
-        return expression
+        return original_expression
 
     def _new_intensional_internal_representation(self, consequent):
         symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
@@ -314,3 +346,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         elif first is not None:
             type_ = infer_type(first)
         return type_, iterable
+
+
+class DatalogProgram(DatalogProgramMixin, ExpressionWalker):
+    pass

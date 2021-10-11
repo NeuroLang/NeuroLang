@@ -3,7 +3,6 @@ from typing import Iterable, Callable, Dict, Union
 from uuid import uuid1
 
 import pandas as pd
-
 from . import abstract as abc
 
 
@@ -149,11 +148,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return tuple()
 
     def as_numpy_array(self):
+        self._drop_duplicates_if_needed()
         res = self._container.values.view()
         res.setflags(write=False)
         return res
 
     def as_pandas_dataframe(self):
+        self._drop_duplicates_if_needed()
         return self._container
 
     def _empty_set_same_structure(self):
@@ -188,6 +189,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         new_container.columns = pd.RangeIndex(len(columns))
         output = self._empty_set_same_structure()
         output._container = new_container
+        if (len(columns) == self.arity):
+            output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def selection(
@@ -230,6 +233,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         output = self._empty_set_same_structure()
         output._container = new_container
+        output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def _selection_dict(self, select_criteria):
@@ -288,6 +292,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         new_container = self._container[ix]
         output = self._empty_set_same_structure()
         output._container = new_container
+        output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def equijoin(self, other, join_indices):
@@ -598,19 +603,65 @@ class NamedRelationalAlgebraFrozenSet(
     def left_naturaljoin(self, other):
         on = [c for c in self.columns if c in other.columns]
 
+        self._drop_duplicates_if_needed()
+        other._drop_duplicates_if_needed()
+
         if len(on) == 0:
             return self
 
-        new_container = self._container.set_index(on).join(
-            other._container.set_index(on), how="left"
+        new_container = self._container.merge(
+            other._container,
+            how="left"
         )
-        new_container = new_container.reset_index()
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=(
                 self._might_have_duplicates | other._might_have_duplicates
             ),
             columns=self.columns,
+        )
+
+    def replace_null(self, column, value):
+        if self._container is None:
+            return self.copy()
+
+        new_container = self._container.fillna({column: value})
+        return self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=self._might_have_duplicates,
+            columns=self.columns,
+        )
+
+    def explode(self, src_column, dst_columns):
+        if self._container is None:
+            return self.copy()
+
+        if dst_columns == src_column:
+            # 1. replace original column by exploded one
+            new_container = self._container.explode(
+                src_column, ignore_index=True
+            )
+            new_columns = self.columns
+        elif not isinstance(dst_columns, tuple):
+            # 2. add new column with exploded values
+            new_container = self._container.assign(
+                **{dst_columns: self._container[src_column]}
+            ).explode(dst_columns, ignore_index=True)
+            new_columns = self.columns + (dst_columns,)
+        else:
+            # 3. explode values into multiple columns
+            new_container = self._container.assign(
+                **{dst_columns[-1]: self._container[src_column]}
+            ).explode(dst_columns[-1], ignore_index=True)
+            for c, v in zip(dst_columns, zip(*new_container[dst_columns[-1]])):
+                new_container[c] = v
+            new_columns = self.columns + dst_columns
+            new_container = new_container[list(new_columns)]
+
+        return self._light_init_same_structure(
+            new_container.convert_dtypes(),
+            might_have_duplicates=True,
+            columns=new_columns,
         )
 
     def cross_product(self, other):
@@ -646,6 +697,8 @@ class NamedRelationalAlgebraFrozenSet(
         return res
 
     def rename_column(self, src, dst):
+        if self.is_dum():
+            return self
         if src not in self._columns:
             raise ValueError(f"{src} not in columns")
         if src == dst:
@@ -664,6 +717,8 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def rename_columns(self, renames):
+        if self.is_dum():
+            return self
         # prevent duplicated destination columns
         self._check_for_duplicated_columns(renames.values())
         if not set(renames).issubset(self.columns):
@@ -758,7 +813,7 @@ class NamedRelationalAlgebraFrozenSet(
 
         output = self._light_init_same_structure(
             new_container,
-            might_have_duplicates=self._might_have_duplicates,
+            might_have_duplicates=False,
             columns=list(new_container.columns),
         )
         return output
@@ -819,25 +874,32 @@ class NamedRelationalAlgebraFrozenSet(
                 iterable=[],
             )
         new_container = self._container.copy()
+        seen_pure_columns = set()
         for dst_column, operation in eval_expressions.items():
             if isinstance(operation, RelationalAlgebraStringExpression):
                 if str(operation) != str(dst_column):
-                    new_container = new_container.eval(
+                    new_container.eval(
                         "{}={}".format(str(dst_column), str(operation)),
                         engine="python",
+                        inplace=True
                     )
             elif isinstance(operation, abc.RelationalAlgebraColumn):
-                new_container[dst_column] = new_container[operation]
+                seen_pure_columns.add(operation)
+                new_container[dst_column] = new_container.loc[:, operation]
             elif callable(operation):
                 new_container[dst_column] = new_container.apply(
                     operation, axis=1
                 )
             else:
                 new_container[dst_column] = operation
-        new_container = new_container[proj_columns]
+        new_container = new_container.loc[:, proj_columns]
+        might_have_duplicates = not (
+            (len(seen_pure_columns) == len(self.columns))
+            and not self._might_have_duplicates
+        )
         output = self._light_init_same_structure(
             new_container,
-            might_have_duplicates=self._might_have_duplicates,
+            might_have_duplicates=might_have_duplicates,
             columns=proj_columns,
         )
         return output
@@ -860,6 +922,7 @@ class NamedRelationalAlgebraFrozenSet(
         container.columns = range(len(container.columns))
         output = RelationalAlgebraFrozenSet()
         output._container = container
+        output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def __sub__(self, other):
@@ -932,7 +995,9 @@ class NamedRelationalAlgebraFrozenSet(
         self._keep_column_types(new_container)
         output = self._light_init_same_structure(
             new_container,
-            might_have_duplicates=self._might_have_duplicates,
+            might_have_duplicates=(
+                self._might_have_duplicates & other._might_have_duplicates
+            ),
         )
         return output
 
