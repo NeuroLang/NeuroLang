@@ -662,8 +662,6 @@ def test_entity_rules_inclusion():
 
     nl = NeurolangPDL()
 
-    nl.add_tuple_set
-
     nl.load_ontology(io.StringIO(owl))
 
     chair = Symbol('Chair')
