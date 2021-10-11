@@ -176,7 +176,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         """
         onto = OntologyParser(paths)
         constraints, entity_rules, classes = onto.parse_ontology()
-        [self.new_symbol(name=c) for c in classes]
+        _ = [self.new_symbol(name=c) for c in classes]
         self.program_ir.set_constraints(constraints)
         self.program_ir.add_existential_rules(onto.existential_rules)
         for _, expressions in entity_rules.items():
