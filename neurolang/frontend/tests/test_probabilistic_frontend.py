@@ -1362,7 +1362,9 @@ def test_current_program_with_probfact():
     )
     exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
     with nl.environment as e:
-        (e.TermInStudy @ (1 / (1 + exp(-300 * (e.tfidf - 0.001)))))[e.t, e.s] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
+        (e.TermInStudy @ (1 / (1 + exp(-300 * (e.tfidf - 0.001)))))[
+            e.t, e.s
+        ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
     prog = nl.current_program
     assert len(prog) == 2
 
