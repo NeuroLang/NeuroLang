@@ -1348,3 +1348,23 @@ def test_pchoice_with_both_eqvar_and_free_var():
         ("b", 0.1 * 0.2),
     }
     assert_almost_equal(result, expected)
+
+
+def test_current_program_with_probfact():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [
+            (10751455, "emotion", 0.052538),
+            (10808134, "emotion", 0.244368),
+            (10913505, "emotion", 0.059463),
+        ],
+        name="TermInStudyTFIDF",
+    )
+    exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
+    with nl.environment as e:
+        (e.TermInStudy @ (1 / (1 + exp(-300 * (e.tfidf - 0.001)))))[
+            e.t, e.s
+        ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
+    prog = nl.current_program
+    assert len(prog) == 2
+
