@@ -1,10 +1,11 @@
-'''
+"""
 Magic Sets [1] rewriting implementation for Datalog.
 
 [1] F. Bancilhon, D. Maier, Y. Sagiv, J. D. Ullman, in ACM PODS ’86, pp. 1–15.
-'''
+"""
 
-from typing import Iterable, Tuple, Type
+from abc import ABC, abstractmethod
+from typing import Iterable, List, Set, Tuple, Type
 from ..config import config
 from ..expressions import Constant, Expression, Symbol
 from ..expression_walker import ExpressionWalker
@@ -26,6 +27,7 @@ from .expressions import (
     Union,
 )
 
+
 class AdornedSymbol(Symbol):
     def __init__(self, expression, adornment, number):
         self.expression = expression
@@ -44,9 +46,9 @@ class AdornedSymbol(Symbol):
 
     def __eq__(self, other):
         return (
-            hash(self) == hash(other) and
-            isinstance(other, AdornedSymbol) and
-            self.unapply() == other.unapply()
+            hash(self) == hash(other)
+            and isinstance(other, AdornedSymbol)
+            and self.unapply() == other.unapply()
         )
 
     def __hash__(self):
@@ -99,12 +101,12 @@ class ReplaceAdornedSymbolWalker(ExpressionWalker):
         )
 
 
-class SIPS:
+class SIPS(ABC):
     """
     Sideways Information Passing Strategy (SIPS). A SIPS defines how
-    bounded variables are passed from the head of a rule to the body
+    bound variables are passed from the head of a rule to the body
     predicates of the rule. SIPS formally describe what information
-    (bounded variables) is passed by one literal, or a conjunction of
+    (bound variables) is passed by one literal, or a conjunction of
     literals, to another literal.
 
     This default SIPS considers that for a body predicate P, and head
@@ -112,47 +114,132 @@ class SIPS:
     corresponds to a bound variable of H in a.
     """
 
-    def __init__(self, rule, adornment, edb) -> None:
+    def __init__(self, rule, adorned_head, edb) -> None:
         self.rule = rule
-        self.adornment = adornment
         self.edb = edb
-        self.bound_variables = {
-            arg
-            for arg, ad in zip(rule.consequent.args, adornment)
-            if isinstance(arg, Symbol) and ad == "b"
-        }
-        bounded_aggregates = {
+
+        self._check_for_bound_aggregates(rule, adorned_head.functor.adornment)
+        self.arcs, self.adorned_antecedent = self._creates_arcs(
+            rule, adorned_head
+        )
+
+    def _check_for_bound_aggregates(self, rule, adornment):
+        """
+        Check if there are aggregate functions in the consequent's arguments
+        and raise an exception if these arguments are bound in the adornment.
+        """
+        bound_aggregates = {
             arg
             for arg, ad in zip(rule.consequent.args, adornment)
             if isinstance(arg, AggregationApplication) and ad == "b"
         }
-        if len(bounded_aggregates) > 0:
-            bounded_aggregate = AdornedSymbol(rule.consequent.functor, adornment, None)
-            bounded_aggregate = bounded_aggregate(*rule.consequent.args)
+        if len(bound_aggregates) > 0:
+            bound_aggregate = AdornedSymbol(
+                rule.consequent.functor, adornment, None
+            )
+            bound_aggregate = bound_aggregate(*rule.consequent.args)
             raise BoundAggregationApplicationError(
                 "Magic Sets rewrite would lead to aggregation application"
                 " being bound. Problematic adorned expression is: "
-                f"{bounded_aggregate}"
+                f"{bound_aggregate}"
             )
 
-    def adorn_predicate(self, predicate, predicate_number, in_edb):
+    def _creates_arcs(self, rule, adorned_head):
+        """
+        For a given rule and an adornment for the head predicate, create the
+        arcs corresponding to this SIPS.
+
+        For each predicate in the rule's antecedent, this method will call
+        `self._should_create_arc` to decide if this predicate should be
+        considered an arc in the SIPS (i.e. negative or probabilistic
+        predicates can be excluded). If `self._should_create_arc` returns True
+        it will call `self._create_arc` which should return the head an tail
+        of the arc to be added.
+
+        Returns
+        -------
+        Union[Dict[Expression, Tuple[Expression]], Tuple[Expression]]
+            returns the created arcs as a dict mapping of head -> tails and
+            the adorned antecedent of the rule
+        """
+        adorned_predicates = [adorned_head]
+        bound_variables = {
+            arg
+            for arg, ad in zip(
+                adorned_head.args, adorned_head.functor.adornment
+            )
+            if isinstance(arg, Symbol) and ad == "b"
+        }
+        arcs = dict()
+        adorned_antecedent = ()
+        checked_predicates = {}
+
+        predicates = extract_logic_predicates(rule.antecedent)
+        for predicate in predicates:
+            predicate_number = checked_predicates.get(predicate, 0)
+            checked_predicates[predicate] = predicate_number + 1
+            if self._should_create_arc(predicate):
+                tail, head = self._create_arc(
+                    predicate,
+                    predicate_number,
+                    bound_variables,
+                    adorned_predicates,
+                )
+                arcs[head] = tail
+                adorned_antecedent += (head,)
+            else:
+                adorned_antecedent += (predicate,)
+        return arcs, adorned_antecedent
+
+    @abstractmethod
+    def _should_create_arc(self, predicate: Expression) -> bool:
+        """
+        Given a predicate p, returns True if this predicate should be
+        considered an arc for this SIPS.
+
+        Parameters
+        ----------
+        predicate : Expression
+            the predicate
+
+        Returns
+        -------
+        bool
+            whether this predicate should be an arc in the SIPS
+        """
+        pass
+
+    def _adorn_predicate(self, predicate, predicate_number, bound_variables):
         adornment = ""
         has_b = False
         for arg in predicate.args:
-            if isinstance(arg, Constant) or arg in self.bound_variables:
+            if isinstance(arg, Constant) or arg in bound_variables:
                 adornment += "b"
                 has_b = True
             else:
                 adornment += "f"
 
-        if in_edb and has_b:
-            adornment = "b" * len(adornment)
-
         if not has_b:
             adornment = ""
 
         p = AdornedSymbol(predicate.functor, adornment, predicate_number)
-        return p(*predicate.args)
+        p = p(*predicate.args)
+        return p
+
+    @abstractmethod
+    def _create_arc(
+        self,
+        predicate: Expression,
+        predicate_number: int,
+        bound_variables: Set[Symbol],
+        adorned_predicates: List[Expression],
+    ) -> Union[Tuple[Expression], Expression]:
+        """
+        Create an arc for the given predicate. An arc is a tuple (tail, head)
+        where tail is a tuple of adorned expressions, and head is the input
+        predicate adorned with the bound variables for this arc.
+        """
+        pass
 
 
 class LeftToRightSIPS(SIPS):
@@ -174,70 +261,38 @@ class LeftToRightSIPS(SIPS):
     def __init__(self, rule, adornment, edb) -> None:
         super().__init__(rule, adornment, edb)
 
-    def adorn_predicate(self, predicate, predicate_number, in_edb):
-        if in_edb or isinstance(predicate.functor, Constant):
-            return predicate
-        adorned_predicate = super().adorn_predicate(
-            predicate, predicate_number, in_edb
+    def _should_create_arc(self, predicate: Expression) -> bool:
+        """
+        Only consider arcs for predicates that are not probabilistic and not
+        in the edb.
+        """
+        if isinstance(predicate, Negation):
+            raise NegationInMagicSetsRewriteError(
+                "Magic sets rewrite does not work with negative predicates."
+            )
+        return not (
+            isinstance(predicate.functor, Constant)
+            or predicate.functor.name in self.edb
         )
-        self.bound_variables.update(
+
+    def _create_arc(
+        self,
+        predicate: Expression,
+        predicate_number: int,
+        bound_variables: Set[Symbol],
+        adorned_predicates: List[Expression],
+    ) -> Union[Tuple[Expression], Expression]:
+        """
+        For each arc, the tail of the arc is composed of all the predicates
+        that have been adorned before it in the rule.
+        """
+        p = self._adorn_predicate(predicate, predicate_number, bound_variables)
+        bound_variables.update(
             arg for arg in predicate.args if isinstance(arg, Symbol)
         )
-        return adorned_predicate
-
-
-class CeriSIPS(SIPS):
-    """
-    In this SIPS, the initial set of bounded variables in the head predicate H
-    with adornment a is augmented with all the variables of EDB predicates and
-    constants of the rule.
-    """
-
-    def __init__(self, rule, adornment, edb) -> None:
-        super().__init__(rule, adornment, edb)
-
-        for predicate in extract_logic_predicates(rule.antecedent):
-            if (
-                isinstance(predicate.functor, Constant)
-                or predicate.functor.name in edb
-            ) and len(self.bound_variables.intersection(predicate.args)) > 0:
-                self.bound_variables.update(
-                    arg for arg in predicate.args if isinstance(arg, Symbol)
-                )
-
-
-def magic_rewrite_ceri(
-    query: Expression, datalog: DatalogProgram
-) -> Tuple[Symbol, Union]:
-    """
-    Implementation of the Magic Sets method of optimization for datalog
-    programs using Ceri et al [1] algorithm.
-
-    .. [1] Stefano Ceri, Georg Gottlob, and Letizia Tanca. 1990.
-       Logic programming and databases. Springer-Verlag, Berlin, Heidelberg.
-       p. 168.
-
-    query : Expression
-        the head symbol of the query rule in the program
-    datalog : DatalogProgram
-        a processed datalog program to optimize
-
-    Returns
-    -------
-    Tuple[Symbol, Union]
-        the rewritten query symbol and program
-    """
-    adorned_code, _ = reachable_adorned_code(query, datalog, CeriSIPS)
-    # assume that the query rule is the last
-    adorned_query = adorned_code.formulas[-1]
-    goal = adorned_query.consequent.functor
-
-    idb = datalog.intensional_database()
-    edb = datalog.extensional_database()
-    magic_rules = create_magic_rules(adorned_code, idb, edb)
-    modified_rules = create_modified_rules(adorned_code, edb)
-    complementary_rules = create_complementary_rules(adorned_code, idb)
-    return goal, Union(magic_rules + modified_rules + complementary_rules)
+        tail = tuple(adorned_predicates)
+        adorned_predicates.append(p)
+        return tail, p
 
 
 def magic_rewrite(
@@ -273,7 +328,9 @@ def magic_rewrite(
     adorned_query = adorned_code.formulas[-1]
     goal = adorned_query.consequent.functor
 
-    magic_rules = create_balbin_magic_rules(adorned_code.formulas[:-1])
+    magic_rules = create_balbin_magic_rules(
+        adorned_code.formulas[:-1], datalog
+    )
     magic_inits = create_magic_query_inits(constant_predicates)
 
     unadorned_code = ReplaceAdornedSymbolWalker().walk(
@@ -313,7 +370,7 @@ def create_magic_query_inits(constant_predicates: Iterable[AdornedSymbol]):
     return magic_init_rules
 
 
-def create_balbin_magic_rules(adorned_rules):
+def create_balbin_magic_rules(adorned_rules, datalog):
     """
     Create the set of Magic Set rules according to Algorithm 2 of
     Balbin et al.
@@ -337,164 +394,31 @@ def create_balbin_magic_rules(adorned_rules):
         if len(magic_head.args) == 0:
             magic_rules.append(rule)
             continue
-        body_predicates = (magic_head,)
-        for predicate in extract_logic_predicates(rule.antecedent):
-            functor = predicate.functor
-            if isinstance(functor, AdornedSymbol) and isinstance(
-                functor.expression, Constant
-            ):
-                body_predicates += (functor.expression(*predicate.args),)
-            elif (
-                isinstance(functor, AdornedSymbol)
-                and "b" in functor.adornment
-            ):
-                new_predicate = magic_predicate(predicate, adorned=False)
-                if not (
-                    len(body_predicates) == 1
-                    and new_predicate == body_predicates[0]
-                ):
+
+        edb = edb_with_prob_symbols(datalog)
+        sips = LeftToRightSIPS(rule, consequent, edb)
+
+        # Add the rule head :- magic(head), body
+        magic_rules.append(
+            Implication(
+                rule.consequent,
+                Conjunction((magic_head,) + sips.adorned_antecedent),
+            )
+        )
+        # Add the magic rules for each arc of the sips
+        for head, tail in sips.arcs.items():
+            if "b" in head.functor.adornment:
+                new_predicate = magic_predicate(head, adorned=False)
+                body_lits = [
+                    p if p != consequent else magic_head for p in tail
+                ]
+                if not (len(body_lits) == 1 and new_predicate == body_lits[0]):
                     # avoid adding rules of the form magic_p(x) :- magic_p(x)
                     magic_rules.append(
-                        Implication(
-                            new_predicate, Conjunction(body_predicates)
-                        )
+                        Implication(new_predicate, Conjunction(body_lits))
                     )
-                body_predicates += (predicate,)
-            else:
-                body_predicates += (predicate,)
-
-        magic_rules.append(
-            Implication(consequent, Conjunction(body_predicates))
-        )
 
     return magic_rules
-
-
-def create_complementary_rules(adorned_code, idb):
-    complementary_rules = []
-    for i, rule in enumerate(adorned_code.formulas):
-        for predicate in extract_logic_predicates(rule.antecedent):
-            if (
-                not (
-                    isinstance(predicate.functor, AdornedSymbol) and
-                    isinstance(predicate.functor.expression, Constant)
-                ) and
-                predicate.functor.name in idb
-            ):
-                magic_consequent = magic_predicate(predicate)
-                magic_antecedent = magic_predicate(predicate, i)
-                complementary_rules.append(Implication(
-                    magic_consequent, magic_antecedent
-                ))
-
-    return complementary_rules
-
-
-def create_magic_rules(adorned_code, idb, edb):
-    magic_rules = []
-    for i, rule in enumerate(adorned_code.formulas):
-        consequent = rule.consequent
-        new_consequent = magic_predicate(consequent)
-        if len(new_consequent.args) == 0:
-            new_consequent = Constant(True)
-        antecedent = rule.antecedent
-        predicates = extract_logic_predicates(antecedent)
-
-        edb_antecedent = create_magic_rules_create_edb_antecedent(
-            predicates, edb
-        )
-        new_antecedent = (new_consequent,)
-        for predicate in edb_antecedent:
-            new_antecedent += (predicate,)
-
-        if len(new_antecedent) == 1:
-            new_antecedent = new_antecedent[0]
-        else:
-            new_antecedent = Conjunction(new_antecedent)
-
-        magic_rules += create_magic_rules_create_rules(
-            new_antecedent, predicates, idb, i
-        )
-    return magic_rules
-
-
-def create_magic_rules_create_edb_antecedent(predicates, edb):
-    edb_antecedent = []
-    for predicate in predicates:
-        functor = predicate.functor
-        if (
-            (
-                isinstance(functor.expression, Constant) or
-                functor.name in edb
-            ) and
-            isinstance(functor, AdornedSymbol) and
-            'b' in functor.adornment
-        ):
-            predicate = Symbol(predicate.functor.name)(*predicate.args)
-            edb_antecedent.append(predicate)
-    return edb_antecedent
-
-
-def create_magic_rules_create_rules(new_antecedent, predicates, idb, i):
-    magic_rules = []
-    for predicate in predicates:
-        functor = predicate.functor
-        is_adorned = isinstance(functor, AdornedSymbol)
-        if (
-            is_adorned and
-            not isinstance(functor.expression, Constant) and
-            functor.name in idb and
-            'b' in functor.adornment
-        ):
-            new_predicate = magic_predicate(predicate, i)
-            magic_rules.append(
-                Implication(
-                    new_predicate,
-                    new_antecedent
-                )
-            )
-    return magic_rules
-
-
-def create_modified_rules(adorned_code, edb):
-    modified_rules = []
-    for i, rule in enumerate(adorned_code.formulas):
-        new_antecedent = obtain_new_antecedent(rule, edb, i)
-
-        if len(new_antecedent) > 0:
-            if len(new_antecedent) == 1:
-                new_antecedent_ = new_antecedent[0]
-            else:
-                new_antecedent_ = Conjunction(tuple(new_antecedent))
-
-            modified_rules.append(Implication(
-                rule.consequent, new_antecedent_
-            ))
-
-    return modified_rules
-
-
-def obtain_new_antecedent(rule, edb, rule_number):
-    new_antecedent = []
-    for predicate in extract_logic_predicates(rule.antecedent):
-        functor = predicate.functor
-        if (
-            isinstance(functor, AdornedSymbol) and
-            isinstance(functor.expression, Constant)
-        ):
-            new_antecedent.append(functor.expression(*predicate.args))
-        elif functor.name in edb:
-            new_antecedent.append(
-                Symbol(functor.name)(*predicate.args)
-            )
-        else:
-            m_p = magic_predicate(predicate, rule_number)
-            update = [m_p, predicate]
-            if functor == rule.consequent.functor:
-                new_antecedent = update + new_antecedent
-            else:
-                new_antecedent += update
-    return new_antecedent
 
 
 def magic_predicate(predicate, i=None, adorned=True):
@@ -607,12 +531,11 @@ def adorn_code(
             continue
 
         for rule in rules.formulas:
+            new_consequent = consequent.functor(*rule.consequent.args)
             adorned_antecedent, to_adorn = adorn_antecedent(
-                rule, adornment,
-                edb, rewritten_rules, sips_class
+                rule, new_consequent, edb, rewritten_rules, sips_class
             )
             adorn_stack += to_adorn
-            new_consequent = consequent.functor(*rule.consequent.args)
             rewritten_program.append(
                 Implication(new_consequent, adorned_antecedent)
             )
@@ -626,45 +549,17 @@ def adorn_code(
 
 
 def adorn_antecedent(
-    rule, adornment, edb, rewritten_rules, sips_class: Type[SIPS]
+    rule, adorned_head, edb, rewritten_rules, sips_class: Type[SIPS]
 ):
-    antecedent = rule.antecedent
     to_adorn = []
-
-    sips = sips_class(rule, adornment, edb)
-
-    predicates = extract_logic_predicates(antecedent)
-    checked_predicates = {}
-    adorned_antecedent = None
-
-    for predicate in predicates:
-        if isinstance(predicate, Negation):
-            raise NegationInMagicSetsRewriteError(
-                "Magic sets rewrite does not work with negative predicates."
-            )
-        predicate_number = checked_predicates.get(predicate, 0)
-        checked_predicates[predicate] = predicate_number + 1
-        in_edb = (
-            isinstance(predicate.functor, Constant)
-            or predicate.functor.name in edb
-        )
-
-        adorned_predicate = sips.adorn_predicate(
-            predicate, predicate_number, in_edb
-        )
-
-        is_adorned = isinstance(adorned_predicate.functor, AdornedSymbol)
-        if (
-            not in_edb
-            and is_adorned
-            and adorned_predicate.functor not in rewritten_rules
-        ):
+    sips = sips_class(rule, adorned_head, edb)
+    arcs = sips.arcs
+    for adorned_predicate in arcs.keys():
+        if adorned_predicate.functor not in rewritten_rules:
             to_adorn.append(adorned_predicate)
 
-        if adorned_antecedent is None:
-            adorned_antecedent = (adorned_predicate,)
-        else:
-            adorned_antecedent += (adorned_predicate,)
+    antecedent = rule.antecedent
+    adorned_antecedent = sips.adorned_antecedent
 
     if len(adorned_antecedent) == 1:
         adorned_antecedent = adorned_antecedent[0]
