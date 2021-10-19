@@ -5,18 +5,16 @@ Magic Sets [1] rewriting implementation for Datalog.
 """
 
 from abc import ABC, abstractmethod
-from typing import Iterable, List, Set, Tuple, Type
+from typing import Iterable, List, Set, Tuple
 from ..config import config
-from ..expressions import Constant, Expression, Symbol
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..expression_walker import ExpressionWalker
 from ..expression_pattern_matching import add_match
 from ..logic import Negation
 from ..probabilistic.expressions import ProbabilisticQuery
-from ..type_system import Unknown
 from . import expression_processing, extract_logic_predicates, DatalogProgram
 from .exceptions import (
     BoundAggregationApplicationError,
-    NegationInMagicSetsRewriteError,
     NonConjunctiveAntecedentInMagicSetsError,
     NoConstantPredicateFoundError,
 )
@@ -33,9 +31,6 @@ class AdornedSymbol(Symbol):
         self.expression = expression
         self.adornment = adornment
         self.number = number
-        self._symbols = {self}
-        if self.type is Unknown:
-            self.type = self.expression.type
 
     @property
     def name(self):
@@ -54,7 +49,7 @@ class AdornedSymbol(Symbol):
     def __hash__(self):
         return hash((self.expression, self.adornment, self.number))
 
-    def __repr__(self):
+    def __str__(self) -> str:
         if isinstance(self.expression, Symbol):
             rep = self.expression.name
         elif isinstance(self.expression, Constant):
@@ -69,17 +64,35 @@ class AdornedSymbol(Symbol):
             subindex = f'_{self.number}'
         else:
             subindex = ''
+        return f'{rep}{superindex}{subindex}'
 
+    def __repr__(self):
         if config.expression_type_printing():
             return (
-                f'S{{{rep}{superindex}{subindex}: '
+                f'S{{{self}: '
                 f'{self.__type_repr__}}}'
             )
         else:
-            return f'S{{{rep}{superindex}{subindex}}}'
+            return f'S{{{self}}}'
+
+
+class NegativeAdornedSymbol(AdornedSymbol):
+    def __init__(self, expression, adornment, number):
+        super().__init__(expression, adornment, number)
+
+    def __hash__(self):
+        return hash(("~", self.expression, self.adornment, self.number))
+
+    def __str__(self) -> str:
+        return "~" + super().__str__()
 
 
 class ReplaceAdornedSymbolWalker(ExpressionWalker):
+    @add_match(FunctionApplication(NegativeAdornedSymbol, ...))
+    def replace_negative_adorned_predicates(self, npred):
+        unadorned_pred = self.process_expression(npred)
+        return Negation(unadorned_pred)
+
     @add_match(Symbol)
     def replace_adorned_symbol(self, symbol):
         if isinstance(symbol, AdornedSymbol) and isinstance(
@@ -187,7 +200,9 @@ class SIPS(ABC):
                 adorned_antecedent += (predicate,)
         return arcs, adorned_antecedent
 
-    def _adorn_predicate(self, predicate, predicate_number, bound_variables):
+    def _adorn_predicate(
+        self, predicate, predicate_number, bound_variables, is_neg
+    ):
         adornment = ""
         has_b = False
         for arg in predicate.args:
@@ -200,7 +215,13 @@ class SIPS(ABC):
         if not has_b:
             adornment = ""
 
-        p = AdornedSymbol(predicate.functor, adornment, predicate_number)
+        if is_neg:
+            p = NegativeAdornedSymbol(
+                predicate.functor, adornment, predicate_number
+            )
+        else:
+            p = AdornedSymbol(predicate.functor, adornment, predicate_number)
+
         p = p(*predicate.args)
         return p
 
@@ -254,19 +275,24 @@ class LeftToRightSIPS(SIPS):
         This is achieved by updating the list of tail_predicates with each new
         adorned predicate.
         """
-        # 1. Constants and predicates in the EDB are already bound and should
+        # 1. unwrap negative predicates
+        is_neg = isinstance(predicate, Negation)
+        if is_neg:
+            pred = predicate.formula
+        else:
+            pred = predicate
+        # 2. Constants and predicates in the EDB are already bound and should
         # not be adorned.
-        if (
-            isinstance(predicate.functor, Constant)
-            or predicate.functor.name in self.edb
-        ):
+        if isinstance(pred.functor, Constant) or pred.functor.name in self.edb:
             return None
 
-        # 2. Adorn the predicate
-        p = self._adorn_predicate(predicate, predicate_number, bound_variables)
+        # 3. Adorn the predicate
+        p = self._adorn_predicate(
+            pred, predicate_number, bound_variables, is_neg
+        )
         tail = tuple(tail_predicates)
 
-        # 3. Update the tail_predicates and list of bound_variables with the
+        # 4. Update the tail_predicates and list of bound_variables with the
         # variables of this predicate. We only add bound variables for
         # positive, non probabilistic predicates
         if p.functor.name not in self.prob_symbols and not isinstance(
@@ -301,10 +327,12 @@ def magic_rewrite(
     Tuple[Symbol, Union]
         the rewritten query symbol and program
     """
+    # 1. Create a SIPS and use it to adorn the code
     sips = LeftToRightSIPS(datalog)
     adorned_code, constant_predicates = reachable_adorned_code(
         query, datalog, sips
     )
+    # 2. Check that there is a constant in the code
     if len(constant_predicates) == 0:
         # No constants present in the code, magic sets is not usefull
         raise NoConstantPredicateFoundError(
@@ -312,16 +340,20 @@ def magic_rewrite(
         )
     # assume that the query rule is the last
     adorned_query = adorned_code.formulas[-1]
-    goal = adorned_query.consequent.functor
 
+    # 3. Create magic rules
     magic_rules = create_balbin_magic_rules(
         adorned_code.formulas[:-1], sips
     )
     magic_inits = create_magic_query_inits(constant_predicates)
 
+    # 4. Unadorn the magic rules + query to replace AdornedSymbols by
+    # regular symbols (makes it easier to check symbol equality later on)
     unadorned_code = ReplaceAdornedSymbolWalker().walk(
         tuple(magic_inits) + tuple(magic_rules) + (adorned_query,)
     )
+    # Ordered of the rules should be preserved, so the unadorned query should
+    # be the last of the unadorned_code
     goal = unadorned_code[-1].consequent.functor
     return goal, Union(unadorned_code)
 
@@ -536,12 +568,9 @@ def adorn_antecedent(
     rule, adorned_head, rewritten_rules, sips: SIPS
 ):
     to_adorn = []
-    _, adorned_antecedent = sips.creates_arcs(rule, adorned_head)
-    for adorned_predicate in adorned_antecedent:
-        if (
-            isinstance(adorned_predicate.functor, AdornedSymbol)
-            and adorned_predicate.functor not in rewritten_rules
-        ):
+    arcs, adorned_antecedent = sips.creates_arcs(rule, adorned_head)
+    for adorned_predicate in arcs.keys():
+        if adorned_predicate.functor not in rewritten_rules:
             to_adorn.append(adorned_predicate)
 
     antecedent = rule.antecedent

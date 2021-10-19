@@ -308,8 +308,14 @@ def test_negation_raises_error():
     dl.walk(code)
     dl.walk(edb)
 
-    with pytest.raises(NegationInMagicSetsRewriteError):
-        magic_sets.magic_rewrite(q(x), dl)
+    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((e,)) for e in (c, d)}
 
 
 @pytest.fixture
