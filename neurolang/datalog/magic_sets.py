@@ -144,12 +144,10 @@ class SIPS(ABC):
         For a given rule and an adorned head predicate, create the
         arcs corresponding to this SIPS.
 
-        For each predicate in the rule's antecedent, this method will call
-        `self._should_create_arc` to decide if this predicate should be
-        considered an arc in the SIPS (i.e. negative or probabilistic
-        predicates can be excluded). If `self._should_create_arc` returns True
-        it will call `self._create_arc` which should return the head an tail
-        of the arc to be added.
+        For each predicate in the rule's antecedent, this method will try to
+        create an arc by calling `self._create_arc`, which should return None
+        if no arc can be created for this predicate, or return the head and
+        tail of the arc to be added.
 
         Returns
         -------
@@ -175,36 +173,19 @@ class SIPS(ABC):
         for predicate in predicates:
             predicate_number = checked_predicates.get(predicate, 0)
             checked_predicates[predicate] = predicate_number + 1
-            if self._should_create_arc(predicate):
-                tail, head = self._create_arc(
+            arc = self._create_arc(
                     predicate,
                     predicate_number,
                     bound_variables,
                     tail_predicates,
                 )
+            if arc is not None:
+                tail, head = arc
                 arcs[head] = tail
                 adorned_antecedent += (head,)
             else:
                 adorned_antecedent += (predicate,)
         return arcs, adorned_antecedent
-
-    @abstractmethod
-    def _should_create_arc(self, predicate: Expression) -> bool:
-        """
-        Given a predicate p, returns True if this predicate should be
-        considered an arc for this SIPS.
-
-        Parameters
-        ----------
-        predicate : Expression
-            the predicate
-
-        Returns
-        -------
-        bool
-            whether this predicate should be an arc in the SIPS
-        """
-        pass
 
     def _adorn_predicate(self, predicate, predicate_number, bound_variables):
         adornment = ""
@@ -230,11 +211,13 @@ class SIPS(ABC):
         predicate_number: int,
         bound_variables: Set[Symbol],
         adorned_predicates: List[Expression],
-    ) -> Union[Tuple[Expression], Expression]:
+    ) -> Union[Tuple[Expression], Expression, None]:
         """
         Create an arc for the given predicate. An arc is a tuple (tail, head)
         where tail is a tuple of adorned expressions, and head is the input
         predicate adorned with the bound variables for this arc.
+        This method should return None if no arc should be created for the
+        given predicate.
         """
         pass
 
@@ -258,20 +241,6 @@ class LeftToRightSIPS(SIPS):
     def __init__(self, datalog) -> None:
         super().__init__(datalog)
 
-    def _should_create_arc(self, predicate: Expression) -> bool:
-        """
-        Only consider arcs for predicates that are not probabilistic and not
-        in the edb.
-        """
-        if isinstance(predicate, Negation):
-            raise NegationInMagicSetsRewriteError(
-                "Magic sets rewrite does not work with negative predicates."
-            )
-        return not (
-            isinstance(predicate.functor, Constant)
-            or predicate.functor.name in self.edb
-        )
-
     def _create_arc(
         self,
         predicate: Expression,
@@ -285,13 +254,29 @@ class LeftToRightSIPS(SIPS):
         This is achieved by updating the list of tail_predicates with each new
         adorned predicate.
         """
+        # 1. Constants and predicates in the EDB are already bound and should
+        # not be adorned.
+        if (
+            isinstance(predicate.functor, Constant)
+            or predicate.functor.name in self.edb
+        ):
+            return None
+
+        # 2. Adorn the predicate
         p = self._adorn_predicate(predicate, predicate_number, bound_variables)
-        bound_variables.update(
-            arg for arg in predicate.args if isinstance(arg, Symbol)
-        )
         tail = tuple(tail_predicates)
-        if p.functor.name not in self.prob_symbols:
+
+        # 3. Update the tail_predicates and list of bound_variables with the
+        # variables of this predicate. We only add bound variables for
+        # positive, non probabilistic predicates
+        if p.functor.name not in self.prob_symbols and not isinstance(
+            predicate, Negation
+        ):
+            bound_variables.update(
+                arg for arg in predicate.args if isinstance(arg, Symbol)
+            )
             tail_predicates.append(p)
+
         return tail, p
 
 
@@ -551,9 +536,12 @@ def adorn_antecedent(
     rule, adorned_head, rewritten_rules, sips: SIPS
 ):
     to_adorn = []
-    arcs, adorned_antecedent = sips.creates_arcs(rule, adorned_head)
-    for adorned_predicate in arcs.keys():
-        if adorned_predicate.functor not in rewritten_rules:
+    _, adorned_antecedent = sips.creates_arcs(rule, adorned_head)
+    for adorned_predicate in adorned_antecedent:
+        if (
+            isinstance(adorned_predicate.functor, AdornedSymbol)
+            and adorned_predicate.functor not in rewritten_rules
+        ):
             to_adorn.append(adorned_predicate)
 
     antecedent = rule.antecedent
