@@ -10,7 +10,7 @@ from ... import expression_walker, expressions
 from ...frontend.datalog.sugar import TranslateProbabilisticQueryMixin
 from ...frontend.probabilistic_frontend import NeurolangPDL
 from ...logic import Negation
-from .. import DatalogProgram, Fact, Implication
+from .. import DatalogProgram, Fact, Implication, Conjunction
 from ..aggregation import (
     AGG_COUNT,
     BuiltinAggregationMixin,
@@ -21,6 +21,7 @@ from ..chase import Chase
 from ..exceptions import BoundAggregationApplicationError
 from ..magic_sets import (
     AdornedSymbol,
+    LeftToRightSIPS,
     NegativeAdornedSymbol,
     ReplaceAdornedSymbolWalker,
     magic_rewrite,
@@ -30,6 +31,7 @@ from ..negation import DatalogProgramNegationMixin
 C_ = expressions.Constant
 S_ = expressions.Symbol
 Imp_ = Implication
+Cnj_ = Conjunction
 F_ = Fact
 Eb_ = expressions.ExpressionBlock
 
@@ -65,6 +67,11 @@ c = C_("c")
 d = C_("d")
 eq = C_(operator.eq)
 
+aq = AdornedSymbol(q, "f", 0)
+aanc2 = AdornedSymbol(anc2, "bf", 0)
+aanc = AdornedSymbol(anc, "bf", 0)
+naanc = NegativeAdornedSymbol(anc, "bf", 0)
+
 
 def test_adorned_symbol():
     ax = AdornedSymbol(x, 'b', 1)
@@ -92,11 +99,6 @@ def test_adorned_symbol():
 
 
 def test_unadorned_expression_walker():
-    aq = AdornedSymbol(q, "f", 0)
-    aanc2 = AdornedSymbol(anc2, "bf", None)
-    aanc = AdornedSymbol(anc, "bf", None)
-    naanc = NegativeAdornedSymbol(anc, "bf", 0)
-
     adorned_code = tuple(
         [
         Imp_(aq(x), aanc2(a, x)),
@@ -107,18 +109,64 @@ def test_unadorned_expression_walker():
     )
     unadorned_code = ReplaceAdornedSymbolWalker().walk(adorned_code)
 
-    xanc2 = S_("anc2^bf")
-    xanc = S_("anc^bf")
+    xanc2 = S_("anc2^bf_0")
+    xanc = S_("anc^bf_0")
     xq = S_("q^f_0")
     expected_code = tuple(
         [
             Imp_(xq(x), xanc2(a, x)),
             Imp_(xanc(x, y), par(x, y)),
             Imp_(xanc(x, y), xanc(x, z) & par(z, y)),
-            Imp_(xanc2(x, y), xanc(x, y) & Negation(S_("anc^bf_0")(x, y))),
+            Imp_(xanc2(x, y), xanc(x, y) & Negation(xanc(x, y))),
         ]
     )
     assert unadorned_code == expected_code
+
+
+def test_l2r_sips():
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(edb)
+    sips = LeftToRightSIPS(dl)
+
+    # Default case
+    arcs, _ = sips.creates_arcs(Imp_(q(x), anc(a, x)), aq(x))
+    assert arcs == {aanc(a, x): (aq(x),)}
+
+    # par is in EDB and should not be an arc
+    arcs, _ = sips.creates_arcs(Imp_(anc(x, y), par(x, y)), aanc(x, y))
+    assert arcs == {}
+
+    # par is in EDB and should not be an arc
+    arcs, _ = sips.creates_arcs(
+        Imp_(anc(x, y), Cnj_((anc(x, z), par(z, y)))), aanc(x, y)
+    )
+    assert arcs == {aanc(x, z): (aanc(x, y),)}
+
+    # bindings should propagate from predicate to predicate
+    arcs, _ = sips.creates_arcs(
+        Imp_(anc(x, y), Cnj_((anc(y, x), par(z, y), up(y, z), down(z, x)))),
+        aanc(x, y),
+    )
+    ancfb = AdornedSymbol(anc, "fb", 0)(y, x)
+    upbf = AdornedSymbol(up, "bf", 0)(y, z)
+    downbb = AdornedSymbol(down, "bb", 0)(z, x)
+    assert arcs == {
+        ancfb: (aanc(x, y),),
+        upbf: (aanc(x, y), ancfb),
+        downbb: (aanc(x, y), ancfb, upbf),
+    }
+
+    # negative predicates should not be added to the tails of arcs
+    arcs, _ = sips.creates_arcs(
+        Imp_(anc2(x, y), Cnj_((Negation(anc(x, y)), anc2(y, x)))), aanc2(x, y)
+    )
+    anc2fb = AdornedSymbol(anc2, "fb", 0)
+    assert arcs == {naanc(x, y): (aanc2(x, y),), anc2fb(y, x): (aanc2(x, y),)}
 
 
 def test_resolution_works():
