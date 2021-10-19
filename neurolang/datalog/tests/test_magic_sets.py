@@ -1,19 +1,16 @@
 import operator
-import logging
-from pathlib import Path
 
-import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
-from nilearn import datasets, image
 from pytest import raises
 
+
 from ... import expression_walker, expressions
-from ...frontend.probabilistic_frontend import NeurolangPDL
-from ...probabilistic.expressions import PROB
 from ...frontend.datalog.sugar import TranslateProbabilisticQueryMixin
-from .. import DatalogProgram, Fact, Implication, magic_sets
+from ...frontend.probabilistic_frontend import NeurolangPDL
+from ...logic import Negation
+from .. import DatalogProgram, Fact, Implication
 from ..aggregation import (
     AGG_COUNT,
     BuiltinAggregationMixin,
@@ -21,7 +18,13 @@ from ..aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..chase import Chase
-from ..exceptions import BoundAggregationApplicationError, NegationInMagicSetsRewriteError
+from ..exceptions import BoundAggregationApplicationError
+from ..magic_sets import (
+    AdornedSymbol,
+    NegativeAdornedSymbol,
+    ReplaceAdornedSymbolWalker,
+    magic_rewrite,
+)
 from ..negation import DatalogProgramNegationMixin
 
 C_ = expressions.Constant
@@ -64,9 +67,9 @@ eq = C_(operator.eq)
 
 
 def test_adorned_symbol():
-    ax = magic_sets.AdornedSymbol(x, 'b', 1)
-    ax_ = magic_sets.AdornedSymbol(x, 'b', 1)
-    ax__ = magic_sets.AdornedSymbol(a, 'b', 1)
+    ax = AdornedSymbol(x, 'b', 1)
+    ax_ = AdornedSymbol(x, 'b', 1)
+    ax__ = AdornedSymbol(a, 'b', 1)
 
     assert ax.expression == x
     assert ax.adornment == 'b'
@@ -74,9 +77,9 @@ def test_adorned_symbol():
     assert ax == ax_
     assert ax != ax__
 
-    ax = magic_sets.AdornedSymbol(a, 'b', 1)
-    ax_ = magic_sets.AdornedSymbol(a, 'b', 1)
-    ax__ = magic_sets.AdornedSymbol(a, 'b', 2)
+    ax = AdornedSymbol(a, 'b', 1)
+    ax_ = AdornedSymbol(a, 'b', 1)
+    ax__ = AdornedSymbol(a, 'b', 2)
 
     assert ax.expression == a
     assert ax.adornment == 'b'
@@ -85,7 +88,37 @@ def test_adorned_symbol():
     assert ax != ax__
 
     with raises(NotImplementedError):
-        magic_sets.AdornedSymbol(a, 'b', 1).name
+        AdornedSymbol(a, 'b', 1).name
+
+
+def test_unadorned_expression_walker():
+    aq = AdornedSymbol(q, "f", 0)
+    aanc2 = AdornedSymbol(anc2, "bf", None)
+    aanc = AdornedSymbol(anc, "bf", None)
+    naanc = NegativeAdornedSymbol(anc, "bf", 0)
+
+    adorned_code = tuple(
+        [
+        Imp_(aq(x), aanc2(a, x)),
+        Imp_(aanc(x, y), par(x, y)),
+        Imp_(aanc(x, y), aanc(x, z) & par(z, y)),
+        Imp_(aanc2(x, y), aanc(x, y) & naanc(x, y)),
+        ]
+    )
+    unadorned_code = ReplaceAdornedSymbolWalker().walk(adorned_code)
+
+    xanc2 = S_("anc2^bf")
+    xanc = S_("anc^bf")
+    xq = S_("q^f_0")
+    expected_code = tuple(
+        [
+            Imp_(xq(x), xanc2(a, x)),
+            Imp_(xanc(x, y), par(x, y)),
+            Imp_(xanc(x, y), xanc(x, z) & par(z, y)),
+            Imp_(xanc2(x, y), xanc(x, y) & Negation(S_("anc^bf_0")(x, y))),
+        ]
+    )
+    assert unadorned_code == expected_code
 
 
 def test_resolution_works():
@@ -104,7 +137,7 @@ def test_resolution_works():
     dl = Datalog()
     dl.walk(code)
     dl.walk(edb)
-    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+    goal, mr = magic_rewrite(q(x), dl)
 
     dl = Datalog()
     dl.walk(mr)
@@ -156,7 +189,7 @@ def test_resolution_works_2():
     dl = Datalog()
     dl.walk(code)
     dl.walk(edb)
-    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+    goal, mr = magic_rewrite(q(x), dl)
 
     dl = Datalog()
     dl.walk(mr)
@@ -182,7 +215,7 @@ def test_resolution_works_query_constant():
     dl = Datalog()
     dl.walk(code)
     dl.walk(edb)
-    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+    goal, mr = magic_rewrite(q(x), dl)
 
     dl = Datalog()
     dl.walk(mr)
@@ -209,7 +242,7 @@ def test_resolution_works_query_free():
     dl = Datalog()
     dl.walk(code)
     dl.walk(edb)
-    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+    goal, mr = magic_rewrite(q(x), dl)
 
     dl = Datalog()
     dl.walk(mr)
@@ -236,7 +269,7 @@ def test_resolution_works_builtin():
     dl = Datalog()
     dl.walk(code)
     dl.walk(edb)
-    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+    goal, mr = magic_rewrite(q(x), dl)
 
     dl = Datalog()
     dl.walk(mr)
@@ -263,7 +296,7 @@ def test_resolution_works_aggregation():
     dl = Datalog()
     dl.walk(code)
     dl.walk(edb)
-    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+    goal, mr = magic_rewrite(q(x), dl)
 
     dl = Datalog()
     dl.walk(mr)
@@ -289,10 +322,10 @@ def test_bound_aggregation_raises_error():
     dl.walk(code)
     dl.walk(edb)
     with pytest.raises(BoundAggregationApplicationError):
-        magic_sets.magic_rewrite(q(x), dl)
+        magic_rewrite(q(x), dl)
 
 
-def test_negation_raises_error():
+def test_resolution_works_negation():
     edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d)),])
 
     code = Eb_(
@@ -308,7 +341,7 @@ def test_negation_raises_error():
     dl.walk(code)
     dl.walk(edb)
 
-    goal, mr = magic_sets.magic_rewrite(q(x), dl)
+    goal, mr = magic_rewrite(q(x), dl)
 
     dl = Datalog()
     dl.walk(mr)
