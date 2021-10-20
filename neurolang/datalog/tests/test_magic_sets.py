@@ -22,7 +22,6 @@ from ..exceptions import BoundAggregationApplicationError
 from ..magic_sets import (
     AdornedSymbol,
     LeftToRightSIPS,
-    NegativeAdornedSymbol,
     ReplaceAdornedSymbolWalker,
     magic_rewrite,
 )
@@ -70,7 +69,6 @@ eq = C_(operator.eq)
 aq = AdornedSymbol(q, "f", 0)
 aanc2 = AdornedSymbol(anc2, "bf", 0)
 aanc = AdornedSymbol(anc, "bf", 0)
-naanc = NegativeAdornedSymbol(anc, "bf", 0)
 
 
 def test_adorned_symbol():
@@ -101,10 +99,10 @@ def test_adorned_symbol():
 def test_unadorned_expression_walker():
     adorned_code = tuple(
         [
-        Imp_(aq(x), aanc2(a, x)),
-        Imp_(aanc(x, y), par(x, y)),
-        Imp_(aanc(x, y), aanc(x, z) & par(z, y)),
-        Imp_(aanc2(x, y), aanc(x, y) & naanc(x, y)),
+            Imp_(aq(x), aanc2(a, x)),
+            Imp_(aanc(x, y), par(x, y)),
+            Imp_(aanc(x, y), aanc(x, z) & par(z, y)),
+            Imp_(aanc2(x, y), aanc(x, y) & Negation(aanc(x, y))),
         ]
     )
     unadorned_code = ReplaceAdornedSymbolWalker().walk(adorned_code)
@@ -166,21 +164,28 @@ def test_l2r_sips():
         Imp_(anc2(x, y), Cnj_((Negation(anc(x, y)), anc2(y, x)))), aanc2(x, y)
     )
     anc2fb = AdornedSymbol(anc2, "fb", 0)
-    assert arcs == {naanc(x, y): (aanc2(x, y),), anc2fb(y, x): (aanc2(x, y),)}
+    assert arcs == {
+        Negation(aanc(x, y)): (aanc2(x, y),),
+        anc2fb(y, x): (aanc2(x, y),),
+    }
 
 
 def test_resolution_works():
-    edb = Eb_([
-        F_(par(a, b)),
-        F_(par(b, c)),
-        F_(par(c, d)),
-    ])
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
 
-    code = Eb_([
-        Imp_(q(x), anc(a, x)),
-        Imp_(anc(x, y), par(x, y)),
-        Imp_(anc(x, y), anc(x, z) & par(z, y)),
-    ])
+    code = Eb_(
+        [
+            Imp_(q(x), anc(a, x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
 
     dl = Datalog()
     dl.walk(code)
@@ -248,17 +253,21 @@ def test_resolution_works_2():
 
 
 def test_resolution_works_query_constant():
-    edb = Eb_([
-        F_(par(a, b)),
-        F_(par(b, c)),
-        F_(par(c, d)),
-    ])
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
 
-    code = Eb_([
-        Imp_(q(x, a), anc(a, x)),
-        Imp_(anc(x, y), par(x, y)),
-        Imp_(anc(x, y), anc(x, z) & par(z, y)),
-    ])
+    code = Eb_(
+        [
+            Imp_(q(x, a), anc(a, x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
 
     dl = Datalog()
     dl.walk(code)
@@ -274,18 +283,22 @@ def test_resolution_works_query_constant():
 
 
 def test_resolution_works_query_free():
-    edb = Eb_([
-        F_(par(a, b)),
-        F_(par(b, c)),
-        F_(par(c, d)),
-    ])
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
 
-    code = Eb_([
-        Imp_(q(x), anc2(x)),
-        Imp_(anc(x, y), par(x, y)),
-        Imp_(anc(x, y), anc(x, z) & par(z, y)),
-        Imp_(anc2(x), anc(a, x))
-    ])
+    code = Eb_(
+        [
+            Imp_(q(x), anc2(x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+            Imp_(anc2(x), anc(a, x)),
+        ]
+    )
 
     dl = Datalog()
     dl.walk(code)
@@ -301,18 +314,22 @@ def test_resolution_works_query_free():
 
 
 def test_resolution_works_builtin():
-    edb = Eb_([
-        F_(par(a, b)),
-        F_(par(b, c)),
-        F_(par(c, d)),
-    ])
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
 
-    code = Eb_([
-        Imp_(q(x), anc2(a, x)),
-        Imp_(anc(x, y), par(x, y)),
-        Imp_(anc(x, y), anc(x, z) & par(z, y)),
-        Imp_(anc2(x, y), anc(x, z) & eq(z, y))
-    ])
+    code = Eb_(
+        [
+            Imp_(q(x), anc2(a, x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+            Imp_(anc2(x, y), anc(x, z) & eq(z, y)),
+        ]
+    )
 
     dl = Datalog()
     dl.walk(code)
@@ -328,18 +345,22 @@ def test_resolution_works_builtin():
 
 
 def test_resolution_works_aggregation():
-    edb = Eb_([
-        F_(par(a, b)),
-        F_(par(b, c)),
-        F_(par(c, d)),
-    ])
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
 
-    code = Eb_([
-        Imp_(q(x), anc2(a, x)),
-        Imp_(anc(x, y), par(x, y)),
-        Imp_(anc(x, y), anc(x, z) & par(z, y)),
-        Imp_(anc2(x, AGG_COUNT(y)), anc(x, y))
-    ])
+    code = Eb_(
+        [
+            Imp_(q(x), anc2(a, x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+            Imp_(anc2(x, AGG_COUNT(y)), anc(x, y)),
+        ]
+    )
 
     dl = Datalog()
     dl.walk(code)
@@ -355,7 +376,13 @@ def test_resolution_works_aggregation():
 
 
 def test_bound_aggregation_raises_error():
-    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d)),])
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
 
     code = Eb_(
         [
@@ -374,14 +401,21 @@ def test_bound_aggregation_raises_error():
 
 
 def test_resolution_works_negation():
-    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d)),])
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
 
     code = Eb_(
         [
             Imp_(q(x), anc2(a, x)),
             Imp_(anc(x, y), par(x, y)),
             Imp_(anc(x, y), anc(x, z) & par(z, y)),
-            Imp_(anc2(x, y), anc(x, y) & ~par(x, y)),
+            Imp_(up(x, y), par(x, y)),
+            Imp_(anc2(x, y), anc(x, y) & ~up(x, y)),
         ]
     )
 

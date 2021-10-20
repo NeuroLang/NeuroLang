@@ -76,23 +76,7 @@ class AdornedSymbol(Symbol):
             return f'S{{{self}}}'
 
 
-class NegativeAdornedSymbol(AdornedSymbol):
-    def __init__(self, expression, adornment, number):
-        super().__init__(expression, adornment, number)
-
-    def __hash__(self):
-        return hash(("~", self.expression, self.adornment, self.number))
-
-    def __str__(self) -> str:
-        return "~" + super().__str__()
-
-
 class ReplaceAdornedSymbolWalker(ExpressionWalker):
-    @add_match(FunctionApplication(NegativeAdornedSymbol, ...))
-    def replace_negative_adorned_predicates(self, npred):
-        unadorned_pred = self.process_expression(npred)
-        return Negation(unadorned_pred)
-
     @add_match(Symbol)
     def replace_adorned_symbol(self, symbol):
         if isinstance(symbol, AdornedSymbol) and isinstance(
@@ -201,7 +185,7 @@ class SIPS(ABC):
         return arcs, adorned_antecedent
 
     def _adorn_predicate(
-        self, predicate, predicate_number, bound_variables, is_neg
+        self, predicate, predicate_number, bound_variables
     ):
         adornment = ""
         has_b = False
@@ -215,13 +199,7 @@ class SIPS(ABC):
         if not has_b:
             adornment = ""
 
-        if is_neg:
-            p = NegativeAdornedSymbol(
-                predicate.functor, adornment, predicate_number
-            )
-        else:
-            p = AdornedSymbol(predicate.functor, adornment, predicate_number)
-
+        p = AdornedSymbol(predicate.functor, adornment, predicate_number)
         p = p(*predicate.args)
         return p
 
@@ -287,22 +265,20 @@ class LeftToRightSIPS(SIPS):
             return None
 
         # 3. Adorn the predicate
-        p = self._adorn_predicate(
-            pred, predicate_number, bound_variables, is_neg
-        )
+        p = self._adorn_predicate(pred, predicate_number, bound_variables)
         tail = tuple(tail_predicates)
 
         # 4. Update the tail_predicates and list of bound_variables with the
         # variables of this predicate. We only add bound variables for
         # positive, non probabilistic predicates
-        if p.functor.name not in self.prob_symbols and not isinstance(
-            predicate, Negation
-        ):
+        if p.functor.name not in self.prob_symbols and not is_neg:
             bound_variables.update(
                 arg for arg in predicate.args if isinstance(arg, Symbol)
             )
             tail_predicates.append(p)
-
+        
+        if is_neg:
+            p = Negation(p)
         return tail, p
 
 
@@ -424,6 +400,8 @@ def create_balbin_magic_rules(adorned_rules, sips):
         )
         # Add the magic rules for each arc of the sips
         for head, tail in arcs.items():
+            if isinstance(head, Negation):
+                head = head.formula
             if "b" in head.functor.adornment:
                 new_predicate = magic_predicate(head, adorned=False)
                 body_lits = [
@@ -570,6 +548,8 @@ def adorn_antecedent(
     to_adorn = []
     arcs, adorned_antecedent = sips.creates_arcs(rule, adorned_head)
     for adorned_predicate in arcs.keys():
+        if isinstance(adorned_predicate, Negation):
+            adorned_predicate = adorned_predicate.formula
         if adorned_predicate.functor not in rewritten_rules:
             to_adorn.append(adorned_predicate)
 
