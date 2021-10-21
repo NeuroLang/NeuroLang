@@ -18,7 +18,7 @@ from ..aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..chase import Chase
-from ..exceptions import BoundAggregationApplicationError
+from ..exceptions import BoundAggregationApplicationError, NegationInMagicSetsRewriteError
 from ..magic_sets import (
     AdornedSymbol,
     LeftToRightSIPS,
@@ -396,7 +396,7 @@ def test_bound_aggregation_raises_error():
     dl = Datalog()
     dl.walk(code)
     dl.walk(edb)
-    with pytest.raises(BoundAggregationApplicationError):
+    with raises(BoundAggregationApplicationError):
         magic_rewrite(q(x), dl)
 
 
@@ -431,6 +431,32 @@ def test_resolution_works_negation():
 
     solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {C_((e,)) for e in (c, d)}
+
+
+def test_complex_negations_raise_errors():
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
+
+    code = Eb_(
+        [
+            Imp_(q(x), anc2(a, x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+            Imp_(anc2(x, y), anc(x, y) & ~(par(y, z) & anc(x, z))),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+
+    with raises(NegationInMagicSetsRewriteError):
+        magic_rewrite(q(x), dl)
 
 
 @pytest.fixture
@@ -517,19 +543,24 @@ def nl():
         (11275483, "emotion", 0.123356),
         (11430815, "emotion", 0.065204),
         (9819274, "auditory", 0.059705),
+        (10751455, "auditory", 0.052538),
         (10022494, "auditory", 0.10052),
         (10022496, "auditory", 0.28146),
         (10197540, "auditory", 0.38657),
         (10407201, "auditory", 0.16817),
+        (11430815, "auditory", 0.065204),
         (10191322, "language", 0.28298),
+        (10751455, "language", 0.052538),
         (10227106, "language", 0.05432),
         (10349031, "language", 0.05329),
         (10402199, "language", 0.18801),
         (10571235, "language", 0.08257),
+        (11430815, "language", 0.065204),
     )
     terms = pd.DataFrame(terms_data, columns=("study", "term", "tfidf"))
     nl.add_tuple_set(peaks, name="PeakReported")
     nl.add_tuple_set(terms, name="TermInStudyTFIDF")
+    nl.add_tuple_set(terms[["term"]].drop_duplicates(), name="Term")
     return nl
 
 

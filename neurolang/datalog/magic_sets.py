@@ -15,6 +15,7 @@ from ..probabilistic.expressions import ProbabilisticQuery
 from . import expression_processing, extract_logic_predicates, DatalogProgram
 from .exceptions import (
     BoundAggregationApplicationError,
+    NegationInMagicSetsRewriteError,
     NonConjunctiveAntecedentInMagicSetsError,
     NoConstantPredicateFoundError,
 )
@@ -257,6 +258,11 @@ class LeftToRightSIPS(SIPS):
         is_neg = isinstance(predicate, Negation)
         if is_neg:
             pred = predicate.formula
+            if not hasattr(pred, "functor"):
+                raise NegationInMagicSetsRewriteError(
+                    "MagicSets can only handle negations on single predicates."
+                    f"Negation {predicate} cannot be handled"
+                )
         else:
             pred = predicate
         # 2. Constants and predicates in the EDB are already bound and should
