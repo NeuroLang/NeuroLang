@@ -574,7 +574,7 @@ def adorn_antecedent(
 
 
 def edb_with_prob_symbols(datalog: DatalogProgram) -> Iterable[Symbol]:
-    edb = set(datalog.extensional_database())
+    edb = set(datalog.extensional_database()) | set(datalog.included_functions)
     try:
         edb = (
             edb
