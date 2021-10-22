@@ -46,6 +46,7 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import (
     UnsupportedQueryError,
     UnsupportedSolverError,
+    UnsupportedProgramError,
 )
 from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
@@ -332,7 +333,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                 self.program_ir.walk(magic_rules)
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
-        except InvalidMagicSetError:
+        except (InvalidMagicSetError, UnsupportedProgramError) :
             solution = self._solve(query)
 
         if not isinstance(head, tuple):

@@ -18,7 +18,10 @@ from ..aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..chase import Chase
-from ..exceptions import BoundAggregationApplicationError, NegationInMagicSetsRewriteError
+from ..exceptions import (
+    BoundAggregationApplicationError,
+    NegationInMagicSetsRewriteError,
+)
 from ..magic_sets import (
     AdornedSymbol,
     LeftToRightSIPS,
@@ -574,7 +577,6 @@ def test_neurosynth_query(nl):
     ans(x, y, z, p) :- QueryActivation(x, y, z, p)
     """
     res = nl.execute_datalog_program(query)
-    print(res)
     expected = (
         (-58, -41, -20, 0.2),
         (-53, -61, -29, 0.2),
@@ -593,4 +595,3 @@ def test_neurosynth_query(nl):
     assert set(tuple(x) for x in p[["x", "y", "z"]].values) == set(
         (x, y, z) for x, y, z, _ in expected
     )
-    np.testing.assert_almost_equal(p.p.values, np.full((10,), 0.2))
