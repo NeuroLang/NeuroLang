@@ -13,6 +13,7 @@ from ...exceptions import (
     UnsupportedQueryError,
     NeuroLangException,
 )
+from ...logic.horn_clauses import Fol2DatalogTranslationException
 from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
@@ -858,7 +859,12 @@ def test_solve_marg_query_disjunction():
         ],
         name="does_not_smoke",
     )
-    with pytest.raises(ForbiddenConditionalQueryNonConjunctive):
+    with pytest.raises(
+        (
+            ForbiddenConditionalQueryNonConjunctive,
+            Fol2DatalogTranslationException,
+        )
+    ):
         with nl.environment as e:
             e.query[e.p, e.PROB[e.p, e.city, e.sport], e.city, e.sport] = (
                 e.person[e.p]
