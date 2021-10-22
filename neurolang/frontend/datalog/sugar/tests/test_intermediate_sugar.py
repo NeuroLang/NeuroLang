@@ -170,7 +170,9 @@ def test_select_by_first_implication_builtin_head():
     assert tr == res
 
 
-class _TestTranslator(sugar.TranslateProbabilisticQueryMixin, ExpressionWalker):
+class _TestTranslator(
+    sugar.TranslateProbabilisticQueryMixin, ExpressionWalker
+):
     pass
 
 
@@ -180,13 +182,47 @@ def test_wlq_floordiv_translation():
     R = Symbol("R")
     x = Symbol("x")
     y = Symbol("y")
+    EQ_ = Constant(operator.eq)
+
     wlq = Implication(
         Q(x, y, PROB(x, y)), Constant(operator.floordiv)(P(x), R(x, y))
     )
     translator = _TestTranslator()
     result = translator.walk(wlq)
-    assert result == Implication(
-        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(P(x), R(x, y))
+
+    # assert num == fresh_01(x, y, PROB) :- P(x) & R(x, y)
+    assert len(result) == 3
+    num = result[0]
+    fnum = num.consequent.functor
+    assert fnum.is_fresh
+    assert num == Implication(
+        fnum(x, y, ProbabilisticQuery(PROB, (x, y))),
+        Conjunction((P(x), R(x, y))),
+    )
+
+    # assert denum == fresh_02(x, y, PROB) :- R(x, y)
+    denum = result[1]
+    fdenum = denum.consequent.functor
+    assert fdenum.is_fresh
+    assert denum == Implication(
+        fdenum(x, y, ProbabilisticQuery(PROB, (x, y))), R(x, y)
+    )
+
+    # assert cond == Q(x, y, p) :- fresh_01(x, y, p0) & fresh_02(x, y, p1) & (p == p0 / p1)
+    cond = result[2]
+    p = [a for a in cond.consequent.args if a.is_fresh][0]
+    p0 = [a for a in cond.antecedent.formulas[0].args if a.is_fresh][0]
+    p1 = [a for a in cond.antecedent.formulas[1].args if a.is_fresh][0]
+
+    assert cond == Implication(
+        Q(x, y, p),
+        Conjunction(
+            (
+                fnum(x, y, p0),
+                fdenum(x, y, p1),
+                EQ_(p, Constant(operator.truediv)(p0, p1)),
+            )
+        ),
     )
 
 
