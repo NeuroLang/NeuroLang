@@ -406,6 +406,11 @@ export class SymbolsController {
           const figContainer = $('#nlMpltFigureContainer')
           figContainer.append(figureData.documentElement)
           figContainer.find('.active.dimmer').removeClass('active')
+          url += '&format=png'
+          const downloadLink = $(`<a href="${url}" class="nl-figure-download">
+          <button class="ui tiny circular icon basic button" data-tooltip="Download figure">
+          <i class="download icon"></i></button></a>`)
+          figContainer.append(downloadLink)
         })
     }
   }
@@ -470,9 +475,8 @@ function renderMpltFigure (data, type, row, meta) {
   if (type === 'display') {
     // create a button to display the figure
     const figDiv = `<div class="nl-mplt-figure-controls">
-      <button class="ui tiny icon button nl-mplt-figure-toggle nl-figure-control"
-      data-row=${meta.row} data-col=${meta.col} data-tooltip="Show figure">
-      <i class="chart area icon"></i></button>
+      <img class="ui tiny bordered image nl-mplt-figure-toggle nl-figure-control"
+      src="data:image/png;base64, ${data}" data-row=${meta.row} data-col=${meta.col} data-tooltip="Show figure">
       </div>`
     return figDiv
   }

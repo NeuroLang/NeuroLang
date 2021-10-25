@@ -504,6 +504,7 @@ class MpltFigureHandler(tornado.web.RequestHandler):
         symbol = self.get_argument("symbol")
         row = self.get_argument("row")
         col = self.get_argument("col")
+        format = self.get_argument("format", "svg")
         LOG.debug("Accessing figure result for request %s.", uuid)
         try:
             future = self.application.nqm.get_result(uuid)
@@ -524,9 +525,15 @@ class MpltFigureHandler(tornado.web.RequestHandler):
                 status_code=404, log_message="Invalid figure format"
             )
 
-        # 2. Stream the figure as an svg
+        # 2. Stream the figure in requested format. If format is not svg
+        # we serve it as an attached file
+        if format != "svg":
+            filename = f"{symbol}_{row}_{col}.{format}"
+            self.set_header(
+                "Content-Disposition", "attachment; filename=" + filename
+            )
         data = BytesIO()
-        figure.savefig(data, format="svg")
+        figure.savefig(data, format=format)
         data.seek(0)
         chunk_size = 1024 * 1024 * 1  # 1 MiB
         while True:
