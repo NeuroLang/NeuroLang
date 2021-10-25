@@ -1,22 +1,37 @@
 import collections
 import itertools
 import operator
-from typing import AbstractSet
 
+from ..datalog.expression_processing import (
+    extract_logic_free_variables,
+    extract_logic_predicates,
+)
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
-from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Implication
+from ..expressions import Constant, Definition, FunctionApplication, Symbol
+from ..logic import Conjunction, ExistentialPredicate, Implication, Negation
 from ..logic.transformations import (
-    RemoveTrivialOperations,
     RemoveDuplicatedConjunctsDisjuncts,
+    RemoveTrivialOperations,
+)
+from ..relational_algebra import (
+    NameColumns,
+    NaturalJoin,
+    Projection,
+    Selection,
+    int2columnint_constant,
+    str2columnstr_constant,
+)
+from ..relational_algebra_provenance import (
+    IndependentProjection,
+    ProvenanceAlgebraSet,
 )
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 from .transforms import convert_to_dnf_ucq
-from ..relational_algebra import Projection, Selection, int2columnint_constant
 
 EQ = Constant(operator.eq)
+NE = Constant(operator.ne)
 
 
 def query_to_tagged_set_representation(query, symbol_table):
@@ -87,6 +102,109 @@ class Shatter(FunctionApplication):
     pass
 
 
+def _extract_shatterable_negexist_selfjoin_ixs(conjunction):
+    (
+        pfact_pred_ixs,
+        pfact_preds,
+    ) = _extract_pfact_positive_literal_conjuncts(conjunction)
+    shatterable = list()
+    for conjunct_ix, conjunct in enumerate(conjunction.formulas):
+        tmp = _extract_neg_existential_with_single_pfact_and_not_equal(
+            conjunct
+        )
+        if tmp is None:
+            continue
+        (
+            pfact_pred,
+            var2var_noteq,
+            _,
+        ) = tmp
+        matching_pred_ixs = [
+            pred_ix
+            for pred_ix, pred in zip(pfact_pred_ixs, pfact_preds)
+            if pred.functor == pfact_pred.functor
+        ]
+        if len(matching_pred_ixs) != 1:
+            continue
+        matching_pred_ix = matching_pred_ixs[0]
+        matching_pred = conjunction.formulas[matching_pred_ix]
+        eqvar_ix = list(pfact_pred.args).index(var2var_noteq[0])
+        extract_logic_free_variables
+        if matching_pred.args[eqvar_ix] != var2var_noteq[1]:
+            continue
+        if not _pred_only_occurs_in_shatterable_selfjoin(
+            matching_pred_ix, conjunct_ix, conjunction
+        ):
+            continue
+        shatterable.append((matching_pred_ix, conjunct_ix))
+    return shatterable
+
+
+def _pred_only_occurs_in_shatterable_selfjoin(
+    pred_ix, negexist_ix, conjunction
+):
+    for ix, conjunct in enumerate(conjunction.formulas):
+        if ix in (pred_ix, negexist_ix):
+            continue
+        if any(
+            pred.functor == conjunction.formulas[pred_ix].functor
+            for pred in extract_logic_predicates(conjunct)
+        ):
+            return False
+    return True
+
+
+def _extract_neg_existential_with_single_pfact_and_not_equal(expression):
+    if not isinstance(expression, Negation):
+        return
+    expression = expression.formula
+    neg_existential_vars = set()
+    while isinstance(expression, ExistentialPredicate):
+        neg_existential_vars.add(expression.head)
+        expression = expression.body
+    if not isinstance(expression, Conjunction) and all(
+        isinstance(conjunct, FunctionApplication)
+        for conjunct in expression.formulas
+    ):
+        return
+    _, pfact_preds = _extract_pfact_positive_literal_conjuncts(expression)
+    if len(pfact_preds) != 1:
+        return
+    pfact_pred = next(iter(pfact_preds))
+    var2var_noteqs = set(
+        tuple(fa.args) for fa in expression.formulas if fa.functor == NE
+    )
+    if len(var2var_noteqs) != 1:
+        return
+    var2var_noteq = next(iter(var2var_noteqs))
+    if (
+        var2var_noteq[0] not in neg_existential_vars
+        and var2var_noteq[1] in neg_existential_vars
+    ):
+        var2var_noteq = tuple(reversed(var2var_noteq))
+    if var2var_noteq[0] not in neg_existential_vars:
+        return
+    return pfact_pred, var2var_noteq, neg_existential_vars
+
+
+def _extract_pfact_positive_literal_conjuncts(conjunction):
+    ixs = list()
+    preds = list()
+    for ix, conjunct in enumerate(conjunction.formulas):
+        if isinstance(conjunct, FunctionApplication) and isinstance(
+            conjunct.functor, ProbabilisticFactSet
+        ):
+            ixs.append(ix)
+            preds.append(conjunct)
+    return ixs, preds
+
+
+class ShatterNegExistentialProbFactSelfJoin(Definition):
+    def __init__(self, pfact_literal, negexist_conjunct):
+        self.pfact_literal = pfact_literal
+        self.negexist_conjunct = negexist_conjunct
+
+
 class Shatterer(ExpressionWalker):
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
@@ -113,19 +231,17 @@ class Shatterer(ExpressionWalker):
             )
             columns = [
                 int2columnint_constant(c)
-                for c in self.symbol_table[shatter.functor.relation]
-                .value.columns
+                for c in self.symbol_table[
+                    shatter.functor.relation
+                ].value.columns
             ]
             new_relation = shatter.functor.relation
             for i in const_idxs:
                 new_relation = Selection(
-                    new_relation,
-                    EQ(columns[i + 1], shatter.args[i])
+                    new_relation, EQ(columns[i + 1], shatter.args[i])
                 )
             non_prob_columns = tuple(
-                c
-                for c in columns
-                if c != shatter.functor.probability_column
+                c for c in columns if c != shatter.functor.probability_column
             )
             proj_cols = (shatter.functor.probability_column,) + tuple(
                 non_prob_columns[i]
@@ -142,6 +258,61 @@ class Shatterer(ExpressionWalker):
             arg for arg in shatter.args if not isinstance(arg, Constant)
         )
         return FunctionApplication(new_tagged, non_const_args)
+
+    @add_match(Conjunction, _extract_shatterable_negexist_selfjoin_ixs)
+    def tag_shatterable_negexist_selfjoin(self, conjunction):
+        shatterable = _extract_shatterable_negexist_selfjoin_ixs(conjunction)
+        new_conjuncts = list(
+            conjunction.formulas[ix]
+            for ix in range(len(conjunction.formulas))
+            if ix not in set.union(*(set(s) for s in shatterable))
+        )
+        for pred_ix, negexist_ix in shatterable:
+            new_conjuncts.append(
+                ShatterNegExistentialProbFactSelfJoin(
+                    conjunction.formulas[pred_ix],
+                    conjunction.formulas[negexist_ix],
+                )
+            )
+        return self.walk(Conjunction(tuple(new_conjuncts)))
+
+    @add_match(ShatterNegExistentialProbFactSelfJoin)
+    def shatterable_negexistential_probfact_selfjoin(self, shatter):
+        pfact_literal = shatter.pfact_literal
+        (
+            negexist_pfact_literal,
+            var2var_noteq,
+            _,
+        ) = _extract_neg_existential_with_single_pfact_and_not_equal(
+            shatter.negexist_conjunct
+        )
+        relation = pfact_literal.functor.relation
+        prob_col = str2columnstr_constant(Symbol.fresh())
+        cols_a = (prob_col,) + tuple(
+            str2columnstr_constant(arg) for arg in pfact_literal.args
+        )
+        relation_a = NameColumns(relation, cols_a)
+        proj_cols = tuple(
+            str2columnstr_constant(arg) for arg in pfact_literal.args
+        )
+        relation_a = Projection(relation_a, proj_cols)
+        cols_b = (prob_col,) + tuple(
+            str2columnstr_constant(arg) for arg in negexist_pfact_literal.args
+        )
+        relation_b = NameColumns(relation, cols_b)
+        new_relation = NaturalJoin(relation_a, relation_b)
+        selection_criteria = NE(
+            str2columnstr_constant(var2var_noteq[0]),
+            str2columnstr_constant(var2var_noteq[1]),
+        )
+        new_relation = Selection(new_relation, selection_criteria)
+        new_pred_symb = Symbol.fresh()
+        self.symbol_table[new_pred_symb] = new_relation
+        new_tagged = ProbabilisticFactSet(new_pred_symb, prob_col)
+        new_args = tuple(
+            sorted(set(pfact_literal.args) | set(negexist_pfact_literal.args))
+        )
+        return FunctionApplication(new_tagged, new_args)
 
     @add_match(
         FunctionApplication(ProbabilisticFactSet, ...),

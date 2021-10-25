@@ -1,11 +1,17 @@
-from neurolang.probabilistic.exceptions import NotEasilyShatterableError
 import operator
 
 import pytest
+from neurolang.probabilistic.exceptions import NotEasilyShatterableError
 
 from ...datalog.expression_processing import UnifyVariableEqualitiesMixin
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication, Disjunction, Negation
+from ...logic import (
+    Conjunction,
+    Disjunction,
+    ExistentialPredicate,
+    Implication,
+    Negation,
+)
 from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
     ProbabilisticFactSet,
@@ -14,10 +20,12 @@ from ..probabilistic_ra_utils import (
 from ..shattering import shatter_easy_probfacts
 
 EQ = Constant(operator.eq)
+NE = Constant(operator.ne)
 
 P = Symbol("P")
 Q = Symbol("Q")
 R = Symbol("R")
+w = Symbol("w")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
@@ -364,3 +372,77 @@ def test_shatter_disjunction_same_shattering_relation():
         and formula.functor.relation.is_fresh
     )
     assert shattered_in_R.functor.relation == shattered_in_Q.functor.relation
+
+
+def test_shatter_negexist_segregation_query():
+    SegQuery = Symbol("SegQuery")
+    NetworkReported = Symbol("NetworkReported")
+    SelectedStudy = Symbol("SelectedStudy")
+    n = Symbol("n")
+    n2 = Symbol("n2")
+    s = Symbol("s")
+    cpl = CPLogicProgramWithVarEqUnification()
+    cpl.add_probabilistic_facts_from_tuples(
+        NetworkReported,
+        [
+            (0.1, "A", "s1"),
+            (0.2, "B", "s1"),
+            (0.7, "C", "s1"),
+            (0.8, "A", "s2"),
+            (0.3, "B", "s2"),
+            (0.4, "C", "s2"),
+        ],
+    )
+    cpl.add_probabilistic_choice_from_tuples(
+        SelectedStudy,
+        [
+            (1 / 3, "s1"),
+            (1 / 3, "s2"),
+            (1 / 3, "s3"),
+        ],
+    )
+    query = Implication(
+        SegQuery(n),
+        Conjunction(
+            (
+                NetworkReported(n, s),
+                SelectedStudy(s),
+                Negation(
+                    ExistentialPredicate(
+                        n2,
+                        Conjunction(
+                            (
+                                NE(n2, n),
+                                NetworkReported(n2, s),
+                            )
+                        ),
+                    )
+                )
+            )
+        )
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    res = shatter_easy_probfacts(query, symbol_table)
+    breakpoint()
+
+
+def test_shatter_negexist_shatterable_cross_product():
+    query = Implication(
+        ans(x, y, w),
+        Conjunction(
+            (
+                R(x, y),
+                Negation(
+                    ExistentialPredicate(
+                        z,
+                        Conjunction(
+                            (
+                                R(w, z),
+                                NE(z, y),
+                            )
+                        ),
+                    )
+                )
+            )
+        )
+    )

@@ -8,22 +8,28 @@ from ...config import config
 from ...datalog import Fact
 from ...exceptions import NonLiftableException, UnsupportedSolverError
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Implication, Negation, Union
+from ...logic import (
+    Conjunction,
+    ExistentialPredicate,
+    Implication,
+    Negation,
+    Union,
+)
 from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
-    weighted_model_counting
+    weighted_model_counting,
 )
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
 from ..exceptions import (
     NotEasilyShatterableError,
-    NotHierarchicalQueryException
+    NotHierarchicalQueryException,
 )
 
 try:
@@ -32,6 +38,7 @@ except ImportError:
     from contextlib import suppress as nullcontext
 
 EQ = Constant(operator.eq)
+NE = Constant(operator.ne)
 
 ans = Symbol("ans")
 P = Symbol("P")
@@ -1209,3 +1216,85 @@ def test_deterministic_simplification():
     )
 
     assert testing.eq_prov_relations(res, testing.make_prov_set({(0.6, 'a', 'b')}, ['_p_', 'x', 'y']))
+
+
+@pytest.mark.parametrize(
+    "solver",
+    [
+        pytest.param(
+            weighted_model_counting,
+            marks=pytest.mark.xfail(reason="WMC issue to be resolved"),
+        ),
+        small_dichotomy_theorem_based_solver,
+        dalvi_suciu_lift,
+    ],
+)
+def test_segregation_query(solver):
+    NetworkReported = Symbol("NetworkReported")
+    SelectedStudy = Symbol("SelectedStudy")
+    SegQuery = Symbol("SegQuery")
+    n = Symbol("n")
+    n2 = Symbol("n2")
+    s = Symbol("s")
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        NetworkReported,
+        [
+            (0.1, "A", "s1"),
+            (0.2, "B", "s1"),
+            (0.7, "C", "s1"),
+            (0.8, "A", "s2"),
+            (0.3, "B", "s2"),
+            (0.4, "C", "s2"),
+        ],
+    )
+    cpl.add_probabilistic_choice_from_tuples(
+        SelectedStudy,
+        [
+            (1 / 3, "s1"),
+            (1 / 3, "s2"),
+            (1 / 3, "s3"),
+        ],
+    )
+    rule = Implication(
+        SegQuery(n, s),
+        Conjunction(
+            (
+                NetworkReported(n, s),
+                Negation(
+                    ExistentialPredicate(
+                        n2,
+                        Conjunction(
+                            (
+                                NE(n2, n),
+                                NetworkReported(n2, s),
+                            )
+                        ),
+                    )
+                )
+            )
+        )
+    )
+    program = Union((rule,))
+    query = Implication(ans(n, s), SegQuery(n, s))
+    cpl.walk(program)
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+    with context:
+        res = solver.solve_succ_query(query, cpl)
+        expected = ProvenanceAlgebraSet(
+            Constant[AbstractSet](
+                NamedRelationalAlgebraFrozenSet(
+                    ("n", "s", "_p_"),
+                    [
+                        ("A", 0.1 * 0.8 * 0.3),
+                        ("B", 0.2 * 0.9 * 0.3),
+                        ("C", 0.7 * 0.9 * 0.8),
+                    ],
+                )
+            ),
+            str2columnstr_constant("_p_"),
+        )
+        assert testing.eq_prov_relations(res, expected)
