@@ -239,6 +239,21 @@ def test_query_wrong_head_arguments():
             neurolang.query((e.x, e.y, e.z), e.q(e.x, e.y))
 
 
+def test_query_with_constant():
+    neurolang = frontend.NeurolangDL()
+
+    s = neurolang.add_tuple_set(
+        (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"))
+    )
+
+    with neurolang.scope as e:
+        e.q[e.x, e.y] = s(e.x, e.y)
+        res = neurolang.query((e.y), e.q("a", e.y))
+
+    print(res.to_unnamed())
+    assert res.to_unnamed() == {("b",), ("c",), ("d",)}
+
+
 @pytest.mark.skip()
 def test_load_spherical_volume_first_order():
     neurolang = frontend.RegionFrontend()

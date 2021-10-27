@@ -454,10 +454,16 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
         query_solution = solution[pred_symb].value.unwrap()
         query_row_type = solution[pred_symb].value.row_type
+        constant_selection = {
+            i: c.value for i, c in enumerate(predicate.expression.args)
+            if isinstance(c, ir.Constant)
+        }
+        if constant_selection:
+            query_solution = query_solution.selection(constant_selection)
         cols = list(
-            arg.name
+            arg.name if isinstance(arg, ir.Symbol)
+            else ir.Symbol.fresh().name
             for arg in predicate.expression.args
-            if isinstance(arg, ir.Symbol)
         )
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
