@@ -1,4 +1,6 @@
+from typing import Collection, List, Tuple
 import numpy as np
+import pandas as pd
 import nibabel as nib
 import scipy.ndimage
 from itertools import product
@@ -266,6 +268,48 @@ class PointSet(VolumetricBrainRegion):
         return hash((self.points_ijk.tobytes(), self.affine.tobytes()))
 
 
+def interval(voxel: Collection[int], affine: np.array) -> Tuple[pd.Interval]:
+    """
+    Given a voxel with (x, y, z) coordinates and an affine matrix,
+    return a tuple of pd.Interval starting at each voxel coordinate with
+    length = affine[i, i] for i in range(3)
+
+    Parameters
+    ----------
+    voxel : Collection
+        the x, y, z voxel coordinates
+    affine : np.array
+        the affine matrix
+
+    Returns
+    -------
+    Tuple[pd.Interval]
+        the intervals
+    """
+    return tuple(
+        pd.Interval(
+            left=c,
+            right=c + affine[i, i],
+            closed="left",
+        )
+        if affine[i, i] > 0
+        else pd.Interval(
+            left=c + affine[i, i],
+            right=c,
+            closed="right",
+        )
+        for i, c in enumerate(voxel)
+    )
+    # return tuple(
+    #     pd.Interval(
+    #         left=min(c, c + affine[i, i]),
+    #         right=max(c, c + affine[i, i]),
+    #         closed="both",
+    #     )
+    #     for i, c in enumerate(voxel)
+    # )
+
+
 class ExplicitVBR(VolumetricBrainRegion):
     def __init__(
         self, voxels, affine_matrix, image_dim=None, prebuild_tree=False
@@ -278,8 +322,15 @@ class ExplicitVBR(VolumetricBrainRegion):
         self.image_dim = image_dim
         self._aabb_tree = None
         self._bounding_box = self.generate_bounding_box(self.voxels)
+        self._set_intervals(self.voxels)
         if prebuild_tree:
             self.build_tree()
+
+    def _set_intervals(self, voxels_ijk):
+        voxels_xyz = nib.affines.apply_affine(
+            self.affine, voxels_ijk
+        )
+        self.intervals = np.asarray([interval(voxel, self.affine) for voxel in voxels_xyz])
 
     @property
     def bounding_box(self):

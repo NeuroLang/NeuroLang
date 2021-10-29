@@ -1,7 +1,9 @@
 from functools import lru_cache
 from itertools import product
+from typing import Collection
 
 import numpy as np
+import pandas as pd
 from scipy.linalg import kron
 
 from .interval_algebra import (v_before, v_during, v_equals, v_finishes,
@@ -48,7 +50,42 @@ relations = [
 ]
 
 
-def cardinal_relation(
+def cardinal_relation(region, reference_region, directions, refine_overlapping=False,
+    stop_at=None):
+    if region is reference_region:
+        return False
+
+    if type(region) is Region and type(reference_region) is Region:
+        mat = direction_matrix_int(region.bounding_box.intervals,
+                               reference_region.bounding_box.intervals)
+        return is_in_direction(mat, directions)
+
+    region, reference_region = cardinal_relation_prepare_regions(
+        region, reference_region
+    )
+
+    if region == reference_region:
+        return directions == 'O'
+    
+    # 1. first check the bounding boxes
+    mat = direction_matrix_int(region.bounding_box.intervals,
+                            reference_region.bounding_box.intervals)
+    # 2. if they don't overlap, easy, check if the boxes are in the right direction
+    if not is_in_direction(mat, 'O') or not refine_overlapping:
+        return is_in_direction(mat, directions)
+    
+    # 3. if they overlap, we check the product of all voxels until we find a pair
+    # that is in the right direction
+    indices = is_in_direction_indices(mat.ndim, directions)
+    for voxel, other_voxel in product(region.intervals, reference_region.intervals):
+        mat = direction_matrix_int(voxel, other_voxel)
+        if np.any(mat[indices] == 1):
+            return True
+    
+    return False
+
+
+def cardinal_relation_2(
     region,
     reference_region,
     directions,
@@ -175,7 +212,40 @@ def is_in_direction(matrix, direction):
     return np.any(matrix[indices] == 1)
 
 
+def relation_vectors_intervals(intervals: Collection[pd.Interval], other_intervals: Collection[pd.Interval]):
+    obtained_vectors = np.empty(
+        (min(len(intervals), len(other_intervals)), 3)
+    )
+    ov = 0
+    for interval, other_interval in zip(
+        intervals, other_intervals
+    ):
+        if not interval.overlaps(other_interval):
+            if interval < other_interval:
+                obtained_vectors[ov] = (1, 0, 0)
+            else:
+                obtained_vectors[ov] = (0, 0, 1)
+        else:
+            left = interval.left not in other_interval and (interval.left != other_interval.left or other_interval.closed_left)
+            right = interval.right not in other_interval and (interval.right != other_interval.right or other_interval.closed_right)
+            res = (1 if left else 0, 1, 1 if right else 0)
+            obtained_vectors[ov] = res
+        ov += 1
+    return obtained_vectors[:ov]
+
+
 def relation_vectors(intervals, other_region_intervals):
+    """
+    intervals = [[0., 7.],
+                 [0., 7.],
+                 [0., 2.]]
+    = interval_x, interval_y, interval_z
+    
+    renvoie 
+                [[0, 1, 0],
+                 [1, 0, 1],
+                 [0, 0, 1]]
+    """
     obtained_vectors = np.empty(
         (min(len(intervals), len(other_region_intervals)), 3)
     )
@@ -190,6 +260,17 @@ def relation_vectors(intervals, other_region_intervals):
                 ov += 1
                 break
     return obtained_vectors[:ov]
+
+
+def direction_matrix_int(intervals: Collection[pd.Interval], other_intervals: Collection[pd.Interval]):
+    rp_vector = relation_vectors_intervals(intervals, other_intervals)
+    tensor = rp_vector[0].reshape(1, 3)
+    for i in range(1, len(rp_vector)):
+        tensor = kron(
+            rp_vector[i].reshape((3, ) + (1, ) * i),
+            tensor
+        ).squeeze()
+    return tensor.clip(0, 1)
 
 
 def direction_matrix(region_bb, another_region_bb):
