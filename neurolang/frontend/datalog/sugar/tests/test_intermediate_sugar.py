@@ -12,7 +12,6 @@ from .....expressions import Constant, Symbol
 from .....logic import Conjunction, Implication
 from .....probabilistic.expressions import (
     PROB,
-    Condition,
     ProbabilisticPredicate,
     ProbabilisticQuery,
 )

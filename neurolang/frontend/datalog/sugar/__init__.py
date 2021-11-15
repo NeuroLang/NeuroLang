@@ -2,7 +2,6 @@
 Set of syntactic sugar processors at the intermediate level.
 """
 
-from neurolang.utils.orderedset import OrderedSet
 import operator as op
 import typing
 from typing import AbstractSet, Any, Callable, DefaultDict

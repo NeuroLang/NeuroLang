@@ -7,7 +7,7 @@ Magic Sets [1] rewriting implementation for Datalog.
 from abc import ABC, abstractmethod
 from typing import Iterable, List, Set, Tuple
 from ..config import config
-from ..expressions import Constant, Expression, FunctionApplication, Symbol
+from ..expressions import Constant, Expression, Symbol
 from ..expression_walker import ExpressionWalker
 from ..expression_pattern_matching import add_match
 from ..logic import Negation
@@ -210,7 +210,7 @@ class SIPS(ABC):
         predicate: Expression,
         predicate_number: int,
         bound_variables: Set[Symbol],
-        adorned_predicates: List[Expression],
+        tail_predicates: List[Expression],
     ) -> Union[Tuple[Expression], Expression, None]:
         """
         Create an arc for the given predicate. An arc is a tuple (tail, head)
@@ -282,7 +282,7 @@ class LeftToRightSIPS(SIPS):
                 arg for arg in predicate.args if isinstance(arg, Symbol)
             )
             tail_predicates.append(p)
-        
+
         if is_neg:
             p = Negation(p)
         return tail, p
