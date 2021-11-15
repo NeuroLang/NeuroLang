@@ -48,7 +48,7 @@ from ..exceptions import (
     UnsupportedSolverError,
     UnsupportedProgramError,
 )
-from ..expression_walker import ExpressionBasicEvaluator
+from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
 from ..logic import Union
 from ..probabilistic import (
     dalvi_suciu_lift,
@@ -104,6 +104,7 @@ class RegionFrontendCPLogicSolver(
     BuiltinAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
+    TypedSymbolTableMixin,
     ExpressionBasicEvaluator,
 ):
     pass
@@ -485,10 +486,16 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
         query_solution = solution[pred_symb].value.unwrap()
         query_row_type = solution[pred_symb].value.row_type
+        constant_selection = {
+            i: c.value for i, c in enumerate(pred_args)
+            if isinstance(c, ir.Constant)
+        }
+        if constant_selection:
+            query_solution = query_solution.selection(constant_selection)
         cols = list(
-            arg.name
+            arg.name if isinstance(arg, ir.Symbol)
+            else ir.Symbol.fresh().name
             for arg in pred_args
-            if isinstance(arg, ir.Symbol)
         )
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
@@ -716,11 +723,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         columns = tuple(ir.Symbol.fresh().name for _ in range(arity))
         ra_set = NamedRelationalAlgebraFrozenSet(columns, iterable)
         prob_col = ir.Symbol.fresh().name
-        probability = 1 / len(iterable)
+        probability = 1 / len(ra_set)
         projections = collections.OrderedDict()
         projections[prob_col] = probability
         for col in columns:
             projections[col] = RelationalAlgebraColumnStr(col)
         ra_set = ra_set.extended_projection(projections)
-        self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
+        self.program_ir.add_probabilistic_choice_from_tuples(
+            symbol,
+            ra_set.projection_to_unnamed(*projections.keys())
+        )
         return fe.Symbol(self, name)
