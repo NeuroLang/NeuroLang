@@ -54,16 +54,20 @@ def fast_overlaps(region, other_region):
     overlaps with a voxel from the other region. They do not overlap if no
     voxels overlap.
     """
-    # 1. loop on each voxel of the region by ziping together its coordinate intervals
-    for row in zip(*region.intervals):
-        # 2. for each voxel of the reference region, compare its x, y, z intervals with
+    if len(region.intervals[0]) < len(other_region.intervals[0]):
+        r0, r1 = region, other_region
+    else:
+        r0, r1 = other_region, region
+    # 1. loop on each voxel of the smallest region
+    for row in zip(*r0.intervals):
+        # 2. for each voxel, compare its x, y, z intervals with
         # the intervals of all voxels in the other region.
         mask = None
         for i, c in enumerate(row):
             if mask is None:
-                mask = other_region.intervals[i].overlaps(c)
+                mask = r1.intervals[i].overlaps(c)
             else:
-                mask &= other_region.intervals[i].overlaps(c)
+                mask &= r1.intervals[i].overlaps(c)
             if not any(mask):
                 break
         overlaps = any(mask)

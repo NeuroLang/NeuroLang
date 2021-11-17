@@ -12,6 +12,15 @@ from neurolang.CD_relations import (
 
 
 class TimeDestrieuxRegions:
+
+    params = [
+        [cardinal_relation, cardinal_relation_fast],
+    ]
+
+    param_names = [
+        "CR method",
+    ]
+
     """
     Ten slowest destrieux regions overlap comparisons:
         ('R G_cuneus', 'R G_occipital_sup') 0.4985234520000006
@@ -40,7 +49,7 @@ class TimeDestrieuxRegions:
 
     timeout = 3 * 60
 
-    def setup(self):
+    def setup(self, cr_method):
         self.regions = self.load_destrieux()
 
     def load_destrieux(self):
@@ -111,7 +120,7 @@ class TimeDestrieuxRegions:
 
         name = "R S_pericallosal"
         r0 = self.regions[name]
-        r1 = r1 = regions.SphericalVolume((5, 3, 16), 11)
+        r1 = r1 = regions.SphericalVolume((5, 3, 16), 9)
         is_overlaping = cr_method(
             r1, r0, "O", refine_overlapping=True
         )
@@ -185,10 +194,11 @@ class TimeDestrieuxRegions:
 
 if __name__ == "__main__":
     ts = TimeDestrieuxRegions()
-    ts.setup()
+    ts.setup(None)
     start = time.perf_counter()
     # ts.check_regions_overlap()
-    ts.time_regions_sphere_overlap(cardinal_relation_fast)
-    # ts.time_regions_overlap()
+    # ts.time_regions_sphere_overlap(cardinal_relation_fast)
+    # ts.time_regions_overlap(cardinal_relation_fast)
+    ts.time_regions_convex(cardinal_relation_fast)
     stop = time.perf_counter()
     print(f"Took : {stop - start: .4f} s.")
