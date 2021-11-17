@@ -5,7 +5,10 @@ import numpy as np
 import time
 
 from neurolang import regions
-from neurolang.CD_relations import cardinal_relation, cardinal_relation_2
+from neurolang.CD_relations import (
+    cardinal_relation,
+    cardinal_relation_fast,
+)
 
 
 class TimeDestrieuxRegions:
@@ -61,34 +64,75 @@ class TimeDestrieuxRegions:
             region_dict[name.decode("utf8")] = r
         return region_dict
 
-    def time_regions_overlap(self):
-        r0 = self.regions["L S_intrapariet_and_P_trans"]
-        r1 = self.regions["L G_parietal_sup"]
+    def check_regions_overlap(self):
+        """
+        Compare results of cardinal_relation and cardinal_relation_fast
+        methods.
+        """
+        ok, nok = 0, 0
+        checked = set()
+        for n0, n1 in product(self.regions.keys(), self.regions.keys()):
+            key = " ".join(sorted((n0, n1)))
+            if key not in checked:
+                checked.add(key)
+                overlap = cardinal_relation(
+                    self.regions[n0],
+                    self.regions[n1],
+                    "O",
+                    refine_overlapping=True,
+                )
+                overlap2 = cardinal_relation_fast(
+                    self.regions[n0],
+                    self.regions[n1],
+                    "O",
+                    refine_overlapping=True,
+                )
+                if overlap == overlap2:
+                    ok += 1
+                else:
+                    print(n0, n1, overlap, overlap2)
+                    nok += 1
 
-        is_overlaping = cardinal_relation_2(
-            r0, r1, "O", refine_overlapping=True
-        )
-        print("Regions overlap: ", is_overlaping)
+        print("total ok ", ok)
+        print("total nok ", nok)
 
-    def time_regions_convex(self):
-        r0 = self.regions["L G_parietal_sup"]
+    def time_regions_convex(self, cr_method):
+        """
+        Time overlaping between convex regions and sphere that don't
+        overlap.
+        """
+        name = "L G_parietal_sup"
+        r0 = self.regions[name]
         r1 = regions.SphericalVolume((-26, -52, 58), 2)
+        is_overlaping = cr_method(
+            r1, r0, "O", refine_overlapping=True
+        )
+        print(f"Convex region {name} is overlaping: ", is_overlaping)
 
-        is_overlaping = cardinal_relation(r1, r0, "O", refine_overlapping=True)
-        print("Regions overlap: ", is_overlaping)
-
-        r0 = self.regions["R S_pericallosal"]
+        name = "R S_pericallosal"
+        r0 = self.regions[name]
         r1 = r1 = regions.SphericalVolume((5, 3, 16), 11)
-        is_overlaping = cardinal_relation(r1, r0, "O", refine_overlapping=True)
-        print("Regions overlap: ", is_overlaping)
+        is_overlaping = cr_method(
+            r1, r0, "O", refine_overlapping=True
+        )
+        print(f"Convex region {name} is overlaping: ", is_overlaping)
 
-    def find_slow_regions(self):
+    def time_regions_overlap(self, cr_method):
+        """
+        Check whether regions are overlaping for all region combinations
+        in destrieux atlas. Prints the 100 slowest times.
+
+        Parameters
+        ----------
+        cr_method : function
+            the cardinal_relation method to test
+        """
         times = dict()
         for r0, r1 in product(self.regions.keys(), self.regions.keys()):
             comb = tuple(sorted((r0, r1)))
             if comb not in times:
                 start = time.perf_counter()
-                is_overlaping = cardinal_relation_2(
+                is_overlaping = cr_method(
                     self.regions[r0],
                     self.regions[r1],
                     "O",
@@ -97,16 +141,22 @@ class TimeDestrieuxRegions:
                 stop = time.perf_counter()
                 times[comb] = stop - start
         # print slowest 100
-        count = 0
+        print("100 slowest times in s for region / region overlaping")
         for k, v in sorted(
             times.items(), key=lambda item: item[1], reverse=True
-        ):
+        )[:100]:
             print(k, v)
-            count += 1
-            if count > 100:
-                break
 
-    def find_slow_regions2(self):
+    def time_regions_sphere_overlap(self, cr_method):
+        """
+        For all regions in destrieux's atlas, check whether they overlap
+        with a 2mm radius sphere in the center of the region.
+
+        Parameters
+        ----------
+        cr_method : function
+            the cr_method to test
+        """
         times = dict()
         for n, r in self.regions.items():
             if not isinstance(r, regions.EmptyRegion):
@@ -120,26 +170,25 @@ class TimeDestrieuxRegions:
                 coords = nibabel.affines.apply_affine(image.affine, coords)
                 center = [int(c) for c in coords]
                 sphere = regions.SphericalVolume(center, 2)
-                is_overlaping = cardinal_relation_2(
+                is_overlaping = cr_method(
                     r, sphere, "O", refine_overlapping=True
                 )
                 stop = time.perf_counter()
                 times[n] = stop - start
         # print slowest 100
-        count = 0
+        print("100 slowest times in s for region / sphere overlaping")
         for k, v in sorted(
             times.items(), key=lambda item: item[1], reverse=True
-        ):
+        )[:100]:
             print(k, v)
-            count += 1
-            if count > 100:
-                break
 
 
 if __name__ == "__main__":
     ts = TimeDestrieuxRegions()
     ts.setup()
     start = time.perf_counter()
-    ts.find_slow_regions2()
+    # ts.check_regions_overlap()
+    ts.time_regions_sphere_overlap(cardinal_relation_fast)
+    # ts.time_regions_overlap()
     stop = time.perf_counter()
-    print(f"Took : {stop - start: .2f} s.")
+    print(f"Took : {stop - start: .4f} s.")

@@ -288,26 +288,12 @@ def interval(voxel: Collection[int], affine: np.array) -> Tuple[pd.Interval]:
     """
     return tuple(
         pd.Interval(
-            left=c,
-            right=c + affine[i, i],
-            closed="left",
-        )
-        if affine[i, i] > 0
-        else pd.Interval(
-            left=c + affine[i, i],
-            right=c,
-            closed="right",
+            left=min(c, c + affine[i, i]),
+            right=max(c, c + affine[i, i]),
+            closed="both",
         )
         for i, c in enumerate(voxel)
     )
-    # return tuple(
-    #     pd.Interval(
-    #         left=min(c, c + affine[i, i]),
-    #         right=max(c, c + affine[i, i]),
-    #         closed="both",
-    #     )
-    #     for i, c in enumerate(voxel)
-    # )
 
 
 class ExplicitVBR(VolumetricBrainRegion):
@@ -330,7 +316,10 @@ class ExplicitVBR(VolumetricBrainRegion):
         voxels_xyz = nib.affines.apply_affine(
             self.affine, voxels_ijk
         )
-        self.intervals = np.asarray([interval(voxel, self.affine) for voxel in voxels_xyz])
+        # 1. create intervals for coordinates of each voxel
+        intervals = np.asarray([interval(voxel, self.affine) for voxel in voxels_xyz])
+        # 2. transform x, y, z coordinate intervals into IntervalArrays
+        self.intervals = [pd.arrays.IntervalArray(a) for a in intervals.T]
 
     @property
     def bounding_box(self):
