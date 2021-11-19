@@ -4,6 +4,7 @@ import pandas as pd
 import nibabel as nib
 import scipy.ndimage
 from itertools import product
+from ncls import NCLS, FNCLS
 
 from .exceptions import NeuroLangException
 from .aabb_tree import AABB, Tree, aabb_from_vertices, Node
@@ -309,6 +310,7 @@ class ExplicitVBR(VolumetricBrainRegion):
         self._aabb_tree = None
         self._bounding_box = self.generate_bounding_box(self.voxels)
         self._set_intervals(self.voxels)
+        self._set_ncls(self.voxels)
         if prebuild_tree:
             self.build_tree()
 
@@ -320,6 +322,27 @@ class ExplicitVBR(VolumetricBrainRegion):
         intervals = np.asarray([interval(voxel, self.affine) for voxel in voxels_xyz])
         # 2. transform x, y, z coordinate intervals into IntervalArrays
         self.intervals = [pd.arrays.IntervalArray(a) for a in intervals.T]
+    
+    def _set_ncls(self, voxels_ijk):
+        """
+        Create NCLS trees for each x, y, z coordinate.
+        NCLS doesnt seem to work with negative values, so I add 10000 to each coordinate.
+        Also overlaping query returns false if intervals only overlap on the edges, so i add
+        eps to each end of the interval.
+        """
+        eps = 0.00001
+        voxels_xyz = nib.affines.apply_affine(
+            self.affine, voxels_ijk
+        )
+        ncls = []
+        for i in range(voxels_xyz.shape[1]):
+            starts = voxels_xyz[:, i].astype(np.double) + 10000
+            ends = starts + self.affine[i, i]
+            ids = np.arange(voxels_xyz.shape[0])
+            # TODO : this is assuming affine is positive
+            ncls.append(FNCLS(starts - eps, ends + eps, ids))
+        self.ncls = tuple(ncls)
+        self.voxels_xyz = voxels_xyz
 
     @property
     def bounding_box(self):

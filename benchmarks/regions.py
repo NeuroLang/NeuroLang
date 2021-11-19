@@ -148,9 +148,9 @@ class TimeDestrieuxRegions:
                     refine_overlapping=True,
                 )
                 stop = time.perf_counter()
-                times[comb] = stop - start
+                times[comb] = (stop - start, is_overlaping)
         # print slowest 100
-        print("100 slowest times in s for region / region overlaping")
+        print(f"100 slowest times in s for region / region overlaping out of {len(times)}")
         for k, v in sorted(
             times.items(), key=lambda item: item[1], reverse=True
         )[:100]:
@@ -185,11 +185,22 @@ class TimeDestrieuxRegions:
                 stop = time.perf_counter()
                 times[n] = stop - start
         # print slowest 100
-        print("100 slowest times in s for region / sphere overlaping")
+        print(f"100 slowest times in s for region / sphere overlaping out of {len(times)}")
         for k, v in sorted(
             times.items(), key=lambda item: item[1], reverse=True
         )[:100]:
             print(k, v)
+
+    def time_region_pair_overlap(self, n0, n1, cr_method):
+        """
+        Time overlaping between two regions.
+        """
+        r0 = self.regions[n0]
+        r1 = self.regions[n1]
+        is_overlaping = cr_method(
+            r0, r1, "O", refine_overlapping=True
+        )
+        print(n0, n1, is_overlaping)
 
 
 if __name__ == "__main__":
@@ -197,8 +208,9 @@ if __name__ == "__main__":
     ts.setup(None)
     start = time.perf_counter()
     # ts.check_regions_overlap()
-    # ts.time_regions_sphere_overlap(cardinal_relation_fast)
-    # ts.time_regions_overlap(cardinal_relation_fast)
-    ts.time_regions_convex(cardinal_relation_fast)
+    # ts.time_regions_sphere_overlap(cardinal_relation)
+    ts.time_regions_overlap(cardinal_relation_fast)
+    # ts.time_region_pair_overlap("R G_and_S_frontomargin", "R G_front_sup", cardinal_relation_fast)
+    # ts.time_regions_convex(cardinal_relation_fast)
     stop = time.perf_counter()
     print(f"Took : {stop - start: .4f} s.")

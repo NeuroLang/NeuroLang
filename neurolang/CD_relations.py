@@ -3,6 +3,7 @@ from itertools import product
 
 import numpy as np
 from scipy.linalg import kron
+from ncls import FNCLS
 
 from .interval_algebra import (v_before, v_during, v_equals, v_finishes,
                                v_meets, v_overlaps, v_starts)
@@ -76,6 +77,66 @@ def fast_overlaps(region, other_region):
     return overlaps
 
 
+def ncls_overlaps(region, other_region):
+    """
+    Use NCLS for querying overlaps between regions
+    """
+    if region.voxels_xyz.shape[0] < other_region.voxels_xyz.shape[0]:
+        r0, r1 = region, other_region
+    else:
+        r0, r1 = other_region, region
+
+    intersects = None
+    for i in range(len(r0.ncls)):
+        ncls = r0.ncls[i]
+        starts = r1.voxels_xyz[:, i].astype(np.double) + 10000
+        ends = starts + r1.affine[i, i]
+        ids = np.arange(r1.voxels_xyz.shape[0])
+        l_idx, r_ids = ncls.all_overlaps_both(starts, ends, ids)
+        if intersects is None:
+            intersects = set(zip(l_idx, r_ids))
+        else:
+            intersects &= set(zip(l_idx, r_ids))
+        if len(intersects) == 0:
+            break
+    return len(intersects) > 0
+
+
+def ncls_overlaps_3(region, other_region):
+    """
+    Same as ncls_overlaps but creates the NCLS tree in the loop.
+    """
+    if region.voxels_xyz.shape[0] > other_region.voxels_xyz.shape[0]:
+        r0, r1 = region, other_region
+    else:
+        r0, r1 = other_region, region
+
+    eps = 0.00001
+    intersects = None
+    r_ids = None
+    for i in range(r0.voxels_xyz.shape[1]):
+        r_starts = r0.voxels_xyz[:, i].astype(np.double) + 10000
+        r_ends = r_starts + r0.affine[i, i]
+        if r_ids is None:
+            r_ids = np.arange(r0.voxels_xyz.shape[0])
+        else:
+            r_ids = np.array(list(set(r_ids))).astype(int)
+            r_starts = r_starts[r_ids]
+            r_ends = r_ends[r_ids]
+        ncls = FNCLS(r_starts - eps, r_ends + eps, r_ids)
+        l_starts = r1.voxels_xyz[:, i].astype(np.double) + 10000
+        l_ends = l_starts + r1.affine[i, i]
+        l_ids = np.arange(r1.voxels_xyz.shape[0])
+        l_idx, r_ids = ncls.all_overlaps_both(l_starts, l_ends, l_ids)
+        if intersects is None:
+            intersects = set(zip(l_idx, r_ids))
+        else:
+            intersects &= set(zip(l_idx, r_ids))
+        if len(intersects) == 0:
+            break
+    return len(intersects) > 0
+
+
 def _check_actual_overlap(row, matching_intervals):
     """ """
     for other_row in zip(*matching_intervals):
@@ -118,7 +179,7 @@ def cardinal_relation_fast(
         return is_in_direction(mat, directions)
 
     # 3. if they overlap, we have to check if they actually do overlap
-    actual_overlap = fast_overlaps(region, reference_region)
+    actual_overlap = ncls_overlaps_3(region, reference_region)
     if directions == "O":
         return actual_overlap
 
