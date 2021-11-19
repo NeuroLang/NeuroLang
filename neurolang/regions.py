@@ -5,6 +5,7 @@ import nibabel as nib
 import scipy.ndimage
 from itertools import product
 from ncls import NCLS, FNCLS
+import pygeos
 
 from .exceptions import NeuroLangException
 from .aabb_tree import AABB, Tree, aabb_from_vertices, Node
@@ -311,6 +312,7 @@ class ExplicitVBR(VolumetricBrainRegion):
         self._bounding_box = self.generate_bounding_box(self.voxels)
         self._set_intervals(self.voxels)
         self._set_ncls(self.voxels)
+        self._set_strtrees(self.voxels)
         if prebuild_tree:
             self.build_tree()
 
@@ -322,6 +324,8 @@ class ExplicitVBR(VolumetricBrainRegion):
         intervals = np.asarray([interval(voxel, self.affine) for voxel in voxels_xyz])
         # 2. transform x, y, z coordinate intervals into IntervalArrays
         self.intervals = [pd.arrays.IntervalArray(a) for a in intervals.T]
+        # TODO: This assumes only xyz coordinates
+        self.intervals_df = pd.DataFrame({k: v for k, v in zip("xyz", self.intervals)})
     
     def _set_ncls(self, voxels_ijk):
         """
@@ -343,6 +347,22 @@ class ExplicitVBR(VolumetricBrainRegion):
             ncls.append(FNCLS(starts - eps, ends + eps, ids))
         self.ncls = tuple(ncls)
         self.voxels_xyz = voxels_xyz
+
+    def _set_strtrees(self, voxels_ijk):
+        voxels_xyz = nib.affines.apply_affine(
+            self.affine, voxels_ijk
+        )
+        trees = []
+        lines = []
+        for i in range(voxels_xyz.shape[1]):
+            starts = self.voxels_xyz[:, i].astype(np.double)
+            ends = starts + self.affine[i, i]
+            # TODO : this is assuming affine is positive
+            l = pygeos.linestrings(list([[x0, 0], [x1, 0]] for x0, x1 in zip(starts, ends)))
+            lines.append(l)
+            trees.append(pygeos.STRtree(l))
+        self.trees = tuple(trees)
+        self.lines = lines
 
     @property
     def bounding_box(self):

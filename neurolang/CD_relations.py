@@ -77,6 +77,25 @@ def fast_overlaps(region, other_region):
     return overlaps
 
 
+def vectorized_overlaps(region, other_region):
+    # Create the cross product of x, y, z intervals from region and other_region
+    prod = region.intervals_df.merge(
+        other_region.intervals_df, how="cross", suffixes=("_left", "_right")
+    )
+    # Find elements for which x, y, and z intervals from left and right df overlap.
+    # this is equivalent to using pd.arrays.IntervalArray.overlaps method :
+    # https://github.com/pandas-dev/pandas/blob/5a404d5b70c6c611b204ba27b1d5c96a3b58f956/pandas/core/arrays/interval.py#L1275
+    overlaps = (
+        (prod.x_right.array.left <= prod.x_left.array.right)
+        & (prod.x_left.array.left <= prod.x_right.array.right)
+        & (prod.y_right.array.left <= prod.y_left.array.right)
+        & (prod.y_left.array.left <= prod.y_right.array.right)
+        & (prod.z_right.array.left <= prod.z_left.array.right)
+        & (prod.z_left.array.left <= prod.z_right.array.right)
+    )
+    return overlaps.any()
+
+
 def ncls_overlaps(region, other_region):
     """
     Use NCLS for querying overlaps between regions
@@ -137,15 +156,19 @@ def ncls_overlaps_3(region, other_region):
     return len(intersects) > 0
 
 
-def _check_actual_overlap(row, matching_intervals):
-    """ """
-    for other_row in zip(*matching_intervals):
-        match = True
-        for i in range(len(row)):
-            match &= row[i].left == other_row[i].left
-        if match:
-            return True
-    return False
+def pygeos_overlaps(region, other_region):
+    intersects = None
+    for i in range(len(region.trees)):
+        tree = region.trees[i]
+        query_lines = other_region.lines[i]
+        l_idx, r_ids = tree.query_bulk(query_lines)
+        if intersects is None:
+            intersects = set(zip(l_idx, r_ids))
+        else:
+            intersects &= set(zip(l_idx, r_ids))
+        if len(intersects) == 0:
+            break
+    return len(intersects) > 0
 
 
 def cardinal_relation_fast(
@@ -179,7 +202,7 @@ def cardinal_relation_fast(
         return is_in_direction(mat, directions)
 
     # 3. if they overlap, we have to check if they actually do overlap
-    actual_overlap = ncls_overlaps_3(region, reference_region)
+    actual_overlap = vectorized_overlaps(region, reference_region)
     if directions == "O":
         return actual_overlap
 
