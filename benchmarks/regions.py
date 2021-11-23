@@ -1,4 +1,6 @@
 from itertools import product
+from pathlib import Path
+from typing import Callable, Iterable
 import nibabel
 import nilearn
 import numpy as np
@@ -9,6 +11,7 @@ from neurolang.CD_relations import (
     cardinal_relation,
     cardinal_relation_fast,
 )
+from neurolang.utils.server.engines import NeurosynthEngineConf
 
 
 class TimeDestrieuxRegions:
@@ -51,6 +54,15 @@ class TimeDestrieuxRegions:
 
     def setup(self, cr_method):
         self.regions = self.load_destrieux()
+        dir = Path.home() / "neurolang_data"
+        self.engine = NeurosynthEngineConf(dir).create()
+        self.engine.add_symbol(
+            regions.region_union,
+            name="region_union",
+            type_=Callable[
+                [Iterable[regions.ExplicitVBR]], regions.ExplicitVBR
+            ],
+        )
 
     def load_destrieux(self):
         atlas_destrieux = nilearn.datasets.fetch_atlas_destrieux_2009()
@@ -105,6 +117,17 @@ class TimeDestrieuxRegions:
         print("total ok ", ok)
         print("total nok ", nok)
 
+    def time_neurosynth_region_query(self, cr_method=None):
+        query = """
+        Activation(s, agg_create_region(x, y, z)) :- PeakReported(x, y, z, s)
+        Ant(region_union(r)) :- Activation(s, r) & destrieux("L S central", central) & anterior_of(r, central)
+        ans(r) :- Ant(r)
+        """
+        with self.engine.scope:
+            res = self.engine.execute_datalog_program(query)
+            if res is None:
+                res = self.engine.solve_all()
+
     def time_regions_convex(self, cr_method):
         """
         Time overlaping between convex regions and sphere that don't
@@ -113,17 +136,13 @@ class TimeDestrieuxRegions:
         name = "L G_parietal_sup"
         r0 = self.regions[name]
         r1 = regions.SphericalVolume((-26, -52, 58), 2)
-        is_overlaping = cr_method(
-            r1, r0, "O", refine_overlapping=True
-        )
+        is_overlaping = cr_method(r1, r0, "O", refine_overlapping=True)
         print(f"Convex region {name} is overlaping: ", is_overlaping)
 
         name = "R S_pericallosal"
         r0 = self.regions[name]
         r1 = r1 = regions.SphericalVolume((5, 3, 16), 9)
-        is_overlaping = cr_method(
-            r1, r0, "O", refine_overlapping=True
-        )
+        is_overlaping = cr_method(r1, r0, "O", refine_overlapping=True)
         print(f"Convex region {name} is overlaping: ", is_overlaping)
 
     def time_regions_overlap(self, cr_method):
@@ -150,7 +169,9 @@ class TimeDestrieuxRegions:
                 stop = time.perf_counter()
                 times[comb] = (stop - start, is_overlaping)
         # print slowest 100
-        print(f"100 slowest times in s for region / region overlaping out of {len(times)}")
+        print(
+            f"100 slowest times in s for region / region overlaping out of {len(times)}"
+        )
         for k, v in sorted(
             times.items(), key=lambda item: item[1], reverse=True
         )[:100]:
@@ -185,7 +206,9 @@ class TimeDestrieuxRegions:
                 stop = time.perf_counter()
                 times[n] = stop - start
         # print slowest 100
-        print(f"100 slowest times in s for region / sphere overlaping out of {len(times)}")
+        print(
+            f"100 slowest times in s for region / sphere overlaping out of {len(times)}"
+        )
         for k, v in sorted(
             times.items(), key=lambda item: item[1], reverse=True
         )[:100]:
@@ -197,9 +220,7 @@ class TimeDestrieuxRegions:
         """
         r0 = self.regions[n0]
         r1 = self.regions[n1]
-        is_overlaping = cr_method(
-            r0, r1, "O", refine_overlapping=True
-        )
+        is_overlaping = cr_method(r0, r1, "O", refine_overlapping=True)
         print(n0, n1, is_overlaping)
 
 
@@ -209,8 +230,9 @@ if __name__ == "__main__":
     start = time.perf_counter()
     # ts.check_regions_overlap()
     # ts.time_regions_sphere_overlap(cardinal_relation)
-    ts.time_regions_overlap(cardinal_relation_fast)
-    # ts.time_region_pair_overlap("R G_and_S_frontomargin", "R G_front_sup", cardinal_relation_fast)
+    # ts.time_regions_overlap(cardinal_relation)
+    ts.time_neurosynth_region_query()
+    # ts.time_region_pair_overlap("L G_postcentral", "L G_precentral", cardinal_relation)
     # ts.time_regions_convex(cardinal_relation_fast)
     stop = time.perf_counter()
-    print(f"Took : {stop - start: .4f} s.")
+    print(f"Took {stop - start: .4f} s.")
