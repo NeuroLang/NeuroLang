@@ -1,7 +1,6 @@
 from copy import deepcopy
 
 import numpy as np
-import pandas as pd
 
 
 class AABB(object):
@@ -9,7 +8,6 @@ class AABB(object):
     def __init__(self, lb, ub):
         self._limits = np.asarray((lb, ub), dtype=float).T
         self._limits.setflags(write=False)
-        self._intervals = pd.arrays.IntervalArray.from_arrays(lb, ub, closed = "left")
         self._lb = self._limits[:, 0]
         self._ub = self._limits[:, 1]
 
