@@ -138,6 +138,7 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
             mask = image.resample_img(mask, np.eye(3) * self.resolution)
         nl = init_frontend(mask)
         load_neurosynth_data(self.data_dir, nl, mask)
+        load_destrieux_atlas(self.data_dir, nl)
         return nl
 
 

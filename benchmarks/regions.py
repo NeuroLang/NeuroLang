@@ -63,6 +63,22 @@ class TimeDestrieuxRegions:
                 [Iterable[regions.ExplicitVBR]], regions.ExplicitVBR
             ],
         )
+    
+    def _create_region_voxels(self):
+        # Add region for each unique peak reported
+        start = time.perf_counter()
+        with self.engine.scope as e:
+            e.VoxelRegion[
+                e.x, e.y, e.z, e.agg_create_region(e.x, e.y, e.z)
+            ] = e.PeakReported[e.x, e.y, e.z, e.s]
+
+            res = self.engine.query((e.x, e.y, e.z, e.r), e.VoxelRegion(e.x, e.y, e.z, e.r))
+        
+        stop = time.perf_counter()
+        self.engine.add_tuple_set(res.to_unnamed(), name="VoxelRegion")
+        print(
+            f"Loaded {len(res)} regions into engine in {stop-start:.4f}s."
+        )
 
     def load_destrieux(self):
         atlas_destrieux = nilearn.datasets.fetch_atlas_destrieux_2009()
@@ -119,14 +135,26 @@ class TimeDestrieuxRegions:
 
     def time_neurosynth_region_query(self, cr_method=None):
         query = """
-        Activation(s, agg_create_region(x, y, z)) :- PeakReported(x, y, z, s)
-        Ant(region_union(r)) :- Activation(s, r) & destrieux("L S central", central) & anterior_of(r, central)
+        Activation(x, y, z, agg_create_region(x, y, z)) :- PeakReported(x, y, z, s)
+        Ant(region_union(r)) :- Activation(_, _, _, r) & destrieux("L S central", central) & anterior_of(r, central)
         ans(r) :- Ant(r)
         """
         with self.engine.scope:
             res = self.engine.execute_datalog_program(query)
             if res is None:
                 res = self.engine.solve_all()
+        print(f"Found {res.fetch_one()[0].voxels.shape[0]} voxels anterior of L S_central region")
+
+    def time_neurosynth_region_query_preloaded(self, cr_method=None):
+        query = """
+        Ant(region_union(r)) :- VoxelRegion(_, _, _, r) & destrieux("L S central", central) & overlapping(r, central)
+        ans(r) :- Ant(r)
+        """
+        with self.engine.scope:
+            res = self.engine.execute_datalog_program(query)
+            if res is None:
+                res = self.engine.solve_all()
+        print(f"Found {res.fetch_one()[0].voxels.shape[0]} voxels anterior of L S_central region")
 
     def time_regions_convex(self, cr_method):
         """
@@ -227,11 +255,13 @@ class TimeDestrieuxRegions:
 if __name__ == "__main__":
     ts = TimeDestrieuxRegions()
     ts.setup(None)
+    ts._create_region_voxels()
     start = time.perf_counter()
     # ts.check_regions_overlap()
     # ts.time_regions_sphere_overlap(cardinal_relation)
     # ts.time_regions_overlap(cardinal_relation)
-    ts.time_neurosynth_region_query()
+    # ts.time_neurosynth_region_query()
+    ts.time_neurosynth_region_query_preloaded()
     # ts.time_region_pair_overlap("L G_postcentral", "L G_precentral", cardinal_relation)
     # ts.time_regions_convex(cardinal_relation_fast)
     stop = time.perf_counter()
