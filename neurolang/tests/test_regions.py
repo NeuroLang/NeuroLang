@@ -1,3 +1,5 @@
+from pathlib import Path
+from nilearn import datasets
 import numpy as np
 import pytest
 from numpy import random
@@ -424,9 +426,9 @@ def test_refinement_of_not_overlapping():
     for r in ['L', 'R', 'A', 'P', 'I', 'S']:
         assert not cardinal_relation(inner, outer, r, refine_overlapping=False)
 
-    for r in ['L', 'R', 'P']:
+    for r in ['L', 'R']:
         assert cardinal_relation(inner, outer, r, refine_overlapping=True)
-    for r in ['A', 'I', 'S', 'O']:
+    for r in ['A', 'P', 'I', 'S', 'O']:
         assert not cardinal_relation(inner, outer, r, refine_overlapping=True)
 
     region = ExplicitVBR(
@@ -528,3 +530,65 @@ def test_cardinal_relation_prepare_regions():
     r1, r2 = cardinal_relation_prepare_regions(sphere_1_evbr, sphere_2_evbr)
     assert r1 is sphere_1_evbr
     assert r2 is sphere_2_evbr
+
+
+def test_destrieux_cardinal_directions():
+    """
+    Test that CD relations between brain regions from destrieux atlas
+    are as expected.
+    """
+    data_dir = Path.home() / "neurolang_data"
+    destrieux_atlas = datasets.fetch_atlas_destrieux_2009(
+        data_dir=str(data_dir / "destrieux")
+    )
+    destrieux_atlas_image = nib.load(destrieux_atlas["maps"])
+    destrieux_labels = dict(destrieux_atlas["labels"])
+    destrieux = dict()
+    for k, v in destrieux_labels.items():
+        if k == 0:
+            continue
+        destrieux[
+            v.decode("utf8").replace("-", " ").replace("_", " ")
+        ] = ExplicitVBR.from_spatial_image_label(destrieux_atlas_image, k)
+
+    r45 = destrieux["L S central"]
+    # regions anterior of S_central
+    r29 = destrieux["L G precentral"]
+    r68 = destrieux["L S precentral inf part"]
+    r69 = destrieux["L S precentral sup part"]
+    r15 = destrieux["L G front middle"]
+    r53 = destrieux["L S front middle"]
+
+    # regions posterior of S_central
+    r28 = destrieux["L G postcentral"]
+    r67 = destrieux["L S postcentral"]
+
+    # S_central has non convex border on the A/P axis with G_postcentral
+    # and G_precentral.
+    for r in ["O", "A", "P", "I", "S", "L", "R"]:
+        assert cardinal_relation(r29, r45, r, refine_overlapping=True)
+        assert cardinal_relation(r28, r45, r, refine_overlapping=True)
+
+    # all other regions should be only anterior of S_central and not posterior
+    for r in ["A", "S", "R"]:
+        assert cardinal_relation(r69, r45, r, refine_overlapping=True)
+    for r in ["O", "P", "I", "L"]:
+        assert not cardinal_relation(r69, r45, r, refine_overlapping=True)
+
+    for r in ["A", "I", "S", "L", "R"]:
+        assert cardinal_relation(r68, r45, r, refine_overlapping=True)
+    for r in ["O", "P"]:
+        assert not cardinal_relation(r68, r45, r, refine_overlapping=True)
+
+    for r in ["A", "I", "S", "R"]:
+        assert cardinal_relation(r15, r45, r, refine_overlapping=True)
+    for r in ["O", "P", "L"]:
+        assert not cardinal_relation(r15, r45, r, refine_overlapping=True)
+
+    for r in ["A", "I"]:
+        assert cardinal_relation(r53, r45, r, refine_overlapping=True)
+    for r in ["O", "P", "S", "L", "R"]:
+        assert not cardinal_relation(r53, r45, r, refine_overlapping=True)
+
+    assert cardinal_relation(r67, r45, "P", refine_overlapping=True)
+    assert not cardinal_relation(r67, r45, "A", refine_overlapping=True)

@@ -126,11 +126,10 @@ def overlap_resolution(
     total_mat = direction_matrix(
         region_stack[0][0].box, region_stack[0][1].box
     ) * 0
-    overlap_indices = is_in_direction_indices(total_mat.ndim, 'O')
     while region_stack:
         region, reference_region, level = region_stack.pop()
 
-        mat = direction_matrix(region.box, reference_region.box)
+        mat = direction_matrix(region.box, reference_region.box, directions_dim_space['A'])
         total_mat += mat
 
         if (
@@ -150,7 +149,7 @@ def overlap_resolution(
             ]
 
             if len(stack_update) > 0:
-                total_mat[overlap_indices] = 0
+                total_mat -= mat
                 region_stack += stack_update
             elif directions is None:
                 break
@@ -192,8 +191,12 @@ def relation_vectors(intervals, other_region_intervals):
     return obtained_vectors[:ov]
 
 
-def direction_matrix(region_bb, another_region_bb):
+def direction_matrix(region_bb, another_region_bb, restrict_axes_directions=None):
     rp_vector = relation_vectors(region_bb.limits, another_region_bb.limits)
+    if restrict_axes_directions is not None:
+        restrict_axis_relation_to_overlaping_regions(
+            rp_vector, restrict_axes_directions
+        )
     tensor = rp_vector[0].reshape(1, 3)
     for i in range(1, len(rp_vector)):
         tensor = kron(
@@ -201,3 +204,20 @@ def direction_matrix(region_bb, another_region_bb):
             tensor
         ).squeeze()
     return tensor.clip(0, 1)
+
+
+def restrict_axis_relation_to_overlaping_regions(rp_vector, axes_directions):
+    """
+    For a given axis (for example anterior/posterior), we only consider
+    non-overlaping relations (i.e. anterior or posterior) iif the regions are
+    also overlaping on all the other axes (i.e. are overlaping on the
+    left/right and inferior/superior axes).
+    """
+    # for each axis direction
+    for direction in axes_directions:
+        # check that all the other axes are overlaping
+        mask = np.ones(len(rp_vector), bool)
+        mask[direction] = 0
+        if not np.all(rp_vector[mask, 1]):
+            # otherwise remove non-overlaping relations from current axis
+            rp_vector[direction] = (0, 1, 0)
