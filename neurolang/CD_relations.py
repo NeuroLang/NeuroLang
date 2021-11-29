@@ -160,6 +160,17 @@ def overlap_resolution(
     return total_mat.clip(0, 1)
 
 
+def center_of_mass_direction(region, reference_region, directions=None):
+    c0 = np.array([np.floor(np.average(region.voxels, axis=0))])
+    c1 = np.array([np.floor(np.average(reference_region.voxels, axis=0))])
+
+    mat = direction_matrix(
+        ExplicitVBR(c0, region.affine).bounding_box,
+        ExplicitVBR(c1, reference_region.affine).bounding_box,
+    )
+    return is_in_direction(mat, directions)
+
+
 @lru_cache(maxsize=128)
 def is_in_direction_indices(n, direction):
     indices = [[0, 1, 2]] * n
