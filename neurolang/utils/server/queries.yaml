@@ -78,7 +78,7 @@ destrieux:
       LeftPrimarySulcusName("L Lat Fis ant Horizont")
       LeftPrimarySulcus(name_, region) :- destrieux(name_, region) & LeftPrimarySulcusName(name_)
       LeftFrontalLobeSulcus(region) :- LeftSulcus(..., region) & anatomical_anterior_of(region, lscregion) & destrieux("L S central", lscregion) & anatomical_superior_of(region, llfavregion) & destrieux("L Lat Fis ant Vertical", llfavregion)
-      LPrecentralSulcus(r) :- LeftFrontalLobeSulcus(r) & principal_direction(r, "SI") & ~exists(r2; LeftFrontalLobeSulcus(r2) & LeftFrontalLobeSulcus(r) & (r2 != r) & anatomical_posterior_of(r2, r))
+      LPrecentralSulcus(r) :- LeftFrontalLobeSulcus(r) & principal_direction(r, "SI") & ~exists(r2; LeftFrontalLobeSulcus(r2) & LeftFrontalLobeSulcus(r) & ~(r2 == r) & anatomical_posterior_of(r2, r))
     description: |
       In this example, we first caracterise some of the sulci in the Destrieux et al. Atlas. We characterise:
         * the left hemisphere primary sulci, by name
