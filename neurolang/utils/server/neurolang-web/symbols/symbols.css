@@ -44,7 +44,7 @@
     cursor: pointer;
 }
 
-.nl-vbr-overlay-controls.displayed .nl-mini-colorbar {
+.nl-vbr-overlay-controls.displayed:not(.region-label) .nl-mini-colorbar {
     display: inline-block;
 }
 
