@@ -7,6 +7,9 @@ Sulcal Identification Query Example in Neurolang
 # %%
 # Initialise the Neurolang deterministic environment
 # ..................................................
+import warnings
+
+warnings.filterwarnings("ignore")
 
 import nibabel as nib
 import numpy as np
