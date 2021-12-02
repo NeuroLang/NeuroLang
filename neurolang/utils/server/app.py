@@ -7,6 +7,7 @@ import sys
 from concurrent.futures import Future
 from io import BytesIO
 from pathlib import Path
+from typing import Optional
 from uuid import uuid4
 
 import pandas as pd
@@ -40,6 +41,7 @@ define(
     help="force a build of the frontend app",
     type=bool,
 )
+static_path = str(Path(__file__).resolve().parent / "neurolang-web" / "dist")
 
 LOG = logging.getLogger(__name__)
 
@@ -60,7 +62,6 @@ class Application(tornado.web.Application):
         uuid_pattern = (
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
         )
-        static_path = str(Path(__file__).resolve().parent / "neurolang-web" / "dist")
         print(f"Serving static files from {static_path}")
 
         handlers = [
@@ -96,7 +97,7 @@ class Application(tornado.web.Application):
             ),
             (
                 r"/(.*)",
-                tornado.web.StaticFileHandler,
+                StaticFileOrDefaultHandler,
                 {"path": static_path, "default_filename": "index.html"},
             ),
         ]
@@ -116,6 +117,23 @@ class Application(tornado.web.Application):
             debug=dev,
         )
         super().__init__(handlers, **settings)
+
+
+class StaticFileOrDefaultHandler(tornado.web.StaticFileHandler):
+    """
+    When serving static files, if file does not exist on path, return
+    index.html instead.
+
+    This is only useful for dev mode, as static file handling is done
+    by nginx in production.
+    """
+    def validate_absolute_path(self, root: str, absolute_path: str) -> Optional[str]:
+        try:
+            return super().validate_absolute_path(root, absolute_path)
+        except tornado.web.HTTPError as e:
+            if e.status_code == 404:
+                return os.path.join(static_path, "index.html")
+            raise e
 
 
 class MainHandler(tornado.web.RequestHandler):
