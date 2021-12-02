@@ -4,6 +4,7 @@ from itertools import product
 import numpy as np
 from scipy.linalg import kron
 
+from .config import config
 from .interval_algebra import (v_before, v_during, v_equals, v_finishes,
                                v_meets, v_overlaps, v_starts)
 from .regions import ExplicitVBR, ImplicitVBR, Region
@@ -44,6 +45,9 @@ inverse_directions = {
 
 anatomical_restric_axes = directions_dim_space["A"] + directions_dim_space["S"]
 anatomical_restrict_dirs = ["A", "P", "I", "S"]
+anatomical_restrict_threshold = config["DEFAULT"].getfloat(
+    "cardinalRelationThreshold"
+)
 
 relations = [
     v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals
@@ -175,9 +179,36 @@ def is_in_direction_indices(n, direction):
 
 
 def is_in_direction(matrix, direction, dir_counts=None):
+    """
+    Returns whether the cardinal relation matrix describing the relative
+    position of two regions is in the given directions.
+
+    If a direction_counts array is provided, this method checks whether the
+    amount of time a direction is present compared to its opposite is greater
+    than a specific threshold.
+
+    Parameters
+    ----------
+    matrix : numpy.array
+        the cardinal relation matrix provided by the `direction_matrix`
+        function
+    direction : str
+        a string containing the directions queried
+    dir_counts : numpy.array, optional
+        an array containing the counts of regions in a direction X for each
+        direction of the anatomical_restrict_dirs
+
+    Returns
+    -------
+    bool
+        whether the regions described by the matrix are in the query directions
+    """
     if dir_counts is not None:
         for dir in direction:
             if dir in anatomical_restrict_dirs:
+                # For direction on the A/P or I/S axis, we consider a region is
+                # in direction A/P if there are more than 80% subregions in
+                # direction A/P.
                 c0, c1 = (
                     dir_counts[anatomical_restrict_dirs.index(dir)],
                     dir_counts[
@@ -185,7 +216,7 @@ def is_in_direction(matrix, direction, dir_counts=None):
                     ],
                 )
                 ratio = c0 / (c0 + c1)
-                if ratio > 0.8:
+                if ratio > anatomical_restrict_threshold:
                     return True
                 else:
                     direction = direction.replace(dir, "")
