@@ -204,22 +204,22 @@ def is_in_direction(matrix, direction, dir_counts=None):
         whether the regions described by the matrix are in the query directions
     """
     if dir_counts is not None:
-        for dir in direction:
-            if dir in anatomical_restrict_dirs:
+        for d in direction:
+            if d in anatomical_restrict_dirs:
                 # For direction on the A/P or I/S axis, we consider a region is
                 # in direction A/P if there are more than 80% subregions in
                 # direction A/P.
                 c0, c1 = (
-                    dir_counts[anatomical_restrict_dirs.index(dir)],
+                    dir_counts[anatomical_restrict_dirs.index(d)],
                     dir_counts[
-                        anatomical_restrict_dirs.index(inverse_directions[dir])
+                        anatomical_restrict_dirs.index(inverse_directions[d])
                     ],
                 )
                 ratio = c0 / (c0 + c1)
                 if ratio > anatomical_restrict_threshold:
                     return True
                 else:
-                    direction = direction.replace(dir, "")
+                    direction = direction.replace(d, "")
 
         if len(direction) == 0:
             return False
