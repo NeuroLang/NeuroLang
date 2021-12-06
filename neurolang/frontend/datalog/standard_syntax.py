@@ -38,7 +38,8 @@ GRAMMAR = u"""
                | probabilistic_rule
                | probabilistic_fact
                | statement
-               | statement_function ;
+               | statement_function
+               | command ;
     fact = constant_predicate ;
     probabilistic_fact = ( arithmetic_operation | int_ext_identifier ) '::' constant_predicate ;
     rule = (head | query) implication (condition | body) ;
@@ -46,6 +47,7 @@ GRAMMAR = u"""
     constraint = body right_implication head ;
     statement = identifier ':=' ( lambda_expression | arithmetic_operation | int_ext_identifier ) ;
     statement_function = identifier'(' [ arguments ] ')' ':=' argument ;
+    command = '.' cmd_identifier '(' [ cmd_args ] ')';
     head = head_predicate ;
     body = conjunction ;
     condition = composite_predicate '//' composite_predicate ;
@@ -112,6 +114,13 @@ GRAMMAR = u"""
 
     identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/
                | '`'@:?"[0-9a-zA-Z/#%._:-]+"'`';
+
+    cmd_identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/ ;
+    cmd_args = ','.{ cmd_arg }* [ ','.{ cmd_keyword_arg }+ ] ;
+    cmd_arg = ( arithmetic_operation | python_string ) !'=';
+    cmd_keyword_arg = identifier '=' cmd_arg ;
+    python_string = '"' @:/[^"]*/ '"'
+                  | "'" @:/[^']*/ "'" ;
 
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
 
@@ -356,6 +365,10 @@ class DatalogSemantics:
 
     def float(self, ast):
         return Constant(float("".join(ast)))
+
+    def command(self, ast):
+        print(ast)
+        return Symbol.fresh()
 
     def _default(self, ast):
         return ast

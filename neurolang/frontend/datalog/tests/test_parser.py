@@ -405,3 +405,14 @@ def test_lambda_application():
         Statement(c, expression),
     ))
     assert expected == res
+
+
+def test_command_syntax():
+    # res = parser('.load_csv(A, "http://myweb/file.csv")')
+    
+    # res = parser('.load_csv("http://myweb/file.csv")')
+
+    # res = parser('.load_csv()')
+
+    res = parser('.load_csv(sep=A)')
+    # res = parser('.load_csv("http://myweb/file.csv", sep=A)')
