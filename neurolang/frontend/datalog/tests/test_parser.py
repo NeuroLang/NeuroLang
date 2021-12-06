@@ -7,6 +7,7 @@ from neurolang.logic import ExistentialPredicate
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....expressions import (
+    Command,
     Constant,
     FunctionApplication,
     Lambda,
@@ -408,11 +409,46 @@ def test_lambda_application():
 
 
 def test_command_syntax():
-    # res = parser('.load_csv(A, "http://myweb/file.csv")')
-    
-    # res = parser('.load_csv("http://myweb/file.csv")')
+    res = parser('.load_csv(A, "http://myweb/file.csv")')
+    expected = Union(
+        (Command("load_csv", (Symbol("A"), "http://myweb/file.csv"), {}),)
+    )
+    assert res == expected
 
-    # res = parser('.load_csv()')
+    res = parser('.load_csv("http://myweb/file.csv")')
+    expected = Union((Command("load_csv", ("http://myweb/file.csv",), {}),))
+    assert res == expected
 
-    res = parser('.load_csv(sep=A)')
-    # res = parser('.load_csv("http://myweb/file.csv", sep=A)')
+    res = parser(".load_csv()")
+    expected = Union((Command("load_csv", (), {}),))
+    assert res == expected
+
+    res = parser('.load_csv(sep=",")')
+    expected = Union((Command("load_csv", (), {Symbol("sep"): ","}),))
+    assert res == expected
+
+    res = parser('.load_csv(sep=",", header=None)')
+    expected = Union(
+        (
+            Command(
+                "load_csv",
+                (),
+                {Symbol("sep"): ",", Symbol("header"): Symbol("None")},
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser(
+        '.load_csv(A, "http://myweb/file.csv", sep=",", header=None)'
+    )
+    expected = Union(
+        (
+            Command(
+                "load_csv",
+                (Symbol("A"), "http://myweb/file.csv"),
+                {Symbol("sep"): ",", Symbol("header"): Symbol("None")},
+            ),
+        )
+    )
+    assert res == expected

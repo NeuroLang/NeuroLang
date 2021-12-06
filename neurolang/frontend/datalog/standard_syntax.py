@@ -7,6 +7,7 @@ from neurolang.logic import ExistentialPredicate
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
 from ...expressions import (
+    Command,
     Constant,
     Expression,
     FunctionApplication,
@@ -47,7 +48,7 @@ GRAMMAR = u"""
     constraint = body right_implication head ;
     statement = identifier ':=' ( lambda_expression | arithmetic_operation | int_ext_identifier ) ;
     statement_function = identifier'(' [ arguments ] ')' ':=' argument ;
-    command = '.' cmd_identifier '(' [ cmd_args ] ')';
+    command = '.' @:cmd_identifier '(' [ @:cmd_args ] ')';
     head = head_predicate ;
     body = conjunction ;
     condition = composite_predicate '//' composite_predicate ;
@@ -116,9 +117,12 @@ GRAMMAR = u"""
                | '`'@:?"[0-9a-zA-Z/#%._:-]+"'`';
 
     cmd_identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/ ;
-    cmd_args = ','.{ cmd_arg }* [ ','.{ cmd_keyword_arg }+ ] ;
-    cmd_arg = ( arithmetic_operation | python_string ) !'=';
-    cmd_keyword_arg = identifier '=' cmd_arg ;
+    cmd_args = @:pos_args [ ',' @:keyword_args ]
+             | @:keyword_args ;
+    pos_args = pos_item { ',' pos_item }* ;
+    pos_item = ( arithmetic_operation | python_string ) !'=' ;
+    keyword_args = keyword_item { ',' keyword_item }* ;
+    keyword_item = identifier '=' pos_item ;
     python_string = '"' @:/[^"]*/ '"'
                   | "'" @:/[^']*/ "'" ;
 
@@ -366,9 +370,41 @@ class DatalogSemantics:
     def float(self, ast):
         return Constant(float("".join(ast)))
 
+    def pos_args(self, ast):
+        args = [ast[0]]
+        if len(ast[1]) > 0:
+            args += ast[1][0][1::2]
+        return tuple(args)
+
+    def keyword_item(self, ast):
+        return {ast[0]: ast[2]}
+
+    def keyword_args(self, ast):
+        kwargs = ast[0]
+        if len(ast[1]) > 0:
+            for kwarg in ast[1][0][1::2]:
+                kwargs.update(kwarg)
+        return kwargs
+
+    def cmd_args(self, ast):
+        if isinstance(ast, list) and len(ast) == 2:
+            args, kwargs = ast
+        elif isinstance(ast, dict):
+            args = ()
+            kwargs = ast
+        else:
+            args = ast
+            kwargs = {}
+        return args, kwargs
+
     def command(self, ast):
-        print(ast)
-        return Symbol.fresh()
+        if not isinstance(ast, list):
+            cmd = Command(ast, (), {})
+        else:
+            name = ast[0]
+            args, kwargs = ast[1]
+            cmd = Command(name, args, kwargs)
+        return cmd
 
     def _default(self, ast):
         return ast

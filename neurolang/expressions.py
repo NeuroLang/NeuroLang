@@ -840,6 +840,23 @@ class Query(Definition):
             )
 
 
+class Command(Definition):
+    def __init__(self, name, args, kwargs):
+        self.name = name
+        self.args = args
+        self.kwargs = kwargs
+
+    def __repr__(self):
+        arg_str = ""
+        if self.args:
+            arg_str += ", ".join([repr(a) for a in self.args])
+        if self.kwargs:
+            if len(arg_str) > 0:
+                arg_str += ", "
+            arg_str += ", ".join(f"{k}={v}" for k, v in self.kwargs.items())
+        return "Command{{{}({})}}".format(self.name, arg_str)
+
+
 def infer_type(value, deep=False):
     if isinstance(value, Expression):
         return value.type
