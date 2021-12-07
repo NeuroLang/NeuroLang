@@ -377,7 +377,10 @@ class DatalogSemantics:
         return tuple(args)
 
     def keyword_item(self, ast):
-        return {ast[0]: ast[2]}
+        key = ast[0]
+        if isinstance(key, Symbol):
+            key = key.name
+        return {key: ast[2]}
 
     def keyword_args(self, ast):
         kwargs = ast[0]

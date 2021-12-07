@@ -424,7 +424,7 @@ def test_command_syntax():
     assert res == expected
 
     res = parser('.load_csv(sep=",")')
-    expected = Union((Command("load_csv", (), {Symbol("sep"): ","}),))
+    expected = Union((Command("load_csv", (), {"sep": ","}),))
     assert res == expected
 
     res = parser('.load_csv(sep=",", header=None)')
@@ -433,7 +433,7 @@ def test_command_syntax():
             Command(
                 "load_csv",
                 (),
-                {Symbol("sep"): ",", Symbol("header"): Symbol("None")},
+                {"sep": ",", "header": Symbol("None")},
             ),
         )
     )
@@ -447,7 +447,7 @@ def test_command_syntax():
             Command(
                 "load_csv",
                 (Symbol("A"), "http://myweb/file.csv"),
-                {Symbol("sep"): ",", Symbol("header"): Symbol("None")},
+                {"sep": ",", "header": Symbol("None")},
             ),
         )
     )
