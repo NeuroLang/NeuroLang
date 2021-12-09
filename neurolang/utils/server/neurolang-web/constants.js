@@ -31,14 +31,16 @@ export const API_ROUTE = {
   atlas: BASE_API_URL + '/v1/atlas',
   engines: BASE_API_URL + '/v1/engines',
   symbols: BASE_API_URL + '/v1/symbol',
-  downloads: BASE_API_URL + '/v1/download'
+  downloads: BASE_API_URL + '/v1/download',
+  figure: BASE_API_URL + '/v1/figure'
 }
 
 // The custom data types which might need special rendering
 export const DATA_TYPES = {
   studyID: "<class 'neurolang.frontend.neurosynth_utils.StudyID'>",
   VBR: "<class 'neurolang.regions.ExplicitVBR'>",
-  VBROverlay: "<class 'neurolang.regions.ExplicitVBROverlay'>"
+  VBROverlay: "<class 'neurolang.regions.ExplicitVBROverlay'>",
+  MpltFigure: "<class 'matplotlib.figure.Figure'>"
 }
 
 export const PUBMED_BASE_URL = 'https://www.ncbi.nlm.nih.gov/pubmed/?term='

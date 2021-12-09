@@ -4,6 +4,9 @@ from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import Callable, Iterable, Union
 
+import matplotlib
+import matplotlib.pyplot as plt
+import seaborn as sns
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -140,6 +143,7 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
         if self.resolution is not None:
             mask = image.resample_img(mask, np.eye(3) * self.resolution)
         nl = init_frontend(mask)
+        add_ploting_functions(nl)
         load_neurosynth_data(self.data_dir, nl, mask)
         return nl
 
@@ -399,3 +403,35 @@ def load_destrieux_atlas(data_dir, nl):
     nl.add_atlas_set(
         "destrieux", destrieux_atlas_labels, destrieux_atlas_images
     )
+
+
+def add_ploting_functions(nl: Union[NeurolangDL, NeurolangPDL]):
+    matplotlib.use('Agg')
+
+    @nl.add_symbol
+    def agg_kde(terms: Iterable, probs: Iterable) -> matplotlib.figure.Figure:
+        """
+        Create a kde plot showing prob distribution per term.
+
+        Parameters
+        ----------
+        terms : Iterable[str]
+            the terms
+        probs: Iterable[float]
+            the probs
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            a Figure
+        """
+        df = pd.DataFrame(
+            {
+                "terms": terms,
+                "probs": probs,
+            }
+        )
+        fig, ax = plt.subplots()
+        fig.suptitle("Distribution of probs / term")
+        sns.kdeplot(ax=ax, data=df[df.probs > 0.002], x="probs", hue="terms")
+        return fig

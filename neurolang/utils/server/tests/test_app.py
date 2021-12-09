@@ -5,6 +5,9 @@ from typing import AbstractSet, Tuple
 from unittest.mock import MagicMock, create_autospec
 from uuid import uuid4
 
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
 import pytest
 import tornado.testing
 import tornado.websocket
@@ -13,6 +16,7 @@ from neurolang.type_system import Unknown
 from neurolang.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
 )
+
 from ..app import Application
 from ..queries import NeurolangQueryManager
 
@@ -59,6 +63,27 @@ def results(data):
     voxels.row_type = Tuple[int, int, int]
     results = {"ans": ans, "Voxel": voxels}
     return results
+
+
+@pytest.fixture
+def figures(data):
+    ans = NamedRelationalAlgebraFrozenSet(("a", "b", "c"), data)
+    ans.row_type = Tuple[float, str, AbstractSet[Unknown]]
+    N_points = 10000
+    n_bins = 20
+    x = np.random.randn(N_points)
+    y = 0.4 * x + np.random.randn(N_points) + 5
+    figx, ax = plt.subplots()
+    ax.hist(x, bins=n_bins)
+    plt.close(figx)
+    figy, axy = plt.subplots()
+    axy.hist(y, bins=n_bins)
+    plt.close(figy)
+
+    hists = NamedRelationalAlgebraFrozenSet(("agg_hist",), [[figx], [figy]])
+    hists.row_type = Tuple[matplotlib.figure.Figure]
+    figures = {"Hists": hists}
+    return figures
 
 
 @pytest.fixture
@@ -155,3 +180,19 @@ def test_symbols_handler_calls_get_symbols_on_nqm(
     response = test_case.fetch(f"/v1/symbol/{engine}")
     assert response.code == 200
     nqm.get_symbols.assert_called_with(engine)
+
+
+def test_figure_handler_gets_figure(test_case, nqm, future, figures):
+    uuid = uuid4()
+    future.done.return_value = True
+    future.exception.return_value = None
+    future.result.return_value = figures
+    nqm.get_result.return_value = future
+
+    params = {"symbol": "Hists", "row": 1, "col": 0}
+
+    response = test_case.fetch(
+        f"/v1/figure/{uuid}?" + urllib.parse.urlencode(params)
+    )
+    assert response.code == 200
+    nqm.get_result.assert_called_with(str(uuid))
