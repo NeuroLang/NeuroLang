@@ -267,10 +267,10 @@ def restrict_axis_relation_to_overlaping_regions(rp_vector):
     other axis.
     """
     # for each axis
-    for dir, orth_dir in zip(
+    for d, orth_dir in zip(
         anatomical_restric_axes, anatomical_restric_axes[::-1]
     ):
         # check that the other axis is overlaping
         if not rp_vector[orth_dir, 1]:
             # otherwise remove non-overlaping relations from current axis
-            rp_vector[dir] = (0, 1, 0)
+            rp_vector[d] = (0, 1, 0)
