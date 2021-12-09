@@ -59,10 +59,10 @@ class CommandsMixin(PatternWalker):
 
         if probabilistic is None:
             self.add_extensional_predicate_from_tuples(symbol, data)
-        elif probabilistic.lowercase() == "choice":
+        elif probabilistic.lower() == "choice":
             self.add_probabilistic_choice_from_tuples(symbol, data)
         else:
-            self.add_probabilistic_facts_from_tuples(symbol, data)
+            self.add_probabilistic_facts_from_tuples(symbol, data.to_records(index=False).tolist())
 
     @add_match(Command)
     def unknown_command(self, command):
