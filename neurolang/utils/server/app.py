@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
+import matplotlib
 import pandas as pd
 import tornado.ioloop
 import tornado.iostream
@@ -60,7 +61,9 @@ class Application(tornado.web.Application):
         uuid_pattern = (
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
         )
-        static_path = str(Path(__file__).resolve().parent / "neurolang-web" / "dist")
+        static_path = str(
+            Path(__file__).resolve().parent / "neurolang-web" / "dist"
+        )
         print(f"Serving static files from {static_path}")
 
         handlers = [
@@ -93,6 +96,10 @@ class Application(tornado.web.Application):
             (
                 r"/v1/download/(.+)",
                 DownloadsHandler,
+            ),
+            (
+                r"/v1/figure/({uuid})".format(uuid=uuid_pattern),
+                MpltFigureHandler,
             ),
             (
                 r"/(.*)",
@@ -452,6 +459,82 @@ class DownloadsHandler(tornado.web.RequestHandler):
         self.set_header(
             "Content-Disposition", "attachment; filename=" + filename
         )
+        chunk_size = 1024 * 1024 * 1  # 1 MiB
+        while True:
+            chunk = data.read(chunk_size)
+            if not chunk:
+                break
+            try:
+                self.write(chunk)  # write the chunk to response
+                await self.flush()  # send the chunk to client
+            except tornado.iostream.StreamClosedError:
+                break
+            finally:
+                del chunk
+
+
+class MpltFigureHandler(tornado.web.RequestHandler):
+    """
+    Handle requests for matplotlib figures. Streams them as svg.
+    """
+
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
+        self.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        self.set_header("Content-Type", "image/svg+xml")
+
+    async def get(self, uuid: str):
+        """
+        Serve the matplotlib figure requested. Required query parameters are:
+        - symbol: the symbol containing the figures
+        - col & row: the col and row index of the figure in the symbol's dataframe.
+
+        Parameters
+        ----------
+        uuid : str
+            the uuid of the query
+
+        Raises
+        ------
+        tornado.web.HTTPError
+            404 if uuid is invalid, or results are not available
+        """
+        # 1. Get the result dataframe for the query params
+        symbol = self.get_argument("symbol")
+        row = self.get_argument("row")
+        col = self.get_argument("col")
+        format_ext = self.get_argument("format", "svg")
+        LOG.debug("Accessing figure result for request %s.", uuid)
+        try:
+            future = self.application.nqm.get_result(uuid)
+        except KeyError:
+            raise tornado.web.HTTPError(
+                status_code=404, log_message="uuid not found"
+            )
+        if not (future.done() and future.result()):
+            raise tornado.web.HTTPError(
+                status_code=404, log_message="query does not have results"
+            )
+        results = future.result()
+        ras = results[symbol]
+        df = ras.as_pandas_dataframe()
+        figure = df.iat[int(row), int(col)]
+        if not isinstance(figure, matplotlib.figure.Figure):
+            raise tornado.web.HTTPError(
+                status_code=404, log_message="Invalid figure format"
+            )
+
+        # 2. Stream the figure in requested format. If format is not svg
+        # we serve it as an attached file
+        if format_ext != "svg":
+            filename = f"{symbol}_{row}_{col}.{format_ext}"
+            self.set_header(
+                "Content-Disposition", "attachment; filename=" + filename
+            )
+        data = BytesIO()
+        figure.savefig(data, format=format_ext)
+        data.seek(0)
         chunk_size = 1024 * 1024 * 1  # 1 MiB
         while True:
             chunk = data.read(chunk_size)

@@ -38,6 +38,7 @@ neurosynth:
       TermsToSelect("fear")
       Activation(x, y, z) :- SelectedStudy(s) & PeakReported(x, y, z, s)
       ActivationGivenTerm(x, y, z, t, PROB) :- Activation(x, y, z) // (TermAssociation(t) & TermsToSelect(t))
+      ProbDistributions(agg_kde(t, p)) :- ActivationGivenTerm(x, y, z, t, p)
       ActivationGivenTermImage(t, agg_create_region_overlay(x, y, z, p)) :- ActivationGivenTerm(x, y, z, t, p)
     description: |
       This example is similar to the [CBMA Single Term](/neurosynth/neuro1) example but it showcases how to query multiple term associations.

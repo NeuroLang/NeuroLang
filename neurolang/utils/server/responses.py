@@ -1,7 +1,10 @@
 import base64
 import hashlib
+from io import BytesIO
 import json
 from concurrent.futures import Future
+
+import matplotlib
 from neurolang.frontend.query_resolution_expressions import Symbol
 from typing import Any, Dict, List, Tuple, Type, Union
 from nibabel.nifti1 import Nifti1Image
@@ -95,8 +98,34 @@ def serializeVBR(image_row: pd.Series):
         "image": base64_encode_spatial(image),
         "hash": hash,
         "center": calculate_image_center(image),
-        "idx": index
+        "idx": index,
     }
+
+
+def serialize_mplt_thumbnails(figure: matplotlib.figure.Figure):
+    """
+    Serialize a figure by creating a base64 encoded thumbnail.
+    This is used only to display the figure as a thumbnail in the list of
+    results. The full size figure will be displayed when the user clicks on
+    the thumbnail. See `app.MpltFigureHandler`.
+
+    Parameters
+    ----------
+    figure : matplotlib.figure.Figure
+        the figure to serialize
+
+    Returns
+    -------
+    str
+        base64 encoded thumbnail of the figure
+    """
+    data = BytesIO()
+    # set dpi to low value to create a small image
+    figure.savefig(data, format="png", dpi=10)
+    data.seek(0)
+    encoded_figure = base64.encodebytes(data.read())
+    enc = encoded_figure.decode("utf-8")
+    return enc
 
 
 class CustomQueryResultsEncoder(json.JSONEncoder):
@@ -227,8 +256,13 @@ class QueryResults:
         result["row_type"] = [str(t) for t in get_args(symbol.row_type)]
         result["columns"] = [str(c) for c in symbol.columns]
         result["size"] = df.shape[0]
-        result["probabilistic"] = hasattr(symbol, "_is_probabilistic") and symbol._is_probabilistic
-        result["last_parsed_symbol"] = hasattr(symbol, "_last_parsed_symbol") and symbol._last_parsed_symbol
+        result["probabilistic"] = (
+            hasattr(symbol, "_is_probabilistic") and symbol._is_probabilistic
+        )
+        result["last_parsed_symbol"] = (
+            hasattr(symbol, "_last_parsed_symbol")
+            and symbol._last_parsed_symbol
+        )
         return result
 
     def get_result_item_values(
@@ -255,7 +289,11 @@ class QueryResults:
         rows = df.iloc[self.start : self.start + self.length].copy()
         for col, col_type in zip(rows.columns, row_type.__args__):
             if col_type == ExplicitVBR or col_type == ExplicitVBROverlay:
-                rows[col] = rows[col].reset_index().apply(serializeVBR, axis=1).values
+                rows[col] = (
+                    rows[col].reset_index().apply(serializeVBR, axis=1).values
+                )
+            elif col_type == matplotlib.figure.Figure:
+                rows[col] = rows[col].apply(serialize_mplt_thumbnails)
             elif rows[col].dtype == np.object_:
                 rows[col] = rows[col].astype(str)
 
