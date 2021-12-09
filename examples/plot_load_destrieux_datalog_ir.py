@@ -8,6 +8,10 @@ Uploading the Destrieux left sulci into NeuroLang and
 executing some simple queries.
 '''
 
+import warnings
+
+warnings.filterwarnings("ignore")
+
 import nilearn
 import numpy as np
 from matplotlib import pyplot as plt
