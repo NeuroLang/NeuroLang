@@ -826,7 +826,7 @@ class NeuroSynthMixin:
             type_ = Tuple[StudyID, str, float]
         else:
             type_ = Tuple[str, str, float]
-        return self.add_tuple_set(term_data.values, type_=type_, name=name)
+        return self.add_tuple_set(term_data, type_=type_, name=name)
 
     def load_neurosynth_study_ids(
         self,
@@ -865,7 +865,7 @@ class NeuroSynthMixin:
             )
         else:
             return self.add_tuple_set(
-                metadata["id"].values, type_=Tuple[str], name=name
+                metadata["id"], type_=Tuple[str], name=name
             )
 
     def load_neurosynth_mni_peaks_reported(
@@ -905,7 +905,7 @@ class NeuroSynthMixin:
             type_ = Tuple[StudyID, int, int, int]
         else:
             type_ = Tuple[str, int, int, int]
-        return self.add_tuple_set(peak_data.values, type_=type_, name=name)
+        return self.add_tuple_set(peak_data, type_=type_, name=name)
 
 
 class QuerySymbolsProxy:

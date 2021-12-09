@@ -312,14 +312,16 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
         return columns
 
     def __repr__(self):
+        try:
+            join_str = ", ".join(
+                "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)
+                for src, dst in self.renames
+            )
+        except TypeError:
+            join_str = repr(self.renames)
         return (
             "\N{GREEK SMALL LETTER RHO}"
-            + "_({})".format(
-                ", ".join(
-                    "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)
-                    for src, dst in self.renames
-                )
-            )
+            + "_({})".format(join_str)
             + f"({self.relation})"
         )
 
@@ -354,12 +356,15 @@ class GroupByAggregation(RelationalAlgebraOperation):
         )
 
     def __repr__(self):
-        join_str = ","
+        try:
+            join_str = ",".join(
+                [repr(member) for member in self.aggregate_functions]
+            )
+        except TypeError:
+            join_str = repr(self.aggregate_functions)
         return "γ_[{}, {}]({})".format(
             repr(self.groupby),
-            join_str.join(
-                [repr(member) for member in self.aggregate_functions]
-            ),
+            join_str,
             repr(self.relation),
         )
 
@@ -397,9 +402,14 @@ class ExtendedProjection(RelationalAlgebraOperation):
         ])
 
     def __repr__(self):
-        join_str = ","
+        try:
+            join_str = ",".join(
+                [repr(member) for member in self.projection_list]
+            )
+        except TypeError:
+            join_str = repr(self.projection_list)
         return "π_[{}]({})".format(
-            join_str.join([repr(member) for member in self.projection_list]),
+            join_str,
             repr(self.relation),
         )
 
