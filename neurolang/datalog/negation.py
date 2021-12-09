@@ -57,8 +57,10 @@ class DatalogProgramNegationMixin(PatternWalker):
         Implication(FunctionApplication[bool](Symbol, ...), NonConstant)
     )
     def statement_intensional(self, expression):
-        consequent = expression.consequent
-        antecedent = expression.antecedent
+        original_expression = expression
+        consequent = self.walk(expression.consequent)
+        antecedent = self.walk(expression.antecedent)
+        expression = Implication(consequent, antecedent)
 
         self._check_implication(consequent, antecedent)
 
@@ -84,7 +86,7 @@ class DatalogProgramNegationMixin(PatternWalker):
         symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
         self.symbol_table[symbol] = Union(disj)
 
-        return expression
+        return original_expression
 
     def _check_implication(self, consequent, antecedent):
         if consequent.functor.name in self.protected_keywords:

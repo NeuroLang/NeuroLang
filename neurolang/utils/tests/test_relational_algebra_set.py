@@ -1,3 +1,4 @@
+from typing import AbstractSet, Tuple
 import pytest
 
 from ..relational_algebra_set import (
@@ -1131,6 +1132,54 @@ def test_replace_null(ra_module):
     )
 
     assert relation.replace_null("y", -1) == expected
+
+
+def test_explode(ra_module):
+    data = [
+        (5, frozenset({1, 2, 5, 6}), "dog"),
+        (10, frozenset({5, 9}), "cat"),
+    ]
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y", "z"],
+        iterable=data,
+    )
+
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y", "z", "t"],
+        iterable=[
+            (5, frozenset({1, 2, 5, 6}), "dog", 1),
+            (5, frozenset({1, 2, 5, 6}), "dog", 2),
+            (5, frozenset({1, 2, 5, 6}), "dog", 5),
+            (5, frozenset({1, 2, 5, 6}), "dog", 6),
+            (10, frozenset({5, 9}), "cat", 5),
+            (10, frozenset({5, 9}), "cat", 9),
+        ],
+    )
+    result = relation.explode("y", "t")
+    assert result == expected
+    if hasattr(result, "set_row_type"):
+        assert result.set_row_type == Tuple[int, AbstractSet[int], str, int]
+
+
+def test_explode_multi_columns(ra_module):
+    data = [
+        (0, 1, frozenset({(3, 4), (4, 5)})),
+        (0, 2, frozenset({(5, 6)})),
+    ]
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y", "z"],
+        iterable=data,
+    )
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y", "z", "v", "w"],
+        iterable=[
+            (0, 1, frozenset({(3, 4), (4, 5)}), 3, 4),
+            (0, 1, frozenset({(3, 4), (4, 5)}), 4, 5),
+            (0, 2, frozenset({(5, 6)}), 5, 6),
+        ],
+    )
+    result = relation.explode("z", ("v", "w"))
+    assert result == expected
 
 
 def test_aggregate_repeated_group_column(ra_module):

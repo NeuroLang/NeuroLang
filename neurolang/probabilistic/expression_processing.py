@@ -19,6 +19,7 @@ from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Negation, Union
 from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import Projection, RelationalAlgebraSolver
+from ..utils import OrderedSet
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -272,7 +273,7 @@ def group_preds_by_functor(predicates, filter_set=None):
     dict of functors to set of predicates
 
     """
-    grouped = collections.defaultdict(set)
+    grouped = collections.defaultdict(OrderedSet)
     for pred in predicates:
         if filter_set is None or pred.functor in filter_set:
             grouped[pred.functor].add(pred)
@@ -306,7 +307,7 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
     grouped_pchoice_preds = group_preds_by_functor(
         predicates, pchoice_pred_symbs
     )
-    eq_set = set()
+    eq_set = OrderedSet()
     for predicates in grouped_pchoice_preds.values():
         predicates = list(predicates)
         arity = len(predicates[0].args)
@@ -346,8 +347,8 @@ def lift_optimization_for_choice_predicates(query, program):
     """
     if len(program.pchoice_pred_symbs) == 0:
         return query
-    positive_predicates = set()
-    negative_predicates = set()
+    positive_predicates = OrderedSet()
+    negative_predicates = OrderedSet()
     for pred in extract_logic_predicates(query):
         if isinstance(pred, Negation):
             negative_predicates.add(pred)
@@ -361,17 +362,17 @@ def lift_optimization_for_choice_predicates(query, program):
         return query
     eq_conj = Conjunction(tuple(EQ(x, y) for x, y in pchoice_eqs))
     grpd_preds = group_preds_by_functor(positive_predicates)
-    new_formulas = set(eq_conj.formulas) | set(negative_predicates)
+    new_formulas = OrderedSet(eq_conj.formulas) | OrderedSet(negative_predicates)
     for functor, preds in grpd_preds.items():
         if functor not in program.pchoice_pred_symbs:
-            new_formulas |= set(preds)
+            new_formulas |= OrderedSet(preds)
         else:
             conj = conjunct_formulas(Conjunction(tuple(preds)), eq_conj)
             unifier = UnifyVariableEqualities()
             rule = Implication(Symbol.fresh()(tuple()), conj)
             unified_antecedent = unifier.walk(rule).antecedent
             unified_conj = GuaranteeConjunction().walk(unified_antecedent)
-            new_formulas |= set(unified_conj.formulas)
+            new_formulas |= OrderedSet(unified_conj.formulas)
     new_query = Conjunction(tuple(new_formulas))
     return new_query
 

@@ -125,17 +125,17 @@ def fetch_feature_data(
     feature_data_sparse = sparse.load_npz(files[0])
     feature_data = feature_data_sparse.todense()
     metadata_df = fetch_study_metadata(data_dir, version, verbose)
-    ids = metadata_df["id"].tolist()
+    ids = metadata_df["id"]
+    if convert_study_ids:
+        ids = ids.apply(StudyID)
     feature_names = np.genfromtxt(
         files[1],
         dtype=str,
         delimiter="\t",
     ).tolist()
     feature_df = pd.DataFrame(
-        index=ids, columns=feature_names, data=feature_data
+        index=ids.tolist(), columns=feature_names, data=feature_data
     )
-    if convert_study_ids:
-        feature_df["id"] = feature_df["id"].apply(StudyID)
     return feature_df
 
 

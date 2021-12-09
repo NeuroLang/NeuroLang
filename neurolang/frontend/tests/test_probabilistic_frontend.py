@@ -13,6 +13,7 @@ from ...exceptions import (
     UnsupportedQueryError,
     NeuroLangException,
 )
+from ...logic.horn_clauses import Fol2DatalogTranslationException
 from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
@@ -309,6 +310,25 @@ def test_solve_boolean_query():
         with nl.scope as e:
             e.ans[e.PROB()] = P[e.x] & Q[e.x]
             nl.query((e.p), e.ans[e.p])
+
+
+def test_solve_query_with_constant():
+    nl = NeurolangPDL()
+    P = nl.add_probabilistic_choice_from_tuples(
+        {(0.2, "a"), (0.3, "b"), (0.5, "c")}, name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("d",), ("c",)], name="Q"
+    )
+    with nl.scope as e:
+        e.ans[e.x, e.PROB(e.x)] = P[e.x] & Q[e.x]
+        res = nl.query((e.p), e.ans["a", e.p])
+    expected = RelationalAlgebraFrozenSet(
+        [
+            (0.2 * 1/3,),
+        ]
+    )
+    assert_almost_equal(res, expected)
 
 
 def test_solve_complex_stratified_query():
@@ -858,7 +878,12 @@ def test_solve_marg_query_disjunction():
         ],
         name="does_not_smoke",
     )
-    with pytest.raises(ForbiddenConditionalQueryNonConjunctive):
+    with pytest.raises(
+        (
+            ForbiddenConditionalQueryNonConjunctive,
+            Fol2DatalogTranslationException,
+        )
+    ):
         with nl.environment as e:
             e.query[e.p, e.PROB[e.p, e.city, e.sport], e.city, e.sport] = (
                 e.person[e.p]
@@ -1348,3 +1373,23 @@ def test_pchoice_with_both_eqvar_and_free_var():
         ("b", 0.1 * 0.2),
     }
     assert_almost_equal(result, expected)
+
+
+def test_current_program_with_probfact():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [
+            (10751455, "emotion", 0.052538),
+            (10808134, "emotion", 0.244368),
+            (10913505, "emotion", 0.059463),
+        ],
+        name="TermInStudyTFIDF",
+    )
+    exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
+    with nl.environment as e:
+        (e.TermInStudy @ (1 / (1 + exp(-300 * (e.tfidf - 0.001)))))[
+            e.t, e.s
+        ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
+    prog = nl.current_program
+    assert len(prog) == 2
+

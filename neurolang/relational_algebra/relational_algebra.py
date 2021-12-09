@@ -312,14 +312,16 @@ class RenameColumns(UnaryRelationalAlgebraOperation):
         return columns
 
     def __repr__(self):
+        try:
+            join_str = ", ".join(
+                "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)
+                for src, dst in self.renames
+            )
+        except TypeError:
+            join_str = repr(self.renames)
         return (
             "\N{GREEK SMALL LETTER RHO}"
-            + "_({})".format(
-                ", ".join(
-                    "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)
-                    for src, dst in self.renames
-                )
-            )
+            + "_({})".format(join_str)
             + f"({self.relation})"
         )
 
@@ -354,12 +356,15 @@ class GroupByAggregation(RelationalAlgebraOperation):
         )
 
     def __repr__(self):
-        join_str = ","
+        try:
+            join_str = ",".join(
+                [repr(member) for member in self.aggregate_functions]
+            )
+        except TypeError:
+            join_str = repr(self.aggregate_functions)
         return "γ_[{}, {}]({})".format(
             repr(self.groupby),
-            join_str.join(
-                [repr(member) for member in self.aggregate_functions]
-            ),
+            join_str,
             repr(self.relation),
         )
 
@@ -397,9 +402,14 @@ class ExtendedProjection(RelationalAlgebraOperation):
         ])
 
     def __repr__(self):
-        join_str = ","
+        try:
+            join_str = ",".join(
+                [repr(member) for member in self.projection_list]
+            )
+        except TypeError:
+            join_str = repr(self.projection_list)
         return "π_[{}]({})".format(
-            join_str.join([repr(member) for member in self.projection_list]),
+            join_str,
             repr(self.relation),
         )
 
@@ -999,31 +1009,10 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                 "set's columns"
             )
 
-        cols = relation.columns
-        set_type = type(relation)
-        if not isinstance(dst_columns, tuple):
-            dst_columns = (dst_columns,)
-        dst_cols = cols + tuple(d for d in dst_columns if d not in cols)
-        result_set = set_type(columns=dst_cols)
-        if len(cols) > 0:
-            row_group_iterator = (t for _, t in relation.groupby(cols))
-        else:
-            row_group_iterator = (relation,)
-        for t in row_group_iterator:
-            destroyed_set = set_type(columns=dst_columns)
-            for row in t:
-                row_set = set_type(
-                    columns=dst_columns,
-                    iterable=getattr(row, src_column)
-                )
-                destroyed_set = destroyed_set | row_set
-            new_set = (
-                t
-                .projection(*cols)
-                .naturaljoin(destroyed_set)
-            )
-            result_set = result_set | new_set
-        return self._build_relation_constant(result_set)
+        new_relation = relation.explode(src_column, dst_columns)
+        return self._build_relation_constant(
+            new_relation
+        )
 
     @ew.add_match(ReplaceNull(Constant, Constant, Constant))
     def replace_null(self, expression):
