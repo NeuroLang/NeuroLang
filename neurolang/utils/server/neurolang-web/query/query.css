@@ -2,7 +2,7 @@
     display: flex;
     align-items: center;
     background-color: #e8e8e8;
-    color: rgba(0,0,0,.6);
+    color: rgba(0, 0, 0, .6);
 }
 
 #queryContainer .code-mirror-container {
@@ -14,19 +14,19 @@
 }
 
 #queryContainer .nl-query-download-buttons a {
-    color: rgba(0,0,0,.6);
+    color: rgba(0, 0, 0, .6);
 }
 
 #queryContainer .nl-query-download-buttons a:hover {
-    color: rgba(0,0,0,.8);
+    color: rgba(0, 0, 0, .8);
 }
 
-#queryContainer .CodeMirror{
+#queryContainer .CodeMirror {
     height: 20em;
     width: 100%;
 }
 
-#queryTextArea + .CodeMirror pre {
+#queryTextArea+.CodeMirror pre {
     padding-bottom: .5em;
 }
 
