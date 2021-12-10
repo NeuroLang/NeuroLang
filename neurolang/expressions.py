@@ -853,7 +853,7 @@ class Command(Definition):
         if self.kwargs:
             if len(arg_str) > 0:
                 arg_str += ", "
-            arg_str += ", ".join(f"{k}={v}" for k, v in self.kwargs.items())
+            arg_str += ", ".join(f"{k}={v}" for k, v in self.kwargs)
         return "Command{{{}({})}}".format(self.name, arg_str)
 
 

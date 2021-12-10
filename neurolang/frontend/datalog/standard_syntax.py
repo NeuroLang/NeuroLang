@@ -370,39 +370,44 @@ class DatalogSemantics:
     def float(self, ast):
         return Constant(float("".join(ast)))
 
+    def cmd_identifier(self, ast):
+        return Symbol(ast)
+
     def pos_args(self, ast):
         args = [ast[0]]
-        if len(ast[1]) > 0:
-            args += ast[1][0][1::2]
+        for arg in ast[1]:
+            args.append(arg[1])
         return tuple(args)
 
     def keyword_item(self, ast):
         key = ast[0]
-        if isinstance(key, Symbol):
-            key = key.name
-        return {key: ast[2]}
+        return (key, ast[2])
+
+    def pos_item(self, ast):
+        if not isinstance(ast, Expression):
+            return Constant(ast)
+        return ast
 
     def keyword_args(self, ast):
-        kwargs = ast[0]
-        if len(ast[1]) > 0:
-            for kwarg in ast[1][0][1::2]:
-                kwargs.update(kwarg)
-        return kwargs
+        kwargs = [ast[0]]
+        for kwarg in ast[1]:
+            kwargs.append(kwarg[1])
+        return tuple(kwargs)
 
     def cmd_args(self, ast):
         if isinstance(ast, list) and len(ast) == 2:
             args, kwargs = ast
-        elif isinstance(ast, dict):
+        elif isinstance(ast[0], tuple):
             args = ()
             kwargs = ast
         else:
             args = ast
-            kwargs = {}
+            kwargs = ()
         return args, kwargs
 
     def command(self, ast):
         if not isinstance(ast, list):
-            cmd = Command(ast, (), {})
+            cmd = Command(ast, (), ())
         else:
             name = ast[0]
             args, kwargs = ast[1]
