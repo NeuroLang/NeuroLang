@@ -1,10 +1,18 @@
+from pathlib import Path
+from typing import AbstractSet, Dict, Tuple
+
+import nibabel
+import numpy as np
 import pandas as pd
+from nibabel.dataobj_images import DataobjImage
+from nilearn.datasets.utils import _fetch_files
 from pandas.errors import ParserError
 
 from ..exceptions import InvalidCommandExpression, UnsupportedProgramError
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
 from ..expressions import Command, Constant, Symbol
+from ..regions import ExplicitVBR
 
 
 class CommandsMixin(PatternWalker):
@@ -45,6 +53,7 @@ class CommandsMixin(PatternWalker):
             raise InvalidCommandExpression(
                 "Could not extract Symbol name and url from arguments."
             )
+
         try:
             data = pd.read_csv(url, **kwargs)
         except ParserError as e:
@@ -53,6 +62,107 @@ class CommandsMixin(PatternWalker):
             ) from e
         data = data.rename(columns={n: i for i, n in enumerate(data.columns)})
         self.add_extensional_predicate_from_tuples(symbol, data)
+
+    @add_match(Command(Symbol("load_atlas"), ..., ...))
+    def load_atlas_command(self, command):
+        """
+        Process the `.load_atlas` command. The load_atlas command fetches an
+        atlas image with its corresponding labels and loads it into the
+        neurolang instance.
+
+        Usage
+        -----
+        The `.load_csv` command requires three positional arguments:
+            - symbol: str, the name of the symbol to load the data into
+            - atlas_url: str, the url for the atlas file
+            - labels_url: str, the url for the atlas labels
+            - base_url: str, optinal. if given, atlas and labels url are
+                        considered relative to this base_url
+        Other keyword arguments are passed to pandas' `read_csv` method.
+
+        `.load_atlas(destrieux, "destrieux2009_rois_lateralized.nii.gz",
+        "destrieux2009_rois_labels_lateralized.csv", 
+        "https://www.nitrc.org/frs/download.php/11942/destrieux2009.tgz")`
+
+        will load Destrieux's atlas into the destrieux relation.
+
+        Raises
+        ------
+        InvalidCommandExpression
+            raised if command args are invalid or if an error occurs while
+            loading the data
+        """
+        try:
+            if len(command.args) == 4:
+                symbol, atlas_url, labels_url, base_url = command.args
+                base_url = _unwrap_expr(base_url)
+            else:
+                symbol, atlas_url, labels_url = command.args
+                base_url = None
+            if not isinstance(symbol, Symbol):
+                symbol = Symbol(symbol)
+            atlas_url = _unwrap_expr(atlas_url)
+            labels_url = _unwrap_expr(labels_url)
+            kwargs = {
+                _unwrap_expr(k): _unwrap_expr(v) for k, v in command.kwargs
+            }
+        except ValueError:
+            raise InvalidCommandExpression(
+                "Could not extract Symbol name and url from arguments."
+            )
+
+        atlas_labels, spatial_image = self._fetch_atlas_map_and_labels(
+            atlas_url, labels_url, base_url, kwargs
+        )
+
+        self._add_atlas_set(symbol, atlas_labels, spatial_image)
+
+    def _fetch_atlas_map_and_labels(
+        self, atlas_url, labels_url, base_url, kwargs
+    ):
+        data_dir = Path.home() / "neurolang_data"
+        if base_url is None:
+            opts = {}
+            p = Path(atlas_url)
+            files = [
+                (p.name, p.parent, opts),
+            ]
+            p = Path(labels_url)
+            files.append((p.name, p.parent, opts),)
+        else:
+            opts = {"uncompress": True}
+            files = [(atlas_url, base_url, opts), (labels_url, base_url, opts)]
+
+        files_ = _fetch_files(data_dir, files)
+        atlas_labels = pd.read_csv(files_[1], **kwargs)
+        atlas_labels = {
+            label: name for label, name in atlas_labels.to_records(index=False)
+        }
+        spatial_image = nibabel.load(files_[0])
+        return atlas_labels, spatial_image
+
+    def _add_atlas_set(
+        self,
+        symbol: Symbol,
+        atlas_labels: Dict[int, str],
+        spatial_image: DataobjImage,
+    ) -> None:
+        atlas_set = list()
+        for id, label_name in atlas_labels.items():
+            voxels = np.transpose(
+                (np.asanyarray(spatial_image.dataobj) == id).nonzero()
+            )
+            if len(voxels) == 0:
+                continue
+            region = ExplicitVBR(
+                voxels, spatial_image.affine, image_dim=spatial_image.shape,
+            )
+            atlas_set.append((label_name, region))
+
+        type_ = AbstractSet[Tuple[str, ExplicitVBR]]
+        self.add_extensional_predicate_from_tuples(
+            symbol, atlas_set, type_=type_
+        )
 
     @add_match(Command)
     def unknown_command(self, command):

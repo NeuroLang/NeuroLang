@@ -1,5 +1,8 @@
+from collections import namedtuple
+from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -12,7 +15,7 @@ from ..commands import CommandsMixin
 
 
 class Datalog(
-    CommandsMixin, DatalogProgram, ExpressionBasicEvaluator, CPLogicMixin
+    CommandsMixin, DatalogProgram, ExpressionBasicEvaluator, CPLogicMixin,
 ):
     pass
 
@@ -54,3 +57,52 @@ def test_load_csv_command_adds_tuple_set(mock_pd_readcsv):
         datalog.symbol_table[studies].value
         == mock_study_ids.to_records(index=False).tolist()
     )
+
+
+@patch("neurolang.frontend.commands.nibabel.load")
+@patch("neurolang.frontend.commands.pd.read_csv")
+@patch("neurolang.frontend.commands._fetch_files")
+def test_load_atlas_command(mock_fetch_files, mock_read_csv, mock_nib_load):
+    """
+    Test that load_atlas command can load destrieux atlas in neurolang
+    """
+    # setup mocks for fetch methods
+    mock_fetch_files.return_value = [
+        "/home/users/mock_atlas_file",
+        "/home/users/mock_labels_file",
+    ]
+    mock_labels = pd.DataFrame(
+        {"id": [1, 2], "labels": ["L S_central", "L S_postcentral"]}
+    )
+    mock_read_csv.return_value = mock_labels
+    shape = (3, 3, 3)
+    dataobj = np.arange(27).reshape(shape)
+    affine = np.eye(4)
+    mock_image = namedtuple("SpatialImage", ["shape", "affine", "dataobj"])(
+        shape, affine, dataobj
+    )
+    mock_nib_load.return_value = mock_image
+
+    # Create command and walk it
+    url = "https://www.nitrc.org/frs/download.php/11942/destrieux2009.tgz"
+    labels_url = "destrieux2009_rois_labels_lateralized.csv"
+    atlas_url = "destrieux2009_rois_lateralized.nii.gz"
+    destrieux = Symbol("Destrieux")
+    cmd = Command(
+        Symbol("load_atlas"),
+        (destrieux, Constant(atlas_url), Constant(labels_url), Constant(url),),
+        (),
+    )
+
+    datalog = Datalog()
+    datalog.walk(cmd)
+
+    mock_fetch_files.assert_called_with(
+        Path.home() / "neurolang_data",
+        [
+            (atlas_url, url, {"uncompress": True}),
+            (labels_url, url, {"uncompress": True}),
+        ],
+    )
+    assert destrieux in datalog.symbol_table
+    assert len(datalog.symbol_table[destrieux].value) == 2
