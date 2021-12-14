@@ -12,7 +12,7 @@ from ..exceptions import InvalidCommandExpression, UnsupportedProgramError
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
 from ..expressions import Command, Constant, Symbol
-from ..regions import ExplicitVBR
+from ..regions import EmptyRegion, ExplicitVBR
 
 
 class CommandsMixin(PatternWalker):
@@ -147,21 +147,16 @@ class CommandsMixin(PatternWalker):
         atlas_labels: Dict[int, str],
         spatial_image: DataobjImage,
     ) -> None:
-        atlas_set = list()
+        atlas_set = set()
         for id, label_name in atlas_labels.items():
-            voxels = np.transpose(
-                (np.asanyarray(spatial_image.dataobj) == id).nonzero()
-            )
-            if len(voxels) == 0:
+            region = (ExplicitVBR.from_spatial_image_label(spatial_image, id),)
+            if isinstance(region, EmptyRegion):
                 continue
-            region = ExplicitVBR(
-                voxels, spatial_image.affine, image_dim=spatial_image.shape,
-            )
-            atlas_set.append((label_name, region))
+            atlas_set.add((label_name, region))
 
-        type_ = AbstractSet[Tuple[str, ExplicitVBR]]
+        type_ = Tuple[str, ExplicitVBR]
         self.add_extensional_predicate_from_tuples(
-            symbol, atlas_set, type_=type_
+            Symbol[AbstractSet[type_]](symbol.name), atlas_set, type_=type_
         )
 
     @add_match(Command)

@@ -11,6 +11,7 @@ from ...exceptions import InvalidCommandExpression, UnsupportedProgramError
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Command, Constant, Symbol
 from ...probabilistic.cplogic.program import CPLogicMixin
+from .. import NeurolangPDL
 from ..commands import CommandsMixin
 
 
@@ -106,3 +107,25 @@ def test_load_atlas_command(mock_fetch_files, mock_read_csv, mock_nib_load):
     )
     assert destrieux in datalog.symbol_table
     assert len(datalog.symbol_table[destrieux].value) == 2
+
+
+def test_command_end2end():
+    """
+    Create a PDL engine and use the .load_atlas command to load the data.
+    """
+    data_dir = Path.home() / "neurolang_data"
+    nl = NeurolangPDL()
+
+    @nl.add_symbol
+    def startswith(prefix: str, s: str) -> bool:
+        return s.startswith(prefix)
+
+    query = """.load_atlas(Destrieux, "destrieux2009_rois_lateralized.nii.gz", "destrieux2009_rois_labels_lateralized.csv", "https://www.nitrc.org/frs/download.php/11942/destrieux2009.tgz")
+    LeftSulcus(name_, region) :- Destrieux(name_, region) & startswith("L S", name_)"""
+
+    with nl.scope:
+        nl.execute_datalog_program(query)
+        res = nl.solve_all()
+
+    assert len(res["LeftSulcus"]) == 31
+    assert "LeftSulcus" not in nl.symbol_table
