@@ -79,7 +79,7 @@ from ..relational_algebra import (
     RelationalAlgebraColumnStr,
 )
 from . import query_resolution_expressions as fe
-from .commands import CommandsMixin
+from ..commands import CommandsMixin
 from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,

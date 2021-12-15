@@ -2,17 +2,16 @@ from pathlib import Path
 from typing import AbstractSet, Dict, Tuple
 
 import nibabel
-import numpy as np
 import pandas as pd
 from nibabel.dataobj_images import DataobjImage
 from nilearn.datasets.utils import _fetch_files
 from pandas.errors import ParserError
 
-from ..exceptions import InvalidCommandExpression, UnsupportedProgramError
-from ..expression_pattern_matching import add_match
-from ..expression_walker import PatternWalker
-from ..expressions import Command, Constant, Symbol
-from ..regions import EmptyRegion, ExplicitVBR
+from .exceptions import InvalidCommandExpression, UnsupportedProgramError
+from .expression_pattern_matching import add_match
+from .expression_walker import PatternWalker
+from .expressions import Command, Constant, Symbol
+from .regions import EmptyRegion, ExplicitVBR
 
 
 class CommandsMixin(PatternWalker):

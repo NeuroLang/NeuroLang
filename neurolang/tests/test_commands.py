@@ -6,12 +6,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ...datalog.basic_representation import DatalogProgram
-from ...exceptions import InvalidCommandExpression, UnsupportedProgramError
-from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import Command, Constant, Symbol
-from ...probabilistic.cplogic.program import CPLogicMixin
-from .. import NeurolangPDL
+from ..frontend.probabilistic_frontend import NeurolangPDL
+
+from ..datalog.basic_representation import DatalogProgram
+from ..exceptions import InvalidCommandExpression, UnsupportedProgramError
+from ..expression_walker import ExpressionBasicEvaluator
+from ..expressions import Command, Constant, Symbol
+from ..probabilistic.cplogic.program import CPLogicMixin
 from ..commands import CommandsMixin
 
 
@@ -35,7 +36,7 @@ def test_invalid_commands_raise_exceptions():
         datalog.walk(cmd)
 
 
-@patch("neurolang.frontend.commands.pd.read_csv")
+@patch("neurolang.commands.pd.read_csv")
 def test_load_csv_command_adds_tuple_set(mock_pd_readcsv):
     mock_study_ids = pd.DataFrame({"A": [1, 2], "B": [3, 4]})
     mock_pd_readcsv.return_value = mock_study_ids
@@ -60,9 +61,9 @@ def test_load_csv_command_adds_tuple_set(mock_pd_readcsv):
     )
 
 
-@patch("neurolang.frontend.commands.nibabel.load")
-@patch("neurolang.frontend.commands.pd.read_csv")
-@patch("neurolang.frontend.commands._fetch_files")
+@patch("neurolang.commands.nibabel.load")
+@patch("neurolang.commands.pd.read_csv")
+@patch("neurolang.commands._fetch_files")
 def test_load_atlas_command(mock_fetch_files, mock_read_csv, mock_nib_load):
     """
     Test that load_atlas command can load destrieux atlas in neurolang
