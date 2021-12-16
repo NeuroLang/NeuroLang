@@ -15,20 +15,32 @@
 
 import os
 import sys
+import subprocess
+from datetime import datetime
 
 import sphinx
 import sphinx_bootstrap_theme
 
 # General information about the project.
+now = datetime.now()
 project = "neurolang"
 copyright = "2017, Demian Wassermann et al"
 
+try:
+    process = subprocess.Popen(["git", "describe" ,"--tag" ,"--exact-match"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    dev = stderr != b"" and stdout == b""
+except:
+    dev = False
 
 from pkg_resources import get_distribution
 
 release = get_distribution(project).version
 # for example take major/minor
-source_version = ".".join(release.split(".")[:2])
+if dev:
+    source_version = ".".join(release.split(".")[:3])
+else:
+    source_version = ".".join(release.split(".")[:2])
 
 currentdir = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(os.path.join(currentdir, "tools"))
@@ -168,6 +180,7 @@ html_theme_options = {
         ("Authors", "authors"),
     ],
 }
+html_context = {'generated_timestamp': now.strftime("%d %b %Y, %H:%M:%S")}
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
