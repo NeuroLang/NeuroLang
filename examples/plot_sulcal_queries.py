@@ -156,7 +156,7 @@ with nl.environment as e:
 # * its principal direction is along the superior-inferior
 #   axis.
 # * no other sulcus satisfying the same conditions is
-#   anterior to the PC.
+#   posterior to the PC.
 
 
 with nl.scope as e:
@@ -166,6 +166,7 @@ with nl.scope as e:
         & ~nl.exists(
             e.other_region,
             e.left_frontal_lobe_sulcus(e.other_region)
+            & e.principal_direction(e.other_region, "SI")
             & (e.region != e.other_region)
             & e.anatomical_posterior_of(e.other_region, e.region),
         )
