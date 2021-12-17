@@ -1,5 +1,8 @@
 import logging
 from concurrent.futures import Future, ThreadPoolExecutor
+import types
+from neurolang.commands import CommandsMixin
+from neurolang.expressions import Command
 from neurolang.frontend.query_resolution_expressions import Symbol
 from neurolang.type_system import get_args, is_leq_informative
 from threading import RLock, get_ident
@@ -345,9 +348,41 @@ class NeurolangQueryManager:
                             ras = symbol.value
                             ras.row_type = get_args(symbol.type)[0]
                             symbols[name] = ras
+                symbols.update(_get_commands(engine))
                 return symbols
             finally:
                 LOG.debug(
                     "[Thread - %s] - Engine of type %s released.",
                     get_ident(), engine_type
                 )
+
+
+def _get_commands(engine) -> Dict[str, Dict]:
+    """
+    Add the command processing functions in CommandsMixin to the list
+    of symbols available on an engine. This is useful to display the
+    docstring of theses commands in the frontend.
+
+    Parameters
+    ----------
+    engine : NeurolangPDL
+        the engine with a program that extends CommandsMixin
+
+    Returns
+    -------
+    Dict[str, Dict]
+        a mapping of command name -> command info
+    """
+    commands = {}
+    for name, command in CommandsMixin.__dict__.items():
+        if (
+            not name.startswith("_")
+            and isinstance(command, types.FunctionType)
+            and hasattr(engine.program_ir, name)
+        ):
+            commands[name] = {
+                "type": str(Command),
+                "doc": command.__doc__,
+                "command": True,
+            }
+    return commands

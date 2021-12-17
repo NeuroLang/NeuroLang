@@ -95,8 +95,11 @@ export class SymbolsController {
     if (this.symbols) {
       const functions = Object.keys(this.symbols.results)
         .filter(elt => this.symbols.results[elt].function)
+      const commands = Object.keys(this.symbols.results)
+        .filter(elt => this.symbols.results[elt].command)
       const symbols = Object.keys(this.symbols.results)
-        .filter(elt => !this.symbols.results[elt].function && resultKeys.indexOf(elt) < 0)
+        .filter(elt => !this.symbols.results[elt].function &&
+          !this.symbols.results[elt].command && resultKeys.indexOf(elt) < 0)
       if (symbols.length > 0) {
         addItemsToDropdownMenu(menu, symbols, 'Base symbols', 'symbol base-symbol')
         selected = !selected ? symbols[0] : selected
@@ -104,6 +107,10 @@ export class SymbolsController {
       if (functions.length > 0) {
         addItemsToDropdownMenu(menu, functions, 'Functions', 'function')
         selected = !selected ? functions[0] : selected
+      }
+      if (commands.length > 0) {
+        addItemsToDropdownMenu(menu, commands, 'Commands', 'command')
+        selected = !selected ? commands[0] : selected
       }
     }
     this.dropdown.dropdown('refresh')
@@ -125,9 +132,9 @@ export class SymbolsController {
     // get the active symbol metadata
     const isQuerySymbol = this.results && this.activeSymbol in this.results.results
     const tab = isQuerySymbol ? this.results.results[this.activeSymbol] : this.symbols.results[this.activeSymbol]
-    if ('function' in tab && tab.function) {
+    if (('function' in tab && tab.function) || ('command' in tab && tab.command)) {
       // Selected symbol is a function, display its doctstring
-      this.setFunctionHelp('', `A function of type ${tab.type}`, this.activeSymbol, tab.doc)
+      this.setFunctionHelp('', `A ${tab.function ? 'function' : 'command'} of type ${tab.type}`, this.activeSymbol, tab.doc)
       this.tabTable.parents('div.dataTables_wrapper').first().hide()
       this.viewer.hideViewer()
     } else {

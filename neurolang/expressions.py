@@ -848,9 +848,9 @@ class Command(Definition):
 
     def __repr__(self):
         arg_str = ""
-        if self.args:
+        if self.args and isinstance(self.args, typing.Iterable):
             arg_str += ", ".join([repr(a) for a in self.args])
-        if self.kwargs:
+        if self.kwargs and isinstance(self.kwargs, typing.Iterable):
             if len(arg_str) > 0:
                 arg_str += ", "
             arg_str += ", ".join(f"{k}={v}" for k, v in self.kwargs)

@@ -58,6 +58,11 @@
   color: grey;
 }
 
+.nl-symbols-dropdown .menu .item.command {
+  font-style: italic;
+  color: #d48354;
+}
+
 .nl-symbols-dropdown .menu .item.probabilistic {
   color: #276f86;
 }

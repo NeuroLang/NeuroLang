@@ -159,7 +159,7 @@ class CommandsMixin(PatternWalker):
         )
 
     @add_match(Command)
-    def unknown_command(self, command):
+    def _unknown_command(self, command):
         raise UnsupportedProgramError(
             f"The command statement {command} is not supported."
         )
