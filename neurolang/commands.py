@@ -80,7 +80,7 @@ class CommandsMixin(PatternWalker):
         Other keyword arguments are passed to pandas' `read_csv` method.
 
         `.load_atlas(destrieux, "destrieux2009_rois_lateralized.nii.gz",
-        "destrieux2009_rois_labels_lateralized.csv", 
+        "destrieux2009_rois_labels_lateralized.csv",
         "https://www.nitrc.org/frs/download.php/11942/destrieux2009.tgz")`
 
         will load Destrieux's atlas into the destrieux relation.
@@ -147,8 +147,8 @@ class CommandsMixin(PatternWalker):
         spatial_image: DataobjImage,
     ) -> None:
         atlas_set = set()
-        for id, label_name in atlas_labels.items():
-            region = (ExplicitVBR.from_spatial_image_label(spatial_image, id),)
+        for idx, label_name in atlas_labels.items():
+            region = (ExplicitVBR.from_spatial_image_label(spatial_image, idx),)
             if isinstance(region, EmptyRegion):
                 continue
             atlas_set.add((label_name, region))

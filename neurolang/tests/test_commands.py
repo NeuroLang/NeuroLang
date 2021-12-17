@@ -114,7 +114,6 @@ def test_command_end2end():
     """
     Create a PDL engine and use the .load_atlas command to load the data.
     """
-    data_dir = Path.home() / "neurolang_data"
     nl = NeurolangPDL()
 
     @nl.add_symbol
