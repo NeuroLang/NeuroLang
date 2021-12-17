@@ -16,7 +16,7 @@ from .regions import EmptyRegion, ExplicitVBR
 
 class CommandsMixin(PatternWalker):
     @add_match(Command(Symbol("load_csv"), ..., ...))
-    def load_csv_command(self, command):
+    def load_csv(self, command):
         """
         Process the `.load_csv` command. The load_csv command fetches tabular
         data from a given url (using pandas' `read_csv` method) and loads it
@@ -63,7 +63,7 @@ class CommandsMixin(PatternWalker):
         self.add_extensional_predicate_from_tuples(symbol, data)
 
     @add_match(Command(Symbol("load_atlas"), ..., ...))
-    def load_atlas_command(self, command):
+    def load_atlas(self, command):
         """
         Process the `.load_atlas` command. The load_atlas command fetches an
         atlas image with its corresponding labels and loads it into the
