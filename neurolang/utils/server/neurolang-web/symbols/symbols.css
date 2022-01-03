@@ -44,8 +44,8 @@
   cursor: pointer;
 }
 
-.nl-vbr-overlay-controls.displayed .nl-mini-colorbar {
-  display: inline-block;
+.nl-vbr-overlay-controls.displayed:not(.region-label) .nl-mini-colorbar {
+    display: inline-block;
 }
 
 #nlHistogramContainer {
@@ -56,6 +56,11 @@
 .nl-symbols-dropdown .menu .item.function {
   font-style: italic;
   color: grey;
+}
+
+.nl-symbols-dropdown .menu .item.command {
+  font-style: italic;
+  color: #d48354;
 }
 
 .nl-symbols-dropdown .menu .item.probabilistic {

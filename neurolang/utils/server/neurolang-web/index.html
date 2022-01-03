@@ -52,9 +52,20 @@
         <div class="content nl-query-description">
         </div>
       </div>
-      <div class="ui raised segment query-segment">
-        <div class="ui top attached label">Write your query on neurological data</div>
-        <div class="code-mirror-container">
+      <div class="ui raised segments">
+        <div class="ui label segment container nl-query-input-header">
+          <span class="text">Write your query on neurological data</span>
+          <div class="nl-query-download-buttons">
+            <input type="file" id="queryFileInput" style="display:none">
+            <a href="#" class="ui right floated nl-query-upload" data-tooltip="Upload code">
+              <i class="circular upload icon"></i>
+            </a>
+            <a href="#" class="ui right floated nl-query-download" data-tooltip="Download code">
+              <i class="circular download icon"></i>
+            </a>
+          </div>
+        </div>
+        <div class="ui segment code-mirror-container">
           <textarea class="ui input" id="queryTextArea"></textarea>
         </div>
       </div>
@@ -100,7 +111,7 @@
             </div>
             <p class="nl-functions-message"></p>
             <pre class="nl-functions-help"></pre>
-        </div>
+          </div>
         </div>
       </div>
     </div>

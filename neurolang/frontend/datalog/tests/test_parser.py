@@ -7,6 +7,7 @@ from neurolang.logic import ExistentialPredicate
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....expressions import (
+    Command,
     Constant,
     FunctionApplication,
     Lambda,
@@ -405,3 +406,68 @@ def test_lambda_application():
         Statement(c, expression),
     ))
     assert expected == res
+
+
+def test_command_syntax():
+    res = parser('.load_csv(A, "http://myweb/file.csv", B)')
+    expected = Union(
+        (
+            Command(
+                Symbol("load_csv"),
+                (Symbol("A"), Constant("http://myweb/file.csv"), Symbol("B")),
+                (),
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser('.load_csv("http://myweb/file.csv")')
+    expected = Union(
+        (
+            Command(
+                Symbol("load_csv"), (Constant("http://myweb/file.csv"),), ()
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser(".load_csv()")
+    expected = Union((Command(Symbol("load_csv"), (), ()),))
+    assert res == expected
+
+    res = parser('.load_csv(sep=",")')
+    expected = Union(
+        (Command("load_csv", (), ((Symbol("sep"), Constant(",")),)),)
+    )
+    assert res == expected
+
+    res = parser('.load_csv(sep=",", header=None, index_col=0)')
+    expected = Union(
+        (
+            Command(
+                "load_csv",
+                (),
+                (
+                    (Symbol("sep"), Constant(",")),
+                    (Symbol("header"), Symbol("None")),
+                    (Symbol("index_col"), Constant(0)),
+                ),
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser('.load_csv(A, "http://myweb/file.csv", sep=",", header=None)')
+    expected = Union(
+        (
+            Command(
+                "load_csv",
+                (Symbol("A"), "http://myweb/file.csv"),
+                (
+                    (Symbol("sep"), Constant(",")),
+                    (Symbol("header"), Symbol("None")),
+                ),
+            ),
+        )
+    )
+    assert res == expected

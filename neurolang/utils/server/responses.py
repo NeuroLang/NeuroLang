@@ -239,6 +239,8 @@ class QueryResults:
                 result["values"] = values
         elif isinstance(symbol, Symbol):
             result = self.get_function_metadata(symbol)
+        elif isinstance(symbol, dict):
+            result = symbol
         return result
 
     def get_function_metadata(self, symbol: Symbol):

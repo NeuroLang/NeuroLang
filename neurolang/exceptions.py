@@ -371,3 +371,11 @@ class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
 
 class NonLiftableException(NeuroLangException):
     pass
+
+
+class InvalidCommandExpression(ForbiddenExpressionError):
+    """
+    Invalid Command statement.
+    """
+
+    pass
