@@ -6,67 +6,35 @@ NeuroLang Example based Implementing a NeuroSynth Query
 """
 
 # %%
+import warnings
+
+warnings.filterwarnings("ignore")
+
+from pathlib import Path
 from typing import Iterable
 
-import nibabel as nib
+import nibabel
+import nilearn.datasets
+import nilearn.image
+import nilearn.plotting
 import numpy as np
 import pandas as pd
-from nilearn import datasets, image, plotting
-
 from neurolang import ExplicitVBROverlay, NeurolangPDL
+from neurolang.frontend.neurosynth_utils import get_ns_mni_peaks_reported
 
 ###############################################################################
 # Data preparation
 # ----------------
 
+data_dir = Path.home() / "neurolang_data"
+
 ###############################################################################
 # Load the MNI atlas and resample it to 4mm voxels
 
-mni_t1 = nib.load(datasets.fetch_icbm152_2009()["t1"])
-mni_t1_4mm = image.resample_img(mni_t1, np.eye(3) * 4)
-
-###############################################################################
-# Load the NeuroSynth database
-
-ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
-    "neurolang",
-    [
-        (
-            "database.txt",
-            "https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz",
-            {"uncompress": True},
-        ),
-        (
-            "features.txt",
-            "https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz",
-            {"uncompress": True},
-        ),
-    ],
+mni_t1 = nibabel.load(
+    nilearn.datasets.fetch_icbm152_2009(data_dir=str(data_dir / "icbm"))["t1"]
 )
-
-ns_database = pd.read_csv(ns_database_fn, sep="\t")
-ijk_positions = np.round(
-    nib.affines.apply_affine(
-        np.linalg.inv(mni_t1_4mm.affine),
-        ns_database[["x", "y", "z"]].values.astype(float),
-    )
-).astype(int)
-ns_database["i"] = ijk_positions[:, 0]
-ns_database["j"] = ijk_positions[:, 1]
-ns_database["k"] = ijk_positions[:, 2]
-
-ns_features = pd.read_csv(ns_features_fn, sep="\t")
-ns_docs = ns_features[["pmid"]].drop_duplicates()
-ns_terms = pd.melt(
-    ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
-).query("TfIdf > 1e-3")[["pmid", "term"]]
-ns_terms.to_csv("term_documents.csv")
-(
-    ns_database[["x", "y", "z", "i", "j", "k", "id"]]
-    .rename(columns={"id": "pmid"})
-    .to_csv("document_activations.csv")
-)
-
+mni_t1_4mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 4)
 
 ###############################################################################
 # Probabilistic Logic Programming in NeuroLang
@@ -77,22 +45,41 @@ nl = NeurolangPDL()
 
 ###############################################################################
 # Adding new aggregation function to build a region overlay
+
+
 @nl.add_symbol
 def agg_create_region_overlay(
     i: Iterable, j: Iterable, k: Iterable, p: Iterable
 ) -> ExplicitVBROverlay:
-    voxels = np.c_[i, j, k]
+    mni_coords = np.c_[i, j, k]
     return ExplicitVBROverlay(
-        voxels, mni_t1_4mm.affine, p, image_dim=mni_t1_4mm.shape
+        mni_coords, mni_t1_4mm.affine, p, image_dim=mni_t1_4mm.shape
     )
 
 
 ###############################################################################
-# Loading the database
+# Load the NeuroSynth database
 
-activations = nl.add_tuple_set(ns_database, name="activations")
-terms = nl.add_tuple_set(ns_terms, name="terms")
-docs = nl.add_uniform_probabilistic_choice_over_set(ns_docs, name="docs")
+peak_data = get_ns_mni_peaks_reported(data_dir)
+ijk_positions = np.round(
+    nibabel.affines.apply_affine(
+        np.linalg.inv(mni_t1_4mm.affine),
+        peak_data[["x", "y", "z"]].values.astype(float),
+    )
+).astype(int)
+peak_data["i"] = ijk_positions[:, 0]
+peak_data["j"] = ijk_positions[:, 1]
+peak_data["k"] = ijk_positions[:, 2]
+peak_data = peak_data[["i", "j", "k", "id"]]
+
+nl.add_tuple_set(peak_data, name="PeakReported")
+study_ids = nl.load_neurosynth_study_ids(data_dir, "Study")
+nl.add_uniform_probabilistic_choice_over_set(
+    study_ids.value, name="SelectedStudy"
+)
+nl.load_neurosynth_term_study_associations(
+    data_dir, "TermInStudyTFIDF", tfidf_threshold=1e-3
+)
 
 
 # %%
@@ -100,38 +87,20 @@ docs = nl.add_uniform_probabilistic_choice_over_set(ns_docs, name="docs")
 # Probabilistic program and querying
 
 with nl.scope as e:
-    e.vox_activation[e.i, e.j, e.k, e.d] = e.activations(
-        e.d,
-        ...,
-        ...,
-        ...,
-        ...,
-        "MNI",
-        ...,
-        ...,
-        ...,
-        ...,
-        ...,
-        ...,
-        ...,
-        e.i,
-        e.j,
-        e.k,
-    ) & e.docs(e.d)
+    e.Activation[e.i, e.j, e.k] = e.PeakReported(
+        e.i, e.j, e.k, e.s
+    ) & e.SelectedStudy(e.s)
+    e.TermAssociation[e.t] = e.SelectedStudy(e.s) & e.TermInStudyTFIDF(
+        e.s, e.t, ...
+    )
+    e.ActivationGivenTerm[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = e.Activation(
+        e.i, e.j, e.k
+    ) // e.TermAssociation("auditory")
+    e.ActivationGivenTermImage[
+        agg_create_region_overlay(e.i, e.j, e.k, e.p)
+    ] = e.ActivationGivenTerm(e.i, e.j, e.k, e.p)
 
-    e.term_present[e.t, e.d] = e.terms(e.d, e.t) & e.docs(e.d)
-
-    e.marg_term[e.t, e.PROB(e.t)] = e.term_present[e.t, e.d]
-    e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
-        e.vox_activation(e.i, e.j, e.k, e.d)
-    ) // e.term_present("auditory", e.d)
-
-    e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
-        e.i, e.j, e.k, e.p
-    ]
-
-    marg_term = nl.query((e.t, e.p), e.marg_term(e.t, e.p))
-    img_query = nl.query((e.x,), e.img(e.x))
+    img_query = nl.query((e.x,), e.ActivationGivenTermImage(e.x))
 
 
 # %%
@@ -141,7 +110,7 @@ with nl.scope as e:
 
 result_image = img_query.fetch_one()[0].spatial_image()
 img = result_image.get_fdata()
-plot = plotting.plot_stat_map(
+plot = nilearn.plotting.plot_stat_map(
     result_image, threshold=np.percentile(img[img > 0], 95)
 )
-plotting.show()
+nilearn.plotting.show()

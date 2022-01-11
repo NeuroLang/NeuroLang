@@ -4,12 +4,19 @@ from multiprocessing import BoundedSemaphore
 from pathlib import Path
 from typing import Callable, Iterable, Union
 
+import matplotlib
+import matplotlib.pyplot as plt
+import seaborn as sns
 import nibabel as nib
 import numpy as np
 import pandas as pd
 from neurolang.frontend import NeurolangDL, NeurolangPDL
 from neurolang.frontend.neurosynth_utils import StudyID
-from neurolang.regions import ExplicitVBR, ExplicitVBROverlay, region_union
+from neurolang.regions import (
+    ExplicitVBR,
+    ExplicitVBROverlay,
+    region_union,
+)
 from nilearn import datasets, image
 
 
@@ -107,7 +114,6 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
         self._mni_atlas = None
         self._mni_brain_mask = None
 
-
     @property
     def key(self):
         return "neurosynth"
@@ -137,6 +143,7 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
         if self.resolution is not None:
             mask = image.resample_img(mask, np.eye(3) * self.resolution)
         nl = init_frontend(mask)
+        add_ploting_functions(nl)
         load_neurosynth_data(self.data_dir, nl, mask)
         return nl
 
@@ -216,9 +223,8 @@ def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
     nl.add_tuple_set(
         np.round(
             nib.affines.apply_affine(
-                mni_mask.affine, np.transpose(
-                    mni_mask.get_fdata().astype(int).nonzero()
-                )
+                mni_mask.affine,
+                np.transpose(mni_mask.get_fdata().astype(int).nonzero()),
             )
         ).astype(int),
         name="Voxel",
@@ -388,17 +394,44 @@ def load_destrieux_atlas(data_dir, nl):
         data_dir=str(data_dir / "destrieux")
     )
 
-    nl.new_symbol(name="destrieux")
-    destrieux_atlas_image = nib.load(destrieux_atlas["maps"])
-    destrieux_labels = dict(destrieux_atlas["labels"])
-    destrieux_set = set()
-    for k, v in destrieux_labels.items():
-        if k == 0:
-            continue
-        destrieux_set.add(
-            (
-                v.decode("utf8").replace("-", " ").replace("_", " "),
-                ExplicitVBR.from_spatial_image_label(destrieux_atlas_image, k),
-            )
+    destrieux_atlas_images = nib.load(destrieux_atlas["maps"])
+    destrieux_atlas_labels = {
+        label: str(name.decode("utf8").replace("-", " ").replace("_", " "))
+        for label, name in destrieux_atlas["labels"]
+        if name != b"Background"
+    }
+    nl.add_atlas_set(
+        "destrieux", destrieux_atlas_labels, destrieux_atlas_images
+    )
+
+
+def add_ploting_functions(nl: Union[NeurolangDL, NeurolangPDL]):
+    matplotlib.use('Agg')
+
+    @nl.add_symbol
+    def agg_kde(terms: Iterable, probs: Iterable) -> matplotlib.figure.Figure:
+        """
+        Create a kde plot showing prob distribution per term.
+
+        Parameters
+        ----------
+        terms : Iterable[str]
+            the terms
+        probs: Iterable[float]
+            the probs
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            a Figure
+        """
+        df = pd.DataFrame(
+            {
+                "terms": terms,
+                "probs": probs,
+            }
         )
-    nl.add_tuple_set(destrieux_set, name="destrieux")
+        fig, ax = plt.subplots()
+        fig.suptitle("Distribution of probs / term")
+        sns.kdeplot(ax=ax, data=df[df.probs > 0.002], x="probs", hue="terms")
+        return fig

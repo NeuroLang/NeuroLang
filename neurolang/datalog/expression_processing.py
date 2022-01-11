@@ -42,6 +42,7 @@ from ..logic import (
 from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions, GuaranteeConjunction, RemoveTrivialOperations
 from ..logic.unification import most_general_unifier
+from ..utils import OrderedSet
 from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
 
@@ -763,10 +764,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
 
     @add_match(Conjunction)
     def conjunction(self, expression):
-        formulas = list(expression.formulas)
+        formulas = collections.deque(expression.formulas)
         new_formulas = tuple()
         while len(formulas) > 0:
-            formula = formulas.pop()
+            formula = formulas.popleft()
             new_formula = self.walk(formula)
             if isinstance(new_formula, Conjunction):
                 new_formulas += new_formula.formulas
@@ -806,7 +807,7 @@ def is_rule_with_builtin(rule, known_builtins=None):
 
 def remove_conjunction_duplicates(conjunction):
     return maybe_deconjunct_single_pred(
-        Conjunction(tuple(set(conjunction.formulas)))
+        Conjunction(tuple(OrderedSet(conjunction.formulas)))
     )
 
 

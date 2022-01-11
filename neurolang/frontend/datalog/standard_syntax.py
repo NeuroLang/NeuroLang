@@ -7,6 +7,7 @@ from neurolang.logic import ExistentialPredicate
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
 from ...expressions import (
+    Command,
     Constant,
     Expression,
     FunctionApplication,
@@ -38,7 +39,8 @@ GRAMMAR = u"""
                | probabilistic_rule
                | probabilistic_fact
                | statement
-               | statement_function ;
+               | statement_function
+               | command ;
     fact = constant_predicate ;
     probabilistic_fact = ( arithmetic_operation | int_ext_identifier ) '::' constant_predicate ;
     rule = (head | query) implication (condition | body) ;
@@ -46,6 +48,7 @@ GRAMMAR = u"""
     constraint = body right_implication head ;
     statement = identifier ':=' ( lambda_expression | arithmetic_operation | int_ext_identifier ) ;
     statement_function = identifier'(' [ arguments ] ')' ':=' argument ;
+    command = '.' @:cmd_identifier '(' [ @:cmd_args ] ')';
     head = head_predicate ;
     body = conjunction ;
     condition = composite_predicate '//' composite_predicate ;
@@ -112,6 +115,16 @@ GRAMMAR = u"""
 
     identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/
                | '`'@:?"[0-9a-zA-Z/#%._:-]+"'`';
+
+    cmd_identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/ ;
+    cmd_args = @:pos_args [ ',' @:keyword_args ]
+             | @:keyword_args ;
+    pos_args = pos_item { ',' pos_item }* ;
+    pos_item = ( arithmetic_operation | python_string ) !'=' ;
+    keyword_args = keyword_item { ',' keyword_item }* ;
+    keyword_item = identifier '=' pos_item ;
+    python_string = '"' @:/[^"]*/ '"'
+                  | "'" @:/[^']*/ "'" ;
 
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
 
@@ -356,6 +369,50 @@ class DatalogSemantics:
 
     def float(self, ast):
         return Constant(float("".join(ast)))
+
+    def cmd_identifier(self, ast):
+        return Symbol(ast)
+
+    def pos_args(self, ast):
+        args = [ast[0]]
+        for arg in ast[1]:
+            args.append(arg[1])
+        return tuple(args)
+
+    def keyword_item(self, ast):
+        key = ast[0]
+        return (key, ast[2])
+
+    def pos_item(self, ast):
+        if not isinstance(ast, Expression):
+            return Constant(ast)
+        return ast
+
+    def keyword_args(self, ast):
+        kwargs = [ast[0]]
+        for kwarg in ast[1]:
+            kwargs.append(kwarg[1])
+        return tuple(kwargs)
+
+    def cmd_args(self, ast):
+        if isinstance(ast, list) and len(ast) == 2:
+            args, kwargs = ast
+        elif isinstance(ast[0], tuple):
+            args = ()
+            kwargs = ast
+        else:
+            args = ast
+            kwargs = ()
+        return args, kwargs
+
+    def command(self, ast):
+        if not isinstance(ast, list):
+            cmd = Command(ast, (), ())
+        else:
+            name = ast[0]
+            args, kwargs = ast[1]
+            cmd = Command(name, args, kwargs)
+        return cmd
 
     def _default(self, ast):
         return ast

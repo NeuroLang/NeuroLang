@@ -31,6 +31,14 @@ export class QueryController {
     this.runQueryBtn = $('#runQueryBtn')
     this.queryAlert = $('#queryAlert')
     this.runQueryBtn.on('click', () => this._submitQuery())
+    this.inputFileReader = $('#queryFileInput')
+    this.inputFileReader.on('change', () => this._loadCodeAsFile())
+    this.downloadLink = $('.nl-query-download')
+    this.downloadLink.on('click', () => this._saveCodeAsFile())
+    $('.nl-query-upload').on('click', (e) => {
+      this.inputFileReader.trigger('click')
+      e.preventDefault()
+    })
 
     /// Results Manager
     this.sc = new SymbolsController()
@@ -120,6 +128,25 @@ export class QueryController {
     this.editor.markText(from, to, {
       css: 'text-decoration: red double underline; text-underline-offset: .3em;'
     })
+  }
+
+  _saveCodeAsFile () {
+    this.downloadLink.attr('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(this.editor.getValue()))
+    this.downloadLink.attr('download', 'export.neurolang')
+  }
+
+  _loadCodeAsFile () {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      this.editor.setValue(e.target.result)
+    }
+    reader.onerror = (e) => {
+      $('body').toast({
+        class: 'error',
+        message: 'An error occured while reading your file !'
+      })
+    }
+    reader.readAsText(this.inputFileReader.get(0).files[0])
   }
 
   /**

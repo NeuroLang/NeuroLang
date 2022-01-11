@@ -241,6 +241,7 @@ class DaskRelationalAlgebraBaseSet:
             if self._table is not None and self.arity > 0:
                 q = select(self._table)
                 ddf = DaskContextManager.sql(q)
+                ddf.columns = self.columns
                 query = DaskContextManager.compile_query(q)
                 self._set_container(
                     ddf, persist=True, prefix="table_as_", sql=query

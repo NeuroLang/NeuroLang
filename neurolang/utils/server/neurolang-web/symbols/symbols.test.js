@@ -61,6 +61,12 @@ const mockResults = {
         columns: ['agg_create_region'],
         size: 2,
         values: [[{ image: 'someEncodedImageData', hash: '89er8798awre', center: [], max: 0.008, min: 0, q95: 0.001 }], [{ image: 'anotherEncodedImage', hash: '456eras8098ert', center: [], max: 0.009, min: 0.00002, q95: 0.00025 }]]
+      },
+      Histograms: {
+        row_type: ["<class 'matplotlib.figure.Figure'>"],
+        columns: ['agg_hist'],
+        size: 2,
+        values: [['Figure 640x400'], ['Figure 640x400']]
       }
     }
   }
@@ -138,7 +144,7 @@ describe('SymbolsController', () => {
         type: 'get'
       })
       const items = $('.nl-symbols-dropdown .item')
-      expect(items.length).toBe(3)
+      expect(items.length).toBe(4)
     })
   })
 
@@ -168,7 +174,7 @@ describe('SymbolsController', () => {
 
     it('should display the base symbols and functions', () => {
       const items = $('.nl-symbols-dropdown .item')
-      expect(items.length).toBe(6)
+      expect(items.length).toBe(7)
       const headers = $('.nl-symbols-dropdown .menu .header')
       expect(headers.length).toBe(2)
       expect(headers.first().text()).toBe('Base symbols')
@@ -217,9 +223,9 @@ describe('SymbolsController', () => {
       sc.setQueryResults(mockResults)
 
       const items = $('.nl-symbols-dropdown .item')
-      expect(items.length).toBe(3)
+      expect(items.length).toBe(4)
       expect(items.first().text()).toBe('ActivationGivenTerm')
-      expect($(items.get(1)).text()).toBe('RegionImage')
+      expect($(items.get(2)).text()).toBe('RegionImage')
       expect(items.last().text()).toBe('TermInStudyTFIDF')
     })
 
@@ -250,16 +256,16 @@ describe('SymbolsController', () => {
       })
 
       it('should show papaya viewer when tab has VBROverlay type', () => {
-        // trigger click on 2nd menu item which contains images
-        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
+        // trigger click on 3nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(2).trigger('click')
         expect(mockShowViewer).toHaveBeenCalled()
         expect(mockHideViewer).not.toHaveBeenCalled()
         expect(mockFetchTableData).toHaveBeenCalled()
       })
 
       it('should show controls when displaying brain images', () => {
-        // trigger click on 2nd menu item which contains images
-        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
+        // trigger click on 3nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(2).trigger('click')
         expect(mockShowViewer).toHaveBeenCalled()
         expect($('#tabTable tr').length).toBe(mockTableData.data.length + 1)
         expect($('.nl-vbr-overlay-switch').length).toBe(mockTableData.data.length)
@@ -271,8 +277,8 @@ describe('SymbolsController', () => {
       })
 
       it('should call setImage on papayaViewer when image switch is checked', () => {
-        // trigger click on 2nd menu item which contains images
-        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
+        // trigger click on 3nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(2).trigger('click')
         mockCanAdd.mockReturnValueOnce(true)
         mockAddImage.mockReturnValueOnce({ lut: 'Viridis' })
 
@@ -289,8 +295,8 @@ describe('SymbolsController', () => {
       it('should not add image if max images already added', () => {
         mockCanAdd.mockReturnValueOnce(false)
 
-        // trigger click on 2nd menu item which contains images
-        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
+        // trigger click on 3nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(2).trigger('click')
 
         // click on first image checkbox
         const chkbox = $('.nl-vbr-overlay-switch input').first()
@@ -305,8 +311,8 @@ describe('SymbolsController', () => {
       it('should set the color and hide histogram for region labels', () => {
         mockCanAdd.mockReturnValueOnce(true)
         mockAddImage.mockReturnValueOnce({ hex: '#f44336' })
-        // trigger click on 2nd menu item which contains images
-        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
+        // trigger click on 3nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(2).trigger('click')
         // click on first image checkbox
         const chkbox = $('.nl-vbr-overlay-switch input').first()
         chkbox.prop('checked', true)
@@ -319,8 +325,8 @@ describe('SymbolsController', () => {
       })
 
       it('should set center when center btn is clicked', () => {
-        // trigger click on 2nd menu item which contains images
-        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
+        // trigger click on 3nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(2).trigger('click')
 
         // click on first image checkbox
         mockCanAdd.mockReturnValueOnce(true)
@@ -335,8 +341,8 @@ describe('SymbolsController', () => {
       })
 
       it('should call showHistogram when histogram btn is clicked', () => {
-        // trigger click on 2nd menu item which contains images
-        $('.nl-symbols-dropdown .item').eq(1).trigger('click')
+        // trigger click on 3nd menu item which contains images
+        $('.nl-symbols-dropdown .item').eq(2).trigger('click')
 
         // click on second image checkbox
         mockCanAdd.mockReturnValueOnce(true)
@@ -412,6 +418,38 @@ describe('SymbolsController', () => {
       }
       sc.fetchNewTableData(data, callback, null)
       expect(callback).toHaveBeenCalledWith(resultData)
+    })
+  })
+
+  describe('plot figure', () => {
+    let mockTableData
+
+    beforeEach(() => {
+      sc.setQueryResults(mockResults)
+      sc.tableData = mockResults.data
+      mockTableData = {
+        draw: 1,
+        recordsTotal: 1,
+        recordsFiltered: 1,
+        data: mockResults.data.results.Histograms.values
+      }
+    })
+
+    it('should show figure controls when displaying figure symbols', () => {
+      // trigger click on 2nd menu item which contains figures
+      $('.nl-symbols-dropdown .item').eq(1).trigger('click')
+      expect($('#tabTable tr').length).toBe(mockTableData.data.length + 1)
+      expect($('.nl-mplt-figure-toggle').length).toBe(mockTableData.data.length)
+    })
+
+    it('should call showFigure when figure btn is clicked', () => {
+      // trigger click on 2nd menu item which contains figures
+      $('.nl-symbols-dropdown .item').eq(1).trigger('click')
+
+      const showFigureSpy = jest.spyOn(sc, 'onShowFigureClicked')
+      // trigger click on second figure toggle btn
+      $('.nl-mplt-figure-toggle').last().trigger('click')
+      expect(showFigureSpy).toHaveBeenCalled()
     })
   })
 })

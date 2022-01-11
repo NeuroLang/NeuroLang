@@ -95,8 +95,11 @@ export class SymbolsController {
     if (this.symbols) {
       const functions = Object.keys(this.symbols.results)
         .filter(elt => this.symbols.results[elt].function)
+      const commands = Object.keys(this.symbols.results)
+        .filter(elt => this.symbols.results[elt].command)
       const symbols = Object.keys(this.symbols.results)
-        .filter(elt => !this.symbols.results[elt].function && resultKeys.indexOf(elt) < 0)
+        .filter(elt => !this.symbols.results[elt].function &&
+          !this.symbols.results[elt].command && resultKeys.indexOf(elt) < 0)
       if (symbols.length > 0) {
         addItemsToDropdownMenu(menu, symbols, 'Base symbols', 'symbol base-symbol')
         selected = !selected ? symbols[0] : selected
@@ -104,6 +107,10 @@ export class SymbolsController {
       if (functions.length > 0) {
         addItemsToDropdownMenu(menu, functions, 'Functions', 'function')
         selected = !selected ? functions[0] : selected
+      }
+      if (commands.length > 0) {
+        addItemsToDropdownMenu(menu, commands, 'Commands', 'command')
+        selected = !selected ? commands[0] : selected
       }
     }
     this.dropdown.dropdown('refresh')
@@ -125,9 +132,9 @@ export class SymbolsController {
     // get the active symbol metadata
     const isQuerySymbol = this.results && this.activeSymbol in this.results.results
     const tab = isQuerySymbol ? this.results.results[this.activeSymbol] : this.symbols.results[this.activeSymbol]
-    if ('function' in tab && tab.function) {
+    if (('function' in tab && tab.function) || ('command' in tab && tab.command)) {
       // Selected symbol is a function, display its doctstring
-      this.setFunctionHelp('', `A function of type ${tab.type}`, this.activeSymbol, tab.doc)
+      this.setFunctionHelp('', `A ${tab.function ? 'function' : 'command'} of type ${tab.type}`, this.activeSymbol, tab.doc)
       this.tabTable.parents('div.dataTables_wrapper').first().hide()
       this.viewer.hideViewer()
     } else {
@@ -148,6 +155,8 @@ export class SymbolsController {
           ret.render = renderPMID
         } else if (tab.row_type[idx] === DATA_TYPES.VBROverlay || tab.row_type[idx] === DATA_TYPES.VBR) {
           ret.render = renderVBROverlay
+        } else if (tab.row_type[idx] === DATA_TYPES.MpltFigure) {
+          ret.render = renderMpltFigure
         }
         return ret
       })
@@ -272,6 +281,14 @@ export class SymbolsController {
     $('.nl-image-download').on('click', (evt) => this.onImageDownloadClicked(evt))
     $('.nl-mini-colorbar').on('click', (evt) => this.onMiniColorBarClicked(evt))
     $('.nl-mini-colorbar').popup()
+    $('.nl-mplt-figure-toggle').on('click', (evt) => this.onShowFigureClicked(evt))
+    $('.nl-mplt-figure-toggle').popup({
+      on: 'manual',
+      html: '<div id="nlMpltFigureContainer" class="nl-mplt-figure-container">' +
+      '<div class="ui active inverted dimmer"><div class="ui text loader">Loading</div></div></div>',
+      position: 'right center',
+      lastResort: 'right center'
+    })
   }
 
   /**
@@ -369,6 +386,41 @@ export class SymbolsController {
     const imageID = `image_${row}_${col}`
     this.viewer.showColorBar(imageID)
   }
+
+  /**
+   * Listener for click events on show figure buttons.
+   *
+   * Gets the clicked item's row and col indices. Then fetches the data
+   * for the figure and adds it to the nlMpltFigureContainer figure container.
+   * @param {*} evt
+   */
+  onShowFigureClicked (evt) {
+    let elmt = $(evt.target)
+    if (elmt.is('i')) {
+      elmt = elmt.parent()
+    }
+    const row = elmt.data('row')
+    const col = elmt.data('col')
+    const vis = elmt.popup('is visible')
+    elmt.popup('toggle')
+    if (!vis) {
+      let url = (this.results && this.activeSymbol in this.results.results)
+        ? `${API_ROUTE.figure}/${this.results.uuid}`
+        : `${API_ROUTE.figure}/${this.engine}`
+      url += `?symbol=${this.activeSymbol}&col=${col}&row=${row}`
+      $.get(url)
+        .done((figureData) => {
+          const figContainer = $('#nlMpltFigureContainer')
+          figContainer.append(figureData.documentElement)
+          figContainer.find('.active.dimmer').removeClass('active')
+          url += '&format=png'
+          const downloadLink = $(`<a href="${url}" class="nl-figure-download">
+          <button class="ui tiny circular icon basic button" data-tooltip="Download figure">
+          <i class="download icon"></i></button></a>`)
+          figContainer.append(downloadLink)
+        })
+    }
+  }
 }
 
 /**
@@ -416,6 +468,24 @@ function renderVBROverlay (data, type, row, meta) {
     }
     // otherwise return the raw data (for ordering)
     return data.hash
+  }
+  return data
+}
+
+/**
+ * Custom renderer for Matplotlib figures
+ * @param {*} data
+ * @param {*} type
+ * @returns
+ */
+function renderMpltFigure (data, type, row, meta) {
+  if (type === 'display') {
+    // create a button to display the figure
+    const figDiv = `<div class="nl-mplt-figure-controls">
+      <img class="ui tiny bordered image nl-mplt-figure-toggle nl-figure-control"
+      src="data:image/png;base64, ${data}" data-row=${meta.row} data-col=${meta.col} data-tooltip="Show figure">
+      </div>`
+    return figDiv
   }
   return data
 }

@@ -7,6 +7,10 @@ Loading and Querying the Destrieux et al. Atlas' Left Hemisphere
 Uploading the Destrieux regions NeuroLang and
 executing a simple query.
 '''
+import warnings
+
+warnings.filterwarnings("ignore")
+
 
 from matplotlib import pyplot as plt
 import nibabel as nib
