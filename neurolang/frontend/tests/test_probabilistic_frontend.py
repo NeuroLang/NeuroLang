@@ -901,11 +901,21 @@ def test_query_without_safe_plan():
         name="names",
     )
 
+    expected = NamedRelationalAlgebraFrozenSet(
+        columns=('x', 'y', 'PROB'),
+        iterable={
+            ('alice', 'alice', 0.2),
+            ('bob', 'bob', 0.8),
+            ('alice', 'bob', 0.8 * 0.2),
+            ('bob', 'alice', 0.8 * 0.2)
+        }
+    )
+
     with nl.environment as e:
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
 
-    with pytest.raises(dalvi_suciu_lift.NonLiftableException):
-        nl.solve_all()
+    res = nl.solve_all()['q']
+    assert res == expected
 
 
 def test_query_without_safe_fails():

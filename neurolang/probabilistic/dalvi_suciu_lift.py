@@ -1,3 +1,4 @@
+from collections import Counter
 import logging
 from functools import reduce
 from itertools import chain, combinations
@@ -205,8 +206,8 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
 
 
 def _verify_that_the_query_is_unate(query, symbol_table):
-    positive_relational_symbols = set()
-    negative_relational_symbols = set()
+    positive_relational_symbols = Counter()
+    negative_relational_symbols = Counter()
 
     query = convert_rule_to_ucq(query)
     query = convert_to_pnf_with_dnf_matrix(query)
@@ -220,12 +221,22 @@ def _verify_that_the_query_is_unate(query, symbol_table):
         if isinstance(predicate, Negation):
             while isinstance(predicate, Negation):
                 predicate = predicate.formula
-            negative_relational_symbols.add(predicate.functor)
+            negative_relational_symbols.update((predicate.functor,))
         else:
-            positive_relational_symbols.add(predicate.functor)
+            positive_relational_symbols.update((predicate.functor,))
 
-    if not positive_relational_symbols.isdisjoint(negative_relational_symbols):
+    if len(positive_relational_symbols & negative_relational_symbols) > 0:
         raise NonLiftableException(f"Query {query} is not unate")
+    if (
+        len(positive_relational_symbols) > 0 and
+        max(positive_relational_symbols.values()) > 1
+    ):
+        raise NonLiftableException("Positive self-join detected")
+    if (
+        len(negative_relational_symbols) > 0 and 
+        max(negative_relational_symbols.values()) > 1
+    ):
+        raise NonLiftableException("Negative self-join detected")
 
 
 def solve_marg_query(rule, cpl):
