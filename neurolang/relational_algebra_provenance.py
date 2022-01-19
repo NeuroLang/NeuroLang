@@ -127,7 +127,7 @@ class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
         )
 
 
-class LiftedPlanProjection(RelationalAlgebraOperation):
+class LiftedPlanProjection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
