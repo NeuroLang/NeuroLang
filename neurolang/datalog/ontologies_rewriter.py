@@ -1,4 +1,8 @@
-from ..expression_walker import ReplaceExpressionWalker, ReplaceSymbolWalker, add_match
+from ..expression_walker import (
+    ReplaceExpressionWalker,
+    ReplaceSymbolWalker,
+    add_match
+)
 from ..expressions import Symbol
 from ..logic import Constant, Implication, NaryLogicOperator, Negation
 from ..logic.expression_processing import ExtractFreeVariablesWalker

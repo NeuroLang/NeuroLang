@@ -2,8 +2,8 @@ import warnings
 
 import rdflib
 from rdflib import BNode, Literal
-from rdflib.namespace import OWL, RDF, RDFS
 from rdflib.extras.infixowl import EnumeratedClass
+from rdflib.namespace import OWL, RDF, RDFS
 
 from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
 from ..expressions import Constant, Symbol

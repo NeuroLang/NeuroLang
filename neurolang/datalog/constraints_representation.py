@@ -7,7 +7,8 @@ sets and has support for constraints.
 """
 
 from ..expression_walker import ExpressionWalker, PatternWalker, add_match
-from ..logic import LogicOperator, Union, Symbol
+from ..expressions import Symbol
+from ..logic import LogicOperator, Union
 from .basic_representation import DatalogProgramMixin
 
 
@@ -105,7 +106,7 @@ class DatalogConstraintsMixin(PatternWalker):
         '''Function in charge of sorting the constraints in a dictionary
         using the consequent functor as an index.
 
-        This categorization is useful to obtain the constraints in the
+        This indexation is useful to obtain the constraints in the
         way they are needed for the rewriting algorithm.
 
         Parameters
