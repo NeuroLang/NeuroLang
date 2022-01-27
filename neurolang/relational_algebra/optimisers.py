@@ -346,6 +346,28 @@ class EliminateTrivialProjections(ew.PatternWalker):
     def eliminate_trivial_projection(self, expression):
         return expression.relation
 
+    @ew.add_match(
+        Projection(Projection, ...),
+        lambda expression: all(
+            isinstance(attribute, Constant[ColumnInt])
+            for attribute in (
+                expression.attributes + expression.relation.attributes
+            )
+        )
+    )
+    def eliminate_trivial_nested_unnamed_projection(self, expression):
+        inner_attributes = expression.relation.attributes
+        outer_attributes = expression.attributes
+
+        resulting_attributes = tuple(
+            inner_attributes[attribute.value]
+            for attribute in outer_attributes
+        )
+
+        return self.walk(
+            Projection(expression.relation.relation, resulting_attributes)
+        )
+
     @ew.add_match(Projection(Projection, ...))
     def eliminate_trivial_nested_projection(self, expression):
         return self.walk(

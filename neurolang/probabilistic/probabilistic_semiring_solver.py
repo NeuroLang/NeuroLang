@@ -1,3 +1,4 @@
+from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expression_walker import (
     ExpressionWalker,
     PatternWalker,
@@ -14,9 +15,10 @@ from ..relational_algebra import (
     RelationalAlgebraSolver,
     str2columnstr_constant
 )
+from ..relational_algebra.relational_algebra import RenameColumns, int2columnint_constant
 from ..relational_algebra_provenance import (
-    ProvenanceAlgebraSet,
     BuildProvenanceAlgebraSetWalkIntoMixin,
+    ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolverMixin
 )
 from .probabilistic_ra_utils import (
@@ -41,15 +43,49 @@ class ProbSemiringSolverMixin(
             isinstance(
                 exp.relation,
                 (
-                    DeterministicFactSet,
                     ProbabilisticFactSet,
                     ProbabilisticChoiceSet,
                 ),
             )
-        ),
+        ) and (
+            exp.relation.probability_column == int2columnint_constant(0)
+        )
     )
     def eliminate_superfluous_projection(self, expression):
-        return self.walk(expression.relation)
+        new_relation = expression.relation.apply(
+            Projection(
+                expression.relation.relation,
+                (expression.relation.probability_column,) +
+                tuple(
+                    int2columnint_constant(a.value + 1)
+                    for a in expression.attributes
+                )
+            ),
+            expression.relation.probability_column
+        )
+        return self.walk(new_relation)
+
+    @add_match(Projection(DeterministicFactSet, ...))
+    def push_projection_in_deterministic(self, expression):
+        return self.walk(
+            DeterministicFactSet(
+                Projection(
+                    expression.relation.relation,
+                    expression.attributes
+                ))
+        )
+
+    def transform_projection(self, expression):
+        new_relation = self.walk(expression.relation)
+        non_provenance_columns = new_relation.non_provenance_columns
+        new_expression = RenameColumns(
+            new_relation,
+            tuple(
+                (non_provenance_columns[attr.value], non_provenance_columns[i])
+                for i, attr in enumerate(expression.attributes)
+            )
+        )
+        return self.walk(new_expression)
 
     @add_match(
         DeterministicFactSet(Constant),
@@ -69,8 +105,12 @@ class ProbSemiringSolverMixin(
             return self.translated_probfact_sets[relation_symbol]
 
         relation = self.walk(relation_symbol)
+        if isinstance(relation, Constant):
+            columns = relation.value.columns
+        else:
+            columns = relation.columns()
         named_columns = tuple(
-            str2columnstr_constant(f"col_{i}") for i in relation.value.columns
+            str2columnstr_constant(f"col_{i}") for i in range(len(columns))
         )
         projection_list = [
             FunctionApplicationListMember(c, c)
@@ -126,9 +166,27 @@ class ProbSemiringSolverMixin(
     def probabilistic_choice_set(self, prob_choice_set):
         return self.probabilistic_fact_set(prob_choice_set)
 
+    @add_match(DeterministicFactSet)
+    def deterministic_fact_set_general(self, det_fact_set):
+        new_symbol = Symbol.fresh()
+        self.symbol_table[new_symbol] = det_fact_set.relation
+        return self.walk(DeterministicFactSet(new_symbol))
+
     @add_match(ProbabilisticFactSet)
     def probabilistic_fact_set_invalid(self, prob_fact_set):
-        raise NotImplementedError()
+        new_symbol = Symbol.fresh()
+        self.symbol_table[new_symbol] = prob_fact_set.relation
+        return self.walk(ProbabilisticFactSet(
+            new_symbol, prob_fact_set.probability_column
+        ))
+
+    @add_match(ProbabilisticChoiceSet)
+    def probabilistic_choice_set_to_symbol(self, prob_choice_set):
+        new_symbol = Symbol.fresh()
+        self.symbol_table[new_symbol] = prob_choice_set.relation
+        return self.walk(ProbabilisticChoiceSet(
+            new_symbol, prob_choice_set.probability_column
+        ))
 
     @staticmethod
     def _check_prov_col_not_in_proj_list(provset, proj_list):
