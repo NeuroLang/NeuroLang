@@ -11,6 +11,7 @@ from ..relational_algebra import (
     ExtendedProjection,
     FunctionApplicationListMember,
     NameColumns,
+    NumberColumns,
     Projection,
     RelationalAlgebraSolver,
     str2columnstr_constant
@@ -118,20 +119,23 @@ class ProbSemiringSolverMixin(
         ]
 
         prov_column = str2columnstr_constant(Symbol.fresh().name)
-        provenance_set = ExtendedProjection(
-            NameColumns(relation, named_columns),
-            tuple(projection_list)
-            + (
-                FunctionApplicationListMember(
-                    Constant[float](1.0),
-                    prov_column,
+        provenance_set = NumberColumns(
+            ExtendedProjection(
+                NameColumns(relation, named_columns),
+                tuple(projection_list)
+                + (
+                    FunctionApplicationListMember(
+                        Constant[float](1.0),
+                        prov_column,
+                    ),
                 ),
             ),
+            (prov_column,) + named_columns
         )
 
         self.translated_probfact_sets[relation_symbol] = \
             ProvenanceAlgebraSet(
-                provenance_set, prov_column
+                provenance_set, int2columnint_constant(0)
             )
         return self.translated_probfact_sets[relation_symbol]
 
@@ -142,23 +146,9 @@ class ProbSemiringSolverMixin(
             return self.translated_probfact_sets[relation_symbol]
 
         relation = self.walk(relation_symbol)
-        if isinstance(relation, Constant):
-            named_columns = tuple(
-                str2columnstr_constant(f"col_{i}") for i in relation.value.columns
-            )
-        else:
-            named_columns = tuple(
-                str2columnstr_constant(f"col_{i.value}") for i in relation.columns()
-            )
-        relation = NameColumns(relation, named_columns)
-        if len(named_columns) > 0:
-            rap_column = named_columns[prob_fact_set.probability_column.value]
-        else:
-            rap_column = str2columnstr_constant(Symbol.fresh().name)
-
         self.translated_probfact_sets[relation_symbol] = \
             ProvenanceAlgebraSet(
-                relation, rap_column
+                relation, prob_fact_set.probability_column
             )
         return self.translated_probfact_sets[relation_symbol]
 

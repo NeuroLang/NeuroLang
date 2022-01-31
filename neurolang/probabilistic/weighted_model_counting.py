@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from pysdd import sdd
 
+from neurolang.relational_algebra.relational_algebra import int2columnint_constant
+
 from ..config import config
 from ..datalog.expression_processing import (
     extract_logic_predicates,
@@ -32,8 +34,10 @@ from ..relational_algebra import (
     ExtendedProjection,
     FunctionApplicationListMember,
     NameColumns,
+    NumberColumns,
     Projection,
     PushInSelections,
+    RenameOptimizations,
     RelationalAlgebraStringExpression,
     str2columnstr_constant
 )
@@ -173,10 +177,9 @@ class DeterministicFactSetTranslation(PatternWalker):
         lambda e: e.relation.value.is_empty()
     )
     def deterministic_fact_set_constant(self, deterministic_set):
-        rap_column = ColumnStr(Symbol.fresh().name)
         return ProvenanceAlgebraSet(
             deterministic_set.relation,
-            str2columnstr_constant(rap_column)
+            int2columnint_constant(0)
         )
 
 
@@ -320,6 +323,7 @@ class WMCSemiRingSolver(
 
 class SDDWMCSemiRingSolver(
     EliminateSuperfluousProjectionMixin,
+    RenameOptimizations,
     DeterministicFactSetTranslation,
     RelationalAlgebraProvenanceExpressionSemringSolver,
 ):
@@ -421,7 +425,7 @@ class SDDWMCSemiRingSolver(
         relation = NameColumns(relation, new_columns)
 
         rap_column = str2columnstr_constant(Symbol.fresh().name)
-        projection_list = [
+        projection_list = tuple(
             FunctionApplicationListMember(
                 Constant[RelationalAlgebraStringExpression](
                     RelationalAlgebraStringExpression(c.value),
@@ -430,27 +434,30 @@ class SDDWMCSemiRingSolver(
                 c
             )
             for c in new_columns
-        ]
+        )
         deterministic_tag_function = FunctionApplication(
             Constant(lambda: self.get_new_bernoulli_variable(1.)),
             tuple()
         )
 
-        tagged_relation = self.walk(
+        new_relation = NumberColumns(
             ExtendedProjection(
                 relation,
-                projection_list + [
+                projection_list + (
                     FunctionApplicationListMember(
                         deterministic_tag_function,
                         rap_column
-                    )
-                ]
-            )
+                    ),
+                )
+            ),
+            (rap_column,) + new_columns
         )
+
+        tagged_relation = self.walk(new_relation)
         self.tagged_sets.append(tagged_relation)
 
         prov_set = ProvenanceAlgebraSet(
-            tagged_relation, rap_column
+            tagged_relation, int2columnint_constant(0)
         )
 
         self.translated_probfact_sets[relation_symbol] = prov_set
@@ -496,20 +503,23 @@ class SDDWMCSemiRingSolver(
             )
 
             tagged_relation = self.walk(
-                ExtendedProjection(
-                    relation,
-                    projection_list + [
-                        FunctionApplicationListMember(
-                            probfact_tag_function,
-                            rap_column
-                        )
-                    ]
+                NumberColumns(
+                    ExtendedProjection(
+                        relation,
+                        projection_list + [
+                            FunctionApplicationListMember(
+                                probfact_tag_function,
+                                rap_column
+                            )
+                        ]
+                    ),
+                    (rap_column,) + new_columns
                 )
             )
             self.tagged_sets.append(tagged_relation)
 
             prov_set = ProvenanceAlgebraSet(
-                tagged_relation, rap_column
+                tagged_relation, int2columnint_constant(0)
             )
 
             self.translated_probfact_sets[relation_symbol] = prov_set
@@ -544,8 +554,11 @@ class SDDWMCSemiRingSolver(
                 new_columns, tagged_df
             )
         return ProvenanceAlgebraSet(
-            Constant[AbstractSet](tagged_ras_set, verify_type=False),
-            str2columnstr_constant(f'col_{prob_column}')
+            NumberColumns(
+                Constant[AbstractSet](tagged_ras_set, verify_type=False),
+                tuple(str2columnstr_constant(c) for c in new_columns)
+            ),
+            int2columnint_constant(prob_column)
         )
 
     def generate_sdd_expression(
