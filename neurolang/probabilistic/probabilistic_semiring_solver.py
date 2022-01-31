@@ -1,4 +1,3 @@
-from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expression_walker import (
     ExpressionWalker,
     PatternWalker,
@@ -14,9 +13,9 @@ from ..relational_algebra import (
     NumberColumns,
     Projection,
     RelationalAlgebraSolver,
+    int2columnint_constant,
     str2columnstr_constant
 )
-from ..relational_algebra.relational_algebra import RenameColumns, int2columnint_constant
 from ..relational_algebra_provenance import (
     BuildProvenanceAlgebraSetWalkIntoMixin,
     ProvenanceAlgebraSet,
@@ -75,18 +74,6 @@ class ProbSemiringSolverMixin(
                     expression.attributes
                 ))
         )
-
-    def transform_projection(self, expression):
-        new_relation = self.walk(expression.relation)
-        non_provenance_columns = new_relation.non_provenance_columns
-        new_expression = RenameColumns(
-            new_relation,
-            tuple(
-                (non_provenance_columns[attr.value], non_provenance_columns[i])
-                for i, attr in enumerate(expression.attributes)
-            )
-        )
-        return self.walk(new_expression)
 
     @add_match(
         DeterministicFactSet(Constant),

@@ -3,8 +3,6 @@ from typing import AbstractSet
 
 import pytest
 
-from neurolang.relational_algebra.relational_algebra import NumberColumns
-
 from ..config import config
 from ..expressions import Constant
 from ..probabilistic.cplogic import testing
@@ -16,6 +14,7 @@ from ..relational_algebra import (
     FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
+    NumberColumns,
     Projection,
     RelationalAlgebraSet,
     RenameColumn,

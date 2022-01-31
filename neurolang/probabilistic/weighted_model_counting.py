@@ -10,8 +10,6 @@ import numpy as np
 import pandas as pd
 from pysdd import sdd
 
-from neurolang.relational_algebra.relational_algebra import int2columnint_constant
-
 from ..config import config
 from ..datalog.expression_processing import (
     extract_logic_predicates,
@@ -37,8 +35,9 @@ from ..relational_algebra import (
     NumberColumns,
     Projection,
     PushInSelections,
-    RenameOptimizations,
     RelationalAlgebraStringExpression,
+    RenameOptimizations,
+    int2columnint_constant,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
@@ -47,7 +46,6 @@ from ..relational_algebra_provenance import (
 )
 from ..utils import log_performance
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from .query_resolution import lift_solve_marg_query as _solve_marg_query
 from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
@@ -55,6 +53,7 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query
 )
+from .query_resolution import lift_solve_marg_query as _solve_marg_query
 
 LOG = logging.getLogger(__name__)
 
