@@ -15,8 +15,10 @@ from .relational_algebra import (
     LeftNaturalJoin,
     NameColumns,
     NaturalJoin,
+    NumberColumns,
     Product,
     Projection,
+    RelationalAlgebraOperation,
     RelationalAlgebraStringExpression,
     RenameColumn,
     RenameColumns,
@@ -345,6 +347,28 @@ class EliminateTrivialProjections(ew.PatternWalker):
     )
     def eliminate_trivial_projection(self, expression):
         return expression.relation
+
+    @ew.add_match(
+        Projection(Projection, ...),
+        lambda expression: all(
+            isinstance(attribute, Constant[ColumnInt])
+            for attribute in (
+                expression.attributes + expression.relation.attributes
+            )
+        )
+    )
+    def eliminate_trivial_nested_unnamed_projection(self, expression):
+        inner_attributes = expression.relation.attributes
+        outer_attributes = expression.attributes
+
+        resulting_attributes = tuple(
+            inner_attributes[attribute.value]
+            for attribute in outer_attributes
+        )
+
+        return self.walk(
+            Projection(expression.relation.relation, resulting_attributes)
+        )
 
     @ew.add_match(Projection(Projection, ...))
     def eliminate_trivial_nested_projection(self, expression):
@@ -907,6 +931,74 @@ class RenameOptimizations(ew.PatternWalker):
                 expression.relation.value
             )
         )
+
+    @ew.add_match(
+        NameColumns(NumberColumns(RelationalAlgebraOperation, ...), ...),
+        lambda expression: all(
+            isinstance(column, Constant[ColumnStr])
+            for column in expression.relation.relation.columns()
+        )
+    )
+    def eliminate_trivial_number_columns(self, expression):
+        column_renames = tuple(
+            (src, dst)
+            for src, dst in zip(
+                expression.relation.column_names,
+                expression.column_names
+            )
+        )
+
+        return self.walk(
+            RenameColumns(
+                expression.relation.relation, column_renames
+            )
+        )
+
+    @ew.add_match(
+        Projection(NumberColumns(RelationalAlgebraOperation, ...), ...),
+        lambda expression: all(
+            isinstance(column, Constant[ColumnStr])
+            for column in expression.relation.relation.columns()
+        )
+    )
+    def eliminate_trivial_projection_number_columns(self, expression):
+        attributes = tuple(
+            expression.relation.relation.columns()[
+                column.value
+            ]
+            for column in expression.relation.columns()
+        )
+        new_relation = Projection(
+            expression.relation.relation,
+            attributes
+        )
+        return self.walk(new_relation)
+
+    @ew.add_match(
+        Selection(NumberColumns(RelationalAlgebraOperation, ...), ...),
+        lambda expression: all(
+            isinstance(column, Constant[ColumnStr])
+            for column in expression.relation.relation.columns()
+        )
+    )
+    def eliminate_trivial_selection_number_columns(self, expression):
+        replacements = {
+            number: name for number, name in
+            zip(
+                expression.relation.columns(),
+                expression.relation.column_names
+            )
+        }
+        new_formula = (
+            ew.ReplaceExpressionWalker(replacements)
+            .walk(expression.formula)
+        )
+        new_relation = NumberColumns(
+            Selection(expression.relation.relation, new_formula),
+            expression.relation.column_names
+        )
+
+        return self.walk(new_relation)
 
 
 class PushInSelections(ew.PatternWalker):
