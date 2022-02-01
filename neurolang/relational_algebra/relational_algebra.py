@@ -268,6 +268,32 @@ class NameColumns(UnaryRelationalAlgebraOperation):
         )
 
 
+class NumberColumns(UnaryRelationalAlgebraOperation):
+    """
+    Converts a named relational algebra set to an unnamed one
+
+    All columns must be numbered at once. Each column name must either be a
+    `Constant[ColumnStr]` and the numbering will be the ordering in the
+    `column_names` attribute.
+    """
+
+    def __init__(self, relation, column_names):
+        self.relation = relation
+        self.column_names = column_names
+
+    def columns(self):
+        return OrderedSet(
+            int2columnint_constant(i)
+            for i in range(len(self.column_names))
+        )
+
+    def __repr__(self):
+        return (
+            f"\N{GREEK SMALL LETTER nu}"
+            f"_{self.column_names}({self.relation})"
+        )
+
+
 class RenameColumn(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, src, dst):
         self.relation = relation
@@ -882,6 +908,17 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             for column_name in name_columns.column_names
         )
         new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
+        return self._build_relation_constant(new_set)
+
+    @ew.add_match(NumberColumns(Constant, ...))
+    def ra_number_columns(self, number_columns):
+        relation = number_columns.relation
+        relation_set = relation.value
+        column_names = tuple(
+            self.walk(column_name).value
+            for column_name in number_columns.column_names
+        )
+        new_set = relation_set.projection_to_unnamed(*column_names)
         return self._build_relation_constant(new_set)
 
     @ew.add_match(RenameColumn(Constant, ..., ...))
