@@ -306,10 +306,12 @@ def test_solve_boolean_query():
     Q = nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("d",), ("c",)], name="Q"
     )
-    with pytest.raises(UnsupportedProbabilisticQueryError):
-        with nl.scope as e:
-            e.ans[e.PROB()] = P[e.x] & Q[e.x]
-            nl.query((e.p), e.ans[e.p])
+    with nl.scope as e:
+        e.ans[e.PROB()] = P[e.x] & Q[e.x]
+        res = nl.query((e.p), e.ans[e.p])
+
+    expected = RelationalAlgebraFrozenSet([(2 / 9,)])
+    assert_almost_equal(res, expected)
 
 
 def test_solve_query_with_constant():
@@ -901,11 +903,50 @@ def test_query_without_safe_plan():
         name="names",
     )
 
+    expected = NamedRelationalAlgebraFrozenSet(
+        columns=('x', 'y', 'PROB'),
+        iterable={
+            ('alice', 'alice', 0.2),
+            ('bob', 'bob', 0.8),
+            ('alice', 'bob', 0.8 * 0.2),
+            ('bob', 'alice', 0.8 * 0.2)
+        }
+    )
+
     with nl.environment as e:
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
 
-    with pytest.raises(dalvi_suciu_lift.NonLiftableException):
-        nl.solve_all()
+    res = nl.solve_all()['q']
+    assert res == expected
+
+
+def test_query_without_safe_plan_2():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "alice", 1),
+            (0.4, "alice", 2),
+            (0.8, "bob", 2),
+            (0.6, "bob", 1),
+        ],
+        name="names",
+    )
+
+    expected = NamedRelationalAlgebraFrozenSet(
+        columns=('x', 'y', 'PROB'),
+        iterable={
+            ('alice', 'alice', 0.52),
+            ('bob', 'bob', 0.92),
+            ('alice', 'bob', 0.40160000000000007),
+            ('bob', 'alice', 0.40160000000000007)
+        }
+    )
+
+    with nl.environment as e:
+        e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x, e.s] & e.names[e.y, e.s]
+
+    res = nl.solve_all()['q']
+    assert res == expected
 
 
 def test_query_without_safe_fails():
@@ -926,6 +967,31 @@ def test_query_without_safe_fails():
 
     with pytest.raises(dalvi_suciu_lift.NonLiftableException):
         nl.solve_all()
+
+
+def test_query_self_join_matrix_query_ds():
+    nl = NeurolangPDL(
+        probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
+        probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "alice", 1),
+            (0.8, "bob", 1),
+            (0.4, "sam", 2),
+            (0.3, "alice", 1)
+        ],
+        name="names",
+    )
+
+    with nl.environment as e:
+        e.q[e.PROB()] = e.names[e.x, e.z] & e.names[e.y, e.z]
+
+    res = nl.solve_all()['q']
+
+    assert len(res) == 1
+    assert res.arity == 1
+    assert list(res)[0].PROB == 0.9328
 
 
 def test_cbma_two_term_conjunctive_query():
