@@ -1458,4 +1458,3 @@ def test_current_program_with_probfact():
         ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
     prog = nl.current_program
     assert len(prog) == 2
-
