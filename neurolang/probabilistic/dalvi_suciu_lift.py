@@ -1,5 +1,4 @@
 import logging
-from collections import Counter
 from functools import reduce
 from itertools import chain, combinations
 from typing import AbstractSet
@@ -41,9 +40,9 @@ from ..logic.expression_processing import (
     extract_logic_predicates
 )
 from ..logic.transformations import (
-    ExtractConjunctiveQueryWithNegation,
     GuaranteeConjunction,
     GuaranteeDisjunction,
+    ExtractConjunctiveQueryWithNegation,
     MakeExistentialsImplicit,
     MoveNegationsToAtomsInFONegE,
     PushExistentialsDown,
@@ -79,7 +78,6 @@ from .query_resolution import (
     lift_solve_marg_query,
     reintroduce_unified_head_terms
 )
-from .ranking import is_ranked
 from .shattering import shatter_easy_probfacts
 from .transforms import (
     add_existentials_except,
@@ -88,6 +86,7 @@ from .transforms import (
     convert_to_dnf_ucq,
     minimize_component_conjunction,
     minimize_component_disjunction,
+    convert_to_dnf_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables
@@ -201,38 +200,15 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         shattered_query = symbolic_shattering(unified_query, symbol_table)
     except NotEasilyShatterableError:
         shattered_query = unified_query
-
-    ucq_shattered_query = convert_rule_to_ucq(shattered_query)
-    if not _verify_that_the_query_is_unate(shattered_query, symbol_table):
-        raise NonLiftableException(f"Query {flat_query} is not unate")
-
-    if not is_ranked(ucq_shattered_query):
-        raise NonLiftableException(f"Query {flat_query} is not ranked")
+    _verify_that_the_query_is_unate(shattered_query, symbol_table)
     return shattered_query, symbol_table
 
 
 def _verify_that_the_query_is_unate(query, symbol_table):
-    """Verify that a query in UCQ format is in the segment of
-    first order logic which consitutes existential, negation, and
-    unate. Unate means that every relational symbol is either positive
-    or negative.
+    positive_relational_symbols = set()
+    negative_relational_symbols = set()
 
-    Parameters
-    ----------
-    query : Expression
-        Logic query in UCQ format
-    symbol_table : Mapping[Symbol, Expression]
-        Mapping containing the map from symbols to
-        relations.
-
-    Returns
-    -------
-    bool
-        True if the query is unate, False otherwise.
-    """
-    positive_relational_symbols = Counter()
-    negative_relational_symbols = Counter()
-
+    query = convert_rule_to_ucq(query)
     query = convert_to_pnf_with_dnf_matrix(query)
     for predicate in extract_logic_predicates(query):
         if isinstance(predicate, Negation):
@@ -244,14 +220,12 @@ def _verify_that_the_query_is_unate(query, symbol_table):
         if isinstance(predicate, Negation):
             while isinstance(predicate, Negation):
                 predicate = predicate.formula
-            negative_relational_symbols.update((predicate.functor,))
+            negative_relational_symbols.add(predicate.functor)
         else:
-            positive_relational_symbols.update((predicate.functor,))
+            positive_relational_symbols.add(predicate.functor)
 
-    if len(positive_relational_symbols & negative_relational_symbols) > 0:
-        return False
-    else:
-        return True
+    if not positive_relational_symbols.isdisjoint(negative_relational_symbols):
+        raise NonLiftableException(f"Query {query} is not unate")
 
 
 def solve_marg_query(rule, cpl):
@@ -360,7 +334,6 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
 
     return GCD.walk(final_expression)
 
-
 def extract_connected_components(list_of_conjunctions, existential_vars):
     """Given a list of conjunctions, this function is in charge of calculating
     the connected components of each one. As a result, it returns a dictionary
@@ -403,7 +376,6 @@ def extract_connected_components(list_of_conjunctions, existential_vars):
                 transformations[form[0]] = calc_new_fresh_symbol(conj, existential_vars)
 
     return transformations
-
 
 def calc_new_fresh_symbol(formula, existential_vars):
     """Given a formula and a list of variables, this function creates a new
