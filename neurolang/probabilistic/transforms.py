@@ -17,6 +17,7 @@ from ..logic.transformations import (
     GuaranteeDisjunction,
     MoveNegationsToAtomsInFONegE,
     PushExistentialsDown,
+    RemoveDuplicatedConjunctsDisjuncts,
     RemoveTrivialOperations,
     RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix
@@ -59,6 +60,7 @@ def minimize_ucq_in_cnf(query):
     simplify = ChainedWalker(
         MoveNegationsToAtomsInFONegE,
         PushExistentialsDown,
+        RemoveDuplicatedConjunctsDisjuncts,
         RemoveTrivialOperations,
         GuaranteeConjunction,
     )
@@ -92,6 +94,7 @@ def minimize_ucq_in_dnf(query):
     simplify = ChainedWalker(
         MoveNegationsToAtomsInFONegE,
         PushExistentialsDown,
+        RemoveDuplicatedConjunctsDisjuncts,
         RemoveTrivialOperations,
         GuaranteeDisjunction
     )

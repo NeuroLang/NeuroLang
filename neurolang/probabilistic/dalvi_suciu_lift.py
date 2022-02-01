@@ -60,6 +60,7 @@ from ..relational_algebra import (
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
+from . import propagate
 from .containment import is_contained
 from .exceptions import NotEasilyShatterableError
 from .expression_processing import lift_optimization_for_choice_predicates
@@ -78,7 +79,7 @@ from .query_resolution import (
     lift_solve_marg_query,
     reintroduce_unified_head_terms
 )
-from .shattering import shatter_easy_probfacts
+from .shattering import shatter_easy_probfacts, shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
@@ -158,8 +159,19 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
+
         flat_query = Implication(query.consequent, flat_query_body)
-        shattered_query, symbol_table = _prepare_and_optimise_query(flat_query, cpl_program)
+        unified_query = UnifyVariableEqualities().walk(flat_query)
+        free_var_replacements = {
+            arg: Constant[str](Symbol.fresh().name)
+            for arg in unified_query.consequent.args
+            if isinstance(arg, Symbol)
+        }
+        unified_boolean_query = Implication(
+            unified_query.consequent.functor(),
+            ReplaceExpressionWalker(free_var_replacements).walk(unified_query.antecedent)
+        )
+        shattered_query, symbol_table = _prepare_and_optimise_query(unified_boolean_query, cpl_program)
         ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -170,8 +182,16 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
                 "Query %s not liftable, algorithm can't be applied",
                 query
             )
+
+        ra_query = propagate.ReplaceSelectionsByPushUps(
+            {v: str2columnstr_constant(k.name) for k, v in free_var_replacements.items()},
+            symbol_table
+        ).walk(ra_query)
+        ra_query = propagate.PushUpWalker(symbol_table).walk(ra_query)
+        ra_query = propagate.remove_push_up_from_top(ra_query)
+
         ra_query = reintroduce_unified_head_terms(
-            ra_query, flat_query, shattered_query
+            ra_query, flat_query, unified_query
         )
 
     query_solver = generate_provenance_query_solver(
@@ -188,7 +208,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 def _prepare_and_optimise_query(flat_query, cpl_program):
     flat_query_body = convert_to_dnf_ucq(flat_query.antecedent)
     flat_query_body = RTO.walk(Disjunction(tuple(
-        lift_optimization_for_choice_predicates(f, cpl_program)
+        #lift_optimization_for_choice_predicates(f, cpl_program)
+        f
         for f in flat_query_body.formulas
     )))
     flat_query = Implication(flat_query.consequent, flat_query_body)
@@ -197,7 +218,8 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         cpl_program, unified_query.antecedent
     )
     try:
-        shattered_query = symbolic_shattering(unified_query, symbol_table)
+        shattered_query_antecedent = shatter_constants(unified_query.antecedent, symbol_table)
+        shattered_query = Implication(unified_query.consequent, shattered_query_antecedent)
     except NotEasilyShatterableError:
         shattered_query = unified_query
     _verify_that_the_query_is_unate(shattered_query, symbol_table)
@@ -609,7 +631,7 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
             disjunctive_query, disjunct, symbol_table
         )
         if has_safe_plan:
-            return plan
+            return has_safe_plan, plan
     return False, None
 
 
