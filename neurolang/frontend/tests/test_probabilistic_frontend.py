@@ -935,10 +935,10 @@ def test_query_without_safe_plan_2():
     expected = NamedRelationalAlgebraFrozenSet(
         columns=('x', 'y', 'PROB'),
         iterable={
-            ('alice', 'alice', 0.2),
-            ('bob', 'bob', 0.8),
-            ('alice', 'bob', 0.8 * 0.2),
-            ('bob', 'alice', 0.8 * 0.2)
+            ('alice', 'alice', 0.52),
+            ('bob', 'bob', 0.92),
+            ('alice', 'bob', 0.40160000000000007),
+            ('bob', 'alice', 0.40160000000000007)
         }
     )
 
@@ -1458,4 +1458,3 @@ def test_current_program_with_probfact():
         ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
     prog = nl.current_program
     assert len(prog) == 2
-

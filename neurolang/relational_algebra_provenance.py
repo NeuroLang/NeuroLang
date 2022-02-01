@@ -14,6 +14,7 @@ from .expressions import (
 )
 from .relational_algebra import (
     ColumnInt,
+    ColumnStr,
     ConcatenateConstantColumn,
     Difference,
     ExtendedProjection,
@@ -23,6 +24,7 @@ from .relational_algebra import (
     NameColumns,
     NAryRelationalAlgebraOperation,
     NaturalJoin,
+    NumberColumns,
     Product,
     Projection,
     RelationalAlgebraOperation,
@@ -131,6 +133,9 @@ class LiftedPlanProjection(UnaryRelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
+
+    def columns(self):
+        return OrderedSet(self.attributes)
 
 
 class IndependentProjection(LiftedPlanProjection):
@@ -332,7 +337,12 @@ class ProvenanceSelectionMixin(PatternWalker):
                 columns[formula.args[1].value],
             )
         )
-        return self.walk(Selection(selection.relation, new_formula))
+        return self.walk(
+            ProvenanceAlgebraSet(
+                Selection(selection.relation.relation, new_formula),
+                selection.relation.provenance_column
+            )
+        )
 
     @add_match(
         Selection(
@@ -349,7 +359,11 @@ class ProvenanceSelectionMixin(PatternWalker):
                 formula.args[1]
             )
         )
-        return self.walk(Selection(selection.relation, new_formula))
+        new_relation = ProvenanceAlgebraSet(
+            Selection(selection.relation.relation, new_formula),
+            selection.relation.provenance_column
+        )
+        return self.walk(new_relation)
 
     @add_match(
         Selection(ProvenanceAlgebraSet, ...)
@@ -389,6 +403,32 @@ class ProvenanceColumnManipulationMixin(PatternWalker):
         )
         return self.walk(res)
 
+    @add_match(
+        NameColumns(ProvenanceAlgebraSet, ...),
+        lambda expression: all(
+            isinstance(column, Constant[ColumnInt])
+            for column in expression.relation.non_provenance_columns
+        )
+    )
+    def name_columns_int_rap(self, expression):
+        relation = expression.relation.relation
+        rap_column = str2columnstr_constant(Symbol.fresh().name)
+        rap_column_index = expression.relation.provenance_column.value
+        new_columns_named = (
+            expression.column_names[:rap_column_index] +
+            (rap_column,) +
+            expression.column_names[rap_column_index:]
+        )
+        new_relation = ProvenanceAlgebraSet(
+            NameColumns(
+                relation,
+                new_columns_named
+            ),
+            new_columns_named[0]
+        )
+
+        return self.walk(new_relation)
+
     @add_match(NameColumns(ProvenanceAlgebraSet, ...))
     def name_columns_rap(self, expression):
         relation = expression.relation.relation
@@ -409,6 +449,21 @@ class ProvenanceColumnManipulationMixin(PatternWalker):
             ne,
             expression.relation.provenance_column
         ))
+
+    @add_match(NumberColumns(ProvenanceAlgebraSet, ...))
+    def number_columns_rap(self, expression):
+        new_columns = (
+            (expression.relation.provenance_column,) +
+            expression.column_names
+        )
+        new_expression = ProvenanceAlgebraSet(
+            NumberColumns(
+                expression.relation.relation,
+                new_columns
+            ),
+            int2columnint_constant(0)
+        )
+        return self.walk(new_expression)
 
     @add_match(RenameColumn(ProvenanceAlgebraSet, ..., ...))
     def prov_rename_column(self, rename_column):
@@ -617,20 +672,65 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
 
     @add_match(
         Projection(ProvenanceAlgebraSet, ...),
-        lambda proj: any(
-            issubclass(att.type, ColumnInt) for att in proj.attributes
+        lambda proj: (
+            all(
+                issubclass(att.type, ColumnInt) for att in proj.attributes
+            ) and issubclass(proj.relation.provenance_column.type, ColumnInt)
+            and (
+                len(proj.attributes) ==
+                len(proj.relation.non_provenance_columns)
+            )
         )
     )
     def projection_rap_columnint(self, projection):
         columns = projection.relation.non_provenance_columns
-        new_attributes = tuple()
+        new_attributes = (projection.relation.provenance_column,)
         for att in projection.attributes:
             if issubclass(att.type, ColumnInt):
                 att = columns[att.value]
             new_attributes += (att,)
-        return self.walk(Projection(projection.relation, new_attributes))
+        return self.walk(
+            ProvenanceAlgebraSet(
+                Projection(
+                    projection.relation.relation,
+                    new_attributes
+                ),
+                int2columnint_constant(0)
+            )
+        )
 
-    @add_match(Projection(ProvenanceAlgebraSet, ...))
+    @add_match(
+        Projection(ProvenanceAlgebraSet, ...),
+        lambda proj: (
+            all(
+                issubclass(att.type, ColumnInt) for att in proj.attributes
+            ) and issubclass(proj.relation.provenance_column.type, ColumnInt)
+        )
+    )
+    def projection_rap_columnint_subset(self, projection):
+        columns = projection.relation.non_provenance_columns
+        new_columns = tuple(str2columnstr_constant(f'col_{i}') for i in range(len(columns)))
+        new_attributes = tuple(
+            new_columns[a.value] for a in projection.attributes
+        )
+        new_expression = NumberColumns(
+            Projection(
+                NameColumns(
+                    projection.relation,
+                    new_columns
+                ),
+                new_attributes
+            ),
+            new_attributes
+        )
+        return self.walk(new_expression)
+
+    @add_match(
+        Projection(ProvenanceAlgebraSet, ...),
+        lambda proj: all(
+            issubclass(att.type, ColumnStr) for att in proj.attributes
+        )
+    )
     def projection_rap(self, projection):
         if (
             set(projection.attributes) ==
