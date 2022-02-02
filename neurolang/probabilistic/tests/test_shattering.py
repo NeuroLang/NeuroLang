@@ -1,22 +1,19 @@
+from neurolang.probabilistic.exceptions import NotEasilyShatterableError
 import operator
 
 import pytest
 
-from neurolang.probabilistic.exceptions import NotEasilyShatterableError
-
 from ...datalog.expression_processing import UnifyVariableEqualitiesMixin
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, Disjunction, Implication, Negation
-from ...relational_algebra import Selection, int2columnint_constant, Projection
+from ...logic import Conjunction, Implication, Disjunction, Negation
 from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query
+    generate_probabilistic_symbol_table_for_query,
 )
-from ..shattering import ShatterEqualities, sets_per_symbol, shatter_easy_probfacts
+from ..shattering import shatter_easy_probfacts
 
 EQ = Constant(operator.eq)
-NE = Constant(operator.ne)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -367,80 +364,3 @@ def test_shatter_disjunction_same_shattering_relation():
         and formula.functor.relation.is_fresh
     )
     assert shattered_in_R.functor.relation == shattered_in_Q.functor.relation
-
-
-def test_symbols_per_set_unitary():
-    query = Conjunction((Q(x), Q(a), Q(b), P(x), Negation(Q(a))))
-
-    res = sets_per_symbol(query)
-
-    c0 = int2columnint_constant(0)
-    expected = {
-        Q: set([
-            Projection(Selection(Q, EQ(c0, a)), tuple()),
-            Projection(Selection(Q, EQ(c0, b)), tuple()),
-            Projection(
-                Selection(Q, Conjunction((NE(c0, a), NE(c0, b)))),
-                (int2columnint_constant(0),)
-            )
-        ])
-    }
-
-    assert res == expected
-
-
-def test_symbols_per_set_binary():
-    query = Conjunction((Q(x, b), Q(a, x), Q(b, a)))
-
-    res = sets_per_symbol(query)
-
-    c0 = int2columnint_constant(0)
-    expected = {
-        Q: set([
-            Projection(Selection(Q, EQ(c0, a)), tuple()),
-            Projection(Selection(Q, EQ(c0, b)), tuple()),
-            Projection(Selection(Q, Conjunction((NE(c0, a), NE(c0, b)))), int2columnint_constant(0))
-        ])
-    }
-
-    assert res == expected
-
-
-def test_shatter_unitary():
-    query = Conjunction((Q(x), Q(a), Q(b), P(x), Negation(Q(a))))
-
-    symbol_sets = sets_per_symbol(query)
-    symbol_table = dict()
-
-    se = ShatterEqualities(symbol_sets, symbol_table)
-    res = se.walk(query)
-
-    expected = []
-
-    assert res == expected
-
-
-def test_shatter_binary():
-    query = Conjunction((Q(x, a), Q(y, a), Q(x, y)))
-
-    symbol_sets = sets_per_symbol(query)
-    symbol_table = dict()
-
-    se = ShatterEqualities(symbol_sets, symbol_table)
-    res = se.walk(query)
-
-    expected = []
-
-    assert True
-
-    query = Conjunction((Q(x, a), Q(a, y), Q(x, y)))
-
-    symbol_sets = sets_per_symbol(query)
-    symbol_table = dict()
-
-    se = ShatterEqualities(symbol_sets, symbol_table)
-    res = se.walk(query)
-
-    expected = []
-
-    assert True

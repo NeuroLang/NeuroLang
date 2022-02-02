@@ -6,20 +6,17 @@ from typing import AbstractSet
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Disjunction, Implication, Conjunction
-from ..logic.expression_processing import extract_logic_atoms
+from ..logic import Implication
 from ..logic.transformations import (
+    RemoveTrivialOperations,
     RemoveDuplicatedConjunctsDisjuncts,
-    RemoveTrivialOperations
 )
-from ..relational_algebra import Projection, Selection, int2columnint_constant
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 from .transforms import convert_to_dnf_ucq
+from ..relational_algebra import Projection, Selection, int2columnint_constant
 
 EQ = Constant(operator.eq)
-NE = Constant(operator.ne)
-RTO = RemoveTrivialOperations()
 
 
 def query_to_tagged_set_representation(query, symbol_table):
@@ -96,9 +93,7 @@ class Shatterer(ExpressionWalker):
         self._cached_args = collections.defaultdict(set)
         self._cached = dict()
 
-    @add_match(
-        Shatter(ProbabilisticFactSet(..., int2columnint_constant(0)), ...)
-    )
+    @add_match(Shatter(ProbabilisticFactSet, ...))
     def easy_shatter_probfact(self, shatter):
         pred_symb = shatter.functor.relation
         cache_key = (pred_symb,)
@@ -224,139 +219,3 @@ def shatter_easy_probfacts(query, symbol_table):
     shattered = shatterer.walk(tagged_query)
     shattered = RemoveTrivialOperations().walk(shattered)
     return shattered
-
-
-def atom_to_constant_to_RA_conditions(atom: FunctionApplication) -> set:
-    conditions = set()
-    for i, arg in enumerate(atom.args):
-        if isinstance(arg, Constant):
-            conditions.add(EQ(int2columnint_constant(i), arg))
-
-    return conditions
-
-
-def conditions_per_symbol(ucq_query):
-    conditions_per_symbol = collections.defaultdict(lambda: set())
-    number_of_args = dict()
-    for atom in extract_logic_atoms(ucq_query):
-        condition = atom_to_constant_to_RA_conditions(atom)
-        conditions_per_symbol[atom.functor] |= condition
-        number_of_args[atom.functor] = len(atom.args)
-
-    return conditions_per_symbol, number_of_args
-
-
-def sets_per_symbol(ucq_query):
-    cps, number_of_args = conditions_per_symbol(ucq_query)
-
-    symbol_sets = dict()
-
-    for symbol, conditions in cps.items():
-        if len(conditions) == 0:
-            continue
-        column_conditions = collections.defaultdict(lambda: set())
-        for condition in conditions:
-            column_conditions[condition.args[0]].add((condition,))
-
-        for column, conditions in column_conditions.items():
-            column_conditions[column].add(
-                tuple(
-                    NE(*c[0].args) for c in conditions
-                )
-            )
-
-        set_formulas = list(
-            Conjunction(sum(conditions, tuple()))
-            for conditions in
-            itertools.product(*column_conditions.values())
-        )
-        conditions_columns = [
-            set(
-                condition_item.args[0].value
-                for condition_item in condition.formulas
-                if condition_item.functor == EQ
-            )
-            for condition in set_formulas
-        ]
-        conditions_projected_args = [
-            tuple(
-                int2columnint_constant(i)
-                for i in range(number_of_args[symbol])
-                if i not in condition_columns
-            )
-            for condition_columns in conditions_columns
-        ]
-
-        symbol_sets[symbol] = set(
-            Projection(Selection(symbol, RTO.walk(condition)), projected_args)
-            for condition, projected_args
-            in zip(set_formulas, conditions_projected_args)
-        )
-
-        return symbol_sets
-
-
-class ShatterEqualities(ExpressionWalker):
-    def __init__(self, symbol_sets, symbol_table):
-        self.symbol_sets = symbol_sets
-        self.symbol_table = symbol_table
-        self.shatter_symbols = dict()
-
-    @add_match(FunctionApplication(Symbol, ...))
-    def shatter_symbol(self, expression):
-        if expression.functor not in self.symbol_sets:
-            return expression
-        else:
-            sets = self.symbol_sets[expression.functor]
-
-        sets_to_keep = self._identify_sets_to_keep(expression, sets)
-
-        expression = self._compute_expression_arguments(
-            expression, sets_to_keep
-        )
-
-        if len(expression) == 1:
-            expression = expression[0]
-        else:
-            expression = Disjunction(expression)
-
-        return expression
-
-    def _compute_expression_arguments(self, expression, sets_to_keep):
-        args = tuple((i, arg) for i, arg in enumerate(expression.args) if isinstance(arg, Symbol))
-        formulas = tuple()
-        for set_ in sets_to_keep:
-            if set_ not in self.shatter_symbols:
-                sym = Symbol.fresh()
-                self.shatter_symbols[set_] = sym
-                self.symbol_table[sym] = set_
-            formulas += (self.shatter_symbols[set_](
-                *(
-                    arg for i, arg in args
-                    if int2columnint_constant(i) in set_.columns()
-                )
-            ),)
-        return formulas
-
-    def _identify_sets_to_keep(self, expression, sets):
-        conditions = atom_to_constant_to_RA_conditions(expression)
-        sets_to_keep = []
-        for set_ in sets:
-            set_conditions = self._selection_formulas(set_)
-            if conditions <= set_conditions:
-                sets_to_keep.append(set_)
-        return sets_to_keep
-
-    def _selection_formulas(self, set_):
-        formula = set_.relation.formula
-        if isinstance(formula, Conjunction):
-            set_conditions = set(formula.formulas)
-        else:
-            set_conditions = {formula}
-        return set_conditions
-
-
-def shatter_constants(query, symbol_table):
-    symbol_sets = sets_per_symbol(query)
-    se = ShatterEqualities(symbol_sets, symbol_table)
-    return se.walk(query)
