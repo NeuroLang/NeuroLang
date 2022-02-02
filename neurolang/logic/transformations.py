@@ -6,6 +6,7 @@ from ..expression_walker import (
     IdentityWalker,
     PatternWalker,
     ReplaceSymbolWalker,
+    ReplaceExpressionWalker,
     add_match
 )
 from ..logic.expression_processing import (
@@ -20,6 +21,7 @@ from . import (
     ExistentialPredicate,
     FunctionApplication,
     Implication,
+    LogicOperator,
     NaryLogicOperator,
     Negation,
     Quantifier,
@@ -263,29 +265,120 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
     """
     Replaces each quantified variale to a fresh one.
     """
+    @add_match(NaryLogicOperator, lambda expression: len(expression.formulas) > 1)
+    def nary_logic_operator(self, expression):
+        free_variables = extract_logic_free_variables(expression)
+        expression_first = self.walk(expression.formulas[0])
+        bound_variables_first = ExtractBoundVariables().walk(expression_first)
+
+        new_expression_tail = expression.apply(tuple(
+            FreshenVariablesWhenQuantified(
+                free_variables | bound_variables_first
+            ).walk(formula)
+            for formula in expression.formulas[1:]
+        ))
+        new_expression_tail = self.walk(new_expression_tail)
+
+        new_expression = expression.apply(
+            (expression_first,) + new_expression_tail.formulas
+        )
+
+        return new_expression
+
+    @add_match(Quantifier)
+    def quantifier(self, expression):
+        return expression.apply(
+            expression.head,
+            self.walk(expression.body)
+        )
 
     @add_match(Implication)
     def implication(self, expression):
+        convert_to_disjunction = Disjunction(
+            (Negation(expression.antecedent), expression.consequent)
+        )
+        walked_disjunction = self.walk(convert_to_disjunction)
+
+        if (
+            isinstance(Disjunction, walked_disjunction) and
+            len(walked_disjunction.formulas) == 2 and
+            isinstance(Negation, walked_disjunction.formulas[0])
+        ):
+            return Implication(
+                walked_disjunction.formulas[1],
+                walked_disjunction.formulas[0].formula
+            )
+        else:
+            return walked_disjunction
+
+
+class FreshenVariablesWhenQuantified(LogicExpressionWalker):
+    def __init__(self, free_variables):
+        self.free_variables = free_variables
+
+    @add_match(Quantifier)
+    def replace_variable_in_quantifier(self, expression):
+        head, body = expression.unapply()
+        if head in self.free_variables:
+            new_head = head.fresh()
+            new_body = (
+                ReplaceExpressionWalker({expression.head: new_head})
+                .walk(expression.body)
+            )
+            head = new_head
+            body = new_body
+
+        new_expression = expression.apply(
+            head,
+            FreshenVariablesWhenQuantified({head}).walk(body)
+        )
+        return new_expression
+
+    @add_match(Implication)
+    def walk_through_implication(self, expression):
+        return Implication(
+            self.walk(expression.consequent),
+            self.walk(expression.antecedent)
+        )
+
+
+class ExtractBoundVariables(WalkLogicProgramAggregatingSets):
+    @add_match(Quantifier)
+    def quantifier(self, expression):
+        return OrderedSet([expression.head]) | self.walk(expression.body)
+
+    @add_match(FunctionApplication)
+    def process_function_application(self, expression):
+        return OrderedSet([])
+
+    @add_match(Symbol)
+    def process_symbol(self, expression):
+        return OrderedSet([])
+
+
+class Noop(LogicExpressionWalker):
+    @add_match(Implication)
+    def implication(self, expression):
         fs = self.walk(expression.consequent), self.walk(expression.antecedent)
-        self._desambiguate(fs)
+        fs = self._desambiguate(fs)
         return expression.apply(*fs)
 
     @add_match(Union)
     def union(self, expression):
         fs = self.walk(expression.formulas)
-        self._desambiguate(fs)
+        fs = self._desambiguate(fs)
         return expression.apply(fs)
 
     @add_match(Disjunction)
     def disjunction(self, expression):
         fs = self.walk(expression.formulas)
-        self._desambiguate(fs)
+        fs = self._desambiguate(fs)
         return expression.apply(fs)
 
     @add_match(Conjunction)
     def conjunction(self, expression):
         fs = self.walk(expression.formulas)
-        self._desambiguate(fs)
+        fs = self._desambiguate(fs)
         return expression.apply(fs)
 
     @add_match(Negation)
@@ -294,11 +387,17 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
 
     @add_match(Quantifier)
     def quantifier(self, expression):
-        expression.body = self.walk(expression.body)
+        body = self.walk(expression.body)
+        expression = expression.apply(expression.head, body)
         uq = UsedQuantifiers().walk(expression.body)
         for q in uq:
             if q.head == expression.head:
-                self.rename_quantifier(q)
+                v = q.head
+                new_q = ReplaceSymbolWalker({v: Symbol[v.type].fresh()}).walk(q)
+                expression = (
+                    ReplaceExpressionWalker({q: new_q})
+                    .walk(expression)
+                )
         return expression
 
     def rename_quantifier(self, q):
@@ -310,11 +409,18 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
         used_variables = set()
         for uv in extract_logic_free_variables(formulas):
             used_variables |= uv
+        res_fs = tuple()
         for f in formulas:
             uq = UsedQuantifiers().walk(f)
             for q in self._conflicted_quantifiers(used_variables, uq):
-                self.rename_quantifier(q)
+                v = q.head
+                new_q = ReplaceSymbolWalker(
+                    {v: Symbol[v.type].fresh()}
+                ).walk(q)
+                f = ReplaceExpressionWalker({q: new_q}).walk(f)
+            res_fs += (f,)
             used_variables |= self._bound_variables(uq)
+        return res_fs
 
     def _conflicted_quantifiers(self, used_variables, quantifiers):
         bv = self._bound_variables(quantifiers)
