@@ -299,9 +299,9 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
         walked_disjunction = self.walk(convert_to_disjunction)
 
         if (
-            isinstance(Disjunction, walked_disjunction) and
+            isinstance(walked_disjunction, Disjunction) and
             len(walked_disjunction.formulas) == 2 and
-            isinstance(Negation, walked_disjunction.formulas[0])
+            isinstance(walked_disjunction.formulas[0], Negation)
         ):
             return Implication(
                 walked_disjunction.formulas[1],
