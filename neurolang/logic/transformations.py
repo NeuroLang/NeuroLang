@@ -1,10 +1,10 @@
-from ..utils.orderedset import OrderedSet
 from ..exceptions import NotInFONegE
 from ..expression_walker import (
     ChainedWalker,
     ExpressionWalker,
     IdentityWalker,
     PatternWalker,
+    ReplaceExpressionWalker,
     ReplaceSymbolWalker,
     ReplaceExpressionWalker,
     add_match
@@ -14,6 +14,7 @@ from ..logic.expression_processing import (
     WalkLogicProgramAggregatingSets,
     extract_logic_free_variables
 )
+from ..utils.orderedset import OrderedSet
 from . import (
     Conjunction,
     Constant,
@@ -264,19 +265,81 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
     """
     Replaces each quantified variale to a fresh one.
     """
+    @add_match(NaryLogicOperator, lambda expression: len(expression.formulas) > 1)
+    def nary_logic_operator(self, expression):
+        free_variables = extract_logic_free_variables(expression)
+        expression_first = self.walk(expression.formulas[0])
+        bound_variables_first = ExtractBoundVariables().walk(expression_first)
+
+        new_expression_tail = expression.apply(tuple(
+            FreshenVariablesWhenQuantified(
+                free_variables | bound_variables_first
+            ).walk(formula)
+            for formula in expression.formulas[1:]
+        ))
+        new_expression_tail = self.walk(new_expression_tail)
+
+        new_expression = expression.apply(
+            (expression_first,) + new_expression_tail.formulas
+        )
+
+        return new_expression
+
     @add_match(Quantifier)
     def quantifier(self, expression):
-        body = self.walk(expression.body)
-        head = expression.head
+        return expression.apply(
+            expression.head,
+            self.walk(expression.body)
+        )
 
-        bound_variables = ExtractBoundVariables().walk(body)
+    @add_match(Implication)
+    def implication(self, expression):
+        convert_to_disjunction = Disjunction(
+            (Negation(expression.antecedent), expression.consequent)
+        )
+        walked_disjunction = self.walk(convert_to_disjunction)
 
-        if head in bound_variables:
+        if (
+            isinstance(walked_disjunction, Disjunction) and
+            len(walked_disjunction.formulas) == 2 and
+            isinstance(walked_disjunction.formulas[0], Negation)
+        ):
+            return Implication(
+                walked_disjunction.formulas[1],
+                walked_disjunction.formulas[0].formula
+            )
+        else:
+            return walked_disjunction
+
+
+class FreshenVariablesWhenQuantified(LogicExpressionWalker):
+    def __init__(self, free_variables):
+        self.free_variables = free_variables
+
+    @add_match(Quantifier)
+    def replace_variable_in_quantifier(self, expression):
+        head, body = expression.unapply()
+        if head in self.free_variables:
             new_head = head.fresh()
-            new_body = ReplaceExpressionWalker({head: new_head}).walk(body)
-            expression = expression.apply(new_head, new_body)
+            new_body = (
+                ReplaceExpressionWalker({expression.head: new_head})
+                .walk(expression.body)
+            )
+            head = new_head
+            body = new_body
 
-        return expression
+        new_expression = expression.apply(
+            head,
+            FreshenVariablesWhenQuantified({head}).walk(body)
+        )
+        return new_expression
+
+    @add_match(Implication)
+    def walk_through_implication(self, expression):
+        return Implication(
+            self.walk(expression.consequent),
+            self.walk(expression.antecedent)
+        )
 
 
 class ExtractBoundVariables(WalkLogicProgramAggregatingSets):
@@ -286,6 +349,10 @@ class ExtractBoundVariables(WalkLogicProgramAggregatingSets):
 
     @add_match(FunctionApplication)
     def process_function_application(self, expression):
+        return OrderedSet([])
+
+    @add_match(Symbol)
+    def process_symbol(self, expression):
         return OrderedSet([])
 
 
@@ -822,5 +889,3 @@ class RemoveExistentialPredicates(LogicExpressionWalker):
     @add_match(ExistentialPredicate)
     def existential_predicate(self, existential_predicate):
         return self.walk(existential_predicate.body)
-
-
