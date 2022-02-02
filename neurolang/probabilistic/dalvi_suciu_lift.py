@@ -13,7 +13,6 @@ from ..datalog.expression_processing import (
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NeuroLangException, NonLiftableException
 from ..expression_walker import (
-    ChainedWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match
@@ -44,7 +43,6 @@ from ..logic.transformations import (
     GuaranteeDisjunction,
     ExtractConjunctiveQueryWithNegation,
     MakeExistentialsImplicit,
-    MoveNegationsToAtomsInFONegE,
     PushExistentialsDown,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
@@ -84,9 +82,6 @@ from .transforms import (
     convert_rule_to_ucq,
     convert_to_cnf_ucq,
     convert_to_dnf_ucq,
-    minimize_component_conjunction,
-    minimize_component_disjunction,
-    convert_to_dnf_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables
@@ -124,7 +119,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     cpl_program : CPLogicProgram
         CP-Logic program on which the query should be solved.
     run_relational_algebra_solver: bool
-        When true the result's `relation` attribute is a NamedRelationalAlgebraFrozenSet,
+        When true the result's `relation` attribute is a
+        NamedRelationalAlgebraFrozenSet,
         when false the attribute is the relational algebra expression that
         produces the such set.
 
@@ -159,7 +155,9 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
-        shattered_query, symbol_table = _prepare_and_optimise_query(flat_query, cpl_program)
+        shattered_query, symbol_table = _prepare_and_optimise_query(
+            flat_query, cpl_program
+        )
         ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -259,7 +257,7 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     rule_cnf = convert_ucq_to_ccq(rule, transformation='CNF')
     connected_components = symbol_connected_components(rule_cnf)
-    if len(connected_components) > 1 :
+    if len(connected_components) > 1:
         return components_plan(
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
@@ -313,17 +311,22 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         existential_vars.update(set(atom.args) - set(free_vars))
 
     conjunctions = ExtractConjunctiveQueryWithNegation().walk(rule)
-    dic_components = extract_connected_components(conjunctions, existential_vars)
+    dic_components = extract_connected_components(
+        conjunctions, existential_vars
+    )
 
-    fresh_symbols_expression = ReplaceExpressionWalker(dic_components).walk(rule)
+    fresh_symbols_expression = (
+        ReplaceExpressionWalker(dic_components)
+        .walk(rule)
+    )
     if transformation == 'CNF':
         fresh_symbols_expression = convert_to_cnf_ucq(fresh_symbols_expression)
         minimize = minimize_ucq_in_cnf
-        GCD = GuaranteeConjunction()
+        gcd = GuaranteeConjunction()
     elif transformation == 'DNF':
         fresh_symbols_expression = convert_to_dnf_ucq(fresh_symbols_expression)
         minimize = minimize_ucq_in_dnf
-        GCD = GuaranteeDisjunction()
+        gcd = GuaranteeDisjunction()
     else:
         raise ValueError(f'Invalid transformation type: {transformation}')
 
@@ -332,7 +335,8 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
     ).walk(fresh_symbols_expression)
     final_expression = minimize(final_expression)
 
-    return GCD.walk(final_expression)
+    return gcd.walk(final_expression)
+
 
 def extract_connected_components(list_of_conjunctions, existential_vars):
     """Given a list of conjunctions, this function is in charge of calculating
@@ -370,12 +374,15 @@ def extract_connected_components(list_of_conjunctions, existential_vars):
             form = [f.formulas[i] for i in c]
             if len(form) > 1:
                 form = Conjunction(form)
-                transformations[form] = calc_new_fresh_symbol(form, existential_vars)
+                transformations[form] = \
+                    calc_new_fresh_symbol(form, existential_vars)
             else:
                 conj = Conjunction(form)
-                transformations[form[0]] = calc_new_fresh_symbol(conj, existential_vars)
+                transformations[form[0]] = \
+                    calc_new_fresh_symbol(conj, existential_vars)
 
     return transformations
+
 
 def calc_new_fresh_symbol(formula, existential_vars):
     """Given a formula and a list of variables, this function creates a new
@@ -474,7 +481,9 @@ def args_co_occurence_graph(expression, variable_to_use=None):
         if variable_to_use is not None:
             f_args &= variable_to_use
         for j, formula_ in enumerate(expression.formulas[i + 1:]):
-            f_args_ = set(b for a in extract_logic_atoms(formula_) for b in a.args)
+            f_args_ = set(
+                b for a in extract_logic_atoms(formula_) for b in a.args
+            )
             if variable_to_use is not None:
                 f_args_ &= variable_to_use
             if not f_args.isdisjoint(f_args_):
@@ -512,6 +521,7 @@ def connected_components(adjacency_matrix):
         components.append(component)
         node_idxs -= component
     return components
+
 
 def disjoint_project(rule_dnf, symbol_table):
     """
