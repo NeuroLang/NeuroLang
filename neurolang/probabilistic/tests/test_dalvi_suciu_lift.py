@@ -31,6 +31,7 @@ from ..probabilistic_ra_utils import (
     ProbabilisticChoiceSet,
     ProbabilisticFactSet
 )
+from ..transforms import convert_rule_to_ucq
 
 TNRA = TranslateToNamedRA()
 EQ = Constant(eq)
@@ -116,7 +117,7 @@ def test_lifted_separator_variable():
     x1 = Symbol('x1')
     z = Symbol('z')
 
-    cq = Implication(Q(z), R(x1, z))
+    cq = ExistentialPredicate(x1, R(x1, z))
     plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
@@ -132,7 +133,8 @@ def test_lifted_join():
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x1, x2), T(x1, z))))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
+    ucq = convert_rule_to_ucq(cq)
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(ucq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -146,7 +148,7 @@ def test_another_liftable_join():
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x1, x2), S(x1, z))))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -160,7 +162,7 @@ def test_non_liftable_join():
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x2, x1), S(x1, z))))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert not res
 
@@ -181,7 +183,7 @@ def test_lifted_bcq_fig_4_4():
          R(z, x1), S(x1, y1), T(z, x2), U(x2, y2)
     )))
 
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -205,7 +207,7 @@ def test_lifted_cq_fig_4_5():
         Conjunction((R(z, x3), T(z, y3))),
     )))
 
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 

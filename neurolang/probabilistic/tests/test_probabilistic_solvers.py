@@ -610,6 +610,7 @@ def test_multilevel_existential_2(solver):
         )
         assert testing.eq_prov_relations(result, expected)
 
+
 def test_repeated_antecedent_predicate_symbol(solver):
     """
     We consider the simple program

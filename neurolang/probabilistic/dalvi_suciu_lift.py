@@ -158,7 +158,9 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         shattered_query, symbol_table = _prepare_and_optimise_query(
             flat_query, cpl_program
         )
-        ra_query = dalvi_suciu_lift(shattered_query, symbol_table)
+        ucq_shattered_query = convert_rule_to_ucq(shattered_query)
+
+        ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
                 "Query not liftable %s",
@@ -238,22 +240,11 @@ def dalvi_suciu_lift(rule, symbol_table):
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
-    if isinstance(rule, Implication):
-        rule = convert_rule_to_ucq(rule)
     rule = RTO.walk(rule)
-    if isinstance(rule, FunctionApplication):
-        return TranslateToNamedRA().walk(rule)
-    elif (
-        all(
-            is_atom_a_deterministic_relation(atom, symbol_table)
-            for atom in extract_logic_atoms(rule)
-        )
-    ):
-        free_vars = extract_logic_free_variables(rule)
-        rule = MakeExistentialsImplicit().walk(rule)
-        result = TranslateToNamedRA().walk(rule)
-        proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
-        return rap.Projection(result, proj_cols)
+
+    has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
+    if has_safe_plan:
+        return res
 
     rule_cnf = convert_ucq_to_ccq(rule, transformation='CNF')
     connected_components = symbol_connected_components(rule_cnf)
@@ -282,6 +273,44 @@ def dalvi_suciu_lift(rule, symbol_table):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule)
+
+
+def symbol_or_deterministic_plan(rule, symbol_table):
+    """If the rule is a single relational symbol or a
+    fully deterministic subquery, then return the safe plan.
+
+    Parameters
+    ----------
+    rule : Expression
+        rule to lift 
+    symbol_table : Mapping of Symbol to Expression
+        symbol table for the relational symbols
+
+    Returns
+    -------
+        Tuple[bool, Union[Expression, NoneType]]
+        if the rule is liftable then the boolean will be True and
+        the second element of the tuple will be the lifted plan.
+    """
+
+    has_safe_plan = False
+    res = None
+    if isinstance(rule, FunctionApplication):
+        has_safe_plan = True
+        res = TranslateToNamedRA().walk(rule)
+    elif (
+        all(
+            is_atom_a_deterministic_relation(atom, symbol_table)
+            for atom in extract_logic_atoms(rule)
+        )
+    ):
+        free_vars = extract_logic_free_variables(rule)
+        rule = MakeExistentialsImplicit().walk(rule)
+        result = TranslateToNamedRA().walk(rule)
+        proj_cols = tuple(Constant(ColumnStr(v.name)) for v in free_vars)
+        has_safe_plan = True
+        res = rap.Projection(result, proj_cols)
+    return has_safe_plan, res
 
 
 def convert_ucq_to_ccq(rule, transformation='CNF'):
