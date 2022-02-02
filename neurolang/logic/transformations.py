@@ -6,7 +6,6 @@ from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
-    ReplaceExpressionWalker,
     add_match
 )
 from ..logic.expression_processing import (
