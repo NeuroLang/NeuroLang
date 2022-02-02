@@ -1,12 +1,11 @@
-from ..utils.orderedset import OrderedSet
 from ..exceptions import NotInFONegE
 from ..expression_walker import (
     ChainedWalker,
     ExpressionWalker,
     IdentityWalker,
     PatternWalker,
-    ReplaceSymbolWalker,
     ReplaceExpressionWalker,
+    ReplaceSymbolWalker,
     add_match
 )
 from ..logic.expression_processing import (
@@ -14,6 +13,7 @@ from ..logic.expression_processing import (
     WalkLogicProgramAggregatingSets,
     extract_logic_free_variables
 )
+from ..utils.orderedset import OrderedSet
 from . import (
     Conjunction,
     Constant,
@@ -21,7 +21,6 @@ from . import (
     ExistentialPredicate,
     FunctionApplication,
     Implication,
-    LogicOperator,
     NaryLogicOperator,
     Negation,
     Quantifier,
@@ -889,5 +888,3 @@ class RemoveExistentialPredicates(LogicExpressionWalker):
     @add_match(ExistentialPredicate)
     def existential_predicate(self, existential_predicate):
         return self.walk(existential_predicate.body)
-
-
