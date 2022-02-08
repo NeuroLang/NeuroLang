@@ -29,17 +29,15 @@ commands:
             else
               sudo apt update && sudo apt install maven
             fi
-
       - run:
           name: install dependencies
           command: |
             python -m venv venv
             . venv/bin/activate
             pip install --upgrade pip
-
             pip install setuptools_scm
             pip install importlib_metadata
-            
+
             if
               [ ${CIRCLE_JOB} == "docs" ]
             then
@@ -47,33 +45,28 @@ commands:
             else
               pip install -e .[dev]
             fi
-
             if << parameters.dask >>
             then
               pip install -e . --install-option="--dask"
             fi
-
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
               pip install virtualenv==16.7.9
               pip install git+https://github.com/airspeed-velocity/asv
             fi
-
       - run:
           name: Setup Code Climate test-reporter
           command: |
             # download test reporter as a static binary
             curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
             chmod +x ./cc-test-reporter
-
       - run:
           name: Setup codacy reporter
           command: |
             python -m venv venv
             . venv/bin/activate
             pip install codacy-coverage
-
       - save_cache:
           paths:
             - ./venv
@@ -93,14 +86,12 @@ commands:
             make test
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
-
       - run:
           name: store tests results
           when: always
           command: |
             mkdir -p test_reports/neurolang
             cp utest.xml test_reports/neurolang/results.xml
-
       - store_artifacts:
           when: always
           path: test_reports
@@ -112,6 +103,17 @@ jobs:
   py37:
     docker:
       - image: circleci/python:3.7
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - install
+      - test
+
+  py38:
+    docker:
+      - image: circleci/python:3.8
 
     working_directory: ~/repo
 
@@ -132,6 +134,19 @@ jobs:
           dask: true
       - test
 
+  py38dask:
+    docker:
+      - image: circleci/python:3.8
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - install:
+          dask: true
+      - test
+
+
   benchmark:
     docker:
       - image: circleci/python:3.7
@@ -146,7 +161,7 @@ jobs:
           command: |
             . venv/bin/activate
             asv machine --yes
-            if 
+            if
               [ "${CIRCLE_BRANCH}" = "master" ]
             then
               asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
@@ -156,7 +171,7 @@ jobs:
               export RESULT=$?
             fi
             asv publish
-            if 
+            if
               [ $RESULT -ne 0 ]
             then
               exit 1
@@ -168,7 +183,7 @@ jobs:
 
   docs:
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
 
     working_directory: ~/repo
 
@@ -219,7 +234,7 @@ jobs:
 
   deploy_docs:
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
     steps:
       - attach_workspace:
           at: /tmp/build
@@ -282,22 +297,22 @@ jobs:
                 git push origin master;
               fi
             fi
-
-
-
 workflows:
   version: 2
   test_benchmark_build:
     jobs:
       - py37
-      - py37dask
+        # - py37dask
+      - py38
+        # - py38dask
+
       - docs:
          requires:
-          - py37
+          - py38
       - deploy_docs:
          requires:
            - docs
-        
+
         #      - benchmark:
         #  requires:
         #    - py37
