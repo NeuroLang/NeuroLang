@@ -150,7 +150,6 @@ class OntologyParser:
             cons = Symbol(self._parse_name(val))
             x = Symbol.fresh()
             imp = RightImplication(ant(x), cons(x))
-            #imp = Implication(cons(x), ant(x))
             self._categorize_constraints([imp])
 
     def _parse_BNode_intersection(self, entity, node, inter_entity):
@@ -479,13 +478,11 @@ class OntologyParser:
             self._add_rules([rule])
 
         self._categorize_constraints([RightImplication(ant, con)])
-        #self._categorize_constraints([Implication(con, ant)])
 
     def _parseEnumeratedClass(self, entity, prop, value):
         warnings.warn("Not implemented yet: EnumeratedClass")
 
     def _parseEquivalentClass(self, entity, prop, value):
-        # <->
         warnings.warn("Not implemented yet: EquivalentClass")
 
     def _categorize_constraints(self, formulas):
