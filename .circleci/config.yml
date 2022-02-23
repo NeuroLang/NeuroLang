@@ -29,12 +29,14 @@ commands:
             else
               sudo apt update && sudo apt install maven
             fi
+
       - run:
           name: install dependencies
           command: |
             python -m venv venv
             . venv/bin/activate
             pip install --upgrade pip
+
             pip install setuptools_scm
             pip install importlib_metadata
 
@@ -45,28 +47,33 @@ commands:
             else
               pip install -e .[dev]
             fi
+
             if << parameters.dask >>
             then
               pip install -e . --install-option="--dask"
             fi
+
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
               pip install virtualenv==16.7.9
               pip install git+https://github.com/airspeed-velocity/asv
             fi
+
       - run:
           name: Setup Code Climate test-reporter
           command: |
             # download test reporter as a static binary
             curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
             chmod +x ./cc-test-reporter
+
       - run:
           name: Setup codacy reporter
           command: |
             python -m venv venv
             . venv/bin/activate
             pip install codacy-coverage
+
       - save_cache:
           paths:
             - ./venv
@@ -86,12 +93,14 @@ commands:
             make test
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
+
       - run:
           name: store tests results
           when: always
           command: |
             mkdir -p test_reports/neurolang
             cp utest.xml test_reports/neurolang/results.xml
+
       - store_artifacts:
           when: always
           path: test_reports
@@ -297,6 +306,9 @@ jobs:
                 git push origin master;
               fi
             fi
+
+
+
 workflows:
   version: 2
   test_benchmark_build:
