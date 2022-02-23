@@ -14,19 +14,21 @@ from ..relational_algebra import (
     FunctionApplicationListMember,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
+    NumberColumns,
     Projection,
+    RelationalAlgebraSet,
     RenameColumn,
     Selection,
     Union,
+    int2columnint_constant,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
-    ProvenanceAlgebraSet,
     BuildProvenanceAlgebraSetWalkIntoMixin,
+    ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     RelationalAlgebraSolver
 )
-
 
 EQ = Constant(operator.eq)
 
@@ -282,30 +284,32 @@ def test_projection_columnint():
         ),
         ColumnStr("_p_"),
     )
+
+    r = NumberColumns(r, (str2columnstr_constant("x"), str2columnstr_constant("y")))
     op = Projection(r, (Constant(ColumnInt(0)),))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
     expected = ProvenanceAlgebraSet(
-        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
-            ("_p_", "x"), [(0.2, "a"), (0.5, "b")]
+        Constant[AbstractSet](RelationalAlgebraSet(
+            [(0.2, "a"), (0.5, "b")]
         )),
-        str2columnstr_constant("_p_"),
+        int2columnint_constant(0),
     )
-    assert testing.eq_prov_relations(result, expected)
+    assert result == expected
     op = Projection(r, (Constant(ColumnInt(0)), Constant(ColumnInt(1))))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    assert testing.eq_prov_relations(result, solver.walk(r))
+    assert result == solver.walk(r)
     op = Projection(r, (Constant(ColumnInt(1)), Constant(ColumnInt(0))))
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
     expected = ProvenanceAlgebraSet(
-        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
-            ("_p_", "y", "x"), [(0.2, "b", "a"), (0.5, "a", "b")]
+        Constant[AbstractSet](RelationalAlgebraSet(
+            [(0.2, "b", "a"), (0.5, "a", "b")]
         )),
-        str2columnstr_constant("_p_"),
+        int2columnint_constant(0)
     )
-    assert testing.eq_prov_relations(result, expected)
+    assert result == expected
 
 
 def test_selection_between_columnints():
