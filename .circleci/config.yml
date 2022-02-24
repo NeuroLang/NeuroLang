@@ -39,7 +39,7 @@ commands:
 
             pip install setuptools_scm
             pip install importlib_metadata
-            
+
             if
               [ ${CIRCLE_JOB} == "docs" ]
             then
@@ -170,7 +170,7 @@ jobs:
           command: |
             . venv/bin/activate
             asv machine --yes
-            if 
+            if
               [ "${CIRCLE_BRANCH}" = "master" ]
             then
               asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
@@ -180,7 +180,7 @@ jobs:
               export RESULT=$?
             fi
             asv publish
-            if 
+            if
               [ $RESULT -ne 0 ]
             then
               exit 1
@@ -324,7 +324,7 @@ workflows:
       - deploy_docs:
          requires:
            - docs
-        
+
         #      - benchmark:
         #  requires:
         #    - py37

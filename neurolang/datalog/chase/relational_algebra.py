@@ -260,7 +260,10 @@ class ChaseNamedRelationalAlgebraMixin:
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
         substitutions_columns = set(substitutions.columns)
-        if substitutions_columns.isdisjoint(consequent.args):
+        if (
+            substitutions_columns.isdisjoint(consequent.args)
+            or instance[consequent.functor].value.is_empty()
+        ):
             return substitutions
 
         args = []

@@ -167,15 +167,14 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
-        self.ontology_loaded = False
+        self.current_program_rewritten = None
         self.check_qbased_pfact_tuple_unicity = (
             check_qbased_pfact_tuple_unicity
         )
 
     def load_ontology(
         self,
-        paths: typing.Union[str, List[str]],
-        load_format: typing.Union[str, List[str]] = "xml",
+        paths: typing.Union[str, List[str]]
     ) -> None:
         """
         Loads and parses ontology stored at the specified paths, and
@@ -185,18 +184,15 @@ class NeurolangPDL(QueryBuilderDatalog):
         ----------
         paths : typing.Union[str, List[str]]
             where the ontology files are stored
-        load_format : typing.Union[str, List[str]], optional
-            storage format, by default "xml"
         """
-        onto = OntologyParser(paths, load_format)
-        d_pred, u_constraints = onto.parse_ontology()
-        self.program_ir.walk(u_constraints)
-        self.program_ir.add_extensional_predicate_from_tuples(
-            onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
-        )
-        self.program_ir.add_extensional_predicate_from_tuples(
-            onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
-        )
+        onto = OntologyParser(paths)
+        constraints, entity_rules, classes = onto.parse_ontology()
+        _ = [self.new_symbol(name=c) for c in classes]
+        self.program_ir.set_constraints(constraints)
+        self.program_ir.add_existential_rules(onto.existential_rules)
+        for _, expressions in entity_rules.items():
+            for e in expressions:
+                self.program_ir.walk(e)
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -411,9 +407,24 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     def _solve_deterministic_stratum(self, det_idb):
+        '''Resolution of the deterministic stratum. In case there
+        are entries in the symbol table under the key __constraints__,
+        a rewrite is performed and the resulting program is assigned
+        to the variable `current_program_rewritten` to provide a way
+        to access this information.
+
+        Parameters
+        ----------
+        det_idb : typing.Union
+            union of rules composing the deterministic stratum.
+
+        Returns
+        -------
+        Result obtained after resolution of the deterministic stratum
+        '''
         if "__constraints__" in self.symbol_table:
-            eB = self._rewrite_program_with_ontology(det_idb)
-            det_idb = Union(det_idb.formulas + eB.formulas)
+            det_idb = self._rewrite_program_with_ontology(det_idb)
+            self.current_program_rewritten = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
         return solution
@@ -515,15 +526,12 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
-            deterministic_program, self.program_ir.constraints()
+            deterministic_program,
+            self.program_ir.get_constraints(),
         )
         rewrite = orw.Xrewrite()
 
-        eB = ()
-        for imp in rewrite:
-            eB += (imp[0],)
-
-        return Union(eB)
+        return Union(rewrite)
 
     def add_probabilistic_facts_from_tuples(
         self,

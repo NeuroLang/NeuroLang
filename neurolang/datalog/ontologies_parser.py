@@ -1,11 +1,13 @@
 import warnings
 
 import rdflib
-from rdflib import OWL, RDF, RDFS, BNode
+from rdflib import BNode, Literal
+from rdflib.extras.infixowl import EnumeratedClass
+from rdflib.namespace import OWL, RDF, RDFS
 
-from ..exceptions import NeuroLangNotImplementedError
+from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
 from ..expressions import Constant, Symbol
-from ..logic import Conjunction, Implication, Union
+from ..logic import Conjunction, Implication
 from .constraints_representation import RightImplication
 
 
@@ -16,475 +18,497 @@ class OntologyParser:
     """
 
     def __init__(self, paths, load_format="xml"):
-        self.namespaces_dic = None
-        self.owl_dic = None
         if isinstance(paths, list):
             self._load_ontology(paths, load_format)
         else:
             self._load_ontology([paths], [load_format])
 
-        self._triple = Symbol.fresh()
-        self._pointer = Symbol.fresh()
-        self._dom = Symbol.fresh()
-
-        self.parsed_restrictions = [
-            OWL.allValuesFrom,
-            OWL.hasValue,
-            OWL.minCardinality,
-            OWL.maxCardinality,
-            OWL.cardinality,
-            OWL.someValuesFrom,
-        ]
+        self.parsed_constraints = {}
+        self.existential_rules = {}
+        self.entity_rules = {}
 
     def _load_ontology(self, paths, load_format):
-        g = rdflib.Graph()
+        rdfGraph = rdflib.Graph()
         for counter, path in enumerate(paths):
-            g.load(path, format=load_format[counter])
+            rdfGraph.load(path, format=load_format[counter])
 
-        self.graph = g
+        self.rdfGraph = rdfGraph
 
     def parse_ontology(self):
-        extensional_predicate_tuples, union_of_constraints_dom = (
-            self._load_domain()
-        )
-        union_of_constraints_prop = self._load_properties()
-        union_of_constraints = self._load_constraints()
-
-        union_of_constraints = Union(
-            union_of_constraints_dom.formulas
-            + union_of_constraints_prop.formulas
-            + union_of_constraints.formulas
-        )
-
-        return extensional_predicate_tuples, union_of_constraints
-
-    def get_triples_symbol(self):
-        return self._triple
-
-    def get_pointers_symbol(self):
-        return self._pointer
-
-    def get_domain_symbol(self):
-        return self._dom
-
-    def _load_domain(self):
-        pointers = frozenset(
-            (str(x),) for x in self.graph.subjects() if isinstance(x, BNode)
-        )
-
-        triples = frozenset(
-            (str(x[0]), str(x[1]), str(x[2])) for x in self.get_triples()
-        )
-
-        x = Symbol.fresh()
-        y = Symbol.fresh()
-        z = Symbol.fresh()
-
-        dom1 = RightImplication(self._triple(x, y, z), self._dom(x))
-        dom2 = RightImplication(self._triple(x, y, z), self._dom(y))
-        dom3 = RightImplication(self._triple(x, y, z), self._dom(z))
-
-        extensional_predicate_tuples = {}
-        extensional_predicate_tuples[self._triple] = triples
-        extensional_predicate_tuples[self._pointer] = pointers
-
-        union_of_constraints = Union((dom1, dom2, dom3))
-
-        return extensional_predicate_tuples, union_of_constraints
-
-    def _load_properties(self):
-        """
-        Function that parse all the properties defined in
-        the ontology.
-        """
-        x = Symbol.fresh()
-        z = Symbol.fresh()
-
-        constraints = ()
-        for pred in set(self.graph.predicates()):
-            symbol_name = str(pred)
-            symbol = Symbol(symbol_name)
-            const = Constant(symbol_name)
-            constraints += (
-                RightImplication(self._triple(x, const, z), symbol(x, z)),
-            )
-
-        return Union(constraints)
-
-    def _load_constraints(self):
-        """
-        Function in charge of parsing the ontology's restrictions.
-        It needs a function "_process_X", where X is the name of
-        the restriction to be processed, to be defined.
-        """
-        restriction_ids = [
-            s for s, _, _ in self.graph.triples((None, None, OWL.Restriction))
-        ]
-
-        union_of_constraints = Union(())
-        for rest in restriction_ids:
-            cut_graph = list(self.graph.triples((rest, None, None)))
-            res_type = self._identify_restriction_type(cut_graph)
-
-            try:
-                process_restriction_method = getattr(
-                    self, f"_process_{res_type}"
-                )
-                constraints = process_restriction_method(cut_graph)
-                union_of_constraints = Union(
-                    union_of_constraints.formulas + constraints.formulas
-                )
-            except AttributeError as err:
-                raise NeuroLangNotImplementedError(
-                    f"""Ontology parser doesn\'t handle
-                    restrictions of type {res_type}"""
-                )
-
-        return union_of_constraints
-
-    def _identify_restriction_type(self, list_of_triples):
-        """
-        Given a list of nodes associated to a restriction,
-        this function returns the name of the restriction
-        to be applied (hasValue, minCardinality, etc).
-
-        Parameters
-        ----------
-        list_of_triples : list
-            List of nodes associated to a restriction.
+        '''
+        Main function to be called for ontology processing.
 
         Returns
         -------
-        str
-            the name of the restriction or an empty string
-            if the name cannot be identified.
-        """
-        for triple in list_of_triples:
-            if triple[1] == OWL.onProperty or triple[1] == RDF.type:
-                continue
+        Two dictionaries. One with contraints, for example, rules derived
+        from restrictions of type someValuesFrom. The other one, with the
+        implications derived from the rest of the ontological information,
+        for example, the label property. Both dictionaries index lists of
+        rules using the rule consequent functor.
+        '''
+        symbols = self._parse_classes()
+
+        return self.parsed_constraints, self.entity_rules, symbols
+
+    def _parse_classes(self):
+        '''This method obtains all the classes present in the ontology and
+        iterates over them, parsing them according to the properties
+        that compose them.
+        '''
+        all_classes = self._get_all_classes()
+        all_symbols = set()
+        self.all_props = set()
+        for class_name in list(all_classes):
+
+            all_symbols.add(self._parse_name(class_name))
+            for entity, prop, value in self.rdfGraph.triples((class_name, None, None)):
+                self.all_props.add(self._parse_name(prop))
+
+                if prop == RDF.type and value == OWL.Class:
+                    # The triple used to index the class must be skipped.
+                    continue
+
+                elif prop == RDFS.subClassOf:
+                    self._parseSubClass(entity, value)
+
+                elif prop == OWL.equivalentClass:
+                    self._parseEquivalentClass(entity, prop, value)
+
+                elif prop == EnumeratedClass:
+                    self._parseEnumeratedClass(entity, prop, value)
+
+                else:
+                    if not isinstance(value, BNode):
+                        self._parseProperty(entity, prop, value)
+                    else:
+                        raise NeuroLangNotImplementedError
+
+        return all_symbols.union(self.all_props)
+
+    def _get_all_classes(self):
+        '''
+        Function in charge of obtaining all the classes of the ontology
+        to iterate through at the time of parsing.
+
+        Returns
+        -------
+        A set of URIs representing the classes that compose the ontology.
+        '''
+        classes = set()
+        for s, _, _ in self.rdfGraph.triples((None, RDF.type, OWL.Class)):
+            if not isinstance(s, BNode):
+                classes.add(s)
+        for s, _, _ in self.rdfGraph.triples((None, RDF.type, RDFS.Class)):
+            if not isinstance(s, BNode):
+                classes.add(s)
+
+        return classes
+
+    def _parseSubClass(self, entity, val):
+        '''Function in charge of identifying the type of constraint to be
+        parsed. At the moment it allows to parse subclasses, basic
+        constraints and a single level of intersections.
+        Nested intersections are not yet implemented.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        value : URIRef or BNode
+            value associated with the entity.
+        '''
+        res = []
+        if isinstance(val, BNode):
+            bnode_triples = list(self.rdfGraph.triples((val, None, None)))
+            restriction_dic = {b: c for _, b, c in bnode_triples}
+            if OWL.Restriction in restriction_dic.values():
+                res = self._parse_restriction(entity, restriction_dic)
+                self._categorize_constraints(res)
+            elif OWL.intersectionOf in restriction_dic.keys():
+                c = restriction_dic[OWL.intersectionOf]
+                int_triples = list(self.rdfGraph.triples((c, None, None)))
+                inter_entity = [
+                    a[2] for a in int_triples if not isinstance(a[2], BNode)
+                ]
+                inter_BNode = [a[2] for a in int_triples if isinstance(a[2], BNode)]
+                if len(inter_entity) == 1 and len(inter_BNode) == 1:
+                    self._parse_BNode_intersection(
+                        entity, inter_BNode[0], inter_entity[0]
+                    )
+                else:
+                    warnings.warn("Complex intersectionOf are not implemented yet")
+
+            elif OWL.unionOf in restriction_dic.keys():
+                warnings.warn("Not implemented yet: unionOf")
+            elif OWL.complementOf in restriction_dic.keys():
+                warnings.warn("Not implemented yet: complementOf")
             else:
-                return triple[1].rsplit("#")[-1]
+                raise NotImplementedError(f"Something went wrong: {restriction_dic}")
+        else:
+            ant = Symbol(self._parse_name(entity))
+            cons = Symbol(self._parse_name(val))
+            x = Symbol.fresh()
+            imp = RightImplication(ant(x), cons(x))
+            self._categorize_constraints([imp])
 
-        return ""
-
-    def _process_hasValue(self, cut_graph):
-        """
-        A restriction containing a owl:hasValue constraint describes a class
-        of all individuals for which the property concerned has at least
-        one value semantically equal to V (it may have other values as well)
-
-        The following example describes the class of individuals
-        who have the individual referred to as Clinton as their parent:
-
-        <owl:Restriction>
-            <owl:onProperty rdf:resource="#hasParent" />
-            <owl:hasValue rdf:resource="#Clinton" />
-        </owl:Restriction>
-        """
-        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
-            cut_graph
-        )
-
-        rdfs_type = Constant(str(RDF.type))
-        property_symbol = Symbol(str(parsed_prop))
-        x = Symbol.fresh()
-
-        constraint = Union(
-            (
-                RightImplication(
-                    self._triple(x, rdfs_type, Constant(str(restricted_node))),
-                    property_symbol(x, Constant(str(value))),
-                ),
-            )
-        )
-
-        return constraint
-
-    def _process_minCardinality(self, cut_graph):
-        """
-        A restriction containing an owl:minCardinality constraint describes
-        a class of all individuals that have at least N semantically distinct
-        values (individuals or data values) for the property concerned,
-        where N is the value of the cardinality constraint.
-
-        The following example describes a class of individuals
-        that have at least two parents:
-
-        <owl:Restriction>
-            <owl:onProperty rdf:resource="#hasParent" />
-            <owl:minCardinality rdf:datatype="&xsd;nonNegativeInteger">
-                2
-            </owl:minCardinality>
-        </owl:Restriction>
-
-        Note that an owl:minCardinality of one or more means that all
-        instances of the class must have a value for the property.
-        """
-
-        _, restricted_node, _ = self._parse_restriction_nodes(
-            cut_graph
-        )
-
-        warnings.warn(
-            f"""The restriction minCardinality cannot be
-            parsed for {restricted_node}."""
-        )
-
-        return Union(())
-
-    def _process_maxCardinality(self, cut_graph):
-        """
-        A restriction containing an owl:maxCardinality constraint describes
-        a class of all individuals that have at most N semantically distinct
-        values (individuals or data values) for the property concerned,
-        where N is the value of the cardinality constraint.
-
-        The following example describes a class of individuals
-        that have at most two parents:
-
-        <owl:Restriction>
-            <owl:onProperty rdf:resource="#hasParent" />
-            <owl:maxCardinality rdf:datatype="&xsd;nonNegativeInteger">
-                2
-            </owl:maxCardinality>
-        </owl:Restriction>
-        """
-
-        _, restricted_node, _ = self._parse_restriction_nodes(
-            cut_graph
-        )
-
-        warnings.warn(
-            f"""The restriction maxCardinality cannot be
-            parsed for {restricted_node}"""
-        )
-
-        return Union(())
-
-    def _process_cardinality(self, cut_graph):
-        """
-        A restriction containing an owl:cardinality constraint describes
-        a class of all individuals that have exactly N semantically distinct
-        values (individuals or data values) for the property concerned,
-        where N is the value of the cardinality constraint.
-
-        This construct is in fact redundant as it can always be replaced
-        by a pair of matching owl:minCardinality and owl:maxCardinality
-        constraints with the same value. It is included as a convenient
-        shorthand for the user.
-
-        The following example describes a class of individuals that have
-        exactly two parents:
-
-        <owl:Restriction>
-            <owl:onProperty rdf:resource="#hasParent" />
-            <owl:cardinality rdf:datatype="&xsd;nonNegativeInteger">
-                2
-            </owl:cardinality>
-        </owl:Restriction>
-        """
-        _, restricted_node, _ = self._parse_restriction_nodes(
-            cut_graph
-        )
-
-        warnings.warn(
-            f"""The restriction cardinality cannot be
-            parsed for {restricted_node}"""
-        )
-
-        return Union(())
-
-    def _process_someValuesFrom(self, cut_graph):
-        """
-        It defines a class of individuals x for which there is at least one y
-        (either an instance of the class description or value of the data
-        range) such that the pair (x,y) is an instance of P. This does not
-        exclude that there are other instances (x,y') of P for which y' does
-        not belong to the class description or data range.
-
-        The following example defines a class of individuals which have at
-        least one parent who is a physician:
-
-        <owl:Restriction>
-            <owl:onProperty rdf:resource="#hasParent" />
-            <owl:someValuesFrom rdf:resource="#Physician" />
-        </owl:Restriction>
-        """
-        parsed_prop, restricted_node, _ = self._parse_restriction_nodes(
-            cut_graph
-        )
-
-        property_symbol = Symbol(str(parsed_prop))
-        rdfs_type = Constant(str(RDF.type))
-        y = Symbol.fresh()
-
-        constraints = Union((
-                RightImplication(
-                    self._triple(
-                        y, rdfs_type, Constant(str(restricted_node))
-                    ),
-                    property_symbol(y, Symbol.fresh()),
-                ),
-            )
-        )
-
-        return constraints
-
-    def _process_allValuesFrom(self, cut_graph):
-        """
-        AllValuesFrom defines a class of individuals x
-        for which holds that if the pair (x,y) is an instance of
-        P (the property concerned), then y should be an instance
-        of the class description.
-
-        <owl:Restriction>
-            <owl:onProperty rdf:resource="#hasParent" />
-            <owl:allValuesFrom rdf:resource="#Human"  />
-        </owl:Restriction>
-
-        This example describes an anonymous OWL class of all individuals
-        for which the hasParent property only has values of class Human
-        """
-
-        parsed_prop, restricted_node, values = self._parse_restriction_nodes(
-            cut_graph
-        )
-
-        allValuesFrom = self._parse_list(values)
-
-        constraints = Union(())
-
-        property_symbol = Symbol(str(parsed_prop))
-        rdf_type = Constant(str(RDF.type))
-        rdf_symbol = Symbol(str(RDF.type))
-        y = Symbol.fresh()
-        x = Symbol.fresh()
-
-        for value in allValuesFrom:
-            constraints = Union(
-                constraints.formulas
-                + (
-                    RightImplication(
-                        Conjunction(
-                            (
-                                self._triple(
-                                    y, rdf_type, Constant(str(restricted_node))
-                                ),
-                                property_symbol(y, x),
-                            )
-                        ),
-                        rdf_symbol(x, Constant(str(value))),
-                    ),
-                )
-            )
-
-        return constraints
-
-    def _parse_restriction_nodes(self, cut_graph):
-        """
-        Given the list of nodes associated with a restriction,
-        this function returns: The restricted node, the property that
-        restricts it and the value associated to it.
+    def _parse_BNode_intersection(self, entity, node, inter_entity):
+        '''When the rules that compose a constraint are defined within an
+        intersection, it needs to be manipulated in a special way.
+        This is the method in charge of that behavior.
 
         Parameters
         ----------
-        cut_graph : list
-            List of nodes associated to a restriction.
+        entity : URIRef
+            the main entity containing the intersection.
+
+        node : URIRef
+            URI defining the intersection.
+
+        inter_entity : URIRef
+            the main entity defined within the intersection.
+
+        '''
+        triple_restriction = list(self.rdfGraph.triples((node, None, None)))
+        nil = [a[2] for a in triple_restriction if not isinstance(a[2], BNode)]
+        bnode = [a[2] for a in triple_restriction if isinstance(a[2], BNode)]
+        support_prop = Symbol.fresh()
+        if nil[0] == RDF.nil:
+            bnode_triples = list(self.rdfGraph.triples((bnode[0], None, None)))
+            restriction_dic = {b: c for _, b, c in bnode_triples}
+            if OWL.Restriction in restriction_dic.values():
+                res = self._parse_restriction(entity, restriction_dic, support_prop)
+                self._categorize_constraints(res)
+            con = Symbol(self._parse_name(inter_entity))
+            x = Symbol.fresh()
+            y = Symbol.fresh()
+            imp = RightImplication(support_prop(x, y), con(x))
+            self._categorize_constraints([imp])
+        else:
+            warnings.warn("Complex intersectionOf are not implemented yet")
+
+    def _parse_name(self, obj):
+        '''Function that transforms the names of the entities of the ontology
+        while preserving the namespace to avoid conflicts.
+
+        Example: the URI `http://www.w3.org/2004/02/skos/core#altLabel`
+        becomes `core:altLabel`.
+
+
+        Parameters
+        ----------
+        obj : URIRef
+            entity to be renamed.
 
         Returns
         -------
-        parsed_property : URIRef
-            The node of the property.
-        restricted_node : URIRef
-            The node restricted by the property.
-        value : URIRef
-            The value of the property
-        """
-        restricted_node = list(
-            self.graph.triples((None, None, cut_graph[0][0]))
-        )[0][0]
+        String with the new name associated to the entity.
+        '''
+        if isinstance(obj, Literal):
+            return str(obj)
 
-        for triple in cut_graph:
-            if OWL.onProperty == triple[1]:
-                parsed_property = triple[2]
-            elif triple[1] in self.parsed_restrictions:
-                value = triple[2]
+        obj_split = obj.split("#")
+        if len(obj_split) == 2:
+            name = obj_split[1]
+            namespace = obj_split[0].split("/")[-1]
+            if name[0] != "" and namespace != "":
+                res = namespace + ":" + name
+            else:
+                res = name
+        else:
+            obj_split = obj.split("/")
+            res = obj_split[-1]
 
-        return parsed_property, restricted_node, value
+        return res
 
-    def _parse_list(self, initial_node):
-        """
-        This function receives an initial BNode from a list of nodes
-        and goes through the list collecting the values from it and
-        returns them as an array
+    def _parse_restriction(self, entity, restriction_dic, support_prop=None):
+        '''Method for the identification of the type of restriction.
+        Each of the possible available restrictions has its own
+        method in charge of information parsing.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        restriction_dic : dict
+            dictionary containing the information of the constraint
+            to be processed.
+
+        support_prop : Symbol, default None
+            Optional symbol. It is used to predefine the symbol used in
+            rules with existentials, when necessary
+            (mainly in nested definitions).
+
+        Returns
+        -------
+        A list of rules that compose the parsed constraint.
+
+        '''
+        cons = []
+        prop = restriction_dic[OWL.onProperty]
+        self.all_props.add(prop)
+
+        if OWL.someValuesFrom in restriction_dic.keys():
+            node = restriction_dic[OWL.someValuesFrom]
+            if isinstance(node, BNode):
+                node = self._solve_BNode(node)
+            else:
+                node = [node]
+            cons = self._parse_someValuesFrom(
+                entity, prop, node, support_prop=support_prop
+            )
+
+        elif OWL.allValuesFrom in restriction_dic.keys():
+            node = restriction_dic[OWL.allValuesFrom]
+            if isinstance(node, BNode):
+                node = self._solve_BNode(node)
+            else:
+                node = [node]
+            cons = self._parse_allValuesFrom(entity, prop, node)
+
+        elif OWL.hasValue in restriction_dic.keys():
+            node = restriction_dic[OWL.hasValue]
+            if isinstance(node, BNode):
+                node = self._solve_BNode(node)
+            else:
+                node = [node]
+            cons = self._parse_hasValue(entity, prop, node)
+
+        elif OWL.minCardinality in restriction_dic.keys():
+            warnings.warn(
+                "minCardinality constraints cannot be implemented in Datalog syntax"
+            )
+        elif OWL.maxCardinality in restriction_dic.keys():
+            warnings.warn(
+                "maxCardinality constraints cannot be implemented in Datalog syntax"
+            )
+        else:
+            raise NeuroLangException(
+                "This restriction does not correspond to an OWL DL constraint:",
+                restriction_dic.keys(),
+            )
+
+        return cons
+
+    def _parse_someValuesFrom(self, entity, prop, nodes, support_prop=None):
+        '''After the restriction is identified as of type `someValuesFrom`,
+        this function is in charge of parsing the information and returning it
+        in the form of rules that our Datalog program can interpret.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        prop : URIRef
+            propertie associated with the entity.
+
+        nodes : list
+            list of the values associated with the entity and the property.
+
+        support_prop : Symbol, default None
+            Optional symbol. It's used to predefine the symbol used in
+            rules with existentials, when necessary
+            (mainly in nested definitions).
+        '''
+        constraints = []
+        if support_prop is None:
+            support_prop = Symbol.fresh()
+        x = Symbol.fresh()
+        y = Symbol.fresh()
+        onProp = Symbol(self._parse_name(prop))
+        entity = Symbol(self._parse_name(entity))
+        for value in nodes:
+            value = self._parse_name(value)
+            exists_imp = RightImplication(support_prop(x, y), Symbol(value)(y))
+            constraints.append(exists_imp)
+        prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
+        ext_rule = RightImplication(entity(x), support_prop(x, y))
+        self._add_existential_rule(entity(x), ext_rule)
+
+        constraints.append(ext_rule)
+        constraints.append(prop_imp)
+
+        return constraints
+
+    def _parse_allValuesFrom(self, entity, prop, nodes):
+        '''After the restriction is identified as of type `allValuesFrom`,
+        this function is in charge of parsing the information and returning it
+        in the form of rules that our Datalog program can interpret.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        prop : URIRef
+            propertie associated with the entity.
+
+        nodes : list
+            list of the values associated with the entity and the property.
+        '''
+        constraints = []
+        x = Symbol.fresh()
+        y = Symbol.fresh()
+        ant = Symbol(self._parse_name(entity))
+        onProp = Symbol(self._parse_name(prop))
+        conj = Conjunction((ant(x), onProp(x, y)))
+        for value in nodes:
+            value = self._parse_name(value)
+            constraints.append(RightImplication(conj, Symbol(value)(y)))
+
+        return constraints
+
+    def _parse_hasValue(self, entity, prop, nodes):
+        '''After the constraint is identified as of type `hasValue`,
+        this function is in charge of parsing the information and returning it
+        in the form of rules that our Datalog program can interpret.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        prop : URIRef
+            propertie associated with the entity.
+
+        nodes : list
+            list of the values associated with the entity and the property.
+        '''
+        x = Symbol.fresh()
+        ent = Symbol(self._parse_name(entity))
+        onProp = Symbol(self._parse_name(prop))
+        value = self._parse_name(nodes[0])
+        return [RightImplication(Symbol(ent)(x), Symbol(onProp)(x, Constant(value)))]
+
+    def _solve_BNode(self, initial_node):
+        '''Once a BNode is identified, this function iterates over each of the pointers
+         that compose it and returns a list with those values.
 
         Parameters
         ----------
         initial_node : BNode
-            Initial node of the list that you want to go through.
+            pointer to the first item in the list
 
         Returns
         -------
-        values : list
-            Array of nodes that are part of the list.
-        """
-        if not isinstance(initial_node, BNode):
-            return [initial_node]
-
+        A list of all the values that arise from traversing the list of BNodes.
+         '''
         list_node = RDF.nil
         values = []
-        for node_triples in self.graph.triples((initial_node, None, None)):
+        for node_triples in self.rdfGraph.triples((initial_node, None, None)):
             if OWL.unionOf == node_triples[1]:
                 list_node = node_triples[2]
-            else:
-                values.append(node_triples[0])
 
         while list_node != RDF.nil and list_node is not None:
-            list_iter = self.graph.triples((list_node, None, None))
+            list_iter = self.rdfGraph.triples((list_node, None, None))
+            list_iter = list(list_iter)
             values.append(self._get_list_first_value(list_iter))
             list_node = self._get_list_rest_value(list_iter)
 
         return values
 
     def _get_list_first_value(self, list_iter):
-        """
-        Given a list of triples, as a result of the iteration of a list,
-        this function returns the node associated to the rdf:first property.
+        '''Used to iterate between pointers in triples, this function takes
+        care of finding the pointed value and returning it.
 
         Parameters
         ----------
-        list_iter : generator
-            Generator that represents the list of nodes that
-            form a position in a list.
+        list_iter : list
+            list of triples
 
         Returns
         -------
-        URIRef
-            Node associated to the rdf:first property.
-        """
+            see description.
+        '''
         for triple in list_iter:
             if RDF.first == triple[1]:
                 return triple[2]
 
     def _get_list_rest_value(self, list_iter):
-        """
-        Given a list of triples, as a result of the iteration of a list,
-        this function returns the node associated to the rdf:rest property.
+        '''Used to iterate between pointers in triples, this function takes
+        care of finding the pointer to the next element and returning it.
 
         Parameters
         ----------
-        list_iter : generator
-            Generator that represents the list of nodes that
-            form a position in a list.
+        list_iter : list
+            list of triples
 
         Returns
         -------
-        URIRef
-            Node associated to the rdf:rest property.
-        """
+            see description.
+        '''
         for triple in list_iter:
             if RDF.rest == triple[1]:
                 return triple[2]
 
-    def get_triples(self):
-        return self.graph.triples((None, None, None))
+    def _parseProperty(self, entity, prop, value):
+        '''Any rule that is not a restriction or a derivation on
+        classes(as the case of subClassOf or EnumeratedClass) is a
+        property that defines a field inside the entity with its
+        corresponding information. For example, the properties
+        label, altLabel, definition, etc.
+
+        This function is in charge of parsing that information.
+
+        Parameters
+        ----------
+        entity : URIRef
+            entity to be parsed.
+
+        prop : URIRef
+            propertie associated with the entity.
+
+        nodes : URIRef
+            value associated with the entity and the property.
+        '''
+        entity = Symbol(self._parse_name(entity))
+        entity_name = Constant(self._parse_name(value))
+        x = Symbol.fresh()
+        ant = entity(x)
+        label = Symbol(self._parse_name(prop))
+        con = label(x, entity_name)
+
+        if prop == RDFS.label:
+            entity_class = Symbol('Entity')
+            x = Symbol.fresh()
+            lower_name = self._parse_name(value).lower()
+            rule = Implication(entity(x), entity_class(x, Constant(lower_name)))
+            self._add_rules([rule])
+
+        self._categorize_constraints([RightImplication(ant, con)])
+
+    def _parseEnumeratedClass(self, entity, prop, value):
+        warnings.warn("Not implemented yet: EnumeratedClass")
+
+    def _parseEquivalentClass(self, entity, prop, value):
+        warnings.warn("Not implemented yet: EquivalentClass")
+
+    def _categorize_constraints(self, formulas):
+        for sigma in formulas:
+            sigma_functor = sigma.consequent.functor.name
+            if sigma_functor in self.parsed_constraints:
+                cons_set = self.parsed_constraints[sigma_functor]
+                cons_set.add(sigma)
+                self.parsed_constraints[sigma_functor] = cons_set
+            else:
+                self.parsed_constraints[sigma_functor] = set([sigma])
+
+    def _add_existential_rule(self, entity, rule):
+        if entity not in self.existential_rules:
+            self.existential_rules[entity] = [rule]
+        else:
+            rules = self.existential_rules[entity]
+            rules.append(rule)
+            self.existential_rules[entity] = rules
+
+    def _add_rules(self, expressions):
+        for exp in expressions:
+            exp_functor = exp.consequent.functor
+            if exp_functor in self.entity_rules:
+                cons_set = self.entity_rules[exp_functor]
+                cons_set.add(exp)
+                self.entity_rules[exp_functor] = cons_set
+            else:
+                self.entity_rules[exp_functor] = set([exp])
