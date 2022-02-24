@@ -32,6 +32,7 @@ except ImportError:
     from contextlib import suppress as nullcontext
 
 EQ = Constant(operator.eq)
+GT = Constant(operator.gt)
 
 ans = Symbol("ans")
 P = Symbol("P")
@@ -610,6 +611,7 @@ def test_multilevel_existential_2(solver):
         )
         assert testing.eq_prov_relations(result, expected)
 
+
 def test_repeated_antecedent_predicate_symbol(solver):
     """
     We consider the simple program
@@ -1016,6 +1018,19 @@ def test_simple_boolean_query(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_boolean_query_equality(solver):
+    pfacts_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfacts_as_set in pfacts_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfacts_as_set
+        )
+    query = Implication(ans(), Z(Constant[str]("s1")))
+    result = solver.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set([(.6,)], ("_p_",))
+    assert testing.eq_prov_relations(result, expected)
+
+
 def test_dalvi_suciu_fails_unate():
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
@@ -1182,6 +1197,28 @@ def test_small_dichotomy_fails_on_noisy_or_projection_with_pchoice_in_query():
             pred_symb, pchoice_as_set
         )
     query = Implication(ans(x), Conjunction((Q(x), P(x, y))))
+    with pytest.raises(UnsupportedSolverError):
+        solver.solve_succ_query(query, cpl_program)
+
+
+def test_dalvi_suciu_fails_builtin():
+    solver = dalvi_suciu_lift
+    pfact_as_sets = {
+        P: {(0.9, 3, 2), (0.8, 3, 1)},
+    }
+    pchoice_as_sets = {
+        Q: {(0.6, 1), (0.4, 2)},
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_as_set in pfact_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_as_set
+        )
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    query = Implication(ans(x), Conjunction((Q(x), P(x, y), GT(x, y))))
     with pytest.raises(UnsupportedSolverError):
         solver.solve_succ_query(query, cpl_program)
 
