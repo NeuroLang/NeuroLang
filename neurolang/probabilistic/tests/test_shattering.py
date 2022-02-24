@@ -1,19 +1,38 @@
-from neurolang.probabilistic.exceptions import NotEasilyShatterableError
 import operator
+from typing import AbstractSet
 
 import pytest
+from pytest import fixture
 
 from ...datalog.expression_processing import UnifyVariableEqualitiesMixin
+from ...datalog.translate_to_named_ra import TranslateToNamedRA
+from ...datalog.wrapped_collections import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+    WrappedNamedRelationalAlgebraFrozenSet,
+    WrappedRelationalAlgebraFrozenSet,
+    WrappedRelationalAlgebraSet
+)
+from ...logic.horn_clauses import convert_to_srnf
+from ...expression_walker import ReplaceExpressionWalker, add_match
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication, Disjunction, Negation
+from ...logic import Conjunction, Disjunction, Implication, Negation
+from ...relational_algebra import Projection, Selection, int2columnint_constant
+from ...relational_algebra.relational_algebra import RelationalAlgebraSolver
 from ..cplogic.program import CPLogicProgram
+from ..exceptions import NotEasilyShatterableError
 from ..probabilistic_ra_utils import (
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query,
+    generate_probabilistic_symbol_table_for_query
 )
-from ..shattering import shatter_easy_probfacts
+from ..shattering import (
+    ShatterEqualities,
+    sets_per_symbol,
+    shatter_easy_probfacts
+)
 
 EQ = Constant(operator.eq)
+NE = Constant(operator.ne)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -364,3 +383,188 @@ def test_shatter_disjunction_same_shattering_relation():
         and formula.functor.relation.is_fresh
     )
     assert shattered_in_R.functor.relation == shattered_in_Q.functor.relation
+
+
+def test_symbols_per_set_unitary():
+    query = Conjunction((Q(x), Q(a), Q(b), P(x), Negation(Q(a))))
+
+    res = sets_per_symbol(query)
+
+    c0 = int2columnint_constant(0)
+    expected = {
+        Q: set([
+            Projection(Selection(Q, EQ(c0, a)), tuple()),
+            Projection(Selection(Q, EQ(c0, b)), tuple()),
+            Projection(
+                Selection(Q, Conjunction((NE(c0, a), NE(c0, b)))),
+                (int2columnint_constant(0),)
+            )
+        ])
+    }
+
+    assert res == expected
+
+
+def test_symbols_per_set_unitary_ne():
+    query = Conjunction((Q(x), Q(a), Q(b), P(x), Negation(Q(a)), NE(d, x)))
+
+    res = sets_per_symbol(query)
+
+    c0 = int2columnint_constant(0)
+    expected = {
+        Q: set([
+            Projection(Selection(Q, EQ(c0, a)), tuple()),
+            Projection(Selection(Q, EQ(c0, b)), tuple()),
+            Projection(Selection(Q, EQ(c0, d)), tuple()),
+            Projection(
+                Selection(Q, Conjunction((NE(c0, a), NE(c0, b), NE(c0, d)))),
+                (c0,)
+            ),
+        ]),
+        P: set([
+            Projection(Selection(P, EQ(c0, d)), tuple()),
+            Projection(
+                Selection(P, NE(c0, d)),
+                (c0,)
+            )
+
+        ])
+    }
+
+    assert res == expected
+
+
+def test_symbols_per_set_binary():
+    query = Conjunction((Q(x, b), Q(a, x), Q(b, y), NE(y, b)))
+
+    res = sets_per_symbol(query)
+
+    c0 = int2columnint_constant(0)
+    c1 = int2columnint_constant(1)
+    expected = {
+        Q: set([
+            Projection(Selection(Q, Conjunction((EQ(c0, a), EQ(c1, b)))), tuple()),
+            Projection(Selection(Q, Conjunction((EQ(c0, b), EQ(c1, b)))), tuple()),
+            Projection(Selection(Q, Conjunction((EQ(c0, a), NE(c1, b)))), (c1,)),
+            Projection(Selection(Q, Conjunction((EQ(c0, b), NE(c1, b)))), (c1,)),
+            Projection(
+                Selection(Q, Conjunction((NE(c0, a), NE(c0, b), EQ(c1, b)))),
+                (c0,)
+            ),
+            Projection(
+                Selection(Q, Conjunction((NE(c0, a), NE(c0, b), NE(c1, b)))),
+                (c0, c1)
+            )
+        ])
+    }
+
+    assert res == expected
+
+
+@fixture
+def R1():
+    return Constant[AbstractSet](
+        WrappedRelationalAlgebraSet([(chr(ord('a') + i),) for i in range(10)])
+    )
+
+
+@fixture
+def R2():
+    return Constant[AbstractSet](
+        WrappedRelationalAlgebraSet([
+            (chr(ord('a') + i * 2), i)
+            for i in range(10)
+        ])
+    )
+
+
+@fixture
+def R3():
+    return Constant[AbstractSet](
+        WrappedRelationalAlgebraSet([
+            (i,)
+            for i in range(10)
+        ])
+    )
+
+
+class RelationalAlgebraSelectionConjunction(RelationalAlgebraSolver):
+    @add_match(Selection(..., Conjunction))
+    def selection_conjunction(self, expression):
+        new_formula = Constant(operator.and_)(
+            *expression.formula.formulas
+        )
+        return self.walk(Selection(
+            expression.relation,
+            new_formula
+        ))
+
+
+def test_shatter_unitary(R1, R2, R3):
+    query = Conjunction((Q(x), Q(a), Q(b), P(x), R(y), Negation(P(b, y))))
+    # query = Conjunction((Q(x), Q(a), Q(b), P(x, y)))
+
+    ra_query = TranslateToNamedRA().walk(query)
+
+    symbol_table = dict({Q: R1, P: R2, R: R3})
+    ras = RelationalAlgebraSolver(symbol_table)
+    ra_sol = ras.walk(ra_query)
+
+    symbol_sets = sets_per_symbol(query)
+
+    se = ShatterEqualities(symbol_sets, symbol_table)
+    res = se.walk(query)
+
+    ras = RelationalAlgebraSelectionConjunction(symbol_table)
+    res = convert_to_srnf(res)
+    ra_query = TranslateToNamedRA().walk(res)
+    shattered_sol = ras.walk(ra_query)
+
+
+    rew = ReplaceExpressionWalker(symbol_table)
+    res = rew.walk(res)
+
+    shattered_Qa = Projection(Selection(Q, EQ(int2columnint_constant(0), a)), tuple())()
+    shattered_Qb = Projection(Selection(Q, EQ(int2columnint_constant(0), b)), tuple())()
+    shattered_Qnanb = Projection(
+        Selection(Q, Conjunction((NE(int2columnint_constant(0), a), NE(int2columnint_constant(0), b)))),
+        (int2columnint_constant(0),)
+    )
+    expected_symbols = {
+        Q(a): shattered_Qa,
+        Q(b): shattered_Qb,
+        Q(x): Disjunction((shattered_Qa, shattered_Qb, shattered_Qnanb(x)))
+    }
+
+    expected = ReplaceExpressionWalker(expected_symbols).walk(query)
+
+    assert isinstance(res, Conjunction)
+    assert isinstance(res.formulas[0], Disjunction)
+    assert set(res.formulas[0].formulas) == set(expected.formulas[0].formulas)
+    assert res.formulas[1:] == expected.formulas[1:]
+
+
+def test_shatter_binary():
+    query = Conjunction((Q(x, a), Q(y, a), Q(x, y)))
+
+    symbol_sets = sets_per_symbol(query)
+    symbol_table = dict()
+
+    se = ShatterEqualities(symbol_sets, symbol_table)
+    res = se.walk(query)
+
+    expected = []
+
+    assert True
+
+    query = Conjunction((Q(x, a), Q(a, y), Q(x, y)))
+
+    symbol_sets = sets_per_symbol(query)
+    symbol_table = dict()
+
+    se = ShatterEqualities(symbol_sets, symbol_table)
+    res = se.walk(query)
+
+    expected = []
+
+    assert True
