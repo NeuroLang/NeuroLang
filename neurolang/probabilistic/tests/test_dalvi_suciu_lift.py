@@ -105,7 +105,7 @@ def test_lifted_bcq_fig_4_4():
     cq = Implication(Q(z), Conjunction((
          R(z, x1), S(x1, y1), T(z, x2), S(x2, y2)
     )))
-
+    cq = convert_rule_to_ucq(cq)
     plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
