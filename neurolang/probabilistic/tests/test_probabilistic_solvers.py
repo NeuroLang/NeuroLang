@@ -1018,6 +1018,19 @@ def test_simple_boolean_query(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_boolean_query_equality(solver):
+    pfacts_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfacts_as_set in pfacts_as_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfacts_as_set
+        )
+    query = Implication(ans(), Z(Constant[str]("s1")))
+    result = solver.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set([(.6,)], ("_p_",))
+    assert testing.eq_prov_relations(result, expected)
+
+
 def test_dalvi_suciu_fails_unate():
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
