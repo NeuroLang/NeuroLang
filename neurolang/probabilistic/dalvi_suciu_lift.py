@@ -11,7 +11,11 @@ from ..datalog.expression_processing import (
     flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..exceptions import NeuroLangException, NonLiftableException
+from ..exceptions import (
+    NeuroLangException,
+    NonLiftableException,
+    UnsupportedSolverError
+)
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
@@ -39,9 +43,9 @@ from ..logic.expression_processing import (
     extract_logic_predicates
 )
 from ..logic.transformations import (
+    ExtractConjunctiveQueryWithNegation,
     GuaranteeConjunction,
     GuaranteeDisjunction,
-    ExtractConjunctiveQueryWithNegation,
     MakeExistentialsImplicit,
     PushExistentialsDown,
     RemoveExistentialOnVariables,
@@ -60,7 +64,10 @@ from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .exceptions import NotEasilyShatterableError
-from .expression_processing import lift_optimization_for_choice_predicates
+from .expression_processing import (
+    is_builtin,
+    lift_optimization_for_choice_predicates
+)
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     NonLiftable,
@@ -200,6 +207,13 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         shattered_query = symbolic_shattering(unified_query, symbol_table)
     except NotEasilyShatterableError:
         shattered_query = unified_query
+    if any(
+        is_builtin(atom, known_builtins=cpl_program.builtins())
+        for atom in extract_logic_atoms(shattered_query)
+    ):
+        raise UnsupportedSolverError(
+            "Builtins not allowed for Dalvi-Suciu lifting"
+        )
     _verify_that_the_query_is_unate(shattered_query, symbol_table)
     return shattered_query, symbol_table
 
