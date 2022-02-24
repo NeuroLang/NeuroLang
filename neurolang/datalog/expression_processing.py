@@ -10,6 +10,7 @@ import typing
 from typing import Iterable
 
 import numpy as np
+from scipy import sparse
 
 from ..exceptions import (
     RuleNotFoundError,
@@ -429,8 +430,12 @@ def dependency_matrix(datalog, rules=None, instance=None):
             formula.consequent.functor
             for formula in datalog.constraints().formulas
         )
+        existential_symbols = set(
+            rule.functor for rule in datalog.existential_rules.keys()
+        )
     else:
         constraint_symbols = set()
+        existential_symbols = set()
 
     dependency_matrix = np.zeros(
         (len(idb_symbols), len(idb_symbols)), dtype=int
@@ -442,7 +447,10 @@ def dependency_matrix(datalog, rules=None, instance=None):
         ix_head = idb_symbols.index(head_functor)
         for predicate in extract_logic_atoms(rule.antecedent):
             functor = predicate.functor
-            if functor in edb or functor in constraint_symbols:
+            if (
+                functor in edb or functor in constraint_symbols
+                or functor in existential_symbols
+            ):
                 continue
             elif functor in idb_symbols:
                 ix_functor = idb_symbols.index(functor)
@@ -463,9 +471,10 @@ def dependency_matrix(datalog, rules=None, instance=None):
 def program_has_loops(program_representation):
     if not isinstance(program_representation, np.ndarray):
         _, program_representation = dependency_matrix(program_representation)
+    program_representation = sparse.csr_matrix(program_representation)
     reachable = program_representation
-    for _ in range(len(program_representation)):
-        if any(np.diag(reachable)):
+    for _ in range(program_representation.shape[0]):
+        if any(reachable.diagonal()):
             return True
         else:
             reachable = np.dot(reachable, program_representation)

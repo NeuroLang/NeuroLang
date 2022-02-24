@@ -7,6 +7,7 @@ sets and has support for constraints.
 """
 
 from ..expression_walker import ExpressionWalker, PatternWalker, add_match
+from ..expressions import Symbol
 from ..logic import LogicOperator, Union
 from .basic_representation import DatalogProgramMixin
 
@@ -31,20 +32,99 @@ class RightImplication(LogicOperator):
 
 class DatalogConstraintsMixin(PatternWalker):
     protected_keywords = {"__constraints__"}
+    categorized_constraints = {}
+    existential_rules = {}
 
     @add_match(RightImplication)
     def add_logic_constraint(self, expression):
-        if ("__constraints__" in self.symbol_table):
-            constrains = self.symbol_table["__constraints__"]
+        sym_constraints = Symbol("__constraints__")
+        if (
+            isinstance(expression, RightImplication)
+            and sym_constraints in self.symbol_table
+        ):
+            constrains = self.symbol_table[sym_constraints]
             constrains = Union((constrains.formulas + (expression,)))
-            self.symbol_table["__constraints__"] = constrains
-        else:
-            self.symbol_table["__constraints__"] = Union((expression,))
+            self.symbol_table[sym_constraints] = constrains
+        elif isinstance(expression, RightImplication):
+            self.symbol_table[sym_constraints] = Union((expression,))
 
         return expression
 
     def constraints(self):
-        return self.symbol_table.get("__constraints__", Union(()))
+        '''Function that returns the constraints contained
+        in the Datalog program.
+
+        Returns
+        -------
+        Union of formulas containing all constraints loaded into the program.
+        '''
+        sym_constraints = Symbol("__constraints__")
+        return self.symbol_table.get(sym_constraints, Union(()))
+
+    def set_constraints(self, categorized_constraints):
+        '''This function receives a dictionary with the contraints organized
+        according to the functor of its consequent and is in charge of setting
+        it both in the symbol table and in the global variable
+        `categorized_contraints`, useful for XRewriter optimizations.
+
+        Parameters
+        ----------
+        categorized_constraints : dict
+            Dictionary of constraints where each key is
+            the functor of the consequent of the rules
+            and the values are lists of contraints with
+            each rule associated to the corresponding functor.
+        '''
+        sym_constraints = Symbol("__constraints__")
+        if isinstance(categorized_constraints, dict):
+            cons = [b for a in list(categorized_constraints.values()) for b in a]
+            self.symbol_table[sym_constraints] = Union(cons)
+
+            self.categorized_constraints = categorized_constraints
+
+    def get_constraints(self):
+        '''Returns the contraints in a dictionary, where the key is the functor
+        of the consequent of each of the rules.
+
+        Returns
+        -------
+        Dictionary containing all constraints loaded in the datalog program,
+        indexed according to the functor of the rule consequent.
+        '''
+        sym_constraints = Symbol("__constraints__")
+        if not self.categorized_constraints:
+            constraints = self.symbol_table.get(sym_constraints, Union(()))
+            for f in constraints.formulas:
+                self._categorize_constraints(f)
+
+        return self.categorized_constraints
+
+    def add_existential_rules(self, rules):
+        self.existential_rules = rules
+
+    def _categorize_constraints(self, sigma):
+        '''Function in charge of sorting the constraints in a dictionary
+        using the consequent functor as an index.
+
+        This indexing is useful to obtain the constraints in the
+        way they are needed for the rewriting algorithm.
+
+        Parameters
+        ----------
+        sigma : RightImplication
+            constraint to be categorized.
+        '''
+        sigma_functor = sigma.consequent.functor.name
+        if (
+            self.categorized_constraints
+            and sigma_functor in self.categorized_constraints
+        ):
+            cons_set = self.categorized_constraints[sigma_functor]
+            if sigma not in cons_set:
+                cons_set.add(sigma)
+                self.categorized_constraints[sigma_functor] = cons_set
+        else:
+            self.categorized_constraints[sigma_functor] = set([sigma])
 
 
 class DatalogConstraintsProgram(
