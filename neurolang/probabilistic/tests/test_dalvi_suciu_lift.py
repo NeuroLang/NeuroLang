@@ -112,7 +112,6 @@ def test_lifted_bcq_fig_4_4():
 
 
 def test_lifted_separator_variable():
-    Q = Symbol('Q')
     R = Symbol('R')
     x1 = Symbol('x1')
     z = Symbol('z')
@@ -165,27 +164,6 @@ def test_non_liftable_join():
     plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert not res
-
-
-def test_lifted_bcq_fig_4_4():
-    Q = Symbol('Q')
-    R = Symbol('R')
-    S = Symbol('S')
-    T = Symbol('T')
-    U = Symbol('U')
-    x1 = Symbol('x1')
-    x2 = Symbol('x2')
-    y1 = Symbol('y1')
-    y2 = Symbol('y2')
-    z = Symbol('z')
-
-    cq = Implication(Q(z), Conjunction((
-         R(z, x1), S(x1, y1), T(z, x2), U(x2, y2)
-    )))
-
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
-    res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
-    assert res
 
 
 def test_lifted_cq_fig_4_5():

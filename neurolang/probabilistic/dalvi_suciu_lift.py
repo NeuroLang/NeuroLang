@@ -296,7 +296,7 @@ def symbol_or_deterministic_plan(rule, symbol_table):
     Parameters
     ----------
     rule : Expression
-        rule to lift 
+        rule to lift
     symbol_table : Mapping of Symbol to Expression
         symbol table for the relational symbols
 
