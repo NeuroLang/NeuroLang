@@ -4,30 +4,21 @@ from typing import AbstractSet
 import pytest
 from pytest import fixture
 
-from neurolang.logic.transformations import MoveQuantifiersUp, PushExistentialsDown, RemoveExistentialOnVariables, convert_to_pnf_with_dnf_matrix
-
-from ...datalog.expression_processing import UnifyVariableEqualitiesMixin, extract_logic_atoms
+from ...datalog.expression_processing import (
+    UnifyVariableEqualitiesMixin,
+    extract_logic_atoms
+)
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
-from ...datalog.wrapped_collections import (
-    NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraFrozenSet,
-    WrappedNamedRelationalAlgebraFrozenSet,
-    WrappedRelationalAlgebraFrozenSet,
-    WrappedRelationalAlgebraSet
-)
-from ...expression_walker import ReplaceExpressionWalker, add_match
+from ...datalog.wrapped_collections import WrappedRelationalAlgebraSet
+from ...expression_walker import add_match
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import (
-    Conjunction,
-    Disjunction,
-    ExistentialPredicate,
-    Implication,
-    Negation
-)
-from ...logic.horn_clauses import convert_to_srnf
+from ...logic import Conjunction, Disjunction, Implication, Negation
 from ...relational_algebra import Projection, Selection, int2columnint_constant
-from ...relational_algebra.relational_algebra import RelationalAlgebraOperation, RelationalAlgebraSolver
-from ...relational_algebra.optimisers import PushUnnamedSelectionsUp, RelationalAlgebraOptimiser
+from ...relational_algebra.optimisers import (
+    PushUnnamedSelectionsUp,
+    RelationalAlgebraOptimiser
+)
+from ...relational_algebra.relational_algebra import RelationalAlgebraSolver
 from ..cplogic.program import CPLogicProgram
 from ..exceptions import NotEasilyShatterableError
 from ..probabilistic_ra_utils import (
@@ -39,7 +30,6 @@ from ..shattering import (
     sets_per_symbol,
     shatter_easy_probfacts
 )
-
 
 RAO = RelationalAlgebraOptimiser()
 
@@ -456,10 +446,18 @@ def test_symbols_per_set_binary():
     c1 = int2columnint_constant(1)
     expected = {
         Q: set([
-            Projection(Selection(Q, Conjunction((EQ(c0, a), EQ(c1, b)))), (c0, c1,)),
-            Projection(Selection(Q, Conjunction((EQ(c0, b), EQ(c1, b)))), (c0, c1,)),
-            Projection(Selection(Q, Conjunction((EQ(c0, a), NE(c1, b)))), (c0, c1,)),
-            Projection(Selection(Q, Conjunction((EQ(c0, b), NE(c1, b)))), (c0, c1,)),
+            Projection(
+                Selection(Q, Conjunction((EQ(c0, a), EQ(c1, b)))), (c0, c1,)
+            ),
+            Projection(
+                Selection(Q, Conjunction((EQ(c0, b), EQ(c1, b)))), (c0, c1,)
+            ),
+            Projection(
+                Selection(Q, Conjunction((EQ(c0, a), NE(c1, b)))), (c0, c1,)
+            ),
+            Projection(
+                Selection(Q, Conjunction((EQ(c0, b), NE(c1, b)))), (c0, c1,)
+            ),
             Projection(
                 Selection(Q, Conjunction((NE(c0, a), NE(c0, b), EQ(c1, b)))),
                 (c0, c1)

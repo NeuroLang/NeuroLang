@@ -1,7 +1,6 @@
 import collections
 import itertools
 import operator
-from typing import AbstractSet
 
 from ..expression_pattern_matching import add_match
 from ..expression_walker import (

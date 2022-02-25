@@ -1,6 +1,5 @@
 from itertools import chain
 import operator
-from unicodedata import name
 
 from .. import expression_walker as ew
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -1168,8 +1167,14 @@ class PushUnnamedSelectionsUp(ew.PatternWalker):
     @ew.add_match(
         Projection(Selection, ...),
         lambda expression: (
-            PushUnnamedSelectionsUp._extract_column_int_constants(expression.relation.formula) and
-            PushUnnamedSelectionsUp._extract_column_int_constants(expression) <= set(expression.attributes)
+            (
+                PushUnnamedSelectionsUp
+                ._extract_column_int_constants(expression.relation.formula)
+            ) and (
+                PushUnnamedSelectionsUp
+                ._extract_column_int_constants(expression)
+                <= set(expression.attributes)
+            )
         )
     )
     def push_selection_above_projection(self, expression):
@@ -1184,7 +1189,8 @@ class PushUnnamedSelectionsUp(ew.PatternWalker):
     @ew.add_match(
         NameColumns(Selection, ...),
         lambda expression: (
-            PushUnnamedSelectionsUp._extract_column_int_constants(expression.relation.formula)
+            PushUnnamedSelectionsUp
+            ._extract_column_int_constants(expression.relation.formula)
         )
     )
     def push_selection_above_name_columns(self, expression):

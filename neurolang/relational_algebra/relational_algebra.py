@@ -6,7 +6,11 @@ import numpy
 import pandas.core.computation.ops
 
 from .. import expression_walker as ew, type_system
-from ..exceptions import ProjectionOverMissingColumnsError, NeuroLangException, RelationalAlgebraNotImplementedError
+from ..exceptions import (
+    NeuroLangException,
+    ProjectionOverMissingColumnsError,
+    RelationalAlgebraNotImplementedError
+)
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expressions import (
     Constant,
@@ -1004,7 +1008,8 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                 for _, expression in ew.expression_iterator(fun_exp)
             ):
                 raise RelationalAlgebraNotImplementedError(
-                    "Complex function evaluations on unnamed RA not implemented"
+                    "Complex function evaluations on "
+                    "unnamed RA not implemented"
                 )
             try:
                 return self._saw.walk(fun_exp).value
