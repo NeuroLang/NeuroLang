@@ -1,13 +1,22 @@
-from neurolang.exceptions import NotConjunctiveExpressionNegation
 from typing import AbstractSet, Callable, Tuple
 
-from ..expression_walker import add_match, PatternWalker
-from ..expressions import (Constant, FunctionApplication, NeuroLangException,
-                           NonConstant, Symbol, is_leq_informative)
+from ..exceptions import (
+    NotConjunctiveExpressionNegation,
+    ProtectedKeywordError
+)
+from ..expression_walker import PatternWalker, add_match
+from ..expressions import (
+    Constant,
+    FunctionApplication,
+    NeuroLangException,
+    NonConstant,
+    Symbol,
+    is_leq_informative
+)
+from ..logic import Conjunction, Implication, Negation, Union
 from ..type_system import Unknown
 from .basic_representation import DatalogProgram, UnionOfConjunctiveQueries
 from .expression_processing import extract_logic_free_variables
-from ..logic import Conjunction, Union, Implication, Negation, Quantifier
 
 
 class NegativeFact(Implication):
@@ -48,8 +57,10 @@ class DatalogProgramNegationMixin(PatternWalker):
         Implication(FunctionApplication[bool](Symbol, ...), NonConstant)
     )
     def statement_intensional(self, expression):
-        consequent = expression.consequent
-        antecedent = expression.antecedent
+        original_expression = expression
+        consequent = self.walk(expression.consequent)
+        antecedent = self.walk(expression.antecedent)
+        expression = Implication(consequent, antecedent)
 
         self._check_implication(consequent, antecedent)
 
@@ -60,10 +71,10 @@ class DatalogProgramNegationMixin(PatternWalker):
                 "All variables on the consequent need to be on the antecedent"
             )
 
-        if consequent.functor.name in self.symbol_table:
-            value = self.symbol_table[consequent.functor.name]
+        if consequent.functor in self.symbol_table:
+            value = self.symbol_table[consequent.functor]
             self._is_previously_defined(value)
-            disj = self.symbol_table[consequent.functor.name].formulas
+            disj = self.symbol_table[consequent.functor].formulas
             self._is_in_idb(expression, disj)
 
         else:
@@ -75,12 +86,12 @@ class DatalogProgramNegationMixin(PatternWalker):
         symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
         self.symbol_table[symbol] = Union(disj)
 
-        return expression
+        return original_expression
 
     def _check_implication(self, consequent, antecedent):
         if consequent.functor.name in self.protected_keywords:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
+            raise ProtectedKeywordError(
+                f'symbol {consequent.functor.name} is protected'
             )
 
         if not is_conjunctive_negation(antecedent):

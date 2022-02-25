@@ -27,9 +27,13 @@ class Conjunction(NaryLogicOperator):
             self._symbols |= formula._symbols
 
     def __repr__(self):
-        return '\u22C0(' + ', '.join(
-            repr(e) for e in self.formulas
-        ) + ')'
+        try:
+            join_str = ', '.join(
+                repr(e) for e in self.formulas
+            )
+        except TypeError:
+            join_str = repr(self.formulas)
+        return '\u22C0(' + join_str + ')'
 
 
 class Disjunction(NaryLogicOperator):
@@ -42,19 +46,24 @@ class Disjunction(NaryLogicOperator):
 
     def __repr__(self):
         repr_formulas = []
-        chars = 0
-        for formula in self.formulas:
-            repr_formulas.append(repr(formula))
-            chars += len(repr_formulas[-1])
+        try:
+            chars = 0
+            for formula in self.formulas:
+                repr_formulas.append(repr(formula))
+                chars += len(repr_formulas[-1])
 
-        if chars < 30:
-            join_text = ', '
-        else:
-            join_text = ',\n'
+            if chars < 30:
+                join_text = ', '
+            else:
+                join_text = ',\n'
 
-        return '\u22C1(' + join_text.join(
-            repr(e) for e in self.formulas
-        ) + ')'
+            join_str = join_text.join(
+                repr(e) for e in self.formulas
+            )
+        except TypeError:
+            join_str = repr(self.formulas)
+
+        return '\u22C1(' + join_str + ')'
 
 
 class Union(NaryLogicOperator):
@@ -134,8 +143,8 @@ class ExistentialPredicate(Quantifier):
 
     def __repr__(self):
         r = (
-            u'\u2203{{{}: {} st {}}}'
-            .format(self.head, self.__type_repr__, self.body)
+            u'\u2203{{{} st {}}}'
+            .format(self.head, self.body)
         )
         return r
 
@@ -165,8 +174,8 @@ class UniversalPredicate(Quantifier):
 
     def __repr__(self):
         r = (
-            u'\u2200{{{}: {} st {}}}'
-            .format(self.head, self.__type_repr__, self.body)
+            u'\u2200{{{} st {}}}'
+            .format(self.head, self.body)
         )
         return r
 

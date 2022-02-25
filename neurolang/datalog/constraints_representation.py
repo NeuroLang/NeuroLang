@@ -6,9 +6,10 @@ the extensional, intensional, and builtin
 sets and has support for constraints.
 """
 
-from ..expression_walker import ExpressionWalker, add_match
-from ..logic import LogicOperator, NaryLogicOperator, Union, Symbol
-from .basic_representation import DatalogProgram
+from ..expression_walker import ExpressionWalker, PatternWalker, add_match
+from ..expressions import Symbol
+from ..logic import LogicOperator, Union
+from .basic_representation import DatalogProgramMixin
 
 
 class RightImplication(LogicOperator):
@@ -29,17 +30,12 @@ class RightImplication(LogicOperator):
         )
 
 
-class DatalogConstraintsMixin(ExpressionWalker):
+class DatalogConstraintsMixin(PatternWalker):
     protected_keywords = {"__constraints__"}
     categorized_constraints = {}
     existential_rules = {}
 
-    @add_match(NaryLogicOperator)
-    def add_nary_constraint(self, expression):
-        for formula in expression.formulas:
-            self.walk(formula)
-
-    @add_match(LogicOperator)
+    @add_match(RightImplication)
     def add_logic_constraint(self, expression):
         sym_constraints = Symbol("__constraints__")
         if (
@@ -51,6 +47,8 @@ class DatalogConstraintsMixin(ExpressionWalker):
             self.symbol_table[sym_constraints] = constrains
         elif isinstance(expression, RightImplication):
             self.symbol_table[sym_constraints] = Union((expression,))
+
+        return expression
 
     def constraints(self):
         '''Function that returns the constraints contained
@@ -108,7 +106,7 @@ class DatalogConstraintsMixin(ExpressionWalker):
         '''Function in charge of sorting the constraints in a dictionary
         using the consequent functor as an index.
 
-        This categorization is useful to obtain the constraints in the
+        This indexing is useful to obtain the constraints in the
         way they are needed for the rewriting algorithm.
 
         Parameters
@@ -129,5 +127,9 @@ class DatalogConstraintsMixin(ExpressionWalker):
             self.categorized_constraints[sigma_functor] = set([sigma])
 
 
-class DatalogConstraintsProgram(DatalogProgram, DatalogConstraintsMixin):
+class DatalogConstraintsProgram(
+    DatalogConstraintsMixin,
+    DatalogProgramMixin,
+    ExpressionWalker
+):
     pass

@@ -125,6 +125,10 @@ class ForbiddenBuiltinError(ForbiddenExpressionError):
     pass
 
 
+class NotInFONegE(ForbiddenExpressionError):
+    pass
+
+
 class NeuroLangFrontendException(NeuroLangException):
     pass
 
@@ -365,5 +369,13 @@ class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
         self.formula = formula
 
 
-class NonLiftableException(NeuroLangException):
+class NonLiftableException(UnsupportedSolverError):
+    pass
+
+
+class InvalidCommandExpression(ForbiddenExpressionError):
+    """
+    Invalid Command statement.
+    """
+
     pass

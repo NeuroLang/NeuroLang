@@ -1,9 +1,25 @@
-from neurolang.logic import ExistentialPredicate
 from operator import add, eq, lt, mul, pow, sub, truediv
 
+import pytest
+from tatsu.exceptions import FailedParse
+
+from neurolang.logic import ExistentialPredicate
+
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
-from ....probabilistic.expressions import Condition, ProbabilisticPredicate
-from ....expressions import Constant, Query, Symbol, FunctionApplication
+from ....expressions import (
+    Command,
+    Constant,
+    FunctionApplication,
+    Lambda,
+    Query,
+    Statement,
+    Symbol
+)
+from ....probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate
+)
 from ..standard_syntax import ExternalSymbol, parser
 
 
@@ -203,7 +219,7 @@ def test_probabilistic_fact():
     d = Symbol("d")
     x = Symbol("x")
     B = Symbol("B")
-    res = parser("exp((-1 * d) / 5.0) :: B(x) :- A(x, d) & (d < 0.8)")
+    res = parser("B(x) :: exp(-d / 5.0) :- A(x, d) & (d < 0.8)")
     expected = Union(
         (
             Implication(
@@ -285,7 +301,7 @@ def test_existential():
     res = parser("C(x) :- B(x), ∃(s1 st A(s1))")
     assert res == expected
 
-    res = parser("C(x) :- B(x), exists(s1, s2; (A(s1), A(s2)))")
+    res = parser("C(x) :- B(x), exists(s1, s2; A(s1), A(s2))")
 
     expected = Union(
         (
@@ -308,6 +324,10 @@ def test_existential():
 
     assert res == expected
 
+    with pytest.raises(FailedParse):
+        res = parser("C(x) :- B(x), exists(s1; )")
+
+
 def test_query():
     ans = Symbol("ans")
     B = Symbol("B")
@@ -318,3 +338,136 @@ def test_query():
     assert res == Union(
         (Query(ans(x), Conjunction((B(x, y), C(Constant(3), y)))),)
     )
+
+
+def test_prob_implicit():
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("B(x, PROB, y) :- C(x, y)")
+    assert res == Union(
+        (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
+    )
+
+
+def test_prob_explicit():
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("B(x, PROB(x, y), y) :- C(x, y)")
+    assert res == Union(
+        (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
+    )
+
+
+def test_lambda_definition():
+    c = Symbol("c")
+    x = Symbol("x")
+
+    res = parser("c := lambda x: x + 1")
+    expression = Lambda((x,), FunctionApplication(
+        Constant(add), (x, Constant[int](1))
+    ))
+    expected = Union((
+        Statement(c, expression),
+    ))
+    assert expected == res
+
+
+def test_lambda_definition_statement():
+    c = Symbol("c")
+    x = Symbol("x")
+    y = Symbol("y")
+
+    res = parser("c(x, y) := x + y")
+    expression = Lambda((x, y), FunctionApplication(
+        Constant(add), (x, y)
+    ))
+    expected = Union((
+        Statement(c, expression),
+    ))
+    assert expected == res
+
+
+def test_lambda_application():
+    c = Symbol("c")
+    x = Symbol("x")
+
+    res = parser("c := (lambda x: x + 1)(2)")
+    expression = FunctionApplication(
+        Lambda((x,), FunctionApplication(
+            Constant(add), (x, Constant[int](1))
+        )),
+        (Constant[int](2),)
+    )
+    expected = Union((
+        Statement(c, expression),
+    ))
+    assert expected == res
+
+
+def test_command_syntax():
+    res = parser('.load_csv(A, "http://myweb/file.csv", B)')
+    expected = Union(
+        (
+            Command(
+                Symbol("load_csv"),
+                (Symbol("A"), Constant("http://myweb/file.csv"), Symbol("B")),
+                (),
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser('.load_csv("http://myweb/file.csv")')
+    expected = Union(
+        (
+            Command(
+                Symbol("load_csv"), (Constant("http://myweb/file.csv"),), ()
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser(".load_csv()")
+    expected = Union((Command(Symbol("load_csv"), (), ()),))
+    assert res == expected
+
+    res = parser('.load_csv(sep=",")')
+    expected = Union(
+        (Command("load_csv", (), ((Symbol("sep"), Constant(",")),)),)
+    )
+    assert res == expected
+
+    res = parser('.load_csv(sep=",", header=None, index_col=0)')
+    expected = Union(
+        (
+            Command(
+                "load_csv",
+                (),
+                (
+                    (Symbol("sep"), Constant(",")),
+                    (Symbol("header"), Symbol("None")),
+                    (Symbol("index_col"), Constant(0)),
+                ),
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser('.load_csv(A, "http://myweb/file.csv", sep=",", header=None)')
+    expected = Union(
+        (
+            Command(
+                "load_csv",
+                (Symbol("A"), "http://myweb/file.csv"),
+                (
+                    (Symbol("sep"), Constant(",")),
+                    (Symbol("header"), Symbol("None")),
+                ),
+            ),
+        )
+    )
+    assert res == expected

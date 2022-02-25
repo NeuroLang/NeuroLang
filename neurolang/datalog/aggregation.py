@@ -112,25 +112,21 @@ class DatalogWithAggregationMixin(PatternWalker):
                 f'symbol {self.constant_set_name} is protected'
             )
 
+        aggregation_functor_symbols = set()
         seen_aggregations = 0
         for arg in consequent.args:
             if isinstance(arg, AggregationApplication):
                 seen_aggregations += 1
-                aggregation_functor = arg.functor
+                aggregation_functor_symbols |= arg.functor._symbols
             elif not isinstance(arg, (Constant, Symbol)):
                 raise NeuroLangException(
                     f'The consequent {consequent} can only be '
                     'constants, symbols'
                 )
 
-            if seen_aggregations > 1:
-                raise NeuroLangException(
-                    f'Only one aggregation allowed in {consequent}'
-                )
-
         consequent_symbols = (
             consequent._symbols - consequent.functor._symbols -
-            aggregation_functor._symbols
+            aggregation_functor_symbols
         )
 
         if not consequent_symbols.issubset(antecedent._symbols):

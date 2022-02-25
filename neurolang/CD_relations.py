@@ -4,6 +4,7 @@ from itertools import product
 import numpy as np
 from scipy.linalg import kron
 
+from .config import config
 from .interval_algebra import (v_before, v_during, v_equals, v_finishes,
                                v_meets, v_overlaps, v_starts)
 from .regions import ExplicitVBR, ImplicitVBR, Region
@@ -42,6 +43,11 @@ inverse_directions = {
     'I': 'S'
 }
 
+anatomical_restric_axes = directions_dim_space["A"] + directions_dim_space["S"]
+anatomical_restrict_dirs = ["A", "P", "I", "S"]
+anatomical_restrict_threshold = config["DEFAULT"].getfloat(
+    "cardinalRelationThreshold"
+)
 
 relations = [
     v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals
@@ -70,9 +76,11 @@ def cardinal_relation(
     if region == reference_region:
         result = directions == 'O'
     else:
-        mat = direction_matrix(region.bounding_box,
-                               reference_region.bounding_box)
-        if not (refine_overlapping and 'O' in directions) and is_in_direction(
+        mat = direction_matrix(
+            region.bounding_box, reference_region.bounding_box
+        )
+        dir_counts = None
+        if not (refine_overlapping and "O" in directions) and is_in_direction(
             mat, directions
         ):
             result = True
@@ -83,10 +91,10 @@ def cardinal_relation(
                     refine_overlapping and
                     isinstance(region, ExplicitVBR)
             ):
-                mat = overlap_resolution(
-                        region, reference_region, directions, stop_at
-                    )
-            result = is_in_direction(mat, directions)
+                mat, dir_counts = overlap_resolution(
+                    region, reference_region, directions, stop_at
+                )
+            result = is_in_direction(mat, directions, dir_counts)
 
     return result
 
@@ -126,12 +134,15 @@ def overlap_resolution(
     total_mat = direction_matrix(
         region_stack[0][0].box, region_stack[0][1].box
     ) * 0
-    overlap_indices = is_in_direction_indices(total_mat.ndim, 'O')
+    dir_counts = np.zeros(len(anatomical_restrict_dirs), dtype=int)
     while region_stack:
         region, reference_region, level = region_stack.pop()
 
-        mat = direction_matrix(region.box, reference_region.box)
+        mat = direction_matrix(region.box, reference_region.box, True)
         total_mat += mat
+        dir_counts += np.array(
+            [is_in_direction(mat, d) for d in anatomical_restrict_dirs], dtype=int
+        )
 
         if (
             is_in_direction(mat, 'O') and
@@ -150,15 +161,12 @@ def overlap_resolution(
             ]
 
             if len(stack_update) > 0:
-                total_mat[overlap_indices] = 0
+                total_mat -= mat
                 region_stack += stack_update
             elif directions is None:
                 break
 
-        elif directions is not None and is_in_direction(mat, directions):
-            break
-
-    return total_mat.clip(0, 1)
+    return total_mat.clip(0, 1), dir_counts
 
 
 @lru_cache(maxsize=128)
@@ -170,7 +178,52 @@ def is_in_direction_indices(n, direction):
     return np.ix_(*indices)
 
 
-def is_in_direction(matrix, direction):
+def is_in_direction(matrix, direction, dir_counts=None):
+    """
+    Returns whether the cardinal relation matrix describing the relative
+    position of two regions is in the given directions.
+
+    If a direction_counts array is provided, this method checks whether the
+    amount of time a direction is present compared to its opposite is greater
+    than a specific threshold.
+
+    Parameters
+    ----------
+    matrix : numpy.array
+        the cardinal relation matrix provided by the `direction_matrix`
+        function
+    direction : str
+        a string containing the directions queried
+    dir_counts : numpy.array, optional
+        an array containing the counts of regions in a direction X for each
+        direction of the anatomical_restrict_dirs
+
+    Returns
+    -------
+    bool
+        whether the regions described by the matrix are in the query directions
+    """
+    if dir_counts is not None:
+        for d in direction:
+            if d in anatomical_restrict_dirs:
+                # For direction on the A/P or I/S axis, we consider a region is
+                # in direction A/P if there are more than 80% subregions in
+                # direction A/P.
+                c0, c1 = (
+                    dir_counts[anatomical_restrict_dirs.index(d)],
+                    dir_counts[
+                        anatomical_restrict_dirs.index(inverse_directions[d])
+                    ],
+                )
+                ratio = c0 / (c0 + c1)
+                if ratio > anatomical_restrict_threshold:
+                    return True
+                else:
+                    direction = direction.replace(d, "")
+
+        if len(direction) == 0:
+            return False
+
     indices = is_in_direction_indices(matrix.ndim, direction)
     return np.any(matrix[indices] == 1)
 
@@ -192,8 +245,12 @@ def relation_vectors(intervals, other_region_intervals):
     return obtained_vectors[:ov]
 
 
-def direction_matrix(region_bb, another_region_bb):
+def direction_matrix(
+    region_bb, another_region_bb, restrict_axes_directions=False
+):
     rp_vector = relation_vectors(region_bb.limits, another_region_bb.limits)
+    if restrict_axes_directions:
+        restrict_axis_relation_to_overlaping_regions(rp_vector)
     tensor = rp_vector[0].reshape(1, 3)
     for i in range(1, len(rp_vector)):
         tensor = kron(
@@ -201,3 +258,19 @@ def direction_matrix(region_bb, another_region_bb):
             tensor
         ).squeeze()
     return tensor.clip(0, 1)
+
+
+def restrict_axis_relation_to_overlaping_regions(rp_vector):
+    """
+    When checking for directions on the anterior/posterior or on the
+    inferior/posterior axis, we only consider intervals which overlap on the
+    other axis.
+    """
+    # for each axis
+    for d, orth_dir in zip(
+        anatomical_restric_axes, anatomical_restric_axes[::-1]
+    ):
+        # check that the other axis is overlaping
+        if not rp_vector[orth_dir, 1]:
+            # otherwise remove non-overlaping relations from current axis
+            rp_vector[d] = (0, 1, 0)

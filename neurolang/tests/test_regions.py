@@ -1,3 +1,5 @@
+from pathlib import Path
+from nilearn import datasets
 import numpy as np
 import pytest
 from numpy import random
@@ -528,3 +530,82 @@ def test_cardinal_relation_prepare_regions():
     r1, r2 = cardinal_relation_prepare_regions(sphere_1_evbr, sphere_2_evbr)
     assert r1 is sphere_1_evbr
     assert r2 is sphere_2_evbr
+
+
+@pytest.fixture
+def destrieux():
+    data_dir = Path.home() / "neurolang_data"
+    destrieux_atlas = datasets.fetch_atlas_destrieux_2009(
+        data_dir=str(data_dir / "destrieux")
+    )
+    destrieux_atlas_image = nib.load(destrieux_atlas["maps"])
+    destrieux_labels = dict(destrieux_atlas["labels"])
+    destrieux = dict()
+    for k, v in destrieux_labels.items():
+        if k == 0:
+            continue
+        destrieux[
+            v.decode("utf8").replace("-", " ").replace("_", " ")
+        ] = ExplicitVBR.from_spatial_image_label(destrieux_atlas_image, k)
+    return destrieux
+
+
+def test_destrieux_cardinal_directions_anterior(destrieux):
+    """
+    Test that CD relations between brain regions from destrieux atlas
+    are as expected on the anterior/posterior axis
+    """
+    # reference region
+    r45 = destrieux["L S central"]
+
+    # regions anterior of S_central
+    for n in [
+        "L G precentral",  # 29
+        "L S precentral inf part",  # 68
+        "L S precentral sup part",  # 69
+        "L G front middle",  # 15
+        "L S front middle",  # 53
+        "L G front inf Opercular",  # 12
+        "L S circular insula sup",  # 49
+        "L S circular insula ant",  # 47
+        "L G insular short",  # 18
+    ]:
+        r = destrieux[n]
+        assert cardinal_relation(r, r45, "A", refine_overlapping=True), n
+        assert not cardinal_relation(r, r45, "P", refine_overlapping=True), n
+
+    # regions posterior of S_central
+    for n in [
+        "L G postcentral",  # 28
+        "L S postcentral",  # 67
+        "L G pariet inf Supramar",  # 26
+        "L G parietal sup",  # 27
+        "L Lat Fis post",  # 41
+    ]:
+        r = destrieux[n]
+        assert cardinal_relation(r, r45, "P", refine_overlapping=True), n
+        assert not cardinal_relation(r, r45, "A", refine_overlapping=True), n
+
+
+def test_destrieux_cardinal_directions_inferior(destrieux):
+    """
+    Test that CD relations between brain regions from destrieux atlas
+    are as expected on the inferior/superior axis
+    """
+    # reference region is left superior temporal gyrus
+    r34 = destrieux["L G temp sup Lateral"]
+
+    # regions superior of superior temporal gyrus
+    for n in ["L G pariet inf Supramar"]:
+        r = destrieux[n]
+        assert cardinal_relation(r, r34, "S", refine_overlapping=True)
+        assert not cardinal_relation(r, r34, "I", refine_overlapping=True)
+
+    # regions inferior of superior temporal gyrus
+    for n in [
+        "L S temporal inf",  # 72
+        "L G temporal middle",  # 38
+    ]:
+        r = destrieux[n]
+        assert cardinal_relation(r, r34, "I", refine_overlapping=True), n
+        assert not cardinal_relation(r, r34, "S", refine_overlapping=True), n

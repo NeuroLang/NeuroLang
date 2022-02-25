@@ -11,6 +11,7 @@ from .... import expressions as ir
 from ....datalog.expression_processing import (
     conjunct_formulas,
     extract_logic_atoms,
+    extract_logic_free_variables,
 )
 from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
 from ....expression_walker import ReplaceExpressionWalker
@@ -73,7 +74,7 @@ class TranslateColumnsToAtoms(ew.PatternWalker):
         ir.FunctionApplication,
         lambda exp: any(isinstance(arg, Column) for arg in exp.args),
     )
-    def function_application_column_sugar(self, expression):
+    def application_column_sugar(self, expression):
         return self.walk(Conjunction((expression,)))
 
     @ew.add_match(Conjunction, lambda exp: _has_column_sugar(exp, Column))
@@ -171,7 +172,7 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
             isinstance(arg, SelectByFirstColumn) for arg in exp.args
         ),
     )
-    def function_application_column_sugar(self, expression):
+    def application_column_sugar(self, expression):
         return self.walk(Conjunction((expression,)))
 
     @ew.add_match(
@@ -439,6 +440,74 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
             csqt_args += (arg,)
         consequent = implication.consequent.functor(*csqt_args)
         return self.walk(Implication(consequent, implication.antecedent))
+
+    @ew.add_match(
+        Implication(..., Condition),
+        lambda implication: len(
+            extract_logic_free_variables(implication.consequent)
+            & extract_logic_free_variables(implication.antecedent.conditioning)
+        )
+        > 0,
+    )
+    def rewrite_conditional_query(self, impl):
+        """
+        Translate an expression of the form
+            P(x, y, z) :- Q(x) & R(y) // T(z)
+
+        to its equivalent expression
+            F1(x, y, z, PROB) :- Q(x) & R(y) &T(z)
+            F2(z, PROB) :- T(z)
+            P(x, y, z, p) :- F1(x, y, z, p1) & F2(z, p2) & (p == p1 / p2)
+        """
+        left = impl.antecedent.conditioned
+        right = impl.antecedent.conditioning
+
+        head_args = extract_logic_free_variables(impl.consequent)
+        new_num = self.walk(
+            Implication(
+                ir.Symbol.fresh()(*impl.consequent.args),
+                conjunct_formulas(left, right),
+            )
+        )
+
+        new_denum_args = extract_logic_free_variables(right) & head_args
+        new_denum_prob_arg = ProbabilisticQuery(PROB, tuple(new_denum_args))
+        new_denum_args.add(new_denum_prob_arg)
+        new_denum = self.walk(
+            Implication(ir.Symbol.fresh()(*new_denum_args), right)
+        )
+
+        p = Symbol.fresh()
+        p1 = Symbol.fresh()
+        p2 = Symbol.fresh()
+        new_impl = self.walk(
+            Implication(
+                self._replace_prob_query_arg_by_var(impl.consequent, p),
+                Conjunction(
+                    (
+                        self._replace_prob_query_arg_by_var(
+                            new_num.consequent, p1
+                        ),
+                        self._replace_prob_query_arg_by_var(
+                            new_denum.consequent, p2
+                        ),
+                        EQ(
+                            p,
+                            Constant(op.truediv)(p1, p2),
+                        ),
+                    )
+                ),
+            )
+        )
+
+        return (new_num, new_denum, new_impl)
+
+    def _replace_prob_query_arg_by_var(self, expr, var):
+        new_args = tuple(
+            arg if not isinstance(arg, ProbabilisticQuery) else var
+            for arg in expr.args
+        )
+        return expr.functor(*new_args)
 
 
 class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):

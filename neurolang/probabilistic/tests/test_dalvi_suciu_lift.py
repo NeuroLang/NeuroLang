@@ -1,3 +1,4 @@
+from operator import eq
 from typing import AbstractSet
 
 import pytest
@@ -9,12 +10,31 @@ from ...logic import (
     Disjunction,
     ExistentialPredicate,
     Implication,
+    Negation
+)
+from ...relational_algebra import (
+    ColumnInt,
+    ColumnStr,
+    Difference,
+    NameColumns,
+    Projection,
+    str2columnstr_constant
+)
+from ...relational_algebra_provenance import (
+    DisjointProjection,
+    IndependentProjection
 )
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift, transforms
-from ..probabilistic_ra_utils import DeterministicFactSet
+from ..probabilistic_ra_utils import (
+    DeterministicFactSet,
+    ProbabilisticChoiceSet,
+    ProbabilisticFactSet
+)
+from ..transforms import convert_rule_to_ucq
 
 TNRA = TranslateToNamedRA()
+EQ = Constant(eq)
 
 
 def test_has_separator_variable_existential():
@@ -71,7 +91,7 @@ def test_has_separator_variable_existential():
     )
 
 
-def test_lifted_bcq_fig_4_():
+def test_lifted_bcq_fig_4_4():
     Q = Symbol('Q')
     R = Symbol('R')
     S = Symbol('S')
@@ -85,19 +105,18 @@ def test_lifted_bcq_fig_4_():
     cq = Implication(Q(z), Conjunction((
          R(z, x1), S(x1, y1), T(z, x2), S(x2, y2)
     )))
-
+    cq = convert_rule_to_ucq(cq)
     plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
 
-def test_lifed_separator_variable():
-    Q = Symbol('Q')
+def test_lifted_separator_variable():
     R = Symbol('R')
     x1 = Symbol('x1')
     z = Symbol('z')
 
-    cq = Implication(Q(z), R(x1, z))
+    cq = ExistentialPredicate(x1, R(x1, z))
     plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
@@ -113,7 +132,8 @@ def test_lifted_join():
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x1, x2), T(x1, z))))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
+    ucq = convert_rule_to_ucq(cq)
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(ucq, {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -127,7 +147,7 @@ def test_another_liftable_join():
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x1, x2), S(x1, z))))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -141,30 +161,9 @@ def test_non_liftable_join():
     z = Symbol('z')
 
     cq = Implication(Q(z), Conjunction((R(x1, z), S(x2, x1), S(x1, z))))
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert not res
-
-
-def test_lifted_bcq_fig_4_4():
-    Q = Symbol('Q')
-    R = Symbol('R')
-    S = Symbol('S')
-    T = Symbol('T')
-    U = Symbol('U')
-    x1 = Symbol('x1')
-    x2 = Symbol('x2')
-    y1 = Symbol('y1')
-    y2 = Symbol('y2')
-    z = Symbol('z')
-
-    cq = Implication(Q(z), Conjunction((
-         R(z, x1), S(x1, y1), T(z, x2), U(x2, y2)
-    )))
-
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
-    res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
-    assert res
 
 
 def test_lifted_cq_fig_4_5():
@@ -186,7 +185,7 @@ def test_lifted_cq_fig_4_5():
         Conjunction((R(z, x3), T(z, y3))),
     )))
 
-    plan = dalvi_suciu_lift.dalvi_suciu_lift(cq, {})
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(convert_rule_to_ucq(cq), {})
     res = dalvi_suciu_lift.is_pure_lifted_plan(plan)
     assert res
 
@@ -486,6 +485,51 @@ def test_example_4_8_tractable_query_intractable_subquery():
     assert dalvi_suciu_lift.is_pure_lifted_plan(resulting_plan)
 
 
+def test_single_disjoint_project_one_variable():
+    P = Symbol("P")
+    x = Symbol("x")
+    pchoice_relation = NamedRelationalAlgebraFrozenSet(
+        iterable=[
+            (0.2, "a"),
+            (0.7, "b"),
+            (0.1, "c"),
+        ],
+        columns=("_p_", "x"),
+    )
+    symbol_table = {
+        P: ProbabilisticChoiceSet(
+            Constant[AbstractSet](pchoice_relation),
+            str2columnstr_constant("_p_"),
+        ),
+    }
+    query = ExistentialPredicate(x, P(x))
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert isinstance(plan, DisjointProjection)
+
+
+def test_single_disjoint_project_two_variables():
+    P = Symbol("P")
+    x = Symbol("x")
+    y = Symbol("y")
+    pchoice_relation = NamedRelationalAlgebraFrozenSet(
+        iterable=[
+            (0.2, "a", "b"),
+            (0.7, "b", "b"),
+            (0.1, "b", "c"),
+        ],
+        columns=("_p_", "x", "y"),
+    )
+    symbol_table = {
+        P: ProbabilisticChoiceSet(
+            Constant[AbstractSet](pchoice_relation),
+            str2columnstr_constant("_p_"),
+        ),
+    }
+    query = ExistentialPredicate(y, P(x, y))
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert isinstance(plan, DisjointProjection)
+
+
 def test_simple_existential_query_plan():
     R = Symbol("R")
     x = Symbol("x")
@@ -533,3 +577,264 @@ def test_extract_probabilistic_root_variables_no_probabilistic_atom():
         formulas, symbol_table
     )
     assert len(res) == 0
+
+
+def test_lifted_negation():
+    R = Symbol('R')
+    S = Symbol('S')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    query = ExistentialPredicate(
+        y,
+        Conjunction((
+            R(x, y),
+            Negation(S(y))
+        ))
+    )
+
+    symbol_table = {
+        symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
+        for symbol in (R, S)
+    }
+    res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    expected = IndependentProjection(
+        Difference(
+            NameColumns(
+                Projection(
+                    R,
+                    (Constant(ColumnInt(0)), Constant(ColumnInt(1))),
+                ),
+                (Constant(ColumnStr('x')), Constant(ColumnStr('y'))),
+            ),
+            NameColumns(
+                Projection(
+                    S,
+                    (Constant(ColumnInt(0)),)
+                ),
+                (Constant(ColumnStr('y')),)
+            ),
+        ),
+        (Constant(ColumnStr('x')),)
+    )
+
+    assert res == expected
+
+
+def test_lifted_disjunction_with_negation():
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    query = Disjunction((
+        ExistentialPredicate(
+            y,
+            Conjunction((
+                R(x, y),
+                Negation(S(y))
+            ))
+        ),
+        ExistentialPredicate(
+            y,
+            T(x, y)
+        )
+    ))
+
+    symbol_table = {
+        symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
+        for symbol in (R, S, T)
+    }
+    res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+
+    assert dalvi_suciu_lift.is_pure_lifted_plan(res)
+
+
+def test_lifted_disjunction_cross_product_with_negation():
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    V = Symbol('V')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    query = Disjunction((
+        ExistentialPredicate(
+            y,
+            Conjunction((
+                R(x),
+                Negation(S(y)),
+                V(y)
+            ))
+        ),
+        ExistentialPredicate(
+            y,
+            T(x, y)
+        )
+    ))
+
+    symbol_table = {
+        symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
+        for symbol in (R, S, T, V)
+    }
+    res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+
+    assert dalvi_suciu_lift.is_pure_lifted_plan(res)
+
+
+def test_lifted_conjunction_existential_negation():
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    query = Conjunction((
+        Negation(
+            ExistentialPredicate(
+                x,
+                Conjunction((
+                    R(x),
+                    S(x, y),
+                ))
+            )
+        ),
+        T(y)
+    ))
+
+    symbol_table = {
+        symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
+        for symbol in (R, S, T)
+    }
+    res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+
+    assert dalvi_suciu_lift.is_pure_lifted_plan(res)
+
+
+def test_lifted_conjunction_existential_negation_constant():
+    R = Symbol('R')
+    S = Symbol('S')
+    T = Symbol('T')
+    Q = Symbol('Q')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    query = Conjunction((
+        Negation(
+            ExistentialPredicate(
+                x,
+                Conjunction((
+                    R(x),
+                    S(x, y, Constant('2'))
+                ))
+            )
+        ),
+        Q(x, y),
+        T(y)
+    ))
+
+    symbol_table = {
+        symbol: ProbabilisticFactSet(Symbol.fresh(), 'p')
+        for symbol in (R, S, T)
+    }
+    symbol_table[Q] = DeterministicFactSet(Symbol.fresh())
+
+    res = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+
+    assert dalvi_suciu_lift.is_pure_lifted_plan(res)
+
+
+def test_mixed_probabilistic_deterministic_safe():
+    R = Symbol("R")
+    S = Symbol("S")
+    T = Symbol("T")
+    x = Symbol("x")
+    y = Symbol("y")
+    R_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("x",))
+    )
+    S_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x", "y"))
+    )
+    T_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x",))
+    )
+    symbol_table = {
+        R: DeterministicFactSet(R_relation),
+        S: ProbabilisticFactSet(S_relation, Constant(ColumnStr("_p_"))),
+        T: ProbabilisticFactSet(T_relation, Constant(ColumnStr("_p_"))),
+    }
+    query = ExistentialPredicate(
+        x,
+        ExistentialPredicate(
+            y,
+            Conjunction((R(x), S(x, y), T(y))),
+        )
+    )
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+def test_mixed_probabilistic_deterministic_unsafe():
+    R = Symbol("R")
+    S = Symbol("S")
+    T = Symbol("T")
+    x = Symbol("x")
+    y = Symbol("y")
+    R_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("x",))
+    )
+    S_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x", "y"))
+    )
+    T_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x",))
+    )
+    symbol_table = {
+        R: ProbabilisticFactSet(R_relation, Constant(ColumnStr("_p_"))),
+        S: DeterministicFactSet(S_relation),
+        T: ProbabilisticFactSet(T_relation, Constant(ColumnStr("_p_"))),
+    }
+    query = ExistentialPredicate(
+        x,
+        ExistentialPredicate(
+            y,
+            Conjunction((R(x), S(x, y), T(y))),
+        )
+    )
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert not dalvi_suciu_lift.is_pure_lifted_plan(plan)
+
+
+def test_interaction_deterministic_probfact_probchoice_safe():
+    Det = Symbol("Det")
+    Pchoice = Symbol("Pchoice")
+    Pfact = Symbol("Pfact")
+    x = Symbol("x")
+    y = Symbol("y")
+    Det_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("x",))
+    )
+    Pchoice_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "y"))
+    )
+    Pfact_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(iterable=[], columns=("_p_", "x",))
+    )
+    symbol_table = {
+        Det: ProbabilisticFactSet(Det_relation, Constant(ColumnStr("_p_"))),
+        Pchoice: DeterministicFactSet(Pchoice_relation),
+        Pfact: ProbabilisticFactSet(
+            Pfact_relation, Constant(ColumnStr("_p_"))
+        ),
+    }
+    query = ExistentialPredicate(
+        x,
+        ExistentialPredicate(
+            y,
+            Conjunction((Det(x, y), Pchoice(y), Pfact(x))),
+        )
+    )
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
+    assert dalvi_suciu_lift.is_pure_lifted_plan(plan)

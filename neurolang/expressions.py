@@ -17,6 +17,7 @@ from .type_system import get_args as get_type_args
 from .type_system import infer_type as _infer_type
 from .type_system import infer_type_builtins, is_leq_informative, unify_types
 from .typed_symbol_table import TypedSymbolTable
+from .config import config
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
@@ -359,24 +360,26 @@ class Expression(metaclass=ExpressionMeta):
         if not isinstance(other, type(self)):
             return False
 
-        for child in self.__children__:
-            val = getattr(self, child)
-            val_other = getattr(other, child)
+        return self.unapply() == other.unapply()
 
-            if isinstance(val, (list, tuple)):
-                if (
-                    len(val) != len(val_other) or
-                    not all(v == o for v, o in zip(val, val_other))
-                ):
-                    break
-            elif not val == val_other:
-                break
+    def __repr__(self):
+        name = type(self).__name__
+        if config.expression_type_printing():
+            r = f'{{{name}: {self.__type_repr__}}}'
         else:
-            return True
-        return False
+            r = f'{{{name}}}'
+        args = self.unapply()
+        if len(args) > 0:
+            str_args = (
+                '(' +
+                ', '.join(repr(arg) for arg in args) +
+                ')'
+            )
+            r += str_args
+        return r
 
     def __hash__(self):
-        return hash(tuple(getattr(self, c) for c in self.__children__))
+        return hash(self.unapply())
 
     def __lt__(self, other):
         """
@@ -434,17 +437,26 @@ class Symbol(NonConstant):
         self.is_fresh = False
 
     def __eq__(self, other):
-        return (
-            hash(self) == hash(other) and
-            (isinstance(other, Symbol) or isinstance(other, str))
-         )
+        if hash(self) != hash(other):
+            return False
+
+        if isinstance(other, str):
+            other_str = other
+        elif isinstance(other, Symbol):
+            other_str = other.name
+        else:
+            return False
+
+        return self.name == other_str
 
     def __hash__(self):
         return hash(self.name)
 
     def __repr__(self):
-        return f'S{{{self.name}}}'
-        # return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
+        if config.expression_type_printing():
+            return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
+        else:
+            return f'S{{{self.name}}}'
 
     def __getstate__(self):
         # Pickle a tuple instead of a set for _symbols to avoid calling hash
@@ -565,10 +577,10 @@ class Constant(Expression):
             warn('Making a comparison with types needed to be inferred')
 
         if isinstance(other, Expression):
-            if isinstance(other, Constant):
-                value_equal = other.value == self.value
-            else:
-                value_equal = hash(other) == hash(self)
+            value_equal = (
+                isinstance(other, Constant) and
+                (other.value == self.value)
+            )
 
             return value_equal and (
                 is_leq_informative(self.type, other.type) or
@@ -577,7 +589,8 @@ class Constant(Expression):
         else:
             return (
                 hash(other) == hash(self) and
-                type_validation_value(other, self.type)
+                type_validation_value(other, self.type) and
+                self.value == other
             )
 
     def __hash__(self):
@@ -594,7 +607,10 @@ class Constant(Expression):
             value_str = self.value.__qualname__
         else:
             value_str = repr(self.value)
-        return 'C{{{}: {}}}'.format(value_str, self.__type_repr__)
+        if config.expression_type_printing():
+            return 'C{{{}: {}}}'.format(value_str, self.__type_repr__)
+        else:
+            return 'C{{{}}}'.format(value_str)
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
@@ -638,9 +654,14 @@ class Lambda(Definition):
         self._symbols = self.function_expression._symbols - set(self.args)
 
     def __repr__(self):
-        r = u'\u03BB {} -> {}: {}'.format(
-            self.args, self.function_expression, self.__type_repr__
-        )
+        if config.expression_type_printing():
+            r = u'\u03BB {} -> {}: {}'.format(
+                self.args, self.function_expression, self.__type_repr__
+            )
+        else:
+            r = u'\u03BB {} -> {}'.format(
+                self.args, self.function_expression
+            )
         return r
 
 
@@ -741,9 +762,14 @@ class Projection(Definition):
         self.item = item
 
     def __repr__(self):
-        return u"\u03C3{{{}[{}]: {}}}".format(
-            self.collection, self.item, self.__type_repr__
-        )
+        if config.expression_type_printing():
+            return u"\u03C3{{{}[{}]: {}}}".format(
+                self.collection, self.item, self.__type_repr__
+            )
+        else:
+            return u"\u03C3{{{}[{}]}}".format(
+                self.collection, self.item
+            )
 
     def _auto_infer_type(self, collection, item):
         if is_leq_informative(collection.type, typing.Tuple):
@@ -776,9 +802,14 @@ class Statement(Definition):
         return self.rhs
 
     def __repr__(self):
-        return 'Statement{{{}: {} <- {}}}'.format(
-            repr(self.lhs), self.__type_repr__, repr(self.rhs)
-        )
+        if config.expression_type_printing():
+            return 'Statement{{{}: {} <- {}}}'.format(
+                repr(self.lhs), self.__type_repr__, repr(self.rhs)
+            )
+        else:
+            return 'Statement{{{} <- {}}}'.format(
+                repr(self.lhs), repr(self.rhs)
+            )
 
 
 class Query(Definition):
@@ -799,9 +830,31 @@ class Query(Definition):
         else:
             name = repr(self.head)
 
-        return 'Query{{{}: {} <- {}}}'.format(
-            name, self.__type_repr__, self.body
-        )
+        if config.expression_type_printing():
+            return 'Query{{{}: {} <- {}}}'.format(
+                name, self.__type_repr__, self.body
+            )
+        else:
+            return 'Query{{{} <- {}}}'.format(
+                name, self.body
+            )
+
+
+class Command(Definition):
+    def __init__(self, name, args, kwargs):
+        self.name = name
+        self.args = args
+        self.kwargs = kwargs
+
+    def __repr__(self):
+        arg_str = ""
+        if self.args and isinstance(self.args, typing.Iterable):
+            arg_str += ", ".join([repr(a) for a in self.args])
+        if self.kwargs and isinstance(self.kwargs, typing.Iterable):
+            if len(arg_str) > 0:
+                arg_str += ", "
+            arg_str += ", ".join(f"{k}={v}" for k, v in self.kwargs)
+        return "Command{{{}({})}}".format(self.name, arg_str)
 
 
 def infer_type(value, deep=False):

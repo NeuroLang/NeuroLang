@@ -20,6 +20,8 @@ from .datalog.sugar import (
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities
 )
+from ..commands import CommandsMixin
+from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol
 
@@ -72,6 +74,8 @@ class RegionFrontendDatalogSolver(
     TranslateHeadConstantsToEqualities,
     Fol2DatalogMixin,
     RegionSolver,
+    CommandsMixin,
+    NumpyFunctionsMixin,
     DatalogWithAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogProgram,

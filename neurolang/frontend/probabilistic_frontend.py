@@ -35,14 +35,20 @@ from ..datalog.aggregation import (
 )
 from ..datalog.chase import Chase
 from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
 )
+from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
-from ..exceptions import UnsupportedQueryError, UnsupportedSolverError
-from ..expression_walker import ExpressionBasicEvaluator
+from ..exceptions import (
+    UnsupportedQueryError,
+    UnsupportedSolverError,
+    UnsupportedProgramError,
+)
+from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
 from ..logic import Union
 from ..probabilistic import (
     dalvi_suciu_lift,
@@ -52,6 +58,9 @@ from ..probabilistic.cplogic.program import CPLogicMixin
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
+)
+from ..probabilistic.magic_sets_processing import (
+    probabilistic_postprocess_magic_rules,
 )
 from ..probabilistic.query_resolution import (
     QueryBasedProbFactToDetRule,
@@ -70,12 +79,14 @@ from ..relational_algebra import (
     RelationalAlgebraColumnStr,
 )
 from . import query_resolution_expressions as fe
+from ..commands import CommandsMixin
 from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
 )
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
+from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
@@ -88,11 +99,14 @@ class RegionFrontendCPLogicSolver(
     QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
     RegionSolver,
+    CommandsMixin,
+    NumpyFunctionsMixin,
     CPLogicMixin,
     DatalogWithAggregationMixin,
     BuiltinAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
+    TypedSymbolTableMixin,
     ExpressionBasicEvaluator,
 ):
     pass
@@ -109,10 +123,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         self,
         chase_class: Type[Chase] = Chase,
         probabilistic_solvers: Tuple[Callable] = (
+            small_dichotomy_theorem_based_solver.solve_succ_query,
             dalvi_suciu_lift.solve_succ_query,
             wmc_solve_succ_query,
         ),
         probabilistic_marg_solvers: Tuple[Callable] = (
+            small_dichotomy_theorem_based_solver.solve_marg_query,
             dalvi_suciu_lift.solve_marg_query,
             wmc_solve_marg_query,
         ),
@@ -297,12 +313,33 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         """
         query_pred_symb = predicate.expression.functor
+        query_pred_args = predicate.expression.args
         if is_probabilistic_predicate_symbol(query_pred_symb, self.program_ir):
             raise UnsupportedQueryError(
                 "Queries on probabilistic predicates are not supported"
             )
         query = self.program_ir.symbol_table[query_pred_symb].formulas[0]
-        solution = self._solve(query)
+
+        try:
+            with self.scope:
+                goal, magic_rules = magic_rewrite(
+                    query.consequent, self.program_ir
+                )
+                self.program_ir.walk(magic_rules)
+                magic_query = self.program_ir.symbol_table[goal].formulas[0]
+                (
+                    magic_query,
+                    magic_rules,
+                ) = probabilistic_postprocess_magic_rules(
+                    self.program_ir, magic_query, magic_rules
+                )
+            with self.scope:
+                self.program_ir.walk(magic_rules)
+                solution = self._solve(magic_query)
+                query_pred_symb = magic_query.consequent.functor
+        except (InvalidMagicSetError, UnsupportedProgramError) :
+            solution = self._solve(query)
+
         if not isinstance(head, tuple):
             # assumes head is a predicate e.g. r(x, y)
             head_symbols = tuple(head.expression.args)
@@ -311,7 +348,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             head_symbols = tuple(t.expression for t in head)
             functor_orig = None
         solution = self._restrict_to_query_solution(
-            head_symbols, predicate, solution
+            head_symbols, query_pred_symb, query_pred_args, solution
         )
         if functor_orig is None:
             solution = solution.value
@@ -452,12 +489,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     @staticmethod
-    def _restrict_to_query_solution(head_symbols, predicate, solution):
+    def _restrict_to_query_solution(
+        head_symbols, pred_symb, pred_args, solution
+    ):
         """
-        Based on a solution instance and a query predicate, retrieve the
-        relation whose columns correspond to symbols in the head of the query.
+        Based on a solution instance and a query predicate symbol and args,
+        retrieve the relation whose columns correspond to symbols in the head
+        of the query.
         """
-        pred_symb = predicate.expression.functor
         # return dum when empty solution (reported in GH481)
         if pred_symb not in solution:
             return ir.Constant[AbstractSet](
@@ -465,10 +504,16 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
         query_solution = solution[pred_symb].value.unwrap()
         query_row_type = solution[pred_symb].value.row_type
+        constant_selection = {
+            i: c.value for i, c in enumerate(pred_args)
+            if isinstance(c, ir.Constant)
+        }
+        if constant_selection:
+            query_solution = query_solution.selection(constant_selection)
         cols = list(
-            arg.name
-            for arg in predicate.expression.args
-            if isinstance(arg, ir.Symbol)
+            arg.name if isinstance(arg, ir.Symbol)
+            else ir.Symbol.fresh().name
+            for arg in pred_args
         )
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
@@ -693,11 +738,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         columns = tuple(ir.Symbol.fresh().name for _ in range(arity))
         ra_set = NamedRelationalAlgebraFrozenSet(columns, iterable)
         prob_col = ir.Symbol.fresh().name
-        probability = 1 / len(iterable)
+        probability = 1 / len(ra_set)
         projections = collections.OrderedDict()
         projections[prob_col] = probability
         for col in columns:
             projections[col] = RelationalAlgebraColumnStr(col)
         ra_set = ra_set.extended_projection(projections)
-        self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
+        self.program_ir.add_probabilistic_choice_from_tuples(
+            symbol,
+            ra_set.projection_to_unnamed(*projections.keys())
+        )
         return fe.Symbol(self, name)

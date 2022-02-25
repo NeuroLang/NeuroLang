@@ -5,7 +5,7 @@ import pytest
 
 from ...datalog.expression_processing import UnifyVariableEqualitiesMixin
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication
+from ...logic import Conjunction, Implication, Disjunction, Negation
 from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
     ProbabilisticFactSet,
@@ -17,6 +17,7 @@ EQ = Constant(operator.eq)
 
 P = Symbol("P")
 Q = Symbol("Q")
+R = Symbol("R")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
@@ -253,3 +254,113 @@ def test_shattering_between_symbol_equalities():
         formula.functor == EQ and formula.args == (y, z)
         for formula in shattered.antecedent.formulas
     )
+
+
+def test_cannot_shatter_dependent_disjuncts():
+    """
+    In this query
+
+    ans(x, y) :- ( P(a, x) ^ Q(x, y) ) v ( P(a, x) ^ P(b, x) ^ Q(y, hello) )
+
+    the two disjuncts are not independent because they have an overlapping
+    ground atom Q(x, hello) with x == y.
+
+    Therefore the shattering should raise a NotEasilyShatterableError
+    """
+    cpl = CPLogicProgramWithVarEqUnification()
+    cpl.add_probabilistic_facts_from_tuples(
+        P,
+        [
+            (0.2, 'a', 42),
+            (0.7, 'b', 19),
+            (0.1, 'a', 10),
+            (0.9, 'b', 99),
+            (0.888, 'b', 42),
+        ],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [
+            (0.777, 42, 'hello'),
+            (0.666, 42, 'bonjour'),
+            (0.999, 19, 'ciao'),
+        ],
+    )
+    query = Implication(
+        ans(x, y),
+        Disjunction(
+            (
+                Conjunction((P(a, x), Q(x, y))),
+                Conjunction((Q(y, Constant('hello')), P(b, y), P(a, x))),
+            )
+        )
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    with pytest.raises(NotEasilyShatterableError):
+        shatter_easy_probfacts(query, symbol_table)
+
+
+def test_shattering_negation():
+    query = Implication(ans(x, y), Negation(P(x, y)))
+    cpl = CPLogicProgramWithVarEqUnification()
+    cpl.add_probabilistic_facts_from_tuples(
+        P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered.antecedent, Negation)
+    assert isinstance(
+        shattered.antecedent.formula.functor, ProbabilisticFactSet
+    )
+    assert shattered.antecedent.formula.functor.relation.is_fresh
+
+
+def test_shatter_disjunction_same_shattering_relation():
+    query = Implication(
+        ans(x, y),
+        Disjunction(
+            (
+                Conjunction((P(a, y), Q(x))),
+                Conjunction((P(a, y), R(x))),
+            )
+        )
+    )
+    cpl = CPLogicProgramWithVarEqUnification()
+    cpl.add_probabilistic_facts_from_tuples(
+        P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered.antecedent, Disjunction)
+    assert len(shattered.antecedent.formulas) == 2
+    R_formula = next(
+        formula for formula in shattered.antecedent.formulas
+        if isinstance(formula, Conjunction)
+        and any(
+            isinstance(f, FunctionApplication)
+            and f.functor == R
+            for f in formula.formulas
+        )
+    )
+    assert len(R_formula.formulas) == 2
+    Q_formula = next(
+        formula for formula in shattered.antecedent.formulas
+        if isinstance(formula, Conjunction)
+        and any(
+            isinstance(f, FunctionApplication)
+            and f.functor == Q
+            for f in formula.formulas
+        )
+    )
+    assert len(Q_formula.formulas) == 2
+    shattered_in_R = next(
+        formula for formula in R_formula.formulas
+        if isinstance(formula.functor, ProbabilisticFactSet)
+        and formula.functor.relation.is_fresh
+    )
+    shattered_in_Q = next(
+        formula for formula in Q_formula.formulas
+        if isinstance(formula.functor, ProbabilisticFactSet)
+        and formula.functor.relation.is_fresh
+    )
+    assert shattered_in_R.functor.relation == shattered_in_Q.functor.relation

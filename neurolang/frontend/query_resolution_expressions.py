@@ -7,6 +7,7 @@ in an ergonomic manner, and attention is paid to their representation
 """
 import operator as op
 from functools import wraps
+from types import BuiltinFunctionType
 from typing import (
     AbstractSet,
     Any,
@@ -235,7 +236,7 @@ class Expression(object):
         """
         if isinstance(self.expression, ir.Constant):
             return self._repr_constant(self.expression)
-        elif isinstance(self.expression, dl.magic_sets.AdornedExpression):
+        elif isinstance(self.expression, dl.magic_sets.AdornedSymbol):
             name = f"{self.expression.expression.name}"
             if self.expression.adornment:
                 name += f"^{self.expression.adornment}"
@@ -809,8 +810,14 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
         return expression.value
 
     @add_match(ir.FunctionApplication)
-    def function_application(self, expression: ir.Expression) -> Any:
-        functor = self.walk(expression.functor)
+    def walk_function_application(self, expression: ir.Expression) -> Any:
+        if (
+            isinstance(expression.functor, ir.Constant) and
+            not isinstance(expression.functor.value, BuiltinFunctionType)
+        ):
+            functor = Expression(self.query_builder, expression.functor)
+        else:
+            functor = self.walk(expression.functor)
         args = tuple(self.walk(arg) for arg in expression.args)
         return functor(*args)
 

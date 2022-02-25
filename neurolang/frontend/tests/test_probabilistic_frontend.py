@@ -11,7 +11,9 @@ from ...exceptions import (
     NegativeFormulaNotSafeRangeException,
     UnsupportedProgramError,
     UnsupportedQueryError,
+    NeuroLangException,
 )
+from ...logic.horn_clauses import Fol2DatalogTranslationException
 from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
@@ -107,21 +109,28 @@ def test_marg_query():
     nl.add_probabilistic_choice_from_tuples(
         {(0.2, "a"), (0.3, "b"), (0.5, "c")}, name="P"
     )
-    nl.add_tuple_set({(1, "a"), (2, "a"), (2, "b")}, name="Q")
-    nl.add_tuple_set({(1, "a"), (1, "b"), (2, "b"), (2, "c")}, name="R")
+    nl.add_tuple_set({(4, "a"), (5, "a"), (5, "b")}, name="Q")
+    nl.add_probabilistic_facts_from_tuples(
+        {
+            (0.2, 1, "a"),
+            (0.1, 1, "b"),
+            (0.7, 2, "b"),
+            (0.9, 2, "c"),
+        },
+        name="R",
+    )
 
     with nl.scope as e:
-        e.Z[e.x, e.z, e.PROB[e.x, e.z]] = (e.Q(e.x, e.y) & e.P(e.y)) // (
-            e.R(e.z, e.y) & e.P(e.y)
-        )
-
+        e.Z[e.x, e.z, e.PROB[e.x, e.z]] = (
+            e.Q(e.x, e.y) & e.P(e.y)
+        ) // (e.R(e.z, e.y) & e.P(e.y))
         res = nl.solve_all()
 
     expected = RelationalAlgebraFrozenSet(
         {
-            (1, 1, 0.4),
-            (2, 1, 1.0),
-            (2, 2, 0.375),
+            (4, 1, 0.2 * 0.2 / (0.2 * 0.2 + 0.3 * 0.1)),
+            (5, 1, (0.2 * 0.2 + 0.3 * 0.1) / (0.2 * 0.2 + 0.3 * 0.1)),
+            (5, 2, 0.3 * 0.7 / (0.3 * 0.7 + 0.9 * 0.5)),
         }
     )
     assert_almost_equal(res["Z"], expected)
@@ -187,11 +196,14 @@ def test_within_language_succ_query():
     )
     with nl.scope as e:
         e.Z[e.x, e.PROB[e.x]] = P[e.x, e.y] & Q[e.x]
-        res = nl.solve_all()
-    assert "Z" in res.keys()
-    df = res["Z"].as_pandas_dataframe()
-    assert np.isclose(df.loc[df.iloc[:, 0] == "b"].iloc[0, 1], 2 / 3 / 2)
-    assert np.isclose(df.loc[df.iloc[:, 0] == "a"].iloc[0, 1], 1 / 3 / 2)
+        res = nl.query((e.x, e.p), e.Z(e.x, e.p))
+    expected = RelationalAlgebraFrozenSet(
+        [
+            ("b", 1 / 3 * 1 / 2 + 1 / 3 * 1 / 2),
+            ("a", 1 / 3 * 1 / 2),
+        ]
+    )
+    assert_almost_equal(res, expected)
 
 
 def test_solve_query():
@@ -246,10 +258,31 @@ def test_solve_boolean_query():
     Q = nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("d",), ("c",)], name="Q"
     )
-    with pytest.raises(UnsupportedProbabilisticQueryError):
-        with nl.scope as e:
-            e.ans[e.PROB()] = P[e.x] & Q[e.x]
-            nl.query((e.p), e.ans[e.p])
+    with nl.scope as e:
+        e.ans[e.PROB()] = P[e.x] & Q[e.x]
+        res = nl.query((e.p), e.ans[e.p])
+
+    expected = RelationalAlgebraFrozenSet([(2 / 9,)])
+    assert_almost_equal(res, expected)
+
+
+def test_solve_query_with_constant():
+    nl = NeurolangPDL()
+    P = nl.add_probabilistic_choice_from_tuples(
+        {(0.2, "a"), (0.3, "b"), (0.5, "c")}, name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("d",), ("c",)], name="Q"
+    )
+    with nl.scope as e:
+        e.ans[e.x, e.PROB(e.x)] = P[e.x] & Q[e.x]
+        res = nl.query((e.p), e.ans["a", e.p])
+    expected = RelationalAlgebraFrozenSet(
+        [
+            (0.2 * 1/3,),
+        ]
+    )
+    assert_almost_equal(res, expected)
 
 
 def test_solve_complex_stratified_query():
@@ -323,7 +356,6 @@ def test_neurolange_dl_deterministic_negation():
     assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i != j}
 
 
-@pytest.mark.skip
 def test_neurolange_dl_probabilistic_negation():
     neurolang = NeurolangPDL()
     s = neurolang.new_symbol(name="s")
@@ -432,7 +464,8 @@ def test_post_probabilistic_aggregation():
         res = nl.query((e.x, e.s), e.D[e.x, e.s])
 
     assert len(res) == 2
-    assert res.to_unnamed() == {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
+    expected = {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
+    assert_almost_equal(res.to_unnamed(), expected)
 
 
 def test_empty_result_query():
@@ -799,7 +832,12 @@ def test_solve_marg_query_disjunction():
         ],
         name="does_not_smoke",
     )
-    with pytest.raises(ForbiddenConditionalQueryNonConjunctive):
+    with pytest.raises(
+        (
+            ForbiddenConditionalQueryNonConjunctive,
+            Fol2DatalogTranslationException,
+        )
+    ):
         with nl.environment as e:
             e.query[e.p, e.PROB[e.p, e.city, e.sport], e.city, e.sport] = (
                 e.person[e.p]
@@ -817,11 +855,50 @@ def test_query_without_safe_plan():
         name="names",
     )
 
+    expected = NamedRelationalAlgebraFrozenSet(
+        columns=('x', 'y', 'PROB'),
+        iterable={
+            ('alice', 'alice', 0.2),
+            ('bob', 'bob', 0.8),
+            ('alice', 'bob', 0.8 * 0.2),
+            ('bob', 'alice', 0.8 * 0.2)
+        }
+    )
+
     with nl.environment as e:
         e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
 
-    with pytest.raises(dalvi_suciu_lift.NonLiftableException):
-        nl.solve_all()
+    res = nl.solve_all()['q']
+    assert res == expected
+
+
+def test_query_without_safe_plan_2():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "alice", 1),
+            (0.4, "alice", 2),
+            (0.8, "bob", 2),
+            (0.6, "bob", 1),
+        ],
+        name="names",
+    )
+
+    expected = NamedRelationalAlgebraFrozenSet(
+        columns=('x', 'y', 'PROB'),
+        iterable={
+            ('alice', 'alice', 0.52),
+            ('bob', 'bob', 0.92),
+            ('alice', 'bob', 0.40160000000000007),
+            ('bob', 'alice', 0.40160000000000007)
+        }
+    )
+
+    with nl.environment as e:
+        e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x, e.s] & e.names[e.y, e.s]
+
+    res = nl.solve_all()['q']
+    assert res == expected
 
 
 def test_query_without_safe_fails():
@@ -842,6 +919,31 @@ def test_query_without_safe_fails():
 
     with pytest.raises(dalvi_suciu_lift.NonLiftableException):
         nl.solve_all()
+
+
+def test_query_self_join_matrix_query_ds():
+    nl = NeurolangPDL(
+        probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
+        probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "alice", 1),
+            (0.8, "bob", 1),
+            (0.4, "sam", 2),
+            (0.3, "alice", 1)
+        ],
+        name="names",
+    )
+
+    with nl.environment as e:
+        e.q[e.PROB()] = e.names[e.x, e.z] & e.names[e.y, e.z]
+
+    res = nl.solve_all()['q']
+
+    assert len(res) == 1
+    assert res.arity == 1
+    assert list(res)[0].PROB == 0.9328
 
 
 def test_cbma_two_term_conjunctive_query():
@@ -895,6 +997,59 @@ def test_cbma_two_term_conjunctive_query():
                 (0.5 * 0.1 * 0.2 + 0.3 * 0.4 * 0.3 + 0.1 * 0.5 * 0.6)
                 / (0.1 * 0.2 + 0.3 * 0.4 + 0.5 * 0.6),
             ),
+        ]
+    )
+    assert_almost_equal(res, expected)
+
+
+def test_cbma_prob_query_with_negation():
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [
+            ("s1",),
+            ("s2",),
+            ("s3",),
+        ],
+        name="SelectedStudy",
+    )
+    nl.add_tuple_set([("nA",), ("nB",)], name="Network")
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.1, "t1", "s1"),
+            (0.2, "t2", "s1"),
+            (0.3, "t1", "s2"),
+            (0.4, "t2", "s2"),
+            (0.5, "t1", "s3"),
+            (0.6, "t2", "s3"),
+        ],
+        name="TermInStudy",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.6, "nA", "s1"),
+            (0.5, "nB", "s1"),
+            (0.4, "nA", "s2"),
+            (0.3, "nB", "s2"),
+            (0.2, "nA", "s3"),
+            (0.1, "nB", "s3"),
+        ],
+        name="NetworkReported",
+    )
+    with nl.environment as e:
+        e.ProbTermAssociation[e.t, e.n, e.PROB[e.t, e.n]] = (
+            e.TermInStudy[e.t, e.s] & e.SelectedStudy[e.s]
+        ) // (
+            ~e.NetworkReported[e.n, e.s]
+            & e.Network[e.n]
+            & e.SelectedStudy[e.s]
+        )
+        res = nl.query((e.t, e.n, e.p), e.ProbTermAssociation[e.t, e.n, e.p])
+    expected = RelationalAlgebraFrozenSet(
+        [
+            ("t1", "nA", 0.344444),
+            ("t1", "nB", 0.338095),
+            ("t2", "nA", 0.444444),
+            ("t2", "nB", 0.438095),
         ]
     )
     assert_almost_equal(res, expected)
@@ -1020,19 +1175,24 @@ def test_postprob_conjunct_with_wlq_result():
 def test_no_tuple_unicity_qbased_pfact():
     nl = NeurolangPDL(check_qbased_pfact_tuple_unicity=True)
     nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
-    with nl.environment as e:
+    with nl.scope as e:
         (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
         e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
         with pytest.raises(RepeatedTuplesInProbabilisticRelationError):
             nl.query((e.x, e.p), e.Query(e.x, e.p))
     nl = NeurolangPDL(check_qbased_pfact_tuple_unicity=False)
     nl.add_tuple_set([(0.2, "a"), (0.5, "b"), (0.9, "a")], name="P")
-    with nl.environment as e:
+    with nl.scope as e:
         (e.Q @ e.p)[e.x] = e.P(e.p, e.x)
         e.Query[e.x, e.PROB(e.x)] = e.Q(e.x)
-        result = nl.query((e.x, e.p), e.Query(e.x, e.p))
-    expected = {("a", 0.2), ("b", 0.5), ("a", 0.9)}
-    assert_almost_equal(result, expected)
+        try:
+            nl.query((e.x, e.p), e.Query(e.x, e.p))
+        except NeuroLangException:
+            pytest.fail(
+                "Expected this test not to raise an exception as "
+                "the tuple unicity check on query-based probabilistic tables "
+                "is disabled"
+            )
 
 
 def test_qbased_pfact_max_prob():
@@ -1044,3 +1204,209 @@ def test_qbased_pfact_max_prob():
         sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
     expected = {("a", 0.9), ("b", 0.5)}
     assert_almost_equal(sol, expected)
+
+
+def test_noisy_or_probabilistic_query():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "a", "b"),
+            (0.7, "a", "c"),
+            (0.9, "b", "c"),
+        ],
+        name="R",
+    )
+    with nl.scope as e:
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x, e.y)
+        sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 1 - (1 - 0.2) * (1 - 0.7)),
+        ("b", 1 - (1 - 0.9)),
+    }
+    assert_almost_equal(sol, expected)
+
+
+def test_disjunctive_probfact_rule():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.7, "a"),
+            (0.1, "b"),
+            (0.8, "c"),
+        ],
+        name="P",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.4, "a"),
+            (0.8, "b"),
+        ],
+        name="Q",
+    )
+    with nl.scope as e:
+        e.Z[e.x] = e.P(e.x)
+        e.Z[e.x] = e.Q(e.x)
+        e.Query[e.x, e.PROB(e.x)] = e.Z(e.x)
+        sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 1 - (1 - 0.7) * (1 - 0.4)),
+        ("b", 1 - (1 - 0.1) * (1 - 0.8)),
+        ("c", 0.8),
+    }
+    assert_almost_equal(sol, expected)
+
+
+def test_probchoice_disjunction():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (0.7, "a"),
+            (0.3, "b"),
+        ],
+        name="P",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.8, "a"),
+            (0.9, "c"),
+        ],
+        name="Q",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "d", "c"),
+            (0.1, "b", "a"),
+            (0.4, "b", "b"),
+        ],
+        name="R",
+    )
+    with nl.scope as e:
+        e.Z[e.x] = e.P(e.x) & e.Q(e.x)
+        e.Z[e.x] = e.P(e.x) & e.R(e.x, e.y)
+        e.Query[e.x, e.PROB(e.x)] = e.Z(e.x)
+        sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 0.7 * 0.8),
+        ("b", 0.3 * (1 - (1 - 0.1) * (1 - 0.4))),
+    }
+    assert_almost_equal(sol, expected)
+
+
+def test_probchoice_disjunction_probfact_probchoice():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (0.7, "a"),
+            (0.3, "b"),
+        ],
+        name="P",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.8, "a"),
+            (0.9, "c"),
+        ],
+        name="Q",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "d", "c"),
+            (0.1, "b", "a"),
+            (0.4, "b", "b"),
+        ],
+        name="R",
+    )
+    with nl.scope as e:
+        e.Z[e.x] = e.P(e.x) & e.Q(e.x)
+        e.Z[e.x] = e.R(e.x, e.y)
+        e.Query[e.x, e.PROB(e.x)] = e.Z(e.x)
+        sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 0.7 * 0.8),
+        ("b", 1 - (1 - 0.1) * (1 - 0.4)),
+        ("d", 0.2),
+    }
+    assert_almost_equal(sol, expected)
+
+
+def test_simple_disjunction_probfacts():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.7, "a"),
+            (0.3, "b"),
+        ],
+        name="P",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.8, "a"),
+            (0.9, "c"),
+        ],
+        name="Q",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "d"),
+            (0.1, "b"),
+        ],
+        name="R",
+    )
+    with nl.scope as e:
+        e.Z[e.x] = e.P(e.x) & e.Q(e.x)
+        e.Z[e.x] = e.R(e.x)
+        e.Query[e.x, e.PROB(e.x)] = e.Z(e.x)
+        sol = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 0.7 * 0.8),
+        ("b", 0.1),
+        ("d", 0.2),
+    }
+    assert_almost_equal(sol, expected)
+
+
+def test_pchoice_with_both_eqvar_and_free_var():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (0.7, "a", "b"),
+            (0.2, "a", "c"),
+            (0.1, "b", "b"),
+        ],
+        name="Pchoice",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.9, "a"),
+            (0.2, "b"),
+            (1.0, "c"),
+        ],
+        name="Pfact",
+    )
+    with nl.scope as e:
+        e.Query[e.x, e.PROB(e.x)] = e.Pchoice(e.x, e.y) & e.Pfact(e.y)
+        result = nl.query((e.x, e.prob), e.Query(e.x, e.prob))
+    expected = {
+        ("a", 0.7 * 0.2 + 0.2 * 1.0),
+        ("b", 0.1 * 0.2),
+    }
+    assert_almost_equal(result, expected)
+
+
+def test_current_program_with_probfact():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [
+            (10751455, "emotion", 0.052538),
+            (10808134, "emotion", 0.244368),
+            (10913505, "emotion", 0.059463),
+        ],
+        name="TermInStudyTFIDF",
+    )
+    exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
+    with nl.environment as e:
+        (e.TermInStudy @ (1 / (1 + exp(-300 * (e.tfidf - 0.001)))))[
+            e.t, e.s
+        ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
+    prog = nl.current_program
+    assert len(prog) == 2

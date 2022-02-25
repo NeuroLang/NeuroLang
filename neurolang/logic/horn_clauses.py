@@ -44,6 +44,7 @@ from .transformations import (
     EliminateImplications,
     LogicExpressionWalker,
     MoveNegationsToAtoms,
+    PushExistentialsDown,
     RemoveUniversalPredicates
 )
 
@@ -160,6 +161,7 @@ def convert_to_srnf(e):
     w = ChainedWalker(
         DesambiguateQuantifiedVariables,
         EliminateImplications,
+        PushExistentialsDown,
         RemoveUniversalPredicates,
         MoveNegationsToAtomsOrExistentialQuantifiers,
     )

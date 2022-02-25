@@ -128,8 +128,6 @@ class OntologyParser:
                 if prop == SKOS.related:
                     self._parse_individual_related(entity, prop, value)
 
-
-
     def _parseSubClass(self, entity, val):
         '''Function in charge of identifying the type of constraint to be
         parsed. At the moment it allows to parse subclasses, basic
@@ -176,7 +174,6 @@ class OntologyParser:
             cons = Symbol(self._parse_name(val))
             x = Symbol.fresh()
             imp = RightImplication(ant(x), cons(x))
-            #imp = Implication(cons(x), ant(x))
             self._categorize_constraints([imp])
 
             neurolang_subclassof = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+'subClassOf')
@@ -530,7 +527,6 @@ class OntologyParser:
         warnings.warn("Not implemented yet: EnumeratedClass")
 
     def _parseEquivalentClass(self, entity, prop, value):
-        # <->
         warnings.warn("Not implemented yet: EquivalentClass")
 
     def _categorize_constraints(self, formulas):

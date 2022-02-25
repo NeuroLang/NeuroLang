@@ -1,10 +1,12 @@
 from functools import reduce
+import logging
 
 from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
-from ..logic import Conjunction, Disjunction, ExistentialPredicate
+from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..logic.expression_processing import (
     extract_logic_atoms,
-    extract_logic_free_variables
+    extract_logic_free_variables,
+    extract_logic_predicates
 )
 from ..logic.transformations import (
     CollapseConjunctions,
@@ -13,7 +15,9 @@ from ..logic.transformations import (
     DistributeDisjunctions,
     GuaranteeConjunction,
     GuaranteeDisjunction,
+    MoveNegationsToAtomsInFONegE,
     PushExistentialsDown,
+    RemoveDuplicatedConjunctsDisjuncts,
     RemoveTrivialOperations,
     RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix
@@ -21,8 +25,13 @@ from ..logic.transformations import (
 from ..logic.unification import compose_substitutions, most_general_unifier
 from .containment import is_contained
 
+
+LOG = logging.getLogger(__name__)
+
+
 GC = GuaranteeConjunction()
 GD = GuaranteeDisjunction()
+MNA = MoveNegationsToAtomsInFONegE()
 PED = PushExistentialsDown()
 RTO = RemoveTrivialOperations()
 
@@ -44,17 +53,19 @@ def minimize_ucq_in_cnf(query):
     query = convert_to_cnf_ucq(query)
     head_variables = extract_logic_free_variables(query)
     cq_d_min = Conjunction(tuple(
-        minimize_component_disjunction(c)
+        minimize_component_disjunction(c, head_variables)
         for c in query.formulas
     ))
 
     simplify = ChainedWalker(
+        MoveNegationsToAtomsInFONegE,
         PushExistentialsDown,
+        RemoveDuplicatedConjunctsDisjuncts,
         RemoveTrivialOperations,
         GuaranteeConjunction,
     )
 
-    cq_min = minimize_component_conjunction(cq_d_min)
+    cq_min = minimize_component_conjunction(cq_d_min, head_variables)
     cq_min = add_existentials_except(cq_min, head_variables)
     return simplify.walk(cq_min)
 
@@ -76,20 +87,21 @@ def minimize_ucq_in_dnf(query):
     query = convert_to_dnf_ucq(query)
     head_variables = extract_logic_free_variables(query)
     cq_d_min = Disjunction(tuple(
-        minimize_component_conjunction(c)
+        minimize_component_conjunction(c, head_variables)
         for c in query.formulas
     ))
 
     simplify = ChainedWalker(
+        MoveNegationsToAtomsInFONegE,
         PushExistentialsDown,
+        RemoveDuplicatedConjunctsDisjuncts,
         RemoveTrivialOperations,
         GuaranteeDisjunction
     )
 
-    cq_min = minimize_component_disjunction(cq_d_min)
+    cq_min = minimize_component_disjunction(cq_d_min, head_variables)
     cq_min = add_existentials_except(cq_min, head_variables)
     return simplify.walk(cq_min)
-
 
 def convert_rule_to_ucq(implication):
     """Convert datalog rule to logic UCQ.
@@ -109,6 +121,7 @@ def convert_rule_to_ucq(implication):
     """
     implication = RTO.walk(implication)
     consequent, antecedent = implication.unapply()
+    antecedent = MNA.walk(antecedent)
     head_vars = set(consequent.args)
     existential_vars = (
         extract_logic_free_variables(antecedent) -
@@ -136,6 +149,7 @@ def convert_to_cnf_ucq(expression):
     expression = RTO.walk(expression)
     expression = Conjunction((expression,))
     c = ChainedWalker(
+        MoveNegationsToAtomsInFONegE,
         PushExistentialsDown,
         DistributeDisjunctions,
         CollapseConjunctions,
@@ -161,6 +175,7 @@ def convert_to_dnf_ucq(expression):
     expression = RTO.walk(expression)
     expression = Disjunction((expression,))
     c = ChainedWalker(
+        MoveNegationsToAtomsInFONegE,
         PushExistentialsDown,
         DistributeConjunctions,
         CollapseDisjunctions,
@@ -169,7 +184,7 @@ def convert_to_dnf_ucq(expression):
     return c.walk(expression)
 
 
-def minimize_component_disjunction(disjunction):
+def minimize_component_disjunction(disjunction, head_vars=None):
     """Given a disjunction of queries Q1  ∨ ... ∨ Qn
     remove each query Qi such that exists Qj and
     Qi → Qj.
@@ -179,22 +194,32 @@ def minimize_component_disjunction(disjunction):
     disjunction : Disjunction
         Disjunction of logical formulas to minimise.
 
+    head_vars: set
+        variables to be considered as constants
+
     Returns
     -------
     Disjunction
         Minimised disjunction.
     """
+
+    if head_vars is None:
+        head_vars = {}
+
     if not isinstance(disjunction, Disjunction):
         return disjunction
+    positive_formulas, negative_formulas = \
+        split_positive_negative_formulas(disjunction)
     keep = minimise_formulas_containment(
-        disjunction.formulas,
-        is_contained
-    )
+        positive_formulas,
+        is_contained,
+        head_vars
+    ) + tuple(negative_formulas)
 
     return GD.walk(RTO.walk(Disjunction(keep)))
 
 
-def minimize_component_conjunction(conjunction):
+def minimize_component_conjunction(conjunction, head_vars=None):
     """Given a conjunction of queries Q1 ∧ ... ∧ Qn
     remove each query Qi such that exists Qj and
     Qj → Qi.
@@ -204,22 +229,64 @@ def minimize_component_conjunction(conjunction):
     conjunction : Conjunction
         conjunction of logical formulas to minimise.
 
+    head_vars: set
+        variables to be considered as constants
+
     Returns
     -------
     Conjunction
         minimised conjunction.
     """
+
+    LOG.debug("About to minimize conjunction %s", conjunction)
+
+    if head_vars is None:
+        head_vars = {}
+
     if not isinstance(conjunction, Conjunction):
         return conjunction
+    positive_formulas, negative_formulas = \
+        split_positive_negative_formulas(conjunction)
     keep = minimise_formulas_containment(
-        conjunction.formulas,
-        lambda x, y: is_contained(y, x)
-    )
+        positive_formulas,
+        lambda x, y: is_contained(y, x),
+        head_vars
+    ) + tuple(negative_formulas)
 
     return GC.walk(RTO.walk(Conjunction(keep)))
 
 
-def minimise_formulas_containment(components, containment_op):
+def split_positive_negative_formulas(nary_logic_operation):
+    """Split formulas of the n_ary_logic operation in those
+    containing a negated predicate and those not.
+
+    Parameters
+    ----------
+    nary_logic_operation : NAryLogicOperation
+        Operation whose formulas are going to be split
+
+    Returns
+    -------
+    positive, negative
+        two Iterable[Union[LogicOperation, FunctionApplication]] objects
+        containing the positive and negative formulas
+    """
+
+    formulas = nary_logic_operation.formulas
+    positive_formulas = []
+    negative_formulas = []
+    for formula in formulas:
+        if any(
+            isinstance(sub_formula, Negation)
+            for sub_formula in extract_logic_predicates(formula)
+        ):
+            negative_formulas.append(formula)
+        else:
+            positive_formulas.append(formula)
+    return positive_formulas, negative_formulas
+
+
+def minimise_formulas_containment(components, containment_op, head_vars):
     components_fv = [
         extract_logic_free_variables(c)
         for c in components
@@ -231,16 +298,17 @@ def minimise_formulas_containment(components, containment_op):
             if i == j:
                 continue
             c_fv = components_fv[i] & components_fv[j]
-            q = add_existentials_except(c, c_fv)
-            q_ = add_existentials_except(c_, c_fv)
+            q = add_existentials_except(c, c_fv | head_vars)
+            q_ = add_existentials_except(c_, c_fv | head_vars)
             is_contained = containments.setdefault(
                 (i, j), containment_op(q_, q)
             )
+            LOG.debug("Checking containment %s <= %s: %s", q, q_, is_contained)
             if (
                 is_contained and
                 not (
                     j < i and
-                    containments[(j, i)]
+                    containments.get((j, i), False)
                 )
             ):
                 break
@@ -291,7 +359,7 @@ def unify_existential_variables(query):
     """
     original_query = query
     query = convert_to_pnf_with_dnf_matrix(query)
-    query = RemoveUniversalPredicates().walk(query)
+    query = RTO.walk(RemoveUniversalPredicates().walk(query))
     variables_to_project = extract_logic_free_variables(query)
     while isinstance(query, ExistentialPredicate):
         query = query.body
