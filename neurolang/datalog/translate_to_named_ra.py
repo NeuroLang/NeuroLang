@@ -2,6 +2,8 @@ import collections
 from operator import contains, eq, not_
 from typing import AbstractSet, Callable, Tuple
 
+from neurolang.relational_algebra.relational_algebra import str2columnstr_constant
+
 from ..exceptions import (
     CouldNotTranslateConjunctionException,
     ForbiddenExpressionError,
@@ -14,7 +16,8 @@ from ..expression_walker import (
     add_match
 )
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Disjunction
+from ..logic import Disjunction, ExistentialPredicate, Conjunction, Negation
+from ..logic.expression_processing import extract_logic_free_variables
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -32,7 +35,6 @@ from ..relational_algebra import (
 )
 from ..type_system import is_leq_informative
 from ..utils import NamedRelationalAlgebraFrozenSet
-from .expressions import Conjunction, Negation
 
 EQ = Constant(eq)
 CONTAINS = Constant(contains)
@@ -275,6 +277,15 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
         return output
 
+    @add_match(ExistentialPredicate)
+    def translate_existential_predicate(self, expression):
+        free_variables = extract_logic_free_variables(expression)
+        body = self.walk(expression.body)
+        return Projection(
+            body,
+            tuple(str2columnstr_constant(fv.name) for fv in free_variables)
+        )
+
     def classify_formulas_obtain_names(self, expression):
         classified_formulas = {
             "pos_formulas": [],
@@ -300,9 +311,9 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                     classified_formulas["named_columns"].update(
                         formula.value.columns
                     )
-                elif isinstance(formula, NameColumns):
+                elif isinstance(formula, RelationalAlgebraOperation):
                     classified_formulas["named_columns"].update(
-                        formula.column_names
+                        formula.columns()
                     )
         return classified_formulas
 
@@ -349,11 +360,11 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @staticmethod
     def obtain_negative_columns(neg_formula):
-        if isinstance(neg_formula, NameColumns):
-            neg_cols = set(neg_formula.column_names)
-        elif isinstance(neg_formula, Constant):
+        if isinstance(neg_formula, Constant):
             neg_cols = set(neg_formula.value.columns)
-        else:
+        elif isinstance(neg_formula, RelationalAlgebraOperation):
+            neg_cols = neg_formula.columns()
+        if any((col.type is ColumnInt) for col in neg_cols):
             raise NegativeFormulaNotNamedRelationException(neg_formula)
         return neg_cols
 

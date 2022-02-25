@@ -4,9 +4,19 @@ import operator
 from typing import AbstractSet
 
 from ..expression_pattern_matching import add_match
-from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker, expression_iterator
+from ..expression_walker import (
+    ExpressionWalker,
+    ReplaceExpressionWalker,
+    expression_iterator
+)
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Disjunction, Implication, Conjunction
+from ..logic import (
+    TRUE,
+    Conjunction,
+    Disjunction,
+    ExistentialPredicate,
+    Implication
+)
 from ..logic.expression_processing import extract_logic_atoms
 from ..logic.transformations import (
     LogicExpressionWalker,
@@ -344,7 +354,7 @@ def sets_per_symbol(ucq_query):
             tuple(
                 int2columnint_constant(i)
                 for i in range(number_of_args[symbol])
-                if i not in condition_columns
+                # if i not in condition_columns
             )
             for condition_columns in conditions_columns
         ]
@@ -368,12 +378,16 @@ class ShatterEqualities(ExpressionWalker):
     def shatter_symbol(self, expression):
         if expression.functor not in self.symbol_sets:
             return expression
-        else:
-            sets = self.symbol_sets[expression.functor]
 
-        sets_to_keep = self._identify_sets_to_keep(expression, sets)
+        expression = self._shatter_atom(expression)
 
-        expression = self._compute_expression_arguments(
+        return expression
+
+    def _shatter_atom(self, expression, nes=None):
+        sets = self.symbol_sets[expression.functor]
+        sets_to_keep = self._identify_sets_to_keep(expression, sets, nes=nes)
+
+        expression, e_vars = self._compute_expression_arguments(
             expression, sets_to_keep
         )
 
@@ -382,30 +396,81 @@ class ShatterEqualities(ExpressionWalker):
         else:
             expression = Disjunction(expression)
 
+        for e_var in e_vars:
+            expression = ExistentialPredicate(e_var, expression)
         return expression
 
+    @add_match(
+        Conjunction,
+        lambda expression: (
+            any(
+                _formula_is_ne(formula) and
+                isinstance(formula.args[1], Constant)
+                for formula in expression.formulas
+            )
+        )
+    )
+    def shatter_inequalities(self, expression):
+        nes = set()
+        formulas_to_keep = []
+        for formula in expression.formulas:
+            if _formula_is_ne(formula):
+                nes.add(formula)
+            else:
+                formulas_to_keep.append(formula)
+
+        resulting_formulas = tuple()
+        for formula in formulas_to_keep:
+            if formula.functor not in self.symbol_sets:
+                resulting_formulas += (formula,)
+            else:
+                resulting_formulas += (self._shatter_atom(formula, nes=nes),)
+
+        return Conjunction(resulting_formulas)
+
     def _compute_expression_arguments(self, expression, sets_to_keep):
-        args = tuple((i, arg) for i, arg in enumerate(expression.args) if isinstance(arg, Symbol))
+        args = []
+        for i, arg in enumerate(expression.args):
+            if isinstance(arg, Symbol):
+                args.append((i, arg, False))
+            elif isinstance(arg, Constant):
+                args.append((i, Symbol.fresh(), True))
         formulas = tuple()
+        e_vars = set()
         for set_ in sets_to_keep:
             if set_ not in self.shatter_symbols:
                 sym = Symbol.fresh()
                 self.shatter_symbols[set_] = sym
                 self.symbol_table[sym] = set_
-            formulas += (self.shatter_symbols[set_](
-                *(
-                    arg for i, arg in args
-                    if int2columnint_constant(i) in set_.columns()
-                )
-            ),)
-        return formulas
+            formula_args = []
+            for i, arg, is_e_var in args:
+                if int2columnint_constant(i) in set_.columns():
+                    formula_args.append(arg)
+                    if is_e_var:
+                        e_vars.add(arg)
+            formulas += (self.shatter_symbols[set_](*formula_args),)
+        return formulas, e_vars
 
-    def _identify_sets_to_keep(self, expression, sets):
+    def _identify_sets_to_keep(self, expression, sets, nes=None):
         conditions = atom_to_constant_to_RA_conditions(expression)
+        negative_conditions = set()
+        if nes is not None:
+            args = list(expression.args)
+            for ne in nes:
+                if ne.args[0] in expression.args:
+                    negative_conditions.add(
+                        EQ(
+                            int2columnint_constant(args.index(ne.args[0])),
+                            ne.args[1]
+                        )
+                    )
         sets_to_keep = []
         for set_ in sets:
             set_conditions = self._selection_formulas(set_)
-            if conditions <= set_conditions:
+            if (
+                conditions <= set_conditions and
+                set_conditions.isdisjoint(negative_conditions)
+            ):
                 sets_to_keep.append(set_)
         return sets_to_keep
 
@@ -418,7 +483,33 @@ class ShatterEqualities(ExpressionWalker):
         return set_conditions
 
 
+def eliminate_non_equals(query):
+    relational_atom_arguments = {
+        arg
+        for atom in extract_logic_atoms(query)
+        for arg in atom.args
+        if (
+            isinstance(atom.functor, Symbol) and
+            isinstance(arg, Symbol)
+        )
+    }
+
+    ne_to_replace = {
+        atom: TRUE
+        for atom in extract_logic_atoms(query)
+        if (
+            atom.functor is NE and
+            atom.args[0] in relational_atom_arguments and
+            isinstance(atom.args[1], Constant)
+        )
+    }
+
+    query = ReplaceExpressionWalker(ne_to_replace).walk(query)
+    query = RTO.walk(query)
+
+
 def shatter_constants(query, symbol_table):
     symbol_sets = sets_per_symbol(query)
     se = ShatterEqualities(symbol_sets, symbol_table)
-    return se.walk(query)
+    query = se.walk(query)
+    return query

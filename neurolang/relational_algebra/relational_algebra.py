@@ -6,7 +6,7 @@ import numpy
 import pandas.core.computation.ops
 
 from .. import expression_walker as ew, type_system
-from ..exceptions import ProjectionOverMissingColumnsError, NeuroLangException
+from ..exceptions import ProjectionOverMissingColumnsError, NeuroLangException, RelationalAlgebraNotImplementedError
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expressions import (
     Constant,
@@ -569,6 +569,7 @@ OPERATOR_STRING = {
     operator.mul: "*",
     operator.truediv: "/",
     operator.eq: "==",
+    operator.ne: "!=",
     operator.gt: ">",
     operator.lt: "<",
     operator.ge: ">=",
@@ -721,6 +722,10 @@ class StringArithmeticWalker(ew.PatternWalker):
             auto_infer_type=False,
         )
 
+    @ew.add_match(Constant[ColumnInt])
+    def process_constant_column_int(self, cst_col_int):
+        raise NeuroLangPatternMatchingNoMatch()
+
     @ew.add_match(Constant[int])
     def process_constant_int(self, cst):
         return Constant[RelationalAlgebraStringExpression](
@@ -737,8 +742,10 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     @ew.add_match(Constant[str])
     def process_constant_str(self, cst):
+        value = cst.value.replace('"', r'\"')
+        value = f'"{value}"'
         return Constant[RelationalAlgebraStringExpression](
-            RelationalAlgebraStringExpression(cst.value),
+            RelationalAlgebraStringExpression(value),
             auto_infer_type=False,
         )
 
@@ -747,6 +754,10 @@ class ReplaceConstantColumnStrBySymbol(ew.ExpressionWalker):
     @ew.add_match(Constant[ColumnStr])
     def column_str(self, expression):
         return Symbol[ColumnStr](expression.value)
+
+    @ew.add_match(Constant[ColumnInt])
+    def column_int(self, expression):
+        raise NeuroLangPatternMatchingNoMatch()
 
 
 class RelationalAlgebraSolver(ew.ExpressionWalker):
@@ -988,6 +999,13 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     def _compile_function_application_to_sql_fun_exp(self, fun_exp):
         if isinstance(fun_exp, FunctionApplication):
+            if any(
+                isinstance(expression, Constant[ColumnInt])
+                for _, expression in ew.expression_iterator(fun_exp)
+            ):
+                raise RelationalAlgebraNotImplementedError(
+                    "Complex function evaluations on unnamed RA not implemented"
+                )
             try:
                 return self._saw.walk(fun_exp).value
             except NeuroLangPatternMatchingNoMatch:

@@ -1,5 +1,6 @@
 from itertools import chain
 import operator
+from unicodedata import name
 
 from .. import expression_walker as ew
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -26,6 +27,7 @@ from .relational_algebra import (
     Selection,
     eq_,
     get_expression_columns,
+    int2columnint_constant,
     str2columnstr_constant
 )
 
@@ -1154,12 +1156,59 @@ class PushInSelections(ew.PatternWalker):
         )
 
 
+class PushUnnamedSelectionsUp(ew.PatternWalker):
+
+    @staticmethod
+    def _extract_column_int_constants(expression):
+        return {
+            e for _, e in ew.expression_iterator(expression)
+            if isinstance(e, Constant[ColumnInt])
+        }
+
+    @ew.add_match(
+        Projection(Selection, ...),
+        lambda expression: (
+            PushUnnamedSelectionsUp._extract_column_int_constants(expression.relation.formula) and
+            PushUnnamedSelectionsUp._extract_column_int_constants(expression) <= set(expression.attributes)
+        )
+    )
+    def push_selection_above_projection(self, expression):
+        return Selection(
+            Projection(
+                expression.relation.relation,
+                expression.attributes
+            ),
+            expression.relation.formula
+        )
+
+    @ew.add_match(
+        NameColumns(Selection, ...),
+        lambda expression: (
+            PushUnnamedSelectionsUp._extract_column_int_constants(expression.relation.formula)
+        )
+    )
+    def push_selection_above_name_columns(self, expression):
+        rew = ew.ReplaceExpressionWalker({
+            int2columnint_constant(i): name
+            for i, name in enumerate(expression.column_names)
+        })
+        new_formula = rew.walk(expression.relation.formula)
+        return Selection(
+            NameColumns(
+                expression.relation.relation,
+                expression.column_names
+            ),
+            new_formula
+        )
+
+
 class RelationalAlgebraOptimiser(
     RewriteSelections,
     ProductSimplification,
     EliminateTrivialProjections,
     PushInSelections,
     RenameOptimizations,
+    PushUnnamedSelectionsUp,
     ew.ExpressionWalker,
 ):
     """
