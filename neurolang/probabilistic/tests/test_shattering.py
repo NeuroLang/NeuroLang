@@ -529,7 +529,7 @@ class RelationalAlgebraSelectionConjunction(
 
 
 def test_shatter_unitary(R1, R2, R3):
-    query = Conjunction((Q(x), Q(a), Q(b), P(x), R(y), Negation(P(b, y))))
+    query = Conjunction((Q(x), Q(a), Q(b), R(y), Negation(P(b, y))))
 
     ra_query = TranslateToNamedRA().walk(query)
 
