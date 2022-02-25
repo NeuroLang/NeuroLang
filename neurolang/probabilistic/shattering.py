@@ -259,7 +259,7 @@ def conditions_per_symbol(ucq_query):
     ucq_query_dnf = convert_to_pnf_with_dnf_matrix(ucq_query)
     ucq_query_dnf = NormalizeNotEquals().walk(ucq_query_dnf)
 
-    conditions_per_symbol = collections.defaultdict(lambda: set())
+    conditions_per_symbol = collections.defaultdict(set)
     number_of_args = dict()
     for atom in extract_logic_atoms(ucq_query_dnf):
         if not isinstance(atom.functor, Symbol):
@@ -317,7 +317,7 @@ def sets_per_symbol(ucq_query):
     for symbol, conditions in cps.items():
         if len(conditions) == 0:
             continue
-        column_conditions = collections.defaultdict(lambda: set())
+        column_conditions = collections.defaultdict(set)
         for condition in conditions:
             if condition.functor == NE:
                 condition = condition.apply(EQ, condition.unapply()[1])
