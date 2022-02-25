@@ -2,6 +2,8 @@ import collections
 import itertools
 import operator
 
+from neurolang.relational_algebra.relational_algebra import NameColumns, NumberColumns
+
 from ..expression_pattern_matching import add_match
 from ..expression_walker import (
     ExpressionWalker,
@@ -10,7 +12,6 @@ from ..expression_walker import (
 )
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import (
-    TRUE,
     Conjunction,
     Disjunction,
     ExistentialPredicate,
@@ -23,7 +24,7 @@ from ..logic.transformations import (
     RemoveTrivialOperations,
     convert_to_pnf_with_dnf_matrix
 )
-from ..relational_algebra import Projection, Selection, int2columnint_constant
+from ..relational_algebra import Projection, Selection, int2columnint_constant, ColumnStr
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 from .transforms import convert_to_dnf_ucq
@@ -480,31 +481,6 @@ class ShatterEqualities(ExpressionWalker):
         else:
             set_conditions = {formula}
         return set_conditions
-
-
-def eliminate_non_equals(query):
-    relational_atom_arguments = {
-        arg
-        for atom in extract_logic_atoms(query)
-        for arg in atom.args
-        if (
-            isinstance(atom.functor, Symbol) and
-            isinstance(arg, Symbol)
-        )
-    }
-
-    ne_to_replace = {
-        atom: TRUE
-        for atom in extract_logic_atoms(query)
-        if (
-            atom.functor is NE and
-            atom.args[0] in relational_atom_arguments and
-            isinstance(atom.args[1], Constant)
-        )
-    }
-
-    query = ReplaceExpressionWalker(ne_to_replace).walk(query)
-    query = RTO.walk(query)
 
 
 def shatter_constants(query, symbol_table):

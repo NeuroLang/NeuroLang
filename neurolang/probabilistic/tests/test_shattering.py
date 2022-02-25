@@ -26,8 +26,8 @@ from ..probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query
 )
 from ..shattering import (
-    ShatterEqualities,
     sets_per_symbol,
+    shatter_constants,
     shatter_easy_probfacts
 )
 
@@ -537,10 +537,7 @@ def test_shatter_unitary(R1, R2, R3):
     ras = RelationalAlgebraSolver(symbol_table)
     ra_sol = ras.walk(ra_query)
 
-    symbol_sets = sets_per_symbol(query)
-
-    se = ShatterEqualities(symbol_sets, symbol_table)
-    res = se.walk(query)
+    res = shatter_constants(query, symbol_table)
 
     ras = RelationalAlgebraSelectionConjunction(symbol_table)
     ra_query = TranslateToNamedRA().walk(res)
@@ -561,10 +558,7 @@ def test_shatter_binary_1(R4):
     ras = RelationalAlgebraSolver(symbol_table)
     ra_sol = ras.walk(ra_query)
 
-    symbol_sets = sets_per_symbol(query)
-
-    se = ShatterEqualities(symbol_sets, symbol_table)
-    res = se.walk(query)
+    res = shatter_constants(query, symbol_table)
 
     ras = RelationalAlgebraSelectionConjunction(symbol_table)
     ra_query = TranslateToNamedRA().walk(res)
@@ -577,18 +571,15 @@ def test_shatter_binary_1(R4):
     assert ra_sol == shattered_sol
 
 
-def test_shatter_binary_2(R4):
-    query = Conjunction((Q(x, b), Q(a, x), Q(x, y)))
+def test_shatter_binary_2(R1, R4):
+    query = Conjunction((Q(x, b), Q(a, x), Q(x, y), R(z)))
     ra_query = TranslateToNamedRA().walk(query)
 
-    symbol_table = dict({Q: R4})
+    symbol_table = dict({Q: R4, R: R1})
     ras = RelationalAlgebraSolver(symbol_table)
     ra_sol = ras.walk(ra_query)
 
-    symbol_sets = sets_per_symbol(query)
-
-    se = ShatterEqualities(symbol_sets, symbol_table)
-    res = se.walk(query)
+    res = shatter_constants(query, symbol_table)
 
     ras = RelationalAlgebraSelectionConjunction(symbol_table)
     ra_query = TranslateToNamedRA().walk(res)
@@ -601,18 +592,36 @@ def test_shatter_binary_2(R4):
     assert ra_sol == shattered_sol
 
 
-def test_shatter_binary_inequality(R4):
-    query = Conjunction((Q(x, a), Q(a, x), Q(x, y), NE(x, b)))
+def test_shatter_binary_3(R4):
+    query = Conjunction((Q(x, b), Q(y, y)))
     ra_query = TranslateToNamedRA().walk(query)
 
     symbol_table = dict({Q: R4})
     ras = RelationalAlgebraSolver(symbol_table)
     ra_sol = ras.walk(ra_query)
 
-    symbol_sets = sets_per_symbol(query)
+    res = shatter_constants(query, symbol_table)
 
-    se = ShatterEqualities(symbol_sets, symbol_table)
-    res = se.walk(query)
+    ras = RelationalAlgebraSelectionConjunction(symbol_table)
+    ra_query = TranslateToNamedRA().walk(res)
+    shattered_sol = ras.walk(ra_query)
+
+    assert all(
+        all(isinstance(arg, Symbol) for arg in atom.args)
+        for atom in extract_logic_atoms(res)
+    )
+    assert ra_sol == shattered_sol
+
+
+def test_shatter_binary_inequality(R1, R4):
+    query = Conjunction((Q(x, a), Q(a, x), Q(y, y), NE(x, b), R(z)))
+    ra_query = TranslateToNamedRA().walk(query)
+
+    symbol_table = dict({Q: R4, R: R1})
+    ras = RelationalAlgebraSolver(symbol_table)
+    ra_sol = ras.walk(ra_query)
+
+    res = shatter_constants(query, symbol_table)
 
     ras = RelationalAlgebraSelectionConjunction(symbol_table)
     ra_query = TranslateToNamedRA().walk(res)
