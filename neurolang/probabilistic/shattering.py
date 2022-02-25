@@ -2,8 +2,6 @@ import collections
 import itertools
 import operator
 
-from neurolang.relational_algebra.relational_algebra import NameColumns, NumberColumns
-
 from ..expression_pattern_matching import add_match
 from ..expression_walker import (
     ExpressionWalker,
@@ -24,7 +22,7 @@ from ..logic.transformations import (
     RemoveTrivialOperations,
     convert_to_pnf_with_dnf_matrix
 )
-from ..relational_algebra import Projection, Selection, int2columnint_constant, ColumnStr
+from ..relational_algebra import Projection, Selection, int2columnint_constant
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 from .transforms import convert_to_dnf_ucq
