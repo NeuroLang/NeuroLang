@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from functools import reduce
 from itertools import chain, combinations
 from typing import AbstractSet
@@ -63,16 +64,16 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
-from .exceptions import NotEasilyShatterableError
 from .expression_processing import (
     is_builtin,
     lift_optimization_for_choice_predicates
 )
 from .probabilistic_ra_utils import (
-    DeterministicFactSet,
     NonLiftable,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
+    is_atom_a_deterministic_relation,
+    is_atom_a_probabilistic_choice_relation,
     generate_probabilistic_symbol_table_for_query
 )
 from .probabilistic_semiring_solver import (
@@ -83,7 +84,7 @@ from .query_resolution import (
     lift_solve_marg_query,
     reintroduce_unified_head_terms
 )
-from .shattering import shatter_easy_probfacts
+from .shattering import shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
@@ -162,9 +163,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
-        shattered_query, symbol_table = _prepare_and_optimise_query(
-            flat_query, cpl_program
-        )
+        shattered_query, symbol_table, shattering_keys = \
+            _prepare_and_optimise_query(flat_query, cpl_program)
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
 
         ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
@@ -181,6 +181,13 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             ra_query, flat_query, shattered_query
         )
 
+    rew = ReplaceExpressionWalker(
+        {
+            k: v for k, v in symbol_table.items()
+            if k in shattering_keys
+        }
+    )
+    ra_query = rew.walk(ra_query)
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
         solver_class=ExtendedRAPToRAWalker
@@ -203,10 +210,19 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, unified_query.antecedent
     )
-    try:
-        shattered_query = symbolic_shattering(unified_query, symbol_table)
-    except NotEasilyShatterableError:
-        shattered_query = unified_query
+    symbol_table_keys = set(symbol_table.keys())
+    shattered_query = Implication(
+        unified_query.consequent,
+        shatter_constants(unified_query.antecedent, symbol_table)
+    )
+    shattering_keys = set(symbol_table) - symbol_table_keys
+    _verify_that_the_query_has_no_builtins(cpl_program, shattered_query)
+    _verify_that_the_query_is_unate(shattered_query, symbol_table)
+    _verify_that_the_query_is_ranked(shattered_query)
+    return shattered_query, symbol_table, shattering_keys
+
+
+def _verify_that_the_query_has_no_builtins(cpl_program, shattered_query):
     if any(
         is_builtin(atom, known_builtins=cpl_program.builtins())
         for atom in extract_logic_atoms(shattered_query)
@@ -214,8 +230,6 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         raise UnsupportedSolverError(
             "Builtins not allowed for Dalvi-Suciu lifting"
         )
-    _verify_that_the_query_is_unate(shattered_query, symbol_table)
-    return shattered_query, symbol_table
 
 
 def _verify_that_the_query_is_unate(query, symbol_table):
@@ -240,6 +254,20 @@ def _verify_that_the_query_is_unate(query, symbol_table):
 
     if not positive_relational_symbols.isdisjoint(negative_relational_symbols):
         raise NonLiftableException(f"Query {query} is not unate")
+
+
+def _verify_that_the_query_is_ranked(query):
+    symbols = defaultdict(lambda: defaultdict(set))
+
+    for atom in extract_logic_atoms(query):
+        if not isinstance(atom.functor, Symbol):
+            continue
+        for i, arg in enumerate(atom.args):
+            if isinstance(arg, Symbol):
+                continue
+            symbols[atom.functor][arg].add(i)
+            if len(symbols[atom.functor][arg]) > 1:
+                raise NonLiftableException(f"Query {query} is not ranked")
 
 
 def solve_marg_query(rule, cpl):
@@ -1071,46 +1099,6 @@ def mobius_function(formula, formula_containments, known_weights=None):
 def powerset(iterable):
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
-
-
-def symbolic_shattering(unified_query, symbol_table):
-    fact_set_classes = (
-        ProbabilisticFactSet, ProbabilisticChoiceSet, DeterministicFactSet
-    )
-    shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
-    inverted_symbol_table = {
-        v: k for k, v in symbol_table.items()
-        if isinstance(v, fact_set_classes)
-    }
-    for atom in extract_logic_atoms(shattered_query):
-        functor = atom.functor
-        if isinstance(functor, fact_set_classes):
-            if functor not in inverted_symbol_table:
-                s = Symbol.fresh()
-                inverted_symbol_table[functor] = s
-                symbol_table[s] = functor
-
-    shattered_query = (
-            ReplaceExpressionWalker(inverted_symbol_table)
-            .walk(shattered_query)
-    )
-    return shattered_query
-
-
-def is_atom_a_deterministic_relation(atom, symbol_table):
-    return (
-        isinstance(atom.functor, Symbol)
-        and atom.functor in symbol_table
-        and isinstance(symbol_table[atom.functor], DeterministicFactSet)
-    )
-
-
-def is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-    return (
-        isinstance(atom.functor, Symbol)
-        and atom.functor in symbol_table
-        and isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet)
-    )
 
 
 def is_probabilistic_atom_with_constants_in_all_key_positions(

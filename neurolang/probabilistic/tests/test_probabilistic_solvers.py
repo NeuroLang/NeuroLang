@@ -21,10 +21,7 @@ from .. import (
 )
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
-from ..exceptions import (
-    NotEasilyShatterableError,
-    NotHierarchicalQueryException
-)
+from ..exceptions import NotHierarchicalQueryException
 
 try:
     from contextlib import nullcontext
@@ -651,7 +648,7 @@ def test_repeated_antecedent_predicate_symbol(solver):
     query = Implication(ans(x, y), Q(x, y))
 
     if solver is small_dichotomy_theorem_based_solver:
-        context = pytest.raises(NotEasilyShatterableError)
+        context = pytest.raises(NotHierarchicalQueryException)
     elif solver is dalvi_suciu_lift:
         context = pytest.raises(NonLiftableException)
     else:
@@ -918,7 +915,9 @@ def test_simple_negation(solver):
 
     with context:
         result = solver.solve_succ_query(query, cpl)
-        expected = testing.make_prov_set([(.18, 'a'), (.10, 'b')], ("_p_", "x"))
+        expected = testing.make_prov_set(
+            [(.18, 'a'), (.10, 'b')], ("_p_", "x")
+        )
         assert testing.eq_prov_relations(result, expected)
 
 
@@ -1042,6 +1041,19 @@ def test_dalvi_suciu_fails_unate():
         [(0.1, 'a'), (0.3, 'c')]
     )
     rule = Implication(P(x), Conjunction((R(y), Q(x), Negation(R(x)))))
+    cpl.walk(rule)
+    query = Implication(ans(x), P(x))
+    with pytest.raises(NonLiftableException):
+        dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+def test_dalvi_suciu_fails_not_ranked():
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.2, 'a', 'b'), (0.1, 'b', 'c')]
+    )
+    rule = Implication(P(x), Conjunction((Q(x, y), Q(y, x))))
     cpl.walk(rule)
     query = Implication(ans(x), P(x))
     with pytest.raises(NonLiftableException):
@@ -1245,4 +1257,6 @@ def test_deterministic_simplification():
         query, cpl_program
     )
 
-    assert testing.eq_prov_relations(res, testing.make_prov_set({(0.6, 'a', 'b')}, ['_p_', 'x', 'y']))
+    assert testing.eq_prov_relations(
+        res, testing.make_prov_set({(0.6, 'a', 'b')}, ['_p_', 'x', 'y'])
+    )

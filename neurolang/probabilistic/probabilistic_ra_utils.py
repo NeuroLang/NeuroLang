@@ -1,11 +1,16 @@
 from collections import defaultdict
-from typing import AbstractSet
+from typing import AbstractSet, Any, Mapping
 
 from ..datalog.wrapped_collections import (
     WrappedNamedRelationalAlgebraFrozenSet
 )
-from ..expressions import Constant, Symbol
-from ..relational_algebra import ColumnInt, RelationalAlgebraOperation
+from ..expression_walker import PatternWalker, add_match
+from ..expressions import Constant, Expression, Symbol
+from ..relational_algebra import (
+    ColumnInt,
+    RelationalAlgebraOperation,
+    UnaryRelationalAlgebraOperation
+)
 
 
 class ProbabilisticFactSet(RelationalAlgebraOperation):
@@ -102,3 +107,110 @@ def classify_and_wrap_symbols(
             Constant[ColumnInt](ColumnInt(0))
         )
         symbol_table[fresh_symbol] = facts
+
+
+class GetProbabilisticSetAtom(PatternWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(
+        UnaryRelationalAlgebraOperation,
+        lambda expression: not isinstance(
+            expression,
+            (
+                DeterministicFactSet,
+                ProbabilisticFactSet,
+                ProbabilisticChoiceSet
+            )
+        )
+    )
+    def projection(self, expression):
+        return self.walk(expression.relation)
+
+    @add_match(Symbol)
+    def resolve_symbol(self, expression):
+        if expression in self.symbol_table:
+            return self.walk(self.symbol_table[expression])
+        else:
+            return expression
+
+    @add_match(...)
+    def default(self, expression):
+        return expression
+
+
+def is_atom_a_deterministic_relation(
+    atom: Expression, symbol_table: Mapping[Any, Expression]
+) -> bool:
+    """Returns if a particular expression is a deterministic relation
+
+    Parameters
+    ----------
+    atom : Expression
+        neurolang Expression
+    symbol_table : Mapping[Any, Expression]
+        mapping maching symbols to expressions.
+
+    Returns
+    -------
+    bool
+        True if the Expression is a relational algebra expression
+        containing a single deterministic relation.
+    """
+    gpsa = GetProbabilisticSetAtom(symbol_table)
+    relation = gpsa.walk(atom.functor)
+    return (
+        isinstance(relation, DeterministicFactSet)
+    )
+
+
+def is_atom_a_probabilistic_fact_relation(
+    atom: Expression, symbol_table: Mapping[Any, Expression]
+) -> bool:
+    """Returns if a particular expression is a tuple independent
+    fact set relation
+
+    Parameters
+    ----------
+    atom : Expression
+        neurolang Expression
+    symbol_table : Mapping[Any, Expression]
+        mapping maching symbols to expressions.
+
+    Returns
+    -------
+    bool
+        True if the Expression is a relational algebra expression
+        containing a single independent fact set relation.
+    """
+    gpsa = GetProbabilisticSetAtom(symbol_table)
+    relation = gpsa.walk(atom.functor)
+    return (
+        isinstance(relation, ProbabilisticFactSet)
+    )
+
+
+def is_atom_a_probabilistic_choice_relation(
+    atom: Expression, symbol_table: Mapping[Any, Expression]
+) -> bool:
+    """Returns if a particular expression is a choice
+    relation
+
+    Parameters
+    ----------
+    atom : Expression
+        neurolang Expression
+    symbol_table : Mapping[Any, Expression]
+        mapping maching symbols to expressions.
+
+    Returns
+    -------
+    bool
+        True if the Expression is a relational algebra expression
+        containing a single choice relation.
+    """
+    gpsa = GetProbabilisticSetAtom(symbol_table)
+    relation = gpsa.walk(atom.functor)
+    return (
+        isinstance(relation, ProbabilisticChoiceSet)
+    )

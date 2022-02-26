@@ -459,6 +459,9 @@ class ExtendedProjection(RelationalAlgebraOperation):
             )
         )
 
+    def __hash__(self):
+        return hash((type(self),) + self.unapply())
+
 
 class FunctionApplicationListMember(Definition):
     """

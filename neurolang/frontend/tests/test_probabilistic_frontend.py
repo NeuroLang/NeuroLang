@@ -1,4 +1,3 @@
-import io
 import itertools
 from typing import AbstractSet, Callable, Tuple
 
@@ -9,21 +8,20 @@ import pytest
 from ...exceptions import (
     NegativeFormulaNotNamedRelationException,
     NegativeFormulaNotSafeRangeException,
-    UnsupportedProgramError,
-    UnsupportedQueryError,
     NeuroLangException,
+    UnsupportedProgramError,
+    UnsupportedQueryError
 )
 from ...logic.horn_clauses import Fol2DatalogTranslationException
 from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
-    RepeatedTuplesInProbabilisticRelationError,
-    UnsupportedProbabilisticQueryError,
+    RepeatedTuplesInProbabilisticRelationError
 )
 from ...regions import SphericalVolume
 from ...utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet
 )
 from ..probabilistic_frontend import NeurolangPDL
 
