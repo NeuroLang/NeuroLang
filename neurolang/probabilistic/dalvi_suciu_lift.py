@@ -1,10 +1,15 @@
 import logging
+import operator
 from collections import defaultdict
 from functools import reduce
-from itertools import chain, combinations
+from itertools import chain, combinations, product
 from typing import AbstractSet
 
 import numpy as np
+
+from neurolang.relational_algebra.relational_algebra import (
+    int2columnint_constant
+)
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
@@ -58,6 +63,8 @@ from ..relational_algebra import (
     ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
+    Projection,
+    Selection,
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
@@ -72,9 +79,9 @@ from .probabilistic_ra_utils import (
     NonLiftable,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
+    generate_probabilistic_symbol_table_for_query,
     is_atom_a_deterministic_relation,
-    is_atom_a_probabilistic_choice_relation,
-    generate_probabilistic_symbol_table_for_query
+    is_atom_a_probabilistic_choice_relation
 )
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
@@ -84,7 +91,7 @@ from .query_resolution import (
     lift_solve_marg_query,
     reintroduce_unified_head_terms
 )
-from .shattering import shatter_constants
+from .shattering import atom_to_constant_to_RA_conditions, shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
@@ -104,6 +111,7 @@ __all__ = [
     "solve_marg_query",
 ]
 
+EQ = Constant(operator.eq)
 RTO = RemoveTrivialOperations()
 PED = PushExistentialsDown()
 
@@ -211,14 +219,16 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         cpl_program, unified_query.antecedent
     )
     symbol_table_keys = set(symbol_table.keys())
+    shattered_query_body = shatter_constants(unified_query.antecedent, symbol_table)
+    shattered_query_body = partially_rank_query(shattered_query_body, symbol_table)
     shattered_query = Implication(
         unified_query.consequent,
-        shatter_constants(unified_query.antecedent, symbol_table)
+        shattered_query_body
     )
     shattering_keys = set(symbol_table) - symbol_table_keys
     _verify_that_the_query_has_no_builtins(cpl_program, shattered_query)
     _verify_that_the_query_is_unate(shattered_query, symbol_table)
-    _verify_that_the_query_is_ranked(shattered_query)
+    _verify_that_the_query_is_ranked(convert_rule_to_ucq(shattered_query))
     return shattered_query, symbol_table, shattering_keys
 
 
@@ -256,18 +266,74 @@ def _verify_that_the_query_is_unate(query, symbol_table):
         raise NonLiftableException(f"Query {query} is not unate")
 
 
+def partially_rank_query(query, symbol_table):
+    atoms_to_rank = defaultdict(set)
+    atom_argument_quantity = dict()
+    for atom in extract_logic_atoms(query):
+        if not isinstance(atom.functor, Symbol):
+            continue
+        atom_argument_quantity[atom.functor] = len(atom.args)
+        arg_counts = defaultdict(list)
+        for i, arg in enumerate(atom.args):
+            arg_counts[arg].append(i)
+        arg_counts_tuple = tuple(
+            (v[0], tuple(v[1:])) for v in arg_counts.values()
+        )
+        atoms_to_rank[atom.functor].add(arg_counts_tuple)
+
+    for symbol, instances_to_rank in atoms_to_rank.items():
+        if len(instances_to_rank) != 1:
+            continue
+        arguments_to_rank = instances_to_rank.pop()
+        if all(len(repeats) == 0 for _, repeats in arguments_to_rank):
+            continue
+        expression = symbol
+        arguments_to_eliminate = set()
+        for arg, repeats in arguments_to_rank:
+            arg = int2columnint_constant(arg)
+            for repeat in repeats:
+                expression = Selection(
+                    expression,
+                    EQ(arg, int2columnint_constant(repeat))
+                )
+            arguments_to_eliminate.update(repeats)
+        attributes = tuple(
+            int2columnint_constant(i)
+            for i in range(atom_argument_quantity[symbol])
+            if i not in arguments_to_eliminate
+        )
+        expression = Projection(expression, attributes)
+        new_symbol = Symbol.fresh()
+        symbol_table[new_symbol] = expression
+        replacements = {
+            atom: new_symbol(*(
+                arg for i, arg in enumerate(atom.args)
+                if i not in arguments_to_eliminate
+            )
+            )
+            for atom in extract_logic_atoms(query)
+            if atom.functor == symbol
+        }
+        query = ReplaceExpressionWalker(replacements).walk(query)
+    return query
+
+
 def _verify_that_the_query_is_ranked(query):
-    symbols = defaultdict(lambda: defaultdict(set))
+    argument_precedence = defaultdict(set)
+    query = convert_to_pnf_with_dnf_matrix(query)
 
     for atom in extract_logic_atoms(query):
         if not isinstance(atom.functor, Symbol):
             continue
-        for i, arg in enumerate(atom.args):
-            if isinstance(arg, Symbol):
-                continue
-            symbols[atom.functor][arg].add(i)
-            if len(symbols[atom.functor][arg]) > 1:
-                raise NonLiftableException(f"Query {query} is not ranked")
+        for i, arg in enumerate(atom.args[1:], 1):
+            argument_precedence[arg].update(atom.args[:i])
+
+    for arg1, arg2 in product(argument_precedence, argument_precedence):
+        if (
+            arg1 in argument_precedence[arg2] and
+            arg2 in argument_precedence[arg1]
+        ):
+            raise NonLiftableException(f"Query {query} is not ranked")
 
 
 def solve_marg_query(rule, cpl):
