@@ -14,6 +14,8 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import (
     NeuroLangException,
     NonLiftableException,
+    NotRankedException,
+    NotUnateException,
     UnsupportedSolverError
 )
 from ..expression_walker import (
@@ -220,7 +222,11 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     shattering_keys = set(symbol_table) - symbol_table_keys
     _verify_that_the_query_has_no_builtins(cpl_program, shattered_query)
     _verify_that_the_query_is_unate(shattered_query, symbol_table)
-    verify_that_the_query_is_ranked(convert_rule_to_ucq(shattered_query))
+    if not verify_that_the_query_is_ranked(
+        convert_rule_to_ucq(shattered_query)
+    ):
+            raise NotRankedException(f"Query {flat_query} is not ranked")
+
     return shattered_query, symbol_table, shattering_keys
 
 
@@ -255,7 +261,7 @@ def _verify_that_the_query_is_unate(query, symbol_table):
             positive_relational_symbols.add(predicate.functor)
 
     if not positive_relational_symbols.isdisjoint(negative_relational_symbols):
-        raise NonLiftableException(f"Query {query} is not unate")
+        raise NotUnateException(f"Query {query} is not unate")
 
 
 def solve_marg_query(rule, cpl):

@@ -20,7 +20,7 @@ def verify_that_the_query_is_ranked(query):
 
     for atom in extract_logic_atoms(query):
         if not isinstance(atom.functor, Symbol):
-            continue
+            return False
         for i, arg in enumerate(atom.args[1:], 1):
             argument_precedence[arg].update(atom.args[:i])
 
@@ -29,7 +29,8 @@ def verify_that_the_query_is_ranked(query):
             arg1 in argument_precedence[arg2] and
             arg2 in argument_precedence[arg1]
         ):
-            raise NonLiftableException(f"Query {query} is not ranked")
+            return False
+    return True
 
 
 def partially_rank_query(query, symbol_table):

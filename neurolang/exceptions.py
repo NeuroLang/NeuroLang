@@ -373,6 +373,13 @@ class NonLiftableException(UnsupportedSolverError):
     pass
 
 
+class NotRankedException(NonLiftableException):
+    pass
+
+
+class NotUnateException(NonLiftableException):
+    pass
+
 class InvalidCommandExpression(ForbiddenExpressionError):
     """
     Invalid Command statement.
