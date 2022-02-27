@@ -1,27 +1,16 @@
 import operator
-from re import I
 from typing import AbstractSet
 
 from pytest import fixture
 
-from ...datalog.expression_processing import extract_logic_atoms
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
 from ...datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Negation, Disjunction
-from ...relational_algebra import Projection, Selection, int2columnint_constant
-from ...relational_algebra.optimisers import (
-    PushUnnamedSelectionsUp,
-    RelationalAlgebraOptimiser
-)
 from ...relational_algebra.relational_algebra import RelationalAlgebraSolver
 from ..ranking import verify_that_the_query_is_ranked, partially_rank_query
 
-RAO = RelationalAlgebraOptimiser()
-
-
 EQ = Constant(operator.eq)
-NE = Constant(operator.ne)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -29,10 +18,6 @@ R = Symbol("R")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
-ans = Symbol("ans")
-a = Constant("a")
-b = Constant("b")
-d = Constant("d")
 
 
 def test_query_ranked():
