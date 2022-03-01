@@ -31,7 +31,6 @@ from .relational_algebra import (
 )
 
 
-EQ = Constant(operator.eq)
 AND = Constant(operator.and_)
 
 
@@ -1167,12 +1166,15 @@ class PushUnnamedSelectionsUp(ew.PatternWalker):
 
     @ew.add_match(
         Projection(
-            Selection(..., EQ(Constant[ColumnInt], Constant[ColumnInt])),
+            Selection(..., eq_(Constant[ColumnInt], Constant[ColumnInt])),
             ...
         ),
         lambda expression: (
             max(expression.relation.formula.args, key=lambda x: x.value)
             in set(expression.attributes)
+        ) and (
+            min(expression.relation.formula.args, key=lambda x: x.value)
+            not in set(expression.attributes)
         )
     )
     def standardize_projected_column(self, expression):
@@ -1189,10 +1191,10 @@ class PushUnnamedSelectionsUp(ew.PatternWalker):
         )
 
     @ew.add_match(
-        Selection(Selection, EQ(Constant[ColumnInt], Constant[ColumnInt])),
+        Selection(Selection, eq_(Constant[ColumnInt], Constant[ColumnInt])),
         lambda expression: not (
             isinstance(expression.relation.formula, FunctionApplication) and
-            expression.relation.formula.functor == EQ and
+            expression.relation.formula.functor == eq_ and
             isinstance(
                 expression.relation.formula.args[0],
                 Constant[ColumnInt]

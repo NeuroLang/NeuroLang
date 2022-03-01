@@ -1096,3 +1096,60 @@ def test_nested_selections(rs, str_columns):
     res = opt.walk(exp)
 
     assert res == Selection(rs, and_(eq_(a, one), eq_(b + one, one)))
+
+
+def test_push_unnamed_selections_up(r1):
+    raop = RelationalAlgebraOptimiser()
+    x = str2columnstr_constant("x")
+    y = str2columnstr_constant("y")
+
+    s = NameColumns(
+        Selection(C_(r1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (x, y)
+    )
+    res = Selection(NameColumns(C_(r1), (x, y)), eq_(x, y))
+    assert raop.walk(s) == res
+
+    s = NameColumns(
+        Selection(C_(r1), eq_(C_(ColumnInt(1)), C_(ColumnInt(0)))),
+        (x, y)
+    )
+    res = Selection(NameColumns(C_(r1), (x, y)), eq_(y, x))
+    assert raop.walk(s) == res
+
+    s = Projection(
+        Selection(C_(r1), eq_(C_(ColumnInt(1)), C_(0))),
+        (C_(ColumnInt(1)),)
+    )
+    res = Selection(
+        Projection(C_(r1), (C_(ColumnInt(1)),)), eq_(C_(ColumnInt(1)), C_(0))
+    )
+    assert raop.walk(s) == res
+
+    s = Projection(
+        Selection(C_(r1), eq_(C_(ColumnInt(1)), C_(ColumnInt(0)))),
+        (C_(ColumnInt(0)),)
+    )
+    res = Projection(
+        Selection(C_(r1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (C_(ColumnInt(0)),)
+    )
+    assert raop.walk(s) == res
+
+    s = Projection(
+        Selection(C_(r1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (C_(ColumnInt(1)),)
+    )
+    assert raop.walk(s) == res
+
+    s = Projection(
+        Selection(C_(r1), eq_(C_(ColumnInt(1)), C_(ColumnInt(0)))),
+        (C_(ColumnInt(0)), C_(ColumnInt(1)))
+    )
+
+    res = Selection(
+        Projection(C_(r1), (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        eq_(C_(ColumnInt(1)), C_(ColumnInt(0)))
+    )
+
+    assert raop.walk(s) == res
