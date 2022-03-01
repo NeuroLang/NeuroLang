@@ -36,6 +36,7 @@ from ..relational_algebra import (
 )
 
 C_ = Constant
+ne = Constant(operator.ne)
 
 
 @pytest.fixture
@@ -1150,6 +1151,18 @@ def test_push_unnamed_selections_up(r1):
     res = Selection(
         Projection(C_(r1), (C_(ColumnInt(0)), C_(ColumnInt(1)))),
         eq_(C_(ColumnInt(1)), C_(ColumnInt(0)))
+    )
+
+    assert raop.walk(s) == res
+
+    s = Selection(
+        Selection(C_(r1), ne(C_(ColumnInt(1)), C_(ColumnInt(2)))),
+        eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))
+    )
+
+    res = Selection(
+        Selection(C_(r1), eq_(C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        ne(C_(ColumnInt(0)), C_(ColumnInt(2)))
     )
 
     assert raop.walk(s) == res
