@@ -6,7 +6,7 @@ import pytest
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Disjunction
+from ...logic import Disjunction, ExistentialPredicate
 from ...relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -880,4 +880,21 @@ def test_sigmoid():
             ),
         ),
     )
+    assert result == expected
+
+
+def test_existential():
+    x = Symbol("x")
+    y = Symbol("y")
+    P = Symbol("P")
+
+    conjunction = ExistentialPredicate(x, P(x, y))
+    result = TranslateToNamedRA().walk(conjunction)
+    p_translated = TranslateToNamedRA().walk(P(x, y))
+    expected = Projection(p_translated, (C_(ColumnStr("y")),))
+    assert result == expected
+
+    conjunction = ExistentialPredicate(y, P(x, y))
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = Projection(p_translated, (C_(ColumnStr("x")),))
     assert result == expected

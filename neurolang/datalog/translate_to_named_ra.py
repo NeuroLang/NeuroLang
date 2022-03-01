@@ -2,8 +2,6 @@ import collections
 from operator import contains, eq, not_
 from typing import AbstractSet, Callable, Tuple
 
-from neurolang.relational_algebra.relational_algebra import str2columnstr_constant
-
 from ..exceptions import (
     CouldNotTranslateConjunctionException,
     ForbiddenExpressionError,
@@ -16,7 +14,7 @@ from ..expression_walker import (
     add_match
 )
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Disjunction, ExistentialPredicate, Conjunction, Negation
+from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..logic.expression_processing import extract_logic_free_variables
 from ..relational_algebra import (
     ColumnInt,
@@ -33,6 +31,7 @@ from ..relational_algebra import (
     Union,
     get_expression_columns
 )
+from ..relational_algebra.relational_algebra import str2columnstr_constant
 from ..type_system import is_leq_informative
 from ..utils import NamedRelationalAlgebraFrozenSet
 
