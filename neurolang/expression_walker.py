@@ -114,7 +114,9 @@ def fix_children_order(dfs, expression, children):
 
 
 def expression_iterator_constant(current_element):
-    if is_leq_informative(current_element[1].type, typing.Tuple):
+    if current_element[1].type is Unknown:
+        children = []
+    elif is_leq_informative(current_element[1].type, typing.Tuple):
         c = current_element[1].value
         children = product((None,), c)
     elif is_leq_informative(current_element[1].type, typing.AbstractSet):
