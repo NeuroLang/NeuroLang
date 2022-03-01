@@ -30,6 +30,7 @@ except ImportError:
 
 EQ = Constant(operator.eq)
 GT = Constant(operator.gt)
+NE = Constant(operator.ne)
 
 ans = Symbol("ans")
 P = Symbol("P")
@@ -830,6 +831,38 @@ def test_program_with_variable_equality(solver):
         ("_p_", "x", "y"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_program_with_segregation(solver):
+    pfact_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "c"), (0.2, "b", "d")},
+    }
+    code = Union((
+        Implication(A(x), Conjunction((P(x, z), P(x, w), NE(z, w)))),
+        Implication(Z(x), Conjunction((P(x, y), Negation(A(x))))),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_set
+        )
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(UnsupportedSolverError)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.5 * (1 - .5) * (1 - 0.2), "a"),
+            ],
+            ("_p_", "x"),
+        )
+        assert testing.eq_prov_relations(result, expected)
 
 
 @pytest.mark.parametrize("solver", [
