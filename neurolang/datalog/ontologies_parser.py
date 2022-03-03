@@ -275,7 +275,7 @@ class OntologyParser:
         '''
         cons = []
         prop = restriction_dic[OWL.onProperty]
-        self.all_props.add(prop)
+        self.all_props.add(self._parse_name(prop))
 
         if OWL.someValuesFrom in restriction_dic.keys():
             node = restriction_dic[OWL.someValuesFrom]
@@ -493,6 +493,7 @@ class OntologyParser:
         '''
         entity = Symbol(self._parse_name(entity))
         entity_name = Constant(self._parse_name(value))
+
         x = Symbol.fresh()
         ant = entity(x)
         label = Symbol(self._parse_name(prop))

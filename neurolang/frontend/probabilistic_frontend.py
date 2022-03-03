@@ -43,13 +43,14 @@ from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
+
 from ..exceptions import (
     UnsupportedQueryError,
     UnsupportedSolverError,
     UnsupportedProgramError,
 )
 from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
-from ..logic import Union
+from ..logic import Union, Symbol
 from ..probabilistic import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -78,8 +79,9 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraColumnStr,
 )
-from . import query_resolution_expressions as fe
 from ..commands import CommandsMixin
+from ..datalog.basic_representation import UnionOfConjunctiveQueries
+from . import query_resolution_expressions as fe
 from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
@@ -186,16 +188,18 @@ class NeurolangPDL(QueryBuilderDatalog):
             where the ontology files are stored
         """
         onto = OntologyParser(paths)
-        constraints, est_knowledge, entity_rules, classes = onto.parse_ontology()
-        [self.new_symbol(name=c) for c in classes]
+        constraints, est_knowledge, entity_rules, _ = onto.parse_ontology()
         self.program_ir.set_constraints(constraints)
+        for name, expressions in constraints.items():
+            symbol = Symbol(name=name).cast(UnionOfConjunctiveQueries)
+            self.program_ir.symbol_table[symbol] = Union(expressions)
         for symbol, expressions in est_knowledge.items():
             iterable = [exp.args for exp in expressions]
             self.program_ir.add_extensional_predicate_from_tuples(
                 symbol, iterable
             )
         self.program_ir.add_existential_rules(onto.existential_rules)
-        for _, expressions in entity_rules.items():
+        for symbol, expressions in entity_rules.items():
             for e in expressions:
                 self.program_ir.walk(e)
 
