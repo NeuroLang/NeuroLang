@@ -43,6 +43,7 @@ from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions, GuaranteeConjunction, RemoveTrivialOperations
 from ..logic.unification import most_general_unifier
 from ..utils import OrderedSet
+from ..datalog.constraints_representation import RightImplication
 from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
 
@@ -354,7 +355,10 @@ def reachable_code(query, datalog):
         if isinstance(rules, Constant):
             continue
         for rule in rules.formulas:
-            if rule in seen_rules:
+            if (
+                rule in seen_rules or
+                isinstance(rule, RightImplication)
+            ):
                 continue
             seen_rules.add(rule)
             reachable_code.append(rule)

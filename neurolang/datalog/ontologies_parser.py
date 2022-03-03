@@ -493,7 +493,6 @@ class OntologyParser:
         '''
         entity = Symbol(self._parse_name(entity))
         entity_name = Constant(self._parse_name(value))
-
         x = Symbol.fresh()
         ant = entity(x)
         label = Symbol(self._parse_name(prop))
@@ -501,12 +500,12 @@ class OntologyParser:
 
         self._categorize_constraints([RightImplication(ant, con)])
 
-        if prop == RDFS.label:
-            entity_class = Symbol('Entity')
-            x = Symbol.fresh()
-            lower_name = self._parse_name(value).lower()
-            rule = Implication(entity(x), entity_class(x, Constant(lower_name)))
-            self._add_rules([rule])
+        #if prop == RDFS.label:
+        #    entity_class = Symbol('Entity')
+        #    x = Symbol.fresh()
+        #    lower_name = self._parse_name(value).lower()
+        #    rule = Implication(entity(x), entity_class(x, Constant(lower_name)))
+        #    self._add_rules([rule])
 
         prop_name = label.name.split(':')[-1]
         neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)

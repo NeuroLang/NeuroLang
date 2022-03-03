@@ -6,10 +6,10 @@ the extensional, intensional, and builtin
 sets and has support for constraints.
 """
 
+from .basic_representation import DatalogProgramMixin
 from ..expression_walker import ExpressionWalker, PatternWalker, add_match
 from ..expressions import Symbol
 from ..logic import LogicOperator, Union
-from .basic_representation import DatalogProgramMixin
 
 
 class RightImplication(LogicOperator):
