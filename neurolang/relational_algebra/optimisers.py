@@ -645,19 +645,6 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         return self.push_computed_columns_up(expression, True)
 
     @ew.add_match(
-        LeftNaturalJoin(..., ExtendedProjection),
-        lambda expression: (
-            set(
-                proj.dst_column
-                for proj in expression.relation_right.projection_list
-                if not isinstance(proj.fun_exp, Constant[Column])
-            ) - expression.relation_left.columns()
-        )
-    )
-    def push_computed_columns_up_flip_left(self, expression):
-        return self.push_computed_columns_up(expression, True)
-
-    @ew.add_match(
         GroupByAggregation(
             ExtendedProjection, ...,
             (

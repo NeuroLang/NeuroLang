@@ -601,24 +601,36 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def left_naturaljoin(self, other):
+        if self.is_dee():
+            return self
+
         on = [c for c in self.columns if c in other.columns]
 
         self._drop_duplicates_if_needed()
         other._drop_duplicates_if_needed()
 
         if len(on) == 0:
-            return self
+            if other.is_empty():
+                new_container = self._container.copy()
+                for c in other.columns:
+                    new_container[c] = pd.NA
+            else:
+                return self.cross_product(other)
+        else:
+            new_container = self._container.merge(
+                other._container,
+                how="left"
+            )
 
-        new_container = self._container.merge(
-            other._container,
-            how="left"
+        new_columns = self.columns + tuple(
+            c for c in other.columns if c not in self.columns
         )
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=(
                 self._might_have_duplicates | other._might_have_duplicates
             ),
-            columns=self.columns,
+            columns=new_columns,
         )
 
     def replace_null(self, column, value):
