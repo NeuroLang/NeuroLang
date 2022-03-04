@@ -17,7 +17,7 @@ from sqlalchemy import (
     select,
     text
 )
-from sqlalchemy.sql import FromClause, except_, intersect, null, table, union
+from sqlalchemy.sql import FromClause, except_, intersect, table, union
 from typing_extensions import get_origin
 
 from ...config import config
