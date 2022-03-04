@@ -590,6 +590,7 @@ def test_named_relational_algebra_ra_naturaljoin(ra_module):
 
 def test_named_relational_algebra_ra_left_naturaljoin(ra_module):
     import numpy as np
+    import pandas as pd
 
     ras_a = ra_module.NamedRelationalAlgebraFrozenSet(
         ("z", "y"), [(0, 0), (1, 2), (2, 4), (3, 6), (4, 8)]
@@ -602,6 +603,18 @@ def test_named_relational_algebra_ra_left_naturaljoin(ra_module):
 
     ras_c = ra_module.NamedRelationalAlgebraFrozenSet(
         ("y", "v"), [(0, 0), (2, 6), (4, 9), (8, 4)]
+    )
+
+    ras_d = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("w",), [(2,)]
+    )
+
+    ras_e = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("w",), []
+    )
+
+    ras_e_null = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("w",), [(pd.NA,)]
     )
 
     empty = ra_module.NamedRelationalAlgebraFrozenSet(("z", "y"), [])
@@ -637,6 +650,12 @@ def test_named_relational_algebra_ra_left_naturaljoin(ra_module):
 
     res = ras_a.left_naturaljoin(ras_c)
     assert res == expected_a_c
+
+    res = ras_a.left_naturaljoin(ras_d)
+    assert res == ras_a.cross_product(ras_d)
+
+    res = ras_a.left_naturaljoin(ras_e)
+    assert res == ras_a.cross_product(ras_e_null)
 
     assert len(ras_a.left_naturaljoin(empty)) == 5
     assert len(empty.left_naturaljoin(ras_a)) == 0

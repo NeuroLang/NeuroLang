@@ -26,6 +26,7 @@ from .relational_algebra import (
     Selection,
     eq_,
     get_expression_columns,
+    int2columnint_constant,
     str2columnstr_constant
 )
 
@@ -644,19 +645,6 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         return self.push_computed_columns_up(expression, True)
 
     @ew.add_match(
-        LeftNaturalJoin(..., ExtendedProjection),
-        lambda expression: (
-            set(
-                proj.dst_column
-                for proj in expression.relation_right.projection_list
-                if not isinstance(proj.fun_exp, Constant[Column])
-            ) - expression.relation_left.columns()
-        )
-    )
-    def push_computed_columns_up_flip_left(self, expression):
-        return self.push_computed_columns_up(expression, True)
-
-    @ew.add_match(
         GroupByAggregation(
             ExtendedProjection, ...,
             (
@@ -1154,12 +1142,122 @@ class PushInSelections(ew.PatternWalker):
         )
 
 
+class PushUnnamedSelectionsUp(ew.PatternWalker):
+
+    @staticmethod
+    def _extract_column_int_constants(expression):
+        return {
+            e for _, e in ew.expression_iterator(expression)
+            if isinstance(e, Constant[ColumnInt])
+        }
+
+    @ew.add_match(
+        Projection(
+            Selection(..., eq_(Constant[ColumnInt], Constant[ColumnInt])),
+            ...
+        ),
+        lambda expression: (
+            max(expression.relation.formula.args, key=lambda x: x.value)
+            in set(expression.attributes)
+        ) and (
+            min(expression.relation.formula.args, key=lambda x: x.value)
+            not in set(expression.attributes)
+        )
+    )
+    def standardize_projected_column(self, expression):
+        rew = ew.ReplaceExpressionWalker(
+            {
+                max(expression.relation.formula.args, key=lambda x: x.value):
+                min(expression.relation.formula.args, key=lambda x: x.value)
+            }
+        )
+
+        return Projection(
+            expression.relation,
+            rew.walk(expression.attributes)
+        )
+
+    @ew.add_match(
+        Selection(Selection, eq_(Constant[ColumnInt], Constant[ColumnInt])),
+        lambda expression: not (
+            isinstance(expression.relation.formula, FunctionApplication) and
+            expression.relation.formula.functor == eq_ and
+            isinstance(
+                expression.relation.formula.args[0],
+                Constant[ColumnInt]
+            ) and
+            isinstance(
+                expression.relation.formula.args[1],
+                Constant[ColumnInt]
+            )
+        )
+    )
+    def invert_selection_order(self, expression):
+        rew = ew.ReplaceExpressionWalker(
+            {
+                max(expression.formula.args, key=lambda x: x.value):
+                min(expression.formula.args, key=lambda x: x.value)
+            }
+        )
+        return Selection(
+            Selection(
+                expression.relation.relation,
+                expression.formula
+            ),
+            rew.walk(expression.relation.formula)
+        )
+
+    @ew.add_match(
+        Projection(Selection, ...),
+        lambda expression: (
+            (
+                PushUnnamedSelectionsUp
+                ._extract_column_int_constants(expression.relation.formula)
+            ) and (
+                PushUnnamedSelectionsUp
+                ._extract_column_int_constants(expression.relation.formula)
+                <= set(expression.attributes)
+            )
+        )
+    )
+    def push_selection_above_projection(self, expression):
+        return Selection(
+            Projection(
+                expression.relation.relation,
+                expression.attributes
+            ),
+            expression.relation.formula
+        )
+
+    @ew.add_match(
+        NameColumns(Selection, ...),
+        lambda expression: (
+            PushUnnamedSelectionsUp
+            ._extract_column_int_constants(expression.relation.formula)
+        )
+    )
+    def push_selection_above_name_columns(self, expression):
+        rew = ew.ReplaceExpressionWalker({
+            int2columnint_constant(i): name
+            for i, name in enumerate(expression.column_names)
+        })
+        new_formula = rew.walk(expression.relation.formula)
+        return Selection(
+            NameColumns(
+                expression.relation.relation,
+                expression.column_names
+            ),
+            new_formula
+        )
+
+
 class RelationalAlgebraOptimiser(
     RewriteSelections,
     ProductSimplification,
     EliminateTrivialProjections,
     PushInSelections,
     RenameOptimizations,
+    PushUnnamedSelectionsUp,
     ew.ExpressionWalker,
 ):
     """
