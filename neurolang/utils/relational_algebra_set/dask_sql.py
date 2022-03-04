@@ -1,21 +1,13 @@
-from typing_extensions import get_origin
-from .dask_helpers import (
-    DaskContextManager,
-    convert_type_to_pandas_dtype,
-    convert_types_to_pandas_dtype,
-    timeit,
-    try_to_infer_type_of_operation,
-)
-
 import logging
 import re
 import types
 import uuid
-from typing import Tuple, Iterable, Union
+from typing import Iterable, Tuple, Union
 
-import dask.dataframe as dd
 import dask.array as da
+import dask.dataframe as dd
 import numpy as np
+import pandas as pd
 from sqlalchemy import (
     and_,
     column,
@@ -23,15 +15,21 @@ from sqlalchemy import (
     literal,
     literal_column,
     select,
-    text,
+    text
 )
-from sqlalchemy.sql import FromClause, except_, intersect, table, union
-
-import pandas as pd
+from sqlalchemy.sql import FromClause, except_, intersect, null, table, union
+from typing_extensions import get_origin
 
 from ...config import config
 from ...type_system import Unknown, get_args, infer_type, is_parameterized
 from . import abstract as abc
+from .dask_helpers import (
+    DaskContextManager,
+    convert_type_to_pandas_dtype,
+    convert_types_to_pandas_dtype,
+    timeit,
+    try_to_infer_type_of_operation
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -717,9 +715,20 @@ class NamedRelationalAlgebraFrozenSet(
         """
         Same as naturaljoin with outer=True
         """
+        if self.is_dee():
+            return self
         on = [c for c in self.columns if c in other.columns]
         if len(on) == 0:
-            return self
+            if other.is_empty():
+                columns = {
+                    c: RelationalAlgebraStringExpression(c)
+                    for c in self.columns
+                }
+                for c in other.columns:
+                    columns[c] = RelationalAlgebraStringExpression("NULL")
+                return self.extended_projection(columns)
+            else:
+                return self.cross_product(other)
         if self._table is None or other._table is None:
             return self._do_empty_join(other, isouter=True)
         return self._do_join(other, on, isouter=True)
