@@ -213,8 +213,12 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         cpl_program, unified_query.antecedent
     )
     symbol_table_keys = set(symbol_table.keys())
-    shattered_query_body = shatter_constants(unified_query.antecedent, symbol_table)
-    shattered_query_body = partially_rank_query(shattered_query_body, symbol_table)
+    shattered_query_body = shatter_constants(
+        unified_query.antecedent, symbol_table
+    )
+    shattered_query_body = partially_rank_query(
+        shattered_query_body, symbol_table
+    )
     shattered_query = Implication(
         unified_query.consequent,
         shattered_query_body
