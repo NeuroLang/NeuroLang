@@ -225,7 +225,7 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     if not verify_that_the_query_is_ranked(
         convert_rule_to_ucq(shattered_query)
     ):
-            raise NotRankedException(f"Query {flat_query} is not ranked")
+        raise NotRankedException(f"Query {flat_query} is not ranked")
 
     return shattered_query, symbol_table, shattering_keys
 
