@@ -742,63 +742,6 @@ def test_composite_extended_projection_function_join(r1, str_columns):
     assert res == exp
 
 
-def test_composite_extended_projection_function_join_flip(r1, str_columns):
-    class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
-        pass
-
-    opt = Opt()
-
-    a, b, c, d, _ = str_columns
-    r1 = NameColumns(Constant(r1), (a, b))
-
-    exp = ExtendedProjection(
-        LeftNaturalJoin(
-            r1,
-            ExtendedProjection(
-                r1, (
-                    FunctionApplicationListMember(b + Constant(1), c),
-                    FunctionApplicationListMember(a, a)
-                )
-            )
-        ),
-        (
-            FunctionApplicationListMember(c + c, d),
-            FunctionApplicationListMember(a, a),
-            FunctionApplicationListMember(b, b)
-        )
-    )
-
-    res = opt.walk(exp)
-    fresh_column = [
-        s for s in res.relation.columns()
-        if s.value.startswith('fresh')
-    ][0]
-    exp = ExtendedProjection(
-        LeftNaturalJoin(
-            r1,
-            ExtendedProjection(
-                r1,
-                (
-                    FunctionApplicationListMember(a, a),
-                    FunctionApplicationListMember(b, fresh_column),
-                )
-            ),
-        ),
-        (
-            FunctionApplicationListMember(
-                FunctionApplication(
-                    Constant(operator.add),
-                    (fresh_column + Constant(1), fresh_column + Constant(1))
-                ),
-                d
-            ),
-            FunctionApplicationListMember(a, a),
-            FunctionApplicationListMember(b, b)
-        )
-    )
-    assert res == exp
-
-
 def test_composite_extended_projection_replacenull(r1, str_columns):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
