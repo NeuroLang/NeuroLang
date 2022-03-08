@@ -6,11 +6,9 @@ the extensional, intensional, and builtin
 sets and has support for constraints.
 """
 
-from .basic_representation import DatalogProgramMixin
-from ..expression_walker import ExpressionWalker, PatternWalker, add_match
+from ..expression_walker import PatternWalker, add_match
 from ..expressions import Symbol
 from ..logic import LogicOperator, Union
-
 
 class RightImplication(LogicOperator):
     """
@@ -125,11 +123,3 @@ class DatalogConstraintsMixin(PatternWalker):
                 self.categorized_constraints[sigma_functor] = cons_set
         else:
             self.categorized_constraints[sigma_functor] = set([sigma])
-
-
-class DatalogConstraintsProgram(
-    DatalogConstraintsMixin,
-    DatalogProgramMixin,
-    ExpressionWalker
-):
-    pass

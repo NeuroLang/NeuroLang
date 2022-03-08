@@ -42,13 +42,13 @@ def reachable_code_from_query(query, program):
     predicates = [query.consequent] + list(
         extract_logic_atoms(query.antecedent)
     )
-    #entity_rules = tuple()
-    #if "__constraints__" in program.symbol_table and 'Entity' in program.symbol_table:
-    #    entity_rules = tuple(
-    #        [q
-    #        for q in _get_list_of_intensional_rules(program)
-    #        if 'Entity' in q.antecedent._symbols
-    #    ])
+    entity_rules = tuple()
+    if "__constraints__" in program.symbol_table:
+        entity_rules = tuple(
+            [q
+            for q in _get_list_of_intensional_rules(program)
+            if 'Entity' in q.antecedent._symbols
+        ])
     reachable = set()
     for pred in predicates:
         for rule in _iter_implication_or_union_of_implications(
@@ -56,7 +56,7 @@ def reachable_code_from_query(query, program):
         ):
             if not isinstance(rule, RightImplication):
                 reachable |= set(reachable_code(rule, program).formulas)
-    return Union(tuple(reachable))
+    return Union(tuple(reachable) + entity_rules)
 
 
 def stratify_program(query, program):

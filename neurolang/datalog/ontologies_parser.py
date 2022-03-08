@@ -49,10 +49,10 @@ class OntologyParser:
         for example, the label property. Both dictionaries index lists of
         rules using the rule consequent functor.
         '''
-        symbols = self._parse_classes()
+        self._parse_classes()
         self._parse_related_individuals()
 
-        return self.parsed_constraints, self.estructural_knowledge, self.entity_rules, symbols
+        return self.parsed_constraints, self.estructural_knowledge, self.entity_rules
 
     def _parse_classes(self):
         '''This method obtains all the classes present in the ontology and
@@ -60,13 +60,9 @@ class OntologyParser:
         that compose them.
         '''
         all_classes = self._get_all_classes()
-        all_symbols = set()
-        self.all_props = set()
         for class_name in list(all_classes):
 
-            all_symbols.add(self._parse_name(class_name))
             for entity, prop, value in self.rdfGraph.triples((class_name, None, None)):
-                self.all_props.add(self._parse_name(prop))
 
                 if prop == RDF.type and value == OWL.Class:
                     # The triple used to index the class must be skipped.
@@ -86,8 +82,6 @@ class OntologyParser:
                         self._parse_property(entity, prop, value)
                     else:
                         raise NeuroLangNotImplementedError
-
-        return all_symbols.union(self.all_props)
 
     def _get_all_classes(self):
         '''
@@ -500,12 +494,12 @@ class OntologyParser:
 
         self._categorize_constraints([RightImplication(ant, con)])
 
-        #if prop == RDFS.label:
-        #    entity_class = Symbol('Entity')
-        #    x = Symbol.fresh()
-        #    lower_name = self._parse_name(value).lower()
-        #    rule = Implication(entity(x), entity_class(x, Constant(lower_name)))
-        #    self._add_rules([rule])
+        if prop == RDFS.label:
+            entity_class = Symbol('Entity')
+            x = Symbol.fresh()
+            lower_name = self._parse_name(value).lower()
+            rule = Implication(entity(x), entity_class(x, Constant(lower_name)))
+            self._add_rules([rule])
 
         prop_name = label.name.split(':')[-1]
         neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)

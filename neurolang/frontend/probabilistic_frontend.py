@@ -34,7 +34,7 @@ from ..datalog.aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..datalog.chase import Chase
-from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.basic_representation import DatalogConstraintsProgram
 from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
@@ -188,7 +188,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             where the ontology files are stored
         """
         onto = OntologyParser(paths)
-        constraints, est_knowledge, entity_rules, _ = onto.parse_ontology()
+        constraints, est_knowledge, entity_rules = onto.parse_ontology()
         self.program_ir.set_constraints(constraints)
         for name, expressions in constraints.items():
             symbol = Symbol(name=name).cast(UnionOfConjunctiveQueries)

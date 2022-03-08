@@ -6,6 +6,8 @@ Magic Sets [1] rewriting implementation for Datalog.
 
 from abc import ABC, abstractmethod
 from typing import Iterable, List, Set, Tuple
+
+from neurolang.datalog.constraints_representation import RightImplication
 from ..config import config
 from ..expressions import Constant, Expression, Symbol
 from ..expression_walker import ExpressionWalker
@@ -280,6 +282,7 @@ class LeftToRightSIPS(SIPS):
         if p.functor.name not in self.prob_symbols and not is_neg:
             bound_variables.update(
                 arg for arg in predicate.args if isinstance(arg, Symbol)
+                and arg in [a for t in tail for a in t.args]
             )
             tail_predicates.append(p)
 
@@ -531,6 +534,8 @@ def adorn_code(
             continue
 
         for rule in rules.formulas:
+            if isinstance(rule, RightImplication):
+                continue
             new_consequent = consequent.functor(*rule.consequent.args)
             adorned_antecedent, to_adorn = adorn_antecedent(
                 rule, new_consequent, rewritten_rules, sips
@@ -541,9 +546,8 @@ def adorn_code(
             )
             rewritten_rules.add(consequent.functor)
             for predicate in to_adorn:
-                for arg in predicate.args:
-                    if isinstance(arg, Constant):
-                        constant_predicates.add(predicate)
+                if any([isinstance(arg, Constant) for arg in predicate.args]):
+                    constant_predicates.add(predicate)
 
     return Union(rewritten_program), constant_predicates
 

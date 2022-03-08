@@ -2,6 +2,7 @@ import collections
 from typing import AbstractSet, Iterable
 
 import numpy
+from neurolang.datalog.constraints_representation import RightImplication
 
 from neurolang.relational_algebra import str2columnstr_constant
 
@@ -395,6 +396,8 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
             continue
 
         for rule in program.symbol_table[pred_symb].formulas:
+            if isinstance(rule, RightImplication):
+                continue
             stack += [
                 apred.functor
                 for apred in extract_logic_atoms(rule.antecedent)

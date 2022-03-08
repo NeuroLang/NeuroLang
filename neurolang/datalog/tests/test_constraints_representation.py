@@ -2,9 +2,9 @@ from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, Symbol
 from ...logic import Union
 from ..constraints_representation import (
-    DatalogConstraintsProgram,
     RightImplication,
 )
+from ..basic_representation import DatalogConstraintsProgram
 from ..expressions import Implication
 
 
