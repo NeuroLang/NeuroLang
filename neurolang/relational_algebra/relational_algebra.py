@@ -1084,8 +1084,19 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         value = expression.value.value
 
         new_relation = relation.replace_null(column, value)
+        null_index = new_relation.columns.index(column)
+        tuple_type = type_system.get_args(type_system.get_args(
+            expression.relation.type)[0]
+        )
+        if tuple_type[null_index] is Unknown:
+            tuple_type = (
+                tuple_type[:null_index] +
+                (expression.value.type,) +
+                tuple_type[null_index + 1:]
+            )
+        relation_type = AbstractSet[Tuple[tuple_type]]
         return self._build_relation_constant(
-            new_relation, type_=expression.relation.type
+            new_relation, type_=relation_type
         )
 
     @ew.add_match(Constant)
