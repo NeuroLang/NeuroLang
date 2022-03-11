@@ -1,7 +1,6 @@
 from collections import defaultdict
 from itertools import product
 
-from ..exceptions import NonLiftableException
 from ..expression_walker import ReplaceExpressionWalker
 from ..expressions import Symbol
 from ..logic.expression_processing import extract_logic_atoms
