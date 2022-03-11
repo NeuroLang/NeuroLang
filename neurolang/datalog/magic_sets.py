@@ -280,6 +280,7 @@ class LeftToRightSIPS(SIPS):
         if p.functor.name not in self.prob_symbols and not is_neg:
             bound_variables.update(
                 arg for arg in predicate.args if isinstance(arg, Symbol)
+                and arg in [a for t in tail for a in t.args]
             )
             tail_predicates.append(p)
 
