@@ -7,8 +7,8 @@ from ..datalog.expression_processing import (
     dependency_matrix,
     extract_logic_atoms,
     extract_logic_predicates,
-    reachable_code,
 )
+from ..datalog.constraints_representation import reachable_code
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
 from ..logic import TRUE, Implication, Negation, Union

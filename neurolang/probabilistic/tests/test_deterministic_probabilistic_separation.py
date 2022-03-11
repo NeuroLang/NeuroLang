@@ -2,7 +2,7 @@ import io
 import operator
 
 from ...datalog.basic_representation import DatalogProgram
-from ...datalog.basic_representation import DatalogConstraintsProgram
+from ...datalog.constraints_representation import DatalogConstraintsProgram
 from ...datalog.expressions import Implication
 from ...datalog.ontologies_parser import OntologyParser
 from ...expression_walker import ExpressionBasicEvaluator

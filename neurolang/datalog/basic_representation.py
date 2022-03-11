@@ -42,7 +42,6 @@ from .expressions import (
     Union
 )
 from .wrapped_collections import WrappedRelationalAlgebraSet
-from .constraints_representation import DatalogConstraintsMixin
 
 __all__ = [
     "Implication", "Fact", "Undefined", "NullConstant",
@@ -350,11 +349,4 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
 
 
 class DatalogProgram(DatalogProgramMixin, ExpressionWalker):
-    pass
-
-class DatalogConstraintsProgram(
-    DatalogConstraintsMixin,
-    DatalogProgramMixin,
-    ExpressionWalker
-):
     pass

@@ -4,7 +4,7 @@ from ...logic import Union
 from ..constraints_representation import (
     RightImplication,
 )
-from ..basic_representation import DatalogConstraintsProgram
+from ..constraints_representation import DatalogConstraintsProgram
 from ..expressions import Implication
 
 

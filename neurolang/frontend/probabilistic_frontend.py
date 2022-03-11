@@ -34,7 +34,7 @@ from ..datalog.aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..datalog.chase import Chase
-from ..datalog.basic_representation import DatalogConstraintsProgram
+from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
