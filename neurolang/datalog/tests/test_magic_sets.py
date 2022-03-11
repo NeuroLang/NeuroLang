@@ -154,7 +154,7 @@ def test_l2r_sips():
     )
     ancfb = AdornedSymbol(anc, "fb", 0)(y, x)
     upbf = AdornedSymbol(up, "bf", 0)(y, z)
-    downbb = AdornedSymbol(down, "bb", 0)(z, x)
+    downbb = AdornedSymbol(down, "fb", 0)(z, x)
     assert arcs == {
         ancfb: (aanc(x, y),),
         upbf: (aanc(x, y), ancfb),
