@@ -28,6 +28,8 @@ try:
 except ImportError:
     from contextlib import suppress as nullcontext
 
+config.switch_expression_type_printing()
+
 EQ = Constant(operator.eq)
 GT = Constant(operator.gt)
 NE = Constant(operator.ne)
@@ -50,6 +52,8 @@ p = Symbol("p")
 a = Constant("a")
 b = Constant("b")
 c = Constant("c")
+d = Constant("d")
+
 
 
 @pytest.fixture(
@@ -834,6 +838,65 @@ def test_program_with_variable_equality(solver):
 
 
 @pytest.mark.parametrize("solver", [
+    # pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+    #     reason="WMC issue to be resolved"
+    # )),
+    # small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_program_with_non_equals(solver):
+    pfact_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "b"), (0.2, "b", "d")},
+        Q: {(1., "a",), (1., "b",)},
+    }
+    code = Union((
+        Implication(A(x, y), Conjunction((Q(x), P(w, y), NE(w, x)))),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_set
+        )
+    cpl_program.walk(code)
+    query0 = Implication(ans(), A(a, b))
+    query1 = Implication(ans(x, y), A(x, y))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(UnsupportedSolverError)
+    else:
+        context = nullcontext()
+
+    with context:
+        result0 = solver.solve_succ_query(query0, cpl_program)
+        result1 = solver.solve_succ_query(query1, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.5,),
+            ],
+            ("_p_",),
+        )
+        assert testing.eq_prov_relations(result0, expected)
+
+        result = solver.solve_succ_query(query1, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.5,),
+            ],
+            ("_p_",),
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+        result = solver.solve_succ_query(query2, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.2,),
+            ],
+            ("_p_",),
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
     pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
         reason="WMC issue to be resolved"
     )),
@@ -843,10 +906,11 @@ def test_program_with_variable_equality(solver):
 def test_program_with_segregation_constant_case(solver):
     pfact_sets = {
         P: {(0.5, "a", "b"), (0.5, "b", "c"), (0.2, "b", "d")},
+        Q: {(1., "a",), (1., "b",)},
     }
     code = Union((
         Implication(Z(x, y), Conjunction((P(x, y), Negation(A(x, y))))),
-        Implication(A(x, y), Conjunction((P(w, y), NE(w, x)))),
+        Implication(A(x, y), Conjunction((Q(x), P(w, y), NE(w, x)))),
     ))
     cpl_program = CPLogicProgram()
     for pred_symb, pfact_set in pfact_sets.items():
@@ -854,7 +918,74 @@ def test_program_with_segregation_constant_case(solver):
             pred_symb, pfact_set
         )
     cpl_program.walk(code)
-    query = Implication(ans(), Z(a, b))
+    query0 = Implication(ans(), Z(a, b))
+    query1 = Implication(ans(), Z(b, c))
+    query2 = Implication(ans(), Z(b, d))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(UnsupportedSolverError)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query0, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.5,),
+            ],
+            ("_p_",),
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+        result = solver.solve_succ_query(query1, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.5,),
+            ],
+            ("_p_",),
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+        result = solver.solve_succ_query(query2, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.2,),
+            ],
+            ("_p_",),
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    # pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+    #     reason="WMC issue to be resolved"
+    # )),
+    # small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_program_with_segregation_head_var_case(solver):
+    pfact_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "c"), (0.2, "b", "d")},
+        Q: {(1., "a",), (1., "b",)},
+    }
+    dfact_sets = {
+        R: {("b",), ("c",), ("d",)}
+    }
+    code = Union((
+        Implication(Z(x, y), Conjunction((P(x, y), Negation(A(x, y))))),
+        Implication(A(x, y), Conjunction((Q(x), P(w, y), NE(w, x)))),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_set
+        )
+    for pred_symb, dfact_set in dfact_sets.items():
+        cpl_program.add_extensional_predicate_from_tuples(
+            pred_symb, dfact_set
+        )
+    cpl_program.walk(code)
+    query = Implication(ans(x, y), Z(x, y))
 
     if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(UnsupportedSolverError)

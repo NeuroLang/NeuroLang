@@ -1,16 +1,14 @@
 import math
 import operator
+from typing import AbstractSet, Tuple
 
 from .exceptions import RelationalAlgebraError
-from .expression_walker import (
-    PatternWalker,
-    add_match
-)
+from .expression_walker import PatternWalker, add_match
 from .expressions import (
     Constant,
     FunctionApplication,
     Symbol,
-    sure_is_not_pattern,
+    sure_is_not_pattern
 )
 from .relational_algebra import (
     ColumnInt,
@@ -40,6 +38,7 @@ from .relational_algebra import (
     str2columnstr_constant
 )
 from .utils import OrderedSet
+from .utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
@@ -48,6 +47,8 @@ SUM = Constant(sum)
 EXP = Constant(math.exp)
 LOG = Constant(math.log)
 ONE = Constant[float](1.)
+EPS = Constant[float](1e-100)
+ZERO = Constant[float](0.)
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -117,6 +118,17 @@ class NaturalJoinInverse(NaturalJoin):
         )
 
 
+class Complement(UnaryRelationalAlgebraOperation):
+    def __init__(self, relation):
+        self.relation = relation
+
+    def __repr__(self):
+        return (
+            "\N{Not Sign}"
+            f"({self.relation})"
+        )
+
+
 class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
     def __init__(self, relations, weights):
         self.relations = relations
@@ -154,6 +166,38 @@ class DisjointProjection(LiftedPlanProjection):
         else:
             attributes_repr = ",".join(repr(attr) for attr in self.attributes)
         return "disj-π_[{}]({})".format(attributes_repr, repr(self.relation))
+
+
+class ComplementSolverMixin(PatternWalker):
+    @add_match(Complement(ProvenanceAlgebraSet))
+    def prov_complement(self, complement):
+        col = Symbol.fresh().name
+        oneset_col = str2columnstr_constant(col)
+        oneset = Constant[AbstractSet[Tuple[(float,)]]](
+            NamedRelationalAlgebraFrozenSet((col,), [(1.,)])
+        )
+        relation = complement.relation
+        provenance_column = relation.provenance_column
+
+        new_relation = ExtendedProjection(
+            ReplaceNull(
+                LeftNaturalJoin(oneset, relation.relation),
+                provenance_column,
+                ZERO
+            ),
+            tuple((
+                FunctionApplicationListMember(col, col)
+                for col in relation.non_provenance_columns
+            )) + (
+                FunctionApplicationListMember(
+                    SUB(oneset_col, provenance_column),
+                    provenance_column
+                ),
+            )
+        )
+
+        new_relation = ProvenanceAlgebraSet(new_relation, provenance_column)
+        return new_relation
 
 
 class WeightedNaturalJoinSolverMixin(PatternWalker):
@@ -231,14 +275,14 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         ]
         proj_list.append(
             FunctionApplicationListMember(
-                LOG(ONE - prov_col),
+                LOG(ONE - prov_col + EPS),
                 prov_col,
             )
         )
         relation = ExtendedProjection(prov_set.relation, proj_list)
         relation = GroupByAggregation(
             relation,
-            groupby=proj_op.attributes,
+            groupby=tuple(proj_op.attributes),
             aggregate_functions=(
                 FunctionApplicationListMember(
                     FunctionApplication(Constant(sum), (prov_col,)),
@@ -289,14 +333,32 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
                 prov_column_right,
                 prov_column_left,
             )
-        columns_to_keep = union.relation_left.non_provenance_columns
-        operation = IndependentProjection(
-            ProvenanceAlgebraSet(
-                Union(relation_left, relation_right),
-                prov_column_left
-            ),
-            columns_to_keep
-        )
+
+        if (
+            union.relation_left.non_provenance_columns ==
+            union.relation_right.non_provenance_columns
+        ):
+            columns_to_keep = union.relation_left.non_provenance_columns
+            operation = IndependentProjection(
+                ProvenanceAlgebraSet(
+                    Union(relation_left, relation_right),
+                    prov_column_left
+                ),
+                tuple(columns_to_keep)
+            )
+        else:
+            columns_to_keep = tuple(
+                union.relation_left.non_provenance_columns |
+                union.relation_right.non_provenance_columns
+            )
+            operation = ProvenanceAlgebraSet(Union(
+                LeftNaturalJoin(relation_left, relation_right),
+                LeftNaturalJoin(relation_right, relation_left)
+            ), prov_column_left)
+            operation = IndependentProjection(
+                operation,
+                columns_to_keep
+            )
         return self.walk(operation)
 
 

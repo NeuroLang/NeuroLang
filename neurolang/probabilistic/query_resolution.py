@@ -3,7 +3,7 @@ import operator
 import typing
 from typing import AbstractSet
 
-from neurolang.relational_algebra.optimisers import PushUnnamedSelectionsUp
+from neurolang.relational_algebra.relational_algebra import GroupByAggregation, LeftNaturalJoin, RenameColumn
 
 from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import (
@@ -13,22 +13,37 @@ from ..datalog.expression_processing import (
 )
 from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
 from ..expression_pattern_matching import add_match
-from ..expression_walker import ChainedWalker, ExpressionWalker, PatternWalker
+from ..expression_walker import (
+    ChainedWalker,
+    ExpressionWalker,
+    PatternWalker,
+    expression_iterator
+)
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
 from ..relational_algebra import (
+    BinaryRelationalAlgebraOperation,
+    ColumnStr,
     EliminateTrivialProjections,
     ExtendedProjection,
     FunctionApplicationListMember,
     Projection,
-    RelationalAlgebraOperation,
     PushInSelections,
+    RelationalAlgebraOperation,
     RelationalAlgebraSolver,
     RenameOptimizations,
+    Selection,
+    Union as RAUnion,
     SimplifyExtendedProjectionsWithConstants,
+    UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import NaturalJoinInverse
+from ..relational_algebra.optimisers import PushUnnamedSelectionsUp
+from ..relational_algebra_provenance import (
+    LiftedPlanProjection,
+    NaturalJoinInverse,
+    ProvenanceAlgebraSet
+)
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
@@ -41,7 +56,7 @@ from .expressions import Condition, ProbabilisticPredicate
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
-
+from .shattering import HeadVar
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
     if isinstance(formula.antecedent, FunctionApplication):
@@ -373,6 +388,264 @@ class FloatArithmeticSimplifier(PatternWalker):
         return self.walk(expression.args[0])
 
 
+def selection_columnstr_args(selection):
+    return set(
+        exp
+        for _, exp in expression_iterator(selection.formula)
+        if isinstance(exp, Constant[ColumnStr])
+    )
+
+
+class PushSelectionsWithoutNamedColumnUp(PatternWalker):
+    @add_match(ProvenanceAlgebraSet(Selection, ...))
+    def no_push_up_rap(self, expression):
+        return ProvenanceAlgebraSet(
+            self.walk(expression.relation),
+            expression.provenance_column
+        )
+
+    @add_match(
+        GroupByAggregation(Selection, ..., ...),
+        lambda expression: (
+            len(
+                selection_columnstr_args(expression.relation) -
+                expression.relation.relation.columns()
+            ) > 0
+        )
+    )
+    def push_up_groupby(self, expression):
+        relation, groupby, aggs = expression.unapply()
+
+        missing = (
+            selection_columnstr_args(relation) &
+            relation.relation.columns()
+        ) - expression.columns()
+        groupby += tuple(missing)
+
+        return Selection(
+            self.walk(expression.apply(relation.relation, groupby, aggs)),
+            relation.formula
+        )
+
+    @add_match(
+        ExtendedProjection(Selection, ...),
+        lambda expression: (
+            len(
+                selection_columnstr_args(expression.relation) -
+                expression.relation.relation.columns()
+            ) > 0
+        )
+
+    )
+    def push_up_extended_projection(self, expression):
+        relation, args = expression.unapply()
+
+        missing = (
+            selection_columnstr_args(relation) &
+            relation.relation.columns()
+        ) - expression.columns()
+        for var in missing:
+            args += (FunctionApplicationListMember(var, var),)
+
+        return Selection(
+            self.walk(expression.apply(relation.relation, args)),
+            relation.formula
+        )
+
+    @add_match(
+        Projection(Selection, ...),
+        lambda expression: (
+            isinstance(expression.relation, Selection) and
+            selection_columnstr_args(expression.relation) >
+            expression.relation.relation.columns()
+        )
+
+    )
+    def push_up_projection(self, expression):
+        relation, args = expression.unapply()
+
+        missing = (
+            selection_columnstr_args(relation) &
+            relation.relation.columns()
+        ) - relation.columns()
+        args += tuple(missing)
+
+        return Selection(
+            self.walk(expression.apply(relation.relation, args)),
+            relation.formula
+        )
+
+    @add_match(
+        UnaryRelationalAlgebraOperation,
+        lambda expression: (
+            isinstance(expression.relation, Selection) and
+            len(
+                selection_columnstr_args(expression.relation) -
+                expression.relation.relation.columns()
+            ) > 0
+        )
+    )
+    def push_unary_up(self, expression):
+        exp_args = expression.unapply()
+        relation = exp_args[0]
+
+        return Selection(
+            self.walk(expression.apply(relation.relation, *exp_args[1:])),
+            relation.formula
+        )
+
+    @add_match(
+        BinaryRelationalAlgebraOperation,
+        lambda expression: (
+            isinstance(expression.relation_left, Selection) and
+            len(
+                selection_columnstr_args(expression.relation_left) -
+                expression.relation_left.relation.columns()
+            ) > 0
+        )
+    )
+    def push_binary_left_up(self, expression):
+        relation_left, relation_right = expression.unapply()
+
+        binary_op = self._binary_op_fix(
+            expression.apply(
+                relation_left.relation, relation_right
+            )
+        )
+
+        return Selection(
+            binary_op,
+            relation_left.formula
+        )
+
+    @add_match(
+        BinaryRelationalAlgebraOperation,
+        lambda expression: (
+            isinstance(expression.relation_right, Selection) and
+            len(
+                selection_columnstr_args(expression.relation_right) -
+                expression.relation_right.relation.columns()
+            ) > 0
+        )
+    )
+    def push_binary_right_up(self, expression):
+        relation_left, relation_right = expression.unapply()
+
+        binary_op = self._binary_op_fix(
+            expression.apply(
+                relation_left, relation_right.relation
+            )
+        )
+
+        return Selection(
+            binary_op,
+            relation_right.formula
+        )
+
+    def _binary_op_fix(self, binary_op):
+        left = binary_op.relation_left
+        right = binary_op.relation_right
+
+        if isinstance(binary_op, RAUnion):
+            if (left.columns() != right.columns()):
+                return RAUnion(
+                    LeftNaturalJoin(left, right),
+                    LeftNaturalJoin(right, left)
+                )
+
+        return binary_op
+
+
+
+AND = Constant(operator.and_)
+NE = Constant(operator.ne)
+
+
+class SplitSelectionConjunctions(PatternWalker):
+    @add_match(Selection(..., FunctionApplication(AND, ...)))
+    def split_selection_conjunction(self, expression):
+        new_expression = expression.relation
+        for arg in expression.formula.args:
+            new_expression = Selection(new_expression, arg)
+        return self.walk(new_expression)
+
+
+class MoveSelectNonEqualsUp(PatternWalker):
+    @add_match(
+        Selection(
+            Selection(
+                ...,
+                FunctionApplication(NE, ...)
+            ),
+            FunctionApplication(EQ, ...)
+        )
+    )
+    def move_ne_up(self, expression):
+        return Selection(
+            self.walk(Selection(
+                expression.relation.relation,
+                expression.formula
+            )),
+            expression.relation.formula
+        )
+
+    @add_match(Selection(Selection, ...))
+    def nested_selection(self, expression):
+        relation = self.walk(expression.relation)
+        if relation is not expression.relation:
+            return self.walk(
+                Selection(
+                    relation,
+                    expression.formula
+                )
+            )
+        else:
+            return expression
+
+
+class SelectionsToRenames(PatternWalker):
+    @add_match(
+        Selection(
+            ...,
+            FunctionApplication(EQ, ...)
+        ),
+        lambda expression: (
+            isinstance(expression.formula.args[1], Constant[ColumnStr]) and
+            expression.formula.args[1] not in expression.relation.columns()
+        )
+    )
+    def selection_to_rename(self, expression):
+        relation = self.walk(expression.relation)
+        if expression.formula.args[1] not in relation.columns():
+            res = self.walk(RenameColumn(
+                relation,
+                expression.formula.args[0],
+                expression.formula.args[1]
+            ))
+        else:
+            res = Selection(
+                relation,
+                expression.formula
+            )
+        return res
+
+
+class PushUnnamedSelectionsUpWalker(
+    PushSelectionsWithoutNamedColumnUp,
+    ExpressionWalker
+):
+    pass
+
+
+class PostProcessPushUps(
+    SplitSelectionConjunctions,
+    MoveSelectNonEqualsUp,
+    SelectionsToRenames,
+    ExpressionWalker
+):
+    pass
+
+
 class RAQueryOptimiser(
     EliminateTrivialProjections,
     PushInSelections,
@@ -420,6 +693,8 @@ def generate_provenance_query_solver(
     steps = [
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
+        PushUnnamedSelectionsUpWalker(),
+        PostProcessPushUps(),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
         RAQueryOptimiser(),
         LogExpression(LOG, "Optimised RA query %s", logging.INFO)

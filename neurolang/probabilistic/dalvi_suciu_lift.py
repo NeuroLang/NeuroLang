@@ -113,6 +113,7 @@ PED = PushExistentialsDown()
 class ExtendedRAPToRAWalker(
     rap.IndependentDisjointProjectionsAndUnionMixin,
     rap.WeightedNaturalJoinSolverMixin,
+    rap.ComplementSolverMixin,
     ProbSemiringToRelationalAlgebraSolver,
 ):
     pass
@@ -169,6 +170,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             _prepare_and_optimise_query(flat_query, cpl_program)
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
 
+        # ucq_shattered_query = convert_to_pnf_with_dnf_matrix(ucq_shattered_query)
         ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -179,17 +181,17 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
                 "Query %s not liftable, algorithm can't be applied",
                 query
             )
-        ra_query = reintroduce_unified_head_terms(
-            ra_query, flat_query, shattered_query
+        rew = ReplaceExpressionWalker(
+            {
+                k: v for k, v in symbol_table.items()
+                if k in shattering_keys
+            }
         )
+        ra_query = rew.walk(ra_query)
+        # ra_query = reintroduce_unified_head_terms(
+        #    ra_query, flat_query, shattered_query
+        # )
 
-    rew = ReplaceExpressionWalker(
-        {
-            k: v for k, v in symbol_table.items()
-            if k in shattering_keys
-        }
-    )
-    ra_query = rew.walk(ra_query)
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
         solver_class=ExtendedRAPToRAWalker
@@ -214,7 +216,8 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     )
     symbol_table_keys = set(symbol_table.keys())
     shattered_query_body = shatter_constants(
-        unified_query.antecedent, symbol_table
+        convert_rule_to_ucq(unified_query),
+        symbol_table
     )
     shattered_query_body = partially_rank_query(
         shattered_query_body, symbol_table
@@ -975,7 +978,8 @@ def variable_co_occurrence_graph(expression):
 
 def components_plan(
     components, operation, symbol_table,
-    negative_operation=None
+    negative_operation=None,
+    unary_negative_operation=rap.Complement,
 ):
     positive_formulas = []
     negative_formulas = []
@@ -988,15 +992,35 @@ def components_plan(
 
             formula = dalvi_suciu_lift(component, symbol_table)
             positive_formulas.append(formula)
-    output = reduce(operation, positive_formulas[1:], positive_formulas[0])
 
-    if len(negative_formulas) > 0 and negative_operation is None:
-        raise ValueError(
-            "If negative components are included,"
-            " a negative operation should be provided"
+    if len(positive_formulas) > 0:
+        output = reduce(operation, positive_formulas[1:], positive_formulas[0])
+
+    if (
+        len(positive_formulas) > 0 and
+        len(negative_formulas) > 0
+    ):
+        if negative_operation is None:
+            raise ValueError(
+                "If negative components are included,"
+                " a negative operation should be provided"
+            )
+        output = reduce(negative_operation, negative_formulas, output)
+    elif len(negative_formulas) > 0:
+        if unary_negative_operation is None:
+            raise ValueError(
+                "If negative components are included,"
+                " and no positive formulas exist,"
+                " a unary negative operation should be provided"
+            )
+        complemented_negative_formulas = [
+            unary_negative_operation(f) for f in negative_formulas
+        ]
+        output = reduce(
+            operation,
+            complemented_negative_formulas[1:],
+            complemented_negative_formulas[0]
         )
-    output = reduce(negative_operation, negative_formulas, output)
-
     return output
 
 
