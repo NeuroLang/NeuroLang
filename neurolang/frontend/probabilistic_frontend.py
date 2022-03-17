@@ -448,7 +448,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                 for q in _get_list_of_intensional_rules(self.program_ir)
                 if self.connector_symbol.expression in q.antecedent._symbols
             ])
-            det_idb = Union(det_idb + connector_rules)
+            det_idb = Union(det_idb.formulas + connector_rules)
             self.current_program_rewritten = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()

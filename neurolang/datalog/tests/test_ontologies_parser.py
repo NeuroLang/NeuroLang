@@ -701,11 +701,11 @@ def test_entity_rules():
         </owl:Class>
     </rdf:RDF>'''
 
-    onto = OntologyParser(io.StringIO(owl))
+    entity = Symbol('Entity')
+    onto = OntologyParser(io.StringIO(owl), connector_symbol=entity)
     _, _, entity_rules = onto.parse_ontology()
 
     chair = Symbol('Chair')
-    entity = Symbol('Entity')
     keys = entity_rules.keys()
     assert len(keys) == 1
     assert chair in keys
@@ -751,10 +751,9 @@ def test_entity_rules_inclusion():
 
     nl = NeurolangPDL()
 
-    nl.load_ontology(io.StringIO(owl))
+    entity = nl.load_ontology(io.StringIO(owl), connector_symbol_name='Entity')
 
     chair = Symbol('Chair')
-    entity = Symbol('Entity')
     assert chair in nl.symbol_table
 
     assert len(nl.symbol_table[chair].formulas) == 1
