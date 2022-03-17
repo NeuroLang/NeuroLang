@@ -19,11 +19,16 @@ class OntologyParser:
 
     STRUCTURAL_KNOWLEDGE_NAMESPACE = 'neurolang:'
 
-    def __init__(self, paths, load_format="xml"):
+    def __init__(self, paths, connector_symbol=None, load_format="xml"):
         if isinstance(paths, list):
             self._load_ontology(paths, load_format)
         else:
             self._load_ontology([paths], [load_format])
+
+        if connector_symbol is None:
+            self.connector_symbol = Symbol.fresh()
+        else:
+            self.connector_symbol = connector_symbol
 
         self.parsed_constraints = {}
         self.estructural_knowledge = {}
@@ -494,10 +499,9 @@ class OntologyParser:
         self._categorize_constraints([RightImplication(ant, con)])
 
         if prop == RDFS.label:
-            entity_class = Symbol('Entity')
             x = Symbol.fresh()
             lower_name = self._parse_name(value).lower()
-            rule = Implication(entity(x), entity_class(x, Constant(lower_name)))
+            rule = Implication(entity(x), self.connector_symbol(x, Constant(lower_name)))
             self._add_rules([rule])
 
         prop_name = label.name.split(':')[-1]

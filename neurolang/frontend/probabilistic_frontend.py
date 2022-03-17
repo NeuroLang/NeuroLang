@@ -67,7 +67,10 @@ from ..probabilistic.query_resolution import (
     QueryBasedProbFactToDetRule,
     compute_probabilistic_solution,
 )
-from ..probabilistic.stratification import stratify_program
+from ..probabilistic.stratification import (
+    _get_list_of_intensional_rules,
+    stratify_program
+)
 from ..probabilistic.weighted_model_counting import (
     solve_marg_query as wmc_solve_marg_query,
 )
@@ -176,7 +179,8 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def load_ontology(
         self,
-        paths: typing.Union[str, List[str]]
+        paths: typing.Union[str, List[str]],
+        connector_symbol_name=None
     ) -> None:
         """
         Loads and parses ontology stored at the specified paths, and
@@ -187,7 +191,11 @@ class NeurolangPDL(QueryBuilderDatalog):
         paths : typing.Union[str, List[str]]
             where the ontology files are stored
         """
-        onto = OntologyParser(paths)
+        if connector_symbol_name is None:
+            self.connector_symbol = self.new_symbol()
+        else:
+            self.connector_symbol = self.new_symbol(name=connector_symbol_name)
+        onto = OntologyParser(paths, connector_symbol=self.connector_symbol.expression)
         constraints, est_knowledge, entity_rules = onto.parse_ontology()
         self.program_ir.set_constraints(constraints)
         for name, expressions in constraints.items():
@@ -202,6 +210,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         for symbol, expressions in entity_rules.items():
             for e in expressions:
                 self.program_ir.walk(e)
+
+        return self.connector_symbol
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -433,6 +443,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         '''
         if "__constraints__" in self.symbol_table:
             det_idb = self._rewrite_program_with_ontology(det_idb)
+            connector_rules = tuple(
+                [q
+                for q in _get_list_of_intensional_rules(self.program_ir)
+                if self.connector_symbol.expression in q.antecedent._symbols
+            ])
+            det_idb = Union(det_idb + connector_rules)
             self.current_program_rewritten = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
