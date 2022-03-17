@@ -190,6 +190,15 @@ class NeurolangPDL(QueryBuilderDatalog):
         ----------
         paths : typing.Union[str, List[str]]
             where the ontology files are stored
+        connector_symbol_name : str
+            name to be used in the connector_symbol.
+            if None, the name is randomly generated
+
+        Returns
+        -------
+        Expression
+            the new connector_symbol, to be used in
+            the query program.
         """
         if connector_symbol_name is None:
             self.connector_symbol = self.new_symbol()
@@ -431,6 +440,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         a rewrite is performed and the resulting program is assigned
         to the variable `current_program_rewritten` to provide a way
         to access this information.
+
+        In case connector_symbol has been defined, all rules derived
+        from the ontology parsing are included in the program
 
         Parameters
         ----------
