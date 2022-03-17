@@ -180,7 +180,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
-        shattered_query, symbol_table = _prepare_and_optimise_query(flat_query, cpl_program)
+        shattered_query, symbol_table = \
+            _prepare_and_optimise_query(flat_query, cpl_program)
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
 
         ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
