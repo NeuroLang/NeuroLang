@@ -194,14 +194,13 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
                 "Query %s not liftable, algorithm can't be applied",
                 query
             )
+        ra_query = (
+            ReplaceAllSymbolsButConstantSets(symbol_table)
+            .walk(ra_query)
+        )
         ra_query = reintroduce_unified_head_terms(
             ra_query, flat_query, shattered_query
         )
-
-    ra_query = (
-        ReplaceAllSymbolsButConstantSets(symbol_table)
-        .walk(ra_query)
-    )
 
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
@@ -235,7 +234,7 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         unified_query.consequent,
         shattered_query_body
     )
-    _verify_that_the_query_has_no_builtins(cpl_program, shattered_query)
+    _verify_that_the_query_has_no_builtins(shattered_query, cpl_program)
     _verify_that_the_query_is_unate(shattered_query, symbol_table)
     if not verify_that_the_query_is_ranked(
         convert_rule_to_ucq(shattered_query)
@@ -245,7 +244,7 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     return shattered_query, symbol_table
 
 
-def _verify_that_the_query_has_no_builtins(cpl_program, shattered_query):
+def _verify_that_the_query_has_no_builtins(shattered_query, cpl_program):
     if any(
         is_builtin(atom, known_builtins=cpl_program.builtins())
         for atom in extract_logic_atoms(shattered_query)
