@@ -19,6 +19,7 @@ from ..exceptions import (
     UnsupportedSolverError
 )
 from ..expression_walker import (
+    ExpressionWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match
@@ -119,6 +120,20 @@ class ExtendedRAPToRAWalker(
     pass
 
 
+class ReplaceAllSymbolsButConstantSets(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(Symbol)
+    def replace_symbol(self, expression):
+        res = expression
+        if expression in self.symbol_table:
+            value = self.symbol_table[expression]
+            if not isinstance(value, Constant[AbstractSet]):
+                res = value
+        return res
+
+
 def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     """
     Solve a SUCC query on a CP-Logic program.
@@ -166,11 +181,10 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
-        shattered_query, symbol_table, shattering_keys = \
+        shattered_query, symbol_table = \
             _prepare_and_optimise_query(flat_query, cpl_program)
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
 
-        # ucq_shattered_query = convert_to_pnf_with_dnf_matrix(ucq_shattered_query)
         ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -181,16 +195,13 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
                 "Query %s not liftable, algorithm can't be applied",
                 query
             )
-        rew = ReplaceExpressionWalker(
-            {
-                k: v for k, v in symbol_table.items()
-                if k in shattering_keys
-            }
+        ra_query = (
+            ReplaceAllSymbolsButConstantSets(symbol_table)
+            .walk(ra_query)
         )
-        ra_query = rew.walk(ra_query)
-        # ra_query = reintroduce_unified_head_terms(
-        #    ra_query, flat_query, shattered_query
-        # )
+        ra_query = reintroduce_unified_head_terms(
+            ra_query, flat_query, shattered_query
+        )
 
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
@@ -214,7 +225,6 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, unified_query.antecedent
     )
-    symbol_table_keys = set(symbol_table.keys())
     shattered_query_body = shatter_constants(
         convert_rule_to_ucq(unified_query),
         symbol_table
@@ -226,18 +236,17 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         unified_query.consequent,
         shattered_query_body
     )
-    shattering_keys = set(symbol_table) - symbol_table_keys
-    _verify_that_the_query_has_no_builtins(cpl_program, shattered_query)
+    _verify_that_the_query_has_no_builtins(shattered_query, cpl_program)
     _verify_that_the_query_is_unate(shattered_query, symbol_table)
     if not verify_that_the_query_is_ranked(
         convert_rule_to_ucq(shattered_query)
     ):
         raise NotRankedException(f"Query {flat_query} is not ranked")
 
-    return shattered_query, symbol_table, shattering_keys
+    return shattered_query, symbol_table
 
 
-def _verify_that_the_query_has_no_builtins(cpl_program, shattered_query):
+def _verify_that_the_query_has_no_builtins(shattered_query, cpl_program):
     if any(
         is_builtin(atom, known_builtins=cpl_program.builtins())
         for atom in extract_logic_atoms(shattered_query)
