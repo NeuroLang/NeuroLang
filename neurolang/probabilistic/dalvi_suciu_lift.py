@@ -14,9 +14,12 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import (
     NeuroLangException,
     NonLiftableException,
+    NotRankedException,
+    NotUnateException,
     UnsupportedSolverError
 )
 from ..expression_walker import (
+    ExpressionWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match
@@ -63,17 +66,17 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
-from .exceptions import NotEasilyShatterableError
 from .expression_processing import (
     is_builtin,
     lift_optimization_for_choice_predicates
 )
 from .probabilistic_ra_utils import (
-    DeterministicFactSet,
     NonLiftable,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query
+    generate_probabilistic_symbol_table_for_query,
+    is_atom_a_deterministic_relation,
+    is_atom_a_probabilistic_choice_relation
 )
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
@@ -83,7 +86,8 @@ from .query_resolution import (
     lift_solve_marg_query,
     reintroduce_unified_head_terms
 )
-from .shattering import shatter_easy_probfacts
+from .ranking import partially_rank_query, verify_that_the_query_is_ranked
+from .shattering import shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
@@ -113,6 +117,20 @@ class ExtendedRAPToRAWalker(
     ProbSemiringToRelationalAlgebraSolver,
 ):
     pass
+
+
+class ReplaceAllSymbolsButConstantSets(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(Symbol)
+    def replace_symbol(self, expression):
+        res = expression
+        if expression in self.symbol_table:
+            value = self.symbol_table[expression]
+            if not isinstance(value, Constant[AbstractSet]):
+                res = value
+        return res
 
 
 def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
@@ -162,9 +180,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
-        shattered_query, symbol_table = _prepare_and_optimise_query(
-            flat_query, cpl_program
-        )
+        shattered_query, symbol_table = \
+            _prepare_and_optimise_query(flat_query, cpl_program)
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
 
         ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
@@ -177,6 +194,10 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
                 "Query %s not liftable, algorithm can't be applied",
                 query
             )
+        ra_query = (
+            ReplaceAllSymbolsButConstantSets(symbol_table)
+            .walk(ra_query)
+        )
         ra_query = reintroduce_unified_head_terms(
             ra_query, flat_query, shattered_query
         )
@@ -203,10 +224,27 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, unified_query.antecedent
     )
-    try:
-        shattered_query = symbolic_shattering(unified_query, symbol_table)
-    except NotEasilyShatterableError:
-        shattered_query = unified_query
+    shattered_query_body = shatter_constants(
+        unified_query.antecedent, symbol_table
+    )
+    shattered_query_body = partially_rank_query(
+        shattered_query_body, symbol_table
+    )
+    shattered_query = Implication(
+        unified_query.consequent,
+        shattered_query_body
+    )
+    _verify_that_the_query_has_no_builtins(shattered_query, cpl_program)
+    _verify_that_the_query_is_unate(shattered_query, symbol_table)
+    if not verify_that_the_query_is_ranked(
+        convert_rule_to_ucq(shattered_query)
+    ):
+        raise NotRankedException(f"Query {flat_query} is not ranked")
+
+    return shattered_query, symbol_table
+
+
+def _verify_that_the_query_has_no_builtins(shattered_query, cpl_program):
     if any(
         is_builtin(atom, known_builtins=cpl_program.builtins())
         for atom in extract_logic_atoms(shattered_query)
@@ -214,8 +252,6 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         raise UnsupportedSolverError(
             "Builtins not allowed for Dalvi-Suciu lifting"
         )
-    _verify_that_the_query_is_unate(shattered_query, symbol_table)
-    return shattered_query, symbol_table
 
 
 def _verify_that_the_query_is_unate(query, symbol_table):
@@ -239,7 +275,7 @@ def _verify_that_the_query_is_unate(query, symbol_table):
             positive_relational_symbols.add(predicate.functor)
 
     if not positive_relational_symbols.isdisjoint(negative_relational_symbols):
-        raise NonLiftableException(f"Query {query} is not unate")
+        raise NotUnateException(f"Query {query} is not unate")
 
 
 def solve_marg_query(rule, cpl):
@@ -1071,46 +1107,6 @@ def mobius_function(formula, formula_containments, known_weights=None):
 def powerset(iterable):
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
-
-
-def symbolic_shattering(unified_query, symbol_table):
-    fact_set_classes = (
-        ProbabilisticFactSet, ProbabilisticChoiceSet, DeterministicFactSet
-    )
-    shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
-    inverted_symbol_table = {
-        v: k for k, v in symbol_table.items()
-        if isinstance(v, fact_set_classes)
-    }
-    for atom in extract_logic_atoms(shattered_query):
-        functor = atom.functor
-        if isinstance(functor, fact_set_classes):
-            if functor not in inverted_symbol_table:
-                s = Symbol.fresh()
-                inverted_symbol_table[functor] = s
-                symbol_table[s] = functor
-
-    shattered_query = (
-            ReplaceExpressionWalker(inverted_symbol_table)
-            .walk(shattered_query)
-    )
-    return shattered_query
-
-
-def is_atom_a_deterministic_relation(atom, symbol_table):
-    return (
-        isinstance(atom.functor, Symbol)
-        and atom.functor in symbol_table
-        and isinstance(symbol_table[atom.functor], DeterministicFactSet)
-    )
-
-
-def is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-    return (
-        isinstance(atom.functor, Symbol)
-        and atom.functor in symbol_table
-        and isinstance(symbol_table[atom.functor], ProbabilisticChoiceSet)
-    )
 
 
 def is_probabilistic_atom_with_constants_in_all_key_positions(

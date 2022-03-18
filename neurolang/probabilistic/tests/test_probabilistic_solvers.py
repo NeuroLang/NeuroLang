@@ -21,10 +21,7 @@ from .. import (
 )
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
-from ..exceptions import (
-    NotEasilyShatterableError,
-    NotHierarchicalQueryException
-)
+from ..exceptions import NotHierarchicalQueryException
 
 try:
     from contextlib import nullcontext
@@ -33,6 +30,7 @@ except ImportError:
 
 EQ = Constant(operator.eq)
 GT = Constant(operator.gt)
+NE = Constant(operator.ne)
 
 ans = Symbol("ans")
 P = Symbol("P")
@@ -651,7 +649,7 @@ def test_repeated_antecedent_predicate_symbol(solver):
     query = Implication(ans(x, y), Q(x, y))
 
     if solver is small_dichotomy_theorem_based_solver:
-        context = pytest.raises(NotEasilyShatterableError)
+        context = pytest.raises(NotHierarchicalQueryException)
     elif solver is dalvi_suciu_lift:
         context = pytest.raises(NonLiftableException)
     else:
@@ -836,6 +834,45 @@ def test_program_with_variable_equality(solver):
 
 
 @pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_program_with_segregation_constant_case(solver):
+    pfact_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "c"), (0.2, "b", "d")},
+    }
+    code = Union((
+        Implication(Z(x, y), Conjunction((P(x, y), Negation(A(x, y))))),
+        Implication(A(x, y), Conjunction((P(w, y), NE(w, x)))),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_set
+        )
+    cpl_program.walk(code)
+    query = Implication(ans(), Z(a, b))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(UnsupportedSolverError)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.5,),
+            ],
+            ("_p_",),
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
     weighted_model_counting,
     pytest.param(small_dichotomy_theorem_based_solver, marks=pytest.mark.xfail(
         reason="Existential variable in probfact leads to unsupported noisy-or"
@@ -918,7 +955,9 @@ def test_simple_negation(solver):
 
     with context:
         result = solver.solve_succ_query(query, cpl)
-        expected = testing.make_prov_set([(.18, 'a'), (.10, 'b')], ("_p_", "x"))
+        expected = testing.make_prov_set(
+            [(.18, 'a'), (.10, 'b')], ("_p_", "x")
+        )
         assert testing.eq_prov_relations(result, expected)
 
 
@@ -1042,6 +1081,19 @@ def test_dalvi_suciu_fails_unate():
         [(0.1, 'a'), (0.3, 'c')]
     )
     rule = Implication(P(x), Conjunction((R(y), Q(x), Negation(R(x)))))
+    cpl.walk(rule)
+    query = Implication(ans(x), P(x))
+    with pytest.raises(NonLiftableException):
+        dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+def test_dalvi_suciu_fails_not_ranked():
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.2, 'a', 'b'), (0.1, 'b', 'c')]
+    )
+    rule = Implication(P(x), Conjunction((Q(x, y), Q(y, x))))
     cpl.walk(rule)
     query = Implication(ans(x), P(x))
     with pytest.raises(NonLiftableException):
@@ -1245,4 +1297,6 @@ def test_deterministic_simplification():
         query, cpl_program
     )
 
-    assert testing.eq_prov_relations(res, testing.make_prov_set({(0.6, 'a', 'b')}, ['_p_', 'x', 'y']))
+    assert testing.eq_prov_relations(
+        res, testing.make_prov_set({(0.6, 'a', 'b')}, ['_p_', 'x', 'y'])
+    )
