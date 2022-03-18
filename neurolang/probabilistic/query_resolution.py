@@ -3,6 +3,8 @@ import operator
 import typing
 from typing import AbstractSet
 
+from neurolang.relational_algebra.optimisers import PushUnnamedSelectionsUp
+
 from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import (
     EQ,
