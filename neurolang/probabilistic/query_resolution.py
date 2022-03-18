@@ -3,8 +3,6 @@ import operator
 import typing
 from typing import AbstractSet
 
-from neurolang.relational_algebra.relational_algebra import GroupByAggregation, LeftNaturalJoin, RenameColumn
-
 from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import (
     EQ,
@@ -33,12 +31,17 @@ from ..relational_algebra import (
     RelationalAlgebraSolver,
     RenameOptimizations,
     Selection,
-    Union as RAUnion,
     SimplifyExtendedProjectionsWithConstants,
     UnaryRelationalAlgebraOperation,
+    Union as RAUnion,
     str2columnstr_constant
 )
 from ..relational_algebra.optimisers import PushUnnamedSelectionsUp
+from ..relational_algebra.relational_algebra import (
+    GroupByAggregation,
+    LeftNaturalJoin,
+    RenameColumn
+)
 from ..relational_algebra_provenance import (
     LiftedPlanProjection,
     NaturalJoinInverse,
@@ -57,6 +60,7 @@ from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
 from .shattering import HeadVar
+
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
     if isinstance(formula.antecedent, FunctionApplication):

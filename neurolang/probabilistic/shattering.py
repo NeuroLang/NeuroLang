@@ -47,6 +47,7 @@ def atom_to_constant_to_RA_conditions(
             conditions.add(EQ(int2columnint_constant(i), arg))
     return conditions
 
+    return conditions
 
 class NormalizeNotEquals(LogicExpressionWalker):
     def __init__(self, head_vars):
