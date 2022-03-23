@@ -139,8 +139,12 @@ class DetectEuclideanDistanceBoundMatrix(PatternWalker):
             and formula.functor.value
             in (operator.lt, operator.le, operator.gt, operator.ge)
             and len(formula.args) == 2
-            and any(isinstance(arg, Symbol) for arg in formula.args)
-            and any(isinstance(arg, Constant) for arg in formula.args)
+            and ((
+                any(isinstance(arg, Symbol) for arg in formula.args)
+                and any(isinstance(arg, Constant) for arg in formula.args)
+            ) or (
+                all(isinstance(arg, Symbol) for arg in formula.args)
+            ))
         )
         if len(matching_formulas) != 1:
             return None
@@ -174,11 +178,10 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
             for arg in var_to_euclidean_equality_formula.args
             if isinstance(arg, FunctionApplication)
         ).args
-        upper_bound = next(
-            arg
-            for arg in distance_upper_bound_formula.args
-            if isinstance(arg, Constant)
-        )
+        upper_bound = [
+            arg for arg in distance_upper_bound_formula.args
+            if isinstance(arg, (Constant, Symbol))
+        ][1]
         first_range_pred = (
             DetectEuclideanDistanceBoundMatrix.get_range_pred_for_coord(
                 formulas, (i1, j1, k1)
@@ -195,10 +198,19 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         second_coord_set = self.safe_range_pred_to_coord_set(
             second_range_pred, (i2, j2, k2)
         )
-        max_dist = self.upper_bound_to_max_dist(upper_bound)
+        if isinstance(upper_bound, Symbol) and upper_bound in first_range_pred.args:
+            max_dist = self.symbol_upper_bound_to_dists(upper_bound, first_range_pred)
+            first_coord_set.as_pandas_dataframe()[upper_bound.name] = max_dist
+        elif isinstance(upper_bound, Symbol) and upper_bound in second_range_pred.args:
+            max_dist = self.symbol_upper_bound_to_dists(upper_bound, second_range_pred)
+            second_coord_set.as_pandas_dataframe()[upper_bound.name] = max_dist
+        else:
+            max_dist = self.upper_bound_to_max_dist(upper_bound)
+
         spatial_bound_solution = self.solve_spatial_bound(
-            first_coord_set.as_numpy_array(),
-            second_coord_set.as_numpy_array(),
+            first_coord_set,
+            second_coord_set,
+            upper_bound,
             max_dist,
         )
         new_pred_symb = Symbol.fresh()
@@ -222,35 +234,99 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
     def upper_bound_to_max_dist(upper_bound):
         val = upper_bound.value
         if isinstance(val, (int, float)):
-            return float(val)
+            return [float(val)]
         raise ValueError("Unsupported distance expression")
+
+    def symbol_upper_bound_to_dists(self, upper_bound, range_pred):
+        index = list(range_pred.args).index(upper_bound)
+        values = self.symbol_table[range_pred.functor].value._container[index]
+
+        return values
 
     @staticmethod
     def solve_spatial_bound(
-        first_coord_array: numpy.array,
-        second_coord_array: numpy.array,
-        max_dist: float,
-    ) -> numpy.array:
+        first_coord_array,
+        second_coord_array,
+        upper_bound,
+        max_dist
+    ):
         with log_performance(LOG, "spatial bound resolution"):
-            first_ckd_tree = scipy.spatial.cKDTree(first_coord_array)
-            second_ckd_tree = scipy.spatial.cKDTree(second_coord_array)
-            dist_mat = first_ckd_tree.sparse_distance_matrix(
-                second_ckd_tree,
-                max_dist,
-                output_type="ndarray",
-                p=2,
-            )
-            dist_mat = pandas.DataFrame(dist_mat)
-            solution_df = pandas.DataFrame(
-                numpy.c_[
-                    first_coord_array[dist_mat.iloc[:, 0].values],
-                    second_coord_array[dist_mat.iloc[:, 1].values],
-                ],
-                dtype=int,
-            )
-            solution_df[len(solution_df.columns)] = numpy.atleast_2d(
-                dist_mat.iloc[:, 2].values
-            ).T
+            if isinstance(upper_bound, Constant):
+                first_coord_array = first_coord_array.as_numpy_array()
+                second_coord_array = second_coord_array.as_numpy_array()
+                first_ckd_tree = scipy.spatial.cKDTree(first_coord_array)
+                second_ckd_tree = scipy.spatial.cKDTree(second_coord_array)
+                dist_mat = first_ckd_tree.sparse_distance_matrix(
+                    second_ckd_tree,
+                    max_dist[0],
+                    output_type="ndarray",
+                    p=2,
+                )
+                dist_mat = pandas.DataFrame(dist_mat)
+                solution_df = pandas.DataFrame(
+                    numpy.c_[
+                        first_coord_array[dist_mat.iloc[:, 0].values],
+                        second_coord_array[dist_mat.iloc[:, 1].values],
+                    ],
+                    dtype=int,
+                )
+                solution_df[len(solution_df.columns)] = numpy.atleast_2d(
+                    dist_mat.iloc[:, 2].values
+                ).T
+            else:
+                if upper_bound in first_coord_array.columns:
+                    group_coords = first_coord_array.as_pandas_dataframe().groupby(upper_bound.name)
+                    ungroup_coords = second_coord_array.as_numpy_array()
+                else:
+                    group_coords = second_coord_array.as_pandas_dataframe().groupby(upper_bound.name)
+                    ungroup_coords = first_coord_array.as_numpy_array()
+
+                second_ckd_tree = scipy.spatial.cKDTree(ungroup_coords)
+                solution_df = None
+                for dist, coords in group_coords:
+                    coords = coords.drop(upper_bound.name, axis=1).values
+                    first_ckd_tree = scipy.spatial.cKDTree(coords)
+
+                    if upper_bound in first_coord_array.columns:
+                        dist_mat = first_ckd_tree.sparse_distance_matrix(
+                            second_ckd_tree,
+                            dist,
+                            output_type="ndarray",
+                            p=2,
+                        )
+                        dist_mat = pandas.DataFrame(dist_mat)
+
+                        temp_df = pandas.DataFrame(
+                            numpy.c_[
+                                coords[dist_mat.iloc[:, 0].values],
+                                ungroup_coords[dist_mat.iloc[:, 1].values],
+                            ],
+                            dtype=int,
+                        )
+                    else:
+                        dist_mat = second_ckd_tree.sparse_distance_matrix(
+                            first_ckd_tree,
+                            dist,
+                            output_type="ndarray",
+                            p=2,
+                        )
+                        dist_mat = pandas.DataFrame(dist_mat)
+
+                        temp_df = pandas.DataFrame(
+                            numpy.c_[
+                                ungroup_coords[dist_mat.iloc[:, 0].values],
+                                coords[dist_mat.iloc[:, 1].values],
+                            ],
+                            dtype=int,
+                        )
+                    temp_df[len(temp_df.columns)] = numpy.atleast_2d(
+                        dist_mat.iloc[:, 2].values
+                    ).T
+                    if solution_df is None:
+                        solution_df = temp_df
+                    else:
+                        solution_df = solution_df.append(temp_df)
+
         return solution_df
 
     def safe_range_pred_to_coord_set(
