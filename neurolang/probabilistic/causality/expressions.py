@@ -1,11 +1,8 @@
-
-
-
-from neurolang.expression_pattern_matching import add_match
-from neurolang.expression_walker import ExpressionWalker
-from neurolang.probabilistic.exceptions import MalformedCausalOperatorError
-from ..expressions import Condition, Symbol
+from ...expression_pattern_matching import add_match
+from ...expression_walker import ExpressionWalker
 from ...logic import Conjunction
+from ..exceptions import MalformedCausalOperatorError
+from ..expressions import Condition, Symbol
 
 DO = Symbol("DO")
 
