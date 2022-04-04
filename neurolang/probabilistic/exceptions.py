@@ -12,6 +12,9 @@ class DistributionDoesNotSumToOneError(NeuroLangException):
 class MalformedProbabilisticTupleError(NeuroLangException):
     pass
 
+class MalformedCausalOperatorError(NeuroLangException):
+    pass
+
 
 class NotHierarchicalQueryException(UnsupportedSolverError):
     pass
