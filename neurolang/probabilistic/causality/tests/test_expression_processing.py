@@ -1,30 +1,46 @@
 import pytest
 
+from ....expressions import Constant, Symbol
 from ....logic import Conjunction
 from ...exceptions import MalformedCausalOperatorError
-from ...expressions import Condition, Symbol
+from ...expressions import Condition
 from ..expressions import CausalIntervention, CausalInterventionWalker
 
+def test_symbols_not_allowed():
+    P = Symbol("P")
+    Q = Symbol("Q")
+
+    x = Symbol("x")
+    with pytest.raises(MalformedCausalOperatorError, match="The atoms intervened by the*"):
+        Condition(
+            P(x),
+            Conjunction((
+                CausalIntervention((
+                    Q(x),
+                )),
+            ))
+        )
 
 def test_do_instantiation():
     P = Symbol("P")
     Q = Symbol("Q")
 
     x = Symbol("x")
-    y = Symbol("y")
+    a = Constant("a")
 
     imp = Condition(
         P(x),
         Conjunction((
             CausalIntervention((
-                Q(y),
+                Q(a),
             )),
         ))
     )
     ciw = CausalInterventionWalker()
 
-    ciw.walk(imp)
-    assert True
+    ci = ciw.walk(imp)
+    assert ci == CausalIntervention((Q(a),))
+
 
 def test_do_instantiation_more_atoms():
     P = Symbol("P")
@@ -32,37 +48,38 @@ def test_do_instantiation_more_atoms():
     R = Symbol("R")
 
     x = Symbol("x")
-    y = Symbol("y")
+    a = Constant("a")
+    b = Constant("b")
 
     imp = Condition(
         P(x),
         Conjunction((
             CausalIntervention((
-                Q(y),R(x)
+                Q(a),R(b)
             )),
         ))
     )
     ciw = CausalInterventionWalker()
 
     ciw.walk(imp)
-    assert True
+    assert CausalIntervention((Q(a),R(b)))
 
-def test_do_multiple_instantiation_exception():
+def test_multiple_instantiation_exception():
     P = Symbol("P")
     Q = Symbol("Q")
     R = Symbol("R")
 
     x = Symbol("x")
-    y = Symbol("y")
+    a = Constant("a")
 
     imp = Condition(
         P(x),
         Conjunction((
             CausalIntervention((
-                Q(y),
+                Q(a),
             )),
             CausalIntervention((
-                R(y),
+                R(a),
             )),
         ))
     )
