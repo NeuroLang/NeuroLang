@@ -84,7 +84,7 @@ from .probabilistic_semiring_solver import (
 from .query_resolution import (
     generate_provenance_query_solver,
     lift_solve_marg_query,
-    reintroduce_unified_head_terms
+    compute_projections_needed_to_reintroduce_head_terms
 )
 from .ranking import partially_rank_query, verify_that_the_query_is_ranked
 from .shattering import shatter_constants
@@ -200,7 +200,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             .walk(ra_query)
         )
 
-    needed_projections = reintroduce_unified_head_terms(
+    needed_projections = compute_projections_needed_to_reintroduce_head_terms(
         ra_query, flat_query, shattered_query
     )
 
