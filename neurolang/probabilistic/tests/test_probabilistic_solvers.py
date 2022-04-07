@@ -55,7 +55,6 @@ c = Constant("c")
 d = Constant("d")
 
 
-
 @pytest.fixture(
     params=((
         weighted_model_counting,
@@ -654,8 +653,6 @@ def test_repeated_antecedent_predicate_symbol(solver):
 
     if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(NotHierarchicalQueryException)
-    elif solver is dalvi_suciu_lift:
-        context = pytest.raises(NonLiftableException)
     else:
         context = nullcontext()
 
@@ -838,10 +835,10 @@ def test_program_with_variable_equality(solver):
 
 
 @pytest.mark.parametrize("solver", [
-    # pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
-    #     reason="WMC issue to be resolved"
-    # )),
-    # small_dichotomy_theorem_based_solver,
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
 def test_program_with_non_equals(solver):
@@ -867,17 +864,7 @@ def test_program_with_non_equals(solver):
         context = nullcontext()
 
     with context:
-        result0 = solver.solve_succ_query(query0, cpl_program)
-        result1 = solver.solve_succ_query(query1, cpl_program)
-        expected = testing.make_prov_set(
-            [
-                (0.5,),
-            ],
-            ("_p_",),
-        )
-        assert testing.eq_prov_relations(result0, expected)
-
-        result = solver.solve_succ_query(query1, cpl_program)
+        result = solver.solve_succ_query(query0, cpl_program)
         expected = testing.make_prov_set(
             [
                 (0.5,),
@@ -886,12 +873,14 @@ def test_program_with_non_equals(solver):
         )
         assert testing.eq_prov_relations(result, expected)
 
-        result = solver.solve_succ_query(query2, cpl_program)
+        result = solver.solve_succ_query(query1, cpl_program)
         expected = testing.make_prov_set(
             [
-                (0.2,),
+                (0.5, "b", "b"),
+                (0.5, "a", "b"),
+                (0.2, "a", "d")
             ],
-            ("_p_",),
+            ("_p_", "x", "y"),
         )
         assert testing.eq_prov_relations(result, expected)
 

@@ -118,6 +118,10 @@ class NAryRelationalAlgebraOperation(RelationalAlgebraOperation):
 
 
 class BinaryRelationalAlgebraOperation(RelationalAlgebraOperation):
+    def __init__(self, relation_left, relation_right):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
+
     def columns(self):
         if not hasattr(self, '_columns'):
             self._columns = (

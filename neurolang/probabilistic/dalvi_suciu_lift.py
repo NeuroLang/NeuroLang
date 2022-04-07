@@ -199,12 +199,14 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             ReplaceAllSymbolsButConstantSets(symbol_table)
             .walk(ra_query)
         )
-        ra_query = reintroduce_unified_head_terms(
-            ra_query, flat_query, shattered_query
-        )
+
+    needed_projections = reintroduce_unified_head_terms(
+        ra_query, flat_query, shattered_query
+    )
 
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
+        needed_projections=needed_projections,
         solver_class=ExtendedRAPToRAWalker
     )
 
@@ -725,20 +727,21 @@ def _apply_disjoint_project_ucq_rule(
     free_vars = extract_logic_free_variables(disjunctive_query)
     head = add_existentials_except(disjunct, free_vars)
     head_plan = dalvi_suciu_lift(head, symbol_table)
-    if isinstance(head_plan, NonLiftable):
+    if not is_pure_lifted_plan(head_plan):
         return False, None
+    tail = set(disjunctive_query.formulas) - {disjunct}
     tail = add_existentials_except(
-        Conjunction(tuple(disjunctive_query.formulas[:1])),
+        Conjunction(tuple(tail)),
         free_vars,
     )
     tail_plan = dalvi_suciu_lift(tail, symbol_table)
-    if isinstance(tail_plan, NonLiftable):
+    if not is_pure_lifted_plan(tail_plan):
         return False, None
     head_and_tail = add_existentials_except(
         Conjunction(disjunctive_query.formulas), free_vars
     )
     head_and_tail_plan = dalvi_suciu_lift(head_and_tail, symbol_table)
-    if isinstance(head_and_tail_plan, NonLiftable):
+    if not is_pure_lifted_plan(head_and_tail_plan):
         return False, None
     return True, rap.WeightedNaturalJoin(
         (head_plan, tail_plan, head_and_tail_plan),

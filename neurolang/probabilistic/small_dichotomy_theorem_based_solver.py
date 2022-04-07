@@ -231,12 +231,13 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         # project on query's head variables
         ra_query = _project_on_query_head(ra_query, shattered_query)
         # re-introduce head variables potentially removed by unification
-        ra_query = reintroduce_unified_head_terms(
+        needed_projections = reintroduce_unified_head_terms(
             ra_query, flat_query, unified_query
         )
 
     query_solver = generate_provenance_query_solver(
-        symbol_table, run_relational_algebra_solver
+        symbol_table, run_relational_algebra_solver,
+        needed_projections=needed_projections
     )
 
     with log_performance(LOG, "Run RAP query %s", init_args=(ra_query,)):

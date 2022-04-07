@@ -1,9 +1,7 @@
 import logging
 import operator
 import typing
-from typing import AbstractSet
-
-from neurolang.relational_algebra.optimisers import PushUnnamedSelectionsUp
+from typing import AbstractSet, Tuple
 
 from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import (
@@ -17,6 +15,7 @@ from ..expression_walker import (
     ChainedWalker,
     ExpressionWalker,
     PatternWalker,
+    ReplaceExpressionWalker,
     expression_iterator
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
@@ -27,6 +26,7 @@ from ..relational_algebra import (
     EliminateTrivialProjections,
     ExtendedProjection,
     FunctionApplicationListMember,
+    NameColumns,
     Projection,
     PushInSelections,
     RelationalAlgebraOperation,
@@ -42,10 +42,11 @@ from ..relational_algebra.optimisers import PushUnnamedSelectionsUp
 from ..relational_algebra.relational_algebra import (
     GroupByAggregation,
     LeftNaturalJoin,
-    RenameColumn
+    RenameColumn,
+    RenameColumns,
+    int2columnint_constant
 )
 from ..relational_algebra_provenance import (
-    LiftedPlanProjection,
     NaturalJoinInverse,
     ProvenanceAlgebraSet
 )
@@ -62,6 +63,10 @@ from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
 from .shattering import HeadVar
+
+
+AND = Constant(operator.and_)
+NE = Constant(operator.ne)
 
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
@@ -402,6 +407,37 @@ def selection_columnstr_args(selection):
     )
 
 
+def selection_headvar_args(selection):
+    return set(
+        exp
+        for _, exp in expression_iterator(selection.formula)
+        if isinstance(exp, Constant[HeadVar])
+    )
+
+
+def conditions_headvar_args(selection):
+    return set(
+        exp
+        for _, exp in expression_iterator(selection.formula)
+        if (
+            isinstance(exp, FunctionApplication) and
+            any(isinstance(arg, Constant[HeadVar]) for arg in exp.args)
+        )
+    )
+
+
+def selection_headvar_dst(selection):
+    return set(
+        exp.args[0] if isinstance(exp.args[1], Constant[HeadVar])
+        else exp.args[1]
+        for _, exp in expression_iterator(selection.formula)
+        if (
+            isinstance(exp, FunctionApplication) and
+            any(isinstance(arg, Constant[HeadVar]) for arg in exp.args)
+        )
+    )
+
+
 class PushSelectionsWithoutNamedColumnUp(PatternWalker):
     @add_match(ProvenanceAlgebraSet(Selection, ...))
     def no_push_up_rap(self, expression):
@@ -411,20 +447,33 @@ class PushSelectionsWithoutNamedColumnUp(PatternWalker):
         )
 
     @add_match(
-        GroupByAggregation(Selection, ..., ...),
+        Selection(Selection, ...),
         lambda expression: (
-            len(
-                selection_columnstr_args(expression.relation) -
-                expression.relation.relation.columns()
-            ) > 0
+            selection_headvar_args(expression.relation) and
+            not selection_headvar_args(expression)
         )
+    )
+    def switch_selection_order(self, expression):
+        return Selection(
+            Selection(
+                expression.relation.relation,
+                expression.formula
+            ),
+            expression.relation.formula
+        )
+
+    @add_match(
+        GroupByAggregation(Selection, ..., ...),
+        lambda expression: ((
+            selection_headvar_args(expression.relation) -
+            expression.columns()
+        ))
     )
     def push_up_groupby(self, expression):
         relation, groupby, aggs = expression.unapply()
-
-        missing = (
-            selection_columnstr_args(relation) &
-            relation.relation.columns()
+        missing = set(
+            cond.args[0]
+            for cond in conditions_headvar_args(relation)
         ) - expression.columns()
         groupby += tuple(missing)
 
@@ -435,21 +484,19 @@ class PushSelectionsWithoutNamedColumnUp(PatternWalker):
 
     @add_match(
         ExtendedProjection(Selection, ...),
-        lambda expression: (
-            len(
-                selection_columnstr_args(expression.relation) -
-                expression.relation.relation.columns()
-            ) > 0
-        )
-
+        lambda expression: ((
+            selection_headvar_args(expression.relation) -
+            expression.columns()
+        ))
     )
     def push_up_extended_projection(self, expression):
         relation, args = expression.unapply()
 
-        missing = (
-            selection_columnstr_args(relation) &
-            relation.relation.columns()
-        ) - expression.columns()
+        head_cond_columns = set(
+            cond.args[0]
+            for cond in conditions_headvar_args(relation)
+        )
+        missing = head_cond_columns - expression.columns()
         for var in missing:
             args += (FunctionApplicationListMember(var, var),)
 
@@ -460,20 +507,18 @@ class PushSelectionsWithoutNamedColumnUp(PatternWalker):
 
     @add_match(
         Projection(Selection, ...),
-        lambda expression: (
-            isinstance(expression.relation, Selection) and
-            selection_columnstr_args(expression.relation) >
-            expression.relation.relation.columns()
-        )
-
+        lambda expression: ((
+            selection_headvar_args(expression.relation) -
+            expression.columns()
+        ))
     )
     def push_up_projection(self, expression):
         relation, args = expression.unapply()
-
-        missing = (
-            selection_columnstr_args(relation) &
-            relation.relation.columns()
-        ) - relation.columns()
+        head_cond_columns = set(
+            cond.args[0]
+            for cond in conditions_headvar_args(relation)
+        )
+        missing = head_cond_columns - expression.columns()
         args += tuple(missing)
 
         return Selection(
@@ -482,13 +527,99 @@ class PushSelectionsWithoutNamedColumnUp(PatternWalker):
         )
 
     @add_match(
+        NameColumns(Selection, ...),
+        lambda expression: (
+            (
+                selection_headvar_args(expression.relation) -
+                expression.columns()
+            )
+            and
+            len(expression.columns()) == len(expression.relation.columns())
+        )
+    )
+    def push_up_name_columns_all_in(self, expression):
+        relation, args = expression.unapply()
+        rew = ReplaceExpressionWalker({
+            int2columnint_constant(i): arg
+            for i, arg in enumerate(args)
+        })
+        new_formula = rew.walk(relation.formula)
+        return Selection(
+            self.walk(NameColumns(relation.relation, args)),
+            new_formula
+        )
+
+    @add_match(
+        Selection(Selection, ...),
+        lambda expression: (
+            selection_headvar_args(expression.relation) and
+            not selection_headvar_args(expression)
+        )
+    )
+    def push_up_nested_selection(self, expression):
+        exp_args = expression.unapply()
+        relation = exp_args[0]
+
+        return Selection(
+            self.walk(expression.apply(relation.relation, *exp_args[1:])),
+            relation.formula
+        )
+
+    @add_match(
+        RenameColumns(Selection, ...),
+        lambda expression: (
+            selection_headvar_args(expression.relation) and
+            (
+                selection_headvar_dst(expression.relation) &
+                set(src for src, _ in expression.renames)
+            )
+        )
+    )
+    def push_rename_columns_up(self, expression):
+        replacements = {src: dst for src, dst in expression.renames}
+        new_formula = ReplaceExpressionWalker(replacements).walk(
+            expression.relation.formula
+        )
+
+        return Selection(
+            RenameColumns(
+                self.walk(expression.relation.relation),
+                expression.renames,
+            ),
+            new_formula
+        )
+
+    @add_match(
+        RenameColumn(Selection, ..., ...),
+        lambda expression: (
+            selection_headvar_args(expression.relation) and
+            expression.src in selection_headvar_dst(expression.relation)
+        )
+    )
+    def push_rename_column_up(self, expression):
+        replacements = {expression.src: expression.dst}
+        new_formula = ReplaceExpressionWalker(replacements).walk(
+            expression.relation.formula
+        )
+
+        return Selection(
+            RenameColumn(
+                self.walk(expression.relation.relation),
+                expression.src,
+                expression.dst
+            ),
+            new_formula
+        )
+
+    @add_match(
         UnaryRelationalAlgebraOperation,
         lambda expression: (
+            not isinstance(expression, Selection) and
             isinstance(expression.relation, Selection) and
-            len(
-                selection_columnstr_args(expression.relation) -
-                expression.relation.relation.columns()
-            ) > 0
+            (
+                selection_headvar_args(expression.relation) -
+                expression.columns()
+            )
         )
     )
     def push_unary_up(self, expression):
@@ -501,13 +632,57 @@ class PushSelectionsWithoutNamedColumnUp(PatternWalker):
         )
 
     @add_match(
-        BinaryRelationalAlgebraOperation,
+        BinaryRelationalAlgebraOperation(
+            Selection(..., FunctionApplication(EQ, ...)),
+            Selection(..., FunctionApplication(EQ, ...))
+        ),
         lambda expression: (
-            isinstance(expression.relation_left, Selection) and
-            len(
-                selection_columnstr_args(expression.relation_left) -
-                expression.relation_left.relation.columns()
-            ) > 0
+            (
+                selection_headvar_args(expression.relation_left) -
+                expression.columns()
+            ) and (
+                selection_headvar_args(expression.relation_right) -
+                expression.columns()
+            )
+        )
+    )
+    def push_binary_both_up(self, expression):
+        relation_left, relation_right = expression.unapply()
+
+        left_headvar_args = selection_headvar_args(relation_left)
+        right_headvar_args = selection_headvar_args(relation_right)
+        both_head_var_args = left_headvar_args & right_headvar_args
+        left_conditions = {var: set() for var in both_head_var_args}
+        right_renames = []
+        for condition in conditions_headvar_args(relation_left):
+            if condition.args[1] in left_conditions:
+                left_conditions[condition.args[1]].add(condition)
+        for condition in conditions_headvar_args(relation_right):
+            src, var = condition.args
+            if var in left_conditions:
+                new_src = next(iter(left_conditions[var])).args[0]
+                right_renames.append((src, new_src))
+
+        new_relation_right = self.walk(
+            RenameColumns(relation_right, tuple(right_renames))
+        )
+        binary_op = self._binary_op_fix(
+            expression.apply(
+                relation_left.relation,
+                new_relation_right
+            )
+        )
+
+        return Selection(
+            binary_op,
+            relation_left.formula
+        )
+
+    @add_match(
+        BinaryRelationalAlgebraOperation(Selection, ...),
+        lambda expression: (
+            selection_headvar_args(expression.relation_left) -
+            expression.columns()
         )
     )
     def push_binary_left_up(self, expression):
@@ -528,10 +703,10 @@ class PushSelectionsWithoutNamedColumnUp(PatternWalker):
         BinaryRelationalAlgebraOperation,
         lambda expression: (
             isinstance(expression.relation_right, Selection) and
-            len(
-                selection_columnstr_args(expression.relation_right) -
-                expression.relation_right.relation.columns()
-            ) > 0
+            (
+                selection_headvar_args(expression.relation_right) -
+                expression.columns()
+            )
         )
     )
     def push_binary_right_up(self, expression):
@@ -562,11 +737,6 @@ class PushSelectionsWithoutNamedColumnUp(PatternWalker):
         return binary_op
 
 
-
-AND = Constant(operator.and_)
-NE = Constant(operator.ne)
-
-
 class SplitSelectionConjunctions(PatternWalker):
     @add_match(Selection(..., FunctionApplication(AND, ...)))
     def split_selection_conjunction(self, expression):
@@ -576,7 +746,42 @@ class SplitSelectionConjunctions(PatternWalker):
         return self.walk(new_expression)
 
 
+class SplitSelectionConjunctionsWalker(
+    SplitSelectionConjunctions,
+    ExpressionWalker
+):
+    pass
+
+
+def _repeated_selections(expression):
+    new_expression = expression
+    formulas = set()
+    number_of_selections = 0
+    while isinstance(new_expression, Selection):
+        formulas.add(new_expression.formula)
+        number_of_selections += 1
+        new_expression = new_expression.relation
+
+    return number_of_selections != len(formulas)
+
+
 class MoveSelectNonEqualsUp(PatternWalker):
+    @add_match(
+        Selection(Selection, ...),
+        _repeated_selections
+    )
+    def nested_selection(self, expression):
+        new_expression = expression
+        formulas = set()
+        while isinstance(new_expression, Selection):
+            formulas.add(new_expression.formula)
+            new_expression = new_expression.relation
+
+        for formula in formulas:
+            new_expression = Selection(new_expression, formula)
+
+        return new_expression
+
     @add_match(
         Selection(
             Selection(
@@ -595,28 +800,14 @@ class MoveSelectNonEqualsUp(PatternWalker):
             expression.relation.formula
         )
 
-    @add_match(Selection(Selection, ...))
-    def nested_selection(self, expression):
-        relation = self.walk(expression.relation)
-        if relation is not expression.relation:
-            return self.walk(
-                Selection(
-                    relation,
-                    expression.formula
-                )
-            )
-        else:
-            return expression
 
-
-class SelectionsToRenames(PatternWalker):
+class SelectionsToRenames(ExpressionWalker):
     @add_match(
         Selection(
             ...,
-            FunctionApplication(EQ, ...)
+            FunctionApplication(EQ, (Constant[ColumnStr], Constant[HeadVar]))
         ),
         lambda expression: (
-            isinstance(expression.formula.args[1], Constant[ColumnStr]) and
             expression.formula.args[1] not in expression.relation.columns()
         )
     )
@@ -635,6 +826,44 @@ class SelectionsToRenames(PatternWalker):
             )
         return res
 
+    @add_match(
+        Projection(
+            Selection(
+                ...,
+                FunctionApplication(
+                    ...,
+                    (Constant[ColumnStr], Constant[HeadVar])
+                )
+            ),
+            ...
+        ),
+        lambda expression: (
+            expression.relation.formula.functor in (EQ, NE) and
+            (
+                expression.relation.formula.args[1] in
+                expression.relation.relation.columns()
+            ) and
+            expression.relation.formula.args[0] not in expression.columns()
+        )
+    )
+    def dont_project_out(self, expression):
+        return expression
+
+    @add_match(
+        Selection(
+            ...,
+            FunctionApplication(..., (Constant[ColumnStr], Constant[HeadVar]))
+        ),
+        lambda expression: (
+            expression.formula.functor in (EQ, NE) and
+            expression.formula.args[1] in expression.relation.columns()
+        )
+    )
+    def selection_project_out(self, expression):
+        new_columns = expression.columns() - {expression.formula.args[0]}
+        new_relation = Projection(expression, tuple(new_columns))
+        return new_relation
+
 
 class PushUnnamedSelectionsUpWalker(
     PushSelectionsWithoutNamedColumnUp,
@@ -644,9 +873,7 @@ class PushUnnamedSelectionsUpWalker(
 
 
 class PostProcessPushUps(
-    SplitSelectionConjunctions,
     MoveSelectNonEqualsUp,
-    SelectionsToRenames,
     ExpressionWalker
 ):
     pass
@@ -666,6 +893,7 @@ class RAQueryOptimiser(
 
 def generate_provenance_query_solver(
     symbol_table, run_relational_algebra_solver,
+    needed_projections=None,
     solver_class=ProbSemiringToRelationalAlgebraSolver
 ):
     """
@@ -685,6 +913,9 @@ def generate_provenance_query_solver(
         Default is `ProbSemiringToRelationalAlgebraSolver`.
     """
 
+    if needed_projections is None:
+        needed_projections = tuple()
+
     class LogExpression(PatternWalker):
         def __init__(self, logger, message, level):
             self.logger = logger
@@ -696,13 +927,39 @@ def generate_provenance_query_solver(
             LOG.log(self.level, self.message, expression)
             return expression
 
+    class AddNeededProjections(PatternWalker):
+        def __init__(self, needed_projections):
+            self.needed_projections = needed_projections
+
+        @add_match(ProvenanceAlgebraSet)
+        def add_projection(self, expression):
+            if self.needed_projections:
+                projections = (
+                    self.needed_projections +
+                    (FunctionApplicationListMember(
+                        expression.provenance_column,
+                        expression.provenance_column
+                    ),)
+                )
+                expression = ProvenanceAlgebraSet(
+                    ExtendedProjection(
+                        expression.relation,
+                        projections
+                    ),
+                    expression.provenance_column
+                )
+            return expression
+
     steps = [
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
+        SplitSelectionConjunctionsWalker(),
         PushUnnamedSelectionsUpWalker(),
         PostProcessPushUps(),
+        SelectionsToRenames(),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
         RAQueryOptimiser(),
+        AddNeededProjections(needed_projections),
         LogExpression(LOG, "Optimised RA query %s", logging.INFO)
     ]
 
@@ -713,13 +970,14 @@ def generate_provenance_query_solver(
     return query_compiler
 
 
-def reintroduce_unified_head_terms(
+def compute_projections_needed_to_reintroduce_head_terms(
     ra_query: RelationalAlgebraOperation,
     flat_query: Implication,
     unified_query: Implication,
-) -> RelationalAlgebraOperation:
+) -> Tuple[FunctionApplicationListMember, ...]:
     """
-    Reintroduce terms that have been removed through unification of the query.
+    Produce the extended projection list for the terms that have been
+    removed through unification of the query.
 
     There are two such cases:
 
@@ -733,6 +991,7 @@ def reintroduce_unified_head_terms(
 
     """
     proj_list = list()
+    needed = False
     for old, new in zip(
         flat_query.consequent.args, unified_query.consequent.args
     ):
@@ -748,6 +1007,9 @@ def reintroduce_unified_head_terms(
                     f"Unexpected argument {new}. "
                     "Expected symbol or constant"
                 )
+            needed = True
         member = FunctionApplicationListMember(fun_exp, dst_column)
         proj_list.append(member)
-    return ExtendedProjection(ra_query, tuple(proj_list))
+    if not needed:
+        proj_list = []
+    return tuple(proj_list)

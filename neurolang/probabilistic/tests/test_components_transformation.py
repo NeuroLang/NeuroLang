@@ -392,10 +392,10 @@ def test_ccq_transformation_example_2_12():
 
     expected = Conjunction((
         Disjunction((
-            c0, c1, c3
+            c0, c3
         )),
         Disjunction((
-            c0, c1, c2
+            c1, c2
         )),
     ))
 

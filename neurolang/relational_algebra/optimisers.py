@@ -32,6 +32,7 @@ from .relational_algebra import (
 
 
 AND = Constant(operator.and_)
+EQ = Constant(operator.eq)
 
 
 class ProductSimplification(ew.ExpressionWalker):
@@ -1031,6 +1032,56 @@ class PushInSelections(ew.PatternWalker):
         )
 
     @ew.add_match(
+        Selection(
+            NaturalJoin,
+            FunctionApplication(EQ, (Constant[ColumnStr], Constant[ColumnStr]))
+        ),
+        lambda exp: (
+            (
+                get_expression_columns(exp.formula) &
+                get_expression_columns(exp.relation.relation_left)
+            ) and (
+                get_expression_columns(exp.formula) &
+                get_expression_columns(exp.relation.relation_right)
+            )
+        )
+    )
+    def push_and_rename_in_naturaljoin(self, expression):
+        column_left = (
+            get_expression_columns(expression.formula) &
+            (
+                get_expression_columns(expression.relation.relation_left) -
+                get_expression_columns(expression.relation.relation_right)
+            )
+        ).pop()
+        column_right = (
+            get_expression_columns(expression.formula) &
+            get_expression_columns(expression.relation.relation_right)
+        ).pop()
+
+        if column_left != column_right:
+            relation_right = RenameColumn(
+                expression.relation.relation_right,
+                column_right, column_left
+            )
+            projections = tuple(
+                FunctionApplicationListMember(c, c)
+                for c in expression.columns()
+                if c != column_right
+            )
+            projections += (
+                FunctionApplicationListMember(column_left, column_right),
+            )
+            expression = ExtendedProjection(
+                NaturalJoin(
+                    expression.relation.relation_left,
+                    relation_right
+                ),
+                projections
+            )
+        return expression
+
+    @ew.add_match(
         Selection(LeftNaturalJoin, ...),
         lambda exp: (
             len(
@@ -1073,6 +1124,10 @@ class PushInSelections(ew.PatternWalker):
     @ew.add_match(
         Selection(Projection, ...),
         lambda exp: (
+            all(
+                isinstance(column, Constant[ColumnStr])
+                for column in get_expression_columns(exp.formula)
+            ) and
             get_expression_columns(exp.formula) <=
             set(exp.relation.attributes)
         )

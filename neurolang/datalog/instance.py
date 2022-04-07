@@ -243,11 +243,18 @@ class FrozenMapInstance(FrozenInstance, Mapping):
 class FrozenSetInstance(FrozenInstance, Set):
     def __contains__(self, predicate):
         functor = predicate.functor
-        tuple_values = predicate.args
-        return (
-            functor in self.elements and
-            tuple_values in self.elements[functor]
-        )
+
+        if len(predicate.args) > 0:
+            tuple_values = predicate.args
+            return (
+                functor in self.elements and
+                tuple_values in self.elements[functor]
+            )
+        else:
+            return (
+                functor in self.elements and
+                self.elements[functor].is_dee()
+            )
 
     def __len__(self):
         return sum(len(v) for v in self.elements.values())

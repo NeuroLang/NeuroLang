@@ -7,7 +7,7 @@ from ...datalog.expression_processing import extract_logic_atoms
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
 from ...datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Negation
+from ...logic import Conjunction, ExistentialPredicate, Negation
 from ...relational_algebra import Projection, Selection, int2columnint_constant
 from ...relational_algebra.optimisers import (
     PushUnnamedSelectionsUp,
@@ -35,7 +35,10 @@ d = Constant("d")
 
 
 def test_symbols_per_set_unitary():
-    query = Conjunction((Q(x), Q(a), Q(b), P(x), Negation(Q(a))))
+    query = ExistentialPredicate(
+        x,
+        Conjunction((Q(x), Q(a), Q(b), P(x), Negation(Q(a))))
+    )
 
     res = sets_per_symbol(query)
 
@@ -55,7 +58,10 @@ def test_symbols_per_set_unitary():
 
 
 def test_symbols_per_set_unitary_ne():
-    query = Conjunction((Q(x), Q(a), Q(b), P(x), Negation(Q(a)), NE(d, x)))
+    query = ExistentialPredicate(
+        x,
+        Conjunction((Q(x), Q(a), Q(b), P(x), Negation(Q(a)), NE(d, x)))
+    )
 
     res = sets_per_symbol(query)
 
@@ -84,7 +90,13 @@ def test_symbols_per_set_unitary_ne():
 
 
 def test_symbols_per_set_binary():
-    query = Conjunction((Q(x, b), Q(a, x), Q(b, y), NE(y, b)))
+    query = ExistentialPredicate(
+        x,
+        ExistentialPredicate(
+            y,
+            Conjunction((Q(x, b), Q(a, x), Q(b, y), NE(y, b)))
+        )
+    )
 
     res = sets_per_symbol(query)
 
@@ -165,7 +177,10 @@ class RelationalAlgebraPushInSolver(
 
 
 def test_shatter_unitary(R1, R2, R3):
-    query = Conjunction((Q(x), Q(a), Q(b), R(y), Negation(P(b, y))))
+    query = ExistentialPredicate(x, ExistentialPredicate(
+        y,
+        Conjunction((Q(x), Q(a), Q(b), R(y), Negation(P(b, y))))
+    ))
 
     ra_query = TranslateToNamedRA().walk(query)
 
@@ -187,7 +202,10 @@ def test_shatter_unitary(R1, R2, R3):
 
 
 def test_shatter_binary_1(R4):
-    query = Conjunction((Q(x, a), Q(y, a), Q(x, y)))
+    query = ExistentialPredicate(x, ExistentialPredicate(
+        y,
+        Conjunction((Q(x, a), Q(y, a), Q(x, y)))
+    ))
     ra_query = TranslateToNamedRA().walk(query)
 
     symbol_table = dict({Q: R4})
@@ -208,7 +226,13 @@ def test_shatter_binary_1(R4):
 
 
 def test_shatter_binary_2(R1, R4):
-    query = Conjunction((Q(x, b), Q(a, x), Q(x, y), R(z)))
+    query = ExistentialPredicate(x, ExistentialPredicate(
+        y,
+        ExistentialPredicate(
+            z,
+            Conjunction((Q(x, b), Q(a, x), Q(x, y), R(z)))
+        )
+    ))
     ra_query = TranslateToNamedRA().walk(query)
 
     symbol_table = dict({Q: R4, R: R1})
@@ -229,7 +253,10 @@ def test_shatter_binary_2(R1, R4):
 
 
 def test_shatter_binary_3(R4):
-    query = Conjunction((Q(x, b), Q(y, y)))
+    query = ExistentialPredicate(x, ExistentialPredicate(
+        y,
+        Conjunction((Q(x, b), Q(y, y)))
+    ))
     ra_query = TranslateToNamedRA().walk(query)
 
     symbol_table = dict({Q: R4})
@@ -250,7 +277,13 @@ def test_shatter_binary_3(R4):
 
 
 def test_shatter_binary_inequality(R1, R4):
-    query = Conjunction((Q(x, a), Q(a, x), Q(y, y), NE(x, b), R(z)))
+    query = ExistentialPredicate(x, ExistentialPredicate(
+        y,
+        ExistentialPredicate(
+            z,
+            Conjunction((Q(x, a), Q(a, x), Q(y, y), NE(x, b), R(z)))
+        )
+    ))
     ra_query = TranslateToNamedRA().walk(query)
 
     symbol_table = dict({Q: R4, R: R1})

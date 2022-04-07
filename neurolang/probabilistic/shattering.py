@@ -26,11 +26,26 @@ from ..relational_algebra import (
     int2columnint_constant,
     str2columnstr_constant
 )
-from .probabilistic_ra_utils import ProbabilisticFactSet
+from ..utils import powerset
+from .expression_processing import UnifyVariableEqualities
+from .probabilistic_ra_utils import (
+    ProbabilisticChoiceSet,
+    ProbabilisticFactSet
+)
 
 EQ = Constant(operator.eq)
 NE = Constant(operator.ne)
 RTO = RemoveTrivialOperations()
+
+
+class HeadVar(ColumnStr):
+    pass
+
+
+def str2columnstr_headvar_constant(name):
+    return Constant[HeadVar](
+        name, auto_infer_type=False, verify_type=False,
+    )
 
 
 def atom_to_constant_to_RA_conditions(
@@ -40,14 +55,13 @@ def atom_to_constant_to_RA_conditions(
     for i, arg in enumerate(atom.args):
         if (
             isinstance(arg, Constant) or
-            (isinstance(arg, Symbol) and arg in head_vars)
+            (arg in head_vars)
         ):
             if isinstance(arg, Symbol):
-                arg = str2columnstr_constant(arg.name)
+                arg = str2columnstr_headvar_constant(arg.name)
             conditions.add(EQ(int2columnint_constant(i), arg))
     return conditions
 
-    return conditions
 
 class NormalizeNotEquals(LogicExpressionWalker):
     def __init__(self, head_vars):
@@ -106,7 +120,12 @@ def conditions_per_symbol(ucq_query):
             ne_symbol = ne.args[0]
             ne_constant = ne.args[1]
             if isinstance(ne_constant, Symbol):
-                ne_constant = str2columnstr_constant(ne_constant.name)
+                if ne_constant in head_vars:
+                    ne_constant = str2columnstr_headvar_constant(
+                        ne_constant.name
+                    )
+                else:
+                    ne_constant = str2columnstr_constant(ne_constant.name)
             for atom in extract_logic_atoms(conjunction):
                 if not isinstance(atom.functor, Symbol):
                     continue
@@ -128,6 +147,13 @@ def _formula_is_ne(formula):
         formula.functor == NE and
         isinstance(formula.args[0], Symbol)
     )
+
+
+def _return_value_or_name(v):
+    if isinstance(v, Constant):
+        return v.value
+    else:
+        return v.name
 
 
 def sets_per_symbol(ucq_query):
@@ -153,13 +179,14 @@ def sets_per_symbol(ucq_query):
                 )
             )
 
-        val = lambda v: v.value if isinstance(v, Constant) else v.name
-
         set_formulas = list(
             Conjunction(tuple(
                 sorted(
                     itertools.chain(*conditions),
-                    key=lambda exp: (val(exp.args[0]), val(exp.args[1]))
+                    key=lambda exp: (
+                        _return_value_or_name(exp.args[0]),
+                        _return_value_or_name(exp.args[1])
+                    )
                 )
             ))
             for conditions in
@@ -189,14 +216,6 @@ def sets_per_symbol(ucq_query):
         )
 
     return symbol_sets
-
-
-class HeadVar(ColumnStr):
-    pass
-
-
-def str2columnstr_headvar_constant(s):
-    return Constant[HeadVar](s)
 
 
 class ShatterEqualities(ExpressionWalker):
@@ -352,9 +371,109 @@ class RelationalAlgebraSelectionConjunction(ExpressionWalker):
         )
 
 
+def extract_variable_support(query, include_position=False):
+    support = collections.defaultdict(lambda: set())
+    for predicate in extract_logic_atoms(query):
+        for i, arg in enumerate(predicate.args):
+            if not isinstance(arg, Symbol):
+                continue
+            if include_position:
+                p = (predicate.functor, i)
+            else:
+                p = predicate.functor
+            support[arg].add(p)
+    return support
+
+
+def compute_var_equivalence_groups(query, head_vars):
+    head_var_support = {
+        k: v
+        for k, v in extract_variable_support(query, True).items()
+        if k in head_vars
+    }
+
+    equivalence_groups = {
+        frozenset((v,)): head_var_support[v]
+        for v in head_vars
+    }
+    change = True
+    while change:
+        change = False
+        for g1, g2 in itertools.product(
+            equivalence_groups, equivalence_groups
+        ):
+            if g1 == g2:
+                continue
+            if equivalence_groups[g1] & equivalence_groups[g2]:
+                equivalence_groups[g1 | g2] = (
+                    equivalence_groups[g1] |
+                    equivalence_groups[g2]
+                )
+                del equivalence_groups[g1]
+                del equivalence_groups[g2]
+                change = True
+                break
+
+    return set(equivalence_groups.keys())
+
+
+def contemplate_for_head_var_equivalence(query, head_vars):
+    equivalence_groups = compute_var_equivalence_groups(query, head_vars)
+    scenarios = []
+    for group in equivalence_groups:
+        conditions = []
+        for subgroup in powerset(group):
+            condition = []
+            complement = group - set(subgroup)
+            for v1, v2 in itertools.product(complement, complement):
+                if v1.name < v2.name:
+                    condition.append(NE(v1, v2))
+            for v1, v2 in itertools.product(subgroup, subgroup):
+                if v1.name < v2.name:
+                    condition.append(EQ(v1, v2))
+            for v1, v2 in itertools.product(
+                itertools.islice(subgroup, 1), complement
+            ):
+                if v1.name < v2.name:
+                    condition.append(NE(v1, v2))
+            if condition:
+                condition = Conjunction(tuple(condition))
+                conditions.append(condition)
+        scenarios.append(set(conditions))
+
+    scenarios = [
+        RTO.walk(Conjunction(tuple(s for s in scenes)))
+        for scenes in itertools.product(*scenarios)
+    ]
+
+    if len(scenarios) > 0:
+        query = Disjunction(tuple(
+            RTO.walk(Conjunction((query, scenario)))
+            for scenario in scenarios
+        ))
+        query = UnifyVariableEqualities().walk(query)
+    return query
+
+
 def shatter_constants(query, symbol_table, shatter_all=False):
     head_vars = extract_logic_free_variables(query)
-    symbol_sets = sets_per_symbol(query)
+    variable_support = extract_variable_support(query)
+    head_vars_choice = set()
+    query_for_symbol_sets = query
+    for var in head_vars:
+        for predicate in variable_support[var]:
+            if isinstance(symbol_table[predicate], ProbabilisticChoiceSet):
+                head_vars_choice.add(var)
+    for var in head_vars_choice:
+        query_for_symbol_sets = ExistentialPredicate(
+            var, query_for_symbol_sets
+        )
+
+    head_vars -= head_vars_choice
+
+    # query = contemplate_for_head_var_equivalence(query, head_vars)
+
+    symbol_sets = sets_per_symbol(query_for_symbol_sets)
     if not shatter_all:
         for k in list(symbol_sets.keys()):
             if not isinstance(symbol_table[k], ProbabilisticFactSet):
