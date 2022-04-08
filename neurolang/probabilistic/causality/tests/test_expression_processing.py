@@ -4,7 +4,10 @@ from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Negation, Union
 from ...exceptions import MalformedCausalOperatorError
 from ...expressions import Condition
-from ..expressions import CausalIntervention, CausalInterventionIdentification, CausalInterventionRewriter
+from ..expression_processing import (
+    CausalIntervention, CausalInterventionIdentification,
+    CausalInterventionRewriter
+)
 
 P = Symbol("P")
 Q = Symbol("Q")
