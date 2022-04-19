@@ -134,25 +134,28 @@ def test_simple_rewrite():
     assert new_f1.is_fresh
     assert new_f2.is_fresh
 
-    new_f1 = new_f1(x)
-    new_f2 = new_f2(x)
-
-    new_imp1 = Implication(new_f2, new_f1)
     new_imp2 = Implication(
         ans(x),
         Condition(
             R(x),
             Conjunction((
-                Q(a),
+                new_f2(a),
             ))
         )
     )
+
+    new_f1 = new_f1(x)
+    new_f2 = new_f2(x)
+
+    new_imp1 = Implication(new_f2, new_f1)
+
     new_rule = Implication(new_f2, Conjunction((P(x), Negation(new_f1))))
     new_fact = new_f1.functor(*intervention.args)
 
     assert len(cir.new_facts) == 1
     assert new_fact == list(cir.new_facts)[0]
-    assert len(new_formulas.formulas) == 3
+    assert len(new_formulas.formulas) == 4
+    assert imp1 in new_formulas.formulas
     assert new_imp1 in new_formulas.formulas
     assert new_imp2 in new_formulas.formulas
     assert new_rule in new_formulas.formulas
@@ -197,6 +200,16 @@ def test_rewrite_two_implications():
     assert new_f1.is_fresh
     assert new_f2.is_fresh
 
+    new_imp2 = Implication(
+        ans(x),
+        Condition(
+            R(x),
+            Conjunction((
+                new_f2(a),
+            ))
+        )
+    )
+
     new_f2_rule_z = new_f2(z)
     new_f2_rule_x = new_f2(x)
 
@@ -205,22 +218,16 @@ def test_rewrite_two_implications():
 
     new_imp1_x = Implication(new_f2_rule_x, new_f1_rule_x)
     new_imp1_z = Implication(new_f2_rule_z, new_f1_rule_z)
-    new_imp2 = Implication(
-        ans(x),
-        Condition(
-            R(x),
-            Conjunction((
-                Q(a),
-            ))
-        )
-    )
+
     new_rule1 = Implication(new_f2_rule_z, Conjunction((P(z), Negation(new_f1_rule_z))))
     new_rule2 = Implication(new_f2_rule_x, Conjunction((S(x, y), Negation(new_f1_rule_x))))
     new_fact = new_f1(*intervention.args)
 
     assert len(cir.new_facts) == 1
     assert new_fact == list(cir.new_facts)[0]
-    assert len(new_formulas.formulas) == 4
+    assert len(new_formulas.formulas) == 6
+    assert imp1 in new_formulas.formulas
+    assert imp3 in new_formulas.formulas
     assert (new_imp1_x in new_formulas.formulas) or (new_imp1_z in new_formulas.formulas)
     assert new_imp2 in new_formulas.formulas
     assert new_rule1 in new_formulas.formulas
@@ -280,15 +287,17 @@ def test_rewrite_two_interventions():
 
     new_imp_int1 = Implication(new_f1, new_f0)
     new_imp_int2 = Implication(new_f3, new_f2)
+
     new_imp2 = Implication(
         ans(x),
         Condition(
             T(x),
             Conjunction((
-                Q(a),R(a, b)
+                new_f1s(a),new_f3s(a, b)
             ))
         )
     )
+
     new_rule1 = Implication(new_f1, Conjunction((P(z), Negation(new_f0))))
     new_rule2 = Implication(new_f3, Conjunction((S(y, x), Negation(new_f2))))
 
@@ -298,10 +307,12 @@ def test_rewrite_two_interventions():
     assert len(cir.new_facts) == 2
     assert new_fact1 in list(cir.new_facts)
     assert new_fact2 in list(cir.new_facts)
-    assert len(new_formulas.formulas) == 6
+    assert len(new_formulas.formulas) == 8
+    assert imp1 in new_formulas.formulas
+    assert imp3 in new_formulas.formulas
+    assert imp4 in new_formulas.formulas
     assert new_imp_int1 in new_formulas.formulas
     assert new_imp_int2 in new_formulas.formulas
     assert new_imp2 in new_formulas.formulas
     assert new_rule1 in new_formulas.formulas
     assert new_rule2 in new_formulas.formulas
-    assert imp4 in new_formulas.formulas

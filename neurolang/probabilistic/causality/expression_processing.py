@@ -1,5 +1,5 @@
 from ...expression_pattern_matching import add_match
-from ...expression_walker import ExpressionWalker
+from ...expression_walker import ExpressionWalker, PatternWalker
 from ...logic import Conjunction, Implication, NaryLogicOperator, Negation, Union
 from ..exceptions import MalformedCausalOperatorError
 from ..expressions import Condition
@@ -42,11 +42,14 @@ class CausalInterventionIdentification(ExpressionWalker):
         elif len(n_interventions) == 1:
             self.intervention = n_interventions[0]
 
-class CausalInterventionRewriter(ExpressionWalker):
+class CausalInterventionRewriter(PatternWalker):
 
     def __init__(self, intervention):
         self.intervention = intervention
         self.new_facts = set()
+
+        self.symbol_computed = {}
+        self.new_query = None
 
         self.intervention_replacement = {}
         self.new_head_replacement = {}
@@ -57,6 +60,23 @@ class CausalInterventionRewriter(ExpressionWalker):
                 return True
         return False
 
+    def union_has_new_symbols(self, union):
+        for formula in union.formulas:
+            if formula.consequent.functor.is_fresh:
+                return True
+
+        return False
+
+    @add_match(Union)
+    def walk_union(self, union):
+        if not self.union_has_new_symbols(union):
+            union_set = set()
+            for formula in union.formulas:
+                new_formula = self.walk(formula)
+                union_set.add(new_formula)
+            union = Union(tuple(union_set))
+        return union
+
     @add_match(Implication(..., Condition), has_causal_intervention)
     def rewrite_do_operator(self, rule):
         if self.intervention is not None:
@@ -65,7 +85,14 @@ class CausalInterventionRewriter(ExpressionWalker):
             for formula in old_antecedent.conditioning.formulas:
                 if isinstance(formula, CausalIntervention):
                     for ci in formula.formulas:
-                        new_conditioning.append(ci)
+                        if ci.functor not in self.symbol_computed.keys():
+                            new_int_functor = Symbol.fresh()
+                            new_int_atom = new_int_functor(*ci.args)
+                            self.symbol_computed[ci.functor] = new_int_functor
+                        else:
+                            new_int_functor = self.symbol_computed[ci.functor]
+                            new_int_atom = new_int_functor(*ci.args)
+                        new_conditioning.append(new_int_atom)
                 else:
                     new_conditioning.append(formula)
 
@@ -76,7 +103,9 @@ class CausalInterventionRewriter(ExpressionWalker):
                     Conjunction(tuple(new_conditioning))
                 )
             )
+            self.new_query = new_rule
             return new_rule
+
 
     @add_match(Implication, lambda rule: not rule.consequent.functor.is_fresh)
     def rewrite_implication(self, rule):
@@ -88,6 +117,7 @@ class CausalInterventionRewriter(ExpressionWalker):
                 matched_functor = matched_atom[0].functor
                 if matched_functor not in self.intervention_replacement.keys():
                     new_int_functor = Symbol.fresh()
+
                     # symbol f1(x)
                     new_int_atom = new_int_functor(*head.args)
                     # symbol f1(a)
@@ -96,8 +126,12 @@ class CausalInterventionRewriter(ExpressionWalker):
                     # added f1(a) as fact
                     self.new_facts.add(new_fact)
 
-                    # symbol f2(x)
-                    new_head_functor = Symbol.fresh()
+                    # symbol f2(x), retrieve the symbol if it's already useds
+                    if matched_functor not in self.symbol_computed.keys():
+                        new_head_functor = Symbol.fresh()
+                        self.symbol_computed[matched_functor] = new_head_functor
+                    else:
+                        new_head_functor = self.symbol_computed[matched_functor]
                     new_head = new_head_functor(*head.args)
                     self.new_head_replacement[matched_functor] = new_head_functor
 
@@ -105,7 +139,7 @@ class CausalInterventionRewriter(ExpressionWalker):
                     f1impf2 = Implication(new_head, new_int_atom)
                     # added rule f2(x) <- old and not(f1(a))
                     notf1impf2 = Implication(new_head, Conjunction((rule.antecedent, Negation(new_int_atom))))
-                    rule = Union((f1impf2, notf1impf2))
+                    rule = Union((f1impf2, notf1impf2, rule))
                 else:
                     # symbol f1(x)
                     new_int_functor = self.intervention_replacement[matched_functor]
@@ -117,7 +151,8 @@ class CausalInterventionRewriter(ExpressionWalker):
 
                     # rule f2(x) <- f1(x) already exists
                     # added rule f2(x) <- old and not(f1(a))
-                    rule = Implication(new_head, Conjunction((rule.antecedent, Negation(new_int_atom))))
+                    new_rule = Implication(new_head, Conjunction((rule.antecedent, Negation(new_int_atom))))
+                    rule = Union((new_rule, rule))
 
         return rule
 
