@@ -182,6 +182,10 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         flat_query = Implication(query.consequent, flat_query_body)
         shattered_query, symbol_table = \
             _prepare_and_optimise_query(flat_query, cpl_program)
+
+        #constantes en pchoice por variables en la cabeza
+        shattered_query = _pchoice_constants_as_head_variables(shattered_query)
+
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
 
         ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
@@ -202,6 +206,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             ra_query, flat_query, shattered_query
         )
 
+        #reintroducir constantes como selects y proyecciones
+
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
         solver_class=ExtendedRAPToRAWalker
@@ -211,6 +217,23 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
+
+def _pchoice_constants_as_head_variables(query):
+
+    pchoice_constants = _identify_pchoice_constants(query.antecedent)
+    query = _add_pchoice_constants_to_head(pchoice_constants, query)
+
+    return query
+
+def identify_pchoice_constants(antecedent):
+    pass
+
+def _identify_pchoice_constants(antecedent):
+    pass
+
+def _add_pchoice_constants_to_head(pchoice_constants, query):
+    pass
+
 
 
 def _prepare_and_optimise_query(flat_query, cpl_program):
