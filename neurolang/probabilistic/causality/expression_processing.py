@@ -1,3 +1,4 @@
+from neurolang.datalog.expressions import Fact
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...logic import Conjunction, Implication, NaryLogicOperator, Negation, Union
@@ -121,7 +122,7 @@ class CausalInterventionRewriter(PatternWalker):
                     # symbol f1(x)
                     new_int_atom = new_int_functor(*head.args)
                     # symbol f1(a)
-                    new_fact = new_int_functor(*matched_atom[0].args)
+                    new_fact = Fact(new_int_functor(*matched_atom[0].args))
                     self.intervention_replacement[matched_functor] = new_int_functor
                     # added f1(a) as fact
                     self.new_facts.add(new_fact)

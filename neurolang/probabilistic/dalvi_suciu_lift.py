@@ -662,6 +662,10 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
                 "Any atom with constants in all its key positions should be "
                 "a probabilistic choice atom"
             )
+
+    if len(nonkey_variables - free_variables) == 0:
+        return False, None
+
     conjunctive_query = (
         RemoveExistentialOnVariables(nonkey_variables)
         .walk(conjunctive_query)
