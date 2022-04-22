@@ -221,7 +221,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 def _pchoice_constants_as_head_variables(query):
 
     pchoice_constants = _identify_pchoice_constants(query.antecedent)
-    query = _add_pchoice_constants_to_head(pchoice_constants, query)
+    query_ = _add_pchoice_constants_to_head(pchoice_constants, query)
 
     return query
 
