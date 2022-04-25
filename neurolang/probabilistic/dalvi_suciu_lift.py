@@ -6,7 +6,7 @@ from typing import AbstractSet
 
 import numpy as np
 
-from ..relational_algebra import Selection
+from ..relational_algebra import Selection, RelationalAlgebraOperation
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
@@ -228,24 +228,24 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
     def __init__(self, constants_by_formula_dict):
         self.constants_by_formula_dict = constants_by_formula_dict
 
-    @add_match(Projection)
-    def match_projection(self, projection):
-        new_fresh_vars = self.constants_by_formula_dict.values()
-
-        new_projection = projection.relation
+    @add_match(RelationalAlgebraOperation)
+    def match_projection(self, raoperation):
+        symbols_as_columns = [
+            str2columnstr_constant(symbol.name) for symbol
+            in self.constants_by_formula_dict.values()
+        ]
+        proyected_variables = raoperation.columns() - set(symbols_as_columns)
+        eq_ = Constant(eq)
         for constant, fresh_var in self.constants_by_formula_dict.items():
-            new_projection = Selection(new_projection, eq(constant, fresh_var))
+            raoperation = Selection(
+                raoperation,
+                eq_(str2columnstr_constant(fresh_var.name), constant)
+            )
 
-        #modify projections list
-        new_projection_list = []
-        for elem in projection.projection_list:
-            if elem.dst_column in new_fresh_vars:
-                #modify!
-                new_projection_list.append(elem)
-            else:
-                new_projection_list.append(elem)
+        if len(proyected_variables) > 0:
+            raoperation = Projection(raoperation, proyected_variables)
 
-        return Projection(new_projection, new_projection_list)
+        return raoperation
 
 
 def _pchoice_constants_as_head_variables(query, symbol_table):
