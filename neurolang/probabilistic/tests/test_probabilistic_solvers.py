@@ -1300,3 +1300,27 @@ def test_deterministic_simplification():
     assert testing.eq_prov_relations(
         res, testing.make_prov_set({(0.6, 'a', 'b')}, ['_p_', 'x', 'y'])
     )
+
+
+def test_pchoice_with_constant(solver):
+    table = {
+        (0.52, "a"),
+        (0.48, "b"),
+    }
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+
+    a = Constant("a")
+    b = Constant("b")
+    #query = Implication(ANS(), Conjunction((P(a),)))
+    #query = Implication(ANS(), Conjunction((P(g),)))
+
+
+    query = Implication(ans(), Conjunction((P(a), P(b))))
+    #query = Implication(ANS(), Conjunction((P(a), P(g))))
+    cpl_program.walk(query)
+
+    #result = solver.solve_marg_query(new_query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
+    a = 1

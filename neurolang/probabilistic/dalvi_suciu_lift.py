@@ -1,9 +1,12 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
+from operator import eq
 from typing import AbstractSet
 
 import numpy as np
+
+from ..relational_algebra import Selection
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
@@ -27,6 +30,7 @@ from ..expression_walker import (
 from ..expressions import (
     Constant,
     FunctionApplication,
+    Projection,
     Symbol,
     TypedSymbolTableMixin
 )
@@ -184,7 +188,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             _prepare_and_optimise_query(flat_query, cpl_program)
 
         #constantes en pchoice por variables en la cabeza
-        shattered_query = _pchoice_constants_as_head_variables(shattered_query)
+        shattered_query, constants_by_formula = _pchoice_constants_as_head_variables(shattered_query, symbol_table)
 
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
 
@@ -206,6 +210,10 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             ra_query, flat_query, shattered_query
         )
 
+        ps_pchoice = ProjectionSelectionByPChoiceConstant(constants_by_formula)
+        ra_query = ps_pchoice.walk(ra_query)
+
+
         #reintroducir constantes como selects y proyecciones
 
     query_solver = generate_provenance_query_solver(
@@ -218,22 +226,42 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     return prob_set_result
 
-def _pchoice_constants_as_head_variables(query):
+def ProjectionSelectionByPChoiceConstant(PatternWalker):
 
-    pchoice_constants = _identify_pchoice_constants(query.antecedent)
-    query_ = _add_pchoice_constants_to_head(pchoice_constants, query)
+    def __init__(self, constants_by_formula_dict):
+        self.constants_by_formula_dict = constants_by_formula_dict
 
-    return query
+    @add_match(Projection)
+    def match_projection(self, projection):
+        new_fresh_vars = self.constants_by_formula_dict.values()
 
-def identify_pchoice_constants(antecedent):
-    pass
+        new_projection = projection.relation
+        for constant, fresh_var in self.constants_by_formula_dict.items():
+            new_projection = Selection(new_projection, eq(constant, fresh_var))
 
-def _identify_pchoice_constants(antecedent):
-    pass
+        #modify projections list
+        new_projection_list = []
+        for elem in projection.projection_list:
+            if elem.dst_column in new_fresh_vars:
+                #modify!
+                new_projection_list.append(elem)
+            else:
+                new_projection_list.append(elem)
 
-def _add_pchoice_constants_to_head(pchoice_constants, query):
-    pass
+        return Projection(new_projection, new_projection_list)
 
+
+def _pchoice_constants_as_head_variables(query, symbol_table):
+    constants_by_formula = {}
+    for atom in extract_logic_atoms(query.antecedent):
+        if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
+            replacements = {arg:Symbol.fresh() for arg in atom.args if isinstance(arg, Constant)}
+            constants_by_formula = {**replacements, **constants_by_formula}
+
+    query = ReplaceExpressionWalker(constants_by_formula).walk(query)
+    query.consequent.args = query.consequent.args + tuple(constants_by_formula.values())
+
+    return query, constants_by_formula
 
 
 def _prepare_and_optimise_query(flat_query, cpl_program):

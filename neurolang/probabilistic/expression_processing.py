@@ -315,7 +315,7 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
             for pred_idx in range(1, len(predicates)):
                 x = predicates[pred_idx - 1].args[var_idx]
                 y = predicates[pred_idx].args[var_idx]
-                if x == y:
+                if x == y or isinstance(x, Constant) or isinstance(y, Constant):
                     continue
                 eq_set.add(
                     (
