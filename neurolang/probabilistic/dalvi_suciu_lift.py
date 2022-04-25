@@ -213,9 +213,6 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         ps_pchoice = ProjectionSelectionByPChoiceConstant(constants_by_formula)
         ra_query = ps_pchoice.walk(ra_query)
 
-
-        #reintroducir constantes como selects y proyecciones
-
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
         solver_class=ExtendedRAPToRAWalker
@@ -226,7 +223,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     return prob_set_result
 
-def ProjectionSelectionByPChoiceConstant(PatternWalker):
+class ProjectionSelectionByPChoiceConstant(PatternWalker):
 
     def __init__(self, constants_by_formula_dict):
         self.constants_by_formula_dict = constants_by_formula_dict
