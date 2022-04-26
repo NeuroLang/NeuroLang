@@ -1312,15 +1312,45 @@ def test_pchoice_with_constant(solver):
     cpl_program.add_probabilistic_choice_from_tuples(P, table)
 
     a = Constant("a")
-    b = Constant("b")
-    #query = Implication(ANS(), Conjunction((P(a),)))
-    #query = Implication(ANS(), Conjunction((P(g),)))
-
-
-    query = Implication(ans(), Conjunction((P(a), P(b))))
-    #query = Implication(ANS(), Conjunction((P(a), P(g))))
+    query = Implication(ans(), Conjunction((P(a),)))
     cpl_program.walk(query)
+    res = solver.solve_succ_query(query, cpl_program)
+    # Both columns have fresh variables as names
+    column_names = [c.value for c in res.columns()._list]
+    assert testing.eq_prov_relations(
+        res, testing.make_prov_set({(0.52, 'a')}, column_names)
+    )
 
-    #result = solver.solve_marg_query(new_query, cpl_program)
-    result = solver.solve_succ_query(query, cpl_program)
-    a = 1
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+
+    query = Implication(ans(), Conjunction((P(a), P(x))))
+    cpl_program.walk(query)
+    res = solver.solve_succ_query(query, cpl_program)
+    column_names = [c.value for c in res.columns()._list]
+    assert testing.eq_prov_relations(
+        res, testing.make_prov_set({(0.52, 'a')}, column_names)
+    )
+
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+
+    b = Constant("b")
+    query = Implication(ans(), Conjunction((P(a), P(b))))
+    cpl_program.walk(query)
+    res = solver.solve_succ_query(query, cpl_program)
+    assert res.relation.value._container.empty
+
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+
+    query = Implication(ans(x), Conjunction((P(a), P(x))))
+    cpl_program.walk(query)
+    res = solver.solve_succ_query(query, cpl_program)
+    column_names = [c.value for c in res.columns()._list]
+    assert testing.eq_prov_relations(
+        res, testing.make_prov_set({(0.52, 'a')}, column_names)
+    )

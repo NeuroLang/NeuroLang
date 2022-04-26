@@ -5,8 +5,10 @@ from operator import eq
 from typing import AbstractSet
 
 import numpy as np
+from sqlalchemy import true
 
-from ..relational_algebra import Selection, RelationalAlgebraOperation
+from ..relational_algebra import (
+    Selection, RelationalAlgebraOperation, Projection)
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
@@ -30,7 +32,6 @@ from ..expression_walker import (
 from ..expressions import (
     Constant,
     FunctionApplication,
-    Projection,
     Symbol,
     TypedSymbolTableMixin
 )
@@ -184,11 +185,12 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
+
+        flat_query, constants_by_formula = \
+            _pchoice_constants_as_head_variables(flat_query, cpl_program)
+
         shattered_query, symbol_table = \
             _prepare_and_optimise_query(flat_query, cpl_program)
-
-        #constantes en pchoice por variables en la cabeza
-        shattered_query, constants_by_formula = _pchoice_constants_as_head_variables(shattered_query, symbol_table)
 
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
 
@@ -236,19 +238,28 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
         ]
         proyected_variables = raoperation.columns() - set(symbols_as_columns)
         eq_ = Constant(eq)
+        new_selection = False
         for constant, fresh_var in self.constants_by_formula_dict.items():
+            new_selection = True
             raoperation = Selection(
                 raoperation,
                 eq_(str2columnstr_constant(fresh_var.name), constant)
             )
 
-        if len(proyected_variables) > 0:
-            raoperation = Projection(raoperation, proyected_variables)
+        if len(proyected_variables) > 0 and new_selection:
+            proyected = tuple()
+            for pv in proyected_variables:
+                #(C_(ColumnInt(0)), C_(ColumnInt(1)))
+                proyected = proyected + (Constant(pv), Constant(pv))
+            raoperation = Projection(raoperation, proyected)
 
         return raoperation
 
 
-def _pchoice_constants_as_head_variables(query, symbol_table):
+def _pchoice_constants_as_head_variables(query, cpl_program):
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, query.antecedent
+    )
     constants_by_formula = {}
     for atom in extract_logic_atoms(query.antecedent):
         if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
@@ -256,7 +267,10 @@ def _pchoice_constants_as_head_variables(query, symbol_table):
             constants_by_formula = {**replacements, **constants_by_formula}
 
     query = ReplaceExpressionWalker(constants_by_formula).walk(query)
-    query.consequent.args = query.consequent.args + tuple(constants_by_formula.values())
+    new_args = query.consequent.args + tuple(constants_by_formula.values())
+    new_consequent = query.consequent.functor(*new_args)
+
+    query = Implication(new_consequent, query.antecedent)
 
     return query, constants_by_formula
 
@@ -353,6 +367,9 @@ def dalvi_suciu_lift(rule, symbol_table):
         )
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
+    if _selfjoins_in_pchoices(rule_dnf):
+        return NonLiftable(rule)
+
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
         return components_plan(
@@ -371,6 +388,17 @@ def dalvi_suciu_lift(rule, symbol_table):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule)
+
+def _selfjoins_in_pchoices(rule_dnf, symbol_table):
+    for formula in rule_dnf.formulas:
+        pchoice_functors = []
+        for atom in extract_logic_atoms(formula):
+            if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
+                if atom.functor in pchoice_functors:
+                    return True
+                else:
+                    pchoice_functors.add(atom.functor)
+    return False
 
 
 def symbol_or_deterministic_plan(rule, symbol_table):
@@ -710,6 +738,10 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
                 "Any atom with constants in all its key positions should be "
                 "a probabilistic choice atom"
             )
+
+    if len(nonkey_variables - free_variables) == 0:
+        return False, None
+
     conjunctive_query = (
         RemoveExistentialOnVariables(nonkey_variables)
         .walk(conjunctive_query)
