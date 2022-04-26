@@ -249,7 +249,6 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
         if len(proyected_variables) > 0 and new_selection:
             proyected = tuple()
             for pv in proyected_variables:
-                #(C_(ColumnInt(0)), C_(ColumnInt(1)))
                 proyected = proyected + (Constant(pv), Constant(pv))
             raoperation = Projection(raoperation, proyected)
 
@@ -397,7 +396,7 @@ def _selfjoins_in_pchoices(rule_dnf, symbol_table):
                 if atom.functor in pchoice_functors:
                     return True
                 else:
-                    pchoice_functors.add(atom.functor)
+                    pchoice_functors.append(atom.functor)
     return False
 
 
