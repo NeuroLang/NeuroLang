@@ -1302,7 +1302,7 @@ def test_deterministic_simplification():
     )
 
 
-def test_pchoice_with_constant(solver):
+def test_pchoice_with_constant():
     table = {
         (0.52, "a"),
         (0.48, "b"),
@@ -1314,7 +1314,7 @@ def test_pchoice_with_constant(solver):
     a = Constant("a")
     query = Implication(ans(), Conjunction((P(a),)))
     cpl_program.walk(query)
-    res = solver.solve_succ_query(query, cpl_program)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     # Both columns have fresh variables as names
     column_names = [c.value for c in res.columns()._list]
     assert testing.eq_prov_relations(
@@ -1327,7 +1327,7 @@ def test_pchoice_with_constant(solver):
 
     query = Implication(ans(), Conjunction((P(a), P(x))))
     cpl_program.walk(query)
-    res = solver.solve_succ_query(query, cpl_program)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     column_names = [c.value for c in res.columns()._list]
     assert testing.eq_prov_relations(
         res, testing.make_prov_set({(0.52, 'a')}, column_names)
@@ -1340,7 +1340,7 @@ def test_pchoice_with_constant(solver):
     b = Constant("b")
     query = Implication(ans(), Conjunction((P(a), P(b))))
     cpl_program.walk(query)
-    res = solver.solve_succ_query(query, cpl_program)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert res.relation.value._container.empty
 
 
@@ -1349,7 +1349,7 @@ def test_pchoice_with_constant(solver):
 
     query = Implication(ans(x), Conjunction((P(a), P(x))))
     cpl_program.walk(query)
-    res = solver.solve_succ_query(query, cpl_program)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     column_names = [c.value for c in res.columns()._list]
     assert testing.eq_prov_relations(
         res, testing.make_prov_set({(0.52, 'a')}, column_names)
