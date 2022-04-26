@@ -29,19 +29,18 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
         non_proyected_vars = set(symbols_as_columns).union(set([prov_columns]))
         proyected_vars = raoperation.columns() - non_proyected_vars
         eq_ = Constant(eq)
-        new_selection = False
         for constant, fresh_var in self.constants_by_formula_dict.items():
-            new_selection = True
             operation = Selection(
                 operation,
                 eq_(str2columnstr_constant(fresh_var.name), constant)
             )
 
-        if len(proyected_vars) > 0 and new_selection:
-            proyected = tuple()
+        proyected = tuple([prov_columns])
+        if len(proyected_vars) > 0:
             for pv in proyected_vars:
                 proyected = proyected + (Constant(pv), Constant(pv))
-            operation = Projection(operation, proyected)
+
+        operation = Projection(operation, tuple(proyected))
 
         return ProvenanceAlgebraSet(operation, prov_columns)
 
