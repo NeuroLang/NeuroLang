@@ -418,9 +418,9 @@ def generate_provenance_query_solver(
             return expression
 
     steps = [
-        ProjectionSelectionByPChoiceConstant(constants_by_formula),
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
+        ProjectionSelectionByPChoiceConstant(constants_by_formula),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
         RAQueryOptimiser(),
         LogExpression(LOG, "Optimised RA query %s", logging.INFO)

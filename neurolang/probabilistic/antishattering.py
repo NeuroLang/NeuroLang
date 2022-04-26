@@ -7,6 +7,7 @@ from ..logic import Implication
 from ..logic.expression_processing import extract_logic_atoms
 from ..relational_algebra import (Projection, RelationalAlgebraOperation,
                                   Selection, str2columnstr_constant)
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_probabilistic_choice_relation)
@@ -19,27 +20,30 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
 
     @add_match(RelationalAlgebraOperation)
     def match_projection(self, raoperation):
+        operation = raoperation.relation
+        prov_columns = raoperation.provenance_column
         symbols_as_columns = [
             str2columnstr_constant(symbol.name) for symbol
             in self.constants_by_formula_dict.values()
         ]
-        proyected_variables = raoperation.columns() - set(symbols_as_columns)
+        non_proyected_vars = set(symbols_as_columns).union(set([prov_columns]))
+        proyected_vars = raoperation.columns() - non_proyected_vars
         eq_ = Constant(eq)
         new_selection = False
         for constant, fresh_var in self.constants_by_formula_dict.items():
             new_selection = True
-            raoperation = Selection(
-                raoperation,
+            operation = Selection(
+                operation,
                 eq_(str2columnstr_constant(fresh_var.name), constant)
             )
 
-        if len(proyected_variables) > 0 and new_selection:
+        if len(proyected_vars) > 0 and new_selection:
             proyected = tuple()
-            for pv in proyected_variables:
+            for pv in proyected_vars:
                 proyected = proyected + (Constant(pv), Constant(pv))
-            raoperation = Projection(raoperation, proyected)
+            operation = Projection(operation, proyected)
 
-        return raoperation
+        return ProvenanceAlgebraSet(operation, prov_columns)
 
 def _pchoice_constants_as_head_variables(query, cpl_program):
     symbol_table = generate_probabilistic_symbol_table_for_query(
