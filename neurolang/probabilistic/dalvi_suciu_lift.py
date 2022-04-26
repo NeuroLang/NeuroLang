@@ -5,10 +5,10 @@ from operator import eq
 from typing import AbstractSet
 
 import numpy as np
-from sqlalchemy import true
 
 from ..relational_algebra import (
-    Selection, RelationalAlgebraOperation, Projection)
+    Selection, RelationalAlgebraOperation, Projection
+)
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
@@ -367,7 +367,7 @@ def dalvi_suciu_lift(rule, symbol_table):
         )
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
-    if _selfjoins_in_pchoices(rule_dnf):
+    if _selfjoins_in_pchoices(rule_dnf, symbol_table):
         return NonLiftable(rule)
 
     connected_components = symbol_connected_components(rule_dnf)
