@@ -27,7 +27,7 @@ def test_pchoice_with_constant():
     # Both columns have fresh variables as names
     column_names = [c.value for c in res.columns()._list]
     assert testing.eq_prov_relations(
-        res, testing.make_prov_set({(0.52,)}, column_names)
+        res, testing.make_prov_set({(0.52,)}, '_p_')
     )
 
 
@@ -46,7 +46,7 @@ def test_pchoice_with_constant_and_variable():
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     column_names = [c.value for c in res.columns()._list]
     assert testing.eq_prov_relations(
-        res, testing.make_prov_set({(0.52,)}, column_names)
+        res, testing.make_prov_set({(0.52,)}, ['_p_'])
     )
 
 
@@ -81,5 +81,5 @@ def test_pchoice_with_constant_and_proyected_variable():
         r.value for r in res.non_provenance_columns
     ]
     assert testing.eq_prov_relations(
-        res, testing.make_prov_set({(0.52, 'a')}, column_names)
+        res, testing.make_prov_set({(0.52, 'a')}, ['_p_', 'x'])
     )

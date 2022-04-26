@@ -38,7 +38,7 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
         proyected = tuple([prov_columns])
         if len(proyected_vars) > 0:
             for pv in proyected_vars:
-                proyected = proyected + tuple([Constant(pv)])
+                proyected = proyected + tuple([pv])
 
         operation = Projection(operation, proyected)
 
