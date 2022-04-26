@@ -24,8 +24,6 @@ def test_pchoice_with_constant():
     query = Implication(ans(), Conjunction((P(a),)))
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
-    # Both columns have fresh variables as names
-    column_names = [c.value for c in res.columns()._list]
     assert testing.eq_prov_relations(
         res, testing.make_prov_set({(0.52,)}, '_p_')
     )
@@ -44,7 +42,6 @@ def test_pchoice_with_constant_and_variable():
     query = Implication(ans(), Conjunction((P(a), P(x))))
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
-    column_names = [c.value for c in res.columns()._list]
     assert testing.eq_prov_relations(
         res, testing.make_prov_set({(0.52,)}, ['_p_'])
     )

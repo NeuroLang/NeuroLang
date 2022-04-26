@@ -1,7 +1,6 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
-from operator import eq
 from typing import AbstractSet
 
 import numpy as np
