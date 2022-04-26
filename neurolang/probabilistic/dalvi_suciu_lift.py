@@ -213,7 +213,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         )
 
     query_solver = generate_provenance_query_solver(
-        symbol_table, run_relational_algebra_solver, constants_by_formula,
+        symbol_table, run_relational_algebra_solver,
+        constants_by_formula=constants_by_formula,
         solver_class=ExtendedRAPToRAWalker
     )
 

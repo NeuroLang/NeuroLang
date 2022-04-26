@@ -386,7 +386,7 @@ class RAQueryOptimiser(
 
 
 def generate_provenance_query_solver(
-    symbol_table, run_relational_algebra_solver, constants_by_formula,
+    symbol_table, run_relational_algebra_solver, constants_by_formula={},
     solver_class=ProbSemiringToRelationalAlgebraSolver
 ):
     """
