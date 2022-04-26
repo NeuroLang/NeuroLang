@@ -74,9 +74,6 @@ def test_pchoice_with_constant_and_proyected_variable():
     query = Implication(ans(x), Conjunction((P(a), P(x))))
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
-    column_names = [res.provenance_column.value] + [
-        r.value for r in res.non_provenance_columns
-    ]
     assert testing.eq_prov_relations(
         res, testing.make_prov_set({(0.52, 'a')}, ['_p_', 'x'])
     )
