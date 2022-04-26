@@ -38,9 +38,9 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
         proyected = tuple([prov_columns])
         if len(proyected_vars) > 0:
             for pv in proyected_vars:
-                proyected = proyected + (Constant(pv), Constant(pv))
+                proyected = proyected + tuple([Constant(pv)])
 
-        operation = Projection(operation, tuple(proyected))
+        operation = Projection(operation, proyected)
 
         return ProvenanceAlgebraSet(operation, prov_columns)
 
