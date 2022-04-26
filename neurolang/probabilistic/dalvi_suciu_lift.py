@@ -6,10 +6,6 @@ from typing import AbstractSet
 
 import numpy as np
 
-from ..relational_algebra import (
-    Selection, RelationalAlgebraOperation, Projection
-)
-
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
@@ -101,6 +97,10 @@ from .transforms import (
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables
+)
+from .antishattering import (
+    _pchoice_constants_as_head_variables,
+    _selfjoins_in_pchoices
 )
 
 LOG = logging.getLogger(__name__)
@@ -212,11 +212,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             ra_query, flat_query, shattered_query
         )
 
-        ps_pchoice = ProjectionSelectionByPChoiceConstant(constants_by_formula)
-        ra_query = ps_pchoice.walk(ra_query)
-
     query_solver = generate_provenance_query_solver(
-        symbol_table, run_relational_algebra_solver,
+        symbol_table, run_relational_algebra_solver, constants_by_formula,
         solver_class=ExtendedRAPToRAWalker
     )
 
@@ -224,55 +221,6 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
-
-class ProjectionSelectionByPChoiceConstant(PatternWalker):
-
-    def __init__(self, constants_by_formula_dict):
-        self.constants_by_formula_dict = constants_by_formula_dict
-
-    @add_match(RelationalAlgebraOperation)
-    def match_projection(self, raoperation):
-        symbols_as_columns = [
-            str2columnstr_constant(symbol.name) for symbol
-            in self.constants_by_formula_dict.values()
-        ]
-        proyected_variables = raoperation.columns() - set(symbols_as_columns)
-        eq_ = Constant(eq)
-        new_selection = False
-        for constant, fresh_var in self.constants_by_formula_dict.items():
-            new_selection = True
-            raoperation = Selection(
-                raoperation,
-                eq_(str2columnstr_constant(fresh_var.name), constant)
-            )
-
-        if len(proyected_variables) > 0 and new_selection:
-            proyected = tuple()
-            for pv in proyected_variables:
-                proyected = proyected + (Constant(pv), Constant(pv))
-            raoperation = Projection(raoperation, proyected)
-
-        return raoperation
-
-
-def _pchoice_constants_as_head_variables(query, cpl_program):
-    symbol_table = generate_probabilistic_symbol_table_for_query(
-        cpl_program, query.antecedent
-    )
-    constants_by_formula = {}
-    for atom in extract_logic_atoms(query.antecedent):
-        if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-            replacements = {arg:Symbol.fresh() for arg in atom.args if isinstance(arg, Constant)}
-            constants_by_formula = {**replacements, **constants_by_formula}
-
-    query = ReplaceExpressionWalker(constants_by_formula).walk(query)
-    new_args = query.consequent.args + tuple(constants_by_formula.values())
-    new_consequent = query.consequent.functor(*new_args)
-
-    query = Implication(new_consequent, query.antecedent)
-
-    return query, constants_by_formula
-
 
 def _prepare_and_optimise_query(flat_query, cpl_program):
     flat_query_body = convert_to_dnf_ucq(flat_query.antecedent)
@@ -387,17 +335,6 @@ def dalvi_suciu_lift(rule, symbol_table):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule)
-
-def _selfjoins_in_pchoices(rule_dnf, symbol_table):
-    for formula in rule_dnf.formulas:
-        pchoice_functors = []
-        for atom in extract_logic_atoms(formula):
-            if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-                if atom.functor in pchoice_functors:
-                    return True
-                else:
-                    pchoice_functors.append(atom.functor)
-    return False
 
 
 def symbol_or_deterministic_plan(rule, symbol_table):
