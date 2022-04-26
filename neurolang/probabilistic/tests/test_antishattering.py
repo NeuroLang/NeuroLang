@@ -25,7 +25,7 @@ def test_pchoice_with_constant():
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
-        res, testing.make_prov_set({(0.52,)}, '_p_')
+        res, testing.make_prov_set({(0.52,)}, ['_p_'])
     )
 
 
