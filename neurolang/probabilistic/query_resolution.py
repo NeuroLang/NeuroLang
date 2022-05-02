@@ -1,6 +1,7 @@
 import logging
 import operator
 import typing
+from itertools import chain
 from typing import AbstractSet, Tuple
 
 from ..datalog.aggregation import is_builtin_aggregation_functor
@@ -19,10 +20,11 @@ from ..expression_walker import (
     expression_iterator
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import TRUE, Conjunction, Implication, Union
+from ..logic import TRUE, Conjunction, Disjunction, Implication, Union
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
     ColumnStr,
+    Difference,
     EliminateTrivialProjections,
     ExtendedProjection,
     FunctionApplicationListMember,
@@ -40,6 +42,7 @@ from ..relational_algebra import (
 )
 from ..relational_algebra.optimisers import PushUnnamedSelectionsUp
 from ..relational_algebra.relational_algebra import (
+    FullOuterNaturalJoin,
     GroupByAggregation,
     LeftNaturalJoin,
     RenameColumn,
@@ -47,9 +50,14 @@ from ..relational_algebra.relational_algebra import (
     int2columnint_constant
 )
 from ..relational_algebra_provenance import (
+    Complement,
+    ComplementSolverMixin,
+    DisjointProjection,
+    IndependentProjection,
     NaturalJoinInverse,
     ProvenanceAlgebraSet
 )
+from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
@@ -63,7 +71,6 @@ from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
 from .shattering import HeadVar
-
 
 AND = Constant(operator.and_)
 NE = Constant(operator.ne)
@@ -438,7 +445,7 @@ def selection_headvar_dst(selection):
     )
 
 
-class PushSelectionsWithoutNamedColumnUp(PatternWalker):
+class PushSelectionsWithHeadVarUp(PatternWalker):
     @add_match(ProvenanceAlgebraSet(Selection, ...))
     def no_push_up_rap(self, expression):
         return ProvenanceAlgebraSet(
@@ -461,6 +468,129 @@ class PushSelectionsWithoutNamedColumnUp(PatternWalker):
             ),
             expression.relation.formula
         )
+
+    @add_match(
+        IndependentProjection(Selection, ...),
+        lambda expression: ((
+            selection_headvar_args(expression.relation) -
+            expression.columns()
+        ))
+
+    )
+    def push_up_independent_projection(self, expression):
+        return self.push_up_projection(expression)
+
+    @add_match(
+        DisjointProjection(Selection, ...),
+        lambda expression: ((
+            selection_headvar_args(expression.relation) -
+            expression.columns()
+        ))
+
+    )
+    def push_up_disjoint_projection(self, expression):
+        return self.push_up_projection(expression)
+
+    @add_match(
+        RAUnion(
+            Selection(
+                ...,
+                FunctionApplication(
+                    NE,
+                    (Constant[ColumnStr], Constant[HeadVar]))
+                ),
+            ...
+        )
+    )
+    def push_up_union_with_ne_left(self, expression):
+        relation_left, relation_right = expression.unapply()
+        return self.walk(Complement(
+            FullOuterNaturalJoin(
+                Complement(relation_left),
+                Complement(relation_right)
+            )
+        ))
+
+    @add_match(
+        RAUnion(
+            ...,
+            Selection(
+                ...,
+                FunctionApplication(
+                    NE,
+                    (Constant[ColumnStr], Constant[HeadVar]))
+                ),
+        )
+    )
+    def push_up_union_with_ne_right(self, expression):
+        relation, formula = expression.relation_right.unapply()
+        new_formula = FunctionApplication(EQ, formula.args)
+        new_relation = Complement(relation)
+
+        res = Selection(
+            RAUnion(
+                expression.relation_left,
+                new_relation
+            ),
+            new_formula
+        )
+
+        return self.walk(res)
+
+    @add_match(
+        Difference(..., Selection),
+        lambda expression: ((
+            selection_headvar_args(expression.relation_right) -
+            expression.columns()
+        ))
+    )
+    def push_up_complement(self, expression):
+        complement_replace = {
+            EQ: NE,
+            NE: EQ
+        }
+        rew = ReplaceExpressionWalker(complement_replace)
+
+        return_formulae = []
+        relation = expression.relation_right
+        while (
+            isinstance(relation, Selection) and
+            selection_headvar_args(relation)
+        ):
+            return_formulae.append(relation.formula)
+            relation = relation.relation
+
+        return_diff = Difference(
+            expression.relation_left,
+            relation
+        )
+        for formula in return_formulae:
+            return_diff = Selection(return_diff, formula)
+
+        returns = []
+        formulas_out = []
+        left_columns = expression.relation_left.columns()
+        relation_in = False
+        for f in return_formulae:
+            f = rew.walk(f)
+            if f.args[0] in left_columns:
+                returns.append(
+                    Selection(expression.relation_left, rew.walk(f))
+                )
+            else:
+                formulas_out.append(f)
+                if f.functor == NE and not relation_in:
+                    returns.append(expression.relation_left)
+                    relation_in = True
+
+        res = return_diff
+        for ret in returns:
+            res = RAUnion(ret, res)
+
+        for f in formulas_out:
+            res = Selection(res, f)
+
+        return res
 
     @add_match(
         GroupByAggregation(Selection, ..., ...),
@@ -663,13 +793,14 @@ class PushSelectionsWithoutNamedColumnUp(PatternWalker):
                 new_src = next(iter(left_conditions[var])).args[0]
                 right_renames.append((src, new_src))
 
-        new_relation_right = self.walk(
-            RenameColumns(relation_right, tuple(right_renames))
-        )
+        if right_renames:
+            relation_right = self.walk(
+                RenameColumns(relation_right, tuple(right_renames))
+            )
         binary_op = self._binary_op_fix(
             expression.apply(
                 relation_left.relation,
-                new_relation_right
+                relation_right
             )
         )
 
@@ -728,6 +859,7 @@ class PushSelectionsWithoutNamedColumnUp(PatternWalker):
         right = binary_op.relation_right
 
         if isinstance(binary_op, RAUnion):
+            return binary_op
             if (left.columns() != right.columns()):
                 return RAUnion(
                     LeftNaturalJoin(left, right),
@@ -865,8 +997,8 @@ class SelectionsToRenames(ExpressionWalker):
         return new_relation
 
 
-class PushUnnamedSelectionsUpWalker(
-    PushSelectionsWithoutNamedColumnUp,
+class PushSelectionsWithHeadVarUpWalker(
+    PushSelectionsWithHeadVarUp,
     ExpressionWalker
 ):
     pass
@@ -887,6 +1019,44 @@ class RAQueryOptimiser(
     FloatArithmeticSimplifier,
     PushUnnamedSelectionsUp,
     ExpressionWalker,
+):
+    pass
+
+
+class AddNeededProjections(PatternWalker):
+    def __init__(self, needed_projections):
+        self.needed_projections = needed_projections
+
+    @add_match(ProvenanceAlgebraSet)
+    def add_projection(self, expression):
+        if self.needed_projections:
+            projections = (
+                self.needed_projections +
+                (FunctionApplicationListMember(
+                    expression.provenance_column,
+                    expression.provenance_column
+                ),)
+            )
+            expression = ProvenanceAlgebraSet(
+                ExtendedProjection(
+                    expression.relation,
+                    projections
+                ),
+                expression.provenance_column
+            )
+        return expression
+
+
+class PushUnnamedSelectionsUpWalker(
+    PushUnnamedSelectionsUp,
+    ExpressionWalker
+):
+    pass
+
+
+class ComplementSolverWalker(
+    ComplementSolverMixin,
+    ExpressionWalker
 ):
     pass
 
@@ -927,38 +1097,17 @@ def generate_provenance_query_solver(
             LOG.log(self.level, self.message, expression)
             return expression
 
-    class AddNeededProjections(PatternWalker):
-        def __init__(self, needed_projections):
-            self.needed_projections = needed_projections
-
-        @add_match(ProvenanceAlgebraSet)
-        def add_projection(self, expression):
-            if self.needed_projections:
-                projections = (
-                    self.needed_projections +
-                    (FunctionApplicationListMember(
-                        expression.provenance_column,
-                        expression.provenance_column
-                    ),)
-                )
-                expression = ProvenanceAlgebraSet(
-                    ExtendedProjection(
-                        expression.relation,
-                        projections
-                    ),
-                    expression.provenance_column
-                )
-            return expression
-
     steps = [
-        RAQueryOptimiser(),
-        solver_class(symbol_table=symbol_table),
+        # RAQueryOptimiser(),
+        ComplementSolverWalker(),
         SplitSelectionConjunctionsWalker(),
         PushUnnamedSelectionsUpWalker(),
+        PushSelectionsWithHeadVarUpWalker(),
+        solver_class(symbol_table=symbol_table),
         PostProcessPushUps(),
         SelectionsToRenames(),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
-        RAQueryOptimiser(),
+        # RAQueryOptimiser(),
         AddNeededProjections(needed_projections),
         LogExpression(LOG, "Optimised RA query %s", logging.INFO)
     ]

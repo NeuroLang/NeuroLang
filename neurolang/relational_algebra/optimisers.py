@@ -1,5 +1,5 @@
-from itertools import chain
 import operator
+from itertools import chain
 
 from .. import expression_walker as ew
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -10,6 +10,7 @@ from .relational_algebra import (
     ColumnStr,
     EquiJoin,
     ExtendedProjection,
+    FullOuterNaturalJoin,
     FunctionApplicationListMember,
     GroupByAggregation,
     LeftNaturalJoin,
@@ -29,7 +30,6 @@ from .relational_algebra import (
     int2columnint_constant,
     str2columnstr_constant
 )
-
 
 AND = Constant(operator.and_)
 EQ = Constant(operator.eq)
@@ -482,6 +482,19 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
 
     @ew.add_match(
         ExtendedProjection(
+            FullOuterNaturalJoin(ExtendedProjection, ...),
+            ...
+        ),
+        lambda expression: any(
+           _function_application_list_member_has_constant_exp(int_proj)
+           for int_proj in expression.relation.relation_left.projection_list
+        )
+    )
+    def nested_extended_projection_outernaturaljoin_constant(self, expression):
+        return self._nested_ep_join_constant_left(expression)
+
+    @ew.add_match(
+        ExtendedProjection(
             NaturalJoin(..., ExtendedProjection),
             ...
         ),
@@ -504,6 +517,19 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         )
     )
     def nested_extended_projection_leftnaturaljoin_constantr(self, expression):
+        return self._nested_ep_join_constant_left(expression, flip=True)
+
+    @ew.add_match(
+        ExtendedProjection(
+            FullOuterNaturalJoin(..., ExtendedProjection),
+            ...
+        ),
+        lambda expression: any(
+           _function_application_list_member_has_constant_exp(int_proj)
+           for int_proj in expression.relation.relation_right.projection_list
+        )
+    )
+    def nested_extended_projection_outernaturaljoin_constantr(self, expression):
         return self._nested_ep_join_constant_left(expression, flip=True)
 
     def _nested_ep_join_constant_left(self, expression, flip=False):
@@ -630,6 +656,19 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         )
     )
     def push_computed_columns_up_left(self, expression):
+        return self.push_computed_columns_up(expression)
+
+    @ew.add_match(
+        FullOuterNaturalJoin(ExtendedProjection, ...),
+        lambda expression: (
+            set(
+                proj.dst_column
+                for proj in expression.relation_left.projection_list
+                if not isinstance(proj.fun_exp, Constant[Column])
+            ) - expression.relation_right.columns()
+        )
+    )
+    def push_computed_columns_up_outer(self, expression):
         return self.push_computed_columns_up(expression)
 
     @ew.add_match(
@@ -875,13 +914,17 @@ class RenameOptimizations(ew.PatternWalker):
             NameColumns(expression.relation.relation, tuple(new_names))
         )
 
-    @ew.add_match(RenameColumns(NaturalJoin, ...))
+    @ew.add_match(RenameColumns(NaturalJoin(RelationalAlgebraOperation, RelationalAlgebraOperation), ...))
     def split_rename_naturaljoin(self, expression):
         return self._rename_joinop(expression, NaturalJoin)
 
-    @ew.add_match(RenameColumns(LeftNaturalJoin, ...))
+    @ew.add_match(RenameColumns(LeftNaturalJoin(RelationalAlgebraOperation, RelationalAlgebraOperation), ...))
     def split_rename_left_naturaljoin(self, expression):
         return self._rename_joinop(expression, LeftNaturalJoin)
+
+    @ew.add_match(RenameColumns(FullOuterNaturalJoin(RelationalAlgebraOperation, RelationalAlgebraOperation), ...))
+    def split_rename_outer_naturaljoin(self, expression):
+        return self._rename_joinop(expression, FullOuterNaturalJoin)
 
     def _rename_joinop(self, expression, joinop):
         left_renames = []
@@ -1113,6 +1156,46 @@ class PushInSelections(ew.PatternWalker):
     def push_selection_in_leftnaturaljoin_right(self, expression):
         return self.walk(
             LeftNaturalJoin(
+                expression.relation.relation_left,
+                Selection(
+                    expression.relation.relation_right,
+                    expression.formula
+                )
+            )
+        )
+
+    @ew.add_match(
+        Selection(FullOuterNaturalJoin, ...),
+        lambda exp: (
+            len(
+                get_expression_columns(exp.formula) &
+                get_expression_columns(exp.relation.relation_right)
+            ) == 0
+        )
+    )
+    def push_selection_in_outernaturaljoin_left(self, expression):
+        return self.walk(
+            FullOuterNaturalJoin(
+                Selection(
+                    expression.relation.relation_left,
+                    expression.formula
+                ),
+                expression.relation.relation_right
+            )
+        )
+
+    @ew.add_match(
+        Selection(FullOuterNaturalJoin, ...),
+        lambda exp: (
+            len(
+                get_expression_columns(exp.formula) &
+                get_expression_columns(exp.relation.relation_left)
+            ) == 0
+        )
+    )
+    def push_selection_in_outernaturaljoin_right(self, expression):
+        return self.walk(
+            FullOuterNaturalJoin(
                 expression.relation.relation_left,
                 Selection(
                     expression.relation.relation_right,

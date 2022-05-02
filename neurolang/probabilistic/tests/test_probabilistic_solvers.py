@@ -974,21 +974,32 @@ def test_program_with_segregation_head_var_case(solver):
             pred_symb, dfact_set
         )
     cpl_program.walk(code)
-    query = Implication(ans(x, y), Z(x, y))
 
     if solver is small_dichotomy_theorem_based_solver:
         context = pytest.raises(UnsupportedSolverError)
     else:
         context = nullcontext()
 
+    expected = []
+    # for _, x_0, y_0 in pfact_sets[P]:
+    #     x_0 = Constant[str](x_0)
+    #     y_0 = Constant[str](y_0)
+    #     query = Implication(ans(), Z(x_0, y_0))
+    #     result = solver.solve_succ_query(query, cpl_program)
+    #     if result.relation.value:
+    #         expected.append(
+    #             (
+    #                 list(result.relation.value)[0][0],
+    #                 x_0.value,
+    #                 y_0.value
+    #             )
+    #         )
+
+    expected = testing.make_prov_set(expected, ("p", "x", "y"))
+
+    query = Implication(ans(x, y), Z(x, y))
     with context:
         result = solver.solve_succ_query(query, cpl_program)
-        expected = testing.make_prov_set(
-            [
-                (0.5,),
-            ],
-            ("_p_",),
-        )
         assert testing.eq_prov_relations(result, expected)
 
 
@@ -1104,6 +1115,33 @@ def test_program_with_probchoice_selfjoin(solver):
     result = solver.solve_succ_query(query, cpl)
     expected = testing.make_prov_set(
         [(0.2 * 0.6, "a", "a"), (0.8 * 0.8, "b", "b")], ("_p_", "x", "y")
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_program_with_probchoice_selfjoin_constant(solver):
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        P,
+        [(0.2, "a"), (0.8, "b")],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.6, "a"), (0.8, "b")],
+    )
+    rule = Implication(R(x), Conjunction((Q(x), P(x), P(a))))
+    cpl.walk(rule)
+    query = Implication(ans(x), R(x))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [(0.2 * 0.6, "a", "a")], ("_p_", "x")
     )
     assert testing.eq_prov_relations(result, expected)
 

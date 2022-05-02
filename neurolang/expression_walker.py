@@ -250,7 +250,8 @@ class ChainedWalker:
                     "walker": walker
                 }
             )
-            expression = walker.walk(expression)
+            new_expression = walker.walk(expression)
+            expression = new_expression
         return expression
 
 
