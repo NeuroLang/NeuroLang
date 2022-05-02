@@ -5,8 +5,7 @@ from ..expression_walker import (PatternWalker, ReplaceExpressionWalker,
 from ..expressions import Constant, Symbol
 from ..logic import Implication
 from ..logic.expression_processing import extract_logic_atoms
-from ..relational_algebra import (Projection, RelationalAlgebraOperation,
-                                  Selection, str2columnstr_constant)
+from ..relational_algebra import Projection, Selection, str2columnstr_constant
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
@@ -18,7 +17,7 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
     def __init__(self, constants_by_formula_dict):
         self.constants_by_formula_dict = constants_by_formula_dict
 
-    @add_match(RelationalAlgebraOperation)
+    @add_match(ProvenanceAlgebraSet)
     def match_projection(self, raoperation):
         operation = raoperation.relation
         prov_columns = raoperation.provenance_column
@@ -44,7 +43,7 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
 
         return ProvenanceAlgebraSet(operation, prov_columns)
 
-def _pchoice_constants_as_head_variables(query, cpl_program):
+def pchoice_constants_as_head_variables(query, cpl_program):
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, query.antecedent
     )
@@ -62,7 +61,7 @@ def _pchoice_constants_as_head_variables(query, cpl_program):
 
     return query, constants_by_formula
 
-def _selfjoins_in_pchoices(rule_dnf, symbol_table):
+def selfjoins_in_pchoices(rule_dnf, symbol_table):
     for formula in rule_dnf.formulas:
         pchoice_functors = []
         for atom in extract_logic_atoms(formula):

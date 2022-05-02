@@ -98,8 +98,8 @@ from .transforms import (
     unify_existential_variables
 )
 from .antishattering import (
-    _pchoice_constants_as_head_variables,
-    _selfjoins_in_pchoices
+    pchoice_constants_as_head_variables,
+    selfjoins_in_pchoices
 )
 
 LOG = logging.getLogger(__name__)
@@ -186,7 +186,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         flat_query = Implication(query.consequent, flat_query_body)
 
         flat_query, constants_by_formula = \
-            _pchoice_constants_as_head_variables(flat_query, cpl_program)
+            pchoice_constants_as_head_variables(flat_query, cpl_program)
 
         shattered_query, symbol_table = \
             _prepare_and_optimise_query(flat_query, cpl_program)
@@ -314,7 +314,7 @@ def dalvi_suciu_lift(rule, symbol_table):
         )
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
-    if _selfjoins_in_pchoices(rule_dnf, symbol_table):
+    if selfjoins_in_pchoices(rule_dnf, symbol_table):
         return NonLiftable(rule)
 
     connected_components = symbol_connected_components(rule_dnf)
