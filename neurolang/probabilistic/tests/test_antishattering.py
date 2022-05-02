@@ -1,5 +1,5 @@
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Disjunction, Implication
+from ...logic import Conjunction, Implication
 from .. import dalvi_suciu_lift
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
