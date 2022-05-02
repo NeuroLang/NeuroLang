@@ -88,11 +88,7 @@ def test_pchoice_with_disjunction():
     cpl_program = CPLogicProgram()
     cpl_program.add_probabilistic_choice_from_tuples(P, table)
 
-    query = Implication(ans(), Conjunction(
-        (Disjunction(
-            (P(a), P(b))
-        ),))
-    )
+    query = Implication(ans(), Disjunction((P(a), P(b))))
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
