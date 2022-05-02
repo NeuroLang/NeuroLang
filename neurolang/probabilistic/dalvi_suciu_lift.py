@@ -97,6 +97,10 @@ from .transforms import (
     minimize_ucq_in_dnf,
     unify_existential_variables
 )
+from .antishattering import (
+    pchoice_constants_as_head_variables,
+    selfjoins_in_pchoices
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -180,8 +184,13 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
+
+        flat_query, constants_by_formula = \
+            pchoice_constants_as_head_variables(flat_query, cpl_program)
+
         shattered_query, symbol_table = \
             _prepare_and_optimise_query(flat_query, cpl_program)
+
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
 
         ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
@@ -204,6 +213,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
+        constants_by_formula=constants_by_formula,
         solver_class=ExtendedRAPToRAWalker
     )
 
@@ -211,7 +221,6 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         prob_set_result = query_solver.walk(ra_query)
 
     return prob_set_result
-
 
 def _prepare_and_optimise_query(flat_query, cpl_program):
     flat_query_body = convert_to_dnf_ucq(flat_query.antecedent)
@@ -305,6 +314,9 @@ def dalvi_suciu_lift(rule, symbol_table):
         )
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
+    if selfjoins_in_pchoices(rule_dnf, symbol_table):
+        return NonLiftable(rule)
+
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
         return components_plan(

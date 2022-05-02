@@ -3,8 +3,6 @@ import operator
 import typing
 from typing import AbstractSet
 
-from neurolang.relational_algebra.optimisers import PushUnnamedSelectionsUp
-
 from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import (
     EQ,
@@ -26,9 +24,10 @@ from ..relational_algebra import (
     RelationalAlgebraSolver,
     RenameOptimizations,
     SimplifyExtendedProjectionsWithConstants,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import NaturalJoinInverse
+from ..relational_algebra.optimisers import PushUnnamedSelectionsUp
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
@@ -41,6 +40,7 @@ from .expressions import Condition, ProbabilisticPredicate
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
+from .antishattering import ProjectionSelectionByPChoiceConstant
 
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
@@ -386,7 +386,7 @@ class RAQueryOptimiser(
 
 
 def generate_provenance_query_solver(
-    symbol_table, run_relational_algebra_solver,
+    symbol_table, run_relational_algebra_solver, constants_by_formula={},
     solver_class=ProbSemiringToRelationalAlgebraSolver
 ):
     """
@@ -420,6 +420,7 @@ def generate_provenance_query_solver(
     steps = [
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
+        ProjectionSelectionByPChoiceConstant(constants_by_formula),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
         RAQueryOptimiser(),
         LogExpression(LOG, "Optimised RA query %s", logging.INFO)
