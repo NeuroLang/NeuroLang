@@ -1,7 +1,7 @@
 from ....logic import Conjunction, Constant, Implication, Union
 from ... import dalvi_suciu_lift
 from ...cplogic.program import Condition, CPLogicProgram
-from ...expressions import Symbol
+from ...expressions import PROB, ProbabilisticQuery, Symbol
 from ..program import CausalProgram
 from .test_expression_processing import CausalIntervention
 
@@ -64,20 +64,22 @@ def test_simpsons_paradox():
                     (Drug(g, d), U_Recovery(g, d, r), Gender(g))
                 )),
             Implication(
-                P(r), Condition(Recovery(g, d, r),
-                Conjunction(
-                    (CausalIntervention((Gender(men),)),)
-                ))
+                ans(r, ProbabilisticQuery(PROB, (r,))), Condition(
+                    Recovery(g, d, r),
+                    Conjunction(
+                        (CausalIntervention((Gender(men),)),)
+                    )
+                )
             )
         )
     )
 
-    new_code, new_facts = CausalProgram().rewrite_program(code)
+    new_program, new_query = CausalProgram().rewrite_program(code)
+    new_program.remove(new_query)
 
-    cpl_program.walk(new_code)
-    cpl_program.walk(new_facts)
-    query = Implication(ans(r), P(r))
+    cpl_program.walk(Union(tuple(new_program)))
+    cpl_program.walk(new_query)
 
-    res = dalvi_suciu_lift.solve_marg_query(query, cpl_program)
+    res = dalvi_suciu_lift.solve_marg_query(new_query, cpl_program)
     a = 1
 
