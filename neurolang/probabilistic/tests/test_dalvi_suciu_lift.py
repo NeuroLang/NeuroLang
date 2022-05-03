@@ -505,7 +505,7 @@ def test_single_disjoint_project_one_variable():
     query = ExistentialPredicate(x, P(x))
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
     assert isinstance(plan, DisjointProjection)
-    assert plan.attributes == (str2columnstr_constant(x.name),)
+    assert plan.attributes == tuple()
     assert plan.relation == dalvi_suciu_lift.dalvi_suciu_lift(
         query.body, symbol_table
     )
@@ -532,7 +532,7 @@ def test_single_disjoint_project_two_variables():
     query = ExistentialPredicate(y, P(x, y))
     plan = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
     assert isinstance(plan, DisjointProjection)
-    assert plan.attributes == (str2columnstr_constant(y.name),)
+    assert plan.attributes == (str2columnstr_constant(x.name),)
     assert plan.relation == dalvi_suciu_lift.dalvi_suciu_lift(
         query.body, symbol_table
     )

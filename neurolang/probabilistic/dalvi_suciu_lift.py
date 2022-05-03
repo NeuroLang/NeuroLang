@@ -673,7 +673,7 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
     plan = dalvi_suciu_lift(conjunctive_query, symbol_table)
     attributes = tuple(
         str2columnstr_constant(v.name)
-        for v in non_key_e_variables
+        for v in free_variables
     )
     plan = rap.DisjointProjection(plan, attributes)
     return True, plan
