@@ -241,8 +241,9 @@ class OntologyParser:
             namespace = obj_split[0].split("/")[-1]
             if namespace + ":" == self.structural_knowledge_namespace:
                 raise Warning(f'The ontology namespace {namespace} matches the one\n'
-                    f'used by neurolang to define structural knowledge. It is recommended to\n'
-                    f'change the latter using the set_structural_knowledge_namespace method in\n'
+                    f'used by neurolang to define structural knowledge. It is\n'
+                    f'recommended to change the latter using the'
+                    f'set_structural_knowledge_namespace method in\n'
                     f'the configuration module to avoid unwanted behavior.\n')
             if name[0] != "" and namespace != "":
                 res = namespace + ":" + name
