@@ -641,6 +641,9 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
 
     """
     free_variables = extract_logic_free_variables(conjunctive_query)
+    conjunctive_query, existential_variables = \
+        remove_existentials_from_the_top(conjunctive_query)
+
     atoms_with_constants_in_all_key_positions = set(
         atom
         for atom in extract_logic_atoms(conjunctive_query)
@@ -662,17 +665,26 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
                 "Any atom with constants in all its key positions should be "
                 "a probabilistic choice atom"
             )
-    conjunctive_query = (
-        RemoveExistentialOnVariables(nonkey_variables)
-        .walk(conjunctive_query)
+
+    non_key_e_variables = nonkey_variables & existential_variables
+    conjunctive_query = add_existentials_except(
+        conjunctive_query, non_key_e_variables | free_variables
     )
     plan = dalvi_suciu_lift(conjunctive_query, symbol_table)
     attributes = tuple(
         str2columnstr_constant(v.name)
-        for v in free_variables
+        for v in non_key_e_variables
     )
     plan = rap.DisjointProjection(plan, attributes)
     return True, plan
+
+
+def remove_existentials_from_the_top(query):
+    existential_variables = OrderedSet()
+    while isinstance(query, ExistentialPredicate):
+        existential_variables.add(query.head)
+        query = query.body
+    return query, existential_variables
 
 
 def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
