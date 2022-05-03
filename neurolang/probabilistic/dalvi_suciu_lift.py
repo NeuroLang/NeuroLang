@@ -185,10 +185,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
 
-        flat_query, constants_by_formula = \
-            pchoice_constants_as_head_variables(flat_query, cpl_program)
-
-        shattered_query, symbol_table = \
+        shattered_query, symbol_table, constants_by_formula = \
             _prepare_and_optimise_query(flat_query, cpl_program)
 
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
@@ -223,6 +220,10 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     return prob_set_result
 
 def _prepare_and_optimise_query(flat_query, cpl_program):
+
+    flat_query, constants_by_formula = \
+            pchoice_constants_as_head_variables(flat_query, cpl_program)
+
     flat_query_body = convert_to_dnf_ucq(flat_query.antecedent)
     flat_query_body = RTO.walk(Disjunction(tuple(
         lift_optimization_for_choice_predicates(f, cpl_program)
@@ -250,7 +251,7 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     ):
         raise NotRankedException(f"Query {flat_query} is not ranked")
 
-    return shattered_query, symbol_table
+    return shattered_query, symbol_table, constants_by_formula
 
 
 def _verify_that_the_query_has_no_builtins(shattered_query, cpl_program):
@@ -315,7 +316,7 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
     if selfjoins_in_pchoices(rule_dnf, symbol_table):
-        return NonLiftable(rule)
+        raise NonLiftableException("Selfjoins between pchoices are not allowed")
 
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:

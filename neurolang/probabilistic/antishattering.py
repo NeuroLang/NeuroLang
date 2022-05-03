@@ -13,6 +13,11 @@ from .probabilistic_ra_utils import (
 
 
 class ProjectionSelectionByPChoiceConstant(PatternWalker):
+    '''
+    Given a dictionary of {constants: symbols}, this walker is responsible for
+    reintroducing the constants in pchoices that were replaced by variables
+    to conclude the anti-shattering strategy.
+    '''
 
     def __init__(self, constants_by_formula_dict):
         self.constants_by_formula_dict = constants_by_formula_dict
@@ -44,6 +49,27 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
         return ProvenanceAlgebraSet(operation, prov_columns)
 
 def pchoice_constants_as_head_variables(query, cpl_program):
+    '''
+    First step of the antishattering strategy.
+    Given an implication, body constants that are associated with
+    probabilistic choices are removed and replaced by variables
+    that are also included in the consequent.
+
+    Parameters
+    ----------
+    query : Implication
+        Query to be transformed.
+    cpl_program : CPLogicProgram
+        CP-Logic program on which the query should be solved.
+
+    Returns
+    -------
+    Implication
+        Implication with the constants of the pchoices
+        replaced by variables, which are also added in the consequent.
+    dic
+        Dictionary mapping replaced constants to their new replacement variables.
+    '''
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, query.antecedent
     )
@@ -62,6 +88,24 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     return query, constants_by_formula
 
 def selfjoins_in_pchoices(rule_dnf, symbol_table):
+    '''
+    Verify the existence of selfjoins between pchoices.
+
+    Parameters
+    ----------
+    rule_dnf : bool
+        Rule to analyze in DNF form.
+    symbol_table : Mapping
+        Mapping from symbols to probabilistic
+        or deterministic sets to solve the query.
+
+    Returns
+    -------
+    bool
+        True if there is a join between pchoices
+        in the same conjunction
+
+    '''
     for formula in rule_dnf.formulas:
         pchoice_functors = []
         for atom in extract_logic_atoms(formula):
