@@ -68,7 +68,7 @@ from ..probabilistic.query_resolution import (
     compute_probabilistic_solution,
 )
 from ..probabilistic.stratification import (
-    _get_list_of_intensional_rules,
+    get_list_of_intensional_rules,
     stratify_program
 )
 from ..probabilistic.weighted_model_counting import (
@@ -458,7 +458,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             if hasattr(self, 'connector_symbol'):
                 connector_rules = tuple(
                     [q
-                    for q in _get_list_of_intensional_rules(self.program_ir)
+                    for q in get_list_of_intensional_rules(self.program_ir)
                     if self.connector_symbol.expression in q.antecedent._symbols
                 ])
                 det_idb = Union(det_idb.formulas + connector_rules)

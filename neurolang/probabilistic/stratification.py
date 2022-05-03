@@ -37,7 +37,7 @@ def reachable_code_from_query(query, program):
 
     """
     if query is None:
-        return Union(tuple(_get_list_of_intensional_rules(program)))
+        return Union(tuple(get_list_of_intensional_rules(program)))
 
     predicates = [query.consequent] + list(
         extract_logic_atoms(query.antecedent)
@@ -129,7 +129,21 @@ def _check_no_negated_prob_idb_predicate(prob_idb):
         )
 
 
-def _get_list_of_intensional_rules(program):
+def get_list_of_intensional_rules(program):
+    '''
+    Given a program, it returns a list of intentional rules.
+
+    Parameters
+    ----------
+    program : CPLogicProgram
+        Program from which we want to obtain the list of intentional rules.
+
+    Returns
+    -------
+    list
+        list of intentional rules
+    '''
+
     idb = [
         rule
         for exp in program.intensional_database().values()

@@ -54,6 +54,13 @@ class NeurolangConfigParser(configparser.ConfigParser):
         self["DEFAULT"]["expressionTypePrinting"] = str(not old_value)
         return self["DEFAULT"]["expressionTypePrinting"] == "True"
 
+    def set_structural_knowledge_namespace(self, name):
+        self.set("DEFAULT", "structural_knowledge_namespace", name)
+
+    def get_structural_knowledge_namespace(self):
+        return self["DEFAULT"].get("structural_knowledge_namespace", "neurolang:")
+
+
 
 config = NeurolangConfigParser()
 

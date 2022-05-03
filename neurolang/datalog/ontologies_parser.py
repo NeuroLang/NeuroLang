@@ -10,6 +10,8 @@ from ..expressions import Constant, Symbol
 from ..logic import Conjunction, Implication
 from .constraints_representation import RightImplication
 
+from ..config import config
+
 
 class OntologyParser:
     """
@@ -17,9 +19,8 @@ class OntologyParser:
     from an ontology, both at entity and constraint levels.
     """
 
-    STRUCTURAL_KNOWLEDGE_NAMESPACE = 'neurolang:'
-
     def __init__(self, paths, connector_symbol=None, load_format="xml"):
+        self.structural_knowledge_namespace = config.get_structural_knowledge_namespace()
         if isinstance(paths, list):
             self._load_ontology(paths, load_format)
         else:
@@ -175,7 +176,7 @@ class OntologyParser:
             imp = RightImplication(ant(x), cons(x))
             self._categorize_constraints([imp])
 
-            neurolang_subclassof = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+'subClassOf')
+            neurolang_subclassof = Symbol(self.structural_knowledge_namespace+'subClassOf')
             est = neurolang_subclassof(Constant(ant.name), Constant(cons.name))
             self._categorize_structural_knowledge([est])
 
@@ -238,6 +239,11 @@ class OntologyParser:
         if len(obj_split) == 2:
             name = obj_split[1]
             namespace = obj_split[0].split("/")[-1]
+            if namespace + ":" == self.structural_knowledge_namespace:
+                raise Warning(f'The ontology namespace {namespace} matches the one\n'
+                    f'used by neurolang to define structural knowledge. It is recommended to\n'
+                    f'change the latter using the set_structural_knowledge_namespace method in\n'
+                    f'the configuration module to avoid unwanted behavior.\n')
             if name[0] != "" and namespace != "":
                 res = namespace + ":" + name
             else:
@@ -505,7 +511,7 @@ class OntologyParser:
             self._add_rules([rule])
 
         prop_name = label.name.split(':')[-1]
-        neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)
+        neurolang_prop = Symbol(self.structural_knowledge_namespace+prop_name)
         est = neurolang_prop(Constant(entity.name), entity_name)
         self._categorize_structural_knowledge([est])
 
@@ -515,7 +521,7 @@ class OntologyParser:
         label = Symbol(self._parse_name(prop))
 
         prop_name = label.name.split(':')[-1]
-        neurolang_prop = Symbol(self.STRUCTURAL_KNOWLEDGE_NAMESPACE+prop_name)
+        neurolang_prop = Symbol(self.structural_knowledge_namespace+prop_name)
         est = neurolang_prop(Constant(entity.name), entity_name)
         self._categorize_structural_knowledge([est])
 
