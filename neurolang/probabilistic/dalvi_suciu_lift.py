@@ -84,7 +84,6 @@ from .shattering import shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
-    convert_to_dnf_ucq,
     convert_ucq_to_ccq,
     unify_existential_variables
 )
@@ -206,7 +205,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
 
 def _prepare_and_optimise_query(flat_query, cpl_program):
-    flat_query_body = convert_to_dnf_ucq(flat_query.antecedent)
+    flat_query_body = convert_ucq_to_ccq(flat_query.antecedent, transformation="DNF")
     flat_query_body = RTO.walk(Disjunction(tuple(
         lift_optimization_for_choice_predicates(f, cpl_program)
         for f in flat_query_body.formulas
