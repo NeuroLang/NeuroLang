@@ -6,9 +6,10 @@ from pytest import fixture
 from ...datalog.translate_to_named_ra import TranslateToNamedRA
 from ...datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Negation, Disjunction
+from ...logic import Conjunction, Disjunction, ExistentialPredicate, Negation
+from ...logic.expression_processing import extract_logic_free_variables
 from ...relational_algebra.relational_algebra import RelationalAlgebraSolver
-from ..ranking import verify_that_the_query_is_ranked, partially_rank_query
+from ..ranking import partially_rank_query, verify_that_the_query_is_ranked
 
 EQ = Constant(operator.eq)
 
@@ -20,25 +21,39 @@ y = Symbol("y")
 z = Symbol("z")
 
 
+def add_all_existentials(query):
+    for v in extract_logic_free_variables(query):
+        query = ExistentialPredicate(v, query)
+    return query
+
+
 def test_query_ranked():
-    query = Conjunction(
+    query = add_all_existentials(Conjunction(
         (Q(x, y), Q(x, z), Q(y, z), P(x, y), Negation(Q(y, z)))
-    )
+    ))
     assert verify_that_the_query_is_ranked(query)
 
-    query = Disjunction((Q(x, y), Conjunction((Q(x, z), P(z, y)))))
+    query = add_all_existentials(
+        Disjunction((Q(x, y), Conjunction((Q(x, z), P(z, y)))))
+    )
+
+    assert verify_that_the_query_is_ranked(query)
+
+    query = add_all_existentials(
+        Disjunction((Q(x, y), Conjunction((Q(x, z), P(z, x)))))
+    )
 
     assert verify_that_the_query_is_ranked(query)
 
 
 def test_query_not_ranked():
     query = Conjunction(
-        (Q(x, y), Q(x, z), Q(z, x), P(x, y), Negation(Q(y, z)))
+        (Q(x, y), Q(x, z), Q(z, x), P(x, y), Negation(Q(y, x)))
     )
     assert not verify_that_the_query_is_ranked(query)
 
     query = Conjunction(
-        (Q(x, y), Q(x, z), P(z, x), P(x, y), Negation(Q(y, z)))
+        (Q(x, y), Q(x, z), P(z, x), P(x, z), Negation(Q(y, z)))
     )
     assert not verify_that_the_query_is_ranked(query)
 

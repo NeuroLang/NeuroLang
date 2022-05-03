@@ -1,5 +1,5 @@
-from functools import reduce
 import logging
+from functools import reduce
 
 from ..expression_walker import ChainedWalker, ReplaceExpressionWalker
 from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
@@ -13,6 +13,7 @@ from ..logic.transformations import (
     CollapseDisjunctions,
     DistributeConjunctions,
     DistributeDisjunctions,
+    ExtractConjunctiveQueryWithNegation,
     GuaranteeConjunction,
     GuaranteeDisjunction,
     MoveNegationsToAtomsInFONegE,
@@ -24,7 +25,7 @@ from ..logic.transformations import (
 )
 from ..logic.unification import compose_substitutions, most_general_unifier
 from .containment import is_contained
-
+from .expression_processing import extract_connected_components
 
 LOG = logging.getLogger(__name__)
 
@@ -390,3 +391,57 @@ def unify_existential_variables(query):
         query = ReplaceExpressionWalker(unifiers).walk(query)
     query = add_existentials_except(query, variables_to_project)
     return query
+
+
+def convert_ucq_to_ccq(rule, transformation='CNF'):
+    """Given a UCQ expression, this function transforms it into a connected
+    component expression following the definition provided by Dalvi Suciu[1]
+    in section 2.6 Special Query Expressions. The transformation can be
+    parameterized to apply a CNF or DNF transformation, as needed.
+
+    [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
+    for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
+
+    Parameters
+    ----------
+    rule : Definition
+        UCQ expression
+
+    Returns
+    -------
+    NAryLogicOperation
+        Transformation of the initial expression
+        in a connected component query.
+    """
+    rule = PED.walk(rule)
+    free_vars = extract_logic_free_variables(rule)
+    existential_vars = set()
+    for atom in extract_logic_atoms(rule):
+        existential_vars.update(set(atom.args) - set(free_vars))
+
+    conjunctions = ExtractConjunctiveQueryWithNegation().walk(rule)
+    dic_components = extract_connected_components(
+        conjunctions, existential_vars
+    )
+
+    fresh_symbols_expression = (
+        ReplaceExpressionWalker(dic_components)
+        .walk(rule)
+    )
+    if transformation == 'CNF':
+        fresh_symbols_expression = convert_to_cnf_ucq(fresh_symbols_expression)
+        minimize = minimize_ucq_in_cnf
+        gcd = GuaranteeConjunction()
+    elif transformation == 'DNF':
+        fresh_symbols_expression = convert_to_dnf_ucq(fresh_symbols_expression)
+        minimize = minimize_ucq_in_dnf
+        gcd = GuaranteeDisjunction()
+    else:
+        raise ValueError(f'Invalid transformation type: {transformation}')
+
+    final_expression = ReplaceExpressionWalker(
+        {v: k for k, v in dic_components.items()}
+    ).walk(fresh_symbols_expression)
+    final_expression = minimize(final_expression)
+
+    return gcd.walk(final_expression)

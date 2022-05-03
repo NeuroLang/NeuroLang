@@ -1,9 +1,7 @@
 import collections
 from typing import AbstractSet, Iterable
 
-import numpy
-
-from neurolang.relational_algebra import str2columnstr_constant
+import numpy as np
 
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
@@ -16,9 +14,22 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import TRUE, Conjunction, Implication, Negation, Union
+from ..logic import (
+    TRUE,
+    Conjunction,
+    ExistentialPredicate,
+    Implication,
+    Negation,
+    Union,
+    NaryLogicOperator
+)
+from ..logic.expression_processing import extract_logic_free_variables
 from ..logic.transformations import GuaranteeConjunction
-from ..relational_algebra import Projection, RelationalAlgebraSolver
+from ..relational_algebra import (
+    Projection,
+    RelationalAlgebraSolver,
+    str2columnstr_constant
+)
 from ..utils import OrderedSet
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
@@ -91,7 +102,7 @@ def build_probabilistic_fact_set(pred_symb, pfacts):
 
 def check_probabilistic_choice_set_probabilities_sum_to_one(ra_set):
     probs_sum = sum(v.value[0].value for v in ra_set.value)
-    if not numpy.isclose(probs_sum, 1.0):
+    if not np.isclose(probs_sum, 1.0):
         raise DistributionDoesNotSumToOneError(
             "Probability labels of a probabilistic choice should sum to 1. "
             f"Got {probs_sum} instead."
@@ -362,7 +373,9 @@ def lift_optimization_for_choice_predicates(query, program):
         return query
     eq_conj = Conjunction(tuple(EQ(x, y) for x, y in pchoice_eqs))
     grpd_preds = group_preds_by_functor(positive_predicates)
-    new_formulas = OrderedSet(eq_conj.formulas) | OrderedSet(negative_predicates)
+    new_formulas = (
+        OrderedSet(eq_conj.formulas) | OrderedSet(negative_predicates)
+    )
     for functor, preds in grpd_preds.items():
         if functor not in program.pchoice_pred_symbs:
             new_formulas |= OrderedSet(preds)
@@ -397,3 +410,188 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
                 if apred.functor not in wlq_symbs
             ]
     return False
+
+
+def extract_connected_components(list_of_conjunctions, existential_vars):
+    """Given a list of conjunctions, this function is in charge of calculating
+    the connected components of each one. As a result, it returns a dictionary
+    with the necessary transformations so that these conjunctions are replaced
+    by symbols that preserve their free variables.
+
+    Parameters
+    ----------
+    list_of_conjunctions : list
+        List of conjunctions for which we want to
+        calculate the connected components
+
+    existential_vars : set
+        Set of variables associated with existentials
+        in the expressions that compose the list of conjunctions.
+
+    Returns
+    -------
+    dict
+        Dictionary of transformations where the keys are the expressions that
+        compose the list of conjunctions and the values are the components
+        by which they must be replaced
+    """
+    transformations = {}
+    for f in list_of_conjunctions:
+        c_matrix = args_co_occurence_graph(f, existential_vars)
+        components = connected_components(c_matrix)
+
+        if isinstance(f, ExistentialPredicate):
+            transformations[f] = calc_new_fresh_symbol(f, existential_vars)
+            continue
+
+        for c in components:
+            form = [f.formulas[i] for i in c]
+            if len(form) > 1:
+                form = Conjunction(form)
+                transformations[form] = \
+                    calc_new_fresh_symbol(form, existential_vars)
+            else:
+                conj = Conjunction(form)
+                transformations[form[0]] = \
+                    calc_new_fresh_symbol(conj, existential_vars)
+
+    return transformations
+
+
+def args_co_occurence_graph(expression, variable_to_use=None):
+    """Arguments co-ocurrence graph expressed as
+    an adjacency matrix.
+
+    Parameters
+    ----------
+    expression : LogicOperator
+        logic expression for which the adjacency matrix is computed.
+
+    Returns
+    -------
+    numpy.ndarray
+        squared binary array where a component is 1 if there is a
+        shared argument between two formulas of the
+        logic expression.
+    """
+
+    if isinstance(expression, ExistentialPredicate):
+        return np.ones((1,))
+
+    c_matrix = np.zeros((len(expression.formulas),) * 2)
+    for i, formula in enumerate(expression.formulas):
+        f_args = set(b for a in extract_logic_atoms(formula) for b in a.args)
+        if variable_to_use is not None:
+            f_args &= variable_to_use
+        for j, formula_ in enumerate(expression.formulas[i + 1:]):
+            f_args_ = set(
+                b for a in extract_logic_atoms(formula_) for b in a.args
+            )
+            if variable_to_use is not None:
+                f_args_ &= variable_to_use
+            if not f_args.isdisjoint(f_args_):
+                c_matrix[i, i + 1 + j] = 1
+                c_matrix[i + 1 + j, i] = 1
+
+    return c_matrix
+
+
+def connected_components(adjacency_matrix):
+    """Connected components of an undirected graph.
+
+    Parameters
+    ----------
+    adjacency_matrix : numpy.ndarray
+        squared array representing the adjacency
+        matrix of an undirected graph.
+
+    Returns
+    -------
+    list of integer sets
+        connected components of the graph.
+    """
+    node_idxs = set(range(adjacency_matrix.shape[0]))
+    components = []
+    while node_idxs:
+        idx = node_idxs.pop()
+        component = {idx}
+        component_follow = [idx]
+        while component_follow:
+            idx = component_follow.pop()
+            idxs = set(adjacency_matrix[idx].nonzero()[0]) - component
+            component |= idxs
+            component_follow += idxs
+        components.append(component)
+        node_idxs -= component
+    return components
+
+
+def calc_new_fresh_symbol(formula, existential_vars):
+    """Given a formula and a list of variables, this function creates a new
+    symbol containing only the unbound variables of the formula.
+
+    Parameters
+    ----------
+    formula : Definition
+        Formula to be transformed.
+
+    existential_vars : set
+        Set of variables associated with existentials.
+
+    Returns
+    -------
+    Symbol
+        New symbol containing only the unbound variables of the formula.
+
+    """
+    cvars = extract_logic_free_variables(formula) - existential_vars
+
+    fresh_symbol = Symbol.fresh()
+    new_symbol = fresh_symbol(tuple(cvars))
+
+    return new_symbol
+
+
+def symbol_connected_components(expression):
+    if not isinstance(expression, NaryLogicOperator):
+        raise ValueError(
+            "Connected components can only be computed "
+            "for n-ary logic operators."
+        )
+    c_matrix = symbol_co_occurence_graph(expression)
+    components = connected_components(c_matrix)
+
+    operation = type(expression)
+    return [
+        operation(tuple(expression.formulas[i] for i in component))
+        for component in components
+    ]
+
+
+def symbol_co_occurence_graph(expression):
+    """Symbol co-ocurrence graph expressed as
+    an adjacency matrix.
+
+    Parameters
+    ----------
+    expression : NAryLogicExpression
+        logic expression for which the adjacency matrix is computed.
+
+    Returns
+    -------
+    numpy.ndarray
+        squared binary array where a component is 1 if there is a
+        shared predicate symbol between two subformulas of the
+        logic expression.
+    """
+    c_matrix = np.zeros((len(expression.formulas),) * 2)
+    for i, formula in enumerate(expression.formulas):
+        atom_symbols = set(a.functor for a in extract_logic_atoms(formula))
+        for j, formula_ in enumerate(expression.formulas[i + 1:]):
+            atom_symbols_ = set(
+                a.functor for a in extract_logic_atoms(formula_)
+            )
+            if not atom_symbols.isdisjoint(atom_symbols_):
+                c_matrix[i, i + 1 + j] = 1
+                c_matrix[i + 1 + j, i] = 1
+    return c_matrix
