@@ -2,15 +2,14 @@ import warnings
 
 import rdflib
 from rdflib import BNode, Literal
-from rdflib.namespace import OWL, RDF, RDFS, SKOS
 from rdflib.extras.infixowl import EnumeratedClass
+from rdflib.namespace import OWL, RDF, RDFS, SKOS
 
+from ..config import config
 from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
 from ..expressions import Constant, Symbol
 from ..logic import Conjunction, Implication
 from .constraints_representation import RightImplication
-
-from ..config import config
 
 
 class OntologyParser:
@@ -20,7 +19,9 @@ class OntologyParser:
     """
 
     def __init__(self, paths, connector_symbol=None, load_format="xml"):
-        self.structural_knowledge_namespace = config.get_structural_knowledge_namespace()
+        self.structural_knowledge_namespace = (
+            config.get_structural_knowledge_namespace()
+        )
         if isinstance(paths, list):
             self._load_ontology(paths, load_format)
         else:
@@ -44,7 +45,7 @@ class OntologyParser:
         self.rdfGraph = rdfGraph
 
     def parse_ontology(self):
-        '''
+        """
         Main function to be called for ontology processing.
 
         Returns
@@ -54,21 +55,27 @@ class OntologyParser:
         implications derived from the rest of the ontological information,
         for example, the label property. Both dictionaries index lists of
         rules using the rule consequent functor.
-        '''
+        """
         self._parse_classes()
         self._parse_related_individuals()
 
-        return self.parsed_constraints, self.estructural_knowledge, self.entity_rules
+        return (
+            self.parsed_constraints,
+            self.estructural_knowledge,
+            self.entity_rules,
+        )
 
     def _parse_classes(self):
-        '''This method obtains all the classes present in the ontology and
+        """This method obtains all the classes present in the ontology and
         iterates over them, parsing them according to the properties
         that compose them.
-        '''
+        """
         all_classes = self._get_all_classes()
         for class_name in list(all_classes):
 
-            for entity, prop, value in self.rdfGraph.triples((class_name, None, None)):
+            for entity, prop, value in self.rdfGraph.triples(
+                (class_name, None, None)
+            ):
 
                 if prop == RDF.type and value == OWL.Class:
                     # The triple used to index the class must be skipped.
@@ -90,14 +97,14 @@ class OntologyParser:
                         raise NeuroLangNotImplementedError
 
     def _get_all_classes(self):
-        '''
+        """
         Function in charge of obtaining all the classes of the ontology
         to iterate through at the time of parsing.
 
         Returns
         -------
         A set of URIs representing the classes that compose the ontology.
-        '''
+        """
         classes = set()
         for s, _, _ in self.rdfGraph.triples((None, RDF.type, OWL.Class)):
             if not isinstance(s, BNode):
@@ -110,7 +117,9 @@ class OntologyParser:
 
     def _get_all_named_individual(self):
         individuals = set()
-        for s, _, _ in self.rdfGraph.triples((None, RDF.type, OWL.NamedIndividual)):
+        for s, _, _ in self.rdfGraph.triples(
+            (None, RDF.type, OWL.NamedIndividual)
+        ):
             individuals.add(s)
 
         return individuals
@@ -119,7 +128,9 @@ class OntologyParser:
         _all_individuals = self._get_all_named_individual()
 
         for individual_name in list(_all_individuals):
-            for entity, prop, value in self.rdfGraph.triples((individual_name, None, None)):
+            for entity, prop, value in self.rdfGraph.triples(
+                (individual_name, None, None)
+            ):
 
                 if prop == RDF.type and value == OWL.NamedIndividual:
                     # The triple used to index the individual must be skipped.
@@ -129,7 +140,7 @@ class OntologyParser:
                     self._parse_individual_related(entity, prop, value)
 
     def _parseSubClass(self, entity, val):
-        '''Function in charge of identifying the type of constraint to be
+        """Function in charge of identifying the type of constraint to be
         parsed. At the moment it allows to parse subclasses, basic
         constraints and a single level of intersections.
         Nested intersections are not yet implemented.
@@ -141,7 +152,7 @@ class OntologyParser:
 
         value : URIRef or BNode
             value associated with the entity.
-        '''
+        """
         res = []
         if isinstance(val, BNode):
             bnode_triples = list(self.rdfGraph.triples((val, None, None)))
@@ -155,20 +166,26 @@ class OntologyParser:
                 inter_entity = [
                     a[2] for a in int_triples if not isinstance(a[2], BNode)
                 ]
-                inter_BNode = [a[2] for a in int_triples if isinstance(a[2], BNode)]
+                inter_BNode = [
+                    a[2] for a in int_triples if isinstance(a[2], BNode)
+                ]
                 if len(inter_entity) == 1 and len(inter_BNode) == 1:
                     self._parse_BNode_intersection(
                         entity, inter_BNode[0], inter_entity[0]
                     )
                 else:
-                    warnings.warn("Complex intersectionOf are not implemented yet")
+                    warnings.warn(
+                        "Complex intersectionOf are not implemented yet"
+                    )
 
             elif OWL.unionOf in restriction_dic.keys():
                 warnings.warn("Not implemented yet: unionOf")
             elif OWL.complementOf in restriction_dic.keys():
                 warnings.warn("Not implemented yet: complementOf")
             else:
-                raise NotImplementedError(f"Something went wrong: {restriction_dic}")
+                raise NotImplementedError(
+                    f"Something went wrong: {restriction_dic}"
+                )
         else:
             ant = Symbol(self._parse_name(entity))
             cons = Symbol(self._parse_name(val))
@@ -176,12 +193,14 @@ class OntologyParser:
             imp = RightImplication(ant(x), cons(x))
             self._categorize_constraints([imp])
 
-            neurolang_subclassof = Symbol(self.structural_knowledge_namespace+'subClassOf')
-            est = neurolang_subclassof(Constant(ant.name), Constant(cons.name))
+            nl_subclassof = Symbol(
+                self.structural_knowledge_namespace + "subClassOf"
+            )
+            est = nl_subclassof(Constant(ant.name), Constant(cons.name))
             self._categorize_structural_knowledge([est])
 
     def _parse_BNode_intersection(self, entity, node, inter_entity):
-        '''When the rules that compose a constraint are defined within an
+        """When the rules that compose a constraint are defined within an
         intersection, it needs to be manipulated in a special way.
         This is the method in charge of that behavior.
 
@@ -196,7 +215,7 @@ class OntologyParser:
         inter_entity : URIRef
             the main entity defined within the intersection.
 
-        '''
+        """
         triple_restriction = list(self.rdfGraph.triples((node, None, None)))
         nil = [a[2] for a in triple_restriction if not isinstance(a[2], BNode)]
         bnode = [a[2] for a in triple_restriction if isinstance(a[2], BNode)]
@@ -205,7 +224,9 @@ class OntologyParser:
             bnode_triples = list(self.rdfGraph.triples((bnode[0], None, None)))
             restriction_dic = {b: c for _, b, c in bnode_triples}
             if OWL.Restriction in restriction_dic.values():
-                res = self._parse_restriction(entity, restriction_dic, support_prop)
+                res = self._parse_restriction(
+                    entity, restriction_dic, support_prop
+                )
                 self._categorize_constraints(res)
             con = Symbol(self._parse_name(inter_entity))
             x = Symbol.fresh()
@@ -216,7 +237,7 @@ class OntologyParser:
             warnings.warn("Complex intersectionOf are not implemented yet")
 
     def _parse_name(self, obj):
-        '''Function that transforms the names of the entities of the ontology
+        """Function that transforms the names of the entities of the ontology
         while preserving the namespace to avoid conflicts.
 
         Example: the URI `http://www.w3.org/2004/02/skos/core#altLabel`
@@ -231,7 +252,7 @@ class OntologyParser:
         Returns
         -------
         String with the new name associated to the entity.
-        '''
+        """
         if isinstance(obj, Literal):
             return str(obj)
 
@@ -240,11 +261,13 @@ class OntologyParser:
             name = obj_split[1]
             namespace = obj_split[0].split("/")[-1]
             if namespace + ":" == self.structural_knowledge_namespace:
-                raise Warning(f'The ontology namespace {namespace} matches the one\n'
-                    f'used by neurolang to define structural knowledge. It is\n'
-                    f'recommended to change the latter using the'
-                    f'set_structural_knowledge_namespace method in\n'
-                    f'the configuration module to avoid unwanted behavior.\n')
+                raise Warning(
+                    f"The ontology namespace {namespace} matches the one\n"
+                    f"used by neurolang to define structural knowledge. It is\n"
+                    f"recommended to change the latter using the"
+                    f"set_structural_knowledge_namespace method in\n"
+                    f"the configuration module to avoid unwanted behavior.\n"
+                )
             if name[0] != "" and namespace != "":
                 res = namespace + ":" + name
             else:
@@ -256,7 +279,7 @@ class OntologyParser:
         return res
 
     def _parse_restriction(self, entity, restriction_dic, support_prop=None):
-        '''Method for the identification of the type of restriction.
+        """Method for the identification of the type of restriction.
         Each of the possible available restrictions has its own
         method in charge of information parsing.
 
@@ -278,7 +301,7 @@ class OntologyParser:
         -------
         A list of rules that compose the parsed constraint.
 
-        '''
+        """
         cons = []
         prop = restriction_dic[OWL.onProperty]
 
@@ -310,11 +333,13 @@ class OntologyParser:
 
         elif OWL.minCardinality in restriction_dic.keys():
             warnings.warn(
-                "minCardinality constraints cannot be implemented in Datalog syntax"
+                "minCardinality constraints cannot\n"
+                "be implemented in Datalog syntax"
             )
         elif OWL.maxCardinality in restriction_dic.keys():
             warnings.warn(
-                "maxCardinality constraints cannot be implemented in Datalog syntax"
+                "maxCardinality constraints cannot\n"
+                "be implemented in Datalog syntax"
             )
         else:
             raise NeuroLangException(
@@ -325,7 +350,7 @@ class OntologyParser:
         return cons
 
     def _parse_someValuesFrom(self, entity, prop, nodes, support_prop=None):
-        '''After the restriction is identified as of type `someValuesFrom`,
+        """After the restriction is identified as of type `someValuesFrom`,
         this function is in charge of parsing the information and returning it
         in the form of rules that our Datalog program can interpret.
 
@@ -344,7 +369,7 @@ class OntologyParser:
             Optional symbol. It's used to predefine the symbol used in
             rules with existentials, when necessary
             (mainly in nested definitions).
-        '''
+        """
         constraints = []
         if support_prop is None:
             support_prop = Symbol.fresh()
@@ -366,7 +391,7 @@ class OntologyParser:
         return constraints
 
     def _parse_allValuesFrom(self, entity, prop, nodes):
-        '''After the restriction is identified as of type `allValuesFrom`,
+        """After the restriction is identified as of type `allValuesFrom`,
         this function is in charge of parsing the information and returning it
         in the form of rules that our Datalog program can interpret.
 
@@ -380,7 +405,7 @@ class OntologyParser:
 
         nodes : list
             list of the values associated with the entity and the property.
-        '''
+        """
         constraints = []
         x = Symbol.fresh()
         y = Symbol.fresh()
@@ -394,7 +419,7 @@ class OntologyParser:
         return constraints
 
     def _parse_hasValue(self, entity, prop, nodes):
-        '''After the constraint is identified as of type `hasValue`,
+        """After the constraint is identified as of type `hasValue`,
         this function is in charge of parsing the information and returning it
         in the form of rules that our Datalog program can interpret.
 
@@ -408,16 +433,21 @@ class OntologyParser:
 
         nodes : list
             list of the values associated with the entity and the property.
-        '''
+        """
         x = Symbol.fresh()
         ent = Symbol(self._parse_name(entity))
         onProp = Symbol(self._parse_name(prop))
         value = self._parse_name(nodes[0])
-        return [RightImplication(Symbol(ent)(x), Symbol(onProp)(x, Constant(value)))]
+        return [
+            RightImplication(
+                Symbol(ent)(x), Symbol(onProp)(x, Constant(value))
+            )
+        ]
 
     def _solve_BNode(self, initial_node):
-        '''Once a BNode is identified, this function iterates over each of the pointers
-         that compose it and returns a list with those values.
+        """Once a BNode is identified, this function iterates
+        over each of the pointers that compose it and returns
+        a list with those values.
 
         Parameters
         ----------
@@ -426,8 +456,10 @@ class OntologyParser:
 
         Returns
         -------
-        A list of all the values that arise from traversing the list of BNodes.
-         '''
+        list
+            A list of all the values that arise
+            from traversing the list of BNodes.
+         """
         list_node = RDF.nil
         values = []
         for node_triples in self.rdfGraph.triples((initial_node, None, None)):
@@ -443,7 +475,7 @@ class OntologyParser:
         return values
 
     def _get_list_first_value(self, list_iter):
-        '''Used to iterate between pointers in triples, this function takes
+        """Used to iterate between pointers in triples, this function takes
         care of finding the pointed value and returning it.
 
         Parameters
@@ -454,13 +486,13 @@ class OntologyParser:
         Returns
         -------
             see description.
-        '''
+        """
         for triple in list_iter:
             if RDF.first == triple[1]:
                 return triple[2]
 
     def _get_list_rest_value(self, list_iter):
-        '''Used to iterate between pointers in triples, this function takes
+        """Used to iterate between pointers in triples, this function takes
         care of finding the pointer to the next element and returning it.
 
         Parameters
@@ -471,13 +503,13 @@ class OntologyParser:
         Returns
         -------
             see description.
-        '''
+        """
         for triple in list_iter:
             if RDF.rest == triple[1]:
                 return triple[2]
 
     def _parse_property(self, entity, prop, value):
-        '''Any rule that is not a restriction or a derivation on
+        """Any rule that is not a restriction or a derivation on
         classes(as the case of subClassOf or EnumeratedClass) is a
         property that defines a field inside the entity with its
         corresponding information. For example, the properties
@@ -495,7 +527,7 @@ class OntologyParser:
 
         nodes : URIRef
             value associated with the entity and the property.
-        '''
+        """
         entity = Symbol(self._parse_name(entity))
         entity_name = Constant(self._parse_name(value))
         x = Symbol.fresh()
@@ -508,11 +540,15 @@ class OntologyParser:
         if prop == RDFS.label:
             x = Symbol.fresh()
             lower_name = self._parse_name(value).lower()
-            rule = Implication(entity(x), self.connector_symbol(x, Constant(lower_name)))
+            rule = Implication(
+                entity(x), self.connector_symbol(x, Constant(lower_name))
+            )
             self._add_rules([rule])
 
-        prop_name = label.name.split(':')[-1]
-        neurolang_prop = Symbol(self.structural_knowledge_namespace+prop_name)
+        prop_name = label.name.split(":")[-1]
+        neurolang_prop = Symbol(
+            self.structural_knowledge_namespace + prop_name
+        )
         est = neurolang_prop(Constant(entity.name), entity_name)
         self._categorize_structural_knowledge([est])
 
@@ -521,11 +557,12 @@ class OntologyParser:
         entity_name = Constant(self._parse_name(value))
         label = Symbol(self._parse_name(prop))
 
-        prop_name = label.name.split(':')[-1]
-        neurolang_prop = Symbol(self.structural_knowledge_namespace+prop_name)
+        prop_name = label.name.split(":")[-1]
+        neurolang_prop = Symbol(
+            self.structural_knowledge_namespace + prop_name
+        )
         est = neurolang_prop(Constant(entity.name), entity_name)
         self._categorize_structural_knowledge([est])
-
 
     def _parseEnumeratedClass(self, entity, prop, value):
         warnings.warn("Not implemented yet: EnumeratedClass")
@@ -552,7 +589,6 @@ class OntologyParser:
                 self.estructural_knowledge[sigma_functor] = cons_set
             else:
                 self.estructural_knowledge[sigma_functor] = set([sigma])
-
 
     def _add_existential_rule(self, entity, rule):
         if entity not in self.existential_rules:
