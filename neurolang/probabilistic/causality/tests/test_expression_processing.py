@@ -5,8 +5,9 @@ from ....logic import Conjunction, Implication, Negation, Union
 from ...exceptions import MalformedCausalOperatorError
 from ...expressions import Condition
 from ..expression_processing import (
-    CausalIntervention, CausalInterventionIdentification,
-    CausalInterventionRewriter
+    CausalIntervention,
+    CausalInterventionIdentification,
+    CausalInterventionRewriter,
 )
 
 P = Symbol("P")
@@ -23,26 +24,16 @@ z = Symbol("z")
 a = Constant("a")
 b = Constant("b")
 
+
 def test_symbols_not_allowed():
-    with pytest.raises(MalformedCausalOperatorError, match="The atoms intervened by the*"):
-        Condition(
-            P(x),
-            Conjunction((
-                CausalIntervention((
-                    Q(x),
-                )),
-            ))
-        )
+    with pytest.raises(
+        MalformedCausalOperatorError, match="The atoms intervened by the*"
+    ):
+        Condition(P(x), Conjunction((CausalIntervention((Q(x),)),)))
+
 
 def test_do_instantiation():
-    imp = Condition(
-        P(x),
-        Conjunction((
-            CausalIntervention((
-                Q(a),
-            )),
-        ))
-    )
+    imp = Condition(P(x), Conjunction((CausalIntervention((Q(a),)),)))
     ciw = CausalInterventionIdentification()
 
     ciw.walk(imp)
@@ -50,65 +41,42 @@ def test_do_instantiation():
 
 
 def test_do_instantiation_more_atoms():
-    imp = Condition(
-        P(x),
-        Conjunction((
-            CausalIntervention((
-                Q(a),R(b)
-            )),
-        ))
-    )
+    imp = Condition(P(x), Conjunction((CausalIntervention((Q(a), R(b))),)))
     ciw = CausalInterventionIdentification()
 
     ciw.walk(imp)
-    assert ciw.intervention == CausalIntervention((Q(a),R(b)))
+    assert ciw.intervention == CausalIntervention((Q(a), R(b)))
+
 
 def test_multiple_instantiation_exception():
     imp = Condition(
         P(x),
-        Conjunction((
-            CausalIntervention((
-                Q(a),
-            )),
-            CausalIntervention((
-                R(a),
-            )),
-        ))
+        Conjunction(
+            (CausalIntervention((Q(a),)), CausalIntervention((R(a),)),)
+        ),
     )
     ciw = CausalInterventionIdentification()
-    with pytest.raises(MalformedCausalOperatorError, match="The use of more than one DO operator*"):
+    with pytest.raises(
+        MalformedCausalOperatorError,
+        match="The use of more than one DO operator*",
+    ):
         ciw.walk(imp)
+
 
 def test_nothing_to_rewrite():
     ciw = CausalInterventionIdentification()
     imp1 = Implication(Q(x), P(x))
-    imp2 = Implication(
-        ans(x),
-        Condition(
-            R(x),
-            Conjunction((
-                    Q(a),
-            ))
-        )
-    )
+    imp2 = Implication(ans(x), Condition(R(x), Conjunction((Q(a),))))
 
     _ = ciw.walk(Union((imp1, imp2)))
-    assert not hasattr(ciw, 'intervention')
+    assert not hasattr(ciw, "intervention")
 
 
 def test_simple_rewrite():
     ciw = CausalInterventionIdentification()
     imp1 = Implication(Q(x), P(x))
     imp2 = Implication(
-        ans(x),
-        Condition(
-            R(x),
-            Conjunction((
-                CausalIntervention((
-                    Q(a),
-                )),
-            ))
-        )
+        ans(x), Condition(R(x), Conjunction((CausalIntervention((Q(a),)),)))
     )
 
     formulas = ciw.walk(Union((imp1, imp2)))
@@ -134,15 +102,7 @@ def test_simple_rewrite():
     assert new_f1.is_fresh
     assert new_f2.is_fresh
 
-    new_imp2 = Implication(
-        ans(x),
-        Condition(
-            R(x),
-            Conjunction((
-                new_f2(a),
-            ))
-        )
-    )
+    new_imp2 = Implication(ans(x), Condition(R(x), Conjunction((new_f2(a),))))
 
     new_f1 = new_f1(x)
     new_f2 = new_f2(x)
@@ -165,15 +125,7 @@ def test_rewrite_two_implications():
     ciw = CausalInterventionIdentification()
     imp1 = Implication(Q(z), P(z))
     imp2 = Implication(
-        ans(x),
-        Condition(
-            R(x),
-            Conjunction((
-                CausalIntervention((
-                    Q(a),
-                )),
-            ))
-        )
+        ans(x), Condition(R(x), Conjunction((CausalIntervention((Q(a),)),)))
     )
     imp3 = Implication(Q(x), S(x, y))
 
@@ -200,15 +152,7 @@ def test_rewrite_two_implications():
     assert new_f1.is_fresh
     assert new_f2.is_fresh
 
-    new_imp2 = Implication(
-        ans(x),
-        Condition(
-            R(x),
-            Conjunction((
-                new_f2(a),
-            ))
-        )
-    )
+    new_imp2 = Implication(ans(x), Condition(R(x), Conjunction((new_f2(a),))))
 
     new_f2_rule_z = new_f2(z)
     new_f2_rule_x = new_f2(x)
@@ -219,8 +163,12 @@ def test_rewrite_two_implications():
     new_imp1_x = Implication(new_f2_rule_x, new_f1_rule_x)
     new_imp1_z = Implication(new_f2_rule_z, new_f1_rule_z)
 
-    new_rule1 = Implication(new_f2_rule_z, Conjunction((P(z), Negation(new_f1_rule_z))))
-    new_rule2 = Implication(new_f2_rule_x, Conjunction((S(x, y), Negation(new_f1_rule_x))))
+    new_rule1 = Implication(
+        new_f2_rule_z, Conjunction((P(z), Negation(new_f1_rule_z)))
+    )
+    new_rule2 = Implication(
+        new_f2_rule_x, Conjunction((S(x, y), Negation(new_f1_rule_x)))
+    )
     new_fact = new_f1(*intervention.args)
 
     assert len(cir.new_facts) == 1
@@ -228,24 +176,20 @@ def test_rewrite_two_implications():
     assert len(new_formulas.formulas) == 6
     assert imp1 in new_formulas.formulas
     assert imp3 in new_formulas.formulas
-    assert (new_imp1_x in new_formulas.formulas) or (new_imp1_z in new_formulas.formulas)
+    assert (new_imp1_x in new_formulas.formulas) or (
+        new_imp1_z in new_formulas.formulas
+    )
     assert new_imp2 in new_formulas.formulas
     assert new_rule1 in new_formulas.formulas
     assert new_rule2 in new_formulas.formulas
+
 
 def test_rewrite_two_interventions():
     ciw = CausalInterventionIdentification()
     imp1 = Implication(Q(z), P(z))
     imp2 = Implication(
         ans(x),
-        Condition(
-            T(x),
-            Conjunction((
-                CausalIntervention((
-                    Q(a),R(a, b)
-                )),
-            ))
-        )
+        Condition(T(x), Conjunction((CausalIntervention((Q(a), R(a, b))),))),
     )
     imp3 = Implication(R(x, y), S(y, x))
     imp4 = Implication(T(z), U(y, z))
@@ -289,13 +233,7 @@ def test_rewrite_two_interventions():
     new_imp_int2 = Implication(new_f3, new_f2)
 
     new_imp2 = Implication(
-        ans(x),
-        Condition(
-            T(x),
-            Conjunction((
-                new_f1s(a),new_f3s(a, b)
-            ))
-        )
+        ans(x), Condition(T(x), Conjunction((new_f1s(a), new_f3s(a, b))))
     )
 
     new_rule1 = Implication(new_f1, Conjunction((P(z), Negation(new_f0))))

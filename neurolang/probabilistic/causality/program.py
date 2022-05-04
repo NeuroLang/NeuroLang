@@ -1,10 +1,11 @@
 from .expression_processing import (
-    CausalInterventionIdentification, CausalInterventionRewriter
+    CausalInterventionIdentification,
+    CausalInterventionRewriter,
 )
 from ...logic import Union
 
-class CausalProgram():
 
+class CausalProgram:
     def rewrite_program(self, program):
         cii = CausalInterventionIdentification()
         cii.walk(program)
