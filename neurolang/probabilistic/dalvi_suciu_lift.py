@@ -331,7 +331,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     if has_safe_plan:
         return plan
 
-    if len(rule_cnf.formulas) > 1:
+    if len(rule_cnf.formulas) > 1 and not selfjoins_in_pchoices(rule_dnf, symbol_table):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule)

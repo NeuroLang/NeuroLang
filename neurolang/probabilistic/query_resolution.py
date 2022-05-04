@@ -386,7 +386,7 @@ class RAQueryOptimiser(
 
 
 def generate_provenance_query_solver(
-    symbol_table, run_relational_algebra_solver, constants_by_formula={},
+    symbol_table, run_relational_algebra_solver, constants_by_formula=None,
     solver_class=ProbSemiringToRelationalAlgebraSolver
 ):
     """
@@ -416,6 +416,9 @@ def generate_provenance_query_solver(
         def log_exp(self, expression):
             LOG.log(self.level, self.message, expression)
             return expression
+
+    if constants_by_formula is None:
+        constants_by_formula = {}
 
     steps = [
         RAQueryOptimiser(),
