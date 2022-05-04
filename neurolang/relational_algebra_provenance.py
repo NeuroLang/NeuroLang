@@ -121,17 +121,6 @@ class NaturalJoinInverse(NaturalJoin):
         )
 
 
-class Complement(UnaryRelationalAlgebraOperation):
-    def __init__(self, relation):
-        self.relation = relation
-
-    def __repr__(self):
-        return (
-            "\N{Not Sign}"
-            f"({self.relation})"
-        )
-
-
 class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
     def __init__(self, relations, weights):
         self.relations = relations
@@ -169,27 +158,6 @@ class DisjointProjection(LiftedPlanProjection):
         else:
             attributes_repr = ",".join(repr(attr) for attr in self.attributes)
         return "disj-π_[{}]({})".format(attributes_repr, repr(self.relation))
-
-
-ONE_PROB_RAS = (lambda col: (
-    ProvenanceAlgebraSet(
-        Projection(
-            Constant[AbstractSet[Tuple[(float,)]]](
-                NamedRelationalAlgebraFrozenSet((col,), [(1.,)])
-            ),
-            (str2columnstr_constant(col),)
-        ),
-        str2columnstr_constant(col)
-    )
-))(Symbol.fresh().name)
-
-
-class ComplementSolverMixin(PatternWalker):
-    @add_match(Complement)
-    def prov_complement(self, complement):
-        relation = complement.relation
-        new_relation = Difference(ONE_PROB_RAS, relation)
-        return self.walk(new_relation)
 
 
 class WeightedNaturalJoinSolverMixin(PatternWalker):
@@ -313,37 +281,6 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         res = ProvenanceAlgebraSet(operation, prov_col)
         return res
 
-    # @add_match(
-    #    Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet),
-    #    lambda expression: (
-    #        expression.relation_left.non_provenance_columns and
-    #        (
-    #            expression.relation_left.non_provenance_columns ==
-    #            expression.relation_right.non_provenance_columns
-    #        )
-    #    )
-    # )
-    def union_rap(self, union):
-        prov_column_left = union.relation_left.provenance_column
-        prov_column_right = union.relation_right.provenance_column
-        relation_left = union.relation_left.relation
-        relation_right = union.relation_right.relation
-        if prov_column_left != prov_column_right:
-            relation_right = RenameColumn(
-                relation_right,
-                prov_column_right,
-                prov_column_left,
-            )
-
-        columns_to_keep = union.relation_left.non_provenance_columns
-        operation = IndependentProjection(
-            ProvenanceAlgebraSet(
-                Union(relation_left, relation_right),
-                prov_column_left
-            ),
-            tuple(columns_to_keep)
-        )
-        return self.walk(operation)
 
     @add_match(Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
     def union_rap_domain_dependent(self, union):
