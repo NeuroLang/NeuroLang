@@ -4,27 +4,31 @@ from operator import eq
 from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
-    add_match
+    add_match,
 )
 from ..expressions import Constant, Symbol
 from ..logic import Disjunction, Implication
 from ..logic.expression_processing import extract_logic_atoms
+from ..logic.transformations import MakeExistentialsImplicit
 from ..relational_algebra import Projection, Selection, str2columnstr_constant
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
-    is_atom_a_probabilistic_choice_relation
+    is_atom_a_probabilistic_choice_relation,
 )
-from ..logic.transformations import MakeExistentialsImplicit
-from .transforms import convert_rule_to_ucq, convert_to_dnf_ucq
+from .transforms import (
+    convert_rule_to_ucq,
+    convert_to_dnf_ucq,
+    convert_ucq_to_ccq,
+)
 
 
 class ProjectionSelectionByPChoiceConstant(PatternWalker):
-    '''
+    """
     Given a dictionary of {constants: symbols}, this walker is responsible for
     reintroducing the constants in pchoices that were replaced by variables
     to conclude the anti-shattering strategy.
-    '''
+    """
 
     def __init__(self, constants_by_formula_dict):
         self.constants_by_formula_dict = constants_by_formula_dict
@@ -34,8 +38,8 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
         operation = raoperation.relation
         prov_columns = raoperation.provenance_column
         symbols_as_columns = [
-            str2columnstr_constant(symbol.name) for symbol
-            in self.constants_by_formula_dict.values()
+            str2columnstr_constant(symbol.name)
+            for symbol in self.constants_by_formula_dict.values()
         ]
         non_proyected_vars = set(symbols_as_columns).union(set([prov_columns]))
         proyected_vars = raoperation.columns() - non_proyected_vars
@@ -43,7 +47,7 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
         for constant, fresh_var in self.constants_by_formula_dict.items():
             operation = Selection(
                 operation,
-                eq_(str2columnstr_constant(fresh_var.name), constant)
+                eq_(str2columnstr_constant(fresh_var.name), constant),
             )
 
         proyected = tuple([prov_columns])
@@ -55,8 +59,9 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
 
         return ProvenanceAlgebraSet(operation, prov_columns)
 
+
 def pchoice_constants_as_head_variables(query, cpl_program):
-    '''
+    """
     First step of the antishattering strategy.
     Given an implication, body constants that are associated with
     probabilistic choices are removed and replaced by variables
@@ -77,12 +82,12 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     dic
         Dictionary mapping replaced constants to their new
         replacement variables.
-    '''
+    """
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, query.antecedent
     )
     query_ucq = convert_rule_to_ucq(query)
-    query_ucq = convert_to_dnf_ucq(query_ucq)
+    query_ucq = convert_ucq_to_ccq(query_ucq, transformation="DNF")
 
     parameter_variable = defaultdict(Symbol.fresh)
 
@@ -98,11 +103,11 @@ def pchoice_constants_as_head_variables(query, cpl_program):
                     if isinstance(arg, Constant)
                 }
                 constants_by_formula_clause = {
-                    **replacements, **constants_by_formula_clause
+                    **replacements,
+                    **constants_by_formula_clause,
                 }
-            clause = (
-                ReplaceExpressionWalker(constants_by_formula_clause)
-                .walk(clause)
+            clause = ReplaceExpressionWalker(constants_by_formula_clause).walk(
+                clause
             )
             query_formulas += (clause,)
         for k, v in constants_by_formula_clause.items():
@@ -111,18 +116,19 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     new_args = query.consequent.args + tuple(constants_by_formula)
     new_consequent = query.consequent.functor(*new_args)
 
-    query_formulas = convert_to_dnf_ucq(Disjunction(query_formulas))
+    query_formulas = convert_ucq_to_ccq(
+        Disjunction(query_formulas), transformation="DNF"
+    )
 
     query = Implication(
-        new_consequent,
-        MakeExistentialsImplicit().walk(query_formulas)
+        new_consequent, MakeExistentialsImplicit().walk(query_formulas)
     )
 
     return query, constants_by_formula
 
 
 def selfjoins_in_pchoices(rule_dnf, symbol_table):
-    '''
+    """
     Verify the existence of selfjoins between pchoices.
 
     Parameters
@@ -139,7 +145,7 @@ def selfjoins_in_pchoices(rule_dnf, symbol_table):
         True if there is a join between pchoices
         in the same conjunction
 
-    '''
+    """
     for formula in rule_dnf.formulas:
         pchoice_functors = []
         for atom in extract_logic_atoms(formula):

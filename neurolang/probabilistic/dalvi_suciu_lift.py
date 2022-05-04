@@ -8,7 +8,7 @@ import numpy as np
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
-    flatten_query
+    flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import (
@@ -16,19 +16,14 @@ from ..exceptions import (
     NonLiftableException,
     NotRankedException,
     NotUnateException,
-    UnsupportedSolverError
+    UnsupportedSolverError,
 )
-from ..expression_walker import (
-    ExpressionWalker,
-    PatternWalker,
-    ReplaceExpressionWalker,
-    add_match
-)
+from ..expression_walker import ExpressionWalker, PatternWalker, add_match
 from ..expressions import (
     Constant,
     FunctionApplication,
     Symbol,
-    TypedSymbolTableMixin
+    TypedSymbolTableMixin,
 )
 from ..logic import (
     FALSE,
@@ -38,22 +33,19 @@ from ..logic import (
     Implication,
     NaryLogicOperator,
     Negation,
-    Union
+    Union,
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
-    extract_logic_predicates
+    extract_logic_predicates,
 )
 from ..logic.transformations import (
-    ExtractConjunctiveQueryWithNegation,
-    GuaranteeConjunction,
-    GuaranteeDisjunction,
     MakeExistentialsImplicit,
     PushExistentialsDown,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
-    convert_to_pnf_with_dnf_matrix
+    convert_to_pnf_with_dnf_matrix,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -61,14 +53,18 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
+from .antishattering import (
+    pchoice_constants_as_head_variables,
+    selfjoins_in_pchoices,
+)
 from .containment import is_contained
 from .expression_processing import (
     is_builtin,
-    lift_optimization_for_choice_predicates
+    lift_optimization_for_choice_predicates,
 )
 from .probabilistic_ra_utils import (
     NonLiftable,
@@ -76,30 +72,25 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_deterministic_relation,
-    is_atom_a_probabilistic_choice_relation
+    is_atom_a_probabilistic_choice_relation,
 )
 from .probabilistic_semiring_solver import (
-    ProbSemiringToRelationalAlgebraSolver
+    ProbSemiringToRelationalAlgebraSolver,
 )
 from .query_resolution import (
     generate_provenance_query_solver,
     lift_solve_marg_query,
-    reintroduce_unified_head_terms
+    reintroduce_unified_head_terms,
 )
 from .ranking import partially_rank_query, verify_that_the_query_is_ranked
 from .shattering import shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
-    convert_to_cnf_ucq,
     convert_to_dnf_ucq,
-    minimize_ucq_in_cnf,
-    minimize_ucq_in_dnf,
-    unify_existential_variables
-)
-from .antishattering import (
-    pchoice_constants_as_head_variables,
-    selfjoins_in_pchoices
+    convert_ucq_to_ccq,
+    symbol_connected_components,
+    unify_existential_variables,
 )
 
 LOG = logging.getLogger(__name__)
@@ -161,9 +152,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     """
     with log_performance(
-        LOG,
-        "Preparing query %s",
-        init_args=(query.consequent.functor.name,),
+        LOG, "Preparing query %s", init_args=(query.consequent.functor.name,),
     ):
         flat_query_body = flatten_query(query.antecedent, cpl_program)
 
@@ -172,49 +161,48 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
     ):
         head_var_names = tuple(
-            term.name for term in query.consequent.args
+            term.name
+            for term in query.consequent.args
             if isinstance(term, Symbol)
         )
         return ProvenanceAlgebraSet(
-            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
-                ("_p_",) + head_var_names
-            )),
+            Constant[AbstractSet](
+                NamedRelationalAlgebraFrozenSet(("_p_",) + head_var_names)
+            ),
             str2columnstr_constant("_p_"),
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
         flat_query = Implication(query.consequent, flat_query_body)
 
-        flat_query, constants_by_formula = \
-            pchoice_constants_as_head_variables(flat_query, cpl_program)
+        flat_query, constants_by_formula = pchoice_constants_as_head_variables(
+            flat_query, cpl_program
+        )
 
-        shattered_query, symbol_table = \
-            _prepare_and_optimise_query(flat_query, cpl_program)
+        shattered_query, symbol_table = _prepare_and_optimise_query(
+            flat_query, cpl_program
+        )
 
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
 
         ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
-            LOG.info(
-                "Query not liftable %s",
-                shattered_query
-            )
+            LOG.info("Query not liftable %s", shattered_query)
             raise NonLiftableException(
-                "Query %s not liftable, algorithm can't be applied",
-                query
+                "Query %s not liftable, algorithm can't be applied", query
             )
-        ra_query = (
-            ReplaceAllSymbolsButConstantSets(symbol_table)
-            .walk(ra_query)
+        ra_query = ReplaceAllSymbolsButConstantSets(symbol_table).walk(
+            ra_query
         )
         ra_query = reintroduce_unified_head_terms(
             ra_query, flat_query, shattered_query
         )
 
     query_solver = generate_provenance_query_solver(
-        symbol_table, run_relational_algebra_solver,
+        symbol_table,
+        run_relational_algebra_solver,
         constants_by_formula=constants_by_formula,
-        solver_class=ExtendedRAPToRAWalker
+        solver_class=ExtendedRAPToRAWalker,
     )
 
     with log_performance(LOG, "Run RAP query %s", init_args=(ra_query,)):
@@ -222,12 +210,17 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     return prob_set_result
 
+
 def _prepare_and_optimise_query(flat_query, cpl_program):
     flat_query_body = convert_to_dnf_ucq(flat_query.antecedent)
-    flat_query_body = RTO.walk(Disjunction(tuple(
-        lift_optimization_for_choice_predicates(f, cpl_program)
-        for f in flat_query_body.formulas
-    )))
+    flat_query_body = RTO.walk(
+        Disjunction(
+            tuple(
+                lift_optimization_for_choice_predicates(f, cpl_program)
+                for f in flat_query_body.formulas
+            )
+        )
+    )
     flat_query = Implication(flat_query.consequent, flat_query_body)
     unified_query = UnifyVariableEqualities().walk(flat_query)
     symbol_table = generate_probabilistic_symbol_table_for_query(
@@ -240,8 +233,7 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         shattered_query_body, symbol_table
     )
     shattered_query = Implication(
-        unified_query.consequent,
-        shattered_query_body
+        unified_query.consequent, shattered_query_body
     )
     _verify_that_the_query_has_no_builtins(shattered_query, cpl_program)
     _verify_that_the_query_is_unate(shattered_query, symbol_table)
@@ -292,35 +284,35 @@ def solve_marg_query(rule, cpl):
 
 
 def dalvi_suciu_lift(rule, symbol_table):
-    '''
+    """
     Translation from a datalog rule which allows disjunctions in the body
     to a safe plan according to [1]. Non-liftable segments are identified
     by the `NonLiftable` expression.
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
-    '''
+    """
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:
         return res
 
-    rule_cnf = convert_ucq_to_ccq(rule, transformation='CNF')
+    rule_cnf = convert_ucq_to_ccq(rule, transformation="CNF")
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
         return components_plan(
-            connected_components, rap.NaturalJoin, symbol_table,
-            negative_operation=rap.Difference
+            connected_components,
+            rap.NaturalJoin,
+            symbol_table,
+            negative_operation=rap.Difference,
         )
 
-    rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
+    rule_dnf = convert_ucq_to_ccq(rule, transformation="DNF")
     if selfjoins_in_pchoices(rule_dnf, symbol_table):
         return NonLiftable(rule)
 
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
-        return components_plan(
-            connected_components, rap.Union, symbol_table
-        )
+        return components_plan(connected_components, rap.Union, symbol_table)
 
     has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
     if has_svs:
@@ -330,7 +322,9 @@ def dalvi_suciu_lift(rule, symbol_table):
     if has_safe_plan:
         return plan
 
-    if len(rule_cnf.formulas) > 1 and not selfjoins_in_pchoices(rule_dnf, symbol_table):
+    if len(rule_cnf.formulas) > 1 and not selfjoins_in_pchoices(
+        rule_dnf, symbol_table
+    ):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule_cnf)
@@ -362,11 +356,9 @@ def symbol_or_deterministic_plan(rule, symbol_table):
     if isinstance(rule, FunctionApplication):
         has_safe_plan = True
         res = TranslateToNamedRA().walk(rule)
-    elif (
-        all(
-            is_atom_a_deterministic_relation(atom, symbol_table)
-            for atom in extract_logic_atoms(rule)
-        )
+    elif all(
+        is_atom_a_deterministic_relation(atom, symbol_table)
+        for atom in extract_logic_atoms(rule)
     ):
         free_vars = extract_logic_free_variables(rule)
         rule = MakeExistentialsImplicit().walk(rule)
@@ -375,245 +367,6 @@ def symbol_or_deterministic_plan(rule, symbol_table):
         has_safe_plan = True
         res = rap.Projection(result, proj_cols)
     return has_safe_plan, res
-
-
-def convert_ucq_to_ccq(rule, transformation='CNF'):
-    """Given a UCQ expression, this function transforms it into a connected
-    component expression following the definition provided by Dalvi Suciu[1]
-    in section 2.6 Special Query Expressions. The transformation can be
-    parameterized to apply a CNF or DNF transformation, as needed.
-
-    [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
-    for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
-
-    Parameters
-    ----------
-    rule : Definition
-        UCQ expression
-
-    Returns
-    -------
-    NAryLogicOperation
-        Transformation of the initial expression
-        in a connected component query.
-    """
-    rule = PED.walk(rule)
-    free_vars = extract_logic_free_variables(rule)
-    existential_vars = set()
-    for atom in extract_logic_atoms(rule):
-        existential_vars.update(set(atom.args) - set(free_vars))
-
-    conjunctions = ExtractConjunctiveQueryWithNegation().walk(rule)
-    dic_components = extract_connected_components(
-        conjunctions, existential_vars
-    )
-
-    fresh_symbols_expression = (
-        ReplaceExpressionWalker(dic_components)
-        .walk(rule)
-    )
-    if transformation == 'CNF':
-        fresh_symbols_expression = convert_to_cnf_ucq(fresh_symbols_expression)
-        minimize = minimize_ucq_in_cnf
-        gcd = GuaranteeConjunction()
-    elif transformation == 'DNF':
-        fresh_symbols_expression = convert_to_dnf_ucq(fresh_symbols_expression)
-        minimize = minimize_ucq_in_dnf
-        gcd = GuaranteeDisjunction()
-    else:
-        raise ValueError(f'Invalid transformation type: {transformation}')
-
-    final_expression = ReplaceExpressionWalker(
-        {v: k for k, v in dic_components.items()}
-    ).walk(fresh_symbols_expression)
-    final_expression = minimize(final_expression)
-
-    return gcd.walk(final_expression)
-
-
-def extract_connected_components(list_of_conjunctions, existential_vars):
-    """Given a list of conjunctions, this function is in charge of calculating
-    the connected components of each one. As a result, it returns a dictionary
-    with the necessary transformations so that these conjunctions are replaced
-    by symbols that preserve their free variables.
-
-    Parameters
-    ----------
-    list_of_conjunctions : list
-        List of conjunctions for which we want to
-        calculate the connected components
-
-    existential_vars : set
-        Set of variables associated with existentials
-        in the expressions that compose the list of conjunctions.
-
-    Returns
-    -------
-    dict
-        Dictionary of transformations where the keys are the expressions that
-        compose the list of conjunctions and the values are the components
-        by which they must be replaced
-    """
-    transformations = {}
-    for f in list_of_conjunctions:
-        c_matrix = args_co_occurence_graph(f, existential_vars)
-        components = connected_components(c_matrix)
-
-        if isinstance(f, ExistentialPredicate):
-            transformations[f] = calc_new_fresh_symbol(f, existential_vars)
-            continue
-
-        for c in components:
-            form = [f.formulas[i] for i in c]
-            if len(form) > 1:
-                form = Conjunction(form)
-                transformations[form] = \
-                    calc_new_fresh_symbol(form, existential_vars)
-            else:
-                conj = Conjunction(form)
-                transformations[form[0]] = \
-                    calc_new_fresh_symbol(conj, existential_vars)
-
-    return transformations
-
-
-def calc_new_fresh_symbol(formula, existential_vars):
-    """Given a formula and a list of variables, this function creates a new
-    symbol containing only the unbound variables of the formula.
-
-    Parameters
-    ----------
-    formula : Definition
-        Formula to be transformed.
-
-    existential_vars : set
-        Set of variables associated with existentials.
-
-    Returns
-    -------
-    Symbol
-        New symbol containing only the unbound variables of the formula.
-
-    """
-    cvars = extract_logic_free_variables(formula) - existential_vars
-
-    fresh_symbol = Symbol.fresh()
-    new_symbol = fresh_symbol(tuple(cvars))
-
-    return new_symbol
-
-
-def symbol_connected_components(expression):
-    if not isinstance(expression, NaryLogicOperator):
-        raise ValueError(
-            "Connected components can only be computed "
-            "for n-ary logic operators."
-        )
-    c_matrix = symbol_co_occurence_graph(expression)
-    components = connected_components(c_matrix)
-
-    operation = type(expression)
-    return [
-        operation(tuple(expression.formulas[i] for i in component))
-        for component in components
-    ]
-
-
-def symbol_co_occurence_graph(expression):
-    """Symbol co-ocurrence graph expressed as
-    an adjacency matrix.
-
-    Parameters
-    ----------
-    expression : NAryLogicExpression
-        logic expression for which the adjacency matrix is computed.
-
-    Returns
-    -------
-    numpy.ndarray
-        squared binary array where a component is 1 if there is a
-        shared predicate symbol between two subformulas of the
-        logic expression.
-    """
-    c_matrix = np.zeros((len(expression.formulas),) * 2)
-    for i, formula in enumerate(expression.formulas):
-        atom_symbols = set(a.functor for a in extract_logic_atoms(formula))
-        for j, formula_ in enumerate(expression.formulas[i + 1:]):
-            atom_symbols_ = set(
-                a.functor for a in extract_logic_atoms(formula_)
-            )
-            if not atom_symbols.isdisjoint(atom_symbols_):
-                c_matrix[i, i + 1 + j] = 1
-                c_matrix[i + 1 + j, i] = 1
-    return c_matrix
-
-
-def args_co_occurence_graph(expression, variable_to_use=None):
-    """Arguments co-ocurrence graph expressed as
-    an adjacency matrix.
-
-    Parameters
-    ----------
-    expression : LogicOperator
-        logic expression for which the adjacency matrix is computed.
-
-    Returns
-    -------
-    numpy.ndarray
-        squared binary array where a component is 1 if there is a
-        shared argument between two formulas of the
-        logic expression.
-    """
-
-    if isinstance(expression, ExistentialPredicate):
-        return np.ones((1,))
-
-    c_matrix = np.zeros((len(expression.formulas),) * 2)
-    for i, formula in enumerate(expression.formulas):
-        f_args = set(b for a in extract_logic_atoms(formula) for b in a.args)
-        if variable_to_use is not None:
-            f_args &= variable_to_use
-        for j, formula_ in enumerate(expression.formulas[i + 1:]):
-            f_args_ = set(
-                b for a in extract_logic_atoms(formula_) for b in a.args
-            )
-            if variable_to_use is not None:
-                f_args_ &= variable_to_use
-            if not f_args.isdisjoint(f_args_):
-                c_matrix[i, i + 1 + j] = 1
-                c_matrix[i + 1 + j, i] = 1
-
-    return c_matrix
-
-
-def connected_components(adjacency_matrix):
-    """Connected components of an undirected graph.
-
-    Parameters
-    ----------
-    adjacency_matrix : numpy.ndarray
-        squared array representing the adjacency
-        matrix of an undirected graph.
-
-    Returns
-    -------
-    list of integer sets
-        connected components of the graph.
-    """
-    node_idxs = set(range(adjacency_matrix.shape[0]))
-    components = []
-    while node_idxs:
-        idx = node_idxs.pop()
-        component = {idx}
-        component_follow = [idx]
-        while component_follow:
-            idx = component_follow.pop()
-            idxs = set(adjacency_matrix[idx].nonzero()[0]) - component
-            component |= idxs
-            component_follow += idxs
-        components.append(component)
-        node_idxs -= component
-    return components
 
 
 def disjoint_project(rule_dnf, symbol_table):
@@ -680,15 +433,11 @@ def disjoint_project_conjunctive_query(conjunctive_query, symbol_table):
     if len(nonkey_variables - free_variables) == 0:
         return False, None
 
-    conjunctive_query = (
-        RemoveExistentialOnVariables(nonkey_variables)
-        .walk(conjunctive_query)
+    conjunctive_query = RemoveExistentialOnVariables(nonkey_variables).walk(
+        conjunctive_query
     )
     plan = dalvi_suciu_lift(conjunctive_query, symbol_table)
-    attributes = tuple(
-        str2columnstr_constant(v.name)
-        for v in free_variables
-    )
+    attributes = tuple(str2columnstr_constant(v.name) for v in free_variables)
     plan = rap.DisjointProjection(plan, attributes)
     return True, plan
 
@@ -706,10 +455,8 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
     applied during the calculation of P(Q1) and P(Q1 ∧ Q').
 
     """
-    matching_disjuncts = (
-        _get_disjuncts_containing_atom_with_all_key_attributes(
-            disjunctive_query, symbol_table
-        )
+    matching_disjuncts = _get_disjuncts_containing_atom_with_all_key_attributes(
+        disjunctive_query, symbol_table
     )
     for disjunct in matching_disjuncts:
         has_safe_plan, plan = _apply_disjoint_project_ucq_rule(
@@ -744,8 +491,7 @@ def _apply_disjoint_project_ucq_rule(
     if isinstance(head_plan, NonLiftable):
         return False, None
     tail = add_existentials_except(
-        Conjunction(tuple(disjunctive_query.formulas[:1])),
-        free_vars,
+        Conjunction(tuple(disjunctive_query.formulas[:1])), free_vars,
     )
     tail_plan = dalvi_suciu_lift(tail, symbol_table)
     if isinstance(tail_plan, NonLiftable):
@@ -756,9 +502,12 @@ def _apply_disjoint_project_ucq_rule(
     head_and_tail_plan = dalvi_suciu_lift(head_and_tail, symbol_table)
     if isinstance(head_and_tail_plan, NonLiftable):
         return False, None
-    return True, rap.WeightedNaturalJoin(
-        (head_plan, tail_plan, head_and_tail_plan),
-        (Constant(1), Constant(1), Constant(-1)),
+    return (
+        True,
+        rap.WeightedNaturalJoin(
+            (head_plan, tail_plan, head_and_tail_plan),
+            (Constant(1), Constant(1), Constant(-1)),
+        ),
     )
 
 
@@ -815,15 +564,13 @@ def has_separator_variables(query, symbol_table):
     """
     svs, expression = find_separator_variables(query, symbol_table)
     if len(svs) > 0:
-        return True, separator_variable_plan(
-            expression, svs, symbol_table
-        )
+        return True, separator_variable_plan(expression, svs, symbol_table)
     else:
         return False, None
 
 
 def find_separator_variables(query, symbol_table):
-    '''
+    """
     According to Dalvi and Suciu [1]_ if `query` is rewritten in prenex
     normal form (PNF) with a DNF matrix, then a variable z is called a
     separator variable if Q starts with ∃z that is, Q = ∃z.Q1, for some
@@ -840,7 +587,7 @@ def find_separator_variables(query, symbol_table):
     .. [2] Suciu, D. Probabilistic Databases for All. in Proceedings of the
     39th ACM SIGMOD-SIGACT-SIGAI Symposium on Principles of Database Systems
     19–31 (ACM, 2020).
-    '''
+    """
     exclude_variables = extract_logic_free_variables(query)
     query = unify_existential_variables(query)
 
@@ -883,7 +630,7 @@ def extract_probabilistic_root_variables(formulas, symbol_table):
         root_variables = reduce(
             lambda y, x: set(x.args) & y,
             probabilistic_atoms[1:],
-            set(probabilistic_atoms[0].args)
+            set(probabilistic_atoms[0].args),
         )
         pchoice_atoms = OrderedSet(
             atom
@@ -913,16 +660,12 @@ class IsPureLiftedPlan(PatternWalker):
 
     @add_match(NAryRelationalAlgebraOperation)
     def nary(self, expression):
-        return all(
-            self.walk(relation)
-            for relation in expression.relations
-        )
+        return all(self.walk(relation) for relation in expression.relations)
 
     @add_match(BinaryRelationalAlgebraOperation)
     def binary(self, expression):
-        return (
-            self.walk(expression.relation_left) &
-            self.walk(expression.relation_right)
+        return self.walk(expression.relation_left) & self.walk(
+            expression.relation_right
         )
 
     @add_match(UnaryRelationalAlgebraOperation)
@@ -960,18 +703,15 @@ def separator_variable_plan(expression, separator_variables, symbol_table):
     variables_to_project = extract_logic_free_variables(expression)
     expression = MakeExistentialsImplicit().walk(expression)
     existentials_to_add = (
-        extract_logic_free_variables(expression) -
-        variables_to_project -
-        separator_variables
+        extract_logic_free_variables(expression)
+        - variables_to_project
+        - separator_variables
     )
     for v in existentials_to_add:
         expression = ExistentialPredicate(v, expression)
     return rap.IndependentProjection(
         dalvi_suciu_lift(expression, symbol_table),
-        tuple(
-            str2columnstr_constant(v.name)
-            for v in variables_to_project
-        )
+        tuple(str2columnstr_constant(v.name) for v in variables_to_project),
     )
 
 
@@ -993,7 +733,7 @@ def variable_co_occurrence_graph(expression):
     c_matrix = np.zeros((len(expression.formulas),) * 2)
     for i, formula in enumerate(expression.formulas):
         free_variables = extract_logic_free_variables(formula)
-        for j, formula_ in enumerate(expression.formulas[i + 1:]):
+        for j, formula_ in enumerate(expression.formulas[i + 1 :]):
             free_variables_ = extract_logic_free_variables(formula_)
             if not free_variables.isdisjoint(free_variables_):
                 c_matrix[i, i + 1 + j] = 1
@@ -1002,8 +742,7 @@ def variable_co_occurrence_graph(expression):
 
 
 def components_plan(
-    components, operation, symbol_table,
-    negative_operation=None
+    components, operation, symbol_table, negative_operation=None
 ):
     positive_formulas = []
     negative_formulas = []
@@ -1054,15 +793,16 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
         else:
             formula_powerset.append(Disjunction(tuple(formula)))
     formulas_weights = _formulas_weights(formula_powerset)
-    new_formulas, weights = zip(*(
-        (dalvi_suciu_lift(formula, symbol_table), weight)
-        for formula, weight in formulas_weights.items()
-        if weight != 0
-    ))
+    new_formulas, weights = zip(
+        *(
+            (dalvi_suciu_lift(formula, symbol_table), weight)
+            for formula, weight in formulas_weights.items()
+            if weight != 0
+        )
+    )
 
     return rap.WeightedNaturalJoin(
-        tuple(new_formulas),
-        tuple(Constant[int](w) for w in weights)
+        tuple(new_formulas), tuple(Constant[int](w) for w in weights)
     )
 
 
@@ -1070,26 +810,19 @@ def _formulas_weights(formula_powerset):
     # Using list set instead of a dictionary
     # due to a strange bug in dictionary lookups with Expressions
     # as keys
-    formula_containments = [
-        set()
-        for formula in formula_powerset
-    ]
+    formula_containments = [set() for formula in formula_powerset]
 
     for i, f0 in enumerate(formula_powerset):
-        for j, f1 in enumerate(formula_powerset[i + 1:], start=i + 1):
+        for j, f1 in enumerate(formula_powerset[i + 1 :], start=i + 1):
             for i0, c0, i1, c1 in ((i, f0, j, f1), (j, f1, i, f0)):
-                if (
-                    c0 not in formula_containments[i1] and
-                    is_contained(c0, c1)
-                ):
-                    formula_containments[i0] |= (
-                        {c1} | formula_containments[i1] - {c0}
-                    )
+                if c0 not in formula_containments[i1] and is_contained(c0, c1):
+                    formula_containments[i0] |= {c1} | formula_containments[
+                        i1
+                    ] - {c0}
 
     fcs = {
         formula: containment
-        for formula, containment in
-        zip(formula_powerset, formula_containments)
+        for formula, containment in zip(formula_powerset, formula_containments)
     }
     formulas_weights = mobius_weights(fcs)
     return formulas_weights
@@ -1114,9 +847,8 @@ def mobius_function(formula, formula_containments, known_weights=None):
         weight = known_weights.setdefault(
             f,
             mobius_function(
-                f,
-                formula_containments, known_weights=known_weights
-            )
+                f, formula_containments, known_weights=known_weights
+            ),
         )
         res += weight
     return -res
@@ -1124,7 +856,7 @@ def mobius_function(formula, formula_containments, known_weights=None):
 
 def powerset(iterable):
     s = list(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+    return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
 
 
 def is_probabilistic_atom_with_constants_in_all_key_positions(
