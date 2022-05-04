@@ -6,11 +6,13 @@ the extensional, intensional, and builtin
 sets and has support for constraints.
 """
 
-from ..expression_walker import ExpressionWalker, PatternWalker, add_match
-from ..expressions import Symbol
-from ..logic import LogicOperator, Union
-from .basic_representation import DatalogProgramMixin
+from typing import Iterable
 
+from .expression_processing import extract_logic_atoms
+from .basic_representation import DatalogProgramMixin
+from ..expression_walker import ExpressionWalker, PatternWalker, add_match
+from ..expressions import Constant, Symbol
+from ..logic import LogicOperator, Union
 
 class RightImplication(LogicOperator):
     """
@@ -126,6 +128,49 @@ class DatalogConstraintsMixin(PatternWalker):
         else:
             self.categorized_constraints[sigma_functor] = set([sigma])
 
+def reachable_code(query, datalog):
+    """Produces the code reachable by a query
+
+    Parameters
+    ----------
+    query : Implication
+        Rule to figure out the reachable program from
+    datalog : DatalogProgram
+        datalog instance containing the EDB and IDB.
+
+    Returns
+    -------
+    ExpressionBlock
+        Code needed to solve the query.
+    """
+    if not isinstance(query, Iterable):
+        query = [query]
+
+    reachable_code = []
+    idb = datalog.intensional_database()
+    to_reach = [q.consequent.functor for q in query]
+    reached = set()
+    seen_rules = set()
+    while to_reach:
+        p = to_reach.pop()
+        reached.add(p)
+        rules = idb[p]
+        if isinstance(rules, Constant):
+            continue
+        for rule in rules.formulas:
+            if (
+                rule in seen_rules or
+                isinstance(rule, RightImplication)
+            ):
+                continue
+            seen_rules.add(rule)
+            reachable_code.append(rule)
+            for predicate in extract_logic_atoms(rule.antecedent):
+                functor = predicate.functor
+                if functor not in reached and functor in idb:
+                    to_reach.append(functor)
+
+    return Union(reachable_code[::-1])
 
 class DatalogConstraintsProgram(
     DatalogConstraintsMixin,
