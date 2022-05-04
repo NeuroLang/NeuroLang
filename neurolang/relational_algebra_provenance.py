@@ -367,22 +367,6 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
             union.relation_left.non_provenance_columns |
             union.relation_right.non_provenance_columns
         )
-        # operation = ProvenanceAlgebraSet(
-        #    FullOuterNaturalJoin()
-        #    Union(
-        #        self._binary_independent_projection(
-        #            prov_column_left, prov_column_right,
-        #            relation_left, relation_right,
-        #            prov_column_left, columns_to_keep
-        #        ),
-        #        self._binary_independent_projection(
-        #            prov_column_right, prov_column_left,
-        #            relation_right, relation_left,
-        #            prov_column_left, columns_to_keep
-        #        ),
-        #    ),
-        #    prov_column_left
-        # )
 
         operation = ProvenanceAlgebraSet(
             ExtendedProjection(
