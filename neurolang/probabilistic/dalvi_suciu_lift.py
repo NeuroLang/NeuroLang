@@ -299,7 +299,6 @@ def dalvi_suciu_lift(rule, symbol_table):
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
-    rule = RTO.walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:
@@ -334,7 +333,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     if len(rule_cnf.formulas) > 1 and not selfjoins_in_pchoices(rule_dnf, symbol_table):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
-    return NonLiftable(rule)
+    return NonLiftable(rule_cnf)
 
 
 def symbol_or_deterministic_plan(rule, symbol_table):
@@ -354,6 +353,9 @@ def symbol_or_deterministic_plan(rule, symbol_table):
         if the rule is liftable then the boolean will be True and
         the second element of the tuple will be the lifted plan.
     """
+
+    rule = convert_ucq_to_ccq(rule)
+    rule = RTO.walk(rule)
 
     has_safe_plan = False
     res = None

@@ -1,15 +1,22 @@
+from collections import defaultdict
 from operator import eq
 
-from ..expression_walker import (PatternWalker, ReplaceExpressionWalker,
-                                 add_match)
+from ..expression_walker import (
+    PatternWalker,
+    ReplaceExpressionWalker,
+    add_match
+)
 from ..expressions import Constant, Symbol
-from ..logic import Implication
+from ..logic import Disjunction, Implication
 from ..logic.expression_processing import extract_logic_atoms
 from ..relational_algebra import Projection, Selection, str2columnstr_constant
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
-    is_atom_a_probabilistic_choice_relation)
+    is_atom_a_probabilistic_choice_relation
+)
+from ..logic.transformations import MakeExistentialsImplicit
+from .transforms import convert_rule_to_ucq, convert_to_dnf_ucq
 
 
 class ProjectionSelectionByPChoiceConstant(PatternWalker):
@@ -68,24 +75,51 @@ def pchoice_constants_as_head_variables(query, cpl_program):
         Implication with the constants of the pchoices
         replaced by variables, which are also added in the consequent.
     dic
-        Dictionary mapping replaced constants to their new replacement variables.
+        Dictionary mapping replaced constants to their new
+        replacement variables.
     '''
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, query.antecedent
     )
-    constants_by_formula = {}
-    for atom in extract_logic_atoms(query.antecedent):
-        if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-            replacements = {arg:Symbol.fresh() for arg in atom.args if isinstance(arg, Constant)}
-            constants_by_formula = {**replacements, **constants_by_formula}
+    query_ucq = convert_rule_to_ucq(query)
+    query_ucq = convert_to_dnf_ucq(query_ucq)
 
-    query = ReplaceExpressionWalker(constants_by_formula).walk(query)
-    new_args = query.consequent.args + tuple(constants_by_formula.values())
+    parameter_variable = defaultdict(Symbol.fresh)
+
+    constants_by_formula = defaultdict(set)
+    query_formulas = tuple()
+    for clause in query_ucq.formulas:
+        constants_by_formula_clause = {}
+        for atom in extract_logic_atoms(clause):
+            if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
+                replacements = {
+                    arg: parameter_variable[(atom.functor, i)]
+                    for i, arg in enumerate(atom.args)
+                    if isinstance(arg, Constant)
+                }
+                constants_by_formula_clause = {
+                    **replacements, **constants_by_formula_clause
+                }
+            clause = (
+                ReplaceExpressionWalker(constants_by_formula_clause)
+                .walk(clause)
+            )
+            query_formulas += (clause,)
+        for k, v in constants_by_formula_clause.items():
+            constants_by_formula[v].add(k)
+
+    new_args = query.consequent.args + tuple(constants_by_formula)
     new_consequent = query.consequent.functor(*new_args)
 
-    query = Implication(new_consequent, query.antecedent)
+    query_formulas = convert_to_dnf_ucq(Disjunction(query_formulas))
+
+    query = Implication(
+        new_consequent,
+        MakeExistentialsImplicit().walk(query_formulas)
+    )
 
     return query, constants_by_formula
+
 
 def selfjoins_in_pchoices(rule_dnf, symbol_table):
     '''
