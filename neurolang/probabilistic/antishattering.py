@@ -129,7 +129,7 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     new_consequent = query.consequent.functor(*new_args)
 
     query_formulas = convert_ucq_to_ccq(
-        Disjunction(query_formulas), transformation="DNF"
+        Conjunction(query_formulas), transformation="CNF"
     )
 
     query = Implication(

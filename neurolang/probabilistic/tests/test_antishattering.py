@@ -61,10 +61,7 @@ def test_pchoice_empty_result():
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
-        res,
-        testing.make_prov_set(
-            {(0.52, "a")}, [res.provenance_column.value, "x"]
-        ),
+        res, testing.make_prov_set([], [res.provenance_column.value]),
     )
 
 

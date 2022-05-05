@@ -156,9 +156,17 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     ):
         flat_query_body = flatten_query(query.antecedent, cpl_program)
 
-    if flat_query_body == FALSE or (
-        isinstance(flat_query_body, Conjunction)
-        and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
+        flat_query = Implication(query.consequent, flat_query_body)
+
+        flat_query, constants_by_formula = pchoice_constants_as_head_variables(
+            flat_query, cpl_program
+        )
+
+    if flat_query.antecedent == FALSE or (
+        isinstance(flat_query.antecedent, Conjunction)
+        and any(
+            conjunct == FALSE for conjunct in flat_query.antecedent.formulas
+        )
     ):
         head_var_names = tuple(
             term.name
@@ -173,11 +181,6 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         )
 
     with log_performance(LOG, "Translation to extensional plan"):
-        flat_query = Implication(query.consequent, flat_query_body)
-
-        flat_query, constants_by_formula = pchoice_constants_as_head_variables(
-            flat_query, cpl_program
-        )
 
         shattered_query, symbol_table = _prepare_and_optimise_query(
             flat_query, cpl_program
