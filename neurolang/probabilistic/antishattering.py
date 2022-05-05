@@ -175,7 +175,13 @@ def remove_selfjoins_between_pchoices(rule_dnf, symbol_table):
                     if mgu is None:
                         conj_formulas += (Constant(False),)
                     else:
-                        conj_formulas += (atom1,)  # + igualdad
+                        for a, b in mgu[0].items():
+                            if isinstance(a, Constant) or isinstance(
+                                b, Constant
+                            ):
+                                conj_formulas += (mgu[1],)
+                            else:
+                                conj_formulas += (mgu[1], Constant(eq)(a, b))
             else:
                 conj_formulas += (atom1,)
 
