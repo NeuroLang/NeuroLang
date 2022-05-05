@@ -22,6 +22,7 @@ from .probabilistic_ra_utils import (
 )
 from .transforms import (
     convert_rule_to_ucq,
+    convert_to_cnf_ucq,
     convert_to_dnf_ucq,
     convert_ucq_to_ccq,
 )
@@ -102,9 +103,11 @@ def pchoice_constants_as_head_variables(query, cpl_program):
 
     constants_by_formula = defaultdict(set)
     query_formulas = tuple()
+    new_formulas = tuple()
     for clause in query_ucq.formulas:
         constants_by_formula_clause = {}
         # for atom in extract_logic_atoms(clause):
+        query_formulas = []
         for atom in clause.formulas:
             if not isinstance(
                 atom, Constant
@@ -125,15 +128,18 @@ def pchoice_constants_as_head_variables(query, cpl_program):
         for k, v in constants_by_formula_clause.items():
             constants_by_formula[v].add(k)
 
+        new_formulas += (Conjunction(query_formulas),)
+
     new_args = query.consequent.args + tuple(constants_by_formula)
     new_consequent = query.consequent.functor(*new_args)
 
-    query_formulas = convert_ucq_to_ccq(
-        Conjunction(query_formulas), transformation="CNF"
-    )
+    # query_formulas = convert_ucq_to_ccq(
+    #    Disjunction(query_formulas), transformation="DNF"
+    # j )
+    new_formulas = convert_to_cnf_ucq(Disjunction(new_formulas))
 
     query = Implication(
-        new_consequent, MakeExistentialsImplicit().walk(query_formulas)
+        new_consequent, MakeExistentialsImplicit().walk(new_formulas)
     )
 
     return query, constants_by_formula
@@ -162,29 +168,37 @@ def remove_selfjoins_between_pchoices(rule_dnf, symbol_table):
     disj_formulas = []
     for formula in rule_dnf.formulas:
         conj_formulas = tuple()
-        for i1, atom1 in enumerate(extract_logic_atoms(formula)):
+        atoms = extract_logic_atoms(formula)
+        for i1, atom1 in enumerate(atoms):
             if (
                 is_atom_a_probabilistic_choice_relation(atom1, symbol_table)
-                and len(extract_logic_atoms(formula)) > 1
+                and len(atoms) > 1
             ):
-                for i2, atom2 in enumerate(extract_logic_atoms(formula)):
+                for i2, atom2 in enumerate(atoms):
                     if i1 >= i2 or atom1.functor != atom2.functor:
                         continue
 
-                    mgu = most_general_unifier(atom1, atom2)
-                    if mgu is None:
-                        conj_formulas += (Constant(False),)
-                    else:
-                        for a, b in mgu[0].items():
-                            if isinstance(a, Constant) or isinstance(
-                                b, Constant
-                            ):
-                                conj_formulas += (mgu[1],)
-                            else:
-                                conj_formulas += (mgu[1], Constant(eq)(a, b))
+                    new_atom = translate_with_mgu(atom1, atom2)
+                    conj_formulas += new_atom
             else:
                 conj_formulas += (atom1,)
 
         disj_formulas.append(Conjunction(conj_formulas))
 
     return Disjunction(tuple(disj_formulas))
+
+
+def translate_with_mgu(atom1, atom2):
+    mgu = most_general_unifier(atom1, atom2)
+    if mgu is None:
+        return (Constant(False),)
+    else:
+        res = tuple()
+        for var1, var2 in mgu[0].items():
+            if isinstance(var1, Constant) or isinstance(var2, Constant):
+                return (atom1, atom2)
+            else:
+                res += (Constant(eq)(var1, var2),)
+
+        res += (mgu[1],)
+        return res
