@@ -82,6 +82,9 @@ def is_contained(q1, q2):
     Computes if q1 is contained in q2. Specifically,
     for 2 non-recursive positive ∃ logic queries,
     without constants, computes wether q1←q2.
+
+    caveat: the free variables of q1 and q2 should be
+    the same, else the queries are judge as not contained.
     '''
     s = Symbol.fresh()
     programs = []
