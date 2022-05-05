@@ -59,7 +59,7 @@ from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .antishattering import (
     pchoice_constants_as_head_variables,
-    selfjoins_in_pchoices,
+    remove_selfjoins_between_pchoices,
 )
 from .containment import is_contained
 from .expression_processing import (
@@ -307,9 +307,6 @@ def dalvi_suciu_lift(rule, symbol_table):
         )
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation="DNF")
-    if selfjoins_in_pchoices(rule_dnf, symbol_table):
-        return NonLiftable(rule)
-
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
         return components_plan(connected_components, rap.Union, symbol_table)
@@ -322,9 +319,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     if has_safe_plan:
         return plan
 
-    if len(rule_cnf.formulas) > 1 and not selfjoins_in_pchoices(
-        rule_dnf, symbol_table
-    ):
+    if len(rule_cnf.formulas) > 1:
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule_cnf)

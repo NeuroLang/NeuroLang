@@ -1,5 +1,9 @@
 from collections import defaultdict
-from operator import eq
+from operator import eq, or_
+
+from neurolang.logic.unification import most_general_unifier
+
+from ..exceptions import NonLiftableException
 
 from ..expression_walker import (
     PatternWalker,
@@ -7,7 +11,7 @@ from ..expression_walker import (
     add_match,
 )
 from ..expressions import Constant, Symbol
-from ..logic import Disjunction, Implication
+from ..logic import Conjunction, Disjunction, Implication
 from ..logic.expression_processing import extract_logic_atoms
 from ..logic.transformations import MakeExistentialsImplicit
 from ..relational_algebra import Projection, Selection, str2columnstr_constant
@@ -37,18 +41,21 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
     def match_projection(self, raoperation):
         operation = raoperation.relation
         prov_columns = raoperation.provenance_column
-        symbols_as_columns = [
-            str2columnstr_constant(symbol.name)
-            for symbol in self.constants_by_formula_dict.values()
-        ]
+        _or = Constant(or_)
+        _eq = Constant(eq)
+        symbols_as_columns = []
+        for functor, constants_set in self.constants_by_formula_dict.items():
+            eq_ops = [
+                _eq(str2columnstr_constant(functor.name), constant)
+                for constant in constants_set
+            ]
+            if len(eq_ops) > 1:
+                operation = Selection(operation, _or(*eq_ops),)
+            else:
+                operation = Selection(operation, eq_ops[0],)
+            symbols_as_columns.append(str2columnstr_constant(functor.name))
         non_proyected_vars = set(symbols_as_columns).union(set([prov_columns]))
         proyected_vars = raoperation.columns() - non_proyected_vars
-        eq_ = Constant(eq)
-        for constant, fresh_var in self.constants_by_formula_dict.items():
-            operation = Selection(
-                operation,
-                eq_(str2columnstr_constant(fresh_var.name), constant),
-            )
 
         proyected = tuple([prov_columns])
         if len(proyected_vars) > 0:
@@ -89,14 +96,19 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     query_ucq = convert_rule_to_ucq(query)
     query_ucq = convert_ucq_to_ccq(query_ucq, transformation="DNF")
 
+    query_ucq = remove_selfjoins_between_pchoices(query_ucq, symbol_table)
+
     parameter_variable = defaultdict(Symbol.fresh)
 
     constants_by_formula = defaultdict(set)
     query_formulas = tuple()
     for clause in query_ucq.formulas:
         constants_by_formula_clause = {}
-        for atom in extract_logic_atoms(clause):
-            if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
+        # for atom in extract_logic_atoms(clause):
+        for atom in clause.formulas:
+            if not isinstance(
+                atom, Constant
+            ) and is_atom_a_probabilistic_choice_relation(atom, symbol_table):
                 replacements = {
                     arg: parameter_variable[(atom.functor, i)]
                     for i, arg in enumerate(atom.args)
@@ -106,10 +118,10 @@ def pchoice_constants_as_head_variables(query, cpl_program):
                     **replacements,
                     **constants_by_formula_clause,
                 }
-            clause = ReplaceExpressionWalker(constants_by_formula_clause).walk(
-                clause
-            )
-            query_formulas += (clause,)
+                atom = ReplaceExpressionWalker(
+                    constants_by_formula_clause
+                ).walk(atom)
+            query_formulas += (atom,)
         for k, v in constants_by_formula_clause.items():
             constants_by_formula[v].add(k)
 
@@ -127,7 +139,7 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     return query, constants_by_formula
 
 
-def selfjoins_in_pchoices(rule_dnf, symbol_table):
+def remove_selfjoins_between_pchoices(rule_dnf, symbol_table):
     """
     Verify the existence of selfjoins between pchoices.
 
@@ -146,13 +158,24 @@ def selfjoins_in_pchoices(rule_dnf, symbol_table):
         in the same conjunction
 
     """
-    for formula in rule_dnf.formulas:
-        pchoice_functors = []
-        for atom in extract_logic_atoms(formula):
-            if is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-                if atom.functor in pchoice_functors:
-                    return True
-                else:
-                    pchoice_functors.append(atom.functor)
 
-    return False
+    disj_formulas = []
+    for formula in rule_dnf.formulas:
+        conj_formulas = tuple()
+        for i1, atom1 in enumerate(extract_logic_atoms(formula)):
+            if is_atom_a_probabilistic_choice_relation(atom1, symbol_table):
+                for i2, atom2 in enumerate(extract_logic_atoms(formula)):
+                    if i1 >= i2 or atom1.functor != atom2.functor:
+                        continue
+
+                    mgu = most_general_unifier(atom1, atom2)
+                    if mgu is None:
+                        conj_formulas += (Constant(False),)
+                    else:
+                        conj_formulas += (atom1,)  # + igualdad
+            else:
+                conj_formulas += (atom1,)
+
+        disj_formulas.append(Conjunction(conj_formulas))
+
+    return Disjunction(tuple(disj_formulas))
