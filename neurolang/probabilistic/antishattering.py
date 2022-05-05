@@ -55,15 +55,15 @@ class ProjectionSelectionByPChoiceConstant(PatternWalker):
             else:
                 operation = Selection(operation, eq_ops[0],)
             symbols_as_columns.append(str2columnstr_constant(functor.name))
-        non_proyected_vars = set(symbols_as_columns).union(set([prov_columns]))
-        proyected_vars = raoperation.columns() - non_proyected_vars
+        non_projected_vars = set(symbols_as_columns).union(set([prov_columns]))
+        projected_vars = raoperation.columns() - non_projected_vars
 
-        proyected = tuple([prov_columns])
-        if len(proyected_vars) > 0:
-            for pv in proyected_vars:
-                proyected = proyected + tuple([pv])
+        projected = tuple([prov_columns])
+        if len(projected_vars) > 0:
+            for pv in projected_vars:
+                projected = projected + tuple([pv])
 
-        operation = Projection(operation, proyected)
+        operation = Projection(operation, projected)
 
         return ProvenanceAlgebraSet(operation, prov_columns)
 

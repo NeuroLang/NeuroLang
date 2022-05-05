@@ -65,7 +65,7 @@ def test_pchoice_empty_result():
     )
 
 
-def test_pchoice_with_constant_and_proyected_variable():
+def test_pchoice_with_constant_and_projected_variable():
     table = {
         (0.52, "a"),
         (0.48, "b"),
@@ -85,7 +85,7 @@ def test_pchoice_with_constant_and_proyected_variable():
     )
 
 
-def test_pchoice_with_constant_and_proyected_variable_disjunction():
+def test_pchoice_with_constant_and_projected_variable_disjunction():
     table = {
         (0.52, "a"),
         (0.48, "b"),
@@ -106,7 +106,7 @@ def test_pchoice_with_constant_and_proyected_variable_disjunction():
     )
 
 
-def test_pchoice_with_constant_and_proyected_variable_disjunction_2():
+def test_pchoice_with_constant_and_projected_variable_disjunction_2():
     table = {
         (0.52, "a"),
         (0.48, "b"),
