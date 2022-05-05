@@ -163,7 +163,10 @@ def remove_selfjoins_between_pchoices(rule_dnf, symbol_table):
     for formula in rule_dnf.formulas:
         conj_formulas = tuple()
         for i1, atom1 in enumerate(extract_logic_atoms(formula)):
-            if is_atom_a_probabilistic_choice_relation(atom1, symbol_table):
+            if (
+                is_atom_a_probabilistic_choice_relation(atom1, symbol_table)
+                and len(extract_logic_atoms(formula)) > 1
+            ):
                 for i2, atom2 in enumerate(extract_logic_atoms(formula)):
                     if i1 >= i2 or atom1.functor != atom2.functor:
                         continue
