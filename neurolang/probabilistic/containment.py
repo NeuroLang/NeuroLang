@@ -86,10 +86,10 @@ def is_contained(q1, q2):
     s = Symbol.fresh()
     programs = []
     if (
-        len(extract_logic_free_variables(q1)) !=
-        len(extract_logic_free_variables(q2))
+        extract_logic_free_variables(q1) !=
+        extract_logic_free_variables(q2)
     ):
-        LOG.debug("Number of free variables is different")
+        LOG.debug("The free variables are different")
         return False
     for query in (q1, q2):
         program = convert_pos_logic_query_to_datalog_rules(query, s)
