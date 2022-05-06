@@ -71,6 +71,18 @@ def test_containment_disjunctive_query():
     assert not is_contained(r3, r4)
 
 
+def test_containment_query_cross_product():
+    R = Symbol('R')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    r1 = R(x)
+    r2 = R(y)
+
+    assert not is_contained(r2, r1)
+    assert not is_contained(r1, r2)
+
+
 def test_containment_query():
     R = Symbol('R')
     x = Symbol('x')

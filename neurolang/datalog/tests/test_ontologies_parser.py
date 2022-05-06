@@ -584,6 +584,95 @@ def test_retrieve_subclass():
     assert ['Manuel'] in res
     assert len(res) == 4
 
+
+def test_knowledge_subclassof():
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <Ontology>
+            <versionInfo>0.3.1</versionInfo>
+        </Ontology>
+
+        <owl:Class rdf:ID="Chair">
+            <rdfs:label>chair</rdfs:label>
+            <rdfs:subClassOf>
+                <owl:Class>
+                    <owl:intersectionOf rdf:parseType="Collection">
+                        <owl:Class rdf:about="#Person" />
+                        <owl:Restriction>
+                            <owl:onProperty rdf:resource="#headOf" />
+                            <owl:someValuesFrom>
+                                <owl:Class rdf:about="#Department" />
+                            </owl:someValuesFrom>
+                        </owl:Restriction>
+                    </owl:intersectionOf>
+                </owl:Class>
+            </rdfs:subClassOf>
+            <rdfs:subClassOf rdf:resource="#Professor" />
+        </owl:Class>
+    </rdf:RDF>'''
+
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(owl))
+
+    subClassOf = nl.new_symbol(name='neurolang:subClassOf')
+    with nl.scope as e:
+        e.answer[e.a] = (
+            subClassOf[e.a, 'Professor']
+        )
+
+        f_term = nl.query((e.a,), e.answer(e.a))
+
+    res = f_term.as_pandas_dataframe().values
+    assert (res == [['Chair']]).all()
+
+def test_knowledge_property():
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <Ontology>
+            <versionInfo>0.3.1</versionInfo>
+        </Ontology>
+
+        <owl:Class rdf:ID="Chair">
+            <rdfs:label>chair</rdfs:label>
+            <rdfs:subClassOf>
+                <owl:Class>
+                    <owl:intersectionOf rdf:parseType="Collection">
+                        <owl:Class rdf:about="#Person" />
+                        <owl:Restriction>
+                            <owl:onProperty rdf:resource="#headOf" />
+                            <owl:someValuesFrom>
+                                <owl:Class rdf:about="#Department" />
+                            </owl:someValuesFrom>
+                        </owl:Restriction>
+                    </owl:intersectionOf>
+                </owl:Class>
+            </rdfs:subClassOf>
+            <rdfs:subClassOf rdf:resource="#Professor" />
+        </owl:Class>
+    </rdf:RDF>'''
+
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(owl))
+
+    label = nl.new_symbol(name='neurolang:label')
+    with nl.scope as e:
+        e.answer[e.a] = (
+            label[e.a, 'chair']
+        )
+
+        f_term = nl.query((e.a,), e.answer[e.a])
+
+    res = f_term.as_pandas_dataframe().values
+    assert (res == [['Chair']]).all()
+
+
+
 def test_entity_rules():
     owl = '''<?xml version="1.0"?>
     <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
@@ -612,11 +701,11 @@ def test_entity_rules():
         </owl:Class>
     </rdf:RDF>'''
 
-    onto = OntologyParser(io.StringIO(owl))
-    _, entity_rules, _ = onto.parse_ontology()
+    entity = Symbol('Entity')
+    onto = OntologyParser(io.StringIO(owl), connector_symbol=entity)
+    _, _, entity_rules = onto.parse_ontology()
 
     chair = Symbol('Chair')
-    entity = Symbol('Entity')
     keys = entity_rules.keys()
     assert len(keys) == 1
     assert chair in keys
@@ -662,10 +751,9 @@ def test_entity_rules_inclusion():
 
     nl = NeurolangPDL()
 
-    nl.load_ontology(io.StringIO(owl))
+    entity = nl.load_ontology(io.StringIO(owl), connector_symbol_name='Entity')
 
     chair = Symbol('Chair')
-    entity = Symbol('Entity')
     assert chair in nl.symbol_table
 
     assert len(nl.symbol_table[chair].formulas) == 1

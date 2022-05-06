@@ -351,9 +351,9 @@ def reachable_code(query, datalog):
         p = to_reach.pop()
         reached.add(p)
         rules = idb[p]
+        if isinstance(rules, Constant):
+            continue
         for rule in rules.formulas:
-            if rule in seen_rules:
-                continue
             seen_rules.add(rule)
             reachable_code.append(rule)
             for predicate in extract_logic_atoms(rule.antecedent):

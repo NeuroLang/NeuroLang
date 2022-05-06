@@ -6,13 +6,15 @@ Magic Sets [1] rewriting implementation for Datalog.
 
 from abc import ABC, abstractmethod
 from typing import Iterable, List, Set, Tuple
+
+
 from ..config import config
 from ..expressions import Constant, Expression, Symbol
 from ..expression_walker import ExpressionWalker
 from ..expression_pattern_matching import add_match
 from ..logic import Negation
 from ..probabilistic.expressions import ProbabilisticQuery
-from . import expression_processing, extract_logic_predicates, DatalogProgram
+from . import extract_logic_predicates, DatalogProgram
 from .exceptions import (
     BoundAggregationApplicationError,
     NegationInMagicSetsRewriteError,
@@ -25,6 +27,7 @@ from .expressions import (
     Implication,
     Union,
 )
+from .constraints_representation import RightImplication, reachable_code
 
 
 class AdornedSymbol(Symbol):
@@ -265,9 +268,16 @@ class LeftToRightSIPS(SIPS):
                 )
         else:
             pred = predicate
-        # 2. Constants and predicates in the EDB are already bound and should
-        # not be adorned.
-        if isinstance(pred.functor, Constant) or pred.functor.name in self.edb:
+        # 2. Constants, constraints and predicates in the EDB are already bound
+        # and should not be adorned.
+        if (
+            isinstance(pred.functor, Constant) or
+            pred.functor.name in self.edb or
+            (
+                hasattr(self.datalog, 'categorized_constraints') and
+                pred.functor in self.datalog.categorized_constraints
+            )
+        ):
             return None
 
         # 3. Adorn the predicate
@@ -475,7 +485,7 @@ def reachable_adorned_code(query, datalog, sips: SIPS):
     # assume that the query rule is the first
     adorned_query = adorned_code.formulas[0]
     return (
-        expression_processing.reachable_code(adorned_query, adorned_datalog),
+        reachable_code(adorned_query, adorned_datalog),
         constant_predicates,
     )
 
@@ -532,6 +542,8 @@ def adorn_code(
             continue
 
         for rule in rules.formulas:
+            if isinstance(rule, RightImplication):
+                continue
             new_consequent = consequent.functor(*rule.consequent.args)
             adorned_antecedent, to_adorn = adorn_antecedent(
                 rule, new_consequent, rewritten_rules, sips
@@ -542,9 +554,8 @@ def adorn_code(
             )
             rewritten_rules.add(consequent.functor)
             for predicate in to_adorn:
-                for arg in predicate.args:
-                    if isinstance(arg, Constant):
-                        constant_predicates.add(predicate)
+                if any([isinstance(arg, Constant) for arg in predicate.args]):
+                    constant_predicates.add(predicate)
 
     return Union(rewritten_program), constant_predicates
 
