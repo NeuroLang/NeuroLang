@@ -4,13 +4,15 @@ import operator
 from .exceptions import RelationalAlgebraError
 from .expression_walker import (
     PatternWalker,
-    add_match
+    ReplaceExpressionWalker,
+    add_match,
+    expression_iterator
 )
 from .expressions import (
     Constant,
     FunctionApplication,
     Symbol,
-    sure_is_not_pattern,
+    sure_is_not_pattern
 )
 from .relational_algebra import (
     ColumnInt,
@@ -18,6 +20,7 @@ from .relational_algebra import (
     ConcatenateConstantColumn,
     Difference,
     ExtendedProjection,
+    FullOuterNaturalJoin,
     FunctionApplicationListMember,
     GroupByAggregation,
     LeftNaturalJoin,
@@ -48,6 +51,8 @@ SUM = Constant(sum)
 EXP = Constant(math.exp)
 LOG = Constant(math.log)
 ONE = Constant[float](1.)
+EPS = Constant[float](1e-100)
+ZERO = Constant[float](0.)
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -231,14 +236,14 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         ]
         proj_list.append(
             FunctionApplicationListMember(
-                LOG(ONE - prov_col),
+                LOG(ONE - prov_col + EPS),
                 prov_col,
             )
         )
         relation = ExtendedProjection(prov_set.relation, proj_list)
         relation = GroupByAggregation(
             relation,
-            groupby=proj_op.attributes,
+            groupby=tuple(proj_op.attributes),
             aggregate_functions=(
                 FunctionApplicationListMember(
                     FunctionApplication(Constant(sum), (prov_col,)),
@@ -277,27 +282,93 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         res = ProvenanceAlgebraSet(operation, prov_col)
         return res
 
+
     @add_match(Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
-    def union_rap(self, union):
+    def union_rap_domain_dependent(self, union):
         prov_column_left = union.relation_left.provenance_column
         prov_column_right = union.relation_right.provenance_column
         relation_left = union.relation_left.relation
         relation_right = union.relation_right.relation
-        if prov_column_left != prov_column_right:
+
+        if prov_column_left == prov_column_right:
+            new_prov_column_right = str2columnstr_constant(
+                Symbol.fresh().name
+            )
             relation_right = RenameColumn(
                 relation_right,
                 prov_column_right,
-                prov_column_left,
-            )
-        columns_to_keep = union.relation_left.non_provenance_columns
-        operation = IndependentProjection(
-            ProvenanceAlgebraSet(
-                Union(relation_left, relation_right),
-                prov_column_left
+                new_prov_column_right
             ),
+            prov_column_right = new_prov_column_right
+
+        columns_to_keep = tuple(
+            union.relation_left.non_provenance_columns |
+            union.relation_right.non_provenance_columns
+        )
+
+        operation = ProvenanceAlgebraSet(
+            ExtendedProjection(
+                ReplaceNull(
+                    ReplaceNull(
+                        FullOuterNaturalJoin(relation_left, relation_right),
+                        prov_column_left,
+                        ZERO
+                    ),
+                    prov_column_right,
+                    ZERO
+                ),
+                tuple(
+                    FunctionApplicationListMember(c, c)
+                    for c in columns_to_keep
+                ) + (
+                    FunctionApplicationListMember(
+                        ONE - (
+                            (ONE - prov_column_left) *
+                            (ONE - prov_column_right)
+                        ),
+                        prov_column_left
+                    ),
+                )
+            ),
+            prov_column_left
+        )
+
+        operation = IndependentProjection(
+            operation,
             columns_to_keep
         )
+
         return self.walk(operation)
+
+    @staticmethod
+    def _binary_independent_projection(
+        prov_column_left, prov_column_right,
+        relation_left, relation_right,
+        dst_prov_column, columns_to_keep
+    ):
+        return ExtendedProjection(
+            ReplaceNull(
+                ReplaceNull(
+                    LeftNaturalJoin(relation_left, relation_right),
+                    prov_column_left,
+                    ZERO
+                ),
+                prov_column_right,
+                ZERO
+            ),
+            tuple(
+                FunctionApplicationListMember(c, c)
+                for c in columns_to_keep
+            ) + (
+                FunctionApplicationListMember(
+                    ONE - (
+                        (ONE - prov_column_left) *
+                        (ONE - prov_column_right)
+                    ),
+                    dst_prov_column
+                ),
+            ),
+        )
 
 
 class BuildProvenanceAlgebraSetWalkIntoMixin(PatternWalker):
@@ -364,6 +435,31 @@ class ProvenanceSelectionMixin(PatternWalker):
             selection.relation.provenance_column
         )
         return self.walk(new_relation)
+
+    @add_match(
+        Selection(ProvenanceAlgebraSet(..., Constant[ColumnInt]), ...)
+    )
+    def selection_provenance_set_column_int(self, selection):
+        columns_in_formula = [
+            expression for _, expression in expression_iterator(selection.formula)
+            if isinstance(expression, Constant[ColumnInt])
+        ]
+        columns = selection.relation.non_provenance_columns
+        replacements = {
+            c: columns[c.value]
+            for c in columns_in_formula
+        }
+        new_formula = ReplaceExpressionWalker(replacements).walk(
+            selection.formula
+        )
+        res = ProvenanceAlgebraSet(
+            Selection(
+                selection.relation.relation,
+                new_formula
+            ),
+            selection.relation.provenance_column
+        )
+        return self.walk(res)
 
     @add_match(
         Selection(ProvenanceAlgebraSet, ...)
