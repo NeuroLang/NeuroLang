@@ -40,7 +40,6 @@ from .expressions import Condition, ProbabilisticPredicate
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
-from .antishattering import ProjectionSelectionByPChoiceConstant
 
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
@@ -386,7 +385,8 @@ class RAQueryOptimiser(
 
 
 def generate_provenance_query_solver(
-    symbol_table, run_relational_algebra_solver, constants_by_formula=None,
+    symbol_table,
+    run_relational_algebra_solver,
     solver_class=ProbSemiringToRelationalAlgebraSolver
 ):
     """
@@ -417,13 +417,9 @@ def generate_provenance_query_solver(
             LOG.log(self.level, self.message, expression)
             return expression
 
-    if constants_by_formula is None:
-        constants_by_formula = {}
-
     steps = [
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
-        ProjectionSelectionByPChoiceConstant(constants_by_formula),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
         RAQueryOptimiser(),
         LogExpression(LOG, "Optimised RA query %s", logging.INFO)

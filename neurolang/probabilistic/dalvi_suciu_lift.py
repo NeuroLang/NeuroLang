@@ -57,10 +57,7 @@ from ..relational_algebra import (
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
-from .antishattering import (
-    pchoice_constants_as_head_variables,
-    remove_selfjoins_between_pchoices,
-)
+from .antishattering import pchoice_constants_as_head_variables
 from .containment import is_contained
 from .expression_processing import (
     is_builtin,
@@ -158,7 +155,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
         flat_query = Implication(query.consequent, flat_query_body)
 
-        flat_query, constants_by_formula = pchoice_constants_as_head_variables(
+        flat_query = pchoice_constants_as_head_variables(
             flat_query, cpl_program
         )
 
@@ -204,7 +201,6 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     query_solver = generate_provenance_query_solver(
         symbol_table,
         run_relational_algebra_solver,
-        constants_by_formula=constants_by_formula,
         solver_class=ExtendedRAPToRAWalker,
     )
 

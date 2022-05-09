@@ -1,6 +1,7 @@
-from ...expressions import Constant, Symbol
+from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Conjunction, Implication, Union
 from .. import dalvi_suciu_lift
+from ..antishattering import pchoice_constants_as_head_variables
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
 
@@ -12,6 +13,70 @@ x = Symbol("x")
 
 a = Constant("a")
 b = Constant("b")
+
+
+def test_antishaterring_rewrite1():
+    table = {
+        (0.52, "a"),
+        (0.48, "b"),
+    }
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+
+    a = Constant("a")
+    query = Implication(ans(), Conjunction((P(a),)))
+    new_query = pchoice_constants_as_head_variables(query, cpl_program)
+    new_symbols = [
+        fp
+        for fp in new_query.antecedent.formulas
+        if isinstance(fp, FunctionApplication) and fp.functor.is_fresh
+    ]
+    for arg in new_symbols[0].args:
+        assert arg in new_query.antecedent.formulas[1].formulas[0].args
+
+
+def test_antishaterring_rewrite2():
+    table = {
+        (0.52, "a", 1),
+        (0.48, "b", 2),
+    }
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+
+    a = Constant("a")
+    query = Implication(ans(), Conjunction((P(a, x),)))
+    new_query = pchoice_constants_as_head_variables(query, cpl_program)
+    new_symbols = [
+        fp
+        for fp in new_query.antecedent.formulas
+        if isinstance(fp, FunctionApplication) and fp.functor.is_fresh
+    ]
+    for arg in new_symbols[0].args:
+        assert arg in new_query.antecedent.formulas[1].formulas[0].args
+
+
+def test_antishaterring_rewrite3():
+    table = {
+        (0.52, "a", 1),
+        (0.48, "b", 2),
+    }
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+
+    a = Constant("a")
+    one = Constant("1")
+    query = Implication(ans(), Conjunction((P(a, one),)))
+    new_query = pchoice_constants_as_head_variables(query, cpl_program)
+    new_symbols = [
+        fp
+        for fp in new_query.antecedent.formulas
+        if isinstance(fp, FunctionApplication) and fp.functor.is_fresh
+    ]
+    for arg in new_symbols[0].args:
+        assert arg in new_query.antecedent.formulas[1].formulas[0].args
 
 
 def test_pchoice_with_constant():
@@ -130,8 +195,5 @@ def test_pchoice_with_constant_and_projected_variable_disjunction_2():
     cpl_program.walk(program)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
-        res,
-        testing.make_prov_set(
-            {(0.52, "a")}, [res.provenance_column.value, "x"]
-        ),
+        res, testing.make_prov_set([1.0], [res.provenance_column.value]),
     )

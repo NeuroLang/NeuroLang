@@ -1,71 +1,35 @@
-from collections import defaultdict
-from operator import eq, or_
-
-from neurolang.logic.unification import most_general_unifier
-
-from ..exceptions import NonLiftableException
+from itertools import product
 
 from ..expression_walker import (
-    PatternWalker,
+    ExpressionWalker,
     ReplaceExpressionWalker,
     add_match,
 )
-from ..expressions import Constant, Symbol
-from ..logic import Conjunction, Disjunction, Implication
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..logic import Conjunction, Implication
 from ..logic.expression_processing import extract_logic_atoms
-from ..logic.transformations import MakeExistentialsImplicit
-from ..relational_algebra import Projection, Selection, str2columnstr_constant
-from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_probabilistic_choice_relation,
 )
-from .transforms import (
-    convert_rule_to_ucq,
-    convert_to_cnf_ucq,
-    convert_to_dnf_ucq,
-    convert_ucq_to_ccq,
-)
+from .transforms import convert_rule_to_ucq, convert_ucq_to_ccq
 
 
-class ProjectionSelectionByPChoiceConstant(PatternWalker):
-    """
-    Given a dictionary of {constants: symbols}, this walker is responsible for
-    reintroducing the constants in pchoices that were replaced by variables
-    to conclude the anti-shattering strategy.
-    """
+class ReplaceFunctionApplicationArgsWalker(ExpressionWalker):
+    def __init__(self, symbol_replacements):
+        self.symbol_replacements = symbol_replacements
 
-    def __init__(self, constants_by_formula_dict):
-        self.constants_by_formula_dict = constants_by_formula_dict
-
-    @add_match(ProvenanceAlgebraSet)
-    def match_projection(self, raoperation):
-        operation = raoperation.relation
-        prov_columns = raoperation.provenance_column
-        _or = Constant(or_)
-        _eq = Constant(eq)
-        symbols_as_columns = []
-        for functor, constants_set in self.constants_by_formula_dict.items():
-            eq_ops = [
-                _eq(str2columnstr_constant(functor.name), constant)
-                for constant in constants_set
-            ]
-            if len(eq_ops) > 1:
-                operation = Selection(operation, _or(*eq_ops),)
+    @add_match(FunctionApplication)
+    def replace_args(self, symbol):
+        new_args = tuple()
+        old_vars = self.symbol_replacements.keys()
+        for arg in symbol.args:
+            if arg in old_vars:
+                new_args += (self.symbol_replacements[arg],)
             else:
-                operation = Selection(operation, eq_ops[0],)
-            symbols_as_columns.append(str2columnstr_constant(functor.name))
-        non_projected_vars = set(symbols_as_columns).union(set([prov_columns]))
-        projected_vars = raoperation.columns() - non_projected_vars
+                new_args += (arg,)
 
-        projected = tuple([prov_columns])
-        if len(projected_vars) > 0:
-            for pv in projected_vars:
-                projected = projected + tuple([pv])
-
-        operation = Projection(operation, projected)
-
-        return ProvenanceAlgebraSet(operation, prov_columns)
+        return symbol.functor(*new_args)
 
 
 def pchoice_constants_as_head_variables(query, cpl_program):
@@ -97,108 +61,63 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     query_ucq = convert_rule_to_ucq(query)
     query_ucq = convert_ucq_to_ccq(query_ucq, transformation="DNF")
 
-    query_ucq = remove_selfjoins_between_pchoices(query_ucq, symbol_table)
+    parameter_variable = {}
+    args_amount = {}
 
-    parameter_variable = defaultdict(Symbol.fresh)
-
-    constants_by_formula = defaultdict(set)
-    query_formulas = tuple()
-    new_formulas = tuple()
     for clause in query_ucq.formulas:
-        constants_by_formula_clause = {}
-        # for atom in extract_logic_atoms(clause):
-        query_formulas = []
-        for atom in clause.formulas:
+        for atom in extract_logic_atoms(clause):
             if not isinstance(
                 atom, Constant
             ) and is_atom_a_probabilistic_choice_relation(atom, symbol_table):
-                replacements = {
-                    arg: parameter_variable[(atom.functor, i)]
-                    for i, arg in enumerate(atom.args)
-                    if isinstance(arg, Constant)
-                }
-                constants_by_formula_clause = {
-                    **replacements,
-                    **constants_by_formula_clause,
-                }
-                atom = ReplaceExpressionWalker(
-                    constants_by_formula_clause
-                ).walk(atom)
-            query_formulas += (atom,)
-        for k, v in constants_by_formula_clause.items():
-            constants_by_formula[v].add(k)
+                for i, arg in enumerate(atom.args):
+                    if isinstance(arg, Constant):
+                        if atom not in parameter_variable:
+                            parameter_variable[atom] = set([(i, arg)])
+                            args_amount[atom.functor] = len(
+                                [
+                                    arg
+                                    for arg in atom.args
+                                    if isinstance(arg, Constant)
+                                ]
+                            )
+                        else:
+                            tmp = parameter_variable[atom]
+                            tmp.add((i, arg))
+                            parameter_variable[atom] = tmp
 
-        new_formulas += (Conjunction(query_formulas),)
+    new_atoms = tuple()
+    rewritten_atoms = {}
+    for atom, var_pos in parameter_variable.items():
+        n_args = args_amount[atom.functor]
+        filtered = [
+            clean_tuple(elem)
+            for elem in product(var_pos, repeat=n_args)
+            if ordered_atoms(elem)
+        ]
+        new_atom = Symbol.fresh()
+        cpl_program.add_extensional_predicate_from_tuples(new_atom, filtered)
+        atom_new_vars = [Symbol.fresh() for _ in range(len(filtered[0]))]
 
-    new_args = query.consequent.args + tuple(constants_by_formula)
-    new_consequent = query.consequent.functor(*new_args)
+        new_atoms += tuple([new_atom(*atom_new_vars)])
+        rewritten_atoms[atom] = ReplaceFunctionApplicationArgsWalker(
+            dict(zip(*filtered, atom_new_vars))
+        ).walk(atom)
 
-    # query_formulas = convert_ucq_to_ccq(
-    #    Disjunction(query_formulas), transformation="DNF"
-    # j )
-    new_formulas = convert_to_cnf_ucq(Disjunction(new_formulas))
+    query = ReplaceExpressionWalker(rewritten_atoms).walk(query)
 
     query = Implication(
-        new_consequent, MakeExistentialsImplicit().walk(new_formulas)
+        query.consequent, Conjunction((*new_atoms, query.antecedent))
     )
 
-    return query, constants_by_formula
+    return query
 
 
-def remove_selfjoins_between_pchoices(rule_dnf, symbol_table):
-    """
-    Verify the existence of selfjoins between pchoices.
-
-    Parameters
-    ----------
-    rule_dnf : bool
-        Rule to analyze in DNF form.
-    symbol_table : Mapping
-        Mapping from symbols to probabilistic
-        or deterministic sets to solve the query.
-
-    Returns
-    -------
-    bool
-        True if there is a join between pchoices
-        in the same conjunction
-
-    """
-
-    disj_formulas = []
-    for formula in rule_dnf.formulas:
-        conj_formulas = tuple()
-        atoms = extract_logic_atoms(formula)
-        for i1, atom1 in enumerate(atoms):
-            if (
-                is_atom_a_probabilistic_choice_relation(atom1, symbol_table)
-                and len(atoms) > 1
-            ):
-                for i2, atom2 in enumerate(atoms):
-                    if i1 >= i2 or atom1.functor != atom2.functor:
-                        continue
-
-                    new_atom = translate_with_mgu(atom1, atom2)
-                    conj_formulas += new_atom
-            else:
-                conj_formulas += (atom1,)
-
-        disj_formulas.append(Conjunction(conj_formulas))
-
-    return Disjunction(tuple(disj_formulas))
+def ordered_atoms(atoms):
+    original_len = len(atoms)
+    # assumes order, should be modified
+    new_atoms = [atom for pos, atom in enumerate(atoms) if pos == atom[0]]
+    return len(new_atoms) == original_len
 
 
-def translate_with_mgu(atom1, atom2):
-    mgu = most_general_unifier(atom1, atom2)
-    if mgu is None:
-        return (Constant(False),)
-    else:
-        res = tuple()
-        for var1, var2 in mgu[0].items():
-            if isinstance(var1, Constant) or isinstance(var2, Constant):
-                return (atom1, atom2)
-            else:
-                res += (Constant(eq)(var1, var2),)
-
-        res += (mgu[1],)
-        return res
+def clean_tuple(atoms):
+    return tuple([atom[1].value for atom in atoms])
