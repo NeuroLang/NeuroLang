@@ -1,5 +1,7 @@
 from itertools import product
 
+from sqlalchemy import true
+
 from ..expression_walker import (
     ExpressionWalker,
     ReplaceExpressionWalker,
@@ -51,9 +53,6 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     Implication
         Implication with the constants of the pchoices
         replaced by variables, which are also added in the consequent.
-    dic
-        Dictionary mapping replaced constants to their new
-        replacement variables.
     """
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, query.antecedent
@@ -92,7 +91,7 @@ def pchoice_constants_as_head_variables(query, cpl_program):
         filtered = [
             clean_tuple(elem)
             for elem in product(var_pos, repeat=n_args)
-            if ordered_atoms(elem)
+            if ordered_atoms(elem, atom)
         ]
         new_atom = Symbol.fresh()
         cpl_program.add_extensional_predicate_from_tuples(new_atom, filtered)
@@ -112,11 +111,12 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     return query
 
 
-def ordered_atoms(atoms):
-    original_len = len(atoms)
-    # assumes order, should be modified
-    new_atoms = [atom for pos, atom in enumerate(atoms) if pos == atom[0]]
-    return len(new_atoms) == original_len
+def ordered_atoms(product, atom):
+    for pos, value in product:
+        if atom.args[pos] != value:
+            return False
+
+    return True
 
 
 def clean_tuple(atoms):

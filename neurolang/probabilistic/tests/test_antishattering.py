@@ -79,6 +79,27 @@ def test_antishaterring_rewrite3():
         assert arg in new_query.antecedent.formulas[1].formulas[0].args
 
 
+def test_antishaterring_rewrite4():
+    table = {
+        (0.52, "a", 1),
+        (0.48, "b", 2),
+    }
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+
+    one = Constant("1")
+    query = Implication(ans(), Conjunction((P(x, one),)))
+    new_query = pchoice_constants_as_head_variables(query, cpl_program)
+    new_symbols = [
+        fp
+        for fp in new_query.antecedent.formulas
+        if isinstance(fp, FunctionApplication) and fp.functor.is_fresh
+    ]
+    for arg in new_symbols[0].args:
+        assert arg in new_query.antecedent.formulas[1].formulas[0].args
+
+
 def test_pchoice_with_constant():
     table = {
         (0.52, "a"),
