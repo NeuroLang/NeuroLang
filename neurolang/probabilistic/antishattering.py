@@ -1,6 +1,6 @@
 from itertools import product
-
-from sqlalchemy import true
+from operator import eq
+from pyclbr import Function
 
 from ..expression_walker import (
     ExpressionWalker,
@@ -8,13 +8,87 @@ from ..expression_walker import (
     add_match,
 )
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction, Implication
+from ..logic import Conjunction, Disjunction, ExistentialPredicate, Implication
 from ..logic.expression_processing import extract_logic_atoms
+from ..logic.unification import most_general_unifier
 from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_probabilistic_choice_relation,
 )
 from .transforms import convert_rule_to_ucq, convert_ucq_to_ccq
+
+
+class SelfjoinChoiceSimplification(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(Conjunction)
+    def match_conjunction(self, conjunction):
+
+        choice_atoms = [
+            atom
+            for atom in extract_logic_atoms(conjunction)
+            if is_atom_a_probabilistic_choice_relation(atom, self.symbol_table)
+        ]
+
+        seen = set()
+        dups_functors = [
+            a.functor
+            for a in choice_atoms
+            if a.functor in seen or seen.add(a.functor)
+        ]
+        if len(dups_functors) > 0:
+            # we have a self-join!
+            dups_atoms = [
+                a for a in choice_atoms if a.functor in dups_functors
+            ]
+
+            # Calculation of possible replacements
+            replacements = {}
+
+            # I think it should go through the formulas and search
+            # for the atoms to be sure they are in the same conjunction
+            # (unless I can add some guarantee about the structure of the conjunction)
+            for i1, atom1 in enumerate(dups_atoms):
+                for i2, atom2 in enumerate(dups_atoms):
+                    if i1 >= i2 or atom1.functor != atom2.functor:
+                        continue
+
+                    new_atom = translate_with_mgu(atom1, atom2)
+                    # replacing one and eliminating the other should be the right thing to do.
+                    # conjunction = RemoveExpressionWalker(atom2).walk(conjunction) (Not working yet)
+
+                    # issue with the new "domain atoms" we added before Dalvi/Suciu ? Check it
+                    replacements[atom1] = new_atom
+
+            conjunction = ReplaceExpressionWalker(replacements).walk(
+                conjunction
+            )
+
+        return conjunction
+
+
+class RemoveExpressionWalker(ExpressionWalker):
+    # Not working yet
+    def __init__(self, expression):
+        self.expression = expression
+
+    @add_match(Conjunction)
+    def replace_conj(self, conj):
+        atoms_conj = tuple()
+        for formula in conj.formulas:
+            atom = self.walk(formula)
+            if atom is not None:
+                atoms_conj += atom
+
+        return Conjunction(atoms_conj)
+
+    @add_match(FunctionApplication)
+    def replace_app(self, app):
+        if app == self.expression:
+            return None
+
+        return app
 
 
 class ReplaceFunctionApplicationArgsWalker(ExpressionWalker):
@@ -59,6 +133,8 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     )
     query_ucq = convert_rule_to_ucq(query)
     query_ucq = convert_ucq_to_ccq(query_ucq, transformation="DNF")
+
+    query_ucq = remove_selfjoins_between_pchoices(query_ucq, symbol_table)
 
     parameter_variable = {}
     args_amount = {}
@@ -109,6 +185,59 @@ def pchoice_constants_as_head_variables(query, cpl_program):
     )
 
     return query
+
+
+def remove_selfjoins_between_pchoices(rule_dnf, symbol_table):
+    """
+    Verify the existence of selfjoins between pchoices.
+    Parameters
+    ----------
+    rule_dnf : bool
+        Rule to analyze in DNF form.
+    symbol_table : Mapping
+        Mapping from symbols to probabilistic
+        or deterministic sets to solve the query.
+    Returns
+    -------
+    bool
+        True if there is a join between pchoices
+        in the same conjunction
+    """
+
+    disj_formulas = []
+    for formula in rule_dnf.formulas:
+        conj_formulas = tuple()
+        atoms = extract_logic_atoms(formula)
+        for i1, atom1 in enumerate(atoms):
+            if (
+                is_atom_a_probabilistic_choice_relation(atom1, symbol_table)
+                and len(atoms) > 1
+            ):
+                for i2, atom2 in enumerate(atoms):
+                    if i1 >= i2 or atom1.functor != atom2.functor:
+                        continue
+
+                    new_atom = translate_with_mgu(atom1, atom2)
+                    conj_formulas += new_atom
+            else:
+                conj_formulas += (atom1,)
+
+        disj_formulas.append(Conjunction(conj_formulas))
+
+    return Disjunction(tuple(disj_formulas))
+
+
+def translate_with_mgu(atom1, atom2):
+    mgu = most_general_unifier(atom1, atom2)
+    if mgu is None:
+        return Constant(False)
+    else:
+        res = tuple()
+        for var1, var2 in mgu[0].items():
+            res += (Constant(eq)(var1, var2),)
+
+        res += (mgu[1],)
+        return Conjunction(res)
 
 
 def ordered_atoms(product, atom):

@@ -1,11 +1,9 @@
 import logging
 from functools import reduce
-from itertools import chain, combinations, groupby, tee
+from itertools import chain, combinations
 from typing import AbstractSet
 
 import numpy as np
-
-from neurolang.logic.unification import most_general_unifier
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
@@ -59,7 +57,11 @@ from ..relational_algebra import (
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
-from .antishattering import pchoice_constants_as_head_variables
+from .antishattering import (
+    SelfjoinChoiceSimplification,
+    pchoice_constants_as_head_variables,
+    translate_with_mgu,
+)
 from .containment import is_contained
 from .expression_processing import (
     is_builtin,
@@ -293,10 +295,6 @@ def dalvi_suciu_lift(rule, symbol_table):
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     """
 
-    has_pchoice_selfjoin, res = all_pchoices_in_selfjoin(rule, symbol_table)
-    if has_pchoice_selfjoin:
-        return res
-
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:
         return res
@@ -328,47 +326,6 @@ def dalvi_suciu_lift(rule, symbol_table):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule_cnf)
-
-
-def all_pchoices_in_selfjoin(rule, symbol_table):
-    # Address the simplest case to avoid conflicts with Dalvi/Suciu algorithm.
-    if isinstance(rule, Conjunction) and all(
-        isinstance(atom, FunctionApplication) for atom in rule.formulas
-    ):
-
-        pchoices = [
-            atom
-            for atom in rule.formulas
-            if is_atom_a_probabilistic_choice_relation(atom, symbol_table)
-        ]
-
-        # If not all are pchoices, let Dalvi/Suciu solve it.
-        if len(pchoices) == 1 or len(pchoices) != len(rule.formulas):
-            return False, None
-
-        # If not all pchocies are the same atom, let Dalvi/Suciu solve it.
-        g = groupby([atom.functor for atom in rule.formulas])
-        if not (next(g, True) and not next(g, False)):
-            return False, None
-
-        # pairwise iteration
-        pos1, pos2 = tee(pchoices)
-        next(pos2, None)
-        pairwise = zip(pos1, pos2)
-
-        # If all pchocies unify, they can be cancelled.
-        unified = True
-        for atom1, atom2 in pairwise:
-            mgu = most_general_unifier(atom1, atom2)
-            if mgu is None:
-                unified = False
-
-        if unified:
-            # Need to see how to create a `Constant(False)` plan if possible.
-            # I will probably have to implement this step before Dalvi/Suciu, as before.
-            return True, TranslateToNamedRA().walk(Constant(False))
-
-    return False, None
 
 
 def symbol_or_deterministic_plan(rule, symbol_table):
