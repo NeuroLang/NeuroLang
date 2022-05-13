@@ -62,13 +62,26 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
                             continue
 
                         new_atom = translate_with_mgu(atom1, atom2)
+                        # need to think about the "domain atoms" we introduce before Dalvi/Suciu
+                        # Not sure about this walker :|
+                        symbols = GetFreshSymbolByOrderedArgs(atom1.args).walk(
+                            conjunction
+                        )
+                        replacements[
+                            Conjunction((symbols[0], atom1))
+                        ] = new_atom
+
+                        # if len(symbols) > 0:
+                        #   remove the others adding existentials for every fresh variable  ?
+                        #   I'm not breaking the theory ?
+
                         # if false: empty RAP with columns
                         # else: replace one and remove the other
 
-                        # need to think about the "domain atoms" we introduce before Dalvi/Suciu
                         # conjunction = RemoveExpressionWalker(atom2).walk(conjunction) (Not working yet)
-                        replacements[(atom1, atom2)] = new_atom
 
+                # this will remove all appearances of the atom, it should be limited to work
+                #  only at the first level of depth of the conjunction.
                 conjunction = ReplaceExpressionWalker(replacements).walk(
                     conjunction
                 )
@@ -137,6 +150,37 @@ class MatchAtomInConjunctionOrExistential(ExpressionWalker):
     @add_match(...)
     def no_match(self, expression):
         return False
+
+
+class GetFreshSymbolByOrderedArgs(ExpressionWalker):
+    def __init__(self, args):
+        self.args = args
+
+    @add_match(Conjunction)
+    def match_conjuntion(self, conjunction):
+        p_choices = tuple()
+        for formula in conjunction.formulas:
+            match = self.walk(formula)
+            if match:
+                p_choices += match
+
+        return p_choices
+
+    @add_match(ExistentialPredicate)
+    def match_existential(self, existential):
+        match = self.walk(existential.body)
+        return match
+
+    @add_match(FunctionApplication)
+    def match_function(self, func_app):
+        if self.args == func_app.args and func_app.functor.is_fresh:
+            return (func_app,)
+
+        return tuple()
+
+    @add_match(...)
+    def no_match(self, _):
+        return tuple()
 
 
 class RemoveExpressionWalker(ExpressionWalker):
