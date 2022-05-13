@@ -1,7 +1,5 @@
-from audioop import add
 from itertools import product
 from operator import eq
-from pyclbr import Function
 
 from ..expression_walker import (
     ExpressionWalker,
