@@ -60,7 +60,6 @@ from ..utils import OrderedSet, log_performance
 from .antishattering import (
     SelfjoinChoiceSimplification,
     pchoice_constants_as_head_variables,
-    translate_with_mgu,
 )
 from .containment import is_contained
 from .expression_processing import (
@@ -294,6 +293,8 @@ def dalvi_suciu_lift(rule, symbol_table):
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     """
+
+    rule_dnf = SelfjoinChoiceSimplification(symbol_table).walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:

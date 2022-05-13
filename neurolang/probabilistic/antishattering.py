@@ -1,3 +1,4 @@
+from audioop import add
 from itertools import product
 from operator import eq
 from pyclbr import Function
@@ -25,11 +26,9 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
     @add_match(Conjunction)
     def match_conjunction(self, conjunction):
 
-        choice_atoms = [
-            atom
-            for atom in extract_logic_atoms(conjunction)
-            if is_atom_a_probabilistic_choice_relation(atom, self.symbol_table)
-        ]
+        choice_atoms = GetChoiceInConjunctionOrExistential(
+            self.symbol_table
+        ).walk(conjunction)
 
         seen = set()
         dups_functors = [
@@ -38,34 +37,106 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
             if a.functor in seen or seen.add(a.functor)
         ]
         if len(dups_functors) > 0:
-            # we have a self-join!
-            dups_atoms = [
-                a for a in choice_atoms if a.functor in dups_functors
-            ]
+            for functor in dups_functors:
+                match_atoms = [a for a in choice_atoms if a.functor == functor]
 
-            # Calculation of possible replacements
-            replacements = {}
+                to_be_replaced = {}
+                for choice_atom in match_atoms:
+                    for formula in conjunction.formulas:
+                        match = MatchAtomInConjunctionOrExistential(
+                            choice_atom
+                        ).walk(formula)
+                        if match:
+                            if choice_atom in to_be_replaced:
+                                tmp = to_be_replaced[choice_atom]
+                                tmp.append(formula)
+                                to_be_replaced[choice_atom] = formula
+                            else:
+                                to_be_replaced[choice_atom] = [formula]
 
-            # I think it should go through the formulas and search
-            # for the atoms to be sure they are in the same conjunction
-            # (unless I can add some guarantee about the structure of the conjunction)
-            for i1, atom1 in enumerate(dups_atoms):
-                for i2, atom2 in enumerate(dups_atoms):
-                    if i1 >= i2 or atom1.functor != atom2.functor:
-                        continue
+                replacements = {}
+                # product between choices
+                for i1, atom1 in enumerate(to_be_replaced.keys()):
+                    for i2, atom2 in enumerate(to_be_replaced.keys()):
+                        if i1 >= i2 or atom1.functor != atom2.functor:
+                            continue
 
-                    new_atom = translate_with_mgu(atom1, atom2)
-                    # replacing one and eliminating the other should be the right thing to do.
-                    # conjunction = RemoveExpressionWalker(atom2).walk(conjunction) (Not working yet)
+                        new_atom = translate_with_mgu(atom1, atom2)
+                        # if false: empty RAP with columns
+                        # else: replace one and remove the other
 
-                    # issue with the new "domain atoms" we added before Dalvi/Suciu ? Check it
-                    replacements[atom1] = new_atom
+                        # need to think about the "domain atoms" we introduce before Dalvi/Suciu
+                        # conjunction = RemoveExpressionWalker(atom2).walk(conjunction) (Not working yet)
+                        replacements[(atom1, atom2)] = new_atom
 
-            conjunction = ReplaceExpressionWalker(replacements).walk(
-                conjunction
-            )
+                conjunction = ReplaceExpressionWalker(replacements).walk(
+                    conjunction
+                )
 
         return conjunction
+
+
+class GetChoiceInConjunctionOrExistential(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(Conjunction)
+    def match_conjuntion(self, conjunction):
+        p_choices = tuple()
+        for formula in conjunction.formulas:
+            match = self.walk(formula)
+            if match:
+                p_choices += match
+
+        return p_choices
+
+    @add_match(ExistentialPredicate)
+    def match_existential(self, existential):
+        match = self.walk(existential.body)
+        return match
+
+    @add_match(FunctionApplication)
+    def match_function(self, func_app):
+        if is_atom_a_probabilistic_choice_relation(
+            func_app, self.symbol_table
+        ):
+            return (func_app,)
+
+        return tuple()
+
+    @add_match(...)
+    def no_match(self, _):
+        return tuple()
+
+
+class MatchAtomInConjunctionOrExistential(ExpressionWalker):
+    def __init__(self, atom):
+        self.atom = atom
+
+    @add_match(Conjunction)
+    def match_conjuntion(self, conjunction):
+        for formula in conjunction.formulas:
+            match = self.walk(formula)
+            if match:
+                return True
+
+        return False
+
+    @add_match(ExistentialPredicate)
+    def match_existential(self, existential):
+        match = self.walk(existential.body)
+        return match
+
+    @add_match(FunctionApplication)
+    def match_function(self, func_app):
+        if func_app == self.atom:
+            return True
+
+        return False
+
+    @add_match(...)
+    def no_match(self, expression):
+        return False
 
 
 class RemoveExpressionWalker(ExpressionWalker):
