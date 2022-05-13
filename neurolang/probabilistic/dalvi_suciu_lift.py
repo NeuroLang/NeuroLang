@@ -294,7 +294,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     """
 
-    rule_dnf = SelfjoinChoiceSimplification(symbol_table).walk(rule)
+    rule = SelfjoinChoiceSimplification(symbol_table).walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:

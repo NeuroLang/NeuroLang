@@ -57,6 +57,20 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
         return conjunction
 
 
+class NestedQuantifiersChoiceSimplification(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(Conjunction)
+    def match_conjuntion(self, conjunction):
+        forms = tuple()
+        for formula in conjunction.formulas:
+            new_formula = self.walk(formula)
+            forms += (new_formula,)
+
+        return Conjunction(forms)
+
+
 class ReplaceExpressionInConjunctionWalker(ExpressionWalker):
     def __init__(self, replacements):
         self.replacements = replacements
