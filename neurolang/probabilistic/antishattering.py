@@ -38,24 +38,10 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
             for functor in dups_functors:
                 match_atoms = [a for a in choice_atoms if a.functor == functor]
 
-                to_be_replaced = {}
-                for choice_atom in match_atoms:
-                    for formula in conjunction.formulas:
-                        match = MatchAtomInConjunctionOrExistential(
-                            choice_atom
-                        ).walk(formula)
-                        if match:
-                            if choice_atom in to_be_replaced:
-                                tmp = to_be_replaced[choice_atom]
-                                tmp.append(formula)
-                                to_be_replaced[choice_atom] = formula
-                            else:
-                                to_be_replaced[choice_atom] = [formula]
-
                 replacements = {}
                 # product between choices
-                for i1, atom1 in enumerate(to_be_replaced.keys()):
-                    for i2, atom2 in enumerate(to_be_replaced.keys()):
+                for i1, atom1 in enumerate(match_atoms):
+                    for i2, atom2 in enumerate(match_atoms):
                         if i1 >= i2 or atom1.functor != atom2.functor:
                             continue
 
@@ -128,36 +114,6 @@ class GetChoiceInConjunctionOrExistential(ExpressionWalker):
     @add_match(...)
     def no_match(self, _):
         return tuple()
-
-
-class MatchAtomInConjunctionOrExistential(ExpressionWalker):
-    def __init__(self, atom):
-        self.atom = atom
-
-    @add_match(Conjunction)
-    def match_conjuntion(self, conjunction):
-        for formula in conjunction.formulas:
-            match = self.walk(formula)
-            if match:
-                return True
-
-        return False
-
-    @add_match(ExistentialPredicate)
-    def match_existential(self, existential):
-        match = self.walk(existential.body)
-        return match
-
-    @add_match(FunctionApplication)
-    def match_function(self, func_app):
-        if func_app == self.atom:
-            return True
-
-        return False
-
-    @add_match(...)
-    def no_match(self, expression):
-        return False
 
 
 class ReplaceFunctionApplicationArgsWalker(ExpressionWalker):
