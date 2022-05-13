@@ -273,7 +273,10 @@ def translate_with_mgu(atom1, atom2):
     else:
         res = tuple()
         for var1, var2 in mgu[0].items():
-            res += (Constant(eq)(var1, var2),)
+            if isinstance(var1, Constant) or isinstance(var2, Constant):
+                return (atom1, atom2)
+            else:
+                res += (Constant(eq)(var1, var2),)
 
         res += (mgu[1],)
         return Conjunction(res)
