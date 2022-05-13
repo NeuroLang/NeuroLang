@@ -62,17 +62,41 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
                             continue
 
                         new_atom = translate_with_mgu(atom1, atom2)
-                        # new_atom can't be false
+                        # new_atom can't be false. Check it.
                         replacements[atom1] = new_atom
                         replacements[atom2] = new_atom
 
-                # this will remove all appearances of the atom, it should be limited to work
-                #  only at the first level of depth of the conjunction.
-                conjunction = ReplaceExpressionWalker(replacements).walk(
-                    conjunction
-                )
+                conjunction = ReplaceExpressionInConjunctionWalker(
+                    replacements
+                ).walk(conjunction)
 
         return conjunction
+
+
+class ReplaceExpressionInConjunctionWalker(ExpressionWalker):
+    def __init__(self, replacements):
+        self.replacements = replacements
+
+    @add_match(Conjunction)
+    def match_conjuntion(self, conjunction):
+        forms = tuple()
+        for formula in conjunction.formulas:
+            new_formula = self.walk(formula)
+            forms += (new_formula,)
+
+        return Conjunction(forms)
+
+    @add_match(ExistentialPredicate)
+    def match_existential(self, existential):
+        match = self.walk(existential.body)
+        return ExistentialPredicate(existential.head, match)
+
+    @add_match(FunctionApplication)
+    def match_function(self, func_app):
+        if func_app in self.replacements:
+            return self.replacements[func_app]
+
+        return func_app
 
 
 class GetChoiceInConjunctionOrExistential(ExpressionWalker):
