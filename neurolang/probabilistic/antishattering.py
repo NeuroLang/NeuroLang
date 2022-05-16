@@ -57,6 +57,31 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
         return conjunction
 
 
+class NestedQuantifiersDetection(ExpressionWalker):
+    @add_match(Conjunction)
+    def match_conjuntion(self, conjunction):
+        nested = tuple()
+        for formula in conjunction.formulas:
+            nested_formula = self.walk(formula)
+            if nested_formula:
+                nested += nested_formula
+
+        return nested
+
+    @add_match(ExistentialPredicate)
+    def match_existential(self, existential):
+        if isinstance(existential.body, ExistentialPredicate):
+            nested = (existential,)
+        else:
+            nested = self.walk(existential.body)
+
+        return nested
+
+    @add_match(...)
+    def no_match(self, _):
+        return tuple()
+
+
 class NestedQuantifiersChoiceSimplification(ExpressionWalker):
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
@@ -64,8 +89,9 @@ class NestedQuantifiersChoiceSimplification(ExpressionWalker):
     @add_match(Conjunction)
     def match_conjuntion(self, conjunction):
         forms = tuple()
+        nqd = NestedQuantifiersDetection()
         for formula in conjunction.formulas:
-            new_formula = self.walk(formula)
+            new_formula = nqd.walk(formula)
             forms += (new_formula,)
 
         return Conjunction(forms)
