@@ -39,62 +39,129 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
                 match_atoms = [a for a in choice_atoms if a.functor == functor]
 
                 replacements = {}
+                eq_vars = []
                 # product between choices
                 for i1, atom1 in enumerate(match_atoms):
                     for i2, atom2 in enumerate(match_atoms):
                         if i1 >= i2 or atom1.functor != atom2.functor:
                             continue
 
-                        new_atom = translate_with_mgu(atom1, atom2)
+                        new_atom, eq_var = translate_with_mgu(atom1, atom2)
                         # new_atom can't be false. Check it.
                         replacements[atom1] = new_atom
                         replacements[atom2] = new_atom
+                        eq_vars.append(eq_var)
 
                 conjunction = ReplaceExpressionInConjunctionWalker(
                     replacements
                 ).walk(conjunction)
 
+                conj = NestedExistentialChoiceSimplification(
+                    self.symbol_table, eq_vars
+                ).walk(conjunction)
+
         return conjunction
 
 
-class NestedQuantifiersDetection(ExpressionWalker):
+class EqualityVarsDetection(ExpressionWalker):
     @add_match(Conjunction)
     def match_conjuntion(self, conjunction):
-        nested = tuple()
+        vars = tuple()
         for formula in conjunction.formulas:
-            nested_formula = self.walk(formula)
-            if nested_formula:
-                nested += nested_formula
+            eq_vars = self.walk(formula)
+            if eq_vars:
+                vars += (eq_vars,)
 
-        return nested
+        return vars
 
     @add_match(ExistentialPredicate)
     def match_existential(self, existential):
-        if isinstance(existential.body, ExistentialPredicate):
-            nested = (existential,)
-        else:
-            nested = self.walk(existential.body)
+        return self.walk(existential.body)
 
-        return nested
+    @add_match(FunctionApplication, lambda fa: fa.functor == Constant(eq))
+    def match_equality(self, equality):
+        return list(equality._symbols)
 
     @add_match(...)
     def no_match(self, _):
         return tuple()
 
 
-class NestedQuantifiersChoiceSimplification(ExpressionWalker):
-    def __init__(self, symbol_table):
+class NestedExistentialChoiceSimplification(ExpressionWalker):
+    def __init__(self, symbol_table, eq_vars):
         self.symbol_table = symbol_table
+        self.eq_vars = eq_vars
+
+    @add_match(Conjunction)
+    def match_conjuntion(self, conjunction):
+        evd = EqualityVarsDetection()
+        forms = tuple()
+        for formula in conjunction.formulas:
+            eq_vars = evd.walk(formula)
+            for vars_pair in eq_vars:
+                if vars_pair in self.eq_vars:
+                    forms += ReplaceNestedExistential(vars_pair).walk(formula)
+                else:
+                    forms += formula
+
+        return Conjunction(forms)
+
+    @add_match(ExistentialPredicate)
+    def match_existential(self, existential):
+        evd = EqualityVarsDetection()
+        eq_vars = evd.walk(existential.body)
+        for vars_pair in eq_vars:
+            if vars_pair in self.eq_vars:
+                existential = ReplaceNestedExistential(vars_pair).walk(
+                    existential
+                )
+
+        return existential
+
+
+class ReplaceNestedExistential(ExpressionWalker):
+    def __init__(self, eq_vars):
+        self.eq_vars = eq_vars
 
     @add_match(Conjunction)
     def match_conjuntion(self, conjunction):
         forms = tuple()
-        nqd = NestedQuantifiersDetection()
         for formula in conjunction.formulas:
-            new_formula = nqd.walk(formula)
-            forms += (new_formula,)
+            forms += self.walk(formula)
 
         return Conjunction(forms)
+
+    @add_match(ExistentialPredicate)
+    def match(self, existential):
+        if existential.head in self.eq_vars and isinstance(
+            existential.body, ExistentialPredicate
+        ):
+            if existential.body.head in self.eq_vars:
+                inner_formula = self.walk(existential.body.body)
+                existential = ExistentialPredicate(
+                    self.eq_vars[1], inner_formula
+                )
+
+        return existential
+
+    @add_match(FunctionApplication, lambda fa: fa.functor == Constant(eq))
+    def match_equality(self, _):
+        return ()
+
+    @add_match(FunctionApplication)
+    def match_function_application(self, fa):
+        new_args = tuple()
+        for arg in fa.args:
+            if arg == self.eq_vars[0]:
+                new_args += (self.eq_vars[1],)
+            else:
+                new_args += arg
+
+        return fa.functor(*new_args)
+
+    @add_match(...)
+    def no_match(self, expression):
+        return expression
 
 
 class ReplaceExpressionInConjunctionWalker(ExpressionWalker):
@@ -118,7 +185,10 @@ class ReplaceExpressionInConjunctionWalker(ExpressionWalker):
     @add_match(FunctionApplication)
     def match_function(self, func_app):
         if func_app in self.replacements:
-            return self.replacements[func_app]
+            # as replacements can never be Constant(False),
+            # it always returns a tuple.
+            # I should modify it in the initial method
+            return Conjunction(self.replacements[func_app])
 
         return func_app
 
@@ -282,7 +352,7 @@ def remove_selfjoins_between_pchoices(rule_dnf, symbol_table):
                     if i1 >= i2 or atom1.functor != atom2.functor:
                         continue
 
-                    new_atom = translate_with_mgu(atom1, atom2)
+                    new_atom, _ = translate_with_mgu(atom1, atom2)
                     conj_formulas += new_atom
             else:
                 conj_formulas += (atom1,)
@@ -295,17 +365,19 @@ def remove_selfjoins_between_pchoices(rule_dnf, symbol_table):
 def translate_with_mgu(atom1, atom2):
     mgu = most_general_unifier(atom1, atom2)
     if mgu is None:
-        return Constant(False)
+        return (Constant(False),), tuple()
     else:
         res = tuple()
+        eq_vars = tuple()
         for var1, var2 in mgu[0].items():
             if isinstance(var1, Constant) or isinstance(var2, Constant):
-                return (atom1, atom2)
+                return (atom1, atom2), tuple()
             else:
                 res += (Constant(eq)(var1, var2),)
+                eq_vars += (var1, var2)
 
         res += (mgu[1],)
-        return Conjunction(res)
+        return (Conjunction(res),), eq_vars
 
 
 def ordered_atoms(product, atom):
