@@ -578,6 +578,12 @@ class MakeExistentialsImplicit(LogicExpressionWalker):
         return self.walk(expression.body)
 
 
+class MakeUniversalsImplicit(LogicExpressionWalker):
+    @add_match(UniversalPredicate)
+    def existential(self, expression):
+        return self.walk(expression.body)
+
+
 class RemoveExistentialOnVariables(LogicExpressionWalker):
     def __init__(self, variables_to_eliminate):
         self._variables_to_eliminate = variables_to_eliminate
@@ -787,6 +793,127 @@ class PushExistentialsDown(
                     ExistentialPredicate(inner_var, new_body)
                 )
         return expression
+
+    @add_match(ExistentialPredicate(..., UniversalPredicate))
+    def push_existential_down_universal(self, expression):
+        outer_var = expression.head
+        inner_var = expression.body.head
+        body = expression.body.body
+        res = UniversalPredicate(inner_var, self.walk(
+            ExistentialPredicate(outer_var, body)
+        ))
+        return res
+
+
+class PushUniversalsDown(
+    CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
+    LogicExpressionWalker
+):
+    @add_match(
+        ExistentialPredicate(..., NaryLogicOperator),
+        lambda e: len(e.body.formulas) == 1
+    )
+    def push_eliminate_trivial_operation(self, expression):
+        return self.walk(
+            UniversalPredicate(expression.head, expression.body.formulas[0])
+        )
+
+    @add_match(
+        UniversalPredicate(..., Conjunction),
+        lambda expression: any(
+            isinstance(formula, Negation) and
+            expression.head in extract_logic_free_variables(formula)
+            for formula in expression.body.formulas
+        )
+    )
+    def push_universal_down_conjunction_not_safe(self, expression):
+        variable = expression.head
+        in_ = tuple()
+        out_ = tuple()
+        negative_logic_free_variables = set()
+        for formula in expression.body.formulas:
+            if isinstance(formula, Negation):
+                negative_logic_free_variables |= extract_logic_free_variables(
+                    formula
+                )
+
+        for formula in expression.body.formulas:
+            if (
+                negative_logic_free_variables &
+                extract_logic_free_variables(formula)
+            ):
+                in_ += (formula,)
+            else:
+                out_ += (formula,)
+
+        if len(out_) == 0:
+            res = UniversalPredicate(variable, self.walk(Conjunction(in_)))
+        else:
+            res = self.walk(
+                Conjunction((
+                    UniversalPredicate(variable, Conjunction(in_)),
+                    Conjunction(out_)
+                ))
+            )
+        return res
+
+    @add_match(UniversalPredicate(..., Conjunction))
+    def push_universal_down_conjunction(self, expression):
+        variable = expression.head
+        changed = False
+        new_formulas = tuple()
+        for formula in expression.body.formulas:
+            if variable in extract_logic_free_variables(formula):
+                changed = True
+                formula = self.walk(UniversalPredicate(variable, formula))
+            new_formulas += (formula,)
+        if changed:
+            res = self.walk(Conjunction(new_formulas))
+        else:
+            res = expression
+        return res
+
+    @add_match(
+        UniversalPredicate(..., Disjunction),
+        lambda expression: any(
+            expression.head not in extract_logic_free_variables(formula)
+            for formula in expression.formulas
+        )
+    )
+    def push_universal_down_disjunction(self, expression):
+        variable = expression.head
+        in_ = tuple()
+        out_ = tuple()
+        for formula in expression.body.formulas:
+            if variable in extract_logic_free_variables(formula):
+                in_ += (formula,)
+            else:
+                out_ += (formula,)
+
+        if len(out_) == 0:
+            res = UniversalPredicate(variable, self.walk(Conjunction(in_)))
+        elif len(in_) == 0:
+            res = self.walk(Disjunction(out_))
+        if len(in_) > 0 and len(out_) > 0:
+            res = self.walk(
+                Disjunction(
+                    (
+                        UniversalPredicate(variable, Disjunction(in_)),
+                    ) + out_
+                )
+            )
+        return res
+
+    @add_match(UniversalPredicate(..., ExistentialPredicate))
+    def push_universal_down_existential(self, expression):
+        outer_var = expression.head
+        inner_var = expression.body.head
+        body = expression.body.body
+        res = ExistentialPredicate(inner_var, self.walk(
+            UniversalPredicate(outer_var, body)
+        ))
+        return res
+
 
 
 class GuaranteeConjunction(IdentityWalker):

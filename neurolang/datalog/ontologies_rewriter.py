@@ -232,7 +232,7 @@ class OntologyRewriter:
 
     def _is_shared(self, a, q):
         if isinstance(q, NaryLogicOperator):
-            count = sum(a in term.args for term in q.formulas)
+            count = sum(a == var for term in q.formulas for var in term.args)
         else:
             count = sum(a == term for term in q.args)
         return count > 1
@@ -263,10 +263,11 @@ class OntologyRewriter:
 
     def _combine_rewriting(self, q, qS, S, sigma):
         sigma_ant = apply_substitution(sigma.antecedent, qS[0])
+        q_con = apply_substitution(q.consequent, qS[0])
         replace = dict({S: sigma_ant})
         rsw = ReplaceExpressionWalker(replace)
         sigma_ant = rsw.walk(q.antecedent)
         sigma_ant = CollapseConjunctions().walk(sigma_ant)
 
-        return Implication(q.consequent, sigma_ant)
+        return Implication(q_con, sigma_ant)
 

@@ -75,6 +75,9 @@ from .shattering import HeadVar
 AND = Constant(operator.and_)
 NE = Constant(operator.ne)
 
+ZERO = Constant[float](0.)
+GT = Constant(operator.gt)
+
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
     if isinstance(formula.antecedent, FunctionApplication):
@@ -1059,6 +1062,16 @@ class ComplementSolverWalker(
     ExpressionWalker
 ):
     pass
+class FilterZeroProbability(ExpressionWalker):
+    @add_match(ProvenanceAlgebraSet)
+    def add_zero_filter(self, expression):
+        return ProvenanceAlgebraSet(
+            Selection(
+                expression.relation,
+                GT(expression.provenance_column, ZERO)
+            ),
+            expression.provenance_column
+        )
 
 
 def generate_provenance_query_solver(
@@ -1109,6 +1122,8 @@ def generate_provenance_query_solver(
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
         # RAQueryOptimiser(),
         AddNeededProjections(needed_projections),
+        FilterZeroProbability(),
+        RAQueryOptimiser(),
         LogExpression(LOG, "Optimised RA query %s", logging.INFO)
     ]
 

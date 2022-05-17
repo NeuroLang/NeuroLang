@@ -159,7 +159,16 @@ class IndependentProjection(LiftedPlanProjection):
             attributes_repr = "..."
         else:
             attributes_repr = ",".join(repr(attr) for attr in self.attributes)
-        return "ind-π_[{}]({})".format(attributes_repr, repr(self.relation))
+        return "ind-∃-π_[{}]({})".format(attributes_repr, repr(self.relation))
+
+
+class IndependentProjectionUniversal(LiftedPlanProjection):
+    def __repr__(self) -> str:
+        if self.attributes is Ellipsis:
+            attributes_repr = "..."
+        else:
+            attributes_repr = ",".join(repr(attr) for attr in self.attributes)
+        return "ind-∀-π_[{}]({})".format(attributes_repr, repr(self.relation))
 
 
 class DisjointProjection(LiftedPlanProjection):
@@ -289,6 +298,44 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         proj_list.append(
             FunctionApplicationListMember(
                ONE - EXP(prov_col),
+               prov_col,
+            )
+        )
+        relation = ExtendedProjection(relation, proj_list)
+        return ProvenanceAlgebraSet(relation, prov_col)
+
+    @add_match(IndependentProjectionUniversal(ProvenanceAlgebraSet, ...))
+    def independent_projection_universal(self, proj_op):
+        prov_set = proj_op.relation
+        prov_col = prov_set.provenance_column
+        proj_list = [
+            FunctionApplicationListMember(col, col)
+            for col in prov_set.non_provenance_columns
+        ]
+        proj_list.append(
+            FunctionApplicationListMember(
+                LOG(prov_col),
+                prov_col,
+            )
+        )
+        relation = ExtendedProjection(prov_set.relation, proj_list)
+        relation = GroupByAggregation(
+            relation,
+            groupby=proj_op.attributes,
+            aggregate_functions=(
+                FunctionApplicationListMember(
+                    FunctionApplication(Constant(sum), (prov_col,)),
+                    prov_col,
+                ),
+            ),
+        )
+        proj_list = [
+            FunctionApplicationListMember(col, col)
+            for col in relation.groupby
+        ]
+        proj_list.append(
+            FunctionApplicationListMember(
+               EXP(prov_col),
                prov_col,
             )
         )
