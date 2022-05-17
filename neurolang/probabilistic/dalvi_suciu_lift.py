@@ -46,8 +46,7 @@ from ..logic import (
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
-    extract_logic_predicates,
-    has_existential_quantifiers
+    extract_logic_predicates
 )
 from ..logic.transformations import (
     ExtractConjunctiveQueryWithNegation,
@@ -70,7 +69,7 @@ from ..relational_algebra import (
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import IndependentProjection, IndependentProjectionUniversal, ProvenanceAlgebraSet
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .expression_processing import (
