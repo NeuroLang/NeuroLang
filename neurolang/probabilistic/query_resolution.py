@@ -21,6 +21,7 @@ from ..relational_algebra import (
     ExtendedProjection,
     FunctionApplicationListMember,
     Projection,
+    Selection,
     RelationalAlgebraOperation,
     PushInSelections,
     RelationalAlgebraSolver,
@@ -28,7 +29,7 @@ from ..relational_algebra import (
     SimplifyExtendedProjectionsWithConstants,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import NaturalJoinInverse
+from ..relational_algebra_provenance import NaturalJoinInverse, ProvenanceAlgebraSet
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
@@ -41,6 +42,9 @@ from .expressions import Condition, ProbabilisticPredicate
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
+
+ZERO = Constant[float](0.)
+GT = Constant(operator.gt)
 
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
@@ -385,6 +389,18 @@ class RAQueryOptimiser(
     pass
 
 
+class FilterZeroProbability(ExpressionWalker):
+    @add_match(ProvenanceAlgebraSet)
+    def add_zero_filter(self, expression):
+        return ProvenanceAlgebraSet(
+            Selection(
+                expression.relation,
+                GT(expression.provenance_column, ZERO)
+            ),
+            expression.provenance_column
+        )
+
+
 def generate_provenance_query_solver(
     symbol_table, run_relational_algebra_solver,
     solver_class=ProbSemiringToRelationalAlgebraSolver
@@ -421,6 +437,7 @@ def generate_provenance_query_solver(
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
+        FilterZeroProbability(),
         RAQueryOptimiser(),
         LogExpression(LOG, "Optimised RA query %s", logging.INFO)
     ]

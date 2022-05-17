@@ -22,7 +22,8 @@ from ..expression_walker import (
     ExpressionWalker,
     PatternWalker,
     ReplaceExpressionWalker,
-    add_match
+    add_match,
+    expression_iterator
 )
 from ..expressions import (
     Constant,
@@ -38,21 +39,27 @@ from ..logic import (
     Implication,
     NaryLogicOperator,
     Negation,
-    Union
+    Quantifier,
+    Union,
+    UniversalPredicate
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
-    extract_logic_predicates
+    extract_logic_predicates,
+    has_existential_quantifiers
 )
 from ..logic.transformations import (
     ExtractConjunctiveQueryWithNegation,
     GuaranteeConjunction,
     GuaranteeDisjunction,
     MakeExistentialsImplicit,
+    MakeUniversalsImplicit,
     PushExistentialsDown,
+    PushUniversalsDown,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
+    RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix
 )
 from ..relational_algebra import (
@@ -63,7 +70,7 @@ from ..relational_algebra import (
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import ProvenanceAlgebraSet
+from ..relational_algebra_provenance import IndependentProjection, IndependentProjectionUniversal, ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .expression_processing import (
@@ -109,6 +116,7 @@ __all__ = [
 
 RTO = RemoveTrivialOperations()
 PED = PushExistentialsDown()
+PUD = PushUniversalsDown()
 
 
 class ExtendedRAPToRAWalker(
@@ -183,7 +191,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         shattered_query, symbol_table = \
             _prepare_and_optimise_query(flat_query, cpl_program)
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
-
+        ucq_shattered_query = convert_to_pnf_with_dnf_matrix(ucq_shattered_query)
+        ucq_shattered_query = PUD.walk(PED.walk(ucq_shattered_query))
         ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -221,6 +230,7 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     )))
     flat_query = Implication(flat_query.consequent, flat_query_body)
     unified_query = UnifyVariableEqualities().walk(flat_query)
+    _verify_that_the_query_has_one_quantifier(flat_query)
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, unified_query.antecedent
     )
@@ -278,6 +288,22 @@ def _verify_that_the_query_is_unate(query, symbol_table):
         raise NotUnateException(f"Query {query} is not unate")
 
 
+def _verify_that_the_query_has_one_quantifier(query):
+    query = convert_rule_to_ucq(query)
+    query = convert_to_pnf_with_dnf_matrix(query)
+    if not isinstance(query, Quantifier):
+        return
+
+    first_quantifier = type(query)
+    query = query.body
+    while isinstance(query, Quantifier):
+        if not isinstance(query, first_quantifier):
+            raise NotUnateException(
+                f"Query {query} uses two types of quantifiers"
+            )
+        query = query.body
+
+
 def solve_marg_query(rule, cpl):
     return lift_solve_marg_query(rule, cpl, solve_succ_query)
 
@@ -290,6 +316,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
+    rule = RemoveUniversalPredicates().walk(rule)
     rule = RTO.walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
@@ -311,7 +338,8 @@ def dalvi_suciu_lift(rule, symbol_table):
             connected_components, rap.Union, symbol_table
         )
 
-    has_svs, plan = has_separator_variables(rule_dnf, symbol_table)
+    rule_pdnf = convert_to_pnf_with_dnf_matrix(rule_dnf)
+    has_svs, plan = has_separator_variables(rule_pdnf, symbol_table)
     if has_svs:
         return plan
 
@@ -445,7 +473,7 @@ def extract_connected_components(list_of_conjunctions, existential_vars):
         c_matrix = args_co_occurence_graph(f, existential_vars)
         components = connected_components(c_matrix)
 
-        if isinstance(f, ExistentialPredicate):
+        if isinstance(f, Quantifier):
             transformations[f] = calc_new_fresh_symbol(f, existential_vars)
             continue
 
@@ -551,7 +579,7 @@ def args_co_occurence_graph(expression, variable_to_use=None):
         logic expression.
     """
 
-    if isinstance(expression, ExistentialPredicate):
+    if isinstance(expression, Quantifier):
         return np.ones((1,))
 
     c_matrix = np.zeros((len(expression.formulas),) * 2)
@@ -849,6 +877,8 @@ def find_separator_variables(query, symbol_table):
         else:
             separator_variables.add(var)
 
+    query = convert_to_pnf_with_dnf_matrix(query)
+    query = PushExistentialsDown().walk(query)
     return separator_variables - exclude_variables, query
 
 
@@ -940,15 +970,29 @@ def separator_variable_plan(expression, separator_variables, symbol_table):
         plan for the logic expression.
     """
     variables_to_project = extract_logic_free_variables(expression)
-    expression = MakeExistentialsImplicit().walk(expression)
-    existentials_to_add = (
+    if any(
+        isinstance(expression, ExistentialPredicate)
+        for _, expression in expression_iterator(expression)
+    ):
+        make_implicit = MakeExistentialsImplicit()
+        quantifier_class = ExistentialPredicate
+        projection_class = rap.IndependentProjection
+    else:
+        make_implicit = MakeUniversalsImplicit()
+        quantifier_class = UniversalPredicate
+        projection_class = rap.IndependentProjectionUniversal
+
+    expression = make_implicit.walk(expression)
+
+    quantified_to_add = (
         extract_logic_free_variables(expression) -
         variables_to_project -
         separator_variables
     )
-    for v in existentials_to_add:
-        expression = ExistentialPredicate(v, expression)
-    return rap.IndependentProjection(
+
+    for v in quantified_to_add:
+        expression = quantifier_class(v, expression)
+    return projection_class(
         dalvi_suciu_lift(expression, symbol_table),
         tuple(
             str2columnstr_constant(v.name)
