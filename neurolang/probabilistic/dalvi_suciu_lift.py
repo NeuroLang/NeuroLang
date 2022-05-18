@@ -57,10 +57,7 @@ from ..relational_algebra import (
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
-from .antishattering import (
-    SelfjoinChoiceSimplification,
-    pchoice_constants_as_head_variables,
-)
+from .antishattering import SelfjoinChoiceSimplification
 from .containment import is_contained
 from .expression_processing import (
     is_builtin,
@@ -157,10 +154,6 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         flat_query_body = flatten_query(query.antecedent, cpl_program)
 
         flat_query = Implication(query.consequent, flat_query_body)
-
-        flat_query = pchoice_constants_as_head_variables(
-            flat_query, cpl_program
-        )
 
     if flat_query.antecedent == FALSE or (
         isinstance(flat_query.antecedent, Conjunction)
