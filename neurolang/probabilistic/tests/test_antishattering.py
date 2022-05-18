@@ -148,7 +148,7 @@ def test_replace_expression_in_conjunction():
     new_formula1 = rfac.walk(formula1)
     new_formula2 = rfac.walk(formula2)
 
-    rfac2 = ReplaceFunctionApplicationArgsWalker({})
+    rfac2 = ReplaceFunctionApplicationInConjunctionWalker({})
     new_formula3 = rfac2.walk(formula1)
 
     assert new_formula1 == Conjunction(
