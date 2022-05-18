@@ -135,9 +135,21 @@ def test_replace_expression_in_conjunction():
         )
     )
 
-    new_formula1 = ReplaceFunctionApplicationInConjunctionWalker(
-        replacements
-    ).walk(formula1)
+    formula2 = Conjunction(
+        (
+            ExistentialPredicate(
+                x, Disjunction((P(x), Conjunction((P(y), R(x)))))
+            ),
+            ExistentialPredicate(z, R(z)),
+        )
+    )
+
+    rfac = ReplaceFunctionApplicationInConjunctionWalker(replacements)
+    new_formula1 = rfac.walk(formula1)
+    new_formula2 = rfac.walk(formula2)
+
+    rfac2 = ReplaceFunctionApplicationArgsWalker({})
+    new_formula3 = rfac2.walk(formula1)
 
     assert new_formula1 == Conjunction(
         (
@@ -147,6 +159,9 @@ def test_replace_expression_in_conjunction():
             Conjunction((Q(y), R(y))),
         )
     )
+
+    assert new_formula2 == formula2
+    assert new_formula3 == formula1
 
 
 def test_replace_function_application_args():
