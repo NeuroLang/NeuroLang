@@ -155,7 +155,7 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         for _, e in expression_iterator(expression.formulas):
             if (
                 isinstance(e, FunctionApplication)
-                and e.functor == Constant(eq)
+                and e.functor != Constant(eq)
                 and not is_atom_a_probabilistic_choice_relation(
                     e, self.symbol_table
                 )
@@ -170,18 +170,16 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         for formula in expression.formulas:
             if isinstance(
                 formula, FunctionApplication
-            ) and formula.functor == Constant[any](eq):
-                symbols, consts = self.get_symbols_constants_in_set(
+            ) and formula.functor == Constant(eq):
+                symbols, _ = self.get_symbols_constants_in_set(
                     formula.args, only_ext_pchoice_args
                 )
-                forms += TRUE
-                if len(symbols) == 1 and len(consts) == 1:
-                    remove_vars.add(symbols.pop())
-                elif len(symbols) == 2:
+                forms += (TRUE,)
+                if len(symbols) == 1 or len(symbols) == 2:
                     # set(Constant(eq)(a, b) for a, b in replacements.items())
                     remove_vars.add(formula.args[0])
             else:
-                forms += formula
+                forms += (formula,)
 
         expression = Conjunction(forms)
         new_ext_vars = ext_vars - remove_vars
@@ -192,13 +190,13 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         expression = LogicSolver().walk(expression)
         return expression
 
-    def get_symbols_constants_in_set(self, args, set):
+    def get_symbols_constants_in_set(self, args, vars_set):
         consts = set()
         symbols = set()
         for arg in args:
-            if isinstance(arg, Constant) and arg in set:
+            if isinstance(arg, Constant) and arg in vars_set:
                 consts.add(arg)
-            elif isinstance(arg, Symbol) and arg in set:
+            elif isinstance(arg, Symbol) and arg in vars_set:
                 symbols.add(arg)
 
         return symbols, consts
