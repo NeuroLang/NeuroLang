@@ -111,8 +111,7 @@ def _check_equality(existential):
     equalities = [
         e
         for _, e in expression_iterator(existential)
-        if isinstance(e, FunctionApplication)
-        and e.functor == Constant[any](eq)
+        if isinstance(e, FunctionApplication) and e.functor == Constant(eq)
     ]
 
     return len(equalities) > 0
@@ -127,9 +126,9 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         forms = tuple()
         for formula in conjunction.formulas:
             if isinstance(formula, ExistentialPredicate):
-                forms += self.walk(formula)
+                forms += (self.walk(formula),)
             else:
-                forms += formula
+                forms += (formula,)
 
         return Conjunction(forms)
 
@@ -142,28 +141,28 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
             ext_vars.add(expression.head)
             expression = expression.body
 
-        pchoice_args = set(
-            [
-                arg
-                for e in expression_iterator(existential)
-                for arg in e.args
-                if is_atom_a_probabilistic_choice_relation(
-                    e, self.symbol_table
-                )
-            ]
-        )
-        no_pchoice_args = set(
-            [
-                arg
-                for e in expression_iterator(existential)
-                for arg in e.args
-                if not is_atom_a_probabilistic_choice_relation(
-                    e, self.symbol_table
-                )
-            ]
-        )
+        pchoice_args = set()
+        for _, e in expression_iterator(expression.formulas):
+            if isinstance(
+                e, FunctionApplication
+            ) and not is_atom_a_probabilistic_choice_relation(
+                e, self.symbol_table
+            ):
+                for arg in e.args:
+                    pchoice_args.add(arg)
+
+        no_pchoice_args = set()
+        for _, e in expression_iterator(expression.formulas):
+            if isinstance(
+                e, FunctionApplication
+            ) and not is_atom_a_probabilistic_choice_relation(
+                e, self.symbol_table
+            ):
+                for arg in e.args:
+                    no_pchoice_args.add(arg)
+
         only_pchoice_args = pchoice_args - no_pchoice_args
-        only_ext_pchoice_args = only_pchoice_args.intersection(ext_var)
+        only_ext_pchoice_args = only_pchoice_args.intersection(ext_vars)
         forms = tuple()
         remove_vars = set()
         for formula in expression.formulas:
