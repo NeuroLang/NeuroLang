@@ -1,17 +1,15 @@
 from collections import Counter
-from itertools import product
 from operator import eq
+from ..logic.expression_processing import LogicSolver
 
-from neurolang.logic.transformations import (
+from ..logic.transformations import (
     CollapseConjunctions,
     MoveQuantifiersUp,
     PushExistentialsDown,
-    RemoveTrivialOperations,
 )
 
 from ..expression_walker import (
     ExpressionWalker,
-    ReplaceExpressionWalker,
     add_match,
     expression_iterator,
 )
@@ -20,12 +18,8 @@ from ..logic import (
     FALSE,
     TRUE,
     Conjunction,
-    Disjunction,
     ExistentialPredicate,
-    Implication,
-    Quantifier,
 )
-from ..logic.expression_processing import extract_logic_atoms
 from ..logic.unification import (
     apply_substitution,
     compose_substitutions,
@@ -108,119 +102,103 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
             return FALSE
 
         equalities = set(Constant(eq)(a, b) for a, b in replacements.items())
-
         new_formulas = tuple(new_formulas) + tuple(equalities)
 
         return Conjunction(new_formulas)
 
 
-class EqualityVarsDetection(ExpressionWalker):
-    @add_match(Conjunction)
-    def match_conjuntion(self, conjunction):
-        vars = []
-        for formula in conjunction.formulas:
-            eq_vars = self.walk(formula)
-            for lst in eq_vars:
-                if lst:
-                    vars.append(lst)
+def _check_equality(existential):
+    equalities = [
+        e
+        for _, e in expression_iterator(existential)
+        if isinstance(e, FunctionApplication)
+        and e.functor == Constant[any](eq)
+    ]
 
-        return vars
-
-    @add_match(ExistentialPredicate)
-    def match_existential(self, existential):
-        vars = []
-        res = self.walk(existential.body)
-        for lst in res:
-            if lst:
-                vars.append(lst)
-
-        return vars
-
-    @add_match(FunctionApplication(Constant(eq), (..., ...)))
-    def match_equality(self, equality):
-        return [list(equality.args)]
-
-    @add_match(...)
-    def no_match(self, _):
-        return [tuple()]
+    return len(equalities) > 0
 
 
 class NestedExistentialChoiceSimplification(ExpressionWalker):
-    def __init__(self, symbol_table, eq_vars):
+    def __init__(self, symbol_table):
         self.symbol_table = symbol_table
-        self.eq_vars = eq_vars
-
-    @add_match(Conjunction)
-    def match_conjuntion(self, conjunction):
-        evd = EqualityVarsDetection()
-        forms = tuple()
-        for formula in conjunction.formulas:
-            eq_vars = evd.walk(formula)
-            for vars_pair in eq_vars:
-                if vars_pair in self.eq_vars:
-                    forms += ReplaceNestedExistential(vars_pair).walk(formula)
-                else:
-                    forms += formula
-
-        return Conjunction(forms)
-
-    @add_match(ExistentialPredicate)
-    def match_existential(self, existential):
-        evd = EqualityVarsDetection()
-        eq_vars = evd.walk(existential.body)
-        for vars_pair in eq_vars:
-            if vars_pair in self.eq_vars:
-                existential = ReplaceNestedExistential(vars_pair).walk(
-                    existential
-                )
-
-        return existential
-
-
-class ReplaceNestedExistential(ExpressionWalker):
-    def __init__(self, eq_vars):
-        self.eq_vars = eq_vars
 
     @add_match(Conjunction)
     def match_conjuntion(self, conjunction):
         forms = tuple()
         for formula in conjunction.formulas:
-            forms += (self.walk(formula),)
-
-        return Conjunction(forms)
-
-    @add_match(ExistentialPredicate)
-    def match_existential(self, existential):
-        if existential.head in self.eq_vars and isinstance(
-            existential.body, ExistentialPredicate
-        ):
-            if existential.body.head in self.eq_vars:
-                inner_formula = self.walk(existential.body.body)
-                existential = ExistentialPredicate(
-                    self.eq_vars[1], inner_formula
-                )
-
-        return existential
-
-    @add_match(FunctionApplication(Constant[any](eq), ...))
-    def match_equality(self, fa):
-        for arg in fa.args:
-            if arg not in self.eq_vars:
-                return fa
-
-        return ()
-
-    @add_match(FunctionApplication)
-    def match_function_application(self, fa):
-        new_args = tuple()
-        for arg in fa.args:
-            if arg == self.eq_vars[0]:
-                new_args += (self.eq_vars[1],)
+            if isinstance(formula, ExistentialPredicate):
+                forms += self.walk(formula)
             else:
-                new_args += arg
+                forms += formula
 
-        return fa.functor(*new_args)
+        return Conjunction(forms)
 
-    @add_match(...)
-    def match_expression(self, expression):
+    @add_match(ExistentialPredicate, _check_equality)
+    def match_existential(self, existential):
+        expression = MoveQuantifiersUp().walk(existential)
+        expression = CollapseConjunctions().walk(expression)
+        ext_vars = set()
+        while hasattr(expression, "head"):
+            ext_vars.add(expression.head)
+            expression = expression.body
+
+        pchoice_args = set(
+            [
+                arg
+                for e in expression_iterator(existential)
+                for arg in e.args
+                if is_atom_a_probabilistic_choice_relation(
+                    e, self.symbol_table
+                )
+            ]
+        )
+        no_pchoice_args = set(
+            [
+                arg
+                for e in expression_iterator(existential)
+                for arg in e.args
+                if not is_atom_a_probabilistic_choice_relation(
+                    e, self.symbol_table
+                )
+            ]
+        )
+        only_pchoice_args = pchoice_args - no_pchoice_args
+        only_ext_pchoice_args = only_pchoice_args.intersection(ext_var)
+        forms = tuple()
+        remove_vars = set()
+        for formula in expression.formulas:
+            if isinstance(
+                formula, FunctionApplication
+            ) and formula.functor == Constant[any](eq):
+                symbols, consts = self.get_symbols_constants_in_set(
+                    formula.args, only_ext_pchoice_args
+                )
+                forms += TRUE
+                if len(symbols) == 1 and len(consts) == 1:
+                    remove_vars.add(symbols.pop())
+                elif len(symbols) == 2:
+                    # set(Constant(eq)(a, b) for a, b in replacements.items())
+                    remove_vars.add(formula.args[0])
+            else:
+                forms += formula
+
+        expression = Conjunction(forms)
+        new_ext_vars = ext_vars - remove_vars
+        for ext_var in new_ext_vars:
+            expression = ExistentialPredicate(ext_var, expression)
+
+        expression = PushExistentialsDown().walk(expression)
+        expression = LogicSolver().walk(expression)
         return expression
+
+    def get_symbols_constants_in_set(self, args, set):
+        consts = set()
+        symbols = set()
+        for arg in args:
+            if isinstance(arg, Constant) and arg in set:
+                consts.add(arg)
+            elif isinstance(arg, Symbol) and arg in set:
+                symbols.add(arg)
+
+        return symbols, consts
+
