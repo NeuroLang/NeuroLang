@@ -145,7 +145,7 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         for _, e in expression_iterator(expression.formulas):
             if isinstance(
                 e, FunctionApplication
-            ) and not is_atom_a_probabilistic_choice_relation(
+            ) and is_atom_a_probabilistic_choice_relation(
                 e, self.symbol_table
             ):
                 for arg in e.args:
@@ -153,10 +153,12 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
 
         no_pchoice_args = set()
         for _, e in expression_iterator(expression.formulas):
-            if isinstance(
-                e, FunctionApplication
-            ) and not is_atom_a_probabilistic_choice_relation(
-                e, self.symbol_table
+            if (
+                isinstance(e, FunctionApplication)
+                and e.functor == Constant(eq)
+                and not is_atom_a_probabilistic_choice_relation(
+                    e, self.symbol_table
+                )
             ):
                 for arg in e.args:
                     no_pchoice_args.add(arg)
