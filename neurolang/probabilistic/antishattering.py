@@ -175,7 +175,7 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
                     formula.args, only_ext_pchoice_args
                 )
                 forms += (TRUE,)
-                if len(symbols) == 1 or len(symbols) == 2:
+                if len(symbols) >= 1:
                     # set(Constant(eq)(a, b) for a, b in replacements.items())
                     remove_vars.add(formula.args[0])
             else:
