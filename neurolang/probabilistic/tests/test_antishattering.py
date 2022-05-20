@@ -179,9 +179,7 @@ def test_walkers_conjuntion_existential():
         new_formula
     )
 
-    assert new_formula == Conjunction(
-        ExistentialPredicate(y, Conjunction((P(y), eq_(x, y))))
-    )
+    assert new_formula == ExistentialPredicate(y, P(y))
 
 
 def test_pchoice_with_constant():

@@ -19,6 +19,7 @@ from ..logic import (
     TRUE,
     Conjunction,
     ExistentialPredicate,
+    Quantifier,
 )
 from ..logic.unification import (
     apply_substitution,
@@ -187,7 +188,7 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
             expression = ExistentialPredicate(ext_var, expression)
 
         expression = PushExistentialsDown().walk(expression)
-        expression = LogicSolver().walk(expression)
+        expression = LogicQuantifiersSolver().walk(expression)
         return expression
 
     def get_symbols_constants_in_set(self, args, vars_set):
@@ -201,3 +202,17 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
 
         return symbols, consts
 
+
+class LogicQuantifiersSolver(LogicSolver):
+    @add_match(Quantifier)
+    def match_quantifier(self, quantifier):
+        body = self.walk(quantifier.body)
+        return ExistentialPredicate(quantifier.head, body)
+
+    @add_match(FunctionApplication)
+    def match_func_app(self, app):
+        return app
+
+    @add_match(Constant)
+    def match_constant(self, constant):
+        return constant
