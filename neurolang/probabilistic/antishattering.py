@@ -19,6 +19,7 @@ from ..logic import (
     TRUE,
     Conjunction,
     ExistentialPredicate,
+    NaryLogicOperator,
     Quantifier,
 )
 from ..logic.unification import (
@@ -118,6 +119,12 @@ def _check_equality(existential):
     return len(equalities) > 0
 
 
+def _only_equality(existential):
+    return isinstance(
+        existential.body, FunctionApplication
+    ) and existential.body.functor == Constant(eq)
+
+
 class NestedExistentialChoiceSimplification(ExpressionWalker):
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
@@ -131,7 +138,12 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
             else:
                 forms += (formula,)
 
-        return Conjunction(forms)
+        expression = LogicQuantifiersSolver().walk(Conjunction(forms))
+        return expression
+
+    @add_match(ExistentialPredicate, _only_equality)
+    def match_existential_equality(self, existential):
+        return TRUE
 
     @add_match(ExistentialPredicate, _check_equality)
     def match_existential(self, existential):
@@ -143,25 +155,44 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
             expression = expression.body
 
         pchoice_args = set()
-        for _, e in expression_iterator(expression.formulas):
+        no_pchoice_args = set()
+        if isinstance(expression, Conjunction):
+            for _, e in expression_iterator(expression.formulas):
+                if isinstance(
+                    e, FunctionApplication
+                ) and is_atom_a_probabilistic_choice_relation(
+                    e, self.symbol_table
+                ):
+                    for arg in e.args:
+                        pchoice_args.add(arg)
+
+            for _, e in expression_iterator(expression.formulas):
+                if (
+                    isinstance(e, FunctionApplication)
+                    and e.functor != Constant(eq)
+                    and not is_atom_a_probabilistic_choice_relation(
+                        e, self.symbol_table
+                    )
+                ):
+                    for arg in e.args:
+                        no_pchoice_args.add(arg)
+        else:
             if isinstance(
-                e, FunctionApplication
+                expression, FunctionApplication
             ) and is_atom_a_probabilistic_choice_relation(
-                e, self.symbol_table
+                expression, self.symbol_table
             ):
-                for arg in e.args:
+                for arg in expression.args:
                     pchoice_args.add(arg)
 
-        no_pchoice_args = set()
-        for _, e in expression_iterator(expression.formulas):
             if (
-                isinstance(e, FunctionApplication)
-                and e.functor != Constant(eq)
+                isinstance(expression, FunctionApplication)
+                and expression.functor != Constant(eq)
                 and not is_atom_a_probabilistic_choice_relation(
-                    e, self.symbol_table
+                    expression, self.symbol_table
                 )
             ):
-                for arg in e.args:
+                for arg in expression.args:
                     no_pchoice_args.add(arg)
 
         only_pchoice_args = pchoice_args - no_pchoice_args
