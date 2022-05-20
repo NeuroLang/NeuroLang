@@ -268,9 +268,24 @@ def test_walkers_choices_facts_det():
         new_formula
     )
 
-    assert new_formula == Conjunction(
-        (ExistentialPredicate(x, P(x)), ExistentialPredicate(y, R(y)),)
-    )
+    # assert new_formula == Conjunction(
+    #    (
+    #        ExistentialPredicate(z, Conjunction((Q(z), P(z)))),
+    #        ExistentialPredicate(y, R(y)),
+    #    )
+    # )
+    assert isinstance(new_formula, Conjunction)
+    for formula in new_formula.formulas:
+        assert isinstance(formula, ExistentialPredicate)
+        if formula.head == z:
+            assert isinstance(formula.body, Conjunction)
+            assert len(formula.body.formulas) == 2
+            for inner_formula in formula.body.formulas:
+                assert inner_formula in [Q(z), P(z)]
+        elif formula.head == y:
+            assert formula.body == R(y)
+        else:
+            assert False
 
 
 def test_pchoice_with_constant():
