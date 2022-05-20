@@ -57,7 +57,7 @@ def test_walkers_no_change():
         new_formula
     )
 
-    assert formula == new_formula
+    assert new_formula == P(a)
 
 
 def test_walkers_conjuntion_selfjoin_constant():

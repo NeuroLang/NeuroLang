@@ -177,6 +177,7 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
                     no_pchoice_args.add(arg)
 
         only_pchoice_args = pchoice_args - no_pchoice_args
+        # only_pchoice_args = pchoice_args.intersection(no_pchoice_args)
         only_ext_pchoice_args = only_pchoice_args.intersection(ext_vars)
         forms = tuple()
         remove_vars = set()
