@@ -314,6 +314,8 @@ def test_pchoice_with_constant_and_variable():
     cpl_program = CPLogicProgram()
     cpl_program.add_probabilistic_choice_from_tuples(P, table)
 
+    cpl_program.add_extensional_predicate_from_tuples(Q, ["a", "b", "c"])
+
     query = Implication(ans(), Conjunction((P(a), P(x), Q(x))))
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
