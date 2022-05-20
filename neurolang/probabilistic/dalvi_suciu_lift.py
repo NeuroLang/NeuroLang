@@ -57,7 +57,10 @@ from ..relational_algebra import (
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
-from .antishattering import SelfjoinChoiceSimplification
+from .antishattering import (
+    NestedExistentialChoiceSimplification,
+    SelfjoinChoiceSimplification,
+)
 from .containment import is_contained
 from .expression_processing import (
     is_builtin,
@@ -288,6 +291,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     """
 
     rule = SelfjoinChoiceSimplification(symbol_table).walk(rule)
+    rule = NestedExistentialChoiceSimplification(symbol_table).walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:

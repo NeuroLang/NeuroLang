@@ -156,43 +156,24 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
 
         pchoice_args = set()
         no_pchoice_args = set()
-        if isinstance(expression, Conjunction):
-            for _, e in expression_iterator(expression.formulas):
-                if isinstance(
-                    e, FunctionApplication
-                ) and is_atom_a_probabilistic_choice_relation(
-                    e, self.symbol_table
-                ):
-                    for arg in e.args:
-                        pchoice_args.add(arg)
-
-            for _, e in expression_iterator(expression.formulas):
-                if (
-                    isinstance(e, FunctionApplication)
-                    and e.functor != Constant(eq)
-                    and not is_atom_a_probabilistic_choice_relation(
-                        e, self.symbol_table
-                    )
-                ):
-                    for arg in e.args:
-                        no_pchoice_args.add(arg)
-        else:
+        for _, e in expression_iterator(expression.formulas):
             if isinstance(
-                expression, FunctionApplication
+                e, FunctionApplication
             ) and is_atom_a_probabilistic_choice_relation(
-                expression, self.symbol_table
+                e, self.symbol_table
             ):
-                for arg in expression.args:
+                for arg in e.args:
                     pchoice_args.add(arg)
 
+        for _, e in expression_iterator(expression.formulas):
             if (
-                isinstance(expression, FunctionApplication)
-                and expression.functor != Constant(eq)
+                isinstance(e, FunctionApplication)
+                and e.functor != Constant(eq)
                 and not is_atom_a_probabilistic_choice_relation(
-                    expression, self.symbol_table
+                    e, self.symbol_table
                 )
             ):
-                for arg in expression.args:
+                for arg in e.args:
                     no_pchoice_args.add(arg)
 
         only_pchoice_args = pchoice_args - no_pchoice_args

@@ -239,6 +239,40 @@ def test_walkers_choices_facts():
     )
 
 
+def test_walkers_choices_facts_det():
+    table = {
+        (0.52, "a"),
+        (0.48, "b"),
+    }
+
+    table2 = {(0.2, "a")}
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+    cpl_program.add_probabilistic_facts_from_tuples(R, table2)
+
+    formula = Conjunction(
+        (
+            ExistentialPredicate(
+                x, ExistentialPredicate(y, Conjunction((P(x), R(y))))
+            ),
+            ExistentialPredicate(z, Conjunction((P(z), Q(z)))),
+        )
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(
+        cpl_program, formula
+    )
+
+    new_formula = SelfjoinChoiceSimplification(symbol_table).walk(formula)
+    new_formula = NestedExistentialChoiceSimplification(symbol_table).walk(
+        new_formula
+    )
+
+    assert new_formula == Conjunction(
+        (ExistentialPredicate(x, P(x)), ExistentialPredicate(y, R(y)),)
+    )
+
+
 def test_pchoice_with_constant():
     table = {
         (0.52, "a"),
