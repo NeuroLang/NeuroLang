@@ -1,12 +1,8 @@
 from collections import Counter
 from operator import eq
-from ..logic.expression_processing import LogicSolver
+from typing import AbstractSet
 
-from ..logic.transformations import (
-    CollapseConjunctions,
-    MoveQuantifiersUp,
-    PushExistentialsDown,
-)
+from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 
 from ..expression_walker import (
     ExpressionWalker,
@@ -14,13 +10,12 @@ from ..expression_walker import (
     expression_iterator,
 )
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import (
-    FALSE,
-    TRUE,
-    Conjunction,
-    ExistentialPredicate,
-    NaryLogicOperator,
-    Quantifier,
+from ..logic import FALSE, TRUE, Conjunction, ExistentialPredicate, Quantifier
+from ..logic.expression_processing import LogicSolver
+from ..logic.transformations import (
+    CollapseConjunctions,
+    MoveQuantifiersUp,
+    PushExistentialsDown,
 )
 from ..logic.unification import (
     apply_substitution,
@@ -125,9 +120,56 @@ def _only_equality(existential):
     ) and existential.body.functor == Constant(eq)
 
 
+def _equility_non_existential(conjunction):
+    equalities = [
+        formula
+        for formula in conjunction.formulas
+        if isinstance(formula, FunctionApplication)
+        and formula.functor == Constant(eq)
+        and any(isinstance(arg, Constant) for arg in formula.args)
+    ]
+
+    return len(equalities) > 0
+
+
 class NestedExistentialChoiceSimplification(ExpressionWalker):
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
+
+    # Overlap with the next one, unify
+    @add_match(Conjunction, _equility_non_existential)
+    def match_conjuntion_non_existential(self, conjunction):
+        forms = tuple()
+        for formula in conjunction.formulas:
+            if isinstance(formula, ExistentialPredicate):
+                forms += (self.walk(formula),)
+            elif isinstance(
+                formula, FunctionApplication
+            ) and formula.functor == Constant(eq):
+                consts = [
+                    (arg,) for arg in formula.args if isinstance(arg, Constant)
+                ]
+                symbols = [
+                    arg for arg in formula.args if isinstance(arg, Symbol)
+                ]
+                if len(consts) == 1:
+                    new_symbol = Symbol.fresh()
+                    new_set = WrappedRelationalAlgebraSet(iterable=consts)
+                    type_ = new_set.row_type
+
+                    constant = Constant[AbstractSet[type_]](
+                        new_set, auto_infer_type=False, verify_type=False
+                    )
+                    constant_symbol = new_symbol.cast(constant.type)
+                    self.symbol_table[constant_symbol] = constant
+                    forms += (new_symbol(symbols[0]),)
+                else:
+                    forms += (formula,)
+            else:
+                forms += (formula,)
+
+        expression = LogicQuantifiersSolver().walk(Conjunction(forms))
+        return expression
 
     @add_match(Conjunction)
     def match_conjuntion(self, conjunction):
@@ -179,7 +221,6 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         only_pchoice_args = pchoice_args - no_pchoice_args
         if len(only_pchoice_args) == 0:
             only_ext_pchoice_args = ext_vars - no_pchoice_args
-            # only_pchoice_args = pchoice_args.intersection(no_pchoice_args)
         else:
             only_ext_pchoice_args = only_pchoice_args.intersection(ext_vars)
         forms = tuple()
@@ -193,7 +234,6 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
                 )
                 forms += (TRUE,)
                 if len(symbols) >= 1:
-                    # set(Constant(eq)(a, b) for a, b in replacements.items())
                     remove_vars.add(formula.args[0])
             else:
                 forms += (formula,)

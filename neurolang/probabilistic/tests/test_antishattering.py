@@ -354,7 +354,6 @@ def test_pchoice_with_constant_and_projected_variable():
     query = Implication(ans(x), Conjunction((P(a), P(x))))
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
-    # What happen if there isn't existentials ?
     assert testing.eq_prov_relations(
         res,
         testing.make_prov_set(
