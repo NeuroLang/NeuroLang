@@ -1,9 +1,11 @@
 import logging
 
+from neurolang.expression_walker import expression_iterator
+
 from ..datalog import Fact, chase
 from ..datalog.negation import DatalogProgramNegation
 from ..expressions import Constant, Symbol
-from ..logic import Disjunction, Implication, Union
+from ..logic import Disjunction, Implication, Negation, Union
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables
@@ -14,7 +16,6 @@ from ..logic.transformations import (
     RemoveUniversalPredicates,
     convert_to_pnf_with_dnf_matrix
 )
-
 
 LOG = logging.getLogger(__name__)
 
@@ -94,6 +95,13 @@ def is_contained(q1, q2):
     ):
         LOG.debug("The free variables are different")
         return False
+
+    if any(
+        isinstance(e, Negation)
+        for _, e in expression_iterator(Union((q1, q2)))
+    ):
+        return False
+
     for query in (q1, q2):
         program = convert_pos_logic_query_to_datalog_rules(query, s)
         LOG.debug("Canonical program for %s", query)

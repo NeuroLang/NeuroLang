@@ -14,6 +14,7 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import (
     NeuroLangException,
     NonLiftableException,
+    NotInFONegE,
     NotRankedException,
     NotUnateException,
     UnsupportedSolverError
@@ -59,6 +60,7 @@ from ..logic.transformations import (
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
     RemoveUniversalPredicates,
+    convert_to_pnf_with_cnf_matrix,
     convert_to_pnf_with_dnf_matrix
 )
 from ..relational_algebra import (
@@ -116,6 +118,7 @@ __all__ = [
 RTO = RemoveTrivialOperations()
 PED = PushExistentialsDown()
 PUD = PushUniversalsDown()
+GC = GuaranteeConjunction()
 
 
 class ExtendedRAPToRAWalker(
@@ -319,7 +322,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
-    rule = RemoveUniversalPredicates().walk(rule)
+    #  rule = RemoveUniversalPredicates().walk(rule)
     rule = RTO.walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
@@ -414,7 +417,7 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         Transformation of the initial expression
         in a connected component query.
     """
-    rule = PED.walk(rule)
+    rule = PUD.walk(PED.walk(rule))
     free_vars = extract_logic_free_variables(rule)
     existential_vars = set()
     for atom in extract_logic_atoms(rule):
@@ -443,7 +446,11 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
     final_expression = ReplaceExpressionWalker(
         {v: k for k, v in dic_components.items()}
     ).walk(fresh_symbols_expression)
-    final_expression = minimize(final_expression)
+
+    try:
+        final_expression = minimize(final_expression)
+    except NotInFONegE:
+        pass
 
     return gcd.walk(final_expression)
 
@@ -1100,10 +1107,11 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
     for formula in powerset(expression.formulas):
         if len(formula) == 0:
             continue
-        elif len(formula) == 1:
-            formula_powerset.append(formula[0])
-        else:
-            formula_powerset.append(Disjunction(tuple(formula)))
+
+        formula = RTO.walk(convert_ucq_to_ccq(
+            Disjunction(tuple(formula)), transformation="DNF")
+        )
+        formula_powerset.append(formula)
     formulas_weights = _formulas_weights(formula_powerset)
     new_formulas, weights = zip(*(
         (dalvi_suciu_lift(formula, symbol_table), weight)

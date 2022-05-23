@@ -186,16 +186,15 @@ class FactorQuantifiersMixin(PatternWalker):
         quantifiers = []
         variables = set()
         for f in expression.formulas:
-            if isinstance(f, Quantifier):
+            while isinstance(f, Quantifier):
                 if f.head in variables:
                     f = ReplaceSymbolWalker(
                         {f.head: Symbol[f.type].fresh()}
                     ).walk(f)
                 variables.add(f.head)
                 quantifiers.append(f)
-                formulas.append(f.body)
-            else:
-                formulas.append(f)
+                f = f.body
+            formulas.append(f)
         exp = Disjunction(tuple(formulas))
         for q in reversed(quantifiers):
             exp = q.apply(q.head, exp)
@@ -214,16 +213,15 @@ class FactorQuantifiersMixin(PatternWalker):
         formulas = []
         variables = set()
         for f in expression.formulas:
-            if isinstance(f, Quantifier):
+            while isinstance(f, Quantifier):
                 if f.head in variables:
                     f = ReplaceSymbolWalker(
                         {f.head: Symbol[f.type].fresh()}
                     ).walk(f)
                 variables.add(f.head)
                 quantifiers.append(f)
-                formulas.append(f.body)
-            else:
-                formulas.append(f)
+                f = f.body
+            formulas.append(f)
         exp = Conjunction(tuple(formulas))
         for q in reversed(quantifiers):
             exp = q.apply(q.head, exp)
@@ -810,7 +808,7 @@ class PushUniversalsDown(
     LogicExpressionWalker
 ):
     @add_match(
-        ExistentialPredicate(..., NaryLogicOperator),
+        UniversalPredicate(..., NaryLogicOperator),
         lambda e: len(e.body.formulas) == 1
     )
     def push_eliminate_trivial_operation(self, expression):
@@ -877,7 +875,7 @@ class PushUniversalsDown(
         UniversalPredicate(..., Disjunction),
         lambda expression: any(
             expression.head not in extract_logic_free_variables(formula)
-            for formula in expression.formulas
+            for formula in expression.body.formulas
         )
     )
     def push_universal_down_disjunction(self, expression):
