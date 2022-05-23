@@ -337,7 +337,6 @@ def test_pchoice_empty_result():
     query = Implication(ans(), Conjunction((P(a), P(b))))
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
-    # Change Constant(False) for empty set ?
     assert testing.eq_prov_relations(
         res, testing.make_prov_set([], [res.provenance_column.value]),
     )

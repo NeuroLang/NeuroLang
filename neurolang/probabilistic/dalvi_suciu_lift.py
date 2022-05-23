@@ -292,6 +292,11 @@ def dalvi_suciu_lift(rule, symbol_table):
 
     rule = SelfjoinChoiceSimplification(symbol_table).walk(rule)
     rule = NestedExistentialChoiceSimplification(symbol_table).walk(rule)
+    if rule == FALSE:
+        return ProvenanceAlgebraSet(
+            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(("_p_",))),
+            str2columnstr_constant("_p_"),
+        )
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:
