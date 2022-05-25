@@ -28,7 +28,7 @@ from .relational_algebra import (
     eq_,
     get_expression_columns,
     int2columnint_constant,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 
 AND = Constant(operator.and_)
@@ -92,9 +92,7 @@ class RewriteSelections(ew.ExpressionWalker):
         ),
         lambda s: (
             s.formula.args[0].value
-            >= RewriteSelections.get_arity(
-                s.relation.relations[0]
-            )
+            >= RewriteSelections.get_arity(s.relation.relations[0])
         ),
     )
     def selection_push_right(self, selection):
@@ -131,9 +129,7 @@ class RewriteSelections(ew.ExpressionWalker):
             s.formula.args[1].value
             < (
                 RewriteSelections.get_arity(s.relation)
-                - RewriteSelections.get_arity(
-                    s.relation.relations[-1]
-                )
+                - RewriteSelections.get_arity(s.relation.relations[-1])
             )
         ),
     )
@@ -149,7 +145,7 @@ class RewriteSelections(ew.ExpressionWalker):
         else:
             inner_relations = Product(inner_relations)
 
-        outer_relations = tuple(relations[i + 1:])
+        outer_relations = tuple(relations[i + 1 :])
 
         arg_left = selection.formula.args[0]
 
@@ -285,20 +281,20 @@ class RewriteSelections(ew.ExpressionWalker):
         )
 
     @ew.add_match(
-       Selection(Selection, ...),
-       lambda exp: all(
-           isinstance(col, Constant[ColumnStr])
-           for col in (
-               get_expression_columns(exp.formula) |
-               get_expression_columns(exp.relation.formula)
-           )
-       )
+        Selection(Selection, ...),
+        lambda exp: all(
+            isinstance(col, Constant[ColumnStr])
+            for col in (
+                get_expression_columns(exp.formula)
+                | get_expression_columns(exp.relation.formula)
+            )
+        ),
     )
     def merge_selections(self, expression):
         return self.walk(
             Selection(
                 expression.relation.relation,
-                AND(expression.relation.formula, expression.formula)
+                AND(expression.relation.formula, expression.formula),
             )
         )
 
@@ -306,9 +302,7 @@ class RewriteSelections(ew.ExpressionWalker):
     def split_relations_column(relations, column):
         accum_arity = 0
         for i, relation in enumerate(relations):
-            current_arity = RewriteSelections.get_arity(
-                relation
-            )
+            current_arity = RewriteSelections.get_arity(relation)
             if column < current_arity:
                 break
             accum_arity += current_arity
@@ -321,19 +315,14 @@ class RewriteSelections(ew.ExpressionWalker):
             return expression.value.arity
         elif isinstance(expression, Product):
             return sum(
-                RewriteSelections.get_arity(r)
-                for r in expression.relations
+                RewriteSelections.get_arity(r) for r in expression.relations
             )
         elif isinstance(expression, EquiJoin):
             return RewriteSelections.get_arity(
                 expression.relation_left
-            ) + RewriteSelections.get_arity(
-                expression.relation_right
-            )
+            ) + RewriteSelections.get_arity(expression.relation_right)
         else:
-            return RewriteSelections.get_arity(
-                expression.relation
-            )
+            return RewriteSelections.get_arity(expression.relation)
 
 
 class EliminateTrivialProjections(ew.PatternWalker):
@@ -342,10 +331,11 @@ class EliminateTrivialProjections(ew.PatternWalker):
         lambda expression: (
             tuple(c.value for c in expression.attributes)
             == tuple(c for c in expression.relation.value.columns)
-        ) or (
+        )
+        or (
             tuple(str(c.value) for c in expression.attributes)
             == tuple(c for c in expression.relation.value.columns)
-        )
+        ),
     )
     def eliminate_trivial_projection(self, expression):
         return expression.relation
@@ -357,15 +347,14 @@ class EliminateTrivialProjections(ew.PatternWalker):
             for attribute in (
                 expression.attributes + expression.relation.attributes
             )
-        )
+        ),
     )
     def eliminate_trivial_nested_unnamed_projection(self, expression):
         inner_attributes = expression.relation.attributes
         outer_attributes = expression.attributes
 
         resulting_attributes = tuple(
-            inner_attributes[attribute.value]
-            for attribute in outer_attributes
+            inner_attributes[attribute.value] for attribute in outer_attributes
         )
 
         return self.walk(
@@ -381,155 +370,138 @@ class EliminateTrivialProjections(ew.PatternWalker):
     @ew.add_match(Projection(ExtendedProjection, ...))
     def simplify_projection_extended_projection(self, expression):
         new_projections = tuple(
-            proj for proj in expression.relation.projection_list
+            proj
+            for proj in expression.relation.projection_list
             if proj.dst_column in expression.attributes
         )
         new_relation = self.walk(
-            ExtendedProjection(
-                expression.relation.relation,
-                new_projections
-            )
+            ExtendedProjection(expression.relation.relation, new_projections)
         )
         return new_relation
 
     @ew.add_match(
         ExtendedProjection,
         lambda e: all(
-            isinstance(p.fun_exp, Constant[ColumnStr]) and
-            (p.fun_exp == p.dst_column)
+            isinstance(p.fun_exp, Constant[ColumnStr])
+            and (p.fun_exp == p.dst_column)
             for p in e.projection_list
-        )
+        ),
     )
     def convert_extended_projection_2_projection(self, expression):
-        return self.walk(Projection(
-            expression.relation,
-            tuple(p.dst_column for p in expression.projection_list)
-        ))
+        return self.walk(
+            Projection(
+                expression.relation,
+                tuple(p.dst_column for p in expression.projection_list),
+            )
+        )
 
     @ew.add_match(
         ExtendedProjection,
         lambda e: all(
             isinstance(p.fun_exp, Constant[ColumnStr])
             for p in e.projection_list
-        ) and (
+        )
+        and (
             len(set(p.fun_exp for p in e.projection_list))
             == len(e.projection_list)
             == len(e.relation.columns())
-        )
+        ),
     )
     def convert_extended_projection_2_rename(self, expression):
-        return self.walk(RenameColumns(
-            expression.relation,
-            tuple(
-                (p.fun_exp, p.dst_column)
-                for p in expression.projection_list
+        return self.walk(
+            RenameColumns(
+                expression.relation,
+                tuple(
+                    (p.fun_exp, p.dst_column)
+                    for p in expression.projection_list
+                ),
             )
-        ))
+        )
 
 
 class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
     @ew.add_match(
-        ExtendedProjection(
-            ExtendedProjection,
-            ...
-        ),
+        ExtendedProjection(ExtendedProjection, ...),
         lambda expression: all(
             isinstance(int_proj.fun_exp, (Constant, FunctionApplication))
             for int_proj in expression.relation.projection_list
-        )
+        ),
     )
     def nested_extended_projection_constant(self, expression):
-        rew = ew.ReplaceExpressionWalker({
-            p.dst_column: p.fun_exp
-            for p in expression.relation.projection_list
-        })
+        rew = ew.ReplaceExpressionWalker(
+            {
+                p.dst_column: p.fun_exp
+                for p in expression.relation.projection_list
+            }
+        )
         new_projections = (
             FunctionApplicationListMember(rew.walk(p.fun_exp), p.dst_column)
             for p in expression.projection_list
         )
         return self.walk(
-            ExtendedProjection(
-                expression.relation.relation,
-                new_projections
-            )
+            ExtendedProjection(expression.relation.relation, new_projections)
         )
 
     @ew.add_match(
-        ExtendedProjection(
-            NaturalJoin(ExtendedProjection, ...),
-            ...
-        ),
+        ExtendedProjection(NaturalJoin(ExtendedProjection, ...), ...),
         lambda expression: any(
             _function_application_list_member_has_constant_exp(int_proj)
             for int_proj in expression.relation.relation_left.projection_list
-        )
+        ),
     )
     def nested_extended_projection_naturaljoin_constant_l(self, expression):
         return self._nested_ep_join_constant_left(expression)
 
     @ew.add_match(
-        ExtendedProjection(
-            LeftNaturalJoin(ExtendedProjection, ...),
-            ...
-        ),
+        ExtendedProjection(LeftNaturalJoin(ExtendedProjection, ...), ...),
         lambda expression: any(
-           _function_application_list_member_has_constant_exp(int_proj)
-           for int_proj in expression.relation.relation_left.projection_list
-        )
+            _function_application_list_member_has_constant_exp(int_proj)
+            for int_proj in expression.relation.relation_left.projection_list
+        ),
     )
     def nested_extended_projection_leftnaturaljoin_constant(self, expression):
         return self._nested_ep_join_constant_left(expression)
 
     @ew.add_match(
-        ExtendedProjection(
-            FullOuterNaturalJoin(ExtendedProjection, ...),
-            ...
-        ),
+        ExtendedProjection(FullOuterNaturalJoin(ExtendedProjection, ...), ...),
         lambda expression: any(
-           _function_application_list_member_has_constant_exp(int_proj)
-           for int_proj in expression.relation.relation_left.projection_list
-        )
+            _function_application_list_member_has_constant_exp(int_proj)
+            for int_proj in expression.relation.relation_left.projection_list
+        ),
     )
     def nested_extended_projection_outernaturaljoin_constant(self, expression):
         return self._nested_ep_join_constant_left(expression)
 
     @ew.add_match(
-        ExtendedProjection(
-            NaturalJoin(..., ExtendedProjection),
-            ...
-        ),
+        ExtendedProjection(NaturalJoin(..., ExtendedProjection), ...),
         lambda expression: any(
             _function_application_list_member_has_constant_exp(int_proj)
             for int_proj in expression.relation.relation_right.projection_list
-        )
+        ),
     )
     def nested_extended_projection_naturaljoin_constantr(self, expression):
         return self._nested_ep_join_constant_left(expression, flip=True)
 
     @ew.add_match(
-        ExtendedProjection(
-            LeftNaturalJoin(..., ExtendedProjection),
-            ...
-        ),
+        ExtendedProjection(LeftNaturalJoin(..., ExtendedProjection), ...),
         lambda expression: any(
-           _function_application_list_member_has_constant_exp(int_proj)
-           for int_proj in expression.relation.relation_right.projection_list
-        )
+            _function_application_list_member_has_constant_exp(int_proj)
+            for int_proj in expression.relation.relation_right.projection_list
+        ),
     )
     def nested_extended_projection_leftnaturaljoin_constantr(self, expression):
         return self._nested_ep_join_constant_left(expression, flip=True)
 
     @ew.add_match(
-        ExtendedProjection(
-            FullOuterNaturalJoin(..., ExtendedProjection),
-            ...
-        ),
+        ExtendedProjection(FullOuterNaturalJoin(..., ExtendedProjection), ...),
         lambda expression: any(
-           _function_application_list_member_has_constant_exp(int_proj)
-           for int_proj in expression.relation.relation_right.projection_list
-        )
+            _function_application_list_member_has_constant_exp(int_proj)
+            for int_proj in expression.relation.relation_right.projection_list
+        ),
     )
-    def nested_extended_projection_outernaturaljoin_constantr(self, expression):
+    def nested_extended_projection_outernaturaljoin_constantr(
+        self, expression
+    ):
         return self._nested_ep_join_constant_left(expression, flip=True)
 
     def _nested_ep_join_constant_left(self, expression, flip=False):
@@ -542,9 +514,8 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         selections = []
         right_columns = right.columns()
         for proj in left.projection_list:
-            if (
-                isinstance(proj.fun_exp, Constant) and
-                not isinstance(proj.fun_exp, Constant[Column])
+            if isinstance(proj.fun_exp, Constant) and not isinstance(
+                proj.fun_exp, Constant[Column]
             ):
                 replacements[proj.dst_column] = proj.fun_exp
                 if proj.dst_column in right_columns:
@@ -568,10 +539,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
             new_join = expression.relation.apply(left, right)
 
         return self.walk(
-            ExtendedProjection(
-                new_join,
-                new_external_projections
-            )
+            ExtendedProjection(new_join, new_external_projections)
         )
 
     @ew.add_match(
@@ -581,8 +549,9 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
                 proj.dst_column
                 for proj in expression.relation_left.projection_list
                 if not isinstance(proj.fun_exp, Constant[Column])
-            ) - expression.relation_right.columns()
-        )
+            )
+            - expression.relation_right.columns()
+        ),
     )
     def push_computed_columns_up(self, expression, flip=False):
         if flip:
@@ -599,9 +568,8 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
             if proj.dst_column == proj.fun_exp
         }
         for proj in left.projection_list:
-            if (
-                proj.dst_column not in right_columns and
-                not isinstance(proj.fun_exp, Constant[Column])
+            if proj.dst_column not in right_columns and not isinstance(
+                proj.fun_exp, Constant[Column]
             ):
                 fun_columns = [
                     c
@@ -614,10 +582,14 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
                             Symbol.fresh().name
                         )
 
-                projections_to_push_up.append(FunctionApplicationListMember(
-                    ew.ReplaceExpressionWalker(new_columns).walk(proj.fun_exp),
-                    proj.dst_column
-                ))
+                projections_to_push_up.append(
+                    FunctionApplicationListMember(
+                        ew.ReplaceExpressionWalker(new_columns).walk(
+                            proj.fun_exp
+                        ),
+                        proj.dst_column,
+                    )
+                )
                 projections_to_keep += [
                     FunctionApplicationListMember(c, new_columns[c])
                     for _, c in ew.expression_iterator(proj.fun_exp)
@@ -628,8 +600,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
 
         if len(projections_to_keep) > 0:
             left = ExtendedProjection(
-                left.relation,
-                tuple(projections_to_keep)
+                left.relation, tuple(projections_to_keep)
             )
         if flip:
             new_join = expression.apply(right, left)
@@ -639,9 +610,9 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         res = ExtendedProjection(
             new_join,
             tuple(
-                FunctionApplicationListMember(c, c)
-                for c in new_join.columns()
-            ) + tuple(projections_to_push_up)
+                FunctionApplicationListMember(c, c) for c in new_join.columns()
+            )
+            + tuple(projections_to_push_up),
         )
         return self.walk(res)
 
@@ -652,8 +623,9 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
                 proj.dst_column
                 for proj in expression.relation_left.projection_list
                 if not isinstance(proj.fun_exp, Constant[Column])
-            ) - expression.relation_right.columns()
-        )
+            )
+            - expression.relation_right.columns()
+        ),
     )
     def push_computed_columns_up_left(self, expression):
         return self.push_computed_columns_up(expression)
@@ -665,8 +637,9 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
                 proj.dst_column
                 for proj in expression.relation_left.projection_list
                 if not isinstance(proj.fun_exp, Constant[Column])
-            ) - expression.relation_right.columns()
-        )
+            )
+            - expression.relation_right.columns()
+        ),
     )
     def push_computed_columns_up_outer(self, expression):
         return self.push_computed_columns_up(expression)
@@ -678,53 +651,52 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
                 proj.dst_column
                 for proj in expression.relation_right.projection_list
                 if not isinstance(proj.fun_exp, Constant[Column])
-            ) - expression.relation_left.columns()
-        )
+            )
+            - expression.relation_left.columns()
+        ),
     )
     def push_computed_columns_up_flip(self, expression):
         return self.push_computed_columns_up(expression, True)
 
     @ew.add_match(
         GroupByAggregation(
-            ExtendedProjection, ...,
+            ExtendedProjection,
+            ...,
             (
                 FunctionApplicationListMember(
-                    FunctionApplication(Constant(sum), ...),
-                    ...
+                    FunctionApplication(Constant(sum), ...), ...
                 ),
-            )
+            ),
         ),
         lambda expression: any(
             (
-                proj.dst_column ==
-                expression.aggregate_functions[0].fun_exp.args[0]
-            ) &
-            (proj.fun_exp == Constant[float](1))
+                proj.dst_column
+                == expression.aggregate_functions[0].fun_exp.args[0]
+            )
+            & (proj.fun_exp == Constant[float](1))
             for proj in expression.relation.projection_list
-        )
+        ),
     )
     def replace_trivial_agg_groupby(self, expression):
         new_projections = tuple(
-            proj for proj in expression.relation.projection_list
+            proj
+            for proj in expression.relation.projection_list
             if (
-                proj.dst_column !=
-                expression.aggregate_functions[0].fun_exp.args[0]
+                proj.dst_column
+                != expression.aggregate_functions[0].fun_exp.args[0]
             )
         )
         return self.walk(
             GroupByAggregation(
                 ExtendedProjection(
-                    expression.relation.relation,
-                    new_projections
+                    expression.relation.relation, new_projections
                 ),
                 expression.groupby,
                 (
                     FunctionApplicationListMember(
-                        COUNT(),
-                        expression.aggregate_functions[0].dst_column
+                        COUNT(), expression.aggregate_functions[0].dst_column
                     ),
-                )
-
+                ),
             )
         )
 
@@ -734,7 +706,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
             isinstance(proj.fun_exp, Constant[ColumnStr])
             for proj in exp.relation.projection_list
             if exp.column == proj.dst_column
-        )
+        ),
     )
     def push_replace_null_in_ext_proj(self, expression):
         for proj in expression.relation.projection_list:
@@ -742,39 +714,34 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
                 replacement = proj.fun_exp
                 break
 
-        return self.walk(ExtendedProjection(
-            ReplaceNull(
-                expression.relation.relation,
-                replacement,
-                expression.value
-            ),
-            expression.relation.projection_list
-        ))
+        return self.walk(
+            ExtendedProjection(
+                ReplaceNull(
+                    expression.relation.relation, replacement, expression.value
+                ),
+                expression.relation.projection_list,
+            )
+        )
 
 
 def _function_application_list_member_has_constant_exp(int_proj):
-    return (
-        isinstance(int_proj.fun_exp, Constant) and
-        not isinstance(
-            int_proj.fun_exp,
-            (Constant[Column], Constant[RelationalAlgebraStringExpression])
-        )
+    return isinstance(int_proj.fun_exp, Constant) and not isinstance(
+        int_proj.fun_exp,
+        (Constant[Column], Constant[RelationalAlgebraStringExpression]),
     )
 
 
 class RenameOptimizations(ew.PatternWalker):
     @ew.add_match(RenameColumn)
     def convert_rename_column(self, expression):
-        return self.walk(RenameColumns(
-            expression.relation,
-            ((expression.src, expression.dst),)
-        ))
+        return self.walk(
+            RenameColumns(
+                expression.relation, ((expression.src, expression.dst),)
+            )
+        )
 
     @ew.add_match(
-        RenameColumns,
-        lambda exp: (
-            all(s == d for s, d in exp.renames)
-        )
+        RenameColumns, lambda exp: (all(s == d for s, d in exp.renames))
     )
     def remove_trivial_rename(self, expression):
         return self.walk(expression.relation)
@@ -785,16 +752,11 @@ class RenameOptimizations(ew.PatternWalker):
         new_renames = []
         for src, dst in expression.relation.renames:
             if dst in outer_renames:
-                new_renames.append(
-                    (src, outer_renames[dst])
-                )
+                new_renames.append((src, outer_renames[dst]))
                 del outer_renames[dst]
             else:
                 new_renames.append((src, dst))
-        new_renames += [
-            (src, dst)
-            for src, dst in outer_renames.items()
-        ]
+        new_renames += [(src, dst) for src, dst in outer_renames.items()]
 
         return self.walk(
             RenameColumns(expression.relation.relation, tuple(new_renames))
@@ -808,20 +770,22 @@ class RenameOptimizations(ew.PatternWalker):
         for falm in projection_list:
             if falm.dst_column in renames:
                 falm = FunctionApplicationListMember(
-                    falm.fun_exp,
-                    renames[falm.dst_column]
+                    falm.fun_exp, renames[falm.dst_column]
                 )
             new_projection_list.append(falm)
-        return self.walk(ExtendedProjection(
-            expression.relation.relation,
-            tuple(new_projection_list)
-        ))
+        return self.walk(
+            ExtendedProjection(
+                expression.relation.relation, tuple(new_projection_list)
+            )
+        )
 
     @ew.add_match(
         RenameColumns(GroupByAggregation, ...),
-        lambda exp: len({src for src, _ in exp.renames} & {
-            f.dst_column for f in exp.relation.aggregate_functions
-        }) > 0
+        lambda exp: len(
+            {src for src, _ in exp.renames}
+            & {f.dst_column for f in exp.relation.aggregate_functions}
+        )
+        > 0,
     )
     def merge_rename_column_group_by(self, expression):
         renames = {src: dst for src, dst in expression.renames}
@@ -831,8 +795,7 @@ class RenameOptimizations(ew.PatternWalker):
             if falm.dst_column in renames:
                 old_dst = falm.dst_column
                 falm = FunctionApplicationListMember(
-                    falm.fun_exp,
-                    renames[falm.dst_column]
+                    falm.fun_exp, renames[falm.dst_column]
                 )
                 del renames[old_dst]
             new_aggregate_functions.append(falm)
@@ -841,20 +804,22 @@ class RenameOptimizations(ew.PatternWalker):
                 GroupByAggregation(
                     expression.relation.relation,
                     expression.relation.groupby,
-                    tuple(new_aggregate_functions)
+                    tuple(new_aggregate_functions),
                 ),
-                tuple((src, dst) for src, dst in renames.items())
+                tuple((src, dst) for src, dst in renames.items()),
             )
         )
 
     @ew.add_match(
         RenameColumns(GroupByAggregation, ...),
         lambda exp: set(chain(*exp.renames)).isdisjoint(
-            chain(*(
-                get_expression_columns(agg.fun_exp)
-                for agg in exp.relation.aggregate_functions
-            ))
-        )
+            chain(
+                *(
+                    get_expression_columns(agg.fun_exp)
+                    for agg in exp.relation.aggregate_functions
+                )
+            )
+        ),
     )
     def push_rename_past_groupby(self, expression):
         renames = {src: dst for src, dst in expression.renames}
@@ -865,11 +830,10 @@ class RenameOptimizations(ew.PatternWalker):
         return self.walk(
             GroupByAggregation(
                 RenameColumns(
-                    expression.relation.relation,
-                    expression.renames
+                    expression.relation.relation, expression.renames
                 ),
                 new_groupby,
-                expression.relation.aggregate_functions
+                expression.relation.aggregate_functions,
             )
         )
 
@@ -883,10 +847,9 @@ class RenameOptimizations(ew.PatternWalker):
         return self.walk(
             Projection(
                 RenameColumns(
-                    expression.relation.relation,
-                    expression.renames
+                    expression.relation.relation, expression.renames
                 ),
-                new_attributes
+                new_attributes,
             )
         )
 
@@ -899,7 +862,7 @@ class RenameOptimizations(ew.PatternWalker):
         return self.walk(
             Selection(
                 RenameColumns(selection.relation, expression.renames),
-                new_formula
+                new_formula,
             )
         )
 
@@ -914,15 +877,36 @@ class RenameOptimizations(ew.PatternWalker):
             NameColumns(expression.relation.relation, tuple(new_names))
         )
 
-    @ew.add_match(RenameColumns(NaturalJoin(RelationalAlgebraOperation, RelationalAlgebraOperation), ...))
+    @ew.add_match(
+        RenameColumns(
+            NaturalJoin(
+                RelationalAlgebraOperation, RelationalAlgebraOperation
+            ),
+            ...,
+        )
+    )
     def split_rename_naturaljoin(self, expression):
         return self._rename_joinop(expression, NaturalJoin)
 
-    @ew.add_match(RenameColumns(LeftNaturalJoin(RelationalAlgebraOperation, RelationalAlgebraOperation), ...))
+    @ew.add_match(
+        RenameColumns(
+            LeftNaturalJoin(
+                RelationalAlgebraOperation, RelationalAlgebraOperation
+            ),
+            ...,
+        )
+    )
     def split_rename_left_naturaljoin(self, expression):
         return self._rename_joinop(expression, LeftNaturalJoin)
 
-    @ew.add_match(RenameColumns(FullOuterNaturalJoin(RelationalAlgebraOperation, RelationalAlgebraOperation), ...))
+    @ew.add_match(
+        RenameColumns(
+            FullOuterNaturalJoin(
+                RelationalAlgebraOperation, RelationalAlgebraOperation
+            ),
+            ...,
+        )
+    )
     def split_rename_outer_naturaljoin(self, expression):
         return self._rename_joinop(expression, FullOuterNaturalJoin)
 
@@ -936,16 +920,16 @@ class RenameOptimizations(ew.PatternWalker):
                 left_renames.append((src, dst))
             if src in right_columns:
                 right_renames.append((src, dst))
-        return self.walk(joinop(
-            RenameColumns(
-                expression.relation.relation_left,
-                tuple(left_renames)
-            ),
-            RenameColumns(
-                expression.relation.relation_right,
-                tuple(right_renames)
+        return self.walk(
+            joinop(
+                RenameColumns(
+                    expression.relation.relation_left, tuple(left_renames)
+                ),
+                RenameColumns(
+                    expression.relation.relation_right, tuple(right_renames)
+                ),
             )
-        ))
+        )
 
     @ew.add_match(RenameColumns(ReplaceNull, ...))
     def switch_rename_replace_null(self, expression):
@@ -953,14 +937,12 @@ class RenameOptimizations(ew.PatternWalker):
         return self.walk(
             ReplaceNull(
                 RenameColumns(
-                    expression.relation.relation,
-                    expression.renames
+                    expression.relation.relation, expression.renames
                 ),
                 renames.get(
-                    expression.relation.column,
-                    expression.relation.column
+                    expression.relation.column, expression.relation.column
                 ),
-                expression.relation.value
+                expression.relation.value,
             )
         )
 
@@ -969,21 +951,18 @@ class RenameOptimizations(ew.PatternWalker):
         lambda expression: all(
             isinstance(column, Constant[ColumnStr])
             for column in expression.relation.relation.columns()
-        )
+        ),
     )
     def eliminate_trivial_number_columns(self, expression):
         column_renames = tuple(
             (src, dst)
             for src, dst in zip(
-                expression.relation.column_names,
-                expression.column_names
+                expression.relation.column_names, expression.column_names
             )
         )
 
         return self.walk(
-            RenameColumns(
-                expression.relation.relation, column_renames
-            )
+            RenameColumns(expression.relation.relation, column_renames)
         )
 
     @ew.add_match(
@@ -992,17 +971,15 @@ class RenameOptimizations(ew.PatternWalker):
             isinstance(column, Constant[ColumnStr])
             for column in expression.relation.relation.columns()
         )
+        and len(expression.columns()) == len(expression.relation.columns()),
     )
     def eliminate_trivial_projection_number_columns(self, expression):
-        attributes = tuple(
-            expression.relation.relation.columns()[
-                column.value
-            ]
-            for column in expression.relation.columns()
+        column_names = tuple(
+            expression.relation.column_names[c.value]
+            for c in expression.attributes
         )
-        new_relation = Projection(
-            expression.relation.relation,
-            attributes
+        new_relation = NumberColumns(
+            expression.relation.relation, column_names
         )
         return self.walk(new_relation)
 
@@ -1011,23 +988,21 @@ class RenameOptimizations(ew.PatternWalker):
         lambda expression: all(
             isinstance(column, Constant[ColumnStr])
             for column in expression.relation.relation.columns()
-        )
+        ),
     )
     def eliminate_trivial_selection_number_columns(self, expression):
         replacements = {
-            number: name for number, name in
-            zip(
-                expression.relation.columns(),
-                expression.relation.column_names
+            number: name
+            for number, name in zip(
+                expression.relation.columns(), expression.relation.column_names
             )
         }
-        new_formula = (
-            ew.ReplaceExpressionWalker(replacements)
-            .walk(expression.formula)
+        new_formula = ew.ReplaceExpressionWalker(replacements).walk(
+            expression.formula
         )
         new_relation = NumberColumns(
             Selection(expression.relation.relation, new_formula),
-            expression.relation.column_names
+            expression.relation.column_names,
         )
 
         return self.walk(new_relation)
@@ -1038,19 +1013,19 @@ class PushInSelections(ew.PatternWalker):
         Selection(NaturalJoin, ...),
         lambda exp: (
             len(
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_right)
-            ) == 0
-        )
+                get_expression_columns(exp.formula)
+                & get_expression_columns(exp.relation.relation_right)
+            )
+            == 0
+        ),
     )
     def push_selection_in_left(self, expression):
         return self.walk(
             NaturalJoin(
                 Selection(
-                    expression.relation.relation_left,
-                    expression.formula
+                    expression.relation.relation_left, expression.formula
                 ),
-                expression.relation.relation_right
+                expression.relation.relation_right,
             )
         )
 
@@ -1058,54 +1033,56 @@ class PushInSelections(ew.PatternWalker):
         Selection(NaturalJoin, ...),
         lambda exp: (
             len(
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_left)
-            ) == 0
-        )
+                get_expression_columns(exp.formula)
+                & get_expression_columns(exp.relation.relation_left)
+            )
+            == 0
+        ),
     )
     def push_selection_in_right(self, expression):
         return self.walk(
             NaturalJoin(
                 expression.relation.relation_left,
                 Selection(
-                    expression.relation.relation_right,
-                    expression.formula
-                )
+                    expression.relation.relation_right, expression.formula
+                ),
             )
         )
 
     @ew.add_match(
         Selection(
             NaturalJoin,
-            FunctionApplication(EQ, (Constant[ColumnStr], Constant[ColumnStr]))
+            FunctionApplication(
+                EQ, (Constant[ColumnStr], Constant[ColumnStr])
+            ),
         ),
         lambda exp: (
             (
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_left)
-            ) and (
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_right)
+                get_expression_columns(exp.formula)
+                & get_expression_columns(exp.relation.relation_left)
             )
-        )
+            and (
+                get_expression_columns(exp.formula)
+                & get_expression_columns(exp.relation.relation_right)
+            )
+        ),
     )
     def push_and_rename_in_naturaljoin(self, expression):
         column_left = (
-            get_expression_columns(expression.formula) &
-            (
-                get_expression_columns(expression.relation.relation_left) -
-                get_expression_columns(expression.relation.relation_right)
+            get_expression_columns(expression.formula)
+            & (
+                get_expression_columns(expression.relation.relation_left)
+                - get_expression_columns(expression.relation.relation_right)
             )
         ).pop()
         column_right = (
-            get_expression_columns(expression.formula) &
-            get_expression_columns(expression.relation.relation_right)
+            get_expression_columns(expression.formula)
+            & get_expression_columns(expression.relation.relation_right)
         ).pop()
 
         if column_left != column_right:
             relation_right = RenameColumn(
-                expression.relation.relation_right,
-                column_right, column_left
+                expression.relation.relation_right, column_right, column_left
             )
             projections = tuple(
                 FunctionApplicationListMember(c, c)
@@ -1116,11 +1093,8 @@ class PushInSelections(ew.PatternWalker):
                 FunctionApplicationListMember(column_left, column_right),
             )
             expression = ExtendedProjection(
-                NaturalJoin(
-                    expression.relation.relation_left,
-                    relation_right
-                ),
-                projections
+                NaturalJoin(expression.relation.relation_left, relation_right),
+                projections,
             )
         return expression
 
@@ -1128,19 +1102,19 @@ class PushInSelections(ew.PatternWalker):
         Selection(LeftNaturalJoin, ...),
         lambda exp: (
             len(
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_right)
-            ) == 0
-        )
+                get_expression_columns(exp.formula)
+                & get_expression_columns(exp.relation.relation_right)
+            )
+            == 0
+        ),
     )
     def push_selection_in_leftnaturaljoin_left(self, expression):
         return self.walk(
             LeftNaturalJoin(
                 Selection(
-                    expression.relation.relation_left,
-                    expression.formula
+                    expression.relation.relation_left, expression.formula
                 ),
-                expression.relation.relation_right
+                expression.relation.relation_right,
             )
         )
 
@@ -1148,19 +1122,19 @@ class PushInSelections(ew.PatternWalker):
         Selection(LeftNaturalJoin, ...),
         lambda exp: (
             len(
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_left)
-            ) == 0
-        )
+                get_expression_columns(exp.formula)
+                & get_expression_columns(exp.relation.relation_left)
+            )
+            == 0
+        ),
     )
     def push_selection_in_leftnaturaljoin_right(self, expression):
         return self.walk(
             LeftNaturalJoin(
                 expression.relation.relation_left,
                 Selection(
-                    expression.relation.relation_right,
-                    expression.formula
-                )
+                    expression.relation.relation_right, expression.formula
+                ),
             )
         )
 
@@ -1168,19 +1142,19 @@ class PushInSelections(ew.PatternWalker):
         Selection(FullOuterNaturalJoin, ...),
         lambda exp: (
             len(
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_right)
-            ) == 0
-        )
+                get_expression_columns(exp.formula)
+                & get_expression_columns(exp.relation.relation_right)
+            )
+            == 0
+        ),
     )
     def push_selection_in_outernaturaljoin_left(self, expression):
         return self.walk(
             FullOuterNaturalJoin(
                 Selection(
-                    expression.relation.relation_left,
-                    expression.formula
+                    expression.relation.relation_left, expression.formula
                 ),
-                expression.relation.relation_right
+                expression.relation.relation_right,
             )
         )
 
@@ -1188,19 +1162,19 @@ class PushInSelections(ew.PatternWalker):
         Selection(FullOuterNaturalJoin, ...),
         lambda exp: (
             len(
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_left)
-            ) == 0
-        )
+                get_expression_columns(exp.formula)
+                & get_expression_columns(exp.relation.relation_left)
+            )
+            == 0
+        ),
     )
     def push_selection_in_outernaturaljoin_right(self, expression):
         return self.walk(
             FullOuterNaturalJoin(
                 expression.relation.relation_left,
                 Selection(
-                    expression.relation.relation_right,
-                    expression.formula
-                )
+                    expression.relation.relation_right, expression.formula
+                ),
             )
         )
 
@@ -1210,56 +1184,58 @@ class PushInSelections(ew.PatternWalker):
             all(
                 isinstance(column, Constant[ColumnStr])
                 for column in get_expression_columns(exp.formula)
-            ) and
-            get_expression_columns(exp.formula) <=
-            set(exp.relation.attributes)
-        )
+            )
+            and get_expression_columns(exp.formula)
+            <= set(exp.relation.attributes)
+        ),
     )
     def push_selection_in_projection(self, expression):
-        return self.walk(Projection(
-            Selection(expression.relation.relation, expression.formula),
-            expression.relation.attributes
-        ))
+        return self.walk(
+            Projection(
+                Selection(expression.relation.relation, expression.formula),
+                expression.relation.attributes,
+            )
+        )
 
     @ew.add_match(
         Selection(ExtendedProjection, ...),
         lambda exp: (
-            get_expression_columns(exp.formula) <=
-            {
+            get_expression_columns(exp.formula)
+            <= {
                 projection.dst_column
                 for projection in exp.relation.projection_list
                 if isinstance(projection.fun_exp, Constant[Column])
             }
-        )
+        ),
     )
     def push_selection_in_extended_projection(self, expression):
-        rew = ew.ReplaceExpressionWalker({
-            projection.dst_column: projection.fun_exp
-            for projection in expression.relation.projection_list
-            if isinstance(projection.fun_exp, Constant[Column])
-        })
+        rew = ew.ReplaceExpressionWalker(
+            {
+                projection.dst_column: projection.fun_exp
+                for projection in expression.relation.projection_list
+                if isinstance(projection.fun_exp, Constant[Column])
+            }
+        )
         new_formula = rew.walk(expression.formula)
-        return self.walk(ExtendedProjection(
-            Selection(expression.relation.relation, new_formula),
-            expression.relation.projection_list
-        ))
+        return self.walk(
+            ExtendedProjection(
+                Selection(expression.relation.relation, new_formula),
+                expression.relation.projection_list,
+            )
+        )
 
     @ew.add_match(
         Selection(GroupByAggregation, ...),
         lambda exp: (
-            get_expression_columns(exp.formula) <=
-            set(exp.relation.groupby)
-        )
+            get_expression_columns(exp.formula) <= set(exp.relation.groupby)
+        ),
     )
     def push_selection_in_groupby(self, expression):
         return self.walk(
             GroupByAggregation(
-                Selection(
-                    expression.relation.relation,
-                    expression.formula
-                ),
+                Selection(expression.relation.relation, expression.formula),
                 expression.relation.groupby,
-                expression.relation.aggregate_functions
+                expression.relation.aggregate_functions,
             )
         )
 
@@ -1267,125 +1243,116 @@ class PushInSelections(ew.PatternWalker):
         Selection(ReplaceNull, ...),
         lambda exp: (
             exp.relation.column not in get_expression_columns(exp.formula)
-        )
+        ),
     )
     def push_selection_in_replace_null(self, expression):
         return ReplaceNull(
-            Selection(
-                expression.relation.relation,
-                expression.formula
-            ),
+            Selection(expression.relation.relation, expression.formula),
             expression.relation.column,
-            expression.relation.value
+            expression.relation.value,
         )
 
 
 class PushUnnamedSelectionsUp(ew.PatternWalker):
-
     @staticmethod
     def _extract_column_int_constants(expression):
         return {
-            e for _, e in ew.expression_iterator(expression)
+            e
+            for _, e in ew.expression_iterator(expression)
             if isinstance(e, Constant[ColumnInt])
         }
 
     @ew.add_match(
         Projection(
-            Selection(..., eq_(Constant[ColumnInt], Constant[ColumnInt])),
-            ...
+            Selection(..., eq_(Constant[ColumnInt], Constant[ColumnInt])), ...
         ),
         lambda expression: (
             max(expression.relation.formula.args, key=lambda x: x.value)
             in set(expression.attributes)
-        ) and (
+        )
+        and (
             min(expression.relation.formula.args, key=lambda x: x.value)
             not in set(expression.attributes)
-        )
+        ),
     )
     def standardize_projected_column(self, expression):
         rew = ew.ReplaceExpressionWalker(
             {
-                max(expression.relation.formula.args, key=lambda x: x.value):
-                min(expression.relation.formula.args, key=lambda x: x.value)
+                max(
+                    expression.relation.formula.args, key=lambda x: x.value
+                ): min(expression.relation.formula.args, key=lambda x: x.value)
             }
         )
 
-        return Projection(
-            expression.relation,
-            rew.walk(expression.attributes)
-        )
+        return Projection(expression.relation, rew.walk(expression.attributes))
 
     @ew.add_match(
         Selection(Selection, eq_(Constant[ColumnInt], Constant[ColumnInt])),
         lambda expression: not (
-            isinstance(expression.relation.formula, FunctionApplication) and
-            expression.relation.formula.functor == eq_ and
-            isinstance(
-                expression.relation.formula.args[0],
-                Constant[ColumnInt]
-            ) and
-            isinstance(
-                expression.relation.formula.args[1],
-                Constant[ColumnInt]
+            isinstance(expression.relation.formula, FunctionApplication)
+            and expression.relation.formula.functor == eq_
+            and isinstance(
+                expression.relation.formula.args[0], Constant[ColumnInt]
             )
-        )
+            and isinstance(
+                expression.relation.formula.args[1], Constant[ColumnInt]
+            )
+        ),
     )
     def invert_selection_order(self, expression):
         rew = ew.ReplaceExpressionWalker(
             {
-                max(expression.formula.args, key=lambda x: x.value):
-                min(expression.formula.args, key=lambda x: x.value)
+                max(expression.formula.args, key=lambda x: x.value): min(
+                    expression.formula.args, key=lambda x: x.value
+                )
             }
         )
         return Selection(
-            Selection(
-                expression.relation.relation,
-                expression.formula
-            ),
-            rew.walk(expression.relation.formula)
+            Selection(expression.relation.relation, expression.formula),
+            rew.walk(expression.relation.formula),
         )
 
     @ew.add_match(
         Projection(Selection, ...),
         lambda expression: (
             (
-                PushUnnamedSelectionsUp
-                ._extract_column_int_constants(expression.relation.formula)
-            ) and (
-                PushUnnamedSelectionsUp
-                ._extract_column_int_constants(expression.relation.formula)
+                PushUnnamedSelectionsUp._extract_column_int_constants(
+                    expression.relation.formula
+                )
+            )
+            and (
+                PushUnnamedSelectionsUp._extract_column_int_constants(
+                    expression.relation.formula
+                )
                 <= set(expression.attributes)
             )
-        )
+        ),
     )
     def push_selection_above_projection(self, expression):
         return Selection(
-            Projection(
-                expression.relation.relation,
-                expression.attributes
-            ),
-            expression.relation.formula
+            Projection(expression.relation.relation, expression.attributes),
+            expression.relation.formula,
         )
 
     @ew.add_match(
         NameColumns(Selection, ...),
         lambda expression: (
-            PushUnnamedSelectionsUp
-            ._extract_column_int_constants(expression.relation.formula)
-        )
+            PushUnnamedSelectionsUp._extract_column_int_constants(
+                expression.relation.formula
+            )
+        ),
     )
     def push_selection_above_name_columns(self, expression):
-        rew = ew.ReplaceExpressionWalker({
-            int2columnint_constant(i): name
-            for i, name in enumerate(expression.column_names)
-        })
+        rew = ew.ReplaceExpressionWalker(
+            {
+                int2columnint_constant(i): name
+                for i, name in enumerate(expression.column_names)
+            }
+        )
         new_formula = rew.walk(expression.relation.formula)
         return Selection(
-            NameColumns(
-                expression.relation.relation,
-                expression.column_names
-            ),
-            new_formula
+            NameColumns(expression.relation.relation, expression.column_names),
+            new_formula,
         )
 
 

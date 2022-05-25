@@ -11,7 +11,7 @@ from ..probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
 )
 
-from ...expressions import Constant, Symbol
+from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import (
     Conjunction,
     ExistentialPredicate,
@@ -79,8 +79,15 @@ def test_walkers_conjuntion_selfjoin_constant():
         new_formula
     )
 
-    # What happens if there isn't existentials ?
-    assert new_formula == Conjunction((P(a), eq_(x, a)))
+    # Conjunction((P(a), Fresh(x)))
+    assert isinstance(new_formula, Conjunction)
+    assert len(new_formula.formulas) == 2
+    for formula in new_formula.formulas:
+        assert isinstance(formula, FunctionApplication)
+        if formula.functor == P:
+            assert formula.args == (a,)
+        if formula.functor.is_fresh:
+            assert formula.args == (x,)
 
 
 def test_walkers_conjuntion_selfjoin_symbols():
@@ -124,10 +131,14 @@ def test_walkers_conjuntion_selfjoin_and_det():
         new_formula
     )
 
+    assert isinstance(new_formula, Conjunction)
+    assert len(new_formula.formulas) == 3
     for formula in new_formula.formulas:
-        if formula not in (Q(a), P(a), eq_(x, a)):
-            assert False
-    assert True
+        assert isinstance(formula, FunctionApplication)
+        if formula.functor == P or formula.functor == Q:
+            assert formula.args == (a,)
+        if formula.functor.is_fresh:
+            assert formula.args == (x,)
 
 
 def test_walkers_conjuntion_selfjoin_and_det2():
@@ -149,10 +160,16 @@ def test_walkers_conjuntion_selfjoin_and_det2():
         new_formula
     )
 
+    assert isinstance(new_formula, Conjunction)
+    assert len(new_formula.formulas) == 3
     for formula in new_formula.formulas:
-        if formula not in (Q(y), P(a), eq_(x, a)):
-            assert False
-    assert True
+        assert isinstance(formula, FunctionApplication)
+        if formula.functor == P:
+            assert formula.args == (a,)
+        if formula.functor == Q:
+            assert formula.args == (y,)
+        if formula.functor.is_fresh:
+            assert formula.args == (x,)
 
 
 def test_walkers_conjuntion_existential():

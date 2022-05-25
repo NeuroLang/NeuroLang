@@ -1,8 +1,20 @@
 from collections import Counter
 from operator import eq
 from typing import AbstractSet
+import typing
 
-from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
+from neurolang.datalog.wrapped_collections import (
+    WrappedNamedRelationalAlgebraFrozenSet,
+    WrappedRelationalAlgebraSet,
+)
+from neurolang.relational_algebra.relational_algebra import (
+    ExtendedProjection,
+    FunctionApplicationListMember,
+    NumberColumns,
+    int2columnint_constant,
+    str2columnstr_constant,
+)
+from neurolang.relational_algebra_provenance import ONE, ProvenanceAlgebraSet
 
 from ..expression_walker import (
     ExpressionWalker,
@@ -25,6 +37,10 @@ from ..logic.unification import (
 from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_probabilistic_choice_relation,
+)
+
+NAMED_DEE = Constant[typing.AbstractSet[typing.Tuple]](
+    WrappedNamedRelationalAlgebraFrozenSet.dee(), verify_type=False
 )
 
 
@@ -147,18 +163,40 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
                 formula, FunctionApplication
             ) and formula.functor == Constant(eq):
                 consts = [
-                    (arg,) for arg in formula.args if isinstance(arg, Constant)
+                    arg for arg in formula.args if isinstance(arg, Constant)
+                ]
+                symbols_str = [
+                    str2columnstr_constant(arg.name)
+                    for arg in formula.args
+                    if isinstance(arg, Symbol)
                 ]
                 symbols = [
                     arg for arg in formula.args if isinstance(arg, Symbol)
                 ]
                 if len(consts) == 1:
                     new_symbol = Symbol.fresh()
-                    new_set = WrappedRelationalAlgebraSet(iterable=consts)
-                    type_ = new_set.row_type
+                    provenance_column = str2columnstr_constant(
+                        Symbol.fresh().name
+                    )
 
-                    constant = Constant[AbstractSet[type_]](
-                        new_set, auto_infer_type=False, verify_type=False
+                    constant = NumberColumns(
+                        ExtendedProjection(
+                            NAMED_DEE,
+                            tuple(
+                                FunctionApplicationListMember(c, s)
+                                for c, s in zip(consts, symbols_str)
+                            )
+                            + (
+                                FunctionApplicationListMember(
+                                    ONE, provenance_column
+                                ),
+                            ),
+                        ),
+                        (provenance_column,) + tuple(symbols_str),
+                    )
+
+                    constant = ProvenanceAlgebraSet(
+                        constant, int2columnint_constant(0)
                     )
                     constant_symbol = new_symbol.cast(constant.type)
                     self.symbol_table[constant_symbol] = constant
