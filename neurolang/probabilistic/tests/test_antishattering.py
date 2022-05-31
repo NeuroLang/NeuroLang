@@ -1,28 +1,17 @@
 from operator import eq
 
-from sqlalchemy import false
-
+from ...expressions import Constant, FunctionApplication, Symbol
+from ...logic import Conjunction, ExistentialPredicate, Implication, Union
+from .. import dalvi_suciu_lift
 from ..antishattering import (
     NestedExistentialChoiceSimplification,
     SelfjoinChoiceSimplification,
 )
-
+from ..cplogic import testing
+from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
 )
-
-from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import (
-    Conjunction,
-    ExistentialPredicate,
-    Implication,
-    Union,
-)
-from .. import dalvi_suciu_lift
-
-from ..cplogic import testing
-from ..cplogic.program import CPLogicProgram
-
 
 ans = Symbol("ans")
 P = Symbol("P")
@@ -355,7 +344,7 @@ def test_pchoice_empty_result():
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
-        res, testing.make_prov_set([], [res.provenance_column.value]),
+        res, testing.make_prov_set([0.0], [res.provenance_column.value]),
     )
 
 
@@ -393,10 +382,7 @@ def test_pchoice_with_constant_and_projected_variable_disjunction():
     cpl_program.walk(program)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
-        res,
-        testing.make_prov_set(
-            [(0.48,), (0.52,)], [res.provenance_column.value]
-        ),
+        res, testing.make_prov_set([(1.0,),], [res.provenance_column.value]),
     )
 
 

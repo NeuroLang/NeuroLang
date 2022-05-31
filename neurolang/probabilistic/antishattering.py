@@ -1,21 +1,10 @@
 from collections import Counter
 from operator import eq
-from typing import AbstractSet
-import typing
+from typing import AbstractSet, Tuple
 
-from neurolang.datalog.wrapped_collections import (
+from ..datalog.wrapped_collections import (
     WrappedNamedRelationalAlgebraFrozenSet,
-    WrappedRelationalAlgebraSet,
 )
-from neurolang.relational_algebra.relational_algebra import (
-    ExtendedProjection,
-    FunctionApplicationListMember,
-    NumberColumns,
-    int2columnint_constant,
-    str2columnstr_constant,
-)
-from neurolang.relational_algebra_provenance import ONE, ProvenanceAlgebraSet
-
 from ..expression_walker import (
     ExpressionWalker,
     add_match,
@@ -34,12 +23,17 @@ from ..logic.unification import (
     compose_substitutions,
     most_general_unifier,
 )
-from .probabilistic_ra_utils import (
-    generate_probabilistic_symbol_table_for_query,
-    is_atom_a_probabilistic_choice_relation,
+from ..relational_algebra.relational_algebra import (
+    ExtendedProjection,
+    FunctionApplicationListMember,
+    NumberColumns,
+    int2columnint_constant,
+    str2columnstr_constant,
 )
+from ..relational_algebra_provenance import ONE, ProvenanceAlgebraSet
+from .probabilistic_ra_utils import is_atom_a_probabilistic_choice_relation
 
-NAMED_DEE = Constant[typing.AbstractSet[typing.Tuple]](
+NAMED_DEE = Constant[AbstractSet[Tuple]](
     WrappedNamedRelationalAlgebraFrozenSet.dee(), verify_type=False
 )
 
@@ -136,24 +130,11 @@ def _only_equality(existential):
     ) and existential.body.functor == Constant(eq)
 
 
-def _equility_non_existential(conjunction):
-    equalities = [
-        formula
-        for formula in conjunction.formulas
-        if isinstance(formula, FunctionApplication)
-        and formula.functor == Constant(eq)
-        and any(isinstance(arg, Constant) for arg in formula.args)
-    ]
-
-    return len(equalities) > 0
-
-
 class NestedExistentialChoiceSimplification(ExpressionWalker):
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
 
-    # Overlap with the next one, unify
-    @add_match(Conjunction, _equility_non_existential)
+    @add_match(Conjunction)
     def match_conjuntion_non_existential(self, conjunction):
         forms = tuple()
         for formula in conjunction.formulas:
@@ -203,18 +184,6 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
                     forms += (new_symbol(symbols[0]),)
                 else:
                     forms += (formula,)
-            else:
-                forms += (formula,)
-
-        expression = LogicQuantifiersSolver().walk(Conjunction(forms))
-        return expression
-
-    @add_match(Conjunction)
-    def match_conjuntion(self, conjunction):
-        forms = tuple()
-        for formula in conjunction.formulas:
-            if isinstance(formula, ExistentialPredicate):
-                forms += (self.walk(formula),)
             else:
                 forms += (formula,)
 

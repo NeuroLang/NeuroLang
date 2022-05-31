@@ -71,9 +71,6 @@ def eq_prov_relations(pas1, pas2):
 
     columns = [v.value for v in pas1.non_provenance_columns]
 
-    if columns == []:
-        return pas1 == pas2
-
     if not (
         pas1.relation.value.projection_to_unnamed(*columns)
         == pas2.relation.value.projection_to_unnamed(*columns)

@@ -55,9 +55,14 @@ from ..relational_algebra import (
     UnaryRelationalAlgebraOperation,
     str2columnstr_constant,
 )
-from ..relational_algebra_provenance import ProvenanceAlgebraSet
+from ..relational_algebra.relational_algebra import (
+    ExtendedProjection,
+    FunctionApplicationListMember,
+)
+from ..relational_algebra_provenance import ZERO, ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .antishattering import (
+    NAMED_DEE,
     NestedExistentialChoiceSimplification,
     SelfjoinChoiceSimplification,
 )
@@ -293,10 +298,13 @@ def dalvi_suciu_lift(rule, symbol_table):
     rule = SelfjoinChoiceSimplification(symbol_table).walk(rule)
     rule = NestedExistentialChoiceSimplification(symbol_table).walk(rule)
     if rule == FALSE:
-        return ProvenanceAlgebraSet(
-            Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(("_p_",))),
-            str2columnstr_constant("_p_"),
+        provenance_column = str2columnstr_constant(Symbol.fresh().name)
+        constant = ExtendedProjection(
+            NAMED_DEE,
+            (FunctionApplicationListMember(ZERO, provenance_column),),
         )
+
+        return ProvenanceAlgebraSet(constant, provenance_column)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:
