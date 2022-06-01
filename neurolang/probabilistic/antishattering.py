@@ -147,9 +147,11 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
     @add_match(Conjunction)
     def match_conjuntion(self, conjunction):
         forms = tuple()
+        modified = False
         for formula in conjunction.formulas:
             if isinstance(formula, ExistentialPredicate):
                 forms += (self.walk(formula),)
+                modified |= True
             elif isinstance(
                 formula, FunctionApplication
             ) and formula.functor == Constant(eq):
@@ -192,13 +194,17 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
                     constant_symbol = new_symbol.cast(constant.type)
                     self.symbol_table[constant_symbol] = constant
                     forms += (new_symbol(symbols[0]),)
+                    modified |= True
                 else:
                     forms += (formula,)
             else:
                 forms += (formula,)
 
-        expression = LogicQuantifiersSolver().walk(Conjunction(forms))
-        return expression
+        if modified:
+            conjunction = LogicQuantifiersSolver().walk(Conjunction(forms))
+
+
+        return conjunction
 
     @add_match(ExistentialPredicate, _only_equality)
     def match_existential_equality(self, existential):
