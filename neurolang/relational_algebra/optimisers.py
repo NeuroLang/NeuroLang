@@ -25,6 +25,7 @@ from .relational_algebra import (
     RenameColumns,
     ReplaceNull,
     Selection,
+    _get_columns_for_RA_or_constant,
     eq_,
     get_expression_columns,
     int2columnint_constant,
@@ -550,7 +551,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
                 for proj in expression.relation_left.projection_list
                 if not isinstance(proj.fun_exp, Constant[Column])
             )
-            - expression.relation_right.columns()
+            - _get_columns_for_RA_or_constant(expression.relation_right)
         ),
     )
     def push_computed_columns_up(self, expression, flip=False):
@@ -559,7 +560,7 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
         else:
             left, right = expression.unapply()
 
-        right_columns = right.columns()
+        right_columns = _get_columns_for_RA_or_constant(right)
         projections_to_push_up = []
         projections_to_keep = []
         new_columns = {
