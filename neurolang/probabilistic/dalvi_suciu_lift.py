@@ -1,9 +1,13 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
-from typing import AbstractSet
+from typing import AbstractSet, Tuple
 
 import numpy as np
+
+from neurolang.datalog.wrapped_collections import (
+    WrappedNamedRelationalAlgebraFrozenSet,
+)
 
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
@@ -58,6 +62,7 @@ from ..relational_algebra import (
 from ..relational_algebra.relational_algebra import (
     ExtendedProjection,
     FunctionApplicationListMember,
+    Projection,
 )
 from ..relational_algebra_provenance import ZERO, ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
@@ -106,6 +111,10 @@ __all__ = [
     "solve_succ_query",
     "solve_marg_query",
 ]
+
+NAMED_DUM = Constant[AbstractSet[Tuple]](
+    WrappedNamedRelationalAlgebraFrozenSet.dum(), verify_type=False
+)
 
 RTO = RemoveTrivialOperations()
 PED = PushExistentialsDown()
@@ -300,7 +309,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     if rule == FALSE:
         provenance_column = str2columnstr_constant(Symbol.fresh().name)
         constant = ExtendedProjection(
-            NAMED_DEE,
+            Projection(NAMED_DEE, tuple()),
             (FunctionApplicationListMember(ZERO, provenance_column),),
         )
 
@@ -499,8 +508,9 @@ def _apply_disjoint_project_ucq_rule(
     head_plan = dalvi_suciu_lift(head, symbol_table)
     if isinstance(head_plan, NonLiftable):
         return False, None
+    tail_formulas = set(disjunctive_query.formulas) - set([disjunct])
     tail = add_existentials_except(
-        Conjunction(tuple(disjunctive_query.formulas[:1])), free_vars,
+        Conjunction(tuple(tail_formulas)), free_vars,
     )
     tail_plan = dalvi_suciu_lift(tail, symbol_table)
     if isinstance(tail_plan, NonLiftable):
