@@ -5,16 +5,15 @@ from typing import AbstractSet, Tuple
 
 import numpy as np
 
-from neurolang.datalog.wrapped_collections import (
-    WrappedNamedRelationalAlgebraFrozenSet,
-)
-
 from .. import relational_algebra_provenance as rap
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
+from ..datalog.wrapped_collections import (
+    WrappedNamedRelationalAlgebraFrozenSet,
+)
 from ..exceptions import (
     NeuroLangException,
     NonLiftableException,

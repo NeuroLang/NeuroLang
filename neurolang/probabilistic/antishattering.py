@@ -37,6 +37,10 @@ NAMED_DEE = Constant[AbstractSet[Tuple]](
     WrappedNamedRelationalAlgebraFrozenSet.dee(), verify_type=False
 )
 
+ped = PushExistentialsDown()
+mqu = MoveQuantifiersUp()
+cc = CollapseConjunctions()
+
 
 def _check_selfjoins(conjunction):
     a = Counter(
@@ -61,11 +65,11 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
         ),
     )
     def match_conj(self, conjunction):
-        expression = MoveQuantifiersUp().walk(conjunction)
-        expression = CollapseConjunctions().walk(expression)
+        expression = mqu.walk(conjunction)
+        expression = cc.walk(expression)
         expression = self.walk(expression)
         if expression != FALSE:
-            expression = PushExistentialsDown().walk(expression)
+            expression = ped.walk(expression)
 
         return expression
 
@@ -91,27 +95,33 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
                 if mgu is not None:
                     replacements = compose_substitutions(replacements, mgu[0])
 
-        new_formulas = set(
-            apply_substitution(f, replacements) for f in conjunction.formulas
-        )
+        if len(replacements) > 0:
+            new_formulas = set(
+                apply_substitution(f, replacements)
+                for f in conjunction.formulas
+            )
 
-        sfc = Counter(
-            (
-                f.functor
-                for f in new_formulas
-                if isinstance(f, FunctionApplication)
-                and is_atom_a_probabilistic_choice_relation(
-                    f, self.symbol_table
+            sfc = Counter(
+                (
+                    f.functor
+                    for f in new_formulas
+                    if isinstance(f, FunctionApplication)
+                    and is_atom_a_probabilistic_choice_relation(
+                        f, self.symbol_table
+                    )
                 )
             )
-        )
-        if any(c > 1 for _, c in sfc.items()):
-            return FALSE
+            if any(c > 1 for _, c in sfc.items()):
+                return FALSE
 
-        equalities = set(Constant(eq)(a, b) for a, b in replacements.items())
-        new_formulas = tuple(new_formulas) + tuple(equalities)
+            equalities = set(
+                Constant(eq)(a, b) for a, b in replacements.items()
+            )
+            new_formulas = tuple(new_formulas) + tuple(equalities)
 
-        return Conjunction(new_formulas)
+            conjunction = Conjunction(new_formulas)
+
+        return conjunction
 
 
 def _check_equality(existential):
@@ -135,7 +145,7 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         self.symbol_table = symbol_table
 
     @add_match(Conjunction)
-    def match_conjuntion_non_existential(self, conjunction):
+    def match_conjuntion(self, conjunction):
         forms = tuple()
         for formula in conjunction.formulas:
             if isinstance(formula, ExistentialPredicate):
@@ -196,8 +206,8 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
 
     @add_match(ExistentialPredicate, _check_equality)
     def match_existential(self, existential):
-        expression = MoveQuantifiersUp().walk(existential)
-        expression = CollapseConjunctions().walk(expression)
+        expression = mqu.walk(existential)
+        expression = cc.walk(expression)
         ext_vars = set()
         while hasattr(expression, "head"):
             ext_vars.add(expression.head)
@@ -250,7 +260,7 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         for ext_var in new_ext_vars:
             expression = ExistentialPredicate(ext_var, expression)
 
-        expression = PushExistentialsDown().walk(expression)
+        expression = ped.walk(expression)
         expression = LogicQuantifiersSolver().walk(expression)
         return expression
 
