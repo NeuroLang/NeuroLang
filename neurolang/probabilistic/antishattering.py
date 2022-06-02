@@ -67,11 +67,13 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
     def match_conj(self, conjunction):
         expression = mqu.walk(conjunction)
         expression = cc.walk(expression)
-        expression = self.walk(expression)
-        if expression != FALSE:
-            expression = ped.walk(expression)
+        walked_expression = self.walk(expression)
+        if expression is walked_expression:
+            return conjunction
+        if walked_expression != FALSE:
+            walked_expression = ped.walk(walked_expression)
 
-        return expression
+        return walked_expression
 
     @add_match(Conjunction, _check_selfjoins)
     def match_conjunction(self, conjunction):
@@ -150,8 +152,10 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         modified = False
         for formula in conjunction.formulas:
             if isinstance(formula, ExistentialPredicate):
-                forms += (self.walk(formula),)
-                modified |= True
+                walked_formula = self.walk(formula)
+                forms += (walked_formula,)
+                if formula is not walked_formula:
+                    modified = True
             elif isinstance(
                 formula, FunctionApplication
             ) and formula.functor == Constant(eq):
@@ -194,7 +198,7 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
                     constant_symbol = new_symbol.cast(constant.type)
                     self.symbol_table[constant_symbol] = constant
                     forms += (new_symbol(symbols[0]),)
-                    modified |= True
+                    modified = True
                 else:
                     forms += (formula,)
             else:
@@ -202,7 +206,6 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
 
         if modified:
             conjunction = LogicQuantifiersSolver().walk(Conjunction(forms))
-
 
         return conjunction
 
