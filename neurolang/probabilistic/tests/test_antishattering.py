@@ -46,7 +46,7 @@ def test_walkers_no_change():
         new_formula
     )
 
-    assert new_formula == P(a)
+    assert new_formula == Conjunction((P(a),))
 
 
 def test_walkers_conjuntion_selfjoin_constant():
@@ -241,9 +241,7 @@ def test_walkers_choices_facts():
         new_formula
     )
 
-    assert new_formula == Conjunction(
-        (ExistentialPredicate(x, P(x)), ExistentialPredicate(y, R(y)),)
-    )
+    assert new_formula == formula
 
 
 def test_walkers_choices_facts_det():

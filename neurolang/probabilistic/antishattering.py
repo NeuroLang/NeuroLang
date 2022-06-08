@@ -97,7 +97,6 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
                 if mgu is not None:
                     replacements = compose_substitutions(replacements, mgu[0])
 
-        if len(replacements) > 0:
             new_formulas = set(
                 apply_substitution(f, replacements)
                 for f in conjunction.formulas
@@ -116,6 +115,7 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
             if any(c > 1 for _, c in sfc.items()):
                 return FALSE
 
+        if len(replacements) > 0:
             equalities = set(
                 Constant(eq)(a, b) for a, b in replacements.items()
             )
