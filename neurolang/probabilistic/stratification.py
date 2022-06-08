@@ -7,11 +7,12 @@ from ..datalog.expression_processing import (
     dependency_matrix,
     extract_logic_atoms,
     extract_logic_predicates,
-    reachable_code,
 )
+from ..datalog.constraints_representation import reachable_code
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
 from ..logic import TRUE, Implication, Negation, Union
+from ..datalog.constraints_representation import RightImplication
 from .expressions import ProbabilisticPredicate
 
 
@@ -36,24 +37,19 @@ def reachable_code_from_query(query, program):
 
     """
     if query is None:
-        return Union(tuple(_get_list_of_intensional_rules(program)))
+        return Union(tuple(get_list_of_intensional_rules(program)))
+
     predicates = [query.consequent] + list(
         extract_logic_atoms(query.antecedent)
     )
-    entity_rules = tuple()
-    if "__constraints__" in program.symbol_table and 'Entity' in program.symbol_table:
-        entity_rules = tuple(
-            [q
-            for q in _get_list_of_intensional_rules(program)
-            if 'Entity' in q.antecedent._symbols
-        ])
     reachable = set()
     for pred in predicates:
         for rule in _iter_implication_or_union_of_implications(
             program.intensional_database().get(pred.functor, None)
         ):
-            reachable |= set(reachable_code(rule, program).formulas)
-    return Union(tuple(reachable) + entity_rules)
+            if not isinstance(rule, RightImplication):
+                reachable |= set(reachable_code(rule, program).formulas)
+    return Union(tuple(reachable))
 
 
 def stratify_program(query, program):
@@ -133,11 +129,26 @@ def _check_no_negated_prob_idb_predicate(prob_idb):
         )
 
 
-def _get_list_of_intensional_rules(program):
+def get_list_of_intensional_rules(program):
+    '''
+    Given a program, it returns a list of intentional rules.
+
+    Parameters
+    ----------
+    program : CPLogicProgram
+        Program from which we want to obtain the list of intentional rules.
+
+    Returns
+    -------
+    list
+        list of intentional rules
+    '''
+
     idb = [
         rule
         for exp in program.intensional_database().values()
         for rule in _iter_implication_or_union_of_implications(exp)
+        if not isinstance(rule, RightImplication)
     ]
     return idb
 

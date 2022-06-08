@@ -883,6 +883,10 @@ class ExtractConjunctiveQueryWithNegation(WalkLogicProgramAggregatingSets):
     def neg(self, expression):
         return self.walk(expression.formula)
 
+    @add_match(Constant)
+    def const(self, expression):
+        return OrderedSet([])
+
 
 class RemoveExistentialPredicates(LogicExpressionWalker):
     @add_match(ExistentialPredicate)

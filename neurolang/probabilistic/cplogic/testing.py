@@ -15,11 +15,11 @@ from ...relational_algebra import (
     Projection,
     RenameColumn,
     Selection,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceCountingSolver
+    RelationalAlgebraProvenanceCountingSolver,
 )
 from .cplogic_to_gm import CPLogicGroundingToGraphicalModelTranslator
 from .gm_provenance_solver import (
@@ -31,7 +31,7 @@ from .gm_provenance_solver import (
     TupleSymbol,
     UnionOverTuples,
     UnionRemover,
-    rename_columns_for_args_to_match
+    rename_columns_for_args_to_match,
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
 
@@ -53,19 +53,16 @@ def build_ra_provenance_set_from_named_ra_set(nas, provenance_column):
     uas = nas.to_unnamed()
     res = NameColumns(
         Constant[AbstractSet](uas),
-        tuple(str2columnstr_constant(c) for c in nas.columns)
+        tuple(str2columnstr_constant(c) for c in nas.columns),
     )
 
-    return ProvenanceAlgebraSet(
-        res,
-        str2columnstr_constant(provenance_column)
-    )
+    return ProvenanceAlgebraSet(res, str2columnstr_constant(provenance_column))
 
 
 def eq_prov_relations(pas1, pas2):
     if not (
-        isinstance(pas1, ProvenanceAlgebraSet) and
-        isinstance(pas2, ProvenanceAlgebraSet)
+        isinstance(pas1, ProvenanceAlgebraSet)
+        and isinstance(pas2, ProvenanceAlgebraSet)
     ):
         return False
 
@@ -76,8 +73,7 @@ def eq_prov_relations(pas1, pas2):
 
     if not (
         pas1.relation.value.projection_to_unnamed(*columns)
-        ==
-        pas2.relation.value.projection_to_unnamed(*columns)
+        == pas2.relation.value.projection_to_unnamed(*columns)
     ):
         return False
 
@@ -86,6 +82,7 @@ def eq_prov_relations(pas1, pas2):
     c2 = Symbol.fresh().name
     x1 = pas1.relation.value.rename_column(pas1.provenance_column.value, c1)
     x2 = pas2.relation.value.rename_column(pas2.provenance_column.value, c2)
+
     joined = x1.naturaljoin(x2)
     probs = list(joined.projection(*(c1, c2)))
     for p1, p2 in probs:
@@ -99,9 +96,9 @@ def eq_prov_relations(pas1, pas2):
 
 def make_prov_set(iterable, columns):
     return ProvenanceAlgebraSet(
-        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
-            columns, iterable
-        )),
+        Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(columns, iterable)
+        ),
         str2columnstr_constant(columns[0]),
     )
 

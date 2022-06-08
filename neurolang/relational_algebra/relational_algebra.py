@@ -1,6 +1,6 @@
 import math
 import operator
-from typing import AbstractSet, Callable, Tuple
+from typing import AbstractSet, Callable, SupportsFloat, Tuple
 
 import numpy
 import pandas.core.computation.ops
@@ -118,6 +118,10 @@ class NAryRelationalAlgebraOperation(RelationalAlgebraOperation):
 
 
 class BinaryRelationalAlgebraOperation(RelationalAlgebraOperation):
+    def __init__(self, relation_left, relation_right):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
+
     def columns(self):
         if not hasattr(self, '_columns'):
             self._columns = (
@@ -193,6 +197,19 @@ class LeftNaturalJoin(BinaryRelationalAlgebraOperation):
         return (
             f"[{self.relation_left}"
             f"\N{LEFT OUTER JOIN}"
+            f"{self.relation_right}]"
+        )
+
+
+class FullOuterNaturalJoin(BinaryRelationalAlgebraOperation):
+    def __init__(self, relation_left, relation_right):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
+
+    def __repr__(self):
+        return (
+            f"[{self.relation_left}"
+            f"\N{FULL OUTER JOIN}"
             f"{self.relation_right}]"
         )
 
@@ -905,6 +922,17 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         row_type = self._compute_join_type(naturaljoin, res, left, right)
         return self._build_relation_constant(res, type_=AbstractSet[row_type])
 
+    @ew.add_match(FullOuterNaturalJoin(Constant, Constant))
+    def ra_full_outer_naturaljoin(self, naturaljoin):
+        left = naturaljoin.relation_left.value
+        right = naturaljoin.relation_right.value
+        res = (
+            left.left_naturaljoin(right) |
+            right.left_naturaljoin(left)
+        )
+        row_type = self._compute_join_type(naturaljoin, res, left, right)
+        return self._build_relation_constant(res, type_=AbstractSet[row_type])
+
     @ew.add_match(Difference(Constant, Constant))
     def ra_difference(self, difference):
         return self._type_preserving_binary_operation(difference)
@@ -1084,8 +1112,19 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         value = expression.value.value
 
         new_relation = relation.replace_null(column, value)
+        null_index = new_relation.columns.index(column)
+        tuple_type = type_system.get_args(type_system.get_args(
+            expression.relation.type)[0]
+        )
+        if tuple_type[null_index] is Unknown:
+            tuple_type = (
+                tuple_type[:null_index] +
+                (expression.value.type,) +
+                tuple_type[null_index + 1:]
+            )
+        relation_type = AbstractSet[Tuple[tuple_type]]
         return self._build_relation_constant(
-            new_relation, type_=expression.relation.type
+            new_relation, type_=relation_type
         )
 
     @ew.add_match(Constant)
@@ -1174,7 +1213,11 @@ def _infer_relation_type(relation):
         return AbstractSet[Tuple]
     if hasattr(relation, "row_type"):
         return AbstractSet[relation.row_type]
-    tuple_type = Tuple[tuple(type(arg) for arg in relation.fetch_one())]
+    tuple_type = Tuple[tuple(
+        Unknown if isinstance(arg, SupportsFloat) and math.isnan(arg)
+        else type(arg)
+        for arg in relation.fetch_one()
+    )]
     return AbstractSet[tuple_type]
 
 

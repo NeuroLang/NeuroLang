@@ -43,13 +43,14 @@ from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
+
 from ..exceptions import (
     UnsupportedQueryError,
     UnsupportedSolverError,
     UnsupportedProgramError,
 )
 from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
-from ..logic import Union
+from ..logic import Union, Symbol
 from ..probabilistic import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -66,7 +67,10 @@ from ..probabilistic.query_resolution import (
     QueryBasedProbFactToDetRule,
     compute_probabilistic_solution,
 )
-from ..probabilistic.stratification import stratify_program
+from ..probabilistic.stratification import (
+    get_list_of_intensional_rules,
+    stratify_program
+)
 from ..probabilistic.weighted_model_counting import (
     solve_marg_query as wmc_solve_marg_query,
 )
@@ -78,8 +82,9 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraColumnStr,
 )
-from . import query_resolution_expressions as fe
 from ..commands import CommandsMixin
+from ..datalog.basic_representation import UnionOfConjunctiveQueries
+from . import query_resolution_expressions as fe
 from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
@@ -174,7 +179,8 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def load_ontology(
         self,
-        paths: typing.Union[str, List[str]]
+        paths: typing.Union[str, List[str]],
+        connector_symbol_name=None
     ) -> None:
         """
         Loads and parses ontology stored at the specified paths, and
@@ -184,15 +190,37 @@ class NeurolangPDL(QueryBuilderDatalog):
         ----------
         paths : typing.Union[str, List[str]]
             where the ontology files are stored
+        connector_symbol_name : str
+            name to be used in the connector_symbol.
+            if None, the name is randomly generated
+
+        Returns
+        -------
+        Expression
+            the new connector_symbol, to be used in
+            the query program.
         """
-        onto = OntologyParser(paths)
-        constraints, entity_rules, classes = onto.parse_ontology()
-        _ = [self.new_symbol(name=c) for c in classes]
+        if connector_symbol_name is None:
+            self.connector_symbol = self.new_symbol()
+        else:
+            self.connector_symbol = self.new_symbol(name=connector_symbol_name)
+        onto = OntologyParser(paths, connector_symbol=self.connector_symbol.expression)
+        constraints, est_knowledge, entity_rules = onto.parse_ontology()
         self.program_ir.set_constraints(constraints)
+        for name, expressions in constraints.items():
+            symbol = Symbol(name=name).cast(UnionOfConjunctiveQueries)
+            self.program_ir.symbol_table[symbol] = Union(expressions)
+        for symbol, expressions in est_knowledge.items():
+            iterable = [exp.args for exp in expressions]
+            self.program_ir.add_extensional_predicate_from_tuples(
+                symbol, iterable
+            )
         self.program_ir.add_existential_rules(onto.existential_rules)
-        for _, expressions in entity_rules.items():
+        for symbol, expressions in entity_rules.items():
             for e in expressions:
                 self.program_ir.walk(e)
+
+        return self.connector_symbol
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -413,6 +441,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         to the variable `current_program_rewritten` to provide a way
         to access this information.
 
+        In case connector_symbol has been defined, all rules derived
+        from the ontology parsing are included in the program
+
         Parameters
         ----------
         det_idb : typing.Union
@@ -424,6 +455,13 @@ class NeurolangPDL(QueryBuilderDatalog):
         '''
         if "__constraints__" in self.symbol_table:
             det_idb = self._rewrite_program_with_ontology(det_idb)
+            if hasattr(self, 'connector_symbol'):
+                connector_rules = tuple(
+                    [q
+                    for q in get_list_of_intensional_rules(self.program_ir)
+                    if self.connector_symbol.expression in q.antecedent._symbols
+                ])
+                det_idb = Union(det_idb.formulas + connector_rules)
             self.current_program_rewritten = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
@@ -527,7 +565,7 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
             deterministic_program,
-            self.program_ir.get_constraints(),
+            self.program_ir.get_constraints()
         )
         rewrite = orw.Xrewrite()
 
