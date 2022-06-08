@@ -1,5 +1,8 @@
 import pytest
 
+from neurolang.datalog.expressions import Fact
+
+
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Negation, Union
 from ...exceptions import MalformedCausalOperatorError
@@ -110,7 +113,7 @@ def test_simple_rewrite():
     new_imp1 = Implication(new_f2, new_f1)
 
     new_rule = Implication(new_f2, Conjunction((P(x), Negation(new_f1))))
-    new_fact = new_f1.functor(*intervention.args)
+    new_fact = Fact(new_f1.functor(*intervention.args))
 
     assert len(cir.new_facts) == 1
     assert new_fact == list(cir.new_facts)[0]
@@ -169,7 +172,7 @@ def test_rewrite_two_implications():
     new_rule2 = Implication(
         new_f2_rule_x, Conjunction((S(x, y), Negation(new_f1_rule_x)))
     )
-    new_fact = new_f1(*intervention.args)
+    new_fact = Fact(new_f1(*intervention.args))
 
     assert len(cir.new_facts) == 1
     assert new_fact == list(cir.new_facts)[0]
@@ -239,8 +242,8 @@ def test_rewrite_two_interventions():
     new_rule1 = Implication(new_f1, Conjunction((P(z), Negation(new_f0))))
     new_rule2 = Implication(new_f3, Conjunction((S(y, x), Negation(new_f2))))
 
-    new_fact1 = new_f0s(*intervention_0.args)
-    new_fact2 = new_f2s(*intervention_1.args)
+    new_fact1 = Fact(new_f0s(*intervention_0.args))
+    new_fact2 = Fact(new_f2s(*intervention_1.args))
 
     assert len(cir.new_facts) == 2
     assert new_fact1 in list(cir.new_facts)
