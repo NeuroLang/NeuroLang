@@ -99,6 +99,8 @@ class CausalInterventionRewriter(PatternWalker):
                         if ci.functor not in self.symbol_computed.keys():
                             new_int_functor = Symbol.fresh()
                             new_int_atom = new_int_functor(*ci.args)
+                            new_fact = Fact(new_int_atom)
+                            self.new_facts.add(new_fact)
                             self.symbol_computed[ci.functor] = new_int_functor
                         else:
                             new_int_functor = self.symbol_computed[ci.functor]
