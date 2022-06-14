@@ -303,13 +303,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     rule = SelfjoinChoiceSimplification(symbol_table).walk(rule)
     rule = NestedExistentialChoiceSimplification(symbol_table).walk(rule)
     if rule == FALSE:
-        provenance_column = str2columnstr_constant(Symbol.fresh().name)
-        constant = ExtendedProjection(
-            Projection(NAMED_DEE, tuple()),
-            (FunctionApplicationListMember(ZERO, provenance_column),),
-        )
-
-        return ProvenanceAlgebraSet(constant, provenance_column)
+        return create_zero_named_dee()
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:
@@ -342,6 +336,16 @@ def dalvi_suciu_lift(rule, symbol_table):
         return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
     return NonLiftable(rule_cnf)
+
+def create_zero_named_dee():
+    provenance_column = str2columnstr_constant(Symbol.fresh().name)
+    constant = ExtendedProjection(
+        Projection(NAMED_DEE, tuple()),
+        (FunctionApplicationListMember(ZERO, provenance_column),),
+    )
+
+    zero_named_dee =  ProvenanceAlgebraSet(constant, provenance_column)
+    return zero_named_dee
 
 
 def symbol_or_deterministic_plan(rule, symbol_table):

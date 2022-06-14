@@ -84,20 +84,7 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
             ):
                 continue
 
-            for f2 in conjunction.formulas[i + 1 :]:
-                if (
-                    isinstance(f2, FunctionApplication)
-                    and f1.functor != f2.functor
-                ):
-                    continue
-                mgu = most_general_unifier(f1, f2)
-                if mgu is not None:
-                    replacements = compose_substitutions(replacements, mgu[0])
-
-            new_formulas = set(
-                apply_substitution(f, replacements)
-                for f in conjunction.formulas
-            )
+            replacements, new_formulas = self.apply_mgu_and_substitutions(conjunction, replacements, i, f1)
 
             sfc = Counter(
                 (
@@ -121,6 +108,24 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
             conjunction = Conjunction(new_formulas)
 
         return conjunction
+
+    def apply_mgu_and_substitutions(self, conjunction, replacements, i, f1):
+        for f2 in conjunction.formulas[i + 1 :]:
+            if (
+                isinstance(f2, FunctionApplication)
+                    and f1.functor != f2.functor
+            ):
+                continue
+            mgu = most_general_unifier(f1, f2)
+            if mgu is not None:
+                replacements = compose_substitutions(replacements, mgu[0])
+
+        new_formulas = set(
+                apply_substitution(f, replacements)
+                for f in conjunction.formulas
+            )
+
+        return replacements,new_formulas
 
 
 def _check_equality(existential):
@@ -168,38 +173,14 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
                     arg for arg in formula.args if isinstance(arg, Symbol)
                 ]
                 if len(consts) == 1:
-                    new_symbol = Symbol.fresh()
-                    provenance_column = str2columnstr_constant(
-                        Symbol.fresh().name
-                    )
-
-                    constant = NumberColumns(
-                        ExtendedProjection(
-                            NAMED_DEE,
-                            tuple(
-                                FunctionApplicationListMember(c, s)
-                                for c, s in zip(consts, symbols_str)
-                            )
-                            + (
-                                FunctionApplicationListMember(
-                                    ONE, provenance_column
-                                ),
-                            ),
-                        ),
-                        (provenance_column,) + tuple(symbols_str),
-                    )
-
-                    constant = ProvenanceAlgebraSet(
-                        constant, int2columnint_constant(0)
-                    )
-                    constant_symbol = new_symbol.cast(constant.type)
-                    self.symbol_table[constant_symbol] = constant
+                    new_symbol = self.create_named_dee(consts, symbols_str)
                     forms += (new_symbol(symbols[0]),)
                     modified = True
                 else:
                     forms += (formula,)
             else:
-                forms += (formula,)
+                form = self.walk(formula)
+                forms += (form,)
 
         if modified:
             conjunction = LogicQuantifiersSolver().walk(Conjunction(forms))
@@ -234,6 +215,35 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         expression = PED.walk(expression)
         expression = LogicQuantifiersSolver().walk(expression)
         return expression
+
+    def create_named_dee(self, consts, symbols_str):
+        new_symbol = Symbol.fresh()
+        provenance_column = str2columnstr_constant(
+            Symbol.fresh().name
+        )
+
+        constant = NumberColumns(
+            ExtendedProjection(
+                NAMED_DEE,
+                tuple(
+                    FunctionApplicationListMember(c, s)
+                    for c, s in zip(consts, symbols_str)
+                )
+                + (
+                    FunctionApplicationListMember(
+                        ONE, provenance_column
+                    ),
+                ),
+            ),
+            (provenance_column,) + tuple(symbols_str),
+        )
+
+        constant = ProvenanceAlgebraSet(
+            constant, int2columnint_constant(0)
+        )
+        constant_symbol = new_symbol.cast(constant.type)
+        self.symbol_table[constant_symbol] = constant
+        return new_symbol
 
     def replace_equalities_with_constants(self, expression, ext_vars, only_ext_pchoice_args):
         forms = tuple()
