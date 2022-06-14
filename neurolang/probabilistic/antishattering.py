@@ -1,9 +1,8 @@
 from collections import Counter
 from operator import eq
-from typing import AbstractSet, Tuple
 
 from ..datalog.wrapped_collections import (
-    WrappedNamedRelationalAlgebraFrozenSet,
+    NAMED_DEE
 )
 from ..expression_walker import (
     ExpressionWalker,
@@ -33,13 +32,11 @@ from ..relational_algebra.relational_algebra import (
 from ..relational_algebra_provenance import ONE, ProvenanceAlgebraSet
 from .probabilistic_ra_utils import is_atom_a_probabilistic_choice_relation
 
-NAMED_DEE = Constant[AbstractSet[Tuple]](
-    WrappedNamedRelationalAlgebraFrozenSet.dee(), verify_type=False
-)
 
-ped = PushExistentialsDown()
-mqu = MoveQuantifiersUp()
-cc = CollapseConjunctions()
+
+PED = PushExistentialsDown()
+MQU = MoveQuantifiersUp()
+CC = CollapseConjunctions()
 
 
 def _check_selfjoins(conjunction):
@@ -65,13 +62,13 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
         ),
     )
     def match_conj(self, conjunction):
-        expression = mqu.walk(conjunction)
-        expression = cc.walk(expression)
+        expression = MQU.walk(conjunction)
+        expression = CC.walk(expression)
         walked_expression = self.walk(expression)
         if expression is walked_expression:
             return conjunction
-        if walked_expression != FALSE:
-            walked_expression = ped.walk(walked_expression)
+
+        walked_expression = PED.walk(walked_expression)
 
         return walked_expression
 
@@ -215,13 +212,50 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
 
     @add_match(ExistentialPredicate, _check_equality)
     def match_existential(self, existential):
-        expression = mqu.walk(existential)
-        expression = cc.walk(expression)
+        expression = MQU.walk(existential)
+        expression = CC.walk(expression)
         ext_vars = set()
         while hasattr(expression, "head"):
             ext_vars.add(expression.head)
             expression = expression.body
 
+        pchoice_args, no_pchoice_args = self.pchoice_args_separation(expression)
+
+        only_pchoice_args = pchoice_args - no_pchoice_args
+        if len(only_pchoice_args) == 0:
+            only_ext_pchoice_args = ext_vars - no_pchoice_args
+        else:
+            only_ext_pchoice_args = only_pchoice_args.intersection(ext_vars)
+
+        expression, new_ext_vars = self.replace_equalities_with_constants(expression, ext_vars, only_ext_pchoice_args)
+        for ext_var in new_ext_vars:
+            expression = ExistentialPredicate(ext_var, expression)
+
+        expression = PED.walk(expression)
+        expression = LogicQuantifiersSolver().walk(expression)
+        return expression
+
+    def replace_equalities_with_constants(self, expression, ext_vars, only_ext_pchoice_args):
+        forms = tuple()
+        remove_vars = set()
+        for formula in expression.formulas:
+            if isinstance(
+                formula, FunctionApplication
+            ) and formula.functor == Constant(eq):
+                symbols, _ = self.get_symbols_constants_in_set(
+                    formula.args, only_ext_pchoice_args
+                )
+                forms += (TRUE,)
+                if len(symbols) >= 1:
+                    remove_vars.add(formula.args[0])
+            else:
+                forms += (formula,)
+
+        expression = Conjunction(forms)
+        new_ext_vars = ext_vars - remove_vars
+        return expression, new_ext_vars
+
+    def pchoice_args_separation(self, expression):
         pchoice_args = set()
         no_pchoice_args = set()
         for _, e in expression_iterator(expression.formulas):
@@ -243,35 +277,7 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
             ):
                 for arg in e.args:
                     no_pchoice_args.add(arg)
-
-        only_pchoice_args = pchoice_args - no_pchoice_args
-        if len(only_pchoice_args) == 0:
-            only_ext_pchoice_args = ext_vars - no_pchoice_args
-        else:
-            only_ext_pchoice_args = only_pchoice_args.intersection(ext_vars)
-        forms = tuple()
-        remove_vars = set()
-        for formula in expression.formulas:
-            if isinstance(
-                formula, FunctionApplication
-            ) and formula.functor == Constant(eq):
-                symbols, _ = self.get_symbols_constants_in_set(
-                    formula.args, only_ext_pchoice_args
-                )
-                forms += (TRUE,)
-                if len(symbols) >= 1:
-                    remove_vars.add(formula.args[0])
-            else:
-                forms += (formula,)
-
-        expression = Conjunction(forms)
-        new_ext_vars = ext_vars - remove_vars
-        for ext_var in new_ext_vars:
-            expression = ExistentialPredicate(ext_var, expression)
-
-        expression = ped.walk(expression)
-        expression = LogicQuantifiersSolver().walk(expression)
-        return expression
+        return pchoice_args, no_pchoice_args
 
     def get_symbols_constants_in_set(self, args, vars_set):
         consts = set()
@@ -289,7 +295,7 @@ class LogicQuantifiersSolver(LogicSolver):
     @add_match(Quantifier)
     def match_quantifier(self, quantifier):
         body = self.walk(quantifier.body)
-        return ExistentialPredicate(quantifier.head, body)
+        return quantifier.apply(quantifier.head, body)
 
     @add_match(FunctionApplication)
     def match_func_app(self, app):

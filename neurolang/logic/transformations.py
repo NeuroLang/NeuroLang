@@ -788,6 +788,10 @@ class PushExistentialsDown(
                 )
         return expression
 
+    @add_match(Constant[bool])
+    def match_boolean_constant(self, expression):
+        return expression
+
 
 class GuaranteeConjunction(IdentityWalker):
     @add_match(..., lambda e: not isinstance(e, Conjunction))

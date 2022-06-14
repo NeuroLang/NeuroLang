@@ -2,7 +2,7 @@ from collections import namedtuple
 from inspect import isclass
 from itertools import tee
 from functools import lru_cache
-from typing import Tuple, Iterable
+from typing import AbstractSet, Tuple, Iterable
 
 import numpy as np
 
@@ -334,3 +334,7 @@ class WrappedNamedRelationalAlgebraFrozenSet(
 ):
     def unwrap(self):
         return NamedRelationalAlgebraFrozenSet.create_view_from(self)
+
+NAMED_DEE = Constant[AbstractSet[Tuple]](
+    WrappedNamedRelationalAlgebraFrozenSet.dee(), verify_type=False
+)

@@ -1,7 +1,7 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
-from typing import AbstractSet, Tuple
+from typing import AbstractSet
 
 import numpy as np
 
@@ -12,7 +12,7 @@ from ..datalog.expression_processing import (
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..datalog.wrapped_collections import (
-    WrappedNamedRelationalAlgebraFrozenSet,
+    NAMED_DEE
 )
 from ..exceptions import (
     NeuroLangException,
@@ -111,9 +111,6 @@ __all__ = [
     "solve_marg_query",
 ]
 
-NAMED_DUM = Constant[AbstractSet[Tuple]](
-    WrappedNamedRelationalAlgebraFrozenSet.dum(), verify_type=False
-)
 
 RTO = RemoveTrivialOperations()
 PED = PushExistentialsDown()
