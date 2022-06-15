@@ -241,7 +241,12 @@ def test_walkers_choices_facts():
         new_formula
     )
 
-    assert new_formula == formula
+    assert new_formula == Conjunction(
+        (
+            ExistentialPredicate(y, R(y)),
+            ExistentialPredicate(x, P(x))
+        )
+    )
 
 
 def test_walkers_choices_facts_det():

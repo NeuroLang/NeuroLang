@@ -1,3 +1,4 @@
+from ast import walk
 from collections import Counter
 from operator import eq
 
@@ -60,19 +61,19 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
     def match_conj(self, conjunction):
         expression = MQU.walk(conjunction)
         expression = CC.walk(expression)
+
         ext_vars = set()
-        #while hasattr(expression, "head"):
-        #    ext_vars.add(expression.head)
-        #    expression = expression.body
+        while hasattr(expression, "head"):
+            ext_vars.add(expression.head)
+            expression = expression.body
 
         walked_expression = self.walk(expression)
+        if walked_expression == FALSE:
+            return walked_expression
 
-        #while ext_vars:
-        #    var = ext_vars.pop()
-        #    walked_expression = ExistentialPredicate(var, walked_expression)
-
-        if expression is walked_expression:
-            return conjunction
+        while ext_vars:
+            var = ext_vars.pop()
+            walked_expression = ExistentialPredicate(var, walked_expression)
 
         walked_expression = PED.walk(walked_expression)
 
