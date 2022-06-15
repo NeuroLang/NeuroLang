@@ -1,9 +1,7 @@
 from collections import Counter
 from operator import eq
 
-from ..datalog.wrapped_collections import (
-    NAMED_DEE
-)
+from ..datalog.wrapped_collections import NAMED_DEE
 from ..expression_walker import (
     ExpressionWalker,
     add_match,
@@ -31,8 +29,6 @@ from ..relational_algebra.relational_algebra import (
 )
 from ..relational_algebra_provenance import ONE, ProvenanceAlgebraSet
 from .probabilistic_ra_utils import is_atom_a_probabilistic_choice_relation
-
-
 
 PED = PushExistentialsDown()
 MQU = MoveQuantifiersUp()
@@ -64,7 +60,17 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
     def match_conj(self, conjunction):
         expression = MQU.walk(conjunction)
         expression = CC.walk(expression)
+        ext_vars = set()
+        #while hasattr(expression, "head"):
+        #    ext_vars.add(expression.head)
+        #    expression = expression.body
+
         walked_expression = self.walk(expression)
+
+        #while ext_vars:
+        #    var = ext_vars.pop()
+        #    walked_expression = ExistentialPredicate(var, walked_expression)
+
         if expression is walked_expression:
             return conjunction
 
@@ -72,9 +78,11 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
 
         return walked_expression
 
+
     @add_match(Conjunction, _check_selfjoins)
     def match_conjunction(self, conjunction):
         replacements = {}
+
         for i, f1 in enumerate(conjunction.formulas):
             if not (
                 isinstance(f1, FunctionApplication)
@@ -84,7 +92,20 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
             ):
                 continue
 
-            replacements, new_formulas = self.apply_mgu_and_substitutions(conjunction, replacements, i, f1)
+            for f2 in conjunction.formulas[i + 1 :]:
+                if (
+                    isinstance(f2, FunctionApplication)
+                    and f1.functor != f2.functor
+                ):
+                    continue
+
+                mgu = most_general_unifier(f1, f2)
+                if mgu is not None:
+                    replacements = compose_substitutions(replacements, mgu[0])
+
+            new_formulas = set(
+                apply_substitution(f, replacements) for f in conjunction.formulas
+            )
 
             sfc = Counter(
                 (
@@ -108,24 +129,6 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
             conjunction = Conjunction(new_formulas)
 
         return conjunction
-
-    def apply_mgu_and_substitutions(self, conjunction, replacements, i, f1):
-        for f2 in conjunction.formulas[i + 1 :]:
-            if (
-                isinstance(f2, FunctionApplication)
-                    and f1.functor != f2.functor
-            ):
-                continue
-            mgu = most_general_unifier(f1, f2)
-            if mgu is not None:
-                replacements = compose_substitutions(replacements, mgu[0])
-
-        new_formulas = set(
-                apply_substitution(f, replacements)
-                for f in conjunction.formulas
-            )
-
-        return replacements,new_formulas
 
 
 def _check_equality(existential):
@@ -200,7 +203,9 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
             ext_vars.add(expression.head)
             expression = expression.body
 
-        pchoice_args, no_pchoice_args = self.pchoice_args_separation(expression)
+        pchoice_args, no_pchoice_args = self.pchoice_args_separation(
+            expression
+        )
 
         only_pchoice_args = pchoice_args - no_pchoice_args
         if len(only_pchoice_args) == 0:
@@ -208,7 +213,9 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
         else:
             only_ext_pchoice_args = only_pchoice_args.intersection(ext_vars)
 
-        expression, new_ext_vars = self.replace_equalities_with_constants(expression, ext_vars, only_ext_pchoice_args)
+        expression, new_ext_vars = self.replace_equalities_with_constants(
+            expression, ext_vars, only_ext_pchoice_args
+        )
         for ext_var in new_ext_vars:
             expression = ExistentialPredicate(ext_var, expression)
 
@@ -218,9 +225,7 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
 
     def create_named_dee(self, consts, symbols_str):
         new_symbol = Symbol.fresh()
-        provenance_column = str2columnstr_constant(
-            Symbol.fresh().name
-        )
+        provenance_column = str2columnstr_constant(Symbol.fresh().name)
 
         constant = NumberColumns(
             ExtendedProjection(
@@ -229,23 +234,19 @@ class NestedExistentialChoiceSimplification(ExpressionWalker):
                     FunctionApplicationListMember(c, s)
                     for c, s in zip(consts, symbols_str)
                 )
-                + (
-                    FunctionApplicationListMember(
-                        ONE, provenance_column
-                    ),
-                ),
+                + (FunctionApplicationListMember(ONE, provenance_column),),
             ),
             (provenance_column,) + tuple(symbols_str),
         )
 
-        constant = ProvenanceAlgebraSet(
-            constant, int2columnint_constant(0)
-        )
+        constant = ProvenanceAlgebraSet(constant, int2columnint_constant(0))
         constant_symbol = new_symbol.cast(constant.type)
         self.symbol_table[constant_symbol] = constant
         return new_symbol
 
-    def replace_equalities_with_constants(self, expression, ext_vars, only_ext_pchoice_args):
+    def replace_equalities_with_constants(
+        self, expression, ext_vars, only_ext_pchoice_args
+    ):
         forms = tuple()
         remove_vars = set()
         for formula in expression.formulas:

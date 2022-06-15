@@ -603,6 +603,9 @@ class SimplifyExtendedProjectionsWithConstants(ew.PatternWalker):
             left = ExtendedProjection(
                 left.relation, tuple(projections_to_keep)
             )
+        else:
+            left = Projection(left.relation, tuple())
+
         if flip:
             new_join = expression.apply(right, left)
         else:

@@ -344,8 +344,7 @@ def create_zero_named_dee():
         (FunctionApplicationListMember(ZERO, provenance_column),),
     )
 
-    zero_named_dee =  ProvenanceAlgebraSet(constant, provenance_column)
-    return zero_named_dee
+    return ProvenanceAlgebraSet(constant, provenance_column)
 
 
 def symbol_or_deterministic_plan(rule, symbol_table):

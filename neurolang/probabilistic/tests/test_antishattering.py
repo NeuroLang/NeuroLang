@@ -410,3 +410,22 @@ def test_pchoice_with_constant_and_projected_variable_disjunction_2():
     assert testing.eq_prov_relations(
         res, testing.make_prov_set([1.0], [res.provenance_column.value]),
     )
+
+def test_false_conjunction_inside_existential():
+    table = {
+        (0.52, "a", "1"),
+        (0.28, "b", "2"),
+        (0.20, "c", "1"),
+    }
+
+    two = Constant("2")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+
+    query = Implication(Q(), Conjunction((P(a, x), P(y, two), P(z, w))))
+
+    cpl_program.walk(query)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    assert testing.eq_prov_relations(
+        res, testing.make_prov_set([0.0], [res.provenance_column.value]),
+    )
