@@ -68,6 +68,8 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
             expression = expression.body
 
         walked_expression = self.walk(expression)
+        if expression == walked_expression:
+            return conjunction
         if walked_expression == FALSE:
             return walked_expression
 
