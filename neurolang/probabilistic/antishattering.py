@@ -97,8 +97,8 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
 
             for f2 in conjunction.formulas[i + 1 :]:
                 if (
-                    isinstance(f2, FunctionApplication)
-                    and f1.functor != f2.functor
+                    not isinstance(f2, FunctionApplication)
+                    or f1.functor != f2.functor
                 ):
                     continue
 
