@@ -241,12 +241,7 @@ def test_walkers_choices_facts():
         new_formula
     )
 
-    assert new_formula == Conjunction(
-        (
-            ExistentialPredicate(y, R(y)),
-            ExistentialPredicate(x, P(x))
-        )
-    )
+    assert new_formula == formula
 
 
 def test_walkers_choices_facts_det():
@@ -433,4 +428,31 @@ def test_false_conjunction_inside_existential():
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
         res, testing.make_prov_set([0.0], [res.provenance_column.value]),
+    )
+
+def test_disjunction_false():
+    table = {
+        (0.52, "a"),
+        (0.48, "b"),
+    }
+
+    table2 = {(0.2, "a")}
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+    cpl_program.add_probabilistic_facts_from_tuples(R, table2)
+
+    query = Implication(ans(), Q())
+    program = Union(
+        (
+            Implication(Q(), Conjunction((P(a), P(b)))),
+            Implication(Q(), P(b)),
+            Implication(Q(), R(x)),
+            query,
+        )
+    )
+    cpl_program.walk(program)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    assert testing.eq_prov_relations(
+        res, testing.make_prov_set([0.584], [res.provenance_column.value]),
     )

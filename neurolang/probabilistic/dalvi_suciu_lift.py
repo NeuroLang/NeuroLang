@@ -67,6 +67,7 @@ from ..relational_algebra_provenance import ZERO, ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .antishattering import (
     NAMED_DEE,
+    LogicQuantifiersSolver,
     NestedExistentialChoiceSimplification,
     SelfjoinChoiceSimplification,
 )
@@ -304,6 +305,8 @@ def dalvi_suciu_lift(rule, symbol_table):
     rule = NestedExistentialChoiceSimplification(symbol_table).walk(rule)
     if rule == FALSE:
         return create_zero_named_dee()
+    else:
+        rule = LogicQuantifiersSolver().walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:
