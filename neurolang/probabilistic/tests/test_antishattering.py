@@ -1,7 +1,7 @@
 from operator import eq
 
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, ExistentialPredicate, Implication, Union
+from ...logic import Conjunction, Disjunction, ExistentialPredicate, Implication, Union
 from .. import dalvi_suciu_lift
 from ..antishattering import (
     NestedExistentialChoiceSimplification,
@@ -445,14 +445,76 @@ def test_disjunction_false():
     query = Implication(ans(), Q())
     program = Union(
         (
-            Implication(Q(), Conjunction((P(a), P(b)))),
-            Implication(Q(), P(b)),
-            Implication(Q(), R(x)),
+            Implication(Q(), Conjunction((P(a), P(b)))), #(1) 0.2496
+            Implication(Q(), P(b)), #(2) 0.48
+            Implication(Q(), R(x)), #(3) 0.2
             query,
         )
     )
+    # P(X) := P(1) + P(2) - P(1^2) = 0.2496 + 0.48 - 0.2496 = 0.48
+    # P(X) + P(3) - P(X^3) = 0.48 + 0.2 - (0.48 * 0.2) = 0.584
     cpl_program.walk(program)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
         res, testing.make_prov_set([0.584], [res.provenance_column.value]),
+    )
+
+def test_nested_conjunction_disjunction():
+    table = {
+        (0.52, "a"),
+        (0.48, "b"),
+    }
+
+    table2 = {
+        (0.2, "a"),
+        (0.8, "b")
+    }
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+    cpl_program.add_probabilistic_choice_from_tuples(R, table2)
+    query = Implication(ans(), Q())
+    program = Union(
+        (
+            Implication(
+                Q(), Conjunction((P(a), R(b)))
+            ), #(1) 0.52 * 0.8 = 0.416
+            Implication(
+                Q(), Conjunction((P(x), R(b)))
+            ), #(2) 0.384 + 0.416 = 0.8
+            Implication(Q(), R(x)), #(3) 1
+            query,
+        )
+    )
+    # P(X) := P(1) + P(2) - P(1^2) = 0.416 + 0.8 - 0.416 = 0.8
+    # P(X) + P(3) - P(X^3) = 0.8 + 1 - 0.416 = 1.384 ?!?
+    cpl_program.walk(program)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    assert testing.eq_prov_relations(
+        res, testing.make_prov_set([0.416], [res.provenance_column.value]),
+    )
+
+def test_false_conjunction_inside_existential():
+    table = {
+        (0.52, "a", "1"),
+        (0.28, "b", "2"),
+        (0.20, "c", "1"),
+    }
+
+    table2 = {
+        (0.62, "a"),
+        (0.38, "b"),
+    }
+
+    one = Constant("1")
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+    cpl_program.add_probabilistic_choice_from_tuples(R, table2)
+
+    query = Implication(Q(), Conjunction((P(a, x), P(y, one), R(y))))
+
+    cpl_program.walk(query)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    assert testing.eq_prov_relations(
+        res, testing.make_prov_set([0.3224], [res.provenance_column.value]),
     )
