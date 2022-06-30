@@ -488,7 +488,7 @@ def disjoint_project_disjunctive_query(disjunctive_query, symbol_table):
 
 
 def _get_disjuncts_containing_atom_with_all_key_attributes(ucq, symbol_table):
-    matching_disjuncts = set()
+    matching_disjuncts = OrderedSet()
     for disjunct in ucq.formulas:
         if any(
             is_probabilistic_atom_with_constants_in_all_key_positions(

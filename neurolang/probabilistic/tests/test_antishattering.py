@@ -451,7 +451,6 @@ def test_disjunction_false():
             query,
         )
     )
-
     cpl_program.walk(program)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
@@ -482,6 +481,39 @@ def test_nested_conjunction_disjunction():
                 Q(), Conjunction((P(x), R(b)))
             ),
             Implication(Q(), R(x)),
+            query,
+        )
+    )
+    cpl_program.walk(program)
+    res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+    assert testing.eq_prov_relations(
+        res, testing.make_prov_set([0.8], [res.provenance_column.value]),
+    )
+
+def test_nested_conjunction_disjunction_reordered():
+    table = {
+        (0.52, "a"),
+        (0.48, "b"),
+    }
+
+    table2 = {
+        (0.2, "a"),
+        (0.8, "b")
+    }
+
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_choice_from_tuples(P, table)
+    cpl_program.add_probabilistic_choice_from_tuples(R, table2)
+    query = Implication(ans(), Q())
+    program = Union(
+        (
+            Implication(Q(), R(x)),
+            Implication(
+                Q(), Conjunction((P(x), R(b)))
+            ),
+            Implication(
+                Q(), Conjunction((P(a), R(b)))
+            ),
             query,
         )
     )
