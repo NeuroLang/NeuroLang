@@ -106,22 +106,22 @@ class SelfjoinChoiceSimplification(ExpressionWalker):
                 if mgu is not None:
                     replacements = compose_substitutions(replacements, mgu[0])
 
-            new_formulas = set(
-                apply_substitution(f, replacements) for f in conjunction.formulas
-            )
+        new_formulas = set(
+            apply_substitution(f, replacements) for f in conjunction.formulas
+        )
 
-            sfc = Counter(
-                (
-                    f.functor
-                    for f in new_formulas
-                    if isinstance(f, FunctionApplication)
-                    and is_atom_a_probabilistic_choice_relation(
-                        f, self.symbol_table
-                    )
+        sfc = Counter(
+            (
+                f.functor
+                for f in new_formulas
+                if isinstance(f, FunctionApplication)
+                and is_atom_a_probabilistic_choice_relation(
+                    f, self.symbol_table
                 )
             )
-            if any(c > 1 for _, c in sfc.items()):
-                return FALSE
+        )
+        if any(c > 1 for _, c in sfc.items()):
+            return FALSE
 
         if len(replacements) > 0:
             equalities = set(

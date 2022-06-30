@@ -445,14 +445,13 @@ def test_disjunction_false():
     query = Implication(ans(), Q())
     program = Union(
         (
-            Implication(Q(), Conjunction((P(a), P(b)))), #(1) 0.2496
-            Implication(Q(), P(b)), #(2) 0.48
-            Implication(Q(), R(x)), #(3) 0.2
+            Implication(Q(), Conjunction((P(a), P(b)))),
+            Implication(Q(), P(b)),
+            Implication(Q(), R(x)),
             query,
         )
     )
-    # P(X) := P(1) + P(2) - P(1^2) = 0.2496 + 0.48 - 0.2496 = 0.48
-    # P(X) + P(3) - P(X^3) = 0.48 + 0.2 - (0.48 * 0.2) = 0.584
+
     cpl_program.walk(program)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
@@ -478,20 +477,18 @@ def test_nested_conjunction_disjunction():
         (
             Implication(
                 Q(), Conjunction((P(a), R(b)))
-            ), #(1) 0.52 * 0.8 = 0.416
+            ),
             Implication(
                 Q(), Conjunction((P(x), R(b)))
-            ), #(2) 0.384 + 0.416 = 0.8
-            Implication(Q(), R(x)), #(3) 1
+            ),
+            Implication(Q(), R(x)),
             query,
         )
     )
-    # P(X) := P(1) + P(2) - P(1^2) = 0.416 + 0.8 - 0.416 = 0.8
-    # P(X) + P(3) - P(X^3) = 0.8 + 1 - 0.416 = 1.384 ?!?
     cpl_program.walk(program)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
-        res, testing.make_prov_set([0.416], [res.provenance_column.value]),
+        res, testing.make_prov_set([0.8], [res.provenance_column.value]),
     )
 
 def test_false_conjunction_inside_existential():
