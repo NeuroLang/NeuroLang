@@ -604,6 +604,7 @@ def _get_evaluatable_operations_and_string_translations():
         numpy.max: "max",
         numpy.min: "min",
         numpy.mean: "mean",
+        numpy.std: "std",
     }
     math_module_equivalent_name = {
         "arcsin": "asin",
