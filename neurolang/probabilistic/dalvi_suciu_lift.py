@@ -501,7 +501,7 @@ def _get_disjuncts_containing_atom_with_all_key_attributes(ucq, symbol_table):
 
 
 def _apply_disjoint_project_ucq_rule(
-    disjunctive_query: Union,
+    disjunctive_query: Disjunction,
     disjunct: Conjunction,
     symbol_table: TypedSymbolTableMixin,
 ):
@@ -512,13 +512,13 @@ def _apply_disjoint_project_ucq_rule(
         return False, None
     tail_formulas = set(disjunctive_query.formulas) - set([disjunct])
     tail = add_existentials_except(
-        Conjunction(tuple(tail_formulas)), free_vars,
+        Disjunction(tuple(tail_formulas)), free_vars,
     )
     tail_plan = dalvi_suciu_lift(tail, symbol_table)
     if isinstance(tail_plan, NonLiftable):
         return False, None
     head_and_tail = add_existentials_except(
-        Conjunction(disjunctive_query.formulas), free_vars
+        Conjunction((disjunct, Disjunction(tuple(tail_formulas)))), free_vars
     )
     head_and_tail_plan = dalvi_suciu_lift(head_and_tail, symbol_table)
     if isinstance(head_and_tail_plan, NonLiftable):

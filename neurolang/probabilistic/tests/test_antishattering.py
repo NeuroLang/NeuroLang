@@ -475,19 +475,20 @@ def test_nested_conjunction_disjunction():
     program = Union(
         (
             Implication(
-                Q(), Conjunction((P(a), R(b)))
+                Q(), Conjunction((P(x), R(b))) # 0.8
             ),
             Implication(
-                Q(), Conjunction((P(x), R(b)))
+                Q(), Conjunction((P(a), R(b))) # 0.52 * 0.8 = 0.416
             ),
-            Implication(Q(), R(x)),
+            Implication(Q(), R(x)), # 1
             query,
         )
+        # 0.8 + 0.416 + 1 - (0.416) - (0.416) - (0.8) + 0.416 = 1
     )
     cpl_program.walk(program)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
-        res, testing.make_prov_set([0.8], [res.provenance_column.value]),
+        res, testing.make_prov_set([1.0], [res.provenance_column.value]),
     )
 
 def test_nested_conjunction_disjunction_reordered():
@@ -520,7 +521,7 @@ def test_nested_conjunction_disjunction_reordered():
     cpl_program.walk(program)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
-        res, testing.make_prov_set([0.8], [res.provenance_column.value]),
+        res, testing.make_prov_set([1.0], [res.provenance_column.value]),
     )
 
 def test_false_conjunction_inside_existential():
