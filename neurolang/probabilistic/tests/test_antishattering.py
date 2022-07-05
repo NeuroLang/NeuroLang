@@ -342,7 +342,7 @@ def test_pchoice_empty_result():
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
-        res, testing.make_prov_set([0.0], [res.provenance_column.value]),
+        res, testing.make_prov_set([], [res.provenance_column.value]),
     )
 
 
@@ -427,7 +427,7 @@ def test_false_conjunction_inside_existential():
     cpl_program.walk(query)
     res = dalvi_suciu_lift.solve_succ_query(query, cpl_program)
     assert testing.eq_prov_relations(
-        res, testing.make_prov_set([0.0], [res.provenance_column.value]),
+        res, testing.make_prov_set([], [res.provenance_column.value]),
     )
 
 def test_disjunction_false():

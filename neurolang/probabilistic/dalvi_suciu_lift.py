@@ -62,6 +62,7 @@ from ..relational_algebra.relational_algebra import (
     ExtendedProjection,
     FunctionApplicationListMember,
     Projection,
+    Selection,
 )
 from ..relational_algebra_provenance import ZERO, ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
@@ -102,6 +103,7 @@ from .transforms import (
     symbol_connected_components,
     unify_existential_variables,
 )
+from operator import gt
 
 LOG = logging.getLogger(__name__)
 
@@ -115,6 +117,7 @@ __all__ = [
 
 RTO = RemoveTrivialOperations()
 PED = PushExistentialsDown()
+_gt = Constant(gt)
 
 
 class ExtendedRAPToRAWalker(
