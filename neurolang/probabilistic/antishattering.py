@@ -1,4 +1,3 @@
-from ast import walk
 from collections import Counter
 from operator import eq
 

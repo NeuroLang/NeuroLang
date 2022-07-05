@@ -1,7 +1,7 @@
 from operator import eq
 
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, Disjunction, ExistentialPredicate, Implication, Union
+from ...logic import Conjunction, ExistentialPredicate, Implication, Union
 from .. import dalvi_suciu_lift
 from ..antishattering import (
     NestedExistentialChoiceSimplification,
@@ -524,7 +524,7 @@ def test_nested_conjunction_disjunction_reordered():
         res, testing.make_prov_set([1.0], [res.provenance_column.value]),
     )
 
-def test_false_conjunction_inside_existential():
+def test_false_conjunction_inside_existential_choices():
     table = {
         (0.52, "a", "1"),
         (0.28, "b", "2"),
