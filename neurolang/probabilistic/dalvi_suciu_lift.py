@@ -517,8 +517,12 @@ def _apply_disjoint_project_ucq_rule(
     tail_plan = dalvi_suciu_lift(tail, symbol_table)
     if isinstance(tail_plan, NonLiftable):
         return False, None
+    if len(tail_formulas) == 1:
+        head_and_tail_formulas = Conjunction(disjunctive_query.formulas)
+    else:
+        head_and_tail_formulas = Conjunction((disjunct, Disjunction(tuple(tail_formulas))))
     head_and_tail = add_existentials_except(
-        Conjunction((disjunct, Disjunction(tuple(tail_formulas)))), free_vars
+        head_and_tail_formulas, free_vars
     )
     head_and_tail_plan = dalvi_suciu_lift(head_and_tail, symbol_table)
     if isinstance(head_and_tail_plan, NonLiftable):
