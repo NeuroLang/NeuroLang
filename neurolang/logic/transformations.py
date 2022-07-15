@@ -580,7 +580,7 @@ class MakeExistentialsImplicit(LogicExpressionWalker):
 
 class MakeUniversalsImplicit(LogicExpressionWalker):
     @add_match(UniversalPredicate)
-    def existential(self, expression):
+    def universal(self, expression):
         return self.walk(expression.body)
 
 
@@ -684,6 +684,16 @@ class PushExistentialsDown(
     CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
     LogicExpressionWalker
 ):
+    @add_match(
+        ExistentialPredicate,
+        lambda expression: (
+            expression.head not in
+            extract_logic_free_variables(expression.body)
+        )
+    )
+    def remove_trivial_existential(self, expression):
+        return self.walk(expression.body)
+    
     @add_match(
         ExistentialPredicate(..., NaryLogicOperator),
         lambda e: len(e.body.formulas) == 1
@@ -810,12 +820,22 @@ class PushUniversalsDown(
     LogicExpressionWalker
 ):
     @add_match(
-        ExistentialPredicate(..., NaryLogicOperator),
+        UniversalPredicate,
+        lambda expression: (
+            expression.head not in
+            extract_logic_free_variables(expression.body)
+        )
+    )
+    def remove_trivial_universal(self, expression):
+        return self.walk(expression.body)
+
+    @add_match(
+        UniversalPredicate(..., NaryLogicOperator),
         lambda e: len(e.body.formulas) == 1
     )
     def push_eliminate_trivial_operation(self, expression):
         return self.walk(
-            UniversalPredicate(expression.head, expression.body.formulas[0])
+            expression.apply(expression.head, expression.body.formulas[0])
         )
 
     @add_match(
@@ -915,7 +935,6 @@ class PushUniversalsDown(
         return res
 
 
-
 class GuaranteeConjunction(IdentityWalker):
     @add_match(..., lambda e: not isinstance(e, Conjunction))
     def guarantee_conjunction(self, expression):
@@ -951,6 +970,7 @@ class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
         nary_op: NaryLogicOperator,
     ) -> NaryLogicOperator:
         return nary_op.apply(tuple(set(nary_op.formulas)))
+
 
 class CheckConjunctiveQueryWithNegation(LogicExpressionWalker):
     @add_match(Conjunction)
