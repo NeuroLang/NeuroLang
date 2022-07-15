@@ -877,7 +877,8 @@ def find_separator_variables(query, symbol_table):
             separator_variables.add(var)
 
     query = convert_to_pnf_with_dnf_matrix(query)
-    query = PushExistentialsDown().walk(query)
+    query = PED.walk(query)
+    query = PUD.walk(query)
     return separator_variables - exclude_variables, query
 
 
