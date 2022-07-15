@@ -693,7 +693,7 @@ class PushExistentialsDown(
     )
     def remove_trivial_existential(self, expression):
         return self.walk(expression.body)
-    
+
     @add_match(
         ExistentialPredicate(..., NaryLogicOperator),
         lambda e: len(e.body.formulas) == 1
