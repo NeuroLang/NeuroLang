@@ -887,7 +887,7 @@ class PushUniversalsDownMixin(
         UniversalPredicate(..., Disjunction),
         lambda expression: any(
             expression.head not in extract_logic_free_variables(formula)
-            for formula in expression.formulas
+            for formula in expression.body.formulas
         )
     )
     def push_universal_down_disjunction(self, expression):
