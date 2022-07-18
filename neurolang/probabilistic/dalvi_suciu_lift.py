@@ -1,6 +1,7 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
+from re import I
 from typing import AbstractSet
 
 import numpy as np
@@ -54,6 +55,7 @@ from ..logic.transformations import (
     GuaranteeDisjunction,
     MakeExistentialsImplicit,
     MakeUniversalsImplicit,
+    MoveNegationsToAtoms,
     PushExistentialsDown,
     PushUniversalsDown,
     RemoveExistentialOnVariables,
@@ -97,8 +99,8 @@ from .shattering import shatter_constants
 from .transforms import (
     add_existentials_except,
     convert_rule_to_ucq,
-    convert_to_cnf_ucq,
-    convert_to_dnf_ucq,
+    convert_to_cnf_existential_ucq,
+    convert_to_dnf_existential_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
     unify_existential_variables
@@ -222,7 +224,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
 
 def _prepare_and_optimise_query(flat_query, cpl_program):
-    flat_query_body = convert_to_dnf_ucq(flat_query.antecedent)
+    flat_query_body = convert_to_dnf_existential_ucq(flat_query.antecedent)
     flat_query_body = RTO.walk(Disjunction(tuple(
         lift_optimization_for_choice_predicates(f, cpl_program)
         for f in flat_query_body.formulas
@@ -250,6 +252,10 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     ):
         raise NotRankedException(f"Query {flat_query} is not ranked")
 
+    shattered_query = Implication(
+        shattered_query.head,
+        MoveNegationsToAtoms().walk(shattered_query.body)
+    )
     return shattered_query, symbol_table
 
 
@@ -315,7 +321,6 @@ def dalvi_suciu_lift(rule, symbol_table):
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
-    rule = RemoveUniversalPredicates().walk(rule)
     rule = RTO.walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
@@ -426,11 +431,11 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         .walk(rule)
     )
     if transformation == 'CNF':
-        fresh_symbols_expression = convert_to_cnf_ucq(fresh_symbols_expression)
+        fresh_symbols_expression = convert_to_cnf_existential_ucq(fresh_symbols_expression)
         minimize = minimize_ucq_in_cnf
         gcd = GuaranteeConjunction()
     elif transformation == 'DNF':
-        fresh_symbols_expression = convert_to_dnf_ucq(fresh_symbols_expression)
+        fresh_symbols_expression = convert_to_dnf_existential_ucq(fresh_symbols_expression)
         minimize = minimize_ucq_in_dnf
         gcd = GuaranteeDisjunction()
     else:

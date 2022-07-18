@@ -50,7 +50,7 @@ def minimize_ucq_in_cnf(query):
     LogicExpression
         minimised query in UCQ semantics.
     """
-    query = convert_to_cnf_ucq(query)
+    query = convert_to_cnf_existential_ucq(query)
     head_variables = extract_logic_free_variables(query)
     cq_d_min = Conjunction(tuple(
         minimize_component_disjunction(c, head_variables)
@@ -84,7 +84,7 @@ def minimize_ucq_in_dnf(query):
     LogicExpression
         minimised query in UCQ semantics.
     """
-    query = convert_to_dnf_ucq(query)
+    query = convert_to_dnf_existential_ucq(query)
     head_variables = extract_logic_free_variables(query)
     cq_d_min = Disjunction(tuple(
         minimize_component_conjunction(c, head_variables)
@@ -133,9 +133,10 @@ def convert_rule_to_ucq(implication):
     return RTO.walk(PED.walk(antecedent))
 
 
-def convert_to_cnf_ucq(expression):
+def convert_to_cnf_existential_ucq(expression):
     """Convert logic UCQ to
-    conjunctive normal from (CNF).
+    conjunctive normal from (CNF)
+    with only existential quantifiers.
 
     Parameters
     ----------
@@ -159,9 +160,10 @@ def convert_to_cnf_ucq(expression):
     return c.walk(expression)
 
 
-def convert_to_dnf_ucq(expression):
+def convert_to_dnf_existential_ucq(expression):
     """Convert logic UCQ to
-    disjunctive normal from (DNF).
+    disjunctive normal from (DNF)
+    with only existential quantifiers.
 
     Parameters
     ----------
