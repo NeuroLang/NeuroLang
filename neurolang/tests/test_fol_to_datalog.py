@@ -311,6 +311,14 @@ def test_move_quantifiers_up():
         X, UniversalPredicate(Y, Disjunction((P, Negation(R(X, Y)))))
     )
 
+    exp = Conjunction(
+        (P, UniversalPredicate(X, Negation(UniversalPredicate(Y, R(X, Y)))))
+    )
+    res = MoveQuantifiersUp().walk(exp)
+    assert res == UniversalPredicate(
+        X, ExistentialPredicate(Y, Conjunction((P, Negation(R(X, Y)))))
+    )
+
 
 def test_distribute_disjunction():
     P = Symbol("P")

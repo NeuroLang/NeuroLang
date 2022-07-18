@@ -355,81 +355,6 @@ class ExtractBoundVariables(WalkLogicProgramAggregatingSets):
         return OrderedSet([])
 
 
-class Noop(LogicExpressionWalker):
-    @add_match(Implication)
-    def implication(self, expression):
-        fs = self.walk(expression.consequent), self.walk(expression.antecedent)
-        fs = self._desambiguate(fs)
-        return expression.apply(*fs)
-
-    @add_match(Union)
-    def union(self, expression):
-        fs = self.walk(expression.formulas)
-        fs = self._desambiguate(fs)
-        return expression.apply(fs)
-
-    @add_match(Disjunction)
-    def disjunction(self, expression):
-        fs = self.walk(expression.formulas)
-        fs = self._desambiguate(fs)
-        return expression.apply(fs)
-
-    @add_match(Conjunction)
-    def conjunction(self, expression):
-        fs = self.walk(expression.formulas)
-        fs = self._desambiguate(fs)
-        return expression.apply(fs)
-
-    @add_match(Negation)
-    def negation(self, expression):
-        return expression.apply(self.walk(expression.formula))
-
-    @add_match(Quantifier)
-    def quantifier(self, expression):
-        body = self.walk(expression.body)
-        expression = expression.apply(expression.head, body)
-        uq = UsedQuantifiers().walk(expression.body)
-        for q in uq:
-            if q.head == expression.head:
-                v = q.head
-                new_q = ReplaceSymbolWalker({v: Symbol[v.type].fresh()}).walk(q)
-                expression = (
-                    ReplaceExpressionWalker({q: new_q})
-                    .walk(expression)
-                )
-        return expression
-
-    def rename_quantifier(self, q):
-        ns = Symbol.fresh()
-        q.body = ReplaceFreeSymbolWalker({q.head: ns}).walk(q.body)
-        q.head = ns
-
-    def _desambiguate(self, formulas):
-        used_variables = set()
-        for uv in extract_logic_free_variables(formulas):
-            used_variables |= uv
-        res_fs = tuple()
-        for f in formulas:
-            uq = UsedQuantifiers().walk(f)
-            for q in self._conflicted_quantifiers(used_variables, uq):
-                v = q.head
-                new_q = ReplaceSymbolWalker(
-                    {v: Symbol[v.type].fresh()}
-                ).walk(q)
-                f = ReplaceExpressionWalker({q: new_q}).walk(f)
-            res_fs += (f,)
-            used_variables |= self._bound_variables(uq)
-        return res_fs
-
-    def _conflicted_quantifiers(self, used_variables, quantifiers):
-        bv = self._bound_variables(quantifiers)
-        repeated = bv & used_variables
-        return [q for q in quantifiers if q.head in repeated]
-
-    def _bound_variables(self, quantifiers):
-        return set(map(lambda q: q.head, quantifiers))
-
-
 class ReplaceFreeSymbolWalker(ReplaceSymbolWalker):
     @add_match(Quantifier)
     def stop_if_bound(self, expression):
@@ -578,6 +503,12 @@ class MakeExistentialsImplicit(LogicExpressionWalker):
         return self.walk(expression.body)
 
 
+class MakeUniversalsImplicit(LogicExpressionWalker):
+    @add_match(UniversalPredicate)
+    def universal(self, expression):
+        return self.walk(expression.body)
+
+
 class RemoveExistentialOnVariables(LogicExpressionWalker):
     def __init__(self, variables_to_eliminate):
         self._variables_to_eliminate = variables_to_eliminate
@@ -674,10 +605,20 @@ class RemoveTrivialOperations(LogicExpressionWalker):
         return self.walk(expression.formula.formula)
 
 
-class PushExistentialsDown(
+class PushExistentialsDownMixin(
     CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
-    LogicExpressionWalker
+    PatternWalker
 ):
+    @add_match(
+        ExistentialPredicate,
+        lambda expression: (
+            expression.head not in
+            extract_logic_free_variables(expression.body)
+        )
+    )
+    def remove_trivial_existential(self, expression):
+        return self.walk(expression.body)
+
     @add_match(
         ExistentialPredicate(..., NaryLogicOperator),
         lambda e: len(e.body.formulas) == 1
@@ -789,6 +730,131 @@ class PushExistentialsDown(
         return expression
 
 
+class PushUniversalsDownMixin(
+    CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
+    PatternWalker
+):
+    @add_match(
+        UniversalPredicate,
+        lambda expression: (
+            expression.head not in
+            extract_logic_free_variables(expression.body)
+        )
+    )
+    def remove_trivial_universal(self, expression):
+        return self.walk(expression.body)
+
+    @add_match(
+        UniversalPredicate(..., NaryLogicOperator),
+        lambda e: len(e.body.formulas) == 1
+    )
+    def push_eliminate_trivial_operation(self, expression):
+        return self.walk(
+            expression.apply(expression.head, expression.body.formulas[0])
+        )
+
+    @add_match(
+        UniversalPredicate(..., Conjunction),
+        lambda expression: any(
+            isinstance(formula, Negation) and
+            expression.head in extract_logic_free_variables(formula)
+            for formula in expression.body.formulas
+        )
+    )
+    def push_universal_down_conjunction_not_safe(self, expression):
+        variable = expression.head
+        in_ = tuple()
+        out_ = tuple()
+        negative_logic_free_variables = set()
+        for formula in expression.body.formulas:
+            if isinstance(formula, Negation):
+                negative_logic_free_variables |= extract_logic_free_variables(
+                    formula
+                )
+
+        for formula in expression.body.formulas:
+            if (
+                negative_logic_free_variables &
+                extract_logic_free_variables(formula)
+            ):
+                in_ += (formula,)
+            else:
+                out_ += (formula,)
+
+        if len(out_) == 0:
+            res = UniversalPredicate(variable, self.walk(Conjunction(in_)))
+        else:
+            res = self.walk(
+                Conjunction((
+                    UniversalPredicate(variable, Conjunction(in_)),
+                    Conjunction(out_)
+                ))
+            )
+        return res
+
+    @add_match(UniversalPredicate(..., Conjunction))
+    def push_universal_down_conjunction(self, expression):
+        variable = expression.head
+        changed = False
+        new_formulas = tuple()
+        for formula in expression.body.formulas:
+            if variable in extract_logic_free_variables(formula):
+                changed = True
+                formula = self.walk(UniversalPredicate(variable, formula))
+            new_formulas += (formula,)
+        if changed:
+            res = self.walk(Conjunction(new_formulas))
+        else:
+            res = expression
+        return res
+
+    @add_match(
+        UniversalPredicate(..., Disjunction),
+        lambda expression: any(
+            expression.head not in extract_logic_free_variables(formula)
+            for formula in expression.body.formulas
+        )
+    )
+    def push_universal_down_disjunction(self, expression):
+        variable = expression.head
+        in_ = tuple()
+        out_ = tuple()
+        for formula in expression.body.formulas:
+            if variable in extract_logic_free_variables(formula):
+                in_ += (formula,)
+            else:
+                out_ += (formula,)
+
+        if len(out_) == 0:
+            res = UniversalPredicate(variable, self.walk(Conjunction(in_)))
+        elif len(in_) == 0:
+            res = self.walk(Disjunction(out_))
+        if len(in_) > 0 and len(out_) > 0:
+            res = self.walk(
+                Disjunction(
+                    (
+                        UniversalPredicate(variable, Disjunction(in_)),
+                    ) + out_
+                )
+            )
+        return res
+
+
+class PushExistentialsDown(PushExistentialsDownMixin, LogicExpressionWalker):
+    pass
+
+
+class PushUniversalsDown(PushUniversalsDownMixin, LogicExpressionWalker):
+    pass
+
+
+class PushQuantifiersDown(
+    PushExistentialsDownMixin, PushUniversalsDownMixin,
+    LogicExpressionWalker
+):
+    pass
+
+
 class GuaranteeConjunction(IdentityWalker):
     @add_match(..., lambda e: not isinstance(e, Conjunction))
     def guarantee_conjunction(self, expression):
@@ -824,6 +890,7 @@ class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
         nary_op: NaryLogicOperator,
     ) -> NaryLogicOperator:
         return nary_op.apply(tuple(set(nary_op.formulas)))
+
 
 class CheckConjunctiveQueryWithNegation(LogicExpressionWalker):
     @add_match(Conjunction)
