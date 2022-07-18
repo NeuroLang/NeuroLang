@@ -879,6 +879,129 @@ def test_program_with_segregation_constant_case(solver):
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
+def test_program_with_segregation_first_constant(solver):
+    pfact_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "c"), (0.2, "b", "d")},
+    }
+    code = Union((
+        Implication(Z(x, y), Conjunction((P(x, y), Negation(A(x, y))))),
+        Implication(A(x, y), Conjunction((P(w, y), NE(w, x)))),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_set
+        )
+    cpl_program.walk(code)
+    query = Implication(ans(y), Z(a, y))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(UnsupportedSolverError)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.5, "b"),
+            ],
+            ("_p_", "y"),
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_program_with_segregation_second_constant(solver):
+    pfact_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "c"), (0.2, "b", "d")},
+    }
+    code = Union((
+        Implication(Z(x, y), Conjunction((P(x, y), Negation(A(x, y))))),
+        Implication(A(x, y), Conjunction((P(w, y), NE(w, x)))),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_set
+        )
+    cpl_program.walk(code)
+    query = Implication(ans(x), Z(x, b))
+
+    if (
+        solver is small_dichotomy_theorem_based_solver or
+        solver is dalvi_suciu_lift
+    ):
+        context = pytest.raises(UnsupportedSolverError)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.5, "b"),
+            ],
+            ("_p_", "y"),
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
+def test_program_with_segregation(solver):
+    pfact_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "c"), (0.2, "b", "d")},
+    }
+    code = Union((
+        Implication(Z(x, y), Conjunction((P(x, y), Negation(A(x, y))))),
+        Implication(A(x, y), Conjunction((P(w, y), NE(w, x)))),
+    ))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(
+            pred_symb, pfact_set
+        )
+    cpl_program.walk(code)
+    query = Implication(ans(x, y), Z(x, y))
+
+    if (
+        solver is small_dichotomy_theorem_based_solver or
+        solver is dalvi_suciu_lift
+    ):
+        context = pytest.raises(UnsupportedSolverError)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.5, "b"),
+            ],
+            ("_p_", "y"),
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
 def test_program_with_negative_existential(solver):
     pfact_sets = {
         P: {(0.5, "a", "b"), (0.5, "b", "c"), (0.2, "b", "d")},
