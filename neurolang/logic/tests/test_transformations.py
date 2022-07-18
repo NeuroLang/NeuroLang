@@ -1,9 +1,15 @@
-from ...expression_walker import IdentityWalker
 from ...expressions import Symbol
-from .. import Conjunction, Disjunction, ExistentialPredicate, Negation
-from ..transformations import DistributeConjunctions, PushExistentialsDown, PushUniversalsDown
-from .. import ExistentialPredicate, Disjunction, Conjunction, UniversalPredicate, Negation
-
+from .. import (
+    Conjunction,
+    Disjunction,
+    ExistentialPredicate,
+    Negation,
+    UniversalPredicate
+)
+from ..transformations import (
+    PushExistentialsDown,
+    PushUniversalsDown
+)
 
 P = Symbol("P")
 Q = Symbol("Q")
