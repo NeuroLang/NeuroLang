@@ -680,9 +680,9 @@ class RemoveTrivialOperations(LogicExpressionWalker):
         return self.walk(expression.formula.formula)
 
 
-class PushExistentialsDown(
+class PushExistentialsDownMixin(
     CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
-    LogicExpressionWalker
+    PatternWalker
 ):
     @add_match(
         ExistentialPredicate,
@@ -815,9 +815,9 @@ class PushExistentialsDown(
         return res
 
 
-class PushUniversalsDown(
+class PushUniversalsDownMixin(
     CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
-    LogicExpressionWalker
+    PatternWalker
 ):
     @add_match(
         UniversalPredicate,
@@ -933,6 +933,21 @@ class PushUniversalsDown(
             UniversalPredicate(outer_var, body)
         ))
         return res
+
+
+class PushExistentialsDown(PushExistentialsDownMixin, LogicExpressionWalker):
+    pass
+
+
+class PushUniversalsDown(PushUniversalsDownMixin, LogicExpressionWalker):
+    pass
+
+
+class PushQuantifiersDown(
+    PushExistentialsDownMixin, PushUniversalsDownMixin,
+    LogicExpressionWalker
+):
+    pass
 
 
 class GuaranteeConjunction(IdentityWalker):

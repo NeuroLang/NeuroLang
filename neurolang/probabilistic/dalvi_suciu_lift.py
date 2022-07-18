@@ -1,7 +1,6 @@
 import logging
 from functools import reduce
 from itertools import chain, combinations
-from re import I
 from typing import AbstractSet
 
 import numpy as np
@@ -56,8 +55,8 @@ from ..logic.transformations import (
     MakeExistentialsImplicit,
     MakeUniversalsImplicit,
     MoveNegationsToAtoms,
-    PushExistentialsDown,
-    PushUniversalsDown,
+    MoveQuantifiersUp,
+    PushQuantifiersDown,
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
     RemoveUniversalPredicates,
@@ -115,9 +114,12 @@ __all__ = [
     "solve_marg_query",
 ]
 
+
+MNTA = MoveNegationsToAtoms()
+MQU = MoveQuantifiersUp()
+PQD = PushQuantifiersDown()
 RTO = RemoveTrivialOperations()
-PED = PushExistentialsDown()
-PUD = PushUniversalsDown()
+RUP = RemoveUniversalPredicates()
 
 
 class ExtendedRAPToRAWalker(
@@ -192,8 +194,9 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         shattered_query, symbol_table = \
             _prepare_and_optimise_query(flat_query, cpl_program)
         ucq_shattered_query = convert_rule_to_ucq(shattered_query)
-        ucq_shattered_query = convert_to_pnf_with_dnf_matrix(ucq_shattered_query)
-        ucq_shattered_query = PUD.walk(PED.walk(ucq_shattered_query))
+        ucq_shattered_query = MNTA.walk(
+            MQU.walk(ucq_shattered_query)
+        )
         ra_query = dalvi_suciu_lift(ucq_shattered_query, symbol_table)
         if not is_pure_lifted_plan(ra_query):
             LOG.info(
@@ -252,10 +255,6 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     ):
         raise NotRankedException(f"Query {flat_query} is not ranked")
 
-    shattered_query = Implication(
-        shattered_query.head,
-        MoveNegationsToAtoms().walk(shattered_query.body)
-    )
     return shattered_query, symbol_table
 
 
@@ -415,7 +414,7 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         Transformation of the initial expression
         in a connected component query.
     """
-    rule = PED.walk(rule)
+    rule = RTO.walk(RUP.walk(PQD.walk(MNTA.walk(rule))))
     free_vars = extract_logic_free_variables(rule)
     existential_vars = set()
     for atom in extract_logic_atoms(rule):
@@ -431,11 +430,15 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         .walk(rule)
     )
     if transformation == 'CNF':
-        fresh_symbols_expression = convert_to_cnf_existential_ucq(fresh_symbols_expression)
+        fresh_symbols_expression = convert_to_cnf_existential_ucq(
+            fresh_symbols_expression
+        )
         minimize = minimize_ucq_in_cnf
         gcd = GuaranteeConjunction()
     elif transformation == 'DNF':
-        fresh_symbols_expression = convert_to_dnf_existential_ucq(fresh_symbols_expression)
+        fresh_symbols_expression = convert_to_dnf_existential_ucq(
+            fresh_symbols_expression
+        )
         minimize = minimize_ucq_in_dnf
         gcd = GuaranteeDisjunction()
     else:
@@ -882,8 +885,7 @@ def find_separator_variables(query, symbol_table):
             separator_variables.add(var)
 
     query = convert_to_pnf_with_dnf_matrix(query)
-    query = PED.walk(query)
-    query = PUD.walk(query)
+    query = PQD.walk(query)
     return separator_variables - exclude_variables, query
 
 
