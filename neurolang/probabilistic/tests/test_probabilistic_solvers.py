@@ -946,9 +946,9 @@ def test_program_with_segregation_second_constant(solver):
         result = solver.solve_succ_query(query, cpl_program)
         expected = testing.make_prov_set(
             [
-                (0.5, "b"),
+                (0.5, "a"),
             ],
-            ("_p_", "y"),
+            ("_p_", "x"),
         )
         assert testing.eq_prov_relations(result, expected)
 
@@ -988,9 +988,9 @@ def test_program_with_segregation(solver):
         result = solver.solve_succ_query(query, cpl_program)
         expected = testing.make_prov_set(
             [
-                (0.5, "b"),
+                (0.5, "a", "b"),
             ],
-            ("_p_", "y"),
+            ("_p_", "x", "y"),
         )
         assert testing.eq_prov_relations(result, expected)
 
