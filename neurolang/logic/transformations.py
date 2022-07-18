@@ -804,16 +804,6 @@ class PushExistentialsDownMixin(
                 )
         return expression
 
-    @add_match(ExistentialPredicate(..., UniversalPredicate))
-    def push_existential_down_universal(self, expression):
-        outer_var = expression.head
-        inner_var = expression.body.head
-        body = expression.body.body
-        res = UniversalPredicate(inner_var, self.walk(
-            ExistentialPredicate(outer_var, body)
-        ))
-        return res
-
 
 class PushUniversalsDownMixin(
     CollapseConjunctionsMixin, CollapseDisjunctionsMixin,
@@ -922,16 +912,6 @@ class PushUniversalsDownMixin(
                     ) + out_
                 )
             )
-        return res
-
-    @add_match(UniversalPredicate(..., ExistentialPredicate))
-    def push_universal_down_existential(self, expression):
-        outer_var = expression.head
-        inner_var = expression.body.head
-        body = expression.body.body
-        res = ExistentialPredicate(inner_var, self.walk(
-            UniversalPredicate(outer_var, body)
-        ))
         return res
 
 
