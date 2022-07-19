@@ -1,6 +1,7 @@
-from contextlib import contextmanager
 import logging
 import time
+from contextlib import contextmanager
+from itertools import chain, combinations
 
 
 @contextmanager
@@ -45,3 +46,8 @@ def log_performance(
         end_args = tuple()
     end_args = (lapse,) + end_args
     logger.log(level, end_message, *end_args)
+
+
+def powerset(iterable):
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))

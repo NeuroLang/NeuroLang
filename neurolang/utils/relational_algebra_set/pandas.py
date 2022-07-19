@@ -433,7 +433,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if not self.is_empty():
             if not isinstance(columns, Iterable):
                 columns = [columns]
-            for g_id, group in self._container.groupby(by=list(columns)):
+            for g_id, group in self._container.groupby(
+                by=list(columns), dropna=False
+            ):
                 group_set = self._empty_set_same_structure()
                 group_set._container = group
                 yield g_id, group_set
@@ -767,7 +769,9 @@ class NamedRelationalAlgebraFrozenSet(
     def groupby(self, columns):
         if self.is_empty():
             return
-        for g_id, group in self._container.groupby(by=list(columns)):
+        for g_id, group in self._container.groupby(
+            by=list(columns), dropna=False
+        ):
             group_set = self._light_init_same_structure(
                 group,
                 might_have_duplicates=self._might_have_duplicates,
@@ -793,9 +797,9 @@ class NamedRelationalAlgebraFrozenSet(
             )
         self._drop_duplicates_if_needed()
         if len(group_columns) > 0:
-            groups = self._container.groupby(group_columns)
+            groups = self._container.groupby(group_columns, dropna=False)
         else:
-            groups = self._container.groupby(lambda x: 0)
+            groups = self._container.groupby(lambda x: 0, dropna=False)
 
         aggs, aggs_multi_column = self._classify_aggregations(
             group_columns, aggregate_function

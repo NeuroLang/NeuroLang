@@ -1,16 +1,16 @@
 import math
 import operator
+from typing import AbstractSet, Tuple
+
+from neurolang.relational_algebra.relational_algebra import FullOuterNaturalJoin
 
 from .exceptions import RelationalAlgebraError
-from .expression_walker import (
-    PatternWalker,
-    add_match
-)
+from .expression_walker import PatternWalker, ReplaceExpressionWalker, add_match, expression_iterator
 from .expressions import (
     Constant,
     FunctionApplication,
     Symbol,
-    sure_is_not_pattern,
+    sure_is_not_pattern
 )
 from .relational_algebra import (
     ColumnInt,
@@ -40,6 +40,8 @@ from .relational_algebra import (
     str2columnstr_constant
 )
 from .utils import OrderedSet
+from .utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from neurolang import expression_walker
 
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
@@ -48,6 +50,8 @@ SUM = Constant(sum)
 EXP = Constant(math.exp)
 LOG = Constant(math.log)
 ONE = Constant[float](1.)
+EPS = Constant[float](1e-100)
+ZERO = Constant[float](0.)
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -117,6 +121,17 @@ class NaturalJoinInverse(NaturalJoin):
         )
 
 
+class Complement(UnaryRelationalAlgebraOperation):
+    def __init__(self, relation):
+        self.relation = relation
+
+    def __repr__(self):
+        return (
+            "\N{Not Sign}"
+            f"({self.relation})"
+        )
+
+
 class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
     def __init__(self, relations, weights):
         self.relations = relations
@@ -163,6 +178,27 @@ class DisjointProjection(LiftedPlanProjection):
         else:
             attributes_repr = ",".join(repr(attr) for attr in self.attributes)
         return "disj-π_[{}]({})".format(attributes_repr, repr(self.relation))
+
+
+ONE_PROB_RAS = (lambda col: (
+    ProvenanceAlgebraSet(
+        Projection(
+            Constant[AbstractSet[Tuple[(float,)]]](
+                NamedRelationalAlgebraFrozenSet((col,), [(1.,)])
+            ),
+            (str2columnstr_constant(col),)
+        ),
+        str2columnstr_constant(col)
+    )
+))(Symbol.fresh().name)
+
+
+class ComplementSolverMixin(PatternWalker):
+    @add_match(Complement)
+    def prov_complement(self, complement):
+        relation = complement.relation
+        new_relation = Difference(ONE_PROB_RAS, relation)
+        return self.walk(new_relation)
 
 
 class WeightedNaturalJoinSolverMixin(PatternWalker):
@@ -240,14 +276,14 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         ]
         proj_list.append(
             FunctionApplicationListMember(
-                LOG(ONE - prov_col),
+                LOG(ONE - prov_col + EPS),
                 prov_col,
             )
         )
         relation = ExtendedProjection(prov_set.relation, proj_list)
         relation = GroupByAggregation(
             relation,
-            groupby=proj_op.attributes,
+            groupby=tuple(proj_op.attributes),
             aggregate_functions=(
                 FunctionApplicationListMember(
                     FunctionApplication(Constant(sum), (prov_col,)),
@@ -324,7 +360,16 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         res = ProvenanceAlgebraSet(operation, prov_col)
         return res
 
-    @add_match(Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
+    # @add_match(
+    #    Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet),
+    #    lambda expression: (
+    #        expression.relation_left.non_provenance_columns and
+    #        (
+    #            expression.relation_left.non_provenance_columns ==
+    #            expression.relation_right.non_provenance_columns
+    #        )
+    #    )
+    # )
     def union_rap(self, union):
         prov_column_left = union.relation_left.provenance_column
         prov_column_right = union.relation_right.provenance_column
@@ -336,15 +381,119 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
                 prov_column_right,
                 prov_column_left,
             )
+
         columns_to_keep = union.relation_left.non_provenance_columns
         operation = IndependentProjection(
             ProvenanceAlgebraSet(
                 Union(relation_left, relation_right),
                 prov_column_left
             ),
-            columns_to_keep
+            tuple(columns_to_keep)
         )
         return self.walk(operation)
+
+    @add_match(Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
+    def union_rap_domain_dependent(self, union):
+        prov_column_left = union.relation_left.provenance_column
+        prov_column_right = union.relation_right.provenance_column
+        relation_left = union.relation_left.relation
+        relation_right = union.relation_right.relation
+
+        if prov_column_left == prov_column_right:
+            new_prov_column_right = str2columnstr_constant(
+                Symbol.fresh().name
+            )
+            relation_right = RenameColumn(
+                relation_right,
+                prov_column_right,
+                new_prov_column_right
+            ),
+            prov_column_right = new_prov_column_right
+
+        columns_to_keep = tuple(
+            union.relation_left.non_provenance_columns |
+            union.relation_right.non_provenance_columns
+        )
+        # operation = ProvenanceAlgebraSet(
+        #    FullOuterNaturalJoin()
+        #    Union(
+        #        self._binary_independent_projection(
+        #            prov_column_left, prov_column_right,
+        #            relation_left, relation_right,
+        #            prov_column_left, columns_to_keep
+        #        ),
+        #        self._binary_independent_projection(
+        #            prov_column_right, prov_column_left,
+        #            relation_right, relation_left,
+        #            prov_column_left, columns_to_keep
+        #        ),
+        #    ),
+        #    prov_column_left
+        # )
+
+        operation = ProvenanceAlgebraSet(
+            ExtendedProjection(
+                ReplaceNull(
+                    ReplaceNull(
+                        FullOuterNaturalJoin(relation_left, relation_right),
+                        prov_column_left,
+                        ZERO
+                    ),
+                    prov_column_right,
+                    ZERO
+                ),
+                tuple(
+                    FunctionApplicationListMember(c, c)
+                    for c in columns_to_keep
+                ) + (
+                    FunctionApplicationListMember(
+                        ONE - (
+                            (ONE - prov_column_left) *
+                            (ONE - prov_column_right)
+                        ),
+                        prov_column_left
+                    ),
+                )
+            ),
+            prov_column_left
+        )
+
+        operation = IndependentProjection(
+            operation,
+            columns_to_keep
+        )
+
+        return self.walk(operation)
+
+    @staticmethod
+    def _binary_independent_projection(
+        prov_column_left, prov_column_right,
+        relation_left, relation_right,
+        dst_prov_column, columns_to_keep
+    ):
+        return ExtendedProjection(
+            ReplaceNull(
+                ReplaceNull(
+                    LeftNaturalJoin(relation_left, relation_right),
+                    prov_column_left,
+                    ZERO
+                ),
+                prov_column_right,
+                ZERO
+            ),
+            tuple(
+                FunctionApplicationListMember(c, c)
+                for c in columns_to_keep
+            ) + (
+                FunctionApplicationListMember(
+                    ONE - (
+                        (ONE - prov_column_left) *
+                        (ONE - prov_column_right)
+                    ),
+                    dst_prov_column
+                ),
+            ),
+        )
 
 
 class BuildProvenanceAlgebraSetWalkIntoMixin(PatternWalker):
@@ -411,6 +560,31 @@ class ProvenanceSelectionMixin(PatternWalker):
             selection.relation.provenance_column
         )
         return self.walk(new_relation)
+
+    @add_match(
+        Selection(ProvenanceAlgebraSet(..., Constant[ColumnInt]), ...)
+    )
+    def selection_provenance_set_column_int(self, selection):
+        columns_in_formula = [
+            expression for _, expression in expression_iterator(selection.formula)
+            if isinstance(expression, Constant[ColumnInt])
+        ]
+        columns = selection.relation.non_provenance_columns
+        replacements = {
+            c: columns[c.value]
+            for c in columns_in_formula
+        }
+        new_formula = ReplaceExpressionWalker(replacements).walk(
+            selection.formula
+        )
+        res = ProvenanceAlgebraSet(
+            Selection(
+                selection.relation.relation,
+                new_formula
+            ),
+            selection.relation.provenance_column
+        )
+        return self.walk(res)
 
     @add_match(
         Selection(ProvenanceAlgebraSet, ...)
@@ -819,9 +993,6 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
     def difference(self, diff):
         left = diff.relation_left
         right = diff.relation_right
-        res_columns = tuple(
-            col for col in left.columns()
-        )
         res_prov_col = left.provenance_column
         tmp_left_prov_col = str2columnstr_constant(Symbol.fresh().name)
         tmp_right_prov_col = str2columnstr_constant(Symbol.fresh().name)
@@ -835,6 +1006,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
             right.provenance_column,
             tmp_right_prov_col,
         )
+        res_columns = tuple(tmp_left.columns() | tmp_right.columns())
         tmp_np_op_args = (tmp_left, tmp_right)
         tmp_non_prov_result = LeftNaturalJoin(*tmp_np_op_args)
         tmp_non_prov_result = ReplaceNull(
@@ -854,7 +1026,8 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
             )
             + tuple(
                 FunctionApplicationListMember(fun_exp=col, dst_column=col)
-                for col in set(res_columns) - {res_prov_col}
+                for col in set(res_columns) -
+                {res_prov_col, tmp_right_prov_col, tmp_left_prov_col}
             ),
         )
         return self.walk(ProvenanceAlgebraSet(
