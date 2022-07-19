@@ -663,7 +663,7 @@ class PushExistentialsDownMixin(
         variable = expression.head
         body_formulas = tuple(
             self.walk(formula)
-            for formula in expression.body
+            for formula in expression.body.formulas
         )
         in_ = tuple()
         out_ = tuple()
