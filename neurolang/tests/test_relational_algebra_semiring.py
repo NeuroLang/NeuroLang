@@ -379,7 +379,10 @@ def test_difference():
         str2columnstr_constant("_p1_"),
     )
 
-    op = Difference(r_left, r_right)
+    op = Projection(
+        Difference(r_left, r_right),
+        tuple(str2columnstr_constant(c) for c in ("x", "y", "w"))
+    )
     result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
     assert testing.eq_prov_relations(result, r_expected)
 
@@ -421,7 +424,10 @@ def test_difference_same_provenance_column():
         str2columnstr_constant("_p_"),
     )
 
-    op = Difference(r_left, r_right)
+    op = Projection(
+        Difference(r_left, r_right),
+        tuple(str2columnstr_constant(c) for c in ("x", "y", "w"))
+    )
     result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
     assert testing.eq_prov_relations(result, r_expected)
 

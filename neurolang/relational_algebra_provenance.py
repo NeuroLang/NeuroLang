@@ -360,38 +360,6 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         res = ProvenanceAlgebraSet(operation, prov_col)
         return res
 
-    # @add_match(
-    #    Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet),
-    #    lambda expression: (
-    #        expression.relation_left.non_provenance_columns and
-    #        (
-    #            expression.relation_left.non_provenance_columns ==
-    #            expression.relation_right.non_provenance_columns
-    #        )
-    #    )
-    # )
-    def union_rap(self, union):
-        prov_column_left = union.relation_left.provenance_column
-        prov_column_right = union.relation_right.provenance_column
-        relation_left = union.relation_left.relation
-        relation_right = union.relation_right.relation
-        if prov_column_left != prov_column_right:
-            relation_right = RenameColumn(
-                relation_right,
-                prov_column_right,
-                prov_column_left,
-            )
-
-        columns_to_keep = union.relation_left.non_provenance_columns
-        operation = IndependentProjection(
-            ProvenanceAlgebraSet(
-                Union(relation_left, relation_right),
-                prov_column_left
-            ),
-            tuple(columns_to_keep)
-        )
-        return self.walk(operation)
-
     @add_match(Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
     def union_rap_domain_dependent(self, union):
         prov_column_left = union.relation_left.provenance_column
@@ -414,22 +382,6 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
             union.relation_left.non_provenance_columns |
             union.relation_right.non_provenance_columns
         )
-        # operation = ProvenanceAlgebraSet(
-        #    FullOuterNaturalJoin()
-        #    Union(
-        #        self._binary_independent_projection(
-        #            prov_column_left, prov_column_right,
-        #            relation_left, relation_right,
-        #            prov_column_left, columns_to_keep
-        #        ),
-        #        self._binary_independent_projection(
-        #            prov_column_right, prov_column_left,
-        #            relation_right, relation_left,
-        #            prov_column_left, columns_to_keep
-        #        ),
-        #    ),
-        #    prov_column_left
-        # )
 
         operation = ProvenanceAlgebraSet(
             ExtendedProjection(
