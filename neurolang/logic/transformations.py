@@ -26,7 +26,6 @@ from . import (
     Quantifier,
     Symbol,
     UnaryLogicOperator,
-    Union,
     UniversalPredicate
 )
 
@@ -75,6 +74,19 @@ class LogicExpressionWalker(PatternWalker):
         else:
             return expression
 
+    @add_match(Implication)
+    def walk_implication(self, expression):
+        antecedent = self.walk(expression.antecedent)
+        consequent = self.walk(expression.consequent)
+
+        if (
+            antecedent != expression.antecedent or
+            consequent != expression.consequent
+        ):
+            return self.walk(Implication(consequent, antecedent))
+        else:
+            return expression
+
 
 class EliminateImplications(LogicExpressionWalker):
     """
@@ -86,6 +98,16 @@ class EliminateImplications(LogicExpressionWalker):
         c = self.walk(implication.consequent)
         a = self.walk(implication.antecedent)
         return self.walk(Disjunction((c, Negation(a))))
+
+
+class RemoveTrivialOperationsMixin(PatternWalker):
+    @add_match(NaryLogicOperator, lambda e: len(e.formulas) == 1)
+    def remove_single(self, expression):
+        return self.walk(expression.formulas[0])
+
+    @add_match(Negation(Negation(...)))
+    def remove_double_negation(self, expression):
+        return self.walk(expression.formula.formula)
 
 
 class MoveNegationsToAtomsSimpleOperationsMixin(PatternWalker):
@@ -105,32 +127,42 @@ class MoveNegationsToAtomsSimpleOperationsMixin(PatternWalker):
         formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
         return self.walk(Conjunction(tuple(formulas)))
 
-    @add_match(Negation(Negation(...)))
-    def negated_negation(self, negation):
-        return self.walk(negation.formula.formula)
+
+class PullUniversalUpFromNegation(PatternWalker):
+    @add_match(Negation(UniversalPredicate(..., ...)))
+    def negated_universal(self, negation):
+        quantifier = negation.formula
+        x = quantifier.head
+        return self.walk(ExistentialPredicate(x, Negation(quantifier.body)))
 
 
-class MoveNegationsToAtoms(
-    MoveNegationsToAtomsSimpleOperationsMixin, LogicExpressionWalker
+class PullExistentialUpFromNegation(PatternWalker):
+    @add_match(Negation(ExistentialPredicate(..., ...)))
+    def negated_existential(self, negation):
+        quantifier = negation.formula
+        x = quantifier.head
+        return self.walk(UniversalPredicate(x, Negation(quantifier.body)))
+
+
+class MoveNegationsToAtomsMixin(
+    RemoveTrivialOperationsMixin,
+    PullExistentialUpFromNegation,
+    PullUniversalUpFromNegation,
+    MoveNegationsToAtomsSimpleOperationsMixin,
+    PatternWalker
 ):
     """
     Moves the negations the furthest possible to the atoms.
     Assumes that there are no implications in the expression.
     """
+    pass
 
-    @add_match(Negation(UniversalPredicate(..., ...)))
-    def negated_universal(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        p = self.walk(Negation(quantifier.body))
-        return self.walk(ExistentialPredicate(x, p))
 
-    @add_match(Negation(ExistentialPredicate(..., ...)))
-    def negated_existential(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        p = self.walk(Negation(quantifier.body))
-        return self.walk(UniversalPredicate(x, p))
+class MoveNegationsToAtoms(
+    MoveNegationsToAtomsMixin,
+    LogicExpressionWalker
+):
+    pass
 
 
 class FONegELogicExpression(LogicExpressionWalker):
@@ -152,7 +184,9 @@ class FONegELogicExpression(LogicExpressionWalker):
 
 
 class MoveNegationsToAtomsInFONegE(
-    MoveNegationsToAtomsSimpleOperationsMixin, FONegELogicExpression
+    MoveNegationsToAtomsSimpleOperationsMixin,
+    PullUniversalUpFromNegation,
+    FONegELogicExpression
 ):
     """
     Moves the negations the furthest possible to the atoms.
@@ -160,13 +194,7 @@ class MoveNegationsToAtomsInFONegE(
     Expressions assumed to be in FO with existential and negation
     only.
     """
-
-    @add_match(Negation(UniversalPredicate(..., ...)))
-    def negated_universal(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        p = self.walk(Negation(quantifier.body))
-        return self.walk(ExistentialPredicate(x, p))
+    pass
 
 
 class FactorQuantifiersMixin(PatternWalker):
@@ -182,20 +210,8 @@ class FactorQuantifiersMixin(PatternWalker):
             self.walk(formula)
             for formula in expression.formulas
         ))
-        formulas = []
-        quantifiers = []
-        variables = set()
-        for f in expression.formulas:
-            if isinstance(f, Quantifier):
-                if f.head in variables:
-                    f = ReplaceSymbolWalker(
-                        {f.head: Symbol[f.type].fresh()}
-                    ).walk(f)
-                variables.add(f.head)
-                quantifiers.append(f)
-                formulas.append(f.body)
-            else:
-                formulas.append(f)
+        formulas, quantifiers = \
+            self._extract_quantifiers_freshen_variables(expression)
         exp = Disjunction(tuple(formulas))
         for q in reversed(quantifiers):
             exp = q.apply(q.head, exp)
@@ -210,44 +226,43 @@ class FactorQuantifiersMixin(PatternWalker):
             self.walk(formula)
             for formula in expression.formulas
         ))
-        quantifiers = []
+        formulas, quantifiers = \
+            self._extract_quantifiers_freshen_variables(expression)
+        exp = Conjunction(tuple(formulas))
+        for q in reversed(quantifiers):
+            exp = q.apply(q.head, exp)
+        return self.walk(exp)
+
+    @staticmethod
+    def _extract_quantifiers_freshen_variables(expression):
         formulas = []
-        variables = set()
+        quantifiers = []
+        variables = extract_logic_free_variables(expression)
         for f in expression.formulas:
-            if isinstance(f, Quantifier):
+            while isinstance(f, Quantifier):
                 if f.head in variables:
                     f = ReplaceSymbolWalker(
                         {f.head: Symbol[f.type].fresh()}
                     ).walk(f)
                 variables.add(f.head)
                 quantifiers.append(f)
-                formulas.append(f.body)
-            else:
-                formulas.append(f)
-        exp = Conjunction(tuple(formulas))
-        for q in reversed(quantifiers):
-            exp = q.apply(q.head, exp)
-        return self.walk(exp)
+                f = f.body
+            formulas.append(f)
+        return formulas, quantifiers
 
 
-class MoveQuantifiersUp(FactorQuantifiersMixin, LogicExpressionWalker):
+class MoveQuantifiersUp(
+    FactorQuantifiersMixin,
+    PullUniversalUpFromNegation,
+    PullExistentialUpFromNegation,
+    LogicExpressionWalker
+):
     """
     Moves the quantifiers up in order to format the expression
     in prenex normal form. Assumes the expression contains no implications
     and the variables of the quantifiers are not repeated.
     """
-
-    @add_match(Negation(UniversalPredicate(..., ...)))
-    def negated_universal(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        return self.walk(ExistentialPredicate(x, Negation(quantifier.body)))
-
-    @add_match(Negation(ExistentialPredicate(..., ...)))
-    def negated_existential(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        return self.walk(UniversalPredicate(x, Negation(quantifier.body)))
+    pass
 
 
 class MoveQuantifiersUpFONegE(FactorQuantifiersMixin, FONegELogicExpression):
@@ -264,7 +279,10 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
     """
     Replaces each quantified variale to a fresh one.
     """
-    @add_match(NaryLogicOperator, lambda expression: len(expression.formulas) > 1)
+    @add_match(
+        NaryLogicOperator,
+        lambda expression: len(expression.formulas) > 1
+    )
     def nary_logic_operator(self, expression):
         free_variables = extract_logic_free_variables(expression)
         expression_first = self.walk(expression.formulas[0])
@@ -588,21 +606,10 @@ class DistributeImplicationsWithConjunctiveHeads(PatternWalker):
         )
 
 
-class RemoveTrivialOperations(LogicExpressionWalker):
-    @add_match(Implication)
-    def implication(self, expression):
-        return Implication(
-            expression.consequent,
-            self.walk(expression.antecedent)
-        )
-
-    @add_match(NaryLogicOperator, lambda e: len(e.formulas) == 1)
-    def remove_single(self, expression):
-        return self.walk(expression.formulas[0])
-
-    @add_match(Negation(Negation(...)))
-    def remove_double_negation(self, expression):
-        return self.walk(expression.formula.formula)
+class RemoveTrivialOperations(
+    RemoveTrivialOperationsMixin, LogicExpressionWalker
+):
+    pass
 
 
 class PushExistentialsDownMixin(
@@ -654,16 +661,17 @@ class PushExistentialsDownMixin(
     )
     def dont_push_when_it_can_be_unsafe(self, expression):
         variable = expression.head
+        body = self.walk(expression.body)
         in_ = tuple()
         out_ = tuple()
         negative_logic_free_variables = set()
-        for formula in expression.body.formulas:
+        for formula in body.formulas:
             if isinstance(formula, Negation):
                 negative_logic_free_variables |= extract_logic_free_variables(
                     formula
                 )
 
-        for formula in expression.body.formulas:
+        for formula in body.formulas:
             if (
                 negative_logic_free_variables &
                 extract_logic_free_variables(formula)
@@ -753,45 +761,6 @@ class PushUniversalsDownMixin(
             expression.apply(expression.head, expression.body.formulas[0])
         )
 
-    @add_match(
-        UniversalPredicate(..., Conjunction),
-        lambda expression: any(
-            isinstance(formula, Negation) and
-            expression.head in extract_logic_free_variables(formula)
-            for formula in expression.body.formulas
-        )
-    )
-    def push_universal_down_conjunction_not_safe(self, expression):
-        variable = expression.head
-        in_ = tuple()
-        out_ = tuple()
-        negative_logic_free_variables = set()
-        for formula in expression.body.formulas:
-            if isinstance(formula, Negation):
-                negative_logic_free_variables |= extract_logic_free_variables(
-                    formula
-                )
-
-        for formula in expression.body.formulas:
-            if (
-                negative_logic_free_variables &
-                extract_logic_free_variables(formula)
-            ):
-                in_ += (formula,)
-            else:
-                out_ += (formula,)
-
-        if len(out_) == 0:
-            res = UniversalPredicate(variable, self.walk(Conjunction(in_)))
-        else:
-            res = self.walk(
-                Conjunction((
-                    UniversalPredicate(variable, Conjunction(in_)),
-                    Conjunction(out_)
-                ))
-            )
-        return res
-
     @add_match(UniversalPredicate(..., Conjunction))
     def push_universal_down_conjunction(self, expression):
         variable = expression.head
@@ -849,6 +818,7 @@ class PushUniversalsDown(PushUniversalsDownMixin, LogicExpressionWalker):
 
 
 class PushQuantifiersDown(
+    RemoveTrivialOperationsMixin,
     PushExistentialsDownMixin, PushUniversalsDownMixin,
     LogicExpressionWalker
 ):

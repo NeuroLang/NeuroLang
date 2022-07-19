@@ -14,6 +14,7 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import (
     NeuroLangException,
     NonLiftableException,
+    NotInFONegE,
     NotRankedException,
     NotUnateException,
     UnsupportedSolverError
@@ -89,9 +90,9 @@ from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
 from .query_resolution import (
+    compute_projections_needed_to_reintroduce_head_terms,
     generate_provenance_query_solver,
-    lift_solve_marg_query,
-    reintroduce_unified_head_terms
+    lift_solve_marg_query
 )
 from .ranking import partially_rank_query, verify_that_the_query_is_ranked
 from .shattering import shatter_constants
@@ -115,6 +116,7 @@ __all__ = [
 ]
 
 
+GC = GuaranteeConjunction()
 MNTA = MoveNegationsToAtoms()
 MQU = MoveQuantifiersUp()
 PQD = PushQuantifiersDown()
@@ -211,12 +213,14 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
             ReplaceAllSymbolsButConstantSets(symbol_table)
             .walk(ra_query)
         )
-        ra_query = reintroduce_unified_head_terms(
-            ra_query, flat_query, shattered_query
-        )
+
+    needed_projections = compute_projections_needed_to_reintroduce_head_terms(
+        ra_query, flat_query, shattered_query
+    )
 
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
+        needed_projections=needed_projections,
         solver_class=ExtendedRAPToRAWalker
     )
 
@@ -239,7 +243,8 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         cpl_program, unified_query.antecedent
     )
     shattered_query_body = shatter_constants(
-        unified_query.antecedent, symbol_table
+        convert_rule_to_ucq(unified_query),
+        symbol_table
     )
     shattered_query_body = partially_rank_query(
         shattered_query_body, symbol_table
@@ -320,6 +325,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
+    #  rule = RemoveUniversalPredicates().walk(rule)
     rule = RTO.walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
@@ -414,7 +420,7 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
         Transformation of the initial expression
         in a connected component query.
     """
-    rule = RTO.walk(RUP.walk(PQD.walk(MNTA.walk(rule))))
+    rule = PQD.walk(RUP.walk(PQD.walk(MNTA.walk(rule))))
     free_vars = extract_logic_free_variables(rule)
     existential_vars = set()
     for atom in extract_logic_atoms(rule):
@@ -447,7 +453,11 @@ def convert_ucq_to_ccq(rule, transformation='CNF'):
     final_expression = ReplaceExpressionWalker(
         {v: k for k, v in dic_components.items()}
     ).walk(fresh_symbols_expression)
-    final_expression = minimize(final_expression)
+
+    try:
+        final_expression = minimize(final_expression)
+    except NotInFONegE:
+        pass
 
     return gcd.walk(final_expression)
 
@@ -758,20 +768,21 @@ def _apply_disjoint_project_ucq_rule(
     free_vars = extract_logic_free_variables(disjunctive_query)
     head = add_existentials_except(disjunct, free_vars)
     head_plan = dalvi_suciu_lift(head, symbol_table)
-    if isinstance(head_plan, NonLiftable):
+    if not is_pure_lifted_plan(head_plan):
         return False, None
+    tail = set(disjunctive_query.formulas) - {disjunct}
     tail = add_existentials_except(
-        Conjunction(tuple(disjunctive_query.formulas[:1])),
+        Conjunction(tuple(tail)),
         free_vars,
     )
     tail_plan = dalvi_suciu_lift(tail, symbol_table)
-    if isinstance(tail_plan, NonLiftable):
+    if not is_pure_lifted_plan(tail_plan):
         return False, None
     head_and_tail = add_existentials_except(
         Conjunction(disjunctive_query.formulas), free_vars
     )
     head_and_tail_plan = dalvi_suciu_lift(head_and_tail, symbol_table)
-    if isinstance(head_and_tail_plan, NonLiftable):
+    if not is_pure_lifted_plan(head_and_tail_plan):
         return False, None
     return True, rap.WeightedNaturalJoin(
         (head_plan, tail_plan, head_and_tail_plan),
@@ -1036,7 +1047,8 @@ def variable_co_occurrence_graph(expression):
 
 def components_plan(
     components, operation, symbol_table,
-    negative_operation=None
+    negative_operation=None,
+    unary_negative_operation=None,
 ):
     positive_formulas = []
     negative_formulas = []
@@ -1049,15 +1061,35 @@ def components_plan(
 
             formula = dalvi_suciu_lift(component, symbol_table)
             positive_formulas.append(formula)
-    output = reduce(operation, positive_formulas[1:], positive_formulas[0])
 
-    if len(negative_formulas) > 0 and negative_operation is None:
-        raise ValueError(
-            "If negative components are included,"
-            " a negative operation should be provided"
+    if len(positive_formulas) > 0:
+        output = reduce(operation, positive_formulas[1:], positive_formulas[0])
+
+    if (
+        len(positive_formulas) > 0 and
+        len(negative_formulas) > 0
+    ):
+        if negative_operation is None:
+            raise ValueError(
+                "If negative components are included,"
+                " a negative operation should be provided"
+            )
+        output = reduce(negative_operation, negative_formulas, output)
+    elif len(negative_formulas) > 0:
+        if unary_negative_operation is None:
+            raise ValueError(
+                "If negative components are included,"
+                " and no positive formulas exist,"
+                " a unary negative operation should be provided"
+            )
+        complemented_negative_formulas = [
+            unary_negative_operation(f) for f in negative_formulas
+        ]
+        output = reduce(
+            operation,
+            complemented_negative_formulas[1:],
+            complemented_negative_formulas[0]
         )
-    output = reduce(negative_operation, negative_formulas, output)
-
     return output
 
 
@@ -1082,10 +1114,11 @@ def inclusion_exclusion_conjunction(expression, symbol_table):
     for formula in powerset(expression.formulas):
         if len(formula) == 0:
             continue
-        elif len(formula) == 1:
-            formula_powerset.append(formula[0])
-        else:
-            formula_powerset.append(Disjunction(tuple(formula)))
+
+        formula = RTO.walk(convert_ucq_to_ccq(
+            Disjunction(tuple(formula)), transformation="DNF")
+        )
+        formula_powerset.append(formula)
     formulas_weights = _formulas_weights(formula_powerset)
     new_formulas, weights = zip(*(
         (dalvi_suciu_lift(formula, symbol_table), weight)

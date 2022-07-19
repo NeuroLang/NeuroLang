@@ -287,6 +287,7 @@ def test_basic_nested_mixed():
     conjunctions = ECQ.walk(rule)
     assert conjunctions == expected
 
+
 def test_basic_nested_mixed_2():
     P = Symbol('P')
     R = Symbol('R')
@@ -307,6 +308,7 @@ def test_basic_nested_mixed_2():
 
     conjunctions = ECQ.walk(rule)
     assert conjunctions == expected
+
 
 def test_nested_existentials():
     R = Symbol('R')
@@ -374,7 +376,7 @@ def test_ccq_transformation_example_2_12():
     c0 = ExistentialPredicate(x1,
         Conjunction((
             ExistentialPredicate(
-                y1, S(x1,y1),
+                y1, S(x1, y1),
             ),
             R(x1),
         ))
