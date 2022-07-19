@@ -2,10 +2,13 @@ import math
 import operator
 from typing import AbstractSet, Tuple
 
-from neurolang.relational_algebra.relational_algebra import FullOuterNaturalJoin
-
 from .exceptions import RelationalAlgebraError
-from .expression_walker import PatternWalker, ReplaceExpressionWalker, add_match, expression_iterator
+from .expression_walker import (
+    PatternWalker,
+    ReplaceExpressionWalker,
+    add_match,
+    expression_iterator
+)
 from .expressions import (
     Constant,
     FunctionApplication,
@@ -18,6 +21,7 @@ from .relational_algebra import (
     ConcatenateConstantColumn,
     Difference,
     ExtendedProjection,
+    FullOuterNaturalJoin,
     FunctionApplicationListMember,
     GroupByAggregation,
     LeftNaturalJoin,
@@ -41,7 +45,6 @@ from .relational_algebra import (
 )
 from .utils import OrderedSet
 from .utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from neurolang import expression_walker
 
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)

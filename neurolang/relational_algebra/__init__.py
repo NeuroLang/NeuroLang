@@ -6,8 +6,8 @@ and different static optimisers.
 
 from .optimisers import (
     EliminateTrivialProjections,
-    RelationalAlgebraOptimiser,
     PushInSelections,
+    RelationalAlgebraOptimiser,
     RenameOptimizations,
     SimplifyExtendedProjectionsWithConstants
 )
@@ -20,6 +20,7 @@ from .relational_algebra import (
     Difference,
     EquiJoin,
     ExtendedProjection,
+    FullOuterNaturalJoin,
     FunctionApplicationListMember,
     GroupByAggregation,
     Intersection,
@@ -60,6 +61,7 @@ __all__ = [
     "eq_",
     "EquiJoin",
     "ExtendedProjection",
+    "FullOuterNaturalJoin",
     "FunctionApplicationListMember",
     "get_expression_columns",
     "GroupByAggregation",
