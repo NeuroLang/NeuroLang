@@ -1,9 +1,7 @@
 import logging
 import operator
 import typing
-from typing import AbstractSet
-
-from neurolang.relational_algebra.optimisers import PushUnnamedSelectionsUp
+from typing import AbstractSet, Tuple
 
 from ..datalog.aggregation import is_builtin_aggregation_functor
 from ..datalog.expression_processing import (
@@ -13,7 +11,11 @@ from ..datalog.expression_processing import (
 )
 from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
 from ..expression_pattern_matching import add_match
-from ..expression_walker import ChainedWalker, ExpressionWalker, PatternWalker
+from ..expression_walker import (
+    ChainedWalker,
+    ExpressionWalker,
+    PatternWalker,
+)
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Union
 from ..relational_algebra import (
@@ -21,15 +23,19 @@ from ..relational_algebra import (
     ExtendedProjection,
     FunctionApplicationListMember,
     Projection,
-    Selection,
-    RelationalAlgebraOperation,
     PushInSelections,
+    RelationalAlgebraOperation,
     RelationalAlgebraSolver,
     RenameOptimizations,
+    Selection,
     SimplifyExtendedProjectionsWithConstants,
     str2columnstr_constant
 )
-from ..relational_algebra_provenance import NaturalJoinInverse, ProvenanceAlgebraSet
+from ..relational_algebra.optimisers import PushUnnamedSelectionsUp
+from ..relational_algebra_provenance import (
+    NaturalJoinInverse,
+    ProvenanceAlgebraSet
+)
 from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
@@ -42,6 +48,15 @@ from .expressions import Condition, ProbabilisticPredicate
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
+
+AND = Constant(operator.and_)
+NE = Constant(operator.ne)
+
+ZERO = Constant[float](0.)
+GT = Constant(operator.gt)
+
+ZERO = Constant[float](0.)
+GT = Constant(operator.gt)
 
 ZERO = Constant[float](0.)
 GT = Constant(operator.gt)
@@ -389,6 +404,30 @@ class RAQueryOptimiser(
     pass
 
 
+class AddNeededProjections(PatternWalker):
+    def __init__(self, needed_projections):
+        self.needed_projections = needed_projections
+
+    @add_match(ProvenanceAlgebraSet)
+    def add_projection(self, expression):
+        if self.needed_projections:
+            projections = (
+                self.needed_projections +
+                (FunctionApplicationListMember(
+                    expression.provenance_column,
+                    expression.provenance_column
+                ),)
+            )
+            expression = ProvenanceAlgebraSet(
+                ExtendedProjection(
+                    expression.relation,
+                    projections
+                ),
+                expression.provenance_column
+            )
+        return expression
+
+
 class FilterZeroProbability(ExpressionWalker):
     @add_match(ProvenanceAlgebraSet)
     def add_zero_filter(self, expression):
@@ -403,6 +442,7 @@ class FilterZeroProbability(ExpressionWalker):
 
 def generate_provenance_query_solver(
     symbol_table, run_relational_algebra_solver,
+    needed_projections=None,
     solver_class=ProbSemiringToRelationalAlgebraSolver
 ):
     """
@@ -422,6 +462,9 @@ def generate_provenance_query_solver(
         Default is `ProbSemiringToRelationalAlgebraSolver`.
     """
 
+    if needed_projections is None:
+        needed_projections = tuple()
+
     class LogExpression(PatternWalker):
         def __init__(self, logger, message, level):
             self.logger = logger
@@ -437,6 +480,7 @@ def generate_provenance_query_solver(
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
+        AddNeededProjections(needed_projections),
         FilterZeroProbability(),
         RAQueryOptimiser(),
         LogExpression(LOG, "Optimised RA query %s", logging.INFO)
@@ -449,13 +493,14 @@ def generate_provenance_query_solver(
     return query_compiler
 
 
-def reintroduce_unified_head_terms(
+def compute_projections_needed_to_reintroduce_head_terms(
     ra_query: RelationalAlgebraOperation,
     flat_query: Implication,
     unified_query: Implication,
-) -> RelationalAlgebraOperation:
+) -> Tuple[FunctionApplicationListMember, ...]:
     """
-    Reintroduce terms that have been removed through unification of the query.
+    Produce the extended projection list for the terms that have been
+    removed through unification of the query.
 
     There are two such cases:
 
@@ -469,6 +514,7 @@ def reintroduce_unified_head_terms(
 
     """
     proj_list = list()
+    needed = False
     for old, new in zip(
         flat_query.consequent.args, unified_query.consequent.args
     ):
@@ -484,6 +530,9 @@ def reintroduce_unified_head_terms(
                     f"Unexpected argument {new}. "
                     "Expected symbol or constant"
                 )
+            needed = True
         member = FunctionApplicationListMember(fun_exp, dst_column)
         proj_list.append(member)
-    return ExtendedProjection(ra_query, tuple(proj_list))
+    if not needed:
+        proj_list = []
+    return tuple(proj_list)

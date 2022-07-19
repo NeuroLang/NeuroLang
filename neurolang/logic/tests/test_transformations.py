@@ -145,7 +145,10 @@ def test_push_universals_down():
         ))
     )
 
-    assert PUD.walk(exp) == exp
+    assert PUD.walk(exp) == Conjunction((
+        P(Y, Z),
+        UniversalPredicate(X, Negation(Q(X, Z)))
+    ))
 
     exp = UniversalPredicate(
         X,

@@ -122,7 +122,6 @@ def convert_rule_to_ucq(implication):
     """
     implication = RTO.walk(implication)
     consequent, antecedent = implication.unapply()
-    antecedent = MNA.walk(antecedent)
     head_vars = set(consequent.args)
     existential_vars = (
         extract_logic_free_variables(antecedent) -
