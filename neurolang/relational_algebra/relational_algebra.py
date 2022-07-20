@@ -1215,7 +1215,7 @@ def _infer_relation_type(relation):
     if hasattr(relation, "row_type"):
         return AbstractSet[relation.row_type]
     tuple_type = Tuple[tuple(
-        Unknown if isinstance(arg, SupportsFloat) and math.isnan(arg)
+        Unknown if issubclass(type(arg), SupportsFloat) and math.isnan(arg)
         else type(arg)
         for arg in relation.fetch_one()
     )]
