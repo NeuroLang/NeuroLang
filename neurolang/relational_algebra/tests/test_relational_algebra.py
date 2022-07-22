@@ -38,6 +38,8 @@ from ...utils import (
 from ...utils.relational_algebra_set import RelationalAlgebraStringExpression
 from ..relational_algebra import (
     EVAL_OP_TO_STR,
+    FullOuterNaturalJoin,
+    LeftNaturalJoin,
     _const_relation_type_is_known,
     _get_const_relation_type,
     _infer_relation_type,
@@ -108,6 +110,34 @@ def test_naturaljoin(R1, R2):
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == r1_named.naturaljoin(r2_named)
+
+
+def test_leftnaturaljoin(R1, R2):
+    r1_named = NamedRelationalAlgebraFrozenSet(('x', 'y'), R1)
+    r2_named = NamedRelationalAlgebraFrozenSet(('x', 'z'), R2)
+    s = LeftNaturalJoin(
+        C_[AbstractSet[Tuple[int, int]]](r1_named),
+        C_[AbstractSet[Tuple[int, int]]](r2_named)
+    )
+    sol = RelationalAlgebraSolver().walk(s).value
+
+    assert sol == r1_named.left_naturaljoin(r2_named)
+
+
+def test_fullouterjoin(R1, R2):
+    r1_named = NamedRelationalAlgebraFrozenSet(('x', 'y'), R1)
+    r2_named = NamedRelationalAlgebraFrozenSet(('x', 'z'), R2)
+    s = FullOuterNaturalJoin(
+        C_[AbstractSet[Tuple[int, int]]](r1_named),
+        C_[AbstractSet[Tuple[int, int]]](r2_named)
+    )
+    expected = (
+        r1_named.left_naturaljoin(r2_named) |
+        r2_named.left_naturaljoin(r1_named)
+    )
+    sol = RelationalAlgebraSolver().walk(s).value
+
+    assert sol == expected
 
 
 def test_union_unnamed():
