@@ -4,26 +4,37 @@ from collections import defaultdict
 from functools import lru_cache
 from typing import AbstractSet, Callable
 
-
 from ...exceptions import (
-    ProjectionOverMissingColumnsError, WrongArgumentsInPredicateError
+    ProjectionOverMissingColumnsError,
+    WrongArgumentsInPredicateError
+)
+from ...expression_walker import (
+    ExpressionWalker,
+    ReplaceSymbolWalker,
+    expression_iterator
 )
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...expression_walker import ExpressionWalker, ReplaceSymbolWalker
 from ...logic.unification import apply_substitution_arguments
-from ...relational_algebra import (ColumnInt, Product, Projection,
-                                   RelationalAlgebraOptimiser,
-                                   PushInSelections,
-                                   RelationalAlgebraSolver, Selection, eq_)
+from ...relational_algebra import (
+    ColumnInt,
+    Product,
+    Projection,
+    PushInSelections,
+    RelationalAlgebraOptimiser,
+    RelationalAlgebraSolver,
+    Selection,
+    eq_
+)
 from ...type_system import Unknown, is_leq_informative
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import extract_logic_free_variables
 from ..expressions import Conjunction, Implication
 from ..instance import MapInstance
 from ..translate_to_named_ra import TranslateToNamedRA
-from ..wrapped_collections import (WrappedNamedRelationalAlgebraFrozenSet,
-                                   WrappedRelationalAlgebraSet)
-
+from ..wrapped_collections import (
+    WrappedNamedRelationalAlgebraFrozenSet,
+    WrappedRelationalAlgebraSet
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -334,21 +345,26 @@ class ChaseNamedRelationalAlgebraMixin:
 
     @lru_cache(1024)
     def translate_conjunction_to_named_ra(self, conjunction):
-        builtin_symbols = {
-            k: v
-            for k, v in self.datalog_program.symbol_table.items()
-            if (
-                v.type is not Unknown and
-                is_leq_informative(v.type, Callable)
-            )
-        }
-        rsw = ReplaceSymbolWalker(builtin_symbols)
-        conjunction = rsw.walk(conjunction)
+        conjunction = self._replace_symbol_builtins_by_builtins(conjunction)
         traslator_to_named_ra = TranslateToNamedRA()
         LOG.info(f"Translating and optimising CQ {conjunction} to RA")
         ra_code = traslator_to_named_ra.walk(conjunction)
         ra_code = NamedRelationalAlgebraOptimiser().walk(ra_code)
         return ra_code
+
+    def _replace_symbol_builtins_by_builtins(self, conjunction):
+        functors = [
+            e.functor for _, e in expression_iterator(conjunction)
+            if isinstance(e, FunctionApplication)
+        ]
+        builtin_symbols = {
+            functor: self.datalog_program.symbol_table[functor]
+            for functor in functors
+            if self.datalog_program.is_builtin(functor)
+        }
+        rsw = ReplaceSymbolWalker(builtin_symbols)
+        conjunction = rsw.walk(conjunction)
+        return conjunction
 
     def compute_result_set(
         self, rule, substitutions, instance, restriction_instance=None

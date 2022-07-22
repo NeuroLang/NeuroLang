@@ -1,4 +1,5 @@
 import collections
+from functools import lru_cache
 from itertools import chain
 
 from . import expressions

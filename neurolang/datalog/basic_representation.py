@@ -6,6 +6,7 @@ the extensional, intensional, and builtin
 sets.
 """
 
+from functools import lru_cache
 import operator as op
 from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
@@ -243,6 +244,7 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
             verify_row_type=verify_row_type
         )
 
+    @lru_cache
     def intensional_database(self):
         return {
             k: v for k, v
@@ -252,6 +254,14 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
                 and k.type is UnionOfConjunctiveQueries
             )
         }
+
+    def is_intensional_symbol(self, symbol):
+        symbol = symbol.cast(UnionOfConjunctiveQueries)
+        return (
+            symbol not in self.protected_keywords and
+            symbol in self.symbol_table and
+            isinstance(self.symbol_table[symbol], Union)
+        )
 
     def predicate_terms(self, predicate):
         try:
@@ -291,8 +301,30 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
                 del ret[keyword]
         return ret
 
+    def is_extensional_symbol(self, symbol):
+        symbol = symbol.cast(AbstractSet)
+        return (
+            symbol not in self.protected_keywords and
+            symbol in self.symbol_table and
+            self.symbol_table[symbol].type is not Unknown and
+            is_leq_informative(self.symbol_table[symbol].type, AbstractSet)
+        )
+
     def builtins(self):
         return self.symbol_table.symbols_by_type(Callable)
+
+    def is_builtin(self, operator):
+        if isinstance(operator, Symbol):
+            type_ = self.symbol_table[operator].type
+        elif isinstance(operator, Constant):
+            type_ = operator.type
+        else:
+            return False
+
+        return (
+            type_ is not Unknown and
+            is_leq_informative(type_, Callable)
+        )
 
     def add_extensional_predicate_from_tuples(
         self, symbol, iterable, type_=Unknown

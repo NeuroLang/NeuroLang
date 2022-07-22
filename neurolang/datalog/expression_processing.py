@@ -414,14 +414,17 @@ def dependency_matrix(datalog, rules=None, instance=None):
         idb_symbols = set()
         for rule in to_reach:
             functor = rule.consequent.functor
-            if rule not in datalog.intensional_database()[functor].formulas:
+            if (
+                not datalog.is_intensional_symbol(rule.consequent.functor) and
+                rule not in datalog.symbol_table[functor].formulas
+            ):
                 raise RuleNotFoundError(
                     f"Rule {rule} not contained in the datalog " "instance."
                 )
             idb_symbols.add(functor)
 
     idb_symbols = tuple(sorted(idb_symbols, key=lambda s: s.name))
-    edb = datalog.extensional_database()
+    # edb = datalog.extensional_database()
     previous_symbols = set()
     if instance is not None:
         previous_symbols = instance.as_map().keys()
@@ -448,7 +451,8 @@ def dependency_matrix(datalog, rules=None, instance=None):
         for predicate in extract_logic_atoms(rule.antecedent):
             functor = predicate.functor
             if (
-                functor in edb or functor in constraint_symbols
+                datalog.is_extensional_symbol(functor)
+                or functor in constraint_symbols
                 or functor in existential_symbols
             ):
                 continue
@@ -460,7 +464,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
                 and functor not in previous_symbols
                 and (
                     functor not in datalog.symbol_table
-                    or functor in datalog.intensional_database()
+                    or datalog.is_intensional_symbol(functor)
                 )
             ):
                 raise SymbolNotFoundError(f"Symbol not found {functor.name}")
