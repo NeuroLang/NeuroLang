@@ -625,10 +625,10 @@ def test_named_relational_algebra_ra_left_naturaljoin(ra_module):
         ("z", "y", "v"),
         [
             (0, 0, 1),
-            (1, 2, np.nan),
-            (2, 4, np.nan),
-            (3, 6, np.nan),
-            (4, 8, np.nan),
+            (1, 2, pd.NA),
+            (2, 4, pd.NA),
+            (3, 6, pd.NA),
+            (4, 8, pd.NA),
         ],
     )
 
@@ -636,7 +636,7 @@ def test_named_relational_algebra_ra_left_naturaljoin(ra_module):
 
     expected_a_c = ra_module.NamedRelationalAlgebraFrozenSet(
         ("y", "z", "v"),
-        [(0, 0, 0), (2, 1, 6), (4, 2, 9), (6, 3, np.nan), (8, 4, 4)],
+        [(0, 0, 0), (2, 1, 6), (4, 2, 9), (6, 3, pd.NA), (8, 4, 4)],
     )
 
     res = ras_a.left_naturaljoin(ras_b)
