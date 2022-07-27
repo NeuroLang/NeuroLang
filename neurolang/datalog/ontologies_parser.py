@@ -1,5 +1,4 @@
 import warnings
-from typing import Callable
 
 import rdflib
 from rdflib import BNode, Literal
@@ -15,7 +14,6 @@ from ..expressions import (
     sure_is_not_pattern
 )
 from ..logic import Conjunction, Implication
-from ..type_system import Unknown
 from .constraints_representation import RightImplication
 
 
@@ -198,12 +196,12 @@ class OntologyParser:
             cons = Symbol(self._parse_name(val))
             x = Symbol.fresh()
             imp = RightImplication(
-                FunctionApplication[Callable[[Unknown], bool]](
+                FunctionApplication[bool](
                     ant,
                     (x,),
                     verify_type=False
                 ),
-                FunctionApplication[Callable[[Unknown], bool]](
+                FunctionApplication[bool](
                     cons,
                     (x,),
                     verify_type=False
@@ -214,7 +212,7 @@ class OntologyParser:
             nl_subclassof = Symbol(
                 self.structural_knowledge_namespace + "subClassOf"
             )
-            est = FunctionApplication[Callable[[str, str], bool]](
+            est = FunctionApplication[bool](
                 nl_subclassof,
                 (
                     Constant[str](ant.name, verify_type=False),
@@ -257,12 +255,12 @@ class OntologyParser:
             x = Symbol.fresh()
             y = Symbol.fresh()
             imp = RightImplication(
-                FunctionApplication[Callable[[Unknown, Unknown], bool]](
+                FunctionApplication[bool](
                     support_prop,
                     (x, y),
                     verify_type=False
                 ),
-                FunctionApplication[Callable[[Unknown], bool]](con, (x,), verify_type=False)
+                FunctionApplication[bool](con, (x,), verify_type=False)
             )
             self._categorize_constraints([imp])
         else:
@@ -410,24 +408,24 @@ class OntologyParser:
             y = Symbol.fresh()
             onProp = Symbol(self._parse_name(prop))
             entity = Symbol(self._parse_name(entity))
-            support_prop_x_y = FunctionApplication[Callable[[Unknown, Unknown], bool]](
+            support_prop_x_y = FunctionApplication[bool](
                 support_prop,
                 (x, y),
                 verify_type=False
             )
-            entity_x = FunctionApplication[Callable[[Unknown], bool]](
+            entity_x = FunctionApplication[bool](
                 entity,
                 (x,),
                 verify_type=False
             )
             for value in nodes:
                 value = self._parse_name(value)
-                value_y = FunctionApplication[Callable[[Unknown], bool]](
+                value_y = FunctionApplication[bool](
                     Symbol(value), (y,), verify_type=False
                 )
                 exists_imp = RightImplication(support_prop_x_y, value_y)
                 constraints.append(exists_imp)
-            on_prop_x_y = FunctionApplication[Callable[[Unknown, Unknown], bool]](
+            on_prop_x_y = FunctionApplication[bool](
                 onProp,
                 (x, y),
                 verify_type=False
@@ -588,11 +586,11 @@ class OntologyParser:
                 self._parse_name(value), verify_type=False
             )
             x = Symbol.fresh()
-            ant = FunctionApplication[Callable[[Unknown], bool]](
+            ant = FunctionApplication[bool](
                 entity, (x,), verify_type=False
             )
             label = Symbol(self._parse_name(prop))
-            con = FunctionApplication[Callable[[Unknown, str], bool]](
+            con = FunctionApplication[bool](
                 label,
                 (x, entity_name),
                 verify_type=False
@@ -604,12 +602,12 @@ class OntologyParser:
                 x = Symbol.fresh()
                 lower_name = self._parse_name(value).lower()
                 rule = Implication(
-                    FunctionApplication[Callable[[Unknown], bool]](
+                    FunctionApplication[bool](
                         entity,
                         (x,),
                         verify_type=False
                     ),
-                    FunctionApplication[Callable[[Unknown, str], bool]](
+                    FunctionApplication[bool](
                         self.connector_symbol,
                         (
                             x,
@@ -624,7 +622,7 @@ class OntologyParser:
             neurolang_prop = Symbol(
                 self.structural_knowledge_namespace + prop_name
             )
-            est = FunctionApplication[Callable[[str, str], bool]](
+            est = FunctionApplication[bool](
                 neurolang_prop,
                 (
                     Constant[str](entity.name, verify_type=False),
@@ -643,7 +641,7 @@ class OntologyParser:
         neurolang_prop = Symbol(
             self.structural_knowledge_namespace + prop_name
         )
-        est = FunctionApplication[Callable[[str, str], bool]](
+        est = FunctionApplication[bool](
             neurolang_prop,
             (
                 Constant[str](entity.name, verify_type=False),
