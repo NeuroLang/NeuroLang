@@ -244,7 +244,7 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
             verify_row_type=verify_row_type
         )
 
-    @lru_cache(maxsize=None)
+    @lru_cache
     def intensional_database(self):
         return {
             k: v for k, v
