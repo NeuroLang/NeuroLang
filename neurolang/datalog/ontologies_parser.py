@@ -1,4 +1,5 @@
 import warnings
+from typing import Callable
 
 import rdflib
 from rdflib import BNode, Literal
@@ -7,8 +8,14 @@ from rdflib.namespace import OWL, RDF, RDFS, SKOS
 
 from ..config import config
 from ..exceptions import NeuroLangException, NeuroLangNotImplementedError
-from ..expressions import Constant, Symbol
+from ..expressions import (
+    Constant,
+    FunctionApplication,
+    Symbol,
+    sure_is_not_pattern
+)
 from ..logic import Conjunction, Implication
+from ..type_system import Unknown
 from .constraints_representation import RightImplication
 
 
@@ -190,13 +197,31 @@ class OntologyParser:
             ant = Symbol(self._parse_name(entity))
             cons = Symbol(self._parse_name(val))
             x = Symbol.fresh()
-            imp = RightImplication(ant(x), cons(x))
+            imp = RightImplication(
+                FunctionApplication[Callable[[Unknown], bool]](
+                    ant,
+                    (x,),
+                    verify_type=False
+                ),
+                FunctionApplication[Callable[[Unknown], bool]](
+                    cons,
+                    (x,),
+                    verify_type=False
+                )
+            )
             self._categorize_constraints([imp])
 
             nl_subclassof = Symbol(
                 self.structural_knowledge_namespace + "subClassOf"
             )
-            est = nl_subclassof(Constant(ant.name), Constant(cons.name))
+            est = FunctionApplication[Callable[[str, str], bool]](
+                nl_subclassof,
+                (
+                    Constant[str](ant.name, verify_type=False),
+                    Constant[str](cons.name, verify_type=False)
+                ),
+                verify_type=False
+            )
             self._categorize_structural_knowledge([est])
 
     def _parse_BNode_intersection(self, entity, node, inter_entity):
@@ -231,7 +256,14 @@ class OntologyParser:
             con = Symbol(self._parse_name(inter_entity))
             x = Symbol.fresh()
             y = Symbol.fresh()
-            imp = RightImplication(support_prop(x, y), con(x))
+            imp = RightImplication(
+                FunctionApplication[Callable[[Unknown, Unknown], bool]](
+                    support_prop,
+                    (x, y),
+                    verify_type=False
+                ),
+                FunctionApplication[Callable[[Unknown], bool]](con, (x,), verify_type=False)
+            )
             self._categorize_constraints([imp])
         else:
             warnings.warn("Complex intersectionOf are not implemented yet")
@@ -371,22 +403,41 @@ class OntologyParser:
             (mainly in nested definitions).
         """
         constraints = []
-        if support_prop is None:
-            support_prop = Symbol.fresh()
-        x = Symbol.fresh()
-        y = Symbol.fresh()
-        onProp = Symbol(self._parse_name(prop))
-        entity = Symbol(self._parse_name(entity))
-        for value in nodes:
-            value = self._parse_name(value)
-            exists_imp = RightImplication(support_prop(x, y), Symbol(value)(y))
-            constraints.append(exists_imp)
-        prop_imp = RightImplication(support_prop(x, y), onProp(x, y))
-        ext_rule = RightImplication(entity(x), support_prop(x, y))
-        self._add_existential_rule(entity(x), ext_rule)
+        with sure_is_not_pattern():
+            if support_prop is None:
+                support_prop = Symbol.fresh()
+            x = Symbol.fresh()
+            y = Symbol.fresh()
+            onProp = Symbol(self._parse_name(prop))
+            entity = Symbol(self._parse_name(entity))
+            support_prop_x_y = FunctionApplication[Callable[[Unknown, Unknown], bool]](
+                support_prop,
+                (x, y),
+                verify_type=False
+            )
+            entity_x = FunctionApplication[Callable[[Unknown], bool]](
+                entity,
+                (x,),
+                verify_type=False
+            )
+            for value in nodes:
+                value = self._parse_name(value)
+                value_y = FunctionApplication[Callable[[Unknown], bool]](
+                    Symbol(value), (y,), verify_type=False
+                )
+                exists_imp = RightImplication(support_prop_x_y, value_y)
+                constraints.append(exists_imp)
+            on_prop_x_y = FunctionApplication[Callable[[Unknown, Unknown], bool]](
+                onProp,
+                (x, y),
+                verify_type=False
+            )
+            prop_imp = RightImplication(support_prop_x_y, on_prop_x_y)
+            ext_rule = RightImplication(entity_x, support_prop_x_y)
+            self._add_existential_rule(entity_x, ext_rule)
 
-        constraints.append(ext_rule)
-        constraints.append(prop_imp)
+            constraints.append(ext_rule)
+            constraints.append(prop_imp)
 
         return constraints
 
@@ -440,7 +491,10 @@ class OntologyParser:
         value = self._parse_name(nodes[0])
         return [
             RightImplication(
-                Symbol(ent)(x), Symbol(onProp)(x, Constant(value))
+                Symbol(ent)(x), Symbol(onProp)(
+                    x,
+                    Constant[str](value, verify_type=False)
+                )
             )
         ]
 
@@ -528,40 +582,75 @@ class OntologyParser:
         nodes : URIRef
             value associated with the entity and the property.
         """
-        entity = Symbol(self._parse_name(entity))
-        entity_name = Constant(self._parse_name(value))
-        x = Symbol.fresh()
-        ant = entity(x)
-        label = Symbol(self._parse_name(prop))
-        con = label(x, entity_name)
-
-        self._categorize_constraints([RightImplication(ant, con)])
-
-        if prop == RDFS.label:
-            x = Symbol.fresh()
-            lower_name = self._parse_name(value).lower()
-            rule = Implication(
-                entity(x), self.connector_symbol(x, Constant(lower_name))
+        with sure_is_not_pattern():
+            entity = Symbol(self._parse_name(entity))
+            entity_name = Constant[str](
+                self._parse_name(value), verify_type=False
             )
-            self._add_rules([rule])
+            x = Symbol.fresh()
+            ant = FunctionApplication[Callable[[Unknown], bool]](
+                entity, (x,), verify_type=False
+            )
+            label = Symbol(self._parse_name(prop))
+            con = FunctionApplication[Callable[[Unknown, str], bool]](
+                label,
+                (x, entity_name),
+                verify_type=False
+            )
 
-        prop_name = label.name.split(":")[-1]
-        neurolang_prop = Symbol(
-            self.structural_knowledge_namespace + prop_name
-        )
-        est = neurolang_prop(Constant(entity.name), entity_name)
-        self._categorize_structural_knowledge([est])
+            self._categorize_constraints([RightImplication(ant, con)])
+
+            if prop == RDFS.label:
+                x = Symbol.fresh()
+                lower_name = self._parse_name(value).lower()
+                rule = Implication(
+                    FunctionApplication[Callable[[Unknown], bool]](
+                        entity,
+                        (x,),
+                        verify_type=False
+                    ),
+                    FunctionApplication[Callable[[Unknown, str], bool]](
+                        self.connector_symbol,
+                        (
+                            x,
+                            Constant[str](lower_name, verify_type=False)
+                        ),
+                        verify_type=False
+                    )
+                )
+                self._add_rules([rule])
+
+            prop_name = label.name.split(":")[-1]
+            neurolang_prop = Symbol(
+                self.structural_knowledge_namespace + prop_name
+            )
+            est = FunctionApplication[Callable[[str, str], bool]](
+                neurolang_prop,
+                (
+                    Constant[str](entity.name, verify_type=False),
+                    entity_name
+                ),
+                verify_type=False
+            )
+            self._categorize_structural_knowledge([est])
 
     def _parse_individual_related(self, entity, prop, value):
         entity = Symbol(self._parse_name(entity))
-        entity_name = Constant(self._parse_name(value))
+        entity_name = Constant[str](self._parse_name(value), verify_type=False)
         label = Symbol(self._parse_name(prop))
 
         prop_name = label.name.split(":")[-1]
         neurolang_prop = Symbol(
             self.structural_knowledge_namespace + prop_name
         )
-        est = neurolang_prop(Constant(entity.name), entity_name)
+        est = FunctionApplication[Callable[[str, str], bool]](
+            neurolang_prop,
+            (
+                Constant[str](entity.name, verify_type=False),
+                entity_name
+            ),
+            verify_type=False
+        )
         self._categorize_structural_knowledge([est])
 
     def _parseEnumeratedClass(self, entity, prop, value):
