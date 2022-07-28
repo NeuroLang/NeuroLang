@@ -45,7 +45,7 @@ class OntologyParser:
     def _load_ontology(self, paths, load_format):
         rdfGraph = rdflib.Graph()
         for counter, path in enumerate(paths):
-            rdfGraph.load(path, format=load_format[counter])
+            rdfGraph.parse(path, format=load_format[counter])
 
         self.rdfGraph = rdfGraph
 
