@@ -491,7 +491,9 @@ class NamedRelationalAlgebraFrozenSet(
             self._container = pd.DataFrame(columns=self._columns)
 
     def _initialize_from_unnamed_ra_set(self, other):
-        if other._container is None:
+        if other.is_empty():
+            self._container = pd.DataFrame(columns=self._columns)
+        elif other._container is None:
             self._container = pd.DataFrame(list(other), columns=self._columns)
         else:
             if self.arity != other.arity:

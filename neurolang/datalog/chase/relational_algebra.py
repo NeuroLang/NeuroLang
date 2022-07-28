@@ -304,7 +304,10 @@ class ChaseNamedRelationalAlgebraMixin:
         self, rule_predicates_iterator, instance, restriction_instance
     ):
         symbol_table = defaultdict(
-            lambda: Constant[AbstractSet](WrappedRelationalAlgebraSet())
+            lambda: Constant[AbstractSet](
+                WrappedRelationalAlgebraSet(),
+                verify_type=False
+            )
         )
         symbol_table.update(instance)
         for k, v in restriction_instance.items():
@@ -334,14 +337,10 @@ class ChaseNamedRelationalAlgebraMixin:
 
     @lru_cache(1024)
     def translate_conjunction_to_named_ra(self, conjunction):
-        builtin_symbols = {
-            k: v
-            for k, v in self.datalog_program.symbol_table.items()
-            if (
-                v.type is not Unknown and
-                is_leq_informative(v.type, Callable)
-            )
-        }
+        if not hasattr(self, "_builtins"):
+            self._builtins = self.datalog_program.builtins()
+
+        builtin_symbols = self._builtins
         rsw = ReplaceSymbolWalker(builtin_symbols)
         conjunction = rsw.walk(conjunction)
         traslator_to_named_ra = TranslateToNamedRA()

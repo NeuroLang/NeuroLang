@@ -399,9 +399,8 @@ def dependency_matrix(datalog, rules=None, instance=None):
         is not a constant or an extensional/intensional predicate.
 
     """
-
+    idb = datalog.intensional_database()
     if rules is None:
-        idb = datalog.intensional_database()
         to_reach = []
         for rule_union in idb.values():
             to_reach += rule_union.formulas
@@ -414,7 +413,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
         idb_symbols = set()
         for rule in to_reach:
             functor = rule.consequent.functor
-            if rule not in datalog.intensional_database()[functor].formulas:
+            if rule not in idb[functor].formulas:
                 raise RuleNotFoundError(
                     f"Rule {rule} not contained in the datalog " "instance."
                 )
