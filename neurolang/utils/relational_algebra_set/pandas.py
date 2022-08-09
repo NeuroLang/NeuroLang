@@ -7,6 +7,9 @@ import pandas as pd
 from . import abstract as abc
 
 
+NA = pd.NA
+
+
 class RelationalAlgebraStringExpression(str):
     def __repr__(self):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
@@ -345,6 +348,18 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             self._might_have_duplicates | other._might_have_duplicates
         )
         return output
+
+    def _extract_unified_column_types(self, other):
+        col_types = dict()
+        for col in self._container.columns & other._container.columns:
+            s_dtype = self._container[col].dtype
+            o_dtype = other._container[col].dtype
+            if s_dtype != o_dtype:
+                if isinstance(s_dtype, pd.core.arrays.numeric.NumericDtype):
+                    col_types[col] = s_dtype
+                elif isinstance(o_dtype, pd.core.arrays.numeric.NumericDtype):
+                    col_types[col] = o_dtype
+        return col_types
 
     def copy(self):
         output = self._empty_set_same_structure()
@@ -1063,18 +1078,6 @@ class NamedRelationalAlgebraFrozenSet(
             might_have_duplicates=True,
         )
         return output
-
-    def _extract_unified_column_types(self, other):
-        col_types = dict()
-        for col in self._container.columns & other._container.columns:
-            s_dtype = self._container[col].dtype
-            o_dtype = other._container[col].dtype
-            if s_dtype != o_dtype:
-                if isinstance(s_dtype, pd.core.arrays.numeric.NumericDtype):
-                    col_types[col] = s_dtype
-                elif isinstance(o_dtype, pd.core.arrays.numeric.NumericDtype):
-                    col_types[col] = o_dtype
-        return col_types
 
     def __and__(self, other):
         res = self._dee_dum_product(other)
