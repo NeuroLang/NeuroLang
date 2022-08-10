@@ -20,6 +20,7 @@ from ..relational_algebra import (
     ColumnStr,
     EquiJoin,
     ExtendedProjection,
+    FullOuterNaturalJoin,
     FunctionApplicationListMember,
     GroupByAggregation,
     LeftNaturalJoin,
@@ -474,7 +475,11 @@ def test_simple_extended_projection_to_rename(rs, str_columns):
     assert res == res
 
 
-def test_composite_extended_projection_join(r1, str_columns):
+@pytest.mark.parametrize(
+    "join_op",
+    [NaturalJoin, LeftNaturalJoin, FullOuterNaturalJoin]
+)
+def test_composite_extended_projection_join(r1, str_columns, join_op):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
 
@@ -484,7 +489,7 @@ def test_composite_extended_projection_join(r1, str_columns):
     r1 = NameColumns(Constant(r1), (a, b))
 
     exp = ExtendedProjection(
-        NaturalJoin(
+        join_op(
             ExtendedProjection(
                 r1, (
                     FunctionApplicationListMember(Constant(1), c),
@@ -502,7 +507,7 @@ def test_composite_extended_projection_join(r1, str_columns):
 
     res = opt.walk(exp)
     exp = ExtendedProjection(
-        NaturalJoin(
+        join_op(
             ExtendedProjection(r1, (FunctionApplicationListMember(a, a),)),
             r1),
         (
@@ -520,7 +525,7 @@ def test_composite_extended_projection_join(r1, str_columns):
     assert res == exp
 
     exp = ExtendedProjection(
-        NaturalJoin(
+        join_op(
             r1,
             ExtendedProjection(
                 r1, (
@@ -538,7 +543,7 @@ def test_composite_extended_projection_join(r1, str_columns):
 
     res = opt.walk(exp)
     exp = ExtendedProjection(
-        NaturalJoin(
+        join_op(
             r1,
             ExtendedProjection(r1, (FunctionApplicationListMember(a, a),))),
         (
@@ -556,7 +561,11 @@ def test_composite_extended_projection_join(r1, str_columns):
     assert res == exp
 
 
-def test_composite_extended_projection_leftjoin(r1, str_columns):
+@pytest.mark.parametrize(
+    "join_op",
+    [NaturalJoin, LeftNaturalJoin, FullOuterNaturalJoin]
+)
+def test_composite_extended_projection_constant_join(r1, str_columns, join_op):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
 
@@ -566,89 +575,7 @@ def test_composite_extended_projection_leftjoin(r1, str_columns):
     r1 = NameColumns(Constant(r1), (a, b))
 
     exp = ExtendedProjection(
-        LeftNaturalJoin(
-            ExtendedProjection(
-                r1, (
-                    FunctionApplicationListMember(Constant(1), c),
-                    FunctionApplicationListMember(a, a)
-                )
-            ),
-            r1
-        ),
-        (
-            FunctionApplicationListMember(c + c, d),
-            FunctionApplicationListMember(a, a),
-            FunctionApplicationListMember(b, b)
-        )
-    )
-
-    res = opt.walk(exp)
-    exp = ExtendedProjection(
-        LeftNaturalJoin(
-            ExtendedProjection(r1, (FunctionApplicationListMember(a, a),)),
-            r1),
-        (
-            FunctionApplicationListMember(
-                FunctionApplication(
-                    Constant(operator.add),
-                    (Constant(1), Constant(1))
-                ),
-                d
-            ),
-            FunctionApplicationListMember(a, a),
-            FunctionApplicationListMember(b, b)
-        )
-    )
-    assert res == exp
-
-    exp = ExtendedProjection(
-        LeftNaturalJoin(
-            r1,
-            ExtendedProjection(
-                r1, (
-                    FunctionApplicationListMember(Constant(1), c),
-                    FunctionApplicationListMember(a, a)
-                )
-            )
-        ),
-        (
-            FunctionApplicationListMember(c + c, d),
-            FunctionApplicationListMember(a, a),
-            FunctionApplicationListMember(b, b)
-        )
-    )
-
-    res = opt.walk(exp)
-    exp = ExtendedProjection(
-        LeftNaturalJoin(
-            r1,
-            ExtendedProjection(r1, (FunctionApplicationListMember(a, a),))),
-        (
-            FunctionApplicationListMember(
-                FunctionApplication(
-                    Constant(operator.add),
-                    (Constant(1), Constant(1))
-                ),
-                d
-            ),
-            FunctionApplicationListMember(a, a),
-            FunctionApplicationListMember(b, b)
-        )
-    )
-    assert res == exp
-
-
-def test_composite_extended_projection_constant_join(r1, str_columns):
-    class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
-        pass
-
-    opt = Opt()
-
-    a, b, c, d, _ = str_columns
-    r1 = NameColumns(Constant(r1), (a, b))
-
-    exp = ExtendedProjection(
-        LeftNaturalJoin(
+        join_op(
             ExtendedProjection(
                 r1, (
                     FunctionApplicationListMember(Constant(1), c),
@@ -666,7 +593,7 @@ def test_composite_extended_projection_constant_join(r1, str_columns):
 
     res = opt.walk(exp)
     exp = ExtendedProjection(
-        LeftNaturalJoin(
+        join_op(
             ExtendedProjection(r1, (FunctionApplicationListMember(a, a),)),
             Selection(RenameColumns(r1, ((b, c),)), eq_(c, Constant(1)))
         ),
@@ -685,7 +612,11 @@ def test_composite_extended_projection_constant_join(r1, str_columns):
     assert res == exp
 
 
-def test_composite_extended_projection_function_join(r1, str_columns):
+@pytest.mark.parametrize(
+    "join_op",
+    [NaturalJoin, LeftNaturalJoin, FullOuterNaturalJoin]
+)
+def test_composite_extended_projection_function_join(r1, str_columns, join_op):
     class Opt(SimplifyExtendedProjectionsWithConstants, ExpressionWalker):
         pass
 
@@ -695,7 +626,7 @@ def test_composite_extended_projection_function_join(r1, str_columns):
     r1 = NameColumns(Constant(r1), (a, b))
 
     exp = ExtendedProjection(
-        LeftNaturalJoin(
+        join_op(
             ExtendedProjection(
                 r1, (
                     FunctionApplicationListMember(b + Constant(1), c),
@@ -717,7 +648,7 @@ def test_composite_extended_projection_function_join(r1, str_columns):
         if s.value.startswith('fresh')
     ][0]
     exp = ExtendedProjection(
-        LeftNaturalJoin(
+        join_op(
             ExtendedProjection(
                 r1,
                 (

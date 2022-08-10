@@ -143,7 +143,8 @@ def test_relational_algebra_ra_selection_columns(ra_module):
     a = [(i % 2, i, i * 2) for i in range(5)]
     ras = ra_module.RelationalAlgebraSet(a)
 
-    # Select elements where col0 == col1 and col1 == col2. Result should be set((0, 0, 0))
+    # Select elements where col0 == col1 and col1 == col2.
+    # Result should be set((0, 0, 0))
     ras_1 = ras.selection_columns({0: 1, 1: 2})
     assert ras_1 == set(t for t in a if t[0] == t[1] & t[1] == t[2])
     assert (
@@ -589,8 +590,6 @@ def test_named_relational_algebra_ra_naturaljoin(ra_module):
 
 
 def test_named_relational_algebra_ra_left_naturaljoin(ra_module):
-    import numpy as np
-
     ras_a = ra_module.NamedRelationalAlgebraFrozenSet(
         ("z", "y"), [(0, 0), (1, 2), (2, 4), (3, 6), (4, 8)]
     )
