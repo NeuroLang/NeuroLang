@@ -5,7 +5,7 @@ from .relational_algebra_set import (
     RelationalAlgebraSet,
     RelationalAlgebraStringExpression,
 )
-from .various import log_performance
+from .various import log_performance, powerset
 
 __all__ = [
     "OrderedSet",
@@ -14,4 +14,5 @@ __all__ = [
     "NamedRelationalAlgebraFrozenSet",
     "RelationalAlgebraStringExpression",
     "log_performance",
+    "powerset",
 ]

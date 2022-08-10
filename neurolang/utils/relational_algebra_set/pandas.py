@@ -2,8 +2,12 @@ from collections import OrderedDict
 from typing import Iterable, Callable, Dict, Union
 from uuid import uuid1
 
+import numpy as np
 import pandas as pd
 from . import abstract as abc
+
+
+NA = pd.NA
 
 
 class RelationalAlgebraStringExpression(str):
@@ -330,7 +334,12 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         tmpcol = str(uuid1())
         left[tmpcol] = 1
         right[tmpcol] = 1
-        new_container = pd.merge(left, right, on=tmpcol)
+        col_types = self._extract_unified_column_types(other)
+        new_container = pd.merge(
+            left.astype(col_types),
+            right.astype(col_types),
+            on=tmpcol
+        )
         del new_container[tmpcol]
         new_container.columns = range(new_container.shape[1])
         output = self._empty_set_same_structure()
@@ -339,6 +348,18 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             self._might_have_duplicates | other._might_have_duplicates
         )
         return output
+
+    def _extract_unified_column_types(self, other):
+        col_types = dict()
+        for col in self._container.columns & other._container.columns:
+            s_dtype = self._container[col].dtype
+            o_dtype = other._container[col].dtype
+            if s_dtype != o_dtype:
+                if isinstance(s_dtype, pd.core.arrays.numeric.NumericDtype):
+                    col_types[col] = s_dtype
+                elif isinstance(o_dtype, pd.core.arrays.numeric.NumericDtype):
+                    col_types[col] = o_dtype
+        return col_types
 
     def copy(self):
         output = self._empty_set_same_structure()
@@ -433,7 +454,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if not self.is_empty():
             if not isinstance(columns, Iterable):
                 columns = [columns]
-            for g_id, group in self._container.groupby(by=list(columns)):
+            for g_id, group in self._container.groupby(
+                by=list(columns), dropna=False
+            ):
                 group_set = self._empty_set_same_structure()
                 group_set._container = group
                 yield g_id, group_set
@@ -593,7 +616,12 @@ class NamedRelationalAlgebraFrozenSet(
 
         self._drop_duplicates_if_needed()
         other._drop_duplicates_if_needed()
-        new_container = self._container.merge(other._container)
+        col_types = self._extract_unified_column_types(other)
+        new_container = (
+            self._container
+            .astype(col_types)
+            .merge(other._container.astype(col_types))
+        )
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=(
@@ -619,20 +647,42 @@ class NamedRelationalAlgebraFrozenSet(
             else:
                 return self.cross_product(other)
         else:
-            new_container = self._container.merge(
-                other._container,
-                how="left"
+            col_types = self._extract_unified_column_types(other)
+            new_container = (
+                self._container.astype(col_types)
+                .merge(
+                    other._container.astype(col_types),
+                    how="left"
+                )
             )
 
         new_columns = self.columns + tuple(
             c for c in other.columns if c not in self.columns
         )
+        self._keep_column_types_after_join(
+            other, new_container, new_columns, check_for_na=True
+        )
+
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=(
                 self._might_have_duplicates | other._might_have_duplicates
             ),
             columns=new_columns,
+        )
+
+    def _keep_column_types_after_join(
+        self, other, new_container, new_columns,
+        check_for_na=False
+    ):
+        new_columns_types = {}
+        for col in new_columns:
+            if col in self.columns:
+                new_columns_types[col] = self._container[col].dtype
+            else:
+                new_columns_types[col] = other._container[col].dtype
+        self._keep_column_types_list(
+            new_container, new_columns_types, check_for_na=check_for_na
         )
 
     def replace_null(self, column, value):
@@ -691,8 +741,9 @@ class NamedRelationalAlgebraFrozenSet(
         if self.is_empty() or other.is_empty():
             res = type(self)(new_columns)
         else:
-            left = self._container.copy(deep=False)
-            right = other._container.copy(deep=False)
+            col_types = self._extract_unified_column_types(other)
+            left = self._container.copy(deep=False).astype(col_types)
+            right = other._container.copy(deep=False).astype(col_types)
             tmpcol = str(uuid1())
             left[tmpcol] = 1
             right[tmpcol] = 1
@@ -769,7 +820,9 @@ class NamedRelationalAlgebraFrozenSet(
     def groupby(self, columns):
         if self.is_empty():
             return
-        for g_id, group in self._container.groupby(by=list(columns)):
+        for g_id, group in self._container.groupby(
+            by=list(columns), dropna=False
+        ):
             group_set = self._light_init_same_structure(
                 group,
                 might_have_duplicates=self._might_have_duplicates,
@@ -795,9 +848,9 @@ class NamedRelationalAlgebraFrozenSet(
             )
         self._drop_duplicates_if_needed()
         if len(group_columns) > 0:
-            groups = self._container.groupby(group_columns)
+            groups = self._container.groupby(group_columns, dropna=False)
         else:
-            groups = self._container.groupby(lambda x: 0)
+            groups = self._container.groupby(lambda x: 0, dropna=False)
 
         aggs, aggs_multi_column = self._classify_aggregations(
             group_columns, aggregate_function
@@ -832,7 +885,21 @@ class NamedRelationalAlgebraFrozenSet(
         )
         return output
 
-    def _keep_column_types(self, new_container, skip=None):
+    def _keep_column_types(self, new_container, skip=None, check_for_na=True):
+        column_types = {
+            col: self._container[col].dtype
+            for col in self._container.columns
+        }
+
+        return self._keep_column_types_list(
+            new_container, column_types,
+            skip=skip, check_for_na=check_for_na
+        )
+
+    def _keep_column_types_list(
+        self, new_container, column_types,
+        skip=None, check_for_na=False
+    ):
         if self.is_empty():
             return
 
@@ -842,11 +909,23 @@ class NamedRelationalAlgebraFrozenSet(
             if col in skip:
                 continue
             if (
-                col in self._container.columns
-                and new_container[col].dtype != self._container[col].dtype
+                col in column_types
+                and new_container[col].dtype != column_types[col]
             ):
+                if (
+                    check_for_na and
+                    isinstance(column_types[col], np.dtype) and
+                    column_types[col].kind == 'i' and
+                    new_container[col].hasnans
+                ):
+                    column_type = getattr(
+                        pd,
+                        f"Int{column_types[col].itemsize * 8}Dtype"
+                    )()
+                else:
+                    column_type = column_types[col]
                 new_container[col] = new_container[col].astype(
-                    self._container[col].dtype
+                    column_type
                 )
 
     def _classify_aggregations(self, group_columns, aggregate_function):
@@ -954,8 +1033,16 @@ class NamedRelationalAlgebraFrozenSet(
             return self.dee()
         self._drop_duplicates_if_needed()
         other._drop_duplicates_if_needed()
-        new_container = self._container.merge(
-            other._container, indicator=True, how="left"
+
+        col_types = self._extract_unified_column_types(other)
+
+        new_container = (
+            self._container
+            .astype(col_types)
+            .merge(
+                other._container.astype(col_types),
+                indicator=True, how="left"
+            )
         )
         new_container = new_container[
             new_container.iloc[:, -1] == "left_only"
@@ -976,9 +1063,12 @@ class NamedRelationalAlgebraFrozenSet(
             raise ValueError(
                 "Union defined only for sets with the same columns"
             )
+
+        col_types = self._extract_unified_column_types(other)
+
         new_container = pd.merge(
-            left=self._container,
-            right=other._container,
+            left=self._container.astype(col_types),
+            right=other._container.astype(col_types),
             how="outer",
         )
 
@@ -1001,9 +1091,10 @@ class NamedRelationalAlgebraFrozenSet(
             return self.copy()
         self._drop_duplicates_if_needed()
         other._drop_duplicates_if_needed()
+        col_types = self._extract_unified_column_types(other)
         new_container = pd.merge(
-            left=self._container,
-            right=other._container,
+            left=self._container.astype(col_types),
+            right=other._container.astype(col_types),
             how="inner",
         )
         self._keep_column_types(new_container)

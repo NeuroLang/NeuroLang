@@ -34,6 +34,9 @@ from .dask_helpers import (
 LOG = logging.getLogger(__name__)
 
 
+NA = None
+
+
 class RelationalAlgebraStringExpression(str):
     """
     RelationalAlgebraStringExpression which replaces some pandas/python
@@ -560,7 +563,7 @@ class RelationalAlgebraFrozenSet(
                 columns = [columns]
             columns = list(map(str, columns))
             df = self.container.compute()
-            for g_id, group in df.groupby(by=columns):
+            for g_id, group in df.groupby(by=columns, dropna=False):
                 group_set = type(self)(iterable=group)
                 yield g_id, group_set
 
