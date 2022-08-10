@@ -309,7 +309,6 @@ def _verify_that_the_query_has_one_quantifier(query):
     query_act = query.body
     while isinstance(query_act, Quantifier):
         if not isinstance(query_act, first_quantifier):
-            break
             raise NotUnateException(
                 f"Query {query} uses two types of quantifiers"
             )
