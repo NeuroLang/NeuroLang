@@ -6,6 +6,7 @@ from typing import AbstractSet
 import numpy as np
 
 from .. import relational_algebra_provenance as rap
+from ..config import config
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     flatten_query
@@ -254,7 +255,8 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
         shattered_query_body
     )
     _verify_that_the_query_has_no_builtins(shattered_query, cpl_program)
-    _verify_that_the_query_is_unate(shattered_query, symbol_table)
+    if config.get_probabilistic_solver_check_unate():
+        _verify_that_the_query_is_unate(shattered_query, symbol_table)
     if not verify_that_the_query_is_ranked(
         convert_rule_to_ucq(shattered_query)
     ):
@@ -304,13 +306,14 @@ def _verify_that_the_query_has_one_quantifier(query):
         return
 
     first_quantifier = type(query)
-    query = query.body
-    while isinstance(query, Quantifier):
-        if not isinstance(query, first_quantifier):
+    query_act = query.body
+    while isinstance(query_act, Quantifier):
+        if not isinstance(query_act, first_quantifier):
+            break
             raise NotUnateException(
                 f"Query {query} uses two types of quantifiers"
             )
-        query = query.body
+        query_act = query_act.body
 
 
 def solve_marg_query(rule, cpl):
