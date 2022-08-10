@@ -60,6 +60,14 @@ class NeurolangConfigParser(configparser.ConfigParser):
     def get_structural_knowledge_namespace(self):
         return self["DEFAULT"].get("structural_knowledge_namespace", "neurolang:")
 
+    def get_probabilistic_solver_check_unate(self):
+        return bool(self["PROBABILISTIC_SOLVER"].get("check_unate", True))
+
+    def enable_probabilistic_solver_check_unate(self):
+        self.set("PROBABILISTIC_SOLVER", "check_unate", "True")
+
+    def disable_probabilistic_solver_check_unate(self):
+        self.set("PROBABILISTIC_SOLVER", "check_unate", "False")
 
 
 config = NeurolangConfigParser()
