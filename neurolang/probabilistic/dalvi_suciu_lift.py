@@ -239,7 +239,8 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     )))
     flat_query = Implication(flat_query.consequent, flat_query_body)
     unified_query = UnifyVariableEqualities().walk(flat_query)
-    _verify_that_the_query_has_one_quantifier(flat_query)
+    if config.get_probabilistic_solver_check_unate():
+        _verify_that_the_query_has_one_quantifier(flat_query)
     symbol_table = generate_probabilistic_symbol_table_for_query(
         cpl_program, unified_query.antecedent
     )
