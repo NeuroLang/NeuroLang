@@ -22,7 +22,7 @@
     "jest-canvas-mock": "^2.3.1",
     "jest-websocket-mock": "^2.2.1",
     "mock-socket": "^9.0.3",
-    "vite": "^2.4.3"
+    "vite": "^2.9.13"
   },
   "dependencies": {
     "codemirror": "^5.62.2",
