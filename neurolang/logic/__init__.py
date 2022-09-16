@@ -121,9 +121,15 @@ class Quantifier(LogicOperator):
 class ExistentialPredicate(Quantifier):
     def __init__(self, head, body):
 
-        if not isinstance(head, Symbol):
+        if not (
+            isinstance(head, Symbol) or
+            (
+                isinstance(head, tuple) and
+                all(isinstance(h, Symbol) for h in head)
+            )
+        ):
             raise NeuroLangException(
-                'A symbol should be provided for the '
+                'A symbol or a symbol tuple should be provided for the '
                 'existential quantifier expression'
             )
         if not isinstance(body, Definition):
@@ -132,14 +138,13 @@ class ExistentialPredicate(Quantifier):
                 'predicates should be associated to the quantifier'
             )
 
-        if head not in body._symbols:
-            raise NeuroLangException(
-                'Symbol should be a free '
-                'variable on the predicate'
-            )
         self.head = head
         self.body = body
-        self._symbols = body._symbols - {head}
+        if isinstance(head, Symbol):
+            head_symbols = {head}
+        else:
+            head_symbols = set(head)
+        self._symbols = body._symbols - head_symbols
 
     def __repr__(self):
         r = (
@@ -152,9 +157,15 @@ class ExistentialPredicate(Quantifier):
 class UniversalPredicate(Quantifier):
     def __init__(self, head, body):
 
-        if not isinstance(head, Symbol):
+        if not (
+            isinstance(head, Symbol) or
+            (
+                isinstance(head, tuple) and
+                all(isinstance(h, Symbol) for h in head)
+            )
+        ):
             raise NeuroLangException(
-                'A symbol should be provided for the '
+                'A symbol or a symbol tuple should be provided for the '
                 'universal quantifier expression'
             )
         if not isinstance(body, Definition):
@@ -163,14 +174,13 @@ class UniversalPredicate(Quantifier):
                 'predicates should be associated to the quantifier'
             )
 
-        if head not in body._symbols:
-            raise NeuroLangException(
-                'Symbol should be a free '
-                'variable on the predicate'
-            )
         self.head = head
         self.body = body
-        self._symbols = body._symbols - {head}
+        if isinstance(head, Symbol):
+            head_symbols = {head}
+        else:
+            head_symbols = set(head)
+        self._symbols = body._symbols - head_symbols    
 
     def __repr__(self):
         r = (

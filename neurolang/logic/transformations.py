@@ -15,6 +15,8 @@ from ..logic.expression_processing import (
 )
 from ..utils.orderedset import OrderedSet
 from . import (
+    FALSE,
+    TRUE,
     Conjunction,
     Constant,
     Disjunction,
@@ -108,6 +110,30 @@ class RemoveTrivialOperationsMixin(PatternWalker):
     @add_match(Negation(Negation(...)))
     def remove_double_negation(self, expression):
         return self.walk(expression.formula.formula)
+
+    @add_match(Conjunction(...), lambda e: any(f == TRUE for f in e.formulas))
+    def remove_trivial_conjunctions_true(self, expression):
+        formulas = tuple(f for f in expression.formulas if f != TRUE)
+        if formulas:
+            return Conjunction(formulas)
+        else:
+            return TRUE
+
+    @add_match(Conjunction(...), lambda e: any(f == FALSE for f in e.formulas))
+    def remove_trivial_conjunctions_false(self, expression):
+        return FALSE
+
+    @add_match(Disjunction(...), lambda e: any(f == FALSE for f in e.formulas))
+    def remove_trivial_disjunction_false(self, expression):
+        formulas = tuple(f for f in expression.formulas if f != FALSE)
+        if formulas:
+            return Conjunction(formulas)
+        else:
+            return FALSE
+
+    @add_match(Disjunction(...), lambda e: any(f == TRUE for f in e.formulas))
+    def remove_trivial_disjunction_true(self, expression):
+        return TRUE
 
 
 class MoveNegationsToAtomsSimpleOperationsMixin(PatternWalker):
