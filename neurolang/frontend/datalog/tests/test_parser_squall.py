@@ -295,6 +295,44 @@ def test_squall_quantified_np_nv2(
         assert weak_logic_eq(res, expected)
 
 
+def test_squall_voxel_activation():
+    query = "every voxel (?x; ?y; ?z) that a study ?s ~reports activates"
+    res = parser(f"squall {query}")
+    x = Symbol("x")
+    y = Symbol("y")
+    z = Symbol("z")
+    s = Symbol("s")
+    voxel = Symbol("voxel")
+    study = Symbol("study")
+    reports = Symbol("reports")
+    activates = Symbol("activates")
+    expected = UniversalPredicate(
+        z,
+        UniversalPredicate(
+            y,
+            UniversalPredicate(
+                x,
+                Implication(
+                    activates(x, y, z),
+                    Conjunction((
+                        voxel(x, y, z),
+                        ExistentialPredicate(
+                            s,
+                            Conjunction((
+                                reports(s, x, y, z),
+                                study(s)
+                            ))
+                        )
+
+                    ))
+                )
+            )
+        )
+    )
+
+    assert res == expected
+
+
 def test_squall():
     # res = parser("squall ?t1 runs")
     # res = parser("squall every woman sees a man")

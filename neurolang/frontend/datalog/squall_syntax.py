@@ -33,6 +33,7 @@ from ...logic.transformations import (
     CollapseConjunctionsMixin,
     CollapseDisjunctionsMixin,
     LogicExpressionWalker,
+    RemoveTrivialOperations,
     RemoveTrivialOperationsMixin
 )
 from ...probabilistic.expressions import ProbabilisticPredicate
@@ -98,10 +99,10 @@ GRAMMAR = u"""
     @@eol_comments :: /#([^\n]*?)$/
     @@keyword :: a all an and are belong belongs every for from
     @@keyword :: has hasnt have had is not of or relate relates that
-    @@keyword :: the there to such was were which who whom
+    @@keyword :: the there to such was were where which who whom
     @@left_recursion :: False
 
-    start = ( squall | tuple_label ) $ ;
+    start = squall $ ;
 
     expressions = ( newline ).{ probabilistic_expression | expression };
 
@@ -122,7 +123,9 @@ GRAMMAR = u"""
     body = ( conjunction ).{ predicate } ;
 
     conjunction = '&' | '\N{LOGICAL AND}' | 'and';
+    disjunction = '|' | '\N{LOGICAL OR}' | 'or' ;
     implication = ':-' | '\N{LEFTWARDS ARROW}' | 'if' ;
+    not = 'not' | '\N{Not Sign}' ;
     right_implication = '-:' | '\N{RIGHTWARDS ARROW}' | 'implies' ;
     head_predicate = predicate:identifier'(' arguments:[ arguments ] ')'
                    | arguments:argument 'is' arguments:argument"'s"\
@@ -157,13 +160,19 @@ GRAMMAR = u"""
 
     preposition = 'to' | 'from' | 'of' | 'than' | 'the' ;
 
-    negated_predicate = ('~' | '\u00AC' | 'not' ) predicate ;
+    negated_predicate = ( '\u00AC' | 'not' ) predicate ;
 
-    s = s1
-      | s2
-      | s3
-      | s4
-      ;
+    s = s_or ;
+    s_or = (disjunction).{@+:s_and} ;
+    s_and = (conjunction).{@+:s_not};
+    s_not = @:[ not ] @+:s_
+          | @+:[ not ] '[' @+:s_ ']' ;
+
+    s_ = s1
+       | s2
+       | s3
+       | s4
+       ;
 
     s1 = @:np [','] @:vp ;
     s2 = 'for' @:np ',' @:s ;
@@ -180,13 +189,12 @@ GRAMMAR = u"""
          ;
 
     vp = vp1
-       | vp2
        | vpdo
        | vppp
        ;
 
-    vp1 = &HAVE Aux vphave ;
-    vp2 = &BE Aux vpbe ;
+    vp1 = &HAVE Aux vphave
+        | &BE Aux vpbe ;
 
     vpdo = transitive:Verb2 op:op
          | intransitive:Verb1 cp:[ cp ]
@@ -248,7 +256,7 @@ GRAMMAR = u"""
     np2 = det ng2 ;
 
     ng1 = noun1 [ app ] [ rel ] ;
-    ng2 = adj1:[ adj1 ] noun2:noun2 app:[ app ] ;
+    ng2 = noun2:noun2 app:[ app ] ;
 
     noun1 = intransitive ;
     noun2 = transitive ;
@@ -257,7 +265,7 @@ GRAMMAR = u"""
           | '?'@+:identifier
           ;
 
-    tuple_label = '(' ~ ';'.{'?'@+:identifier}+ ')';
+    tuple_label = '(' ';'.{'?'@+:identifier}+ ')';
 
     rel = ( conjunction ).{ rel_ }+ ;
 
@@ -267,13 +275,14 @@ GRAMMAR = u"""
          | rel7
          ;
 
-    rel1 = ('that' | 'which' | 'who' ) vp ;
-    rel2 = ('that' | 'which' | 'whom' ) np Verb2 [ cp ] ;
+    rel1 = ('that' | 'which' | 'where' | 'who' ) vp ;
+    rel2 = ('that' | 'which' | 'where' | 'whom' ) np Verb2 [ cp ] ;
     rel3 = np2 'of which' vp ;
     rel4 = 'whose' ng2 vp ;
     rel5 = adj1 [ cp ] ;
     rel6 = adj2 op ;
-    rel7 = 'such that' @:s ;
+    rel7 = 'such' 'that' @:s
+         | '--'~ 'such' 'that' @:s '--' ;
 
     adj1 = intransitive ;
     adj2 = transitive ;
@@ -391,6 +400,24 @@ class DatalogSemantics(DatalogClassicSemantics):
             )
         else:
             raise ValueError("Invalid rule")
+
+    def s_or(self, ast):
+        if len(ast) == 1:
+            return ast[0]
+        else:
+            return Disjunction(tuple(ast))
+
+    def s_and(self, ast):
+        if len(ast) == 1:
+            return ast[0]
+        else:
+            return Conjunction(tuple(ast))
+
+    def s_not(self, ast):
+        if len(ast) > 1:
+            return Negation(ast[1])
+        else:
+            return ast[0]
 
     def s(self, ast):
         return squall_to_fol(ast)
@@ -793,7 +820,8 @@ class LambdaReplacementsWalker(ExpressionWalker):
     @add_match(Lambda)
     def process_lambda(self, expression):
         new_replacements = {
-            k: v for k, v in self.replacements.items() if k not in expression.args
+            k: v for k, v in self.replacements.items()
+            if k not in expression.args
         }
         if new_replacements:
             new_function_expression = (
@@ -896,6 +924,10 @@ class PrepositionSolverMixin(PatternMatcher):
 
 
 class SquallSolver(LambdaSolverMixin, PrepositionSolverMixin, ExpressionWalker):
+    pass
+
+
+class LambdaSolver(LambdaSolverMixin, ExpressionWalker):
     pass
 
 

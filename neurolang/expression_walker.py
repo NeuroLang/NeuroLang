@@ -232,7 +232,12 @@ class ExpressionWalker(PatternWalker):
         new_arg = list()
         for sub_arg in arg:
             new_arg.append(self.walk(sub_arg))
-            changed |= new_arg[-1] is not sub_arg
+            if isinstance(new_arg[-1], Expression):
+                changed |= new_arg[-1] is not sub_arg
+            elif isinstance(new_arg[-1], tuple) and isinstance(sub_arg, tuple):
+                changed |= all(n is not o for n, o in zip(new_arg[-1], sub_arg))
+            else:
+                changed |= True
         new_arg = type(arg)(new_arg)
         return new_arg, changed
 
