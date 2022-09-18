@@ -40,6 +40,21 @@ from ...probabilistic.expressions import ProbabilisticPredicate
 from .standard_syntax import DatalogSemantics as DatalogClassicSemantics
 
 
+from typing import NewType, Callable, TypeVar, Any, get_args
+
+
+S = TypeVar("Statement")
+E = TypeVar("Entity")
+P1 = Callable[[E], S]
+P2 = Callable[[E, E], S]
+S1 = Callable[[P1], S]
+S2 = Callable[[P1], S1]
+
+
+def M(type_):
+    return Callable[[type_], type_]
+
+
 class Label(FunctionApplication):
     def __init__(self, variable, label):
         self.functor = Constant(None)
@@ -98,7 +113,7 @@ GRAMMAR = u"""
     @@whitespace :: /[\t ]+/
     @@eol_comments :: /#([^\n]*?)$/
     @@keyword :: a all an and are belong belongs every for from
-    @@keyword :: has hasnt have had is not of or relate relates that
+    @@keyword :: has hasnt have had in is not of or relate relates that
     @@keyword :: the there to such was were where which who whom
     @@left_recursion :: False
 
@@ -260,7 +275,8 @@ GRAMMAR = u"""
 
     noun1 = intransitive ;
     noun2 = transitive ;
-    app = label ;
+    app = 'in' /\s+[0-9]+D/
+        | label ;
     label = tuple_label
           | '?'@+:identifier
           ;
@@ -423,17 +439,17 @@ class DatalogSemantics(DatalogClassicSemantics):
         return squall_to_fol(ast)
 
     def s1(self, ast):
-        return FunctionApplication(ast[0], (ast[1],))
+        return FunctionApplication[S](ast[0], (ast[1],))
 
     def s2(self, ast):
         np, s = ast
-        x = Symbol.fresh()
-        return np(Lambda((x,), s))
+        x = Symbol[E].fresh()
+        return np(Lambda[P1]((x,), s))
 
     def s3(self, ast):
         np = ast
-        x = Symbol.fresh()
-        return np(Lambda((x,), TRUE))
+        x = Symbol[E].fresh()
+        return np(Lambda[P1]((x,), TRUE))
 
     def s4(self, ast):
         pp, s = ast
@@ -444,78 +460,78 @@ class DatalogSemantics(DatalogClassicSemantics):
             res = ast
         elif len(ast) == 2:
             det, ng1 = ast
-            d = Symbol.fresh()
-            res = Lambda(
+            d = Symbol[P1].fresh()
+            res = Lambda[S1](
                 (d,),
                 det(ng1)(d)
             )
         elif len(ast) == 3 and ast[1] == "of":
             np2, _, np = ast
-            d = Symbol.fresh()
-            x = Symbol.fresh()
-            res = Lambda(
+            d = Symbol[P1].fresh()
+            x = Symbol[E].fresh()
+            res = Lambda[S1](
                 (d,),
-                np(Lambda((x,), np2(x)(d)))
+                np(Lambda[Callable[[E], S1]]((x,), np2(x)(d)))
             )
         return res
 
     def np2(self, ast):
-        x = Symbol.fresh()
-        y = Symbol.fresh()
-        d = Symbol.fresh()
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        d = Symbol[P1].fresh()
         det, ng2 = ast
-        res = Lambda(
+        res = Lambda[Callable[[E], S1]](
             (x,),
             Lambda(
                 (d,),
                 det(
-                    Lambda((y,), ng2(x)(y))
+                    Lambda[P2]((y,), ng2(x)(y))
                 )(d)
             )
         )
         return res
 
     def term_(self, ast):
-        d = Symbol.fresh()
-        return Lambda((d,), d(ast))
+        d = Symbol[P1].fresh()
+        return Lambda[S1]((d,), d(ast))
 
     def vpdo(self, ast):
-        x = Symbol.fresh()
+        x = Symbol[E].fresh()
         if 'intransitive' in ast:
-            res = ast['intransitive'](x)
+            res = ast['intransitive'].cast(P1)(x)
             if ast['cp']:
                 res = ast['cp'](res)
-            res = Lambda((x,), res)
+            res = Lambda[P1]((x,), res)
         if 'transitive' in ast:
-            y = Symbol.fresh()
-            res = Lambda(
+            y = Symbol[E].fresh()
+            res = Lambda[P1](
                 (x,),
                 ast['op'](
-                    Lambda((y,), ast['transitive'](x, y))
+                    Lambda[P1]((y,), ast['transitive'].cast(P2)(x, y))
                 )
             )
         return res
 
     def vppp(self, ast):
         pp, vp = ast
-        x = Symbol.fresh()
+        x = Symbol[E].fresh()
 
-        return Lambda((x,), pp(vp(x)))
+        return Lambda[P1]((x,), pp(vp(x)))
 
     def op1(self, ast):
         return ast
 
     def op2(self, ast):
         pp, op = ast
-        d = Symbol.fresh()
-        return Lambda((d,), pp(op(d)))
+        d = Symbol[S].fresh()
+        return Lambda[S1]((d,), pp(op(d)))
 
     def ng1(self, ast):
-        x = Symbol.fresh()
+        x = Symbol[E].fresh()
         if isinstance(ast, Expression):
             ast = [ast]
-        return Lambda((x,), Conjunction(tuple(
-            FunctionApplication(a, (x,))
+        return Lambda[P1]((x,), Conjunction[S](tuple(
+            FunctionApplication(a.cast(P1), (x,))
             for a in ast
         )))
 
@@ -536,165 +552,173 @@ class DatalogSemantics(DatalogClassicSemantics):
         return Lambda((x,), Lambda((y,), Conjunction(conjunction)))
 
     def det(self, ast):
-        d1 = Symbol.fresh()
-        d2 = Symbol.fresh()
-        x = Symbol.fresh()
+        d1 = Symbol[P1].fresh()
+        d2 = Symbol[P1].fresh()
+        x = Symbol[E].fresh()
 
         if isinstance(ast, Expression):
             det1 = ast
-            res = Lambda(
-                (d1, d2),
-                det1(Lambda(
-                    (x,),
-                    Conjunction((d1(x), d2(x)))
-                ))
+            res = Lambda[S2](
+                (d2,), 
+                Lambda[S1](
+                    (d1,),
+                    det1(Lambda[P1](
+                        (x,),
+                        Conjunction[S]((d1(x), d2(x)))
+                    ))
+                )
             )
         elif ast in ("every", "all"):
-            res = Lambda(
-                (d1, d2),
-                UniversalPredicate(x, Implication(d1(x), d2(x)))
+            res = Lambda[S2](
+                (d2,),
+                Lambda(
+                    (d1,),
+                    UniversalPredicate[S](x, Implication[S](d1(x), d2(x)))
+                )
             )
         return res
 
     def det1(self, ast):
-        d = Symbol.fresh()
-        x = Symbol.fresh()
+        d = Symbol[P1].fresh()
+        x = Symbol[E].fresh()
         if ast in ("a", "an", "some"):
-            res = Lambda((d,), ExistentialPredicate(x, d(x)))
+            res = Lambda[S1]((d,), ExistentialPredicate[S](x, d(x)))
         elif ast == "no":
-            res = Lambda((d,), Negation(ExistentialPredicate(x, d(x))))
+            res = Lambda[S1]((d,), Negation[S](ExistentialPredicate[S](x, d(x))))
         return res
 
     def vp(self, ast):
-        x = Symbol.fresh()
-        y = Symbol.fresh()
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
         if isinstance(ast, Expression):
-            return Lambda(
-                (x,),  FunctionApplication(ast, (x,))
+            return Lambda[P1](
+                (x,),  FunctionApplication[S](ast, (x,))
             )
         else:
             tv, np = ast
-            return Lambda(
-                (x,), np(Lambda((y,), tv(y, x)))
+            return Lambda[P1](
+                (x,), np(Lambda[P1]((y,), tv(y, x)))
             )
 
     def Aux(self, ast, *args, **kwargs):
         s = Symbol.fresh()
         if isinstance(ast, str):
-            res = Lambda((s,), s)
+            res = Lambda[M(S)]((s,), s)
         elif ast[1] in ('not', 'n\'t'):
-            res = Lambda((s,), Negation(s))
+            res = Lambda[M(S)]((s,), Negation[S](s))
         return res
 
     def vp1(self, ast):
-        x = Symbol.fresh()
+        x = Symbol[E].fresh()
         aux, vp = ast
-        return Lambda((x,), aux(vp(x)))
+        return Lambda[P1]((x,), aux(vp(x)))
 
     def vphave1(self, ast):
-        x = Symbol.fresh()
-        y = Symbol.fresh()
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
         noun2, op = ast
-        return Lambda(
+        return Lambda[P1](
             (x,),
-            op(Lambda((y,), noun2(x, y)))
+            op(Lambda[P1]((y,), noun2(x, y)))
         )
 
     def vphave2(self, ast):
-        x = Symbol.fresh()
-        y = Symbol.fresh()
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
         np2 = ast[0]
         rel = Lambda((y,), y)
         if ast[1:]:
             rel = ast[1]
         res = np2(x)(rel)
-        return Lambda((x,), res)
+        return Lambda[P1]((x,), res)
 
     def vpbe1(self, ast):
-        x = Symbol.fresh()
-        return Lambda((x,), TRUE)
+        x = Symbol[E].fresh()
+        return Lambda[P1]((x,), TRUE)
 
     def vpbe2(self, ast):
         rel = ast
-        x = Symbol.fresh()
-        return Lambda((x,), rel(x))
+        x = Symbol[E].fresh()
+        return Lambda[P1]((x,), rel(x))
 
     def vpbe3(self, ast):
         npc = ast
-        x = Symbol.fresh()
-        return Lambda((x,), npc(x))
+        x = Symbol[E].fresh()
+        return Lambda[P1]((x,), npc(x))
 
     def belongs(self, ast):
-        x = Symbol.fresh()
+        x = Symbol[E].fresh()
         c = Symbol.fresh()
-        return Lambda(
+        return Lambda[P1](
             (x,),
             ForArg(TO, Lambda((c,), c(x)))
         )
 
     def relates(self, ast):
-        x = Symbol.fresh()
-        y = Symbol.fresh()
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
         p = Symbol.fresh()
 
         return Lambda(
             (p,),
-            Lambda(
+            Lambda[P1](
                 (x,),
                 ForArg(TO, Lambda((y,), p(x, y)))
             )
         )
 
     def app(self, ast):
+        if isinstance(ast, tuple) and ast[0] == 'in':
+            ast = tuple(Symbol.fresh() for _ in range(int(ast[1][:-1])))
         x = Symbol.fresh()
         return Lambda((x,), Label(x, ast))
 
     def label(self, ast):
         if len(ast) == 1:
-            label = ast[0]
+            label = ast[0].cast(E)
         else:
             label = tuple(ast)
         return label
 
     def rel(self, ast):
-        x = Symbol.fresh()
-        return Lambda((x,), Conjunction(tuple(a(x) for a in ast)))
+        x = Symbol[E].fresh()
+        return Lambda[P1]((x,), Conjunction[S](tuple(a(x) for a in ast)))
 
     def rel1(self, ast):
-        x = Symbol.fresh()
+        x = Symbol[E].fresh()
         _, vp = ast
-        res = Lambda((x,), vp(x))
+        res = Lambda[P1]((x,), vp(x))
         return res
 
     def rel2(self, ast):
-        x = Symbol.fresh()
-        y = Symbol.fresh()
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
         _, np, verb2 = ast[:3]
-        res = Lambda(
+        res = Lambda[P1](
             (y,),
             np(
-                Lambda((x,), verb2(x, y))
+                Lambda[P1]((x,), verb2(x, y))
             )
         )
         return res
 
     def rel3(self, ast):
         np2, _, vp = ast
-        x = Symbol.fresh()
-        return Lambda((x,), np2(x)(vp))
+        x = Symbol[E].fresh()
+        return Lambda[P1]((x,), np2(x)(vp))
 
     def rel4(self, ast):
         _, ng2, vp = ast
-        x = Symbol.fresh()
-        y = Symbol.fresh()
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
 
-        res = Lambda(
+        res = Lambda[P2](
             (x,),
-            ExistentialPredicate(
+            ExistentialPredicate[S](
                 y,
-                Lambda(
+                Lambda[P1](
                     (y,),
-                    Conjunction((ng2(x)(y), vp(y)))
+                    Conjunction[S]((ng2(x)(y), vp(y)))
                 )(y)
             )
         )
@@ -717,24 +741,24 @@ class DatalogSemantics(DatalogClassicSemantics):
 
     def rel6(self, ast):
         adj2, op = ast
-        x = Symbol.fresh()
-        y = Symbol.fresh()
-        return Lambda((x,), op(Lambda((y,), adj2(x, y))))
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        return Lambda[P1]((x,), op(Lambda((y,), adj2(x, y))))
 
     def rel7(self, ast):
-        x = Symbol.fresh()
-        return Lambda((x,), ast)
+        x = Symbol[E].fresh()
+        return Lambda[P1]((x,), ast)
 
     def rel8(self, ast):
-        x = Symbol.fresh()
+        x = Symbol[E].fresh()
         if len(ast) == 2 and ast[0] == 'not':
-            res = Negation(ast(x))
+            res = Negation[S](ast(x))
         if len(ast) == 3:
             if ast[1] == "or":
-                res = Disjunction((ast[0](x), ast[1]))
+                res = Disjunction[S]((ast[0](x), ast[1]))
             elif ast[1] == "and":
-                res = Conjunction((ast[0](x), ast[1](x)))
-        return Lambda((x,), res)
+                res = Conjunction[S]((ast[0](x), ast[1](x)))
+        return Lambda[P1]((x,), res)
 
     def TV(self, ast):
         x = Symbol.fresh()
@@ -859,6 +883,8 @@ class SolveLabels(LogicExpressionWalker):
             if not isinstance(arg, tuple):
                 arg = (arg,)
             new_args += arg
+            type_args = get_args(expression.type)
+            new_type = Callable[[arg.type for arg in new_args], type_args[-1]]
         return self.walk(FunctionApplication(expression.functor, new_args))
 
     @add_match(
