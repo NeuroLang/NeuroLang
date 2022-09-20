@@ -1,6 +1,9 @@
-from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
+from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
+from typing import Any, Callable, NewType, Tuple, TypeVar
 
 import tatsu
+
+from neurolang.datalog.expressions import Fact
 
 from ...datalog import Implication
 from ...datalog.aggregation import AggregationApplication
@@ -8,6 +11,7 @@ from ...expression_walker import (
     ChainedWalker,
     ExpressionWalker,
     PatternMatcher,
+    PatternWalker,
     ReplaceExpressionWalker,
     add_match,
     expression_iterator
@@ -27,21 +31,19 @@ from ...logic import (
     ExistentialPredicate,
     Negation,
     Quantifier,
+    Union,
     UniversalPredicate
 )
 from ...logic.transformations import (
     CollapseConjunctionsMixin,
     CollapseDisjunctionsMixin,
     LogicExpressionWalker,
-    RemoveTrivialOperations,
+    FactorQuantifiersMixin,
     RemoveTrivialOperationsMixin
 )
 from ...probabilistic.expressions import ProbabilisticPredicate
+from ...type_system import get_args, unify_types
 from .standard_syntax import DatalogSemantics as DatalogClassicSemantics
-
-
-from typing import NewType, Callable, TypeVar, Any, get_args
-
 
 S = TypeVar("Statement")
 E = TypeVar("Entity")
@@ -53,6 +55,10 @@ S2 = Callable[[P1], S1]
 
 def M(type_):
     return Callable[[type_], type_]
+
+
+def K(type_):
+    return Callable[[Callable[[E], type_]], type_]
 
 
 class Label(FunctionApplication):
@@ -101,20 +107,44 @@ class ForArg(Definition):
         return "ForArg[{}, {}]".format(self.preposition, self.arg)
 
 
+class Expr(Definition):
+    def __init__(self, arg):
+        self.arg = arg
+
+    def __repr__(self):
+        return "Expr({})".format(self.arg)
+
+
+class The(Quantifier):
+    def __init__(self, head, arg1, arg2):
+        self.head = head
+        self.arg1 = arg1
+        self.arg2 = arg2
+
+    def __repr__(self):
+        return "The[{}; {}, {}]".format(self.head, self.arg1, self.arg2)
+
+
 TO = Constant("to")
 FROM = Constant("from")
 
 EQ = Constant(eq)
+ADD = Constant(add)
+DIV = Constant(truediv)
+MUL = Constant(mul)
+NEG = Constant(neg)
+POW = Constant(pow)
+SUB = Constant(sub)
 
 
 GRAMMAR = u"""
     @@grammar::Datalog
     @@parseinfo :: True
-    @@whitespace :: /[\t ]+/
     @@eol_comments :: /#([^\n]*?)$/
     @@keyword :: a all an and are belong belongs every for from
     @@keyword :: has hasnt have had in is not of or relate relates that
     @@keyword :: the there to such was were where which who whom
+    @@keyword :: ADD
     @@left_recursion :: False
 
     start = squall $ ;
@@ -196,7 +226,7 @@ GRAMMAR = u"""
 
     np = np2 'of' np
        | det ng1
-       | term_
+       | expr_np
        ;
 
     term_ = label
@@ -308,6 +338,20 @@ GRAMMAR = u"""
 
     pp1 = Prep np ;
     Prep = ( "to" | "from" ) ;
+
+    expr_np = expr_np_add
+            | '(' @:expr_np_add ')'
+            ;
+
+    expr_np_add = expr_np_mul [ ( '+' | '-' ) expr_np_add ] ;
+    expr_np_mul = expr_np_factor [ ( '*' | '/' ) expr_np_factor ] ;
+    expr_np_factor = expr_np_exponent [ '**' expr_np_exponent ] ;
+    expr_np_exponent = expr_np
+                     | expr_np_np
+                     ;
+    expr_np_np = term_
+               | np
+               ;
 
     comparison = argument comparison_operator argument ;
 
@@ -536,10 +580,10 @@ class DatalogSemantics(DatalogClassicSemantics):
         )))
 
     def ng2(self, ast):
-        x = Symbol.fresh()
-        y = Symbol.fresh()
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
 
-        noun2 = ast['noun2']
+        noun2 = ast['noun2'].cast(P2)
         app = ast['app']
         adj1 = ast['adj1']
 
@@ -549,7 +593,7 @@ class DatalogSemantics(DatalogClassicSemantics):
         if adj1:
             conjunction += (adj1(y),)
 
-        return Lambda((x,), Lambda((y,), Conjunction(conjunction)))
+        return Lambda[P2]((x,), Lambda[P1]((y,), Conjunction[S](conjunction)))
 
     def det(self, ast):
         d1 = Symbol[P1].fresh()
@@ -571,9 +615,17 @@ class DatalogSemantics(DatalogClassicSemantics):
         elif ast in ("every", "all"):
             res = Lambda[S2](
                 (d2,),
-                Lambda(
+                Lambda[S1](
                     (d1,),
-                    UniversalPredicate[S](x, Implication[S](d1(x), d2(x)))
+                    UniversalPredicate[S]((x,), Implication[S](d1(x), d2(x)))
+                )
+            )
+        elif ast == "the":
+            res = Lambda[S2](
+                (d2,),
+                Lambda[S1](
+                    (d1,),
+                    The[S]((x,), d1(x), d2(x))
                 )
             )
         return res
@@ -582,9 +634,9 @@ class DatalogSemantics(DatalogClassicSemantics):
         d = Symbol[P1].fresh()
         x = Symbol[E].fresh()
         if ast in ("a", "an", "some"):
-            res = Lambda[S1]((d,), ExistentialPredicate[S](x, d(x)))
+            res = Lambda[S1]((d,), ExistentialPredicate[S]((x,), d(x)))
         elif ast == "no":
-            res = Lambda[S1]((d,), Negation[S](ExistentialPredicate[S](x, d(x))))
+            res = Lambda[S1]((d,), Negation[S](ExistentialPredicate[S]((x,), d(x))))
         return res
 
     def vp(self, ast):
@@ -619,7 +671,7 @@ class DatalogSemantics(DatalogClassicSemantics):
         noun2, op = ast
         return Lambda[P1](
             (x,),
-            op(Lambda[P1]((y,), noun2(x, y)))
+            op(Lambda[P1]((y,), noun2.cast(P2)(x, y)))
         )
 
     def vphave2(self, ast):
@@ -670,14 +722,14 @@ class DatalogSemantics(DatalogClassicSemantics):
     def app(self, ast):
         if isinstance(ast, tuple) and ast[0] == 'in':
             ast = tuple(Symbol.fresh() for _ in range(int(ast[1][:-1])))
-        x = Symbol.fresh()
-        return Lambda((x,), Label(x, ast))
+        x = Symbol[E].fresh()
+        return Lambda[P1]((x,), Label(x, ast))
 
     def label(self, ast):
         if len(ast) == 1:
             label = ast[0].cast(E)
         else:
-            label = tuple(ast)
+            label = tuple(arg.cast(E) for arg in ast)
         return label
 
     def rel(self, ast):
@@ -697,7 +749,7 @@ class DatalogSemantics(DatalogClassicSemantics):
         res = Lambda[P1](
             (y,),
             np(
-                Lambda[P1]((x,), verb2(x, y))
+                Lambda[P1]((x,), verb2.cast(P2)(x, y))
             )
         )
         return res
@@ -712,10 +764,10 @@ class DatalogSemantics(DatalogClassicSemantics):
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
 
-        res = Lambda[P2](
+        res = Lambda[P1](
             (x,),
             ExistentialPredicate[S](
-                y,
+                (y,),
                 Lambda[P1](
                     (y,),
                     Conjunction[S]((ng2(x)(y), vp(y)))
@@ -760,37 +812,92 @@ class DatalogSemantics(DatalogClassicSemantics):
                 res = Conjunction[S]((ast[0](x), ast[1](x)))
         return Lambda[P1]((x,), res)
 
-    def TV(self, ast):
-        x = Symbol.fresh()
+    @staticmethod
+    def apply(k, d, alpha):
+        k_ = Symbol.fresh()
+        d_ = Symbol.fresh()
         y = Symbol.fresh()
-        return Lambda(
-            (y, x),
-            FunctionApplication(ast, (x, y))
+
+        alpha_args = get_args(alpha)
+        z_ = tuple(Symbol[arg].fresh() for arg in alpha_args[:-1])
+        y = Symbol[E].fresh()
+        res = The[S](
+            (y,),
+            EQ(d_, y),
+            k_(y, *z_)
         )
 
-    def RCN(self, ast):
-        x = Symbol.fresh()
-        y = Symbol.fresh()
-        if len(ast) == 2:
-            CN, vp = ast
-            return Lambda(
-                (x,),
-                Conjunction((CN(x), vp(x)))
-            )
-        elif len(ast) == 3:
-            CN, np, TV = ast
-            return Lambda(
-                (x,),
-                Conjunction((CN(x), np(Lambda((y,), TV(y, x)))))
-            )
-        else:
-            raise ValueError()
+        lambda_args = (k_, d_) + z_
+        for arg in lambda_args[::-1]:
+            res = Lambda((arg,), res)
 
-    def CN(self, ast):
-        x = Symbol.fresh()
-        return Lambda(
-            (x,), FunctionApplication(ast, (x,))
+        res = res(k)(d)
+
+        return res
+
+    def expr_np(self, ast):
+        expr = ast
+
+        d_ = Symbol.fresh()
+        v = Symbol.fresh()
+        res = expr(
+            Lambda(
+                (v,),
+                Lambda(
+                    (d_,),
+                    d_(v)
+                )
+            )
         )
+
+        return res
+
+    def expr_np_add(self, ast):
+        return self.expression_operation(ast, {'+': ADD, '-': SUB}, S1)
+
+    def expr_np_mul(self, ast):
+        return self.expression_operation(ast, {'*': MUL, '/': DIV}, S1)
+
+    def expr_np_factor(self, ast):
+        return self.expression_operation(ast, {'**': POW}, S1)
+
+    def expression_operation(self, ast, ops, alpha):
+        if isinstance(ast, Expression):
+            return ast
+        expr1, op, expr2 = ast
+        fun = ops[op]
+        return self.apply_expression(fun, (expr1, expr2), S1)
+
+    def apply_expression(self, fun, args, alpha):
+        k = Symbol[K(alpha)].fresh()
+
+        xs = tuple(Symbol[arg.type].fresh() for arg in args)
+        res = self.apply(k, fun(*xs), alpha)
+
+        for x, arg in zip(xs[::-1], args[::-1]):
+            res = arg(Lambda((x,), res))
+
+        res = Lambda((k,), res)
+
+        return res
+
+    def expr_np_np(self, ast):
+        k = Symbol.fresh()
+        d = Symbol.fresh()
+        x = Symbol.fresh()
+        np = ast
+
+        res = Lambda(
+            (k,),
+            Lambda(
+                (d,),
+                np(
+                    Lambda((x,), k(x)(d))
+                )
+            )
+        )
+
+        return res
 
     def pp1(self, ast):
         prep, np = ast
@@ -883,9 +990,11 @@ class SolveLabels(LogicExpressionWalker):
             if not isinstance(arg, tuple):
                 arg = (arg,)
             new_args += arg
-            type_args = get_args(expression.type)
+            type_args = get_args(expression.functor.type)
             new_type = Callable[[arg.type for arg in new_args], type_args[-1]]
-        return self.walk(FunctionApplication(expression.functor, new_args))
+        return self.walk(FunctionApplication(
+            expression.functor.cast(new_type), new_args
+        ))
 
     @add_match(
         Quantifier,
@@ -923,10 +1032,10 @@ class SimplifyNestedImplicationsMixin(PatternMatcher):
         if new_head in antecedent._symbols:
             new_head = new_head.fresh()
             new_consequent = ReplaceExpressionWalker(
-                {consequent.head: new_head}
+                {consequent.head[0]: new_head}
             ).walk(consequent.body)
         return UniversalPredicate(
-            new_head, Implication(new_consequent, antecedent)
+            (new_head,), Implication(new_consequent, antecedent)
         )
 
 
@@ -949,7 +1058,19 @@ class PrepositionSolverMixin(PatternMatcher):
         return new_lambda_exp
 
 
-class SquallSolver(LambdaSolverMixin, PrepositionSolverMixin, ExpressionWalker):
+class SquallIntermediateSolver(PatternWalker):
+    @add_match(The)
+    def replace_the_existential(self, expression):
+        head, d1, d2 = expression.unapply()
+        return ExistentialPredicate[S](head, Conjunction[S]((d2, d1)))
+
+
+class SquallSolver(
+    LambdaSolverMixin,
+    PrepositionSolverMixin,
+    SquallIntermediateSolver,
+    ExpressionWalker
+):
     pass
 
 
@@ -957,11 +1078,56 @@ class LambdaSolver(LambdaSolverMixin, ExpressionWalker):
     pass
 
 
+class MergeQuantifiersMixin(PatternWalker):
+    @add_match(UniversalPredicate(..., UniversalPredicate))
+    def merge_universals(self, expression):
+        new_head = tuple(sorted(expression.head + expression.body.head))
+        new_body = expression.body.body
+        return UniversalPredicate(new_head, new_body)
+
+
+class SplitNestedImplicationsMixin(PatternWalker):
+    @add_match(
+        Implication(..., Conjunction),
+        lambda exp: any(
+            isinstance(formula, UniversalPredicate) and
+            isinstance(formula.body, Implication)
+            for formula in exp.antecedent.formulas
+        )
+    )
+    def nested_implications_to_union(self, expression):
+        code = tuple()
+        new_formulas = tuple()
+        for formula in expression.antecedent.formulas:
+            if (
+                isinstance(formula, UniversalPredicate) and
+                isinstance(formula.body, Implication)
+            ):
+                new_formulas += (formula.body.consequent,)
+                code += (formula,)
+        new_rule = Implication(expression.consequent, Conjunction(new_formulas))
+
+        code += (new_rule,)
+
+        res = Union(code) 
+        return res
+
+
+class SplitQuantifiersMixin(PatternWalker):
+    @add_match(UniversalPredicate, lambda exp: isinstance(exp.head, tuple) and len(exp.head) > 1)
+    def split_universals(self, expression):
+        exp = expression.body
+        for head in expression.head[::-1]:
+            exp = UniversalPredicate((head,), exp)
+        return exp
+
+
 class LogicSimplifier(
     SimplifyNestedImplicationsMixin,
     RemoveTrivialOperationsMixin,
     CollapseConjunctionsMixin,
     CollapseDisjunctionsMixin,
+    FactorQuantifiersMixin,
     LogicExpressionWalker
 ):
     pass
@@ -975,3 +1141,6 @@ def squall_to_fol(expression):
     )
 
     return cw.walk(expression)
+
+
+LS = LambdaSolver()
