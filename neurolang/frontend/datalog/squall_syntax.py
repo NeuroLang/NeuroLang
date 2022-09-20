@@ -1,4 +1,5 @@
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
+from pyclbr import Function
 from typing import Any, Callable, NewType, Tuple, TypeVar
 
 import tatsu
@@ -29,6 +30,7 @@ from ...logic import (
     Conjunction,
     Disjunction,
     ExistentialPredicate,
+    NaryLogicOperator,
     Negation,
     Quantifier,
     Union,
@@ -39,6 +41,8 @@ from ...logic.transformations import (
     CollapseDisjunctionsMixin,
     LogicExpressionWalker,
     FactorQuantifiersMixin,
+    PushExistentialsDown,
+    PushExistentialsDownMixin,
     RemoveTrivialOperationsMixin
 )
 from ...probabilistic.expressions import ProbabilisticPredicate
@@ -145,7 +149,7 @@ GRAMMAR = u"""
     @@keyword :: has hasnt have had in is not of or relate relates that
     @@keyword :: the there to such was were where which who whom
     @@keyword :: ADD
-    @@left_recursion :: False
+    @@left_recursion :: True
 
     start = squall $ ;
 
@@ -339,14 +343,22 @@ GRAMMAR = u"""
     pp1 = Prep np ;
     Prep = ( "to" | "from" ) ;
 
-    expr_np = expr_np_add
-            | '(' @:expr_np_add ')'
-            ;
+    expr_np = expr_np_add ;
 
-    expr_np_add = expr_np_mul [ ( '+' | '-' ) expr_np_add ] ;
-    expr_np_mul = expr_np_factor [ ( '*' | '/' ) expr_np_factor ] ;
+    sum_op = '+'
+           | '-'
+           ;
+
+    expr_np_add = expr_np_add ( '+' | '-' ) ~ expr_np_mul
+                | expr_np_mul 
+                ;
+
+    expr_np_mul = expr_np_mul ( '*' | '/' ) ~ expr_np_factor 
+                | expr_np_factor
+                ;
+
     expr_np_factor = expr_np_exponent [ '**' expr_np_exponent ] ;
-    expr_np_exponent = expr_np
+    expr_np_exponent = '(' ~ @:expr_np_add ')'
                      | expr_np_np
                      ;
     expr_np_np = term_
@@ -1122,22 +1134,95 @@ class SplitQuantifiersMixin(PatternWalker):
         return exp
 
 
+class SimplifiyEqualitiesMixin(PatternWalker):
+    @add_match(
+        Conjunction,
+        lambda exp: any(
+            isinstance(formula, FunctionApplication) and
+            formula.functor == EQ and
+            any(
+                isinstance(formula_, FunctionApplication) and
+                formula_.functor == EQ and
+                formula_.args[1] in formula_._symbols
+                for formula_ in exp.formulas
+                if formula_ != formula
+            )
+            for formula in exp.formulas
+        )
+    )
+    def simplify_equalities(self, expression):
+        equalities = []
+        non_equalities = []
+        for formula in expression.formulas:
+            if (
+                isinstance(formula, FunctionApplication) and
+                formula.functor == EQ
+            ):
+                equalities.append(formula)
+            else:
+                non_equalities.append(formula)
+        equality_replacements = {
+            formula.args[1]: formula.args[0]
+            for formula in equalities
+        }
+        rew = ReplaceExpressionWalker(equality_replacements)
+        changed = True
+        while changed:
+            changed = False
+            new_equalities = []
+            for equality in equalities:
+                left, right = equality.args
+                left = rew.walk(left)
+                if left != equality.args[0]:
+                    equality = EQ(left, right)
+                    changed = True
+                new_equalities.append(equality)
+            equalities = new_equalities
+
+        return Conjunction(tuple(non_equalities + equalities))
+
+
 class LogicSimplifier(
     SimplifyNestedImplicationsMixin,
     RemoveTrivialOperationsMixin,
     CollapseConjunctionsMixin,
     CollapseDisjunctionsMixin,
     FactorQuantifiersMixin,
+    SimplifiyEqualitiesMixin,
     LogicExpressionWalker
 ):
     pass
+
+
+NONE = Constant(None)
+
+class EliminateSpuriousEqualities(
+    PushExistentialsDownMixin,
+    CollapseConjunctionsMixin,
+    CollapseDisjunctionsMixin,
+    RemoveTrivialOperationsMixin,
+    LogicExpressionWalker
+):
+    @add_match(ExistentialPredicate(..., EQ(..., ...)))
+    def eliminate_trivial_existential(self, _):
+        return NONE
+
+    @add_match(
+        NaryLogicOperator,
+        lambda exp: any(e == NONE for e in exp.formulas)
+    )
+    def eliminate_element(self, expression):
+        return expression.apply(
+            tuple(e for e in expression.formulas if e != NONE)
+        )
 
 
 def squall_to_fol(expression):
     cw = ChainedWalker(
         SquallSolver(),
         SolveLabels(),
-        LogicSimplifier()
+        LogicSimplifier(),
+        EliminateSpuriousEqualities()
     )
 
     return cw.walk(expression)
