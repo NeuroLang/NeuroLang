@@ -46,7 +46,7 @@ from ...logic.transformations import (
     RemoveTrivialOperationsMixin
 )
 from ...probabilistic.expressions import ProbabilisticPredicate
-from ...type_system import get_args, unify_types
+from ...type_system import Unknown, get_args, unify_types
 from .standard_syntax import DatalogSemantics as DatalogClassicSemantics
 
 S = TypeVar("Statement")
@@ -350,10 +350,10 @@ GRAMMAR = u"""
            ;
 
     expr_np_add = expr_np_add ( '+' | '-' ) ~ expr_np_mul
-                | expr_np_mul 
+                | expr_np_mul
                 ;
 
-    expr_np_mul = expr_np_mul ( '*' | '/' ) ~ expr_np_factor 
+    expr_np_mul = expr_np_mul ( '*' | '/' ) ~ expr_np_factor
                 | expr_np_factor
                 ;
 
@@ -362,8 +362,11 @@ GRAMMAR = u"""
                      | expr_np_np
                      ;
     expr_np_np = term_
+               | expr_np_function
                | np
                ;
+
+    expr_np_function = @:identifier '(' ~ (',').{ @:expr_np_add } ')' ;
 
     comparison = argument comparison_operator argument ;
 
@@ -865,15 +868,32 @@ class DatalogSemantics(DatalogClassicSemantics):
         return res
 
     def expr_np_add(self, ast):
-        return self.expression_operation(ast, {'+': ADD, '-': SUB}, S1)
+        if not isinstance(ast, Expression):
+            print(LS.walk(ast[0]))
+        res = self.expression_infix_operation(ast, {'+': ADD, '-': SUB}, S1)
+        res = LS.walk(res)
+        print(res)
+        return res
 
     def expr_np_mul(self, ast):
-        return self.expression_operation(ast, {'*': MUL, '/': DIV}, S1)
+        return self.expression_infix_operation(ast, {'*': MUL, '/': DIV}, S1)
 
     def expr_np_factor(self, ast):
-        return self.expression_operation(ast, {'**': POW}, S1)
+        return self.expression_infix_operation(ast, {'**': POW}, S1)
 
-    def expression_operation(self, ast, ops, alpha):
+    def expr_np_function(self, ast):
+        # arg_type = [Unknown] * (len(ast) - 1)
+        # identifier = ast[0].cast(Callable[arg_type, Unknown])
+        # arguments = tuple(ast[1:])
+        print(LS.walk(ast[1]))
+        ast = [ast[1], '+', ast[2]]
+        res = self.expression_infix_operation(ast, {'+': ADD}, S1)
+        res = LS.walk(res)
+        print(res)
+        return res
+        # return self.apply_expression(ADD, (ast[1], ast[2]), S1)
+
+    def expression_infix_operation(self, ast, ops, alpha):
         if isinstance(ast, Expression):
             return ast
         expr1, op, expr2 = ast
@@ -1191,10 +1211,18 @@ class LogicSimplifier(
     SimplifiyEqualitiesMixin,
     LogicExpressionWalker
 ):
-    pass
+    @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
+    def explode_quantifiers(self, expression):
+        res = expression.body
+        for h in expression.head:
+            res = expression.apply(h, res)
+
+        return res
+
 
 
 NONE = Constant(None)
+
 
 class EliminateSpuriousEqualities(
     PushExistentialsDownMixin,

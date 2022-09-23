@@ -17,7 +17,8 @@ from ....logic import (
     UniversalPredicate
 )
 from ....probabilistic.expressions import ProbabilisticPredicate
-from ..squall_syntax import LogicSimplifier, parser
+from ..squall_syntax import LogicSimplifier
+from ..squall_syntax_lark import parser
 from ..standard_syntax import ExternalSymbol
 
 config.disable_expression_type_printing()
@@ -269,7 +270,7 @@ def test_squall_simple_np_nv(noun_phrases, verb_phrases):
 def test_squall_quantified_np_nv(noun_phrase_quantified_1, verb_phrases):
     query_result_pairs = []
     for np, vp in product(noun_phrase_quantified_1, verb_phrases):
-       query_result_pairs.append(
+        query_result_pairs.append(
             (f"{np[0]} {vp[0]}", np[1](vp[1]))
         )
 
@@ -330,7 +331,7 @@ def test_squall_voxel_activation():
         )
     )
 
-    assert res == expected
+    assert weak_logic_eq(res, expected)
 
 
 def test_squall():
