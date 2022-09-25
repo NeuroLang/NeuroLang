@@ -118,9 +118,9 @@ def is_leq_informative(left, right):
         raise ValueError("typing Generic not supported")
     if left is right:
         result = True
-    elif left is Unknown:
+    elif (left is Unknown) or is_typevar(left):
         result = True
-    elif right is Unknown:
+    elif (right is Unknown) or is_typevar(right):
         result = False
     elif right is Any:
         result = True
@@ -238,6 +238,10 @@ def is_parameterized(type_):
             return get_origin(type_) is not type_
     else:
         return False
+
+
+def get_parameters(type_):
+    return type_.__parameters__
 
 
 def unify_types(t1, t2):

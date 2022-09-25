@@ -1,9 +1,19 @@
 
 
-import lark
+from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
 from typing import Callable, TypeVar
 
-from ...expressions import Constant, FunctionApplication, Lambda, Symbol
+import lark
+
+from ...expression_walker import ExpressionWalker, add_match
+from ...expressions import (
+    Constant,
+    Definition,
+    Expression,
+    FunctionApplication,
+    Lambda,
+    Symbol
+)
 from ...logic import (
     Conjunction,
     Disjunction,
@@ -13,7 +23,7 @@ from ...logic import (
     UniversalPredicate
 )
 from ...logic.transformations import RemoveTrivialOperations
-from ...type_system import get_args, is_leq_informative
+from ...type_system import get_args, is_leq_informative, is_parameterized, get_parameters, Unknown
 from .squall_syntax import (
     Label,
     LambdaSolver,
@@ -22,13 +32,14 @@ from .squall_syntax import (
     squall_to_fol
 )
 
-
 S = TypeVar("Statement")
 E = TypeVar("Entity")
+alpha = TypeVar("alpha")
 P1 = Callable[[E], S]
 P2 = Callable[[E, E], S]
 S1 = Callable[[P1], S]
 S2 = Callable[[P1], S1]
+K_alpha = Callable[[Callable[[E], alpha]], alpha]
 
 
 def M(type_):
@@ -43,17 +54,25 @@ RTO = RemoveTrivialOperations()
 LS = LambdaSolver()
 SS = SquallSolver()
 
+EQ = Constant(eq)
+ADD = Constant(add)
+DIV = Constant(truediv)
+MUL = Constant(mul)
+NEG = Constant(neg)
+POW = Constant(pow)
+SUB = Constant(sub)
+
 
 GRAMMAR=r"""
 ?start: ["squall"] squall
 
 squall : s
 
-?s : s_b
+?s : bool{s_b}
 ?s_b : np [ "," ] vp  -> s_np_vp
     | "for" np "," s -> s_for
 
-?np : np_b
+?np : expr{np_b} -> expr_np
 ?np_b : det ng1 -> np_quantified
       | np2 "of" np
       | term -> np_term
@@ -116,17 +135,36 @@ string : STRING
 number : SIGNED_NUMBER
 
 
-_bool{x} : bool_disjunction{x}
+?bool{x} : bool_disjunction{x}
 bool_disjunction{x} : ( bool_disjunction{x} _disjunction ) * bool_conjunction{x}
 bool_conjunction{x} : ( bool_conjunction{x} _conjunction ) * bool_atom{x}
 bool_atom{x} : _negation bool_atom{x} -> bool_negation
-         | "(" _bool{x} ")"
+         | "(" bool{x} ")"
          | x
 
 _conjunction : "&" | "\N{LOGICAL AND}" | "and"
 _disjunction : "|" | "\N{LOGICAL OR}" | "or"
 _implication : ":-" | "\N{LEFTWARDS ARROW}" | "if"
 _negation : "not" | "\N{Not Sign}"
+
+?expr{x} : expr_sum{x}
+expr_sum{x} : ( expr_sum{x} SUM )? expr_mul{x}
+expr_mul{x} : ( expr_mul{x} MUL )? expr_pow{x}
+expr_pow{x} : expr_exponent{x} (pow expr_exponential{x})?
+?expr_exponent{x} : expr_atom{x}
+?expr_exponential{x} : expr_atom{x}
+expr_atom{x} : "(" expr{x} ")"
+             | identifier"(" (expr{x} ("," expr{x})*)? ")" -> expr_atom_fun
+             | term                                        -> expr_atom_term
+             | x
+
+SUM : "+" 
+    | "-"
+
+MUL : "*" 
+    | "/"
+
+?pow : "**"
 
 NAME : /[a-zA-Z_]\w*/
 STRING : /[^']+/
@@ -138,6 +176,125 @@ STRING : /[^']+/
 """
 
 
+class Apply_(Definition):
+    """Apply Operator defined in the SQUALL paper
+    by Ferré, section 4.4.11.
+
+    Parameters
+    ----------
+    Definition : _type_
+        _description_
+    """
+    def __init__(self, k, d):
+        self.k = k
+        self.d = d
+
+    def __repr__(self):
+        return (
+            "\N{GREEK SMALL LETTER LAMDA}.z*"
+            f"APPLY[{self.k}; {self.d}]"
+        )
+
+
+Apply = Apply_[Callable[[Callable[[Callable[[E], alpha]], P1]], alpha]]
+
+
+class Expr(Definition):
+    """Expr Operator defined in the SQUALL paper
+    by Ferré, section 4.4.11.
+
+    Parameters
+    ----------
+    Definition : _type_
+        _description_
+    """
+    def __init__(self, expr):
+        self.expr = expr
+
+    def __repr__(self):
+        return f"Expr[{self.expr}]"
+
+
+class ChangeApplies(ExpressionWalker):
+    """Change operation Apply for the
+    apply operation in the SQUALL paper,
+    section 4.4.11
+
+    Parameters
+    ----------
+    alpha: type parameter of the expression
+
+    """
+    def __init__(self, alpha):
+        self.alpha = alpha
+        self.types_for_z = get_args(alpha)[:-1]
+
+    @add_match(Apply)
+    def apply_apply(self, expression):
+        k = expression.k
+        d = expression.d
+
+        return ChangeApplies.apply(k, d, self.alpha)
+
+    @staticmethod
+    def apply(k, d, alpha):
+        k_ = Symbol[K(alpha)].fresh()
+        d_ = Symbol[P1].fresh()
+        y = Symbol[E].fresh()
+
+        alpha_args = get_args(alpha)
+        z_ = tuple(Symbol[arg].fresh() for arg in alpha_args[:-1])
+        y = Symbol[E].fresh()
+        res = The[S](
+            (y,),
+            EQ(d_, y),
+            k_(y, *z_)
+        )
+
+        lambda_args = (k_, d_) + z_
+        for arg in lambda_args[::-1]:
+            res = Lambda((arg,), res)
+
+        res = res(k)(d)
+
+        return res
+
+
+class ChangeAlphaTypes(ExpressionWalker):
+    def __init__(self, alpha):
+        self.alpha = alpha
+
+    @add_match(
+        Expression,
+        lambda exp: (
+            is_parameterized(exp.type) and
+            alpha in get_parameters(exp.type)
+        )
+    )
+    def change_alpha_type(self, expression):
+        type_params = expression.type.__parameters__
+
+        new_params = tuple()
+        for t in type_params:
+            if t == alpha:
+                new_params += (self.alpha,)
+            else:
+                new_params += (t,)
+
+        new_expression = expression.cast(expression.type[new_params])
+
+        return new_expression
+
+
+class CastExpr(ExpressionWalker):
+    def __init__(self, cast_operation):
+        self.cast_operation = cast_operation
+
+    @add_match(Expr)
+    def expr(self, expression):
+        return self.cast_operation(expression.expr)
+
+
 class SquallTransformer(lark.Transformer):
     def squall(self, ast):
         return squall_to_fol(ast[0])
@@ -145,7 +302,6 @@ class SquallTransformer(lark.Transformer):
     def s_np_vp(self, ast):
         np, vp = ast
         res = np(vp)
-        print(res.type)
         return res
 
     def s_for(self, ast):
@@ -367,17 +523,17 @@ class SquallTransformer(lark.Transformer):
 
     def bool_disjunction(self, ast):
         return self._boolean_application_by_type(
-            ast, Disjunction
+            ast, Disjunction, True
         )
 
     def bool_conjunction(self, ast):
         return self._boolean_application_by_type(
-            ast, Conjunction
+            ast, Conjunction, True
         )
 
     def bool_negation(self, ast):
         res = self._boolean_application_by_type(
-            ast, Negation
+            ast, Negation, False
         )
         res = res.apply(*res.unapply())
         return res
@@ -386,7 +542,84 @@ class SquallTransformer(lark.Transformer):
         return ast[0]
 
     @staticmethod
-    def _boolean_application_by_type(ast, op):
+    def expr_2_np(np):
+        k = Symbol.fresh()
+        d = Symbol[P1].fresh()
+        x = Symbol[E].fresh()
+        return Lambda((k,), Lambda((d,), np(Lambda((x,), (k(x)(d))))))
+
+    def expr_np(self, ast):
+        v = Symbol[E].fresh()
+        d = Symbol[P1].fresh()
+
+        expr = ast[0]
+        expr = CastExpr(self.expr_2_np).walk(expr)
+        expr = ChangeApplies(S1).walk(expr)
+        expr = ChangeAlphaTypes(S1).walk(expr)
+        res = expr(Lambda((v,), Lambda((d,), d(v))))
+
+        return res
+
+    def expr_sum(self, ast):
+        if len(ast) == 1:
+            return ast[0]
+        else:
+            if ast[1][0] == "+":
+                op = ADD
+            else:
+                op = SUB
+            ast = tuple((ast[0], ast[-1]))
+        return self.apply_expression(op, ast)
+
+    def expr_mul(self, ast):
+        if len(ast) == 1:
+            return ast[0]
+        else:
+            if ast[1][0] == "*":
+                op = MUL
+            else:
+                op = DIV
+            ast = tuple((ast[0], ast[-1]))
+        return self.apply_expression(op, ast)
+
+    def expr_pow(self, ast):
+        ast = tuple(ast)
+        if len(ast) == 1:
+            return ast[0]
+        return self.apply_expression(POW, ast)
+
+    def expr_atom_term(self, ast):
+        term = ast[0]
+        k = Symbol[Callable[[E], alpha]].fresh()
+        return Lambda((k,), k(term))
+
+    def expr_atom_fun(self, ast):
+        functor = ast[0].cast(Unknown)
+        params = tuple(ast[1:])
+        return self.apply_expression(functor, params)
+
+    def expr_atom(self, ast):
+        return Expr(ast[0])
+
+    @staticmethod
+    def apply_expression(fun, args, alpha=alpha):
+        k = Symbol[Callable[[E], alpha]].fresh()
+
+        xs = tuple(Symbol[arg.type].fresh() for arg in args)
+        res = Apply(k, fun(*xs))
+
+        for x, arg in zip(xs[::-1], args[::-1]):
+            res = arg(Lambda((x,), res))
+
+        res = Lambda((k,), res)
+
+        return res
+
+    @staticmethod
+    def _boolean_application_by_type(ast, op, nary):
+        if nary and len(ast) == 1:
+            return ast[0]
+
         type_ = ast[0].type
         if (
             not isinstance(type_, TypeVar) and
@@ -416,9 +649,13 @@ class SquallTransformer(lark.Transformer):
 COMPILED_GRAMMAR = lark.Lark(GRAMMAR)
 
 
-def parser(code, locals=None, globals=None, return_tree=False, **kwargs):
+def parser(code, locals=None, globals=None, return_tree=False, process=True, **kwargs):
     tree = COMPILED_GRAMMAR.parse(code)
-    intermediate_representation = SquallTransformer().transform(tree)
+
+    if process:
+        intermediate_representation = SquallTransformer().transform(tree)
+    else:
+        intermediate_representation = None
 
     if return_tree:
         return intermediate_representation, tree
