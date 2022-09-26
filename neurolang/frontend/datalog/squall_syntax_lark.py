@@ -1,5 +1,6 @@
 
 
+from ast import Gt
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
 from typing import Callable, TypeVar
 
@@ -20,7 +21,8 @@ from ...logic import (
     ExistentialPredicate,
     Implication,
     Negation,
-    UniversalPredicate
+    UniversalPredicate,
+    TRUE
 )
 from ...logic.transformations import RemoveTrivialOperations
 from ...type_system import get_args, is_leq_informative, is_parameterized, get_parameters, Unknown
@@ -55,6 +57,11 @@ LS = LambdaSolver()
 SS = SquallSolver()
 
 EQ = Constant(eq)
+GT = Constant(gt)
+GE = Constant(ge)
+LT = Constant(lt)
+LE = Constant(le)
+NE = Constant(ne)
 ADD = Constant(add)
 DIV = Constant(truediv)
 MUL = Constant(mul)
@@ -97,15 +104,30 @@ rel : ("that" | "which" | "where" | "who" ) vp               -> rel_vp
     | np2 "of" "which" vp                                    -> rel_np2
     | "whose" ng2 vp                                         -> rel_ng2
     | "such" "that" s                                        -> rel_s
+    | comparison "than" op                                   -> rel_comp
+
+
+!comparison : "greater" [ "equal" ]
+            | "lower"   [ "equal" ]
+            | [ "not" ] "equal"
 
 
 term : label
      | literal
 
 ?vp : vpdo
+    | aux{be} vpbe  -> vp_aux
 
 vpdo :  verb1 [ cp ] -> vpdo_v1
      |  verb2 op    -> vpdo_v2
+
+vpbe : "there" -> vpbe_there
+     | rel     -> vpbe_rel
+
+aux{verb} : verb                         -> aux_id
+          | (verb "\s+not" | verb"n't")  -> aux_not
+
+?be : ("is" | "are" | "was" | "were" )
 
 ?adj1 : intransitive
 ?adj2 : transitive
@@ -322,6 +344,12 @@ class SquallTransformer(lark.Transformer):
         )
         return res
 
+    def vp_aux(self, ast):
+        aux, vp = ast
+        x = Symbol[E].fresh()
+        res = Lambda((x,), aux(vp(x)))
+        return res
+
     def vpdo_v1(self, ast):
         x = Symbol[E].fresh()
         verb1, cp = ast
@@ -342,6 +370,23 @@ class SquallTransformer(lark.Transformer):
             )
         )
         return res
+
+    def aux_id(self, ast):
+        s = Symbol[S].fresh()
+        return Lambda((s,), s)
+
+    def aux_not(self, ast):
+        s = Symbol[S].fresh()
+        return Lambda((s,), Negation(s))
+
+    def vpbe_there(self, ast):
+        x = Symbol[E].fresh()
+        return Lambda((x,), TRUE)
+
+    def vpbe_rel(self, ast):
+        rel = ast[0]
+        x = Symbol[E].fresh()
+        return Lambda((x,), rel(x))
 
     def op(self, ast):
         np = ast[0]
@@ -505,6 +550,28 @@ class SquallTransformer(lark.Transformer):
         s = ast[0]
         x = Symbol[E].fresh()
         return Lambda((x,), s)
+
+    def rel_comp(self, ast):
+        comp, op = ast
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        return Lambda(
+            (x,),
+            op(Lambda((y,), comp(x, y)))
+        )
+
+    def comparison(self, ast):
+        comp = ' '.join(a for a in ast if a)
+        comp_dict = {
+            "greater": GT,
+            "greater equal": GE,
+            "lower": LT,
+            "lower equal": LE,
+            "equal": EQ,
+            "not equal": NE
+        }
+
+        return comp_dict[comp]
 
     def label(self, ast):
         ast = tuple(ast)
