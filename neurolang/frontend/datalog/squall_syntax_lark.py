@@ -470,7 +470,7 @@ class SquallTransformer(lark.Transformer):
             (d2,),
             Lambda[S1](
                 (d1,),
-                UniversalPredicate[S]((x,), Implication[S](d1(x), d2(x)))
+                UniversalPredicate[S](x, Implication[S](d1(x), d2(x)))
             )
         )
         return res
