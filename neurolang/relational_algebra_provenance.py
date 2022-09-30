@@ -44,10 +44,13 @@ from .utils import OrderedSet
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
 SUB = Constant(operator.sub)
+LT = Constant(operator.lt)
+EQ = Constant(operator.eq)
 SUM = Constant(sum)
 EXP = Constant(math.exp)
 LOG = Constant(math.log)
 ONE = Constant[float](1.)
+ZERO = Constant[float](0.)
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -238,13 +241,27 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
             FunctionApplicationListMember(col, col)
             for col in prov_set.non_provenance_columns
         ]
-        proj_list.append(
+        proj_list_log = proj_list + [
             FunctionApplicationListMember(
                 LOG(ONE - prov_col),
                 prov_col,
             )
+        ]
+        proj_list_0 = proj_list + [
+            FunctionApplicationListMember(
+                ZERO,
+                prov_col,
+            )
+        ]
+        relation_log = ExtendedProjection(
+            Selection(prov_set.relation, FunctionApplication(LT, (prov_col, ONE))),
+            proj_list_log
         )
-        relation = ExtendedProjection(prov_set.relation, proj_list)
+        relation_zero = ExtendedProjection(
+            Selection(prov_set.relation, FunctionApplication(EQ, (prov_col, ONE))),
+            proj_list_0
+        )
+        relation = Union(relation_log, relation_zero)
         relation = GroupByAggregation(
             relation,
             groupby=proj_op.attributes,
