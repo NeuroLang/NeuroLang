@@ -1,5 +1,6 @@
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
 from pyclbr import Function
+from re import I
 from typing import Any, Callable, NewType, Tuple, TypeVar
 
 import tatsu
@@ -133,6 +134,7 @@ TO = Constant("to")
 FROM = Constant("from")
 
 EQ = Constant(eq)
+NE = Constant(ne)
 ADD = Constant(add)
 DIV = Constant(truediv)
 MUL = Constant(mul)
@@ -1003,6 +1005,23 @@ class LambdaReplacementsWalker(ExpressionWalker):
         return self.replacements.get(expression, expression)
 
 
+class LogicPreprocessing(FactorQuantifiersMixin, LogicExpressionWalker):
+    @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
+    def explode_quantifier_tuples(self, expression):
+        head = expression.head
+        res = expression.body
+        for h in sorted(head, key=repr):
+            res = expression.apply(h, res)
+        return self.walk(res)
+
+
+def _label_in_quantifier_body(expression):
+    return any(
+        isinstance(l, Label) and l.variable == expression.head
+        for _, l in expression_iterator(expression.body)
+    )
+
+
 class SolveLabels(LogicExpressionWalker):
     @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
     def explode_quantifier_tuples(self, expression):
@@ -1030,10 +1049,7 @@ class SolveLabels(LogicExpressionWalker):
 
     @add_match(
         Quantifier,
-        lambda expression: any(
-            isinstance(l, Label)
-            for _, l in expression_iterator(expression.body)
-        )
+        _label_in_quantifier_body
     )
     def solve_label(self, expression):
         labels = [
@@ -1201,6 +1217,12 @@ class SimplifiyEqualitiesMixin(PatternWalker):
 
         return Conjunction(tuple(non_equalities + equalities))
 
+    @add_match(Negation(FunctionApplication(EQ, ...)))
+    def negation_eq_to_ne(self, expression):
+        return FunctionApplication(
+            NE, expression.formula.args
+        )
+
 
 class LogicSimplifier(
     SimplifyNestedImplicationsMixin,
@@ -1248,6 +1270,7 @@ class EliminateSpuriousEqualities(
 def squall_to_fol(expression):
     cw = ChainedWalker(
         SquallSolver(),
+        LogicPreprocessing(),
         SolveLabels(),
         LogicSimplifier(),
         EliminateSpuriousEqualities()
