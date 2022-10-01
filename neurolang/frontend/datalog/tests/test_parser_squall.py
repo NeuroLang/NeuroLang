@@ -1,6 +1,7 @@
 from inspect import signature
 from itertools import product
 from operator import add, eq, mul, pow, sub, truediv
+import logging
 
 import pytest
 
@@ -20,6 +21,10 @@ from ....probabilistic.expressions import ProbabilisticPredicate
 from ..squall_syntax import LogicSimplifier
 from ..squall_syntax_lark import parser
 from ..standard_syntax import ExternalSymbol
+
+
+LOGGER = logging.getLogger()
+
 
 config.disable_expression_type_printing()
 
@@ -149,6 +154,14 @@ def nouns_1():
     ]
 
 
+@pytest.fixture(scope="module")
+def nouns_2():
+    return [
+        ("~author", Symbol("author")),
+        ("~publication_year", Symbol("publication_year"))
+    ]
+
+
 def lambda_simple(arg):
     return lambda x: arg(x)
 
@@ -157,12 +170,27 @@ def lambda_conjunction(*args):
     return lambda x: Conjunction(tuple(a(x) for a in args))
 
 
+def lambda_conjunction_2(arg2, *args):
+    return lambda x: lambda y: Conjunction(
+        tuple(a(x) for a in args) + (arg2(x, y),)
+    )
+
+
 @pytest.fixture(scope="module")
 def noun_groups_1(nouns_1):
     return [
         (f"{n1[0]}", lambda_conjunction(n1[1]))
         for n1 in nouns_1
     ]
+
+
+@pytest.fixture(scope="module")
+def noun_groups_2(nouns_2):
+    return [
+        (f"{n2[0]}", lambda_conjunction_2(n2[1]))
+        for n2 in nouns_2
+    ]
+
 
 
 @pytest.fixture(scope="module")
@@ -208,6 +236,36 @@ def noun_phrase_quantified_1(det, noun_groups_1):
     return res
 
 
+def np_np2_composition(np, np2):
+    return lambda d: np(lambda x: (np2(x)(d)))
+
+
+@pytest.fixture(scope="module")
+def noun_phrase_quantified_2(noun_phrase_2, nouns):
+    res = []
+    for np2, np in product(noun_phrase_2, nouns):
+        exp = np_np2_composition(np[1], np2[1])
+        res.append((f"{np2[0]} of {np[0]}", exp))
+    return res
+
+
+def det_ng2_composition(det, ng2):
+    return lambda x: lambda d: (
+        det(lambda y: ng2(x)(y))(d)
+    )
+
+
+@pytest.fixture(scope="module")
+def noun_phrase_2(det, noun_groups_2):
+    res = []
+    for det_, ng2 in product(det, noun_groups_2):
+        exp = det_ng2_composition(det_[1], ng2[1])
+        res.append((
+            f"{det_[0]} {ng2[0]}", exp
+        ))
+    return res
+
+
 @pytest.fixture(scope="module")
 def verb_phrases(verbs, verb_phrases_do_op):
     return [
@@ -216,8 +274,8 @@ def verb_phrases(verbs, verb_phrases_do_op):
 
 
 @pytest.fixture(scope="module")
-def noun_phrases(nouns, noun_phrase_quantified_1):
-    return nouns + noun_phrase_quantified_1
+def noun_phrases(nouns, noun_phrase_quantified_1, noun_phrase_quantified_2):
+    return nouns + noun_phrase_quantified_1 + noun_phrase_quantified_2 
 
 
 @pytest.fixture(scope="module")
@@ -245,8 +303,10 @@ def s(s_np_vp, s_for):
     return s_np_vp + s_for
 
 
+@pytest.mark.slow
 def test_squall_s(s):
     for query, expected in s:
+        LOGGER.log(logging.INFO + 1, "Query to test %s", query)
         res = parser(f"squall {query}")
         assert weak_logic_eq(res, expected)
 
@@ -270,6 +330,18 @@ def test_squall_simple_np_nv(noun_phrases, verb_phrases):
 def test_squall_quantified_np_nv(noun_phrase_quantified_1, verb_phrases):
     query_result_pairs = []
     for np, vp in product(noun_phrase_quantified_1, verb_phrases):
+        query_result_pairs.append(
+            (f"{np[0]} {vp[0]}", np[1](vp[1]))
+        )
+
+    for query, expected in query_result_pairs:
+        res = parser(f"squall {query}")
+        assert weak_logic_eq(res, expected)
+
+
+def test_squall_quantified_np2_nv(noun_phrase_quantified_2, verb_phrases):
+    query_result_pairs = []
+    for np, vp in product(noun_phrase_quantified_2, verb_phrases):
         query_result_pairs.append(
             (f"{np[0]} {vp[0]}", np[1](vp[1]))
         )
@@ -339,291 +411,10 @@ def test_squall():
     # res = parser("squall every woman sees a man")
     # res = parser("squall a woman that eats sees a man that sleeps")
     res = parser("squall ?s reports")
-    parser("squall every voxel that a study reports is an activation")
-    parser("squall every voxel that 'a' reports activates")
-    parser("squall every voxel that a study that mentions a word that is 'pepe' reports activates")
-    parser("squall every voxel that a study that reports no region reports activates")
-    parser("squall every voxel that a study -that reports no region- reports activates")
+    parser("squall every voxel that a study ~reports is an activation")
+    parser("squall every voxel that 'neuro study' ~reports activates")
+    parser("squall every voxel that a study that ~mentions a word that is 'auditory' ~reports, activates")
+    parser("squall every voxel that a study that ~reports no region ~reports activates")
+    # parser("squall every voxel that a study --that ~reports no region-- ~reports activates")
 
     assert res
-
-
-def test_facts():
-    res = parser('A(3)')
-    assert res == Union((Fact(Symbol('A')(Constant(3.))),))
-
-    res = parser('A("x")')
-    assert res == Union((Fact(Symbol('A')(Constant('x'))),))
-
-    res = parser("A('x', 3)")
-    assert res == Union((Fact(Symbol('A')(Constant('x'), Constant(3.))),))
-
-    res = parser(
-        'A("x", 3)\n'
-        'ans():-A(x, y)'
-    )
-    assert res == Union((
-        Fact(Symbol('A')(Constant('x'), Constant(3.))),
-        Query(
-            Symbol('ans')(),
-            Conjunction((
-                Symbol('A')(Symbol('x'), Symbol('y')),
-            ))
-        )
-    ))
-
-    res = parser('"john" is cat')
-    assert res == Union((Fact(Symbol('cat')(Constant("john"))),))
-
-    res = parser('"john" is `http://owl#fact`')
-    assert res == Union((Fact(Symbol('http://owl#fact')(Constant("john"))),))
-
-    res = parser('"john" is "perceval"\'s mascot')
-    assert res == Union((
-        Fact(Symbol('mascot')(Constant("john"), Constant("perceval"))),
-    ))
-
-    res = parser('"john" has 4 legs')
-    assert res == Union((
-        Fact(Symbol('legs')(Constant("john"), Constant(4.))),
-    ))
-
-    res = parser('"john" has 4 legs')
-    assert res == Union((
-        Fact(Symbol('legs')(Constant("john"), Constant(4.))),
-    ))
-
-    res = parser('"john" is below the "table"')
-    assert res == Union((
-        Fact(Symbol('below')(Constant("john"), Constant("table"))),
-    ))
-
-
-def test_rules():
-    A = Symbol('A')
-    B = Symbol('B')
-    C = Symbol('C')
-    f = Symbol('f')
-    x = Symbol('x')
-    y = Symbol('y')
-    z = Symbol('z')
-    res = parser('A(x):-B(x, y), C(3, z)')
-    assert res == Union((
-        Implication(A(x), Conjunction((B(x, y), C(Constant(3), z)))),
-    ))
-
-    res = parser('A(x):-~B(x)')
-    assert res == Union((
-        Implication(A(x), Conjunction((Negation(B(x)),))),
-    ))
-
-    res = parser('A(x):-B(x, y), C(3, z), z == 4')
-    assert res == Union((
-        Implication(
-            A(x),
-            Conjunction((
-                B(x, y), C(Constant(3), z), Constant(eq)(z, Constant(4.))
-            ))
-        ),
-    ))
-
-    res = parser('A(x):-B(x + 5 * 2, y), C(3, z), z == 4')
-    assert res == Union((
-        Implication(
-            A(x),
-            Conjunction((
-                B(
-                    Constant(add)(
-                        x,
-                        Constant(mul)(Constant(5.), Constant(2.))),
-                    y
-                ),
-                C(Constant(3), z), Constant(eq)(z, Constant(4.))
-            ))
-        ),
-    ))
-
-    res = parser('A(x):-B(x / 2, y), C(3, z), z == 4')
-    assert res == Union((
-        Implication(
-            A(x),
-            Conjunction((
-                B(
-                    Constant(truediv)(x, Constant(2.)),
-                    y
-                ),
-                C(Constant(3), z), Constant(eq)(z, Constant(4.))
-            ))
-        ),
-    ))
-
-    res = parser('A(x):-B(f(x), y), C(3, z), z == 4')
-    assert res == Union((
-        Implication(
-            A(x),
-            Conjunction((
-                B(f(x), y),
-                C(Constant(3), z), Constant(eq)(z, Constant(4.))
-            ))
-        ),
-    ))
-
-    res = parser('A(x):-B(x + (-5), "a")')
-    assert res == Union((
-        Implication(
-            A(x),
-            Conjunction((
-                B(
-                    Constant(add)(x, Constant(-5.)),
-                    Constant("a")
-                ),
-            ))
-        ),
-    ))
-
-    res = parser('A(x):-B(x - 5 * 2, @y ** -2)')
-    assert res == Union((
-        Implication(
-            A(x),
-            Conjunction((
-                B(
-                    Constant(sub)(
-                        x,
-                        Constant(mul)(Constant(5.), Constant(2.))
-                    ),
-                    Constant(pow)(ExternalSymbol('y'), Constant(-2.))
-                ),
-            ))
-        ),
-    ))
-
-
-def test_nl_rules():
-    cat = Symbol('cat')
-    bird = Symbol('bird')
-    feline = Symbol('feline')
-    legs = Symbol('legs')
-    small = Symbol('small')
-    goodluck_cat = Symbol('goodluck_cat')
-    black = Symbol('black')
-
-    x = Symbol('x')
-    y = Symbol('y')
-
-    res = parser('x is cat if x is feline, x has 4 legs, x is small')
-    assert res == Union((
-        Implication(
-            cat(x), Conjunction((feline(x), legs(x, Constant(4.)), small(x)))
-        ),
-    ))
-
-    res = parser('x is goodluck_cat if x is cat, not x is black')
-    assert res == Union((
-        Implication(
-            goodluck_cat(x), Conjunction((cat(x), Negation(black(x))))
-        ),
-    ))
-
-    res = parser('''
-        x has y legs if x is a cat & y == 4.0
-        or x has y legs if x is a bird and y == 2
-    ''')
-    assert res == Union((
-        Implication(
-            legs(x, y), Conjunction((cat(x), Constant(eq)(y, Constant(4.))))
-        ),
-        Implication(
-            legs(x, y), Conjunction((bird(x), Constant(eq)(y, Constant(2))))
-        ),
-    ))
-
-
-def test_aggregation():
-    A = Symbol('A')
-    B = Symbol('B')
-    f = Symbol('f')
-    x = Symbol('x')
-    y = Symbol('y')
-    res = parser('A(x, f(y)):-B(x, y)')
-    assert res == Union((
-        Implication(
-            A(x, AggregationApplication(f, (y,))),
-            Conjunction((B(x, y),))
-        ),
-    ))
-
-
-def test_aggregation_nsd():
-    A = Symbol('A')
-    B = Symbol('B')
-    f = Symbol('f')
-    x = Symbol('x')
-    y = Symbol('y')
-    res = parser('x has f(y) A if B(x, y)')
-    assert res == Union((
-        Implication(
-            A(x, AggregationApplication(f, (y,))),
-            Conjunction((B(x, y),))
-        ),
-    ))
-
-
-def test_uri_nsd():
-    from rdflib import RDFS
-
-    label = Symbol(name=str(RDFS.label))
-    regional_part = Symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
-    x = Symbol('x')
-
-    res = parser(f'x is `{str(label.name)}` if x is `{str(regional_part.name)}`')
-    expected_result = Union((
-        Implication(
-            label(x),
-            Conjunction((regional_part(x),))
-        ),
-    ))
-
-    assert res == expected_result
-
-
-def test_probabilistic_fact():
-    A = Symbol('A')
-    p = Symbol('p')
-    res = parser('p::A(3)')
-    assert res == Union((
-        Implication(
-            ProbabilisticPredicate(p, A(Constant(3.))),
-            Constant(True)
-        ),
-    ))
-
-    res = parser('0.8::A("a b", 3)')
-    assert res == Union((
-        Implication(
-            ProbabilisticPredicate(
-                Constant(0.8),
-                A(Constant("a b"), Constant(3.))
-            ),
-            Constant(True)
-        ),
-    ))
-
-
-def test_probabilistic_fact_nsd():
-    cat = Symbol('cat')
-    p = Symbol('p')
-    res = parser('with probability p "john" is cat')
-    assert res == Union((
-        Implication(
-            ProbabilisticPredicate(p, cat(Constant("john"))),
-            Constant(True)
-        ),
-    ))
-
-    res = parser("with probability p 'john' is 'george''s cat")
-    assert res == Union((
-        Implication(
-            ProbabilisticPredicate(p, cat(Constant("john"), Constant("george"))),
-            Constant(True)
-        ),
-    ))
