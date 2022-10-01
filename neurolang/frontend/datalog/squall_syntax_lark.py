@@ -1,6 +1,4 @@
-
-
-from ast import Gt
+import ast
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
 from typing import Callable, TypeVar
 
@@ -16,17 +14,27 @@ from ...expressions import (
     Symbol
 )
 from ...logic import (
+    TRUE,
     Conjunction,
     Disjunction,
     ExistentialPredicate,
     Implication,
     Negation,
-    UniversalPredicate,
-    TRUE
+    UniversalPredicate
 )
-from ...logic.transformations import RemoveTrivialOperations
-from ...type_system import get_args, is_leq_informative, is_parameterized, get_parameters, Unknown
+from ...logic.transformations import RemoveTrivialOperations, FactorQuantifiersMixin
+from ...type_system import (
+    Unknown,
+    get_args,
+    get_parameters,
+    is_leq_informative,
+    is_parameterized
+)
 from .squall_syntax import (
+    FROM,
+    TO,
+    Arg,
+    ForArg,
     Label,
     LambdaSolver,
     SquallSolver,
@@ -69,42 +77,48 @@ NEG = Constant(neg)
 POW = Constant(pow)
 SUB = Constant(sub)
 
+OfType = Symbol[Callable[[E], E]]("rdf:type")
 
-GRAMMAR=r"""
+
+GRAMMAR = r"""
 ?start: ["squall"] squall
 
 squall : s
 
 ?s : bool{s_b}
 ?s_b : np [ "," ] vp  -> s_np_vp
-    | "for" np "," s -> s_for
+    | "for" np "," s  -> s_for
+    | pp s            -> s_pp  
 
-?np : expr{np_b} -> expr_np
-?np_b : det ng1 -> np_quantified
-      | np2 "of" np
-      | term -> np_term
+?np : expr{np_b}    -> expr_np
+?np_b : det ng1     -> np_quantified
+      | np2 "of" np -> np_np2
+//      | term        -> np_term
 
 det : det1              -> det_some
     | ("every" | "all") -> det_every
     | "the"             -> det_the
 
-det1 : ("a" | "an" | "some" ) -> det1_some
-     | "no"                   -> det1_no
+det1 : "some" -> det1_some
+     | /an{0,1}/   -> det1_some
+     | "no"   -> det1_no
 
 np2 : det ng2
 
 ng1 : noun1 [ app ] [ rel ]
-ng2 : [ adj1 ] noun2 [ app ]
+ng2 : noun2 [ app ]
 
 app : "in" number"D" -> app_dimension
     | label          -> app_label
 
-rel : ("that" | "which" | "where" | "who" ) vp               -> rel_vp
-    | ("that" | "which" | "where" | "whom" ) np verb2 [ cp ] -> rel_vp2
-    | np2 "of" "which" vp                                    -> rel_np2
-    | "whose" ng2 vp                                         -> rel_ng2
-    | "such" "that" s                                        -> rel_s
-    | comparison "than" op                                   -> rel_comp
+?rel : bool{rel_b}
+rel_b : ("that" | "which" | "where" | "who" ) vp               -> rel_vp
+      | ("that" | "which" | "where" | "whom" ) np verb2 [ cp ] -> rel_vp2
+      | np2 "of" "which" vp                                    -> rel_np2
+      | "whose" ng2 vp                                         -> rel_ng2
+      | "such" "that" s                                        -> rel_s
+      | comparison "than" op                                   -> rel_comp
+      | "--" rel "--"
 
 
 !comparison : "greater" [ "equal" ]
@@ -115,51 +129,90 @@ rel : ("that" | "which" | "where" | "who" ) vp               -> rel_vp
 term : label
      | literal
 
-?vp : vpdo
-    | aux{be} vpbe  -> vp_aux
+?vp : bool{vp_b}
+?vp_b : vpdo
+      | aux{be} vpbe      -> vp_aux
+      | aux{have} vphave  -> vp_aux
+      | aux{do} vpdo      -> vp_aux
+      | pp vp             -> vp_pp
 
-vpdo :  verb1 [ cp ] -> vpdo_v1
-     |  verb2 op    -> vpdo_v2
+vpdo : verb1 [ cp ]     -> vpdo_v1
+     | verb2 [ DOPREP ] op  -> vpdo_v2
 
-vpbe : "there" -> vpbe_there
-     | rel     -> vpbe_rel
+DOPREP : "with"
+
+vpbe : "there"       -> vpbe_there
+     | rel           -> vpbe_rel
+     | npc{a_an_the} -> vpbe_npc
+     | npc_p{in}     -> vpbe_npc
+
+a_an_the : "a"
+         | "an"
+         | "the"
+
+in : "in"
+
+vphave : noun2 op -> vphave_noun2
+       | np2 [ rel ] -> vphave_np2
 
 aux{verb} : verb                         -> aux_id
           | (verb "\s+not" | verb"n't")  -> aux_not
 
-?be : ("is" | "are" | "was" | "were" )
+npc{det_} : term     -> npc_term
+          | det_ WS ng1 -> npc_det
 
-?adj1 : intransitive
+npc_p{prep_} : prep_ WS ng1 -> npc_det
+
+?be : ( "is" | "are" | "was" | "were" )
+?have: ( "has" | "had" | "have" )
+?do: ( "does" | "do" | "did" )
+
+// ?adj1 : intransitive
 ?adj2 : transitive
 
 ?noun1 : intransitive
 ?noun2 : transitive
 
-?verb1 : intransitive
-?verb2 : transitive
+?verb1 : belong
+       | intransitive
+?verb2 : relate
+       | transitive
+
+belong : /belong[s]{0,1}/
+relate : /relate[s]{0,1}/
 
 ?intransitive : identifier
 ?transitive : "~" identifier
 
-op : np [ cp ]
+op : np [ cp ] -> op_np
+   | pp op     -> op_pp
 
-cp : "NULL"
+pp : prep np -> pp_np
+
+!prep : "to"
+      | "from"
+
+cp : pp [ cp ] -> cp_pp
 
 label : "?" identifier
       | "(" "?" identifier (";" "?" identifier )* ")"
 
 identifier : NAME
+           | "`"string"`"
 
 ?literal : "'"string"'"
          | number
 
 string : STRING
-number : SIGNED_NUMBER
+number : SIGNED_INT
+       | SIGNED_FLOAT
 
 
 ?bool{x} : bool_disjunction{x}
-bool_disjunction{x} : ( bool_disjunction{x} _disjunction ) * bool_conjunction{x}
-bool_conjunction{x} : ( bool_conjunction{x} _conjunction ) * bool_atom{x}
+bool_disjunction{x} : bool_conjunction{x}
+                    | bool_disjunction{x} _disjunction bool_conjunction{x}
+bool_conjunction{x} : bool_atom{x}
+                    | bool_conjunction{x} _conjunction bool_atom{x}
 bool_atom{x} : _negation bool_atom{x} -> bool_negation
          | "(" bool{x} ")"
          | x
@@ -192,7 +245,8 @@ NAME : /[a-zA-Z_]\w*/
 STRING : /[^']+/
 
 %import common._STRING_ESC_INNER
-%import common.SIGNED_NUMBER
+%import common.SIGNED_INT
+%import common.SIGNED_FLOAT
 %import common.WS
 %ignore WS
 """
@@ -331,6 +385,10 @@ class SquallTransformer(lark.Transformer):
         np, s = ast
         return np(Lambda((x,), s))
 
+    def s_pp(self, ast):
+        pp, s = ast
+        return pp(s)
+
     def np_term(self, ast):
         d = Symbol[P1].fresh()
         return Lambda[S1]((d,), d(ast[0]))
@@ -344,10 +402,25 @@ class SquallTransformer(lark.Transformer):
         )
         return res
 
+    def np_np2(self, ast):
+        np2, np = ast
+        d = Symbol[P1].fresh()
+        x = Symbol[E].fresh()
+
+        res = Lambda((d,), np(Lambda((x,), np2(x)(d))))
+        return res
+ 
     def vp_aux(self, ast):
         aux, vp = ast
         x = Symbol[E].fresh()
         res = Lambda((x,), aux(vp(x)))
+        return res
+
+    def vp_pp(self, ast):
+        pp, vp = ast
+        x = Symbol[E].fresh()
+        res = Lambda((x,), pp(vp(x)))
+
         return res
 
     def vpdo_v1(self, ast):
@@ -360,7 +433,7 @@ class SquallTransformer(lark.Transformer):
         return res
 
     def vpdo_v2(self, ast):
-        verb2, op = ast
+        verb2, _, op = ast
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
         res = Lambda(
@@ -388,10 +461,50 @@ class SquallTransformer(lark.Transformer):
         x = Symbol[E].fresh()
         return Lambda((x,), rel(x))
 
-    def op(self, ast):
+    def vpbe_npc(self, ast):
+        npc = ast[0]
+        x = Symbol[E].fresh()
+
+        return Lambda((x,), npc(x))
+
+    def vphave_noun(self, ast):
+        noun2, op = ast
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+
+        res = Lambda(
+            (x,),
+            op(Lambda((y,), noun2(x, y)))
+        )
+
+        return res
+
+    def vphave_np2(self, ast):
+        np2, rel = ast
+        if not rel:
+            y = Symbol[E].fresh()
+            rel = Lambda((y,), TRUE)
+        x = Symbol[E].fresh()
+
+        res = Lambda((x,), np2(x)(rel))
+        return res
+
+    def npc_term(self, ast):
+        term = ast[0]
+        x = Symbol[E].fresh()
+
+        return Lambda((x,), EQ(x, term))
+
+    def npc_det(self, ast):
+        ng1 = ast[-1]
+        x = Symbol[E].fresh()
+
+        return Lambda((x,), ng1(x))
+
+    def op_np(self, ast):
         np = ast[0]
 
-        d = Symbol.fresh()
+        d = Symbol[P1].fresh()
         y = Symbol[E].fresh()
 
         res = Lambda(
@@ -406,27 +519,58 @@ class SquallTransformer(lark.Transformer):
 
         return res
 
+    def op_pp(self, ast):
+        pp, op = ast
+        x = Symbol[E].fresh()
+        res = Lambda((x,), pp(op(x)))
+        return res
+
+    def cp_pp(self, ast):
+        pp, cp = ast
+        s = Symbol[S].fresh()
+        if cp:
+            res = cp(s)
+        else:
+            res = s
+        res = Lambda((s,), pp(res))
+        return res
+
+    def prep(self, ast):
+        if ast[0].lower() == "from":
+            res = FROM
+        elif ast[0].lower() == "to":
+            res = TO
+        return res
+
+    def pp_np(self, ast):
+        prep, np = ast
+        s = Symbol[S].fresh()
+        z = Symbol[E].fresh()
+        res = Lambda((s,), np(Lambda((z,), Arg(prep, ((z, s))))))
+        return res
+
     def ng1(self, ast):
         x = Symbol[E].fresh()
+        noun1, app, rel = ast
+        noun1 = noun1.cast(P1)
+        args = (noun1, app, rel)
         return Lambda[P1]((x,), Conjunction[S](tuple(
-            FunctionApplication(a.cast(P1), (x,))
-            for a in ast if a is not None
+            FunctionApplication(a, (x,))
+            for a in args if a is not None
         )))
 
     def ng2(self, ast):
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
 
-        adj1, noun2, app = ast
+        noun2, app = ast
         noun2 = noun2.cast(P2)
 
         conjunction = (noun2(x, y),)
         if app:
             conjunction += (app(y),)
-        if adj1:
-            conjunction += (adj1(y),)
 
-        return Lambda[P2]((x,), Lambda[P1]((y,), Conjunction[S](conjunction)))
+        return Lambda((x,), Lambda((y,), Conjunction[S](conjunction)))
 
     def det1_some(self, ast):
         d = Symbol[P1].fresh()
@@ -447,6 +591,21 @@ class SquallTransformer(lark.Transformer):
                 ExistentialPredicate[S]((x,), d(x)))
         )
         return res
+
+    def np2(self, ast):
+        det, ng2 = ast
+        x = Symbol[E].fresh()
+        d = Symbol[P1].fresh()
+        y = Symbol[E].fresh()
+
+        res = Lambda(
+            (x,),
+            Lambda(
+                (d,),
+                det(Lambda((y,), ng2(x)(y)))(d)
+            )
+        )
+        return res  
 
     def det_some(self, ast):
         det1 = ast[0]
@@ -470,7 +629,7 @@ class SquallTransformer(lark.Transformer):
             (d2,),
             Lambda[S1](
                 (d1,),
-                UniversalPredicate[S](x, Implication[S](d1(x), d2(x)))
+                UniversalPredicate[S]((x,), Implication[S](d1(x), d2(x)))
             )
         )
         return res
@@ -503,7 +662,7 @@ class SquallTransformer(lark.Transformer):
 
     def rel_vp(self, ast):
         x = Symbol[E].fresh()
-        return Lambda((x,), ast[0])
+        return Lambda((x,), ast[0](x))
 
     def rel_vp2(self, ast):
         x = Symbol[E].fresh()
@@ -708,8 +867,30 @@ class SquallTransformer(lark.Transformer):
             else:
                 return op[type_](tuple(ast))
 
+    def belong(self, ast):
+        x = Symbol.fresh()
+        c = Symbol[Callable[[alpha], Callable[[alpha], alpha]]].fresh()
+        return Lambda[P1](
+            (x,),
+            ForArg(TO, Lambda((c,), OfType(x, c)))
+        )
+
+    def relate(self, ast):
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        p = Symbol.fresh()
+
+        return Lambda(
+            (p,),
+            Lambda(
+                (x,),
+                ForArg(TO, Lambda((y,), p(x, y)))
+            )
+        )
+
     NAME = str
-    SIGNED_NUMBER = int
+    SIGNED_INT = int
+    SIGNED_FLOAT = float
     STRING = str
 
 
