@@ -657,9 +657,9 @@ def test_independentdisjointprojections_provenance_name():
 
     expected = NamedRelationalAlgebraFrozenSet(
         columns=("_p_", "col1", "col2"),
-        iterable=[(0.0, 2, 1),
+        iterable=[(1.0, 2, 1),
                   (0.6, 1, 2),
-                  (0.0, 1, 1)],
+                  (1.0, 1, 1)],
     )
 
     s = IndependentProjection(pset_r1, (str2columnstr_constant("col1"),str2columnstr_constant("col2")))

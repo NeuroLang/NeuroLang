@@ -50,7 +50,7 @@ SUM = Constant(sum)
 EXP = Constant(math.exp)
 LOG = Constant(math.log)
 ONE = Constant[float](1.)
-ZERO = Constant[float](0.)
+LARGE_NEG = Constant[float](-1e20)
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -249,7 +249,7 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         ]
         proj_list_0 = proj_list + [
             FunctionApplicationListMember(
-                ZERO,
+                LARGE_NEG,
                 prov_col,
             )
         ]
@@ -282,6 +282,7 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
                prov_col,
             )
         )
+
         relation = ExtendedProjection(relation, proj_list)
         return ProvenanceAlgebraSet(relation, prov_col)
 
