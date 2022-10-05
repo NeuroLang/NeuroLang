@@ -20,6 +20,8 @@ from ..relational_algebra import (
     str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
+    IndependentDisjointProjectionsAndUnionMixin,
+    IndependentProjection,
     ProvenanceAlgebraSet,
     ConcatenateConstantColumn,
     ExtendedProjection,
@@ -640,3 +642,28 @@ def test_weightednaturaljoin_provenance_name():
     )
 
     assert sol.relation.value == expected
+
+def test_independentdisjointprojections_provenance_name():
+    RA1 = NamedRelationalAlgebraFrozenSet(
+        columns=("_p_", "col1", "col2", "col3"),
+        iterable=[(0.5, 1, 2, 5),
+                  (1.0, 2, 1, 6),
+                  (1.0, 1, 1, 7),
+                  (0.2, 1, 2, 4)],
+    )
+    pset_r1 = testing.build_ra_provenance_set_from_named_ra_set(
+        RA1, ColumnStr("_p_")
+    )
+
+    expected = NamedRelationalAlgebraFrozenSet(
+        columns=("_p_", "col1", "col2"),
+        iterable=[(1.0, 2, 1),
+                  (0.6, 1, 2),
+                  (1.0, 1, 1)],
+    )
+
+    s = IndependentProjection(pset_r1, (str2columnstr_constant("col1"),str2columnstr_constant("col2")))
+    result = IndependentDisjointProjectionsAndUnionMixin().walk(s)
+    res = RelationalAlgebraProvenanceCountingSolver().walk(result)
+
+    assert res.relation.value == expected
