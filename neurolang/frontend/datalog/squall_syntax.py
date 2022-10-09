@@ -69,7 +69,10 @@ def K(type_):
 class Label(FunctionApplication):
     def __init__(self, variable, label):
         self.functor = Constant(None)
-        self.args = (variable, label)
+        if isinstance(label, tuple):
+            self.args = (variable,) + label
+        else:
+            self.args = (variable, label)
         self.variable = variable
         self.label = label
 
@@ -1022,7 +1025,7 @@ def _label_in_quantifier_body(expression):
     )
 
 
-class SolveLabels(LogicExpressionWalker):
+class ExplodeTupleArguments(LogicExpressionWalker):
     @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
     def explode_quantifier_tuples(self, expression):
         head = expression.head
@@ -1047,6 +1050,8 @@ class SolveLabels(LogicExpressionWalker):
             expression.functor.cast(new_type), new_args
         ))
 
+
+class SolveLabels(LogicExpressionWalker):
     @add_match(
         Quantifier,
         _label_in_quantifier_body
@@ -1270,8 +1275,10 @@ class EliminateSpuriousEqualities(
 def squall_to_fol(expression):
     cw = ChainedWalker(
         SquallSolver(),
+        ExplodeTupleArguments(),
         LogicPreprocessing(),
         SolveLabels(),
+        ExplodeTupleArguments(),       
         LogicSimplifier(),
         EliminateSpuriousEqualities()
     )

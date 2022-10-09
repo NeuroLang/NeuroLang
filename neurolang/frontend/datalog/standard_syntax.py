@@ -2,8 +2,6 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
 
-from neurolang.logic import ExistentialPredicate
-
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
 from ...expressions import (
@@ -16,6 +14,7 @@ from ...expressions import (
     Statement,
     Symbol
 )
+from ...logic import ExistentialPredicate
 from ...probabilistic.expressions import (
     PROB,
     Condition,

@@ -1,9 +1,11 @@
-import ast
+from doctest import UnexpectedException
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
 from typing import Callable, TypeVar
+import re
 
 import lark
 
+from ...exceptions import NeuroLangFrontendException
 from ...expression_walker import ExpressionWalker, add_match
 from ...expressions import (
     Constant,
@@ -22,7 +24,10 @@ from ...logic import (
     Negation,
     UniversalPredicate
 )
-from ...logic.transformations import RemoveTrivialOperations, FactorQuantifiersMixin
+from ...logic.transformations import (
+    FactorQuantifiersMixin,
+    RemoveTrivialOperations
+)
 from ...type_system import (
     Unknown,
     get_args,
@@ -80,28 +85,84 @@ SUB = Constant(sub)
 OfType = Symbol[Callable[[E], E]]("rdf:type")
 
 
+KEYWORDS = [
+    'a',
+    'all',
+    'an',
+    'and',
+    'are',
+    'define',
+    'defines',
+    'every',
+    'equal',
+    'for',
+    'greater',
+    'is',
+    'isn\'t',
+    'has',
+    'hasn\'t',
+    'lower',
+    'no',
+    'not',
+    'of',
+    'or',
+    'some',
+    'such',
+    'that',
+    'the',
+    'there',
+    'was',
+    'were',
+    'where',
+    'which',
+    'whom',
+    'whose'
+]
+
+
 GRAMMAR = r"""
 ?start: ["squall"] squall
 
 squall : s
+       | rule
+
+//rule :  _FOR? np_every "," _CONSEQUENCE "an"? vpcons  -> rule_simple
+//     | _FOR? np "," rule                        -> rule_rec
+rule  : "define" "as" verb1 op "."?-> rule_op
+      | "define" "as" verb2 np prep op "."? -> rule_op2
+
+vpcons : verb1        -> vpcons_v1
+       | verb2 opcons -> vpcons_v2
+
+opcons : term
 
 ?s : bool{s_b}
-?s_b : np [ "," ] vp  -> s_np_vp
-    | "for" np "," s  -> s_for
-    | pp s            -> s_pp  
+?s_b : np [ "," ]  vp          -> s_np_vp
+      | _FOR np ","  s  -> s_for
+//    | pp s            -> s_pp  
+
+_FOR : "for"
+_CONSEQUENCE : /define[s]{0,1}/
 
 ?np : expr{np_b}    -> expr_np
 ?np_b : det ng1     -> np_quantified
       | np2 "of" np -> np_np2
 //      | term        -> np_term
 
-det : det1              -> det_some
-    | ("every" | "all") -> det_every
-    | "the"             -> det_the
+det : det1  -> det_some
+    | EVERY -> det_every
+    | THE   -> det_the
 
-det1 : "some" -> det1_some
-     | /an{0,1}/   -> det1_some
-     | "no"   -> det1_no
+EVERY : "every" | "all"
+THE : "the"
+
+det1 : SOME -> det1_some
+     | AN   -> det1_some
+     | NO   -> det1_no
+
+SOME : "some"
+AN : /an{0,1}/
+NO : "no"
 
 np2 : det ng2
 
@@ -112,14 +173,16 @@ app : "in" number"D" -> app_dimension
     | label          -> app_label
 
 ?rel : bool{rel_b}
+     | _DASH bool{rel_b} _DASH
+
+_DASH : "--"
+
 rel_b : ("that" | "which" | "where" | "who" ) vp               -> rel_vp
       | ("that" | "which" | "where" | "whom" ) np verb2 [ cp ] -> rel_vp2
       | np2 "of" "which" vp                                    -> rel_np2
       | "whose" ng2 vp                                         -> rel_ng2
       | "such" "that" s                                        -> rel_s
       | comparison "than" op                                   -> rel_comp
-      | "--" rel "--"
-
 
 !comparison : "greater" [ "equal" ]
             | "lower"   [ "equal" ]
@@ -134,7 +197,7 @@ term : label
       | aux{be} vpbe      -> vp_aux
       | aux{have} vphave  -> vp_aux
       | aux{do} vpdo      -> vp_aux
-      | pp vp             -> vp_pp
+//      | pp vp             -> vp_pp
 
 vpdo : verb1 [ cp ]     -> vpdo_v1
      | verb2 [ DOPREP ] op  -> vpdo_v2
@@ -173,24 +236,25 @@ npc_p{prep_} : prep_ WS ng1 -> npc_det
 ?noun1 : intransitive
 ?noun2 : transitive
 
-?verb1 : belong
+?verb1 : BELONG
        | intransitive
-?verb2 : relate
+?verb2 : RELATE
        | transitive
 
-belong : /belong[s]{0,1}/
-relate : /relate[s]{0,1}/
+BELONG : /belong[s]{0,1}/
+RELATE : /relate[s]{0,1}/
 
-?intransitive : identifier
-?transitive : "~" identifier
+intransitive : identifier
+transitive : "~" identifier
 
 op : np [ cp ] -> op_np
-   | pp op     -> op_pp
+//   | pp op     -> op_pp
 
 pp : prep np -> pp_np
 
 !prep : "to"
       | "from"
+      | "with"
 
 cp : pp [ cp ] -> cp_pp
 
@@ -198,10 +262,11 @@ label : "?" identifier
       | "(" "?" identifier (";" "?" identifier )* ")"
 
 identifier : NAME
-           | "`"string"`"
+           | /`[^`]*`/
 
 ?literal : "'"string"'"
          | number
+         | "@"NAME      -> external_literal
 
 string : STRING
 number : SIGNED_INT
@@ -210,17 +275,17 @@ number : SIGNED_INT
 
 ?bool{x} : bool_disjunction{x}
 bool_disjunction{x} : bool_conjunction{x}
-                    | bool_disjunction{x} _disjunction bool_conjunction{x}
+                    | bool_disjunction{x} _DISJUNCTION bool_conjunction{x}
 bool_conjunction{x} : bool_atom{x}
-                    | bool_conjunction{x} _conjunction bool_atom{x}
-bool_atom{x} : _negation bool_atom{x} -> bool_negation
+                    | bool_conjunction{x} _CONJUNCTION bool_atom{x}
+bool_atom{x} : _NEGATION bool_atom{x} -> bool_negation
          | "(" bool{x} ")"
          | x
 
-_conjunction : "&" | "\N{LOGICAL AND}" | "and"
-_disjunction : "|" | "\N{LOGICAL OR}" | "or"
-_implication : ":-" | "\N{LEFTWARDS ARROW}" | "if"
-_negation : "not" | "\N{Not Sign}"
+_CONJUNCTION : "&" | "\N{LOGICAL AND}" | "and"
+_DISJUNCTION : "|" | "\N{LOGICAL OR}" | "or"
+_IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}" | "if"
+_NEGATION : "not" | "\N{Not Sign}"
 
 ?expr{x} : expr_sum{x}
 expr_sum{x} : ( expr_sum{x} SUM )? expr_mul{x}
@@ -241,7 +306,7 @@ MUL : "*"
 
 ?pow : "**"
 
-NAME : /[a-zA-Z_]\w*/
+NAME : /(?!(\b(_KEYWORD)\b))//[a-zA-Z_]\w*/
 STRING : /[^']+/
 
 %import common._STRING_ESC_INNER
@@ -249,7 +314,7 @@ STRING : /[^']+/
 %import common.SIGNED_FLOAT
 %import common.WS
 %ignore WS
-"""
+""".replace("_KEYWORD", "|".join(KEYWORDS))
 
 
 class Apply_(Definition):
@@ -372,8 +437,47 @@ class CastExpr(ExpressionWalker):
 
 
 class SquallTransformer(lark.Transformer):
+    def __init__(self, locals=None, globals=None):
+        super().__init__()
+
+        if locals is None:
+            locals = {}
+        if globals is None:
+            globals = {}
+
+        self.locals = locals
+        self.globals = globals
+
     def squall(self, ast):
         return squall_to_fol(ast[0])
+
+    def rule_simple(self, ast):
+        np, vpcons = ast
+        res = np(vpcons)
+        return res
+
+    def rule_rec(self, ast):
+        x = Symbol[E].fresh()
+        np, rule = ast
+        return np(Lambda((x,), rule))
+
+    def rule_op(self, ast):
+        verb1, op = ast
+        x = Symbol[E].fresh()
+        return op(Lambda((x,), verb1(x)))
+
+    def rule_op2(self, ast):
+        verb2, np, prep, op = ast
+        s = Symbol[S].fresh()
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        z = Symbol[E].fresh()
+
+        pp = Lambda((s,), op(Lambda((z,), Arg(prep, (z, s)))))
+        vp = Lambda((x,), ForArg(prep, Lambda((y,), verb2(x, y))))
+        vp_pp = Lambda((x,), pp(vp(x)))
+        res = np(vp_pp)
+        return res
 
     def s_np_vp(self, ast):
         np, vp = ast
@@ -409,7 +513,16 @@ class SquallTransformer(lark.Transformer):
 
         res = Lambda((d,), np(Lambda((x,), np2(x)(d))))
         return res
- 
+
+    def np_every_1(self, ast):
+        det, ng1 = ast
+        d = Symbol[P1].fresh()
+        res = Lambda[S1](
+            (d,),
+            det(ng1)(d)
+        )
+        return res
+
     def vp_aux(self, ast):
         aux, vp = ast
         x = Symbol[E].fresh()
@@ -422,6 +535,28 @@ class SquallTransformer(lark.Transformer):
         res = Lambda((x,), pp(vp(x)))
 
         return res
+
+    def vpcons_v1(self, ast):
+        x = Symbol[E].fresh()
+        verb1 = ast[0]
+        res = verb1.cast(P1)(x)
+        res = Lambda[P1]((x,), res)
+        return res
+
+    def vpcons_v2(self, ast):
+        verb2, op = ast
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        res = Lambda(
+            (x,),
+            op(
+                Lambda((y,), verb2.cast(P2)(x, y))
+            )
+        )
+        return res
+
+    def opcons(self, ast):
+        return self.op_np([self.np_term(ast)])
 
     def vpdo_v1(self, ast):
         x = Symbol[E].fresh()
@@ -467,7 +602,7 @@ class SquallTransformer(lark.Transformer):
 
         return Lambda((x,), npc(x))
 
-    def vphave_noun(self, ast):
+    def vphave_noun2(self, ast):
         noun2, op = ast
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
@@ -540,6 +675,8 @@ class SquallTransformer(lark.Transformer):
             res = FROM
         elif ast[0].lower() == "to":
             res = TO
+        else:
+            res = Constant[str](ast[0].lower())
         return res
 
     def pp_np(self, ast):
@@ -552,7 +689,6 @@ class SquallTransformer(lark.Transformer):
     def ng1(self, ast):
         x = Symbol[E].fresh()
         noun1, app, rel = ast
-        noun1 = noun1.cast(P1)
         args = (noun1, app, rel)
         return Lambda[P1]((x,), Conjunction[S](tuple(
             FunctionApplication(a, (x,))
@@ -646,6 +782,12 @@ class SquallTransformer(lark.Transformer):
             )
         )
         return res
+
+    def intransitive(self, ast):
+        return ast[0].cast(P1)
+
+    def transitive(self, ast):
+        return ast[0].cast(P2)
 
     def term(self, ast):
         return ast[0]
@@ -888,20 +1030,57 @@ class SquallTransformer(lark.Transformer):
             )
         )
 
+    def external_literal(self, ast):
+        name = ast[0]
+        if name in self.locals:
+            return Constant(self.locals[name])
+        elif name in self.globals:
+            return Constant(self.globals[name])
+        else:
+            raise NeuroLangFrontendException(
+                f"Variable {name} not found in environment"
+            )
+
     NAME = str
     SIGNED_INT = int
     SIGNED_FLOAT = float
     STRING = str
 
 
-COMPILED_GRAMMAR = lark.Lark(GRAMMAR)
+COMPILED_GRAMMAR = lark.Lark(GRAMMAR, parser="earley")
 
 
 def parser(code, locals=None, globals=None, return_tree=False, process=True, **kwargs):
-    tree = COMPILED_GRAMMAR.parse(code)
+    try:
+        tree = COMPILED_GRAMMAR.parse(code)
+    except lark.exceptions.UnexpectedEOF as ex:
+        err = ex.get_context(code, span=80)
+        expected = set(ex.expected)
+        expected_formatted = '\n\t* ' + '\n\t* '.join(
+            "%s : %s" % (t, COMPILED_GRAMMAR.get_terminal(t).pattern.to_regexp())
+            for t in sorted(expected)
+        )
+        raise NeuroLangFrontendException("\n" + err + expected_formatted) from None
+    except lark.exceptions.UnexpectedInput as ex:
+        err = ex.get_context(code, span=80)
+        print(err)
+        # next_rules = [k for k in sorted(ex.interactive_parser.choices()) if re.match('[a-z]', k[0])]
+        # print(next_rules)
+        #print(ex.expected)
+        #print("\n".join(ex.considered_rules))
+        #print(ex.state)
+        #print(str(ex))
+        expected = ex.allowed
+        expected_formatted = '\n\t* ' + '\n\t* '.join(
+            "%s : %s" % (t, COMPILED_GRAMMAR.get_terminal(t).pattern.to_regexp())
+            for t in sorted(expected)
+        )
+        raise NeuroLangFrontendException("\n" + err + expected_formatted) from None
+    except lark.exceptions.UnexpectedException as ex:
+        raise ex from None
 
     if process:
-        intermediate_representation = SquallTransformer().transform(tree)
+        intermediate_representation = SquallTransformer(locals=locals, globals=globals).transform(tree)
     else:
         intermediate_representation = None
 

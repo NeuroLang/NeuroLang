@@ -261,7 +261,10 @@ class FactorQuantifiersMixin(PatternWalker):
 
     @add_match(
         Implication(..., ExistentialPredicate),
-        lambda exp: exp.antecedent.head not in extract_logic_free_variables(exp.consequent)
+        lambda exp: (
+            exp.antecedent.head
+            not in extract_logic_free_variables(exp.consequent)
+        )
     )
     def implication_existential_antecedent(self, expression):
         head = expression.antecedent.head
