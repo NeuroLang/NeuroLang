@@ -1,7 +1,6 @@
 from doctest import UnexpectedException
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
-from typing import Callable, TypeVar
-import re
+from typing import Callable, List, TypeVar
 
 import lark
 
@@ -13,7 +12,8 @@ from ...expressions import (
     Expression,
     FunctionApplication,
     Lambda,
-    Symbol
+    Symbol,
+    expressions_behave_as_objects
 )
 from ...logic import (
     TRUE,
@@ -24,10 +24,7 @@ from ...logic import (
     Negation,
     UniversalPredicate
 )
-from ...logic.transformations import (
-    FactorQuantifiersMixin,
-    RemoveTrivialOperations
-)
+from ...logic.transformations import RemoveTrivialOperations
 from ...type_system import (
     Unknown,
     get_args,
@@ -35,34 +32,28 @@ from ...type_system import (
     is_leq_informative,
     is_parameterized
 )
-from .squall_syntax import (
+from .squall import (
     FROM,
+    P1,
+    P2,
+    S1,
+    S2,
     TO,
+    Aggregation,
     Arg,
+    E,
     ForArg,
+    K,
     Label,
     LambdaSolver,
+    S,
     SquallSolver,
     The,
     squall_to_fol
 )
 
-S = TypeVar("Statement")
-E = TypeVar("Entity")
 alpha = TypeVar("alpha")
-P1 = Callable[[E], S]
-P2 = Callable[[E, E], S]
-S1 = Callable[[P1], S]
-S2 = Callable[[P1], S1]
 K_alpha = Callable[[Callable[[E], alpha]], alpha]
-
-
-def M(type_):
-    return Callable[[type_], type_]
-
-
-def K(type_):
-    return Callable[[Callable[[E], type_]], type_]
 
 
 RTO = RemoveTrivialOperations()
@@ -126,10 +117,12 @@ GRAMMAR = r"""
 squall : s
        | rule
 
-//rule :  _FOR? np_every "," _CONSEQUENCE "an"? vpcons  -> rule_simple
-//     | _FOR? np "," rule                        -> rule_rec
-rule  : "define" "as" verb1 op "."?-> rule_op
-      | "define" "as" verb2 np prep op "."? -> rule_op2
+rule  : "define" "as" [PROBABLY] verb1 op "."?-> rule_op
+      | "define" "as" [PROBABLY] verb2 np _BREAK? prep op "."? -> rule_op2
+      | "define" "as" [PROBABLY] verb2 prep op _BREAK? np "."? -> rule_op2_b
+
+PROBABLY : "probably"
+_BREAK : "," | ";"
 
 vpcons : verb1        -> vpcons_v1
        | verb2 opcons -> vpcons_v2
@@ -139,7 +132,7 @@ opcons : term
 ?s : bool{s_b}
 ?s_b : np [ "," ]  vp          -> s_np_vp
       | _FOR np ","  s  -> s_for
-//    | pp s            -> s_pp  
+//    | pp s            -> s_pp
 
 _FOR : "for"
 _CONSEQUENCE : /define[s]{0,1}/
@@ -159,6 +152,7 @@ THE : "the"
 det1 : SOME -> det1_some
      | AN   -> det1_some
      | NO   -> det1_no
+     | AN adj_aggreg [ app ] [ rel ] -> det_agg
 
 SOME : "some"
 AN : /an{0,1}/
@@ -166,14 +160,27 @@ NO : "no"
 
 np2 : det ng2
 
-ng1 : noun1 [ app ] [ rel ]
+ng1 : noun1 [ app ] [ rel ]                    -> ng1_noun
+    | noun_aggreg [ app ] _OF npc{THE} [ dims ] -> ng1_agg
 ng2 : noun2 [ app ]
+
+
 
 app : "in" number"D" -> app_dimension
     | label          -> app_label
 
+dims : dim                    -> dims_base
+     | dim _CONJUNCTION dims  -> dims_rec
+
+dim : _PER ng2      -> dim_ng2
+    | _PER npc{THE} -> dim_npc
+
+_PER : "per"
+
 ?rel : bool{rel_b}
      | _DASH bool{rel_b} _DASH
+
+_OF : "of"
 
 _DASH : "--"
 
@@ -230,7 +237,7 @@ npc_p{prep_} : prep_ WS ng1 -> npc_det
 ?have: ( "has" | "had" | "have" )
 ?do: ( "does" | "do" | "did" )
 
-// ?adj1 : intransitive
+?adj1 : intransitive
 ?adj2 : transitive
 
 ?noun1 : intransitive
@@ -241,11 +248,14 @@ npc_p{prep_} : prep_ WS ng1 -> npc_det
 ?verb2 : RELATE
        | transitive
 
+noun_aggreg : identifier
+adj_aggreg : identifier
+
 BELONG : /belong[s]{0,1}/
 RELATE : /relate[s]{0,1}/
 
-intransitive : identifier
-transitive : "~" identifier
+intransitive : upper_identifier
+transitive : identifier
 
 op : np [ cp ] -> op_np
 //   | pp op     -> op_pp
@@ -255,11 +265,15 @@ pp : prep np -> pp_np
 !prep : "to"
       | "from"
       | "with"
+      | "for"
 
 cp : pp [ cp ] -> cp_pp
 
 label : "?" identifier
       | "(" "?" identifier (";" "?" identifier )* ")"
+
+upper_identifier : /[A-Z]/NAME
+                 | /`[A-Z][^`]*`/
 
 identifier : NAME
            | /`[^`]*`/
@@ -462,19 +476,46 @@ class SquallTransformer(lark.Transformer):
         return np(Lambda((x,), rule))
 
     def rule_op(self, ast):
-        verb1, op = ast
+        probably, verb1, op = ast
         x = Symbol[E].fresh()
-        return op(Lambda((x,), verb1(x)))
+        if probably:
+            verb = verb1(x, FunctionApplication[float](Symbol[Callable[[E], float]]("PROB"), (x,)))
+        else:
+            verb = verb1(x)
+        return op(Lambda((x,), verb))
 
     def rule_op2(self, ast):
-        verb2, np, prep, op = ast
+        probably, verb2, np, prep, op = ast
         s = Symbol[S].fresh()
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
         z = Symbol[E].fresh()
 
+        if probably:
+            verb = verb2(x, y, FunctionApplication[float](Symbol[Callable[[E], float]]("PROB"), (x, y)))
+        else:
+            verb = verb2(x, y)
+
         pp = Lambda((s,), op(Lambda((z,), Arg(prep, (z, s)))))
-        vp = Lambda((x,), ForArg(prep, Lambda((y,), verb2(x, y))))
+        vp = Lambda((x,), ForArg(prep, Lambda((y,), verb)))
+        vp_pp = Lambda((x,), pp(vp(x)))
+        res = np(vp_pp)
+        return res
+
+    def rule_op2_b(self, ast):
+        probably, verb2, prep, op, np = ast
+        s = Symbol[S].fresh()
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        z = Symbol[E].fresh()
+
+        if probably:
+            verb = verb2(x, y, FunctionApplication[float](Symbol[Callable[[E], float]]("PROB"), (x, y)))
+        else:
+            verb = verb2(x, y)
+
+        pp = Lambda((s,), op(Lambda((z,), Arg(prep, (z, s)))))
+        vp = Lambda((x,), ForArg(prep, Lambda((y,), verb)))
         vp_pp = Lambda((x,), pp(vp(x)))
         res = np(vp_pp)
         return res
@@ -686,7 +727,7 @@ class SquallTransformer(lark.Transformer):
         res = Lambda((s,), np(Lambda((z,), Arg(prep, ((z, s))))))
         return res
 
-    def ng1(self, ast):
+    def ng1_noun(self, ast):
         x = Symbol[E].fresh()
         noun1, app, rel = ast
         args = (noun1, app, rel)
@@ -694,6 +735,33 @@ class SquallTransformer(lark.Transformer):
             FunctionApplication(a, (x,))
             for a in args if a is not None
         )))
+
+    def ng1_agg(self, ast):
+        aggreg, app, npc, dims = ast
+        v = Symbol[S].fresh()
+        y = Symbol[E].fresh()
+        lz = Symbol[List[E]].fresh()
+
+        inner = (npc(y),)
+        if dims:
+            inner += (dims(y)(lz),)
+        inner = Conjunction[S](inner)
+
+        formulas = (aggreg(Lambda(
+            (lz,),
+            Lambda(
+                (y,),
+                inner
+            )
+        ))(v),)
+
+        if app:
+            formulas += (app(v),)
+
+        formulas = Conjunction[S](formulas)
+
+        res = Lambda((v,), formulas)
+        return res
 
     def ng2(self, ast):
         x = Symbol[E].fresh()
@@ -802,6 +870,52 @@ class SquallTransformer(lark.Transformer):
         x = Symbol[E].fresh()
         return Lambda[P1]((x,), Label(x, ast[0]))
 
+    def dims_base(self, ast):
+        dim = ast[0]
+        y = Symbol[E].fresh()
+        lz = Symbol[List[E]].fresh()
+        with expressions_behave_as_objects():
+            res = Lambda(
+                (y,),
+                Lambda(
+                    (lz,),
+                    dim(y)(lz[Constant(0)])
+                )
+            )
+        return res
+
+    def dims_rec(self, ast):
+        dim, dims = ast
+        y = Symbol[E].fresh()
+        lz = Symbol[List[E]].fresh()
+
+        with expressions_behave_as_objects():
+            res = Lambda(
+                (y,),
+                Lambda(
+                    (lz,),
+                    Conjunction[S]((
+                        dim(y, lz[Constant(0)]),
+                        dims(y, lz[Constant(slice(1, None))])
+                    ))
+                )
+            )
+        return res
+
+    def dim_ng2(self, ast):
+        ng2 = ast[0]
+        y = Symbol[E].fresh()
+        z = Symbol[E].fresh()
+        res = Lambda((y,), Lambda((z,), ng2(y)(z)))
+        return res
+
+    def dim_npc(self, ast):
+        npc = ast[0]
+        y = Symbol[E].fresh()
+        z = Symbol[E].fresh()
+        res = Lambda((y,), Lambda((z,), npc(z)))
+        return res
+
     def rel_vp(self, ast):
         x = Symbol[E].fresh()
         return Lambda((x,), ast[0](x))
@@ -879,6 +993,10 @@ class SquallTransformer(lark.Transformer):
         if len(ast) == 1:
             ast = ast[0]
         return ast
+
+    def upper_identifier(self, ast):
+        ast = ''.join(ast)
+        return Symbol[E](ast)
 
     def identifier(self, ast):
         return Symbol[E](ast[0])
@@ -1040,6 +1158,22 @@ class SquallTransformer(lark.Transformer):
             raise NeuroLangFrontendException(
                 f"Variable {name} not found in environment"
             )
+
+    def noun_aggreg(self, ast):
+        return self.adj_aggreg(ast)
+
+    def adj_aggreg(self, ast):
+        functor = ast[0].cast(Callable[[Callable[[List[E]], P1]], P1])
+        d = Symbol[List[E]].fresh()
+        x = Symbol[P1].fresh()
+        res = Lambda(
+            (d,),
+            Lambda(
+                (x,),
+                Aggregation[P1](functor, d, x)
+            )
+        )
+        return res
 
     NAME = str
     SIGNED_INT = int

@@ -1,12 +1,13 @@
+from collections import Counter
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
 from pyclbr import Function
-from re import I
+from re import I, L
 from typing import Any, Callable, NewType, Tuple, TypeVar
 
 import tatsu
 
 from neurolang.datalog.expressions import Fact
-
+from ...exceptions import NeuroLangFrontendException
 from ...datalog import Implication
 from ...datalog.aggregation import AggregationApplication
 from ...expression_walker import (
@@ -24,6 +25,7 @@ from ...expressions import (
     Expression,
     FunctionApplication,
     Lambda,
+    Projection,
     Symbol
 )
 from ...logic import (
@@ -31,6 +33,7 @@ from ...logic import (
     Conjunction,
     Disjunction,
     ExistentialPredicate,
+    LogicOperator,
     NaryLogicOperator,
     Negation,
     Quantifier,
@@ -44,11 +47,17 @@ from ...logic.transformations import (
     FactorQuantifiersMixin,
     PushExistentialsDown,
     PushExistentialsDownMixin,
+    PushUniversalsDown,
     RemoveTrivialOperationsMixin
 )
 from ...probabilistic.expressions import ProbabilisticPredicate
 from ...type_system import Unknown, get_args, unify_types
 from .standard_syntax import DatalogSemantics as DatalogClassicSemantics
+
+
+class RepeatedLabelException(NeuroLangFrontendException):
+    pass
+
 
 S = TypeVar("Statement")
 E = TypeVar("Entity")
@@ -78,6 +87,16 @@ class Label(FunctionApplication):
 
     def __repr__(self):
         return "Label[{}:={}]".format(self.label, self.variable)
+
+
+class Aggregation(Definition):
+    def __init__(self, functor, criteria, values):
+        self.functor = functor
+        self.criteria = criteria
+        self.values = values
+
+    def __repr__(self):
+        return "Aggregate[{}, {}, {}]".format(self.functor, self.criteria, self.values)
 
 
 class Ref(Expression):
@@ -1008,7 +1027,24 @@ class LambdaReplacementsWalker(ExpressionWalker):
         return self.replacements.get(expression, expression)
 
 
-class LogicPreprocessing(FactorQuantifiersMixin, LogicExpressionWalker):
+class PullUniversalUpImplicationMixin(PatternWalker):
+    @add_match(Implication(UniversalPredicate, ...))
+    def push_universal_up_implication(self, expression):
+        consequent = expression.consequent
+        antecedent = expression.antecedent
+        new_head = consequent.head
+        new_consequent = consequent.body
+        if new_head in antecedent._symbols:
+            new_head = new_head.fresh()
+            new_consequent = ReplaceExpressionWalker(
+                {consequent.head: new_head}
+            ).walk(consequent.body)
+        return UniversalPredicate(
+            (new_head,), Implication(new_consequent, antecedent)
+        )
+
+
+class LogicPreprocessing(FactorQuantifiersMixin, PullUniversalUpImplicationMixin, LogicExpressionWalker):
     @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
     def explode_quantifier_tuples(self, expression):
         head = expression.head
@@ -1051,6 +1087,27 @@ class ExplodeTupleArguments(LogicExpressionWalker):
         ))
 
 
+def _label_expressions(expression):
+    return [
+        e for _, e in expression_iterator(expression)
+        if isinstance(e, Label)
+    ]
+
+
+def _repeated_labels(expression):
+    labels = _label_expressions(expression)
+    label_counts = Counter(label.label for label in labels)
+    return [l for l in labels if label_counts[l] > 1]
+
+
+class DuplicatedLabelsVerification(LogicExpressionWalker):
+    @add_match(
+        LogicOperator,
+        lambda exp: _repeated_labels(exp)
+    )
+    def solve_repeated_labels(self, expression):
+        raise RepeatedLabelException("Repeated appositions are not permitted")
+
 class SolveLabels(LogicExpressionWalker):
     @add_match(
         Quantifier,
@@ -1058,9 +1115,8 @@ class SolveLabels(LogicExpressionWalker):
     )
     def solve_label(self, expression):
         labels = [
-            l for _, l in expression_iterator(expression.body)
-            if isinstance(l, Label)
-            and l.variable == expression.head
+            l for l in _label_expressions(expression.body)
+            if l.variable == expression.head
         ]
         if labels:
             expression = ReplaceExpressionWalker(
@@ -1069,27 +1125,14 @@ class SolveLabels(LogicExpressionWalker):
         return self.walk(expression.apply(expression.head, self.walk(expression.body)))
 
 
-class SimplifyNestedImplicationsMixin(PatternMatcher):
+class SimplifyNestedImplicationsMixin(PullUniversalUpImplicationMixin):
     @add_match(Implication(Implication, ...))
     def implication_implication_other(self, expression):
         consequent = expression.consequent.consequent
-        antecedent = Conjunction((expression.consequent.antecedent, expression.antecedent))
-        return Implication(consequent, antecedent)
-
-    @add_match(Implication(UniversalPredicate, ...))
-    def push_universal_up_implication(self, expression):
-        consequent = expression.consequent
-        antecedent = expression.antecedent
-        new_head = consequent.head
-        new_consequent = consequent.body
-        if new_head in antecedent._symbols:
-            new_head = new_head.fresh()
-            new_consequent = ReplaceExpressionWalker(
-                {consequent.head[0]: new_head}
-            ).walk(consequent.body)
-        return UniversalPredicate(
-            (new_head,), Implication(new_consequent, antecedent)
+        antecedent = Conjunction(
+            (expression.consequent.antecedent, expression.antecedent)
         )
+        return Implication(consequent, antecedent)
 
 
 class PrepositionSolverMixin(PatternMatcher):
@@ -1117,8 +1160,81 @@ class SquallIntermediateSolver(PatternWalker):
         head, d1, d2 = expression.unapply()
         return ExistentialPredicate[S](head, Conjunction[S]((d2, d1)))
 
+    @add_match(Aggregation(..., Lambda, Symbol))
+    def translate_aggregation(self, expression):
+        functor = expression.functor
+        criteria = expression.criteria
+        value = expression.values
+        predicate = Symbol.fresh()
+        groups = Symbol.fresh()
+        aggregate_var = Symbol.fresh()
+        solved_criteria = self.walk(criteria(groups)(aggregate_var))
+
+        n_groups = max(
+            s.item.value
+            for _, s in expression_iterator(solved_criteria)
+            if isinstance(s, Projection) and s.collection == groups
+        ) + 1
+
+        group_vars = tuple(Symbol[E].fresh() for _ in range(n_groups))
+        solved_criteria = ReplaceExpressionWalker({
+            Projection(groups, Constant(i)): var
+            for i, var in enumerate(group_vars)
+        }).walk(solved_criteria)
+
+        aggregate_var_label = tuple(
+            l for _, l in expression_iterator(solved_criteria)
+            if isinstance(l, Label) and l.variable == aggregate_var
+        )
+
+        group_var_labels = tuple(
+            l for _, l in expression_iterator(solved_criteria)
+            if isinstance(l, Label) and l.variable in group_vars
+        )
+
+        solved_criteria = ReplaceExpressionWalker({l: TRUE for l in group_var_labels}).walk(solved_criteria)
+
+        aggregation_rule = UniversalPredicate(aggregate_var, Implication(
+            FunctionApplication(predicate, group_vars + (AggregationApplication(functor, (aggregate_var,)),)),
+            solved_criteria
+        ))
+        for var in group_vars:
+            aggregation_rule = UniversalPredicate(var, aggregation_rule)
+        aggregation_predicate = FunctionApplication(predicate, group_vars + (value,))
+        formulas = (aggregation_predicate, aggregation_rule)
+
+        formulas += tuple(EQ(l.label, l.variable) for l in group_var_labels)
+
+        if aggregate_var_label and isinstance(aggregate_var_label[0].label, tuple):
+            new_tuple = tuple(Symbol[E].fresh() for _ in aggregate_var_label[0].label)
+            aggregate_var_label = ReplaceExpressionWalker(
+                {aggregate_var_label[0]: Label(value, new_tuple)}
+            ).walk(aggregate_var_label)
+            formulas += aggregate_var_label
+
+        return Conjunction[S](formulas)
+
+
+class SimplifyNestedProjectionMixin(PatternWalker):
+    @add_match(
+        Projection(Projection(..., Constant[slice]), Constant[int]),
+        lambda exp: (
+            exp.collection.item.value.start is not None and
+            exp.collection.item.value.stop is None and
+            exp.collection.item.value.step is None
+        )
+    )
+    def simplify_nested_projection(self, expression):
+        item = expression.item
+        start = expression.collection.item.value.start
+        collection = expression.collection.collection
+        new_item = Constant(item.value + start)
+
+        return self.walk(Projection(collection, new_item))
+
 
 class SquallSolver(
+    SimplifyNestedProjectionMixin,
     LambdaSolverMixin,
     PrepositionSolverMixin,
     SquallIntermediateSolver,
@@ -1272,15 +1388,43 @@ class EliminateSpuriousEqualities(
         )
 
 
+class PushUniversalsDownWithImplications(PushUniversalsDown):
+    @add_match(UniversalPredicate(..., Implication(FunctionApplication, ...)))
+    def push_universal_down_implication(self, expression):
+        if expression.head in expression.body.consequent.args:
+            new_antecedent = self.walk(expression.body.antecedent)
+            if new_antecedent is not expression.body.antecedent:
+                expression = self.walk(UniversalPredicate(
+                    expression.head,
+                    Implication(
+                        expression.body.consequent,
+                        new_antecedent
+                    )
+                ))
+        else:
+            expression = self.walk(
+                Implication(
+                    expression.body.consequent,
+                    ExistentialPredicate(
+                        expression.head,
+                        expression.body.antecedent
+                    )
+                )
+            )
+        return expression
+
+
 def squall_to_fol(expression):
     cw = ChainedWalker(
         SquallSolver(),
         ExplodeTupleArguments(),
+        DuplicatedLabelsVerification(),
         LogicPreprocessing(),
         SolveLabels(),
-        ExplodeTupleArguments(),       
+        ExplodeTupleArguments(),
         LogicSimplifier(),
-        EliminateSpuriousEqualities()
+        EliminateSpuriousEqualities(),
+        PushUniversalsDownWithImplications()
     )
 
     return cw.walk(expression)
