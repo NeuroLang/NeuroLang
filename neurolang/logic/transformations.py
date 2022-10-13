@@ -568,12 +568,6 @@ def convert_to_pnf_with_dnf_matrix(expression):
     return walker.walk(expression)
 
 
-class ExtractFOLFreeVariables(ExtractFreeVariablesWalker):
-    @add_match(Implication)
-    def extract_variables_s(self, exp):
-        return self.walk(exp.consequent) | self.walk(exp.antecedent)
-
-
 class DistributeUniversalQuantifiers(PatternWalker):
     @add_match(UniversalPredicate(..., Conjunction))
     def distribute_universal_quantifier(self, uq):
@@ -585,7 +579,7 @@ class DistributeUniversalQuantifiers(PatternWalker):
 
     def _apply_quantifier(self, var):
         def foo(exp):
-            fv = ExtractFOLFreeVariables().walk(exp)
+            fv = ExtractFreeVariablesWalker().walk(exp)
             if var in fv:
                 exp = UniversalPredicate(var, exp)
             return exp
