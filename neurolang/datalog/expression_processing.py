@@ -15,38 +15,50 @@ from scipy import sparse
 from ..exceptions import (
     RuleNotFoundError,
     SymbolNotFoundError,
-    UnsupportedProgramError,
+    UnsupportedProgramError
 )
 from ..expression_pattern_matching import (
     NeuroLangPatternMatchingNoMatch,
-    add_match,
+    add_match
 )
 from ..expression_walker import (
     ExpressionWalker,
     PatternWalker,
     ReplaceExpressionWalker,
-    ReplaceSymbolWalker,
+    ReplaceSymbolWalker
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import (
-    ExistentialPredicate,
     FALSE,
     TRUE,
     Conjunction,
     Disjunction,
+    ExistentialPredicate,
     Implication,
     Negation,
     Quantifier,
     Union,
+    expression_processing as elp
 )
-from ..logic import expression_processing as elp
-from ..logic.transformations import CollapseConjunctions, GuaranteeConjunction, RemoveTrivialOperations
+from ..logic.transformations import (
+    CollapseConjunctions,
+    GuaranteeConjunction,
+    RemoveTrivialOperations
+)
 from ..logic.unification import most_general_unifier
 from ..utils import OrderedSet
 from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
 
 EQ = Constant(operator.eq)
+
+
+class ExtractFreeVariablesWalker(elp.ExtractFreeVariablesWalker):
+    @add_match(Implication)
+    def extract_variables_datalog_implication(self, expression):
+        return self.walk(expression.antecedent) - self.walk(
+            expression.consequent
+        )
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
@@ -192,7 +204,7 @@ def extract_logic_free_variables(expression):
     """
     translator = TranslateToDatalogSemantics()
     datalog_code = translator.walk(expression)
-    return elp.extract_logic_free_variables(datalog_code)
+    return ExtractFreeVariablesWalker().walk(datalog_code)
 
 
 def extract_logic_predicates(expression):
