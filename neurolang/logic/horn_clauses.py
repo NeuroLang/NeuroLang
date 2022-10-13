@@ -16,6 +16,8 @@ from the chapter 4 of [1]_.
 import operator
 from functools import reduce
 from typing import Callable
+import typing
+
 
 from ..datalog.expressions import Fact
 from ..datalog.negation import is_conjunctive_negation
@@ -336,7 +338,9 @@ def _restrictive_atoms(atoms):
 
 def _is_restriction(atom):
     if isinstance(atom, FunctionApplication):
-        if is_leq_informative(atom.functor.type, Unknown):
+        if is_leq_informative(
+            atom.functor.type, typing.Union[Callable[..., bool], Unknown]
+        ):
             return True
         elif atom.functor == operator.eq and any(
             isinstance(a, Constant) for a in atom.args

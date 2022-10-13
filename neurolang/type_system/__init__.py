@@ -174,6 +174,9 @@ def is_leq_informative_parameterized_right(left, right):
         type_parameters_left = get_args(left)
         type_parameters_right = get_args(right)
 
+        if is_callable_type(right) and type_parameters_right[0] is Ellipsis:
+            return is_leq_informative(type_parameters_left[1], type_parameters_right[1])
+
         if len(type_parameters_left) != len(type_parameters_right):
             return False
 

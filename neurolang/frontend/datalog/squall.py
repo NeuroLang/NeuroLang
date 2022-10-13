@@ -1,6 +1,6 @@
 from collections import Counter
 from operator import add, eq, mul, ne, neg, pow, sub, truediv
-from typing import Callable, TypeVar
+from typing import Callable, TypeVar, NewType
 
 from ...datalog.aggregation import AggregationApplication
 from ...exceptions import NeuroLangFrontendException
@@ -49,7 +49,7 @@ class RepeatedLabelException(NeuroLangFrontendException):
     pass
 
 
-S = TypeVar("Statement")
+S = bool
 E = TypeVar("Entity")
 P1 = Callable[[E], S]
 P2 = Callable[[E, E], S]
@@ -579,14 +579,7 @@ class PushUniversalsDownWithImplications(PushUniversalsDown):
     def push_universal_down_implication(self, expression):
         if expression.head in expression.body.consequent.args:
             new_antecedent = self.walk(expression.body.antecedent)
-            if new_antecedent is not expression.body.antecedent:
-                expression = self.walk(UniversalPredicate(
-                    expression.head,
-                    Implication(
-                        expression.body.consequent,
-                        new_antecedent
-                    )
-                ))
+            expression = self.walk(Implication(expression.body.consequent, new_antecedent))
         else:
             expression = self.walk(
                 Implication(
