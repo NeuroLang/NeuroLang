@@ -1,11 +1,11 @@
-from doctest import UnexpectedException
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
 from typing import Callable, List, TypeVar
-
+import nltk
+from nltk.stem.wordnet import WordNetLemmatizer
 import lark
 
-from ...exceptions import NeuroLangFrontendException
-from ...expression_walker import ExpressionWalker, add_match
+from ...exceptions import NeuroLangException, NeuroLangFrontendException
+from ...expression_walker import ExpressionWalker, PatternWalker, add_match
 from ...expressions import (
     Constant,
     Definition,
@@ -25,6 +25,7 @@ from ...logic import (
     UniversalPredicate
 )
 from ...logic.transformations import RemoveTrivialOperations
+from ...probabilistic.expressions import PROB, Condition
 from ...type_system import (
     Unknown,
     get_args,
@@ -36,12 +37,15 @@ from .squall import (
     FROM,
     P1,
     P2,
+    PN,
     S1,
     S2,
     TO,
     Aggregation,
     Arg,
+    Cons,
     E,
+    ExpandListArgument,
     ForArg,
     K,
     Label,
@@ -51,9 +55,14 @@ from .squall import (
     The,
     squall_to_fol
 )
+# nltk.download('omw-1.4')
+
 
 alpha = TypeVar("alpha")
 K_alpha = Callable[[Callable[[E], alpha]], alpha]
+
+LEMMATIZER = WordNetLemmatizer()
+
 
 
 RTO = RemoveTrivialOperations()
@@ -82,6 +91,7 @@ KEYWORDS = [
     'an',
     'and',
     'are',
+    'conditioned',
     'define',
     'defines',
     'every',
@@ -107,7 +117,7 @@ KEYWORDS = [
     'where',
     'which',
     'whom',
-    'whose'
+    'whose',
 ]
 
 
@@ -117,11 +127,29 @@ GRAMMAR = r"""
 squall : s
        | rule
 
-rule  : "define" "as" [PROBABLY] verb1 op "."?-> rule_op
-      | "define" "as" [PROBABLY] verb2 np _BREAK? prep op "."? -> rule_op2
-      | "define" "as" [PROBABLY] verb2 prep op _BREAK? np "."? -> rule_op2_b
+?rule  : rule_op
+       | rulen
+
+rule_op :"define" "as" [PROBABLY] verb1 rule_body1 "."?
+        | "define" "as" PROBABLY verb1 rule_body1_cond "."?
+
+//      | "define" "as" [PROBABLY] verb2 np _BREAK? prep op "."? -> rule_op2
+
+?rule2 : "define" "as" [PROBABLY] verb2 rule_body1 (_BREAK? prep rule_body1 )+ "."? -> rule_opn
+       | "define" "as" PROBABLY verb2 rule_body2_cond "."?                            -> rule_op2_cond
+       | "define" "as" [PROBABLY] verb2 prep op _BREAK? np "."? -> rule_op2_b
+
+?rulen : "define" "as" verbn rule_body1 _BREAK ops "."? -> rule_opnn
+
+rule_body1 : det ng1
+rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
+                | s _CONDITIONED _TO det ng1 -> rule_body1_cond_posterior
+
+rule_body2_cond : det ng1 _CONDITIONED _TO det ng1
 
 PROBABLY : "probably"
+_TO : "to"
+_CONDITIONED : "conditioned"
 _BREAK : "," | ";"
 
 vpcons : verb1        -> vpcons_v1
@@ -132,6 +160,7 @@ opcons : term
 ?s : bool{s_b}
 ?s_b : np [ "," ]  vp          -> s_np_vp
       | _FOR np ","  s  -> s_for
+      | "there" be np   -> s_be
 //    | pp s            -> s_pp
 
 _FOR : "for"
@@ -206,8 +235,9 @@ term : label
       | aux{do} vpdo      -> vp_aux
 //      | pp vp             -> vp_pp
 
-vpdo : verb1 [ cp ]     -> vpdo_v1
+vpdo : verb1 [ cp ]         -> vpdo_v1
      | verb2 [ DOPREP ] op  -> vpdo_v2
+     | verbn [ DOPREP ] ops -> vpdo_vn
 
 DOPREP : "with"
 
@@ -243,10 +273,11 @@ npc_p{prep_} : prep_ WS ng1 -> npc_det
 ?noun1 : intransitive
 ?noun2 : transitive
 
-?verb1 : BELONG
-       | intransitive
-?verb2 : RELATE
-       | transitive
+verb1 : BELONG
+      | intransitive
+verb2 : RELATE
+      | transitive
+verbn : transitive_multiple
 
 noun_aggreg : identifier
 adj_aggreg : identifier
@@ -256,9 +287,13 @@ RELATE : /relate[s]{0,1}/
 
 intransitive : upper_identifier
 transitive : identifier
+transitive_multiple : identifier
 
-op : np [ cp ] -> op_np
+op : np  -> op_np
 //   | pp op     -> op_pp
+
+ops : [ prep ] op          -> ops_base
+    | ops _BREAK? prep op  -> ops_rec
 
 pp : prep np -> pp_np
 
@@ -479,10 +514,40 @@ class SquallTransformer(lark.Transformer):
         probably, verb1, op = ast
         x = Symbol[E].fresh()
         if probably:
-            verb = verb1(x, FunctionApplication[float](Symbol[Callable[[E], float]]("PROB"), (x,)))
+            prob = PROB.cast(Callable[[E], float])
+            verb = verb1(x, FunctionApplication[float](prob, (x,)))
         else:
             verb = verb1(x)
         return op(Lambda((x,), verb))
+
+    def rule_op_cond1(self, ast):
+        probably, verb1, op = ast
+        x = Symbol[E].fresh()
+        if probably:
+            prob = PROB.cast(Callable[[E], float])
+            verb = verb1(x, FunctionApplication[float](prob, (x,)))
+        else:
+            verb = verb1(x)
+        return op(Lambda((x,), verb))
+
+    def rule_op_pc(self, ast):
+        _, verb1, op, _, _, s = ast
+        x = Symbol[E].fresh()
+        d = Symbol[P1].fresh()
+        prob = PROB.cast(Callable[[E], float])
+        verb = verb1(x, FunctionApplication[float](prob, (x,)))
+        op = Lambda((d,), Condition(op(d), s) )
+        return op(Lambda((x,), verb))
+
+    def rule_op2_cond(self, ast):
+        verb2, np2 = ast[-2:]
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        prob = PROB.cast(Callable[[E, E], float])
+
+        verb = verb2(x, y, FunctionApplication[float](prob, (x, y)))
+        res = np2(verb)
+        return res
 
     def rule_op2(self, ast):
         probably, verb2, np, prep, op = ast
@@ -492,13 +557,35 @@ class SquallTransformer(lark.Transformer):
         z = Symbol[E].fresh()
 
         if probably:
-            verb = verb2(x, y, FunctionApplication[float](Symbol[Callable[[E], float]]("PROB"), (x, y)))
+            prob = PROB.cast(Callable[[E, E], float])
+            verb = verb2(x, y, FunctionApplication[float](prob, (x, y)))
         else:
             verb = verb2(x, y)
 
         pp = Lambda((s,), op(Lambda((z,), Arg(prep, (z, s)))))
         vp = Lambda((x,), ForArg(prep, Lambda((y,), verb)))
         vp_pp = Lambda((x,), pp(vp(x)))
+        res = np(vp_pp)
+        return res
+
+    def rule_opn(self, ast):
+        probably, verb2, np = ast[:3]
+        n_op = len(ast[3:]) // 2
+        args = tuple(Symbol[E].fresh() for _ in range(n_op + 1))
+        if probably:
+            args += (FunctionApplication[float](Symbol[Callable[[E], float]]("PROB"), args),)
+
+        vp_pp = verb2(*args)
+        arg_ant = args[0]
+        for prep, op, arg in zip(ast[3::2], ast[4::2], args[1:]):
+            s = Symbol[S].fresh()
+            z = Symbol[E].fresh()
+            x = Symbol[E].fresh()
+            pp = Lambda((s,), op(Lambda((z,), Arg(prep, (z, s)))))
+            vp = Lambda((arg_ant,), ForArg(prep, Lambda((arg,), vp_pp)))
+            vp_pp = Lambda((x,), pp(vp(x)))
+            arg_ant = arg
+
         res = np(vp_pp)
         return res
 
@@ -520,6 +607,53 @@ class SquallTransformer(lark.Transformer):
         res = np(vp_pp)
         return res
 
+    def rule_opnn(self, ast):
+        verbn, rule_body1, ops = ast
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        ly = Symbol[List[E]].fresh()
+        verb_obj = ExpandListArgument(
+            Lambda((x,), ops(ly)(Lambda((y,), verbn(x, y)))),
+            ly
+        )
+        res = rule_body1(verb_obj)
+        return res
+
+    def rule_body1(self, ast):
+        return self.np_quantified(ast)
+
+    def rule_body1_cond_prior(self, ast):
+        det, ng1, s = ast
+        d = Symbol[P1].fresh()
+        x = Symbol[E].fresh()
+        res = Lambda[S1](
+            (d,),
+            det(Lambda((x,), Condition[S](ng1(x), s)))(d)
+        )
+        return res
+
+    def rule_body1_cond_posterior(self, ast):
+        s, det, ng1 = ast
+        d = Symbol[P1].fresh()
+        x = Symbol[E].fresh()
+        res = Lambda[S1](
+            (d,),
+            det(Lambda((x,), Condition[S](s, ng1(x))))(d)
+        )
+        return res
+
+    def rule_body2_cond(self, ast):
+        det_1, ng1_1, det_2, ng1_2 = ast
+        d = Symbol[P2].fresh()
+        x = Symbol[E].fresh() 
+        y = Symbol[E].fresh()       
+
+        np = self.np_quantified((det_1, ng1_1))
+        op = self.np_quantified((det_2, ng1_2))
+
+        res = Lambda((d,), np(Lambda((x,), op(Lambda((y,), d(x, y))))))
+        return res
+
     def s_np_vp(self, ast):
         np, vp = ast
         res = np(vp)
@@ -529,6 +663,11 @@ class SquallTransformer(lark.Transformer):
         x = Symbol[E].fresh()
         np, s = ast
         return np(Lambda((x,), s))
+
+    def s_be(self, ast):
+        np = ast[-1]
+        x = Symbol[E].fresh()
+        return np(Lambda((x,), TRUE))
 
     def s_pp(self, ast):
         pp, s = ast
@@ -620,6 +759,17 @@ class SquallTransformer(lark.Transformer):
         )
         return res
 
+    def vpdo_vn(self, ast):
+        verbn, _, ops = ast
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        ly = Symbol[List[E]].fresh()
+        res = ExpandListArgument(
+            Lambda((x,), ops(ly)(Lambda((y,), verbn(x, y)))),
+            ly
+        )
+        return res
+
     def aux_id(self, ast):
         s = Symbol[S].fresh()
         return Lambda((s,), s)
@@ -699,6 +849,44 @@ class SquallTransformer(lark.Transformer):
         pp, op = ast
         x = Symbol[E].fresh()
         res = Lambda((x,), pp(op(x)))
+        return res
+
+    def ops_base(self, ast):
+        op = ast[1]
+        lz = Symbol[List[E]].fresh()
+        d = Symbol[P1].fresh()
+        with expressions_behave_as_objects():
+            lz_head = lz[Constant(0)]
+            lz_tail = lz[Constant(slice(1, None))]
+            z = Symbol[E].fresh()
+            pred = Lambda(
+                (z,),
+                Conjunction[S]((
+                    Label[S](z, lz_head),
+                    d(Cons(lz_head, lz_tail))
+                ))
+            )
+            res = Lambda((lz,), Lambda((d,), op(pred)))
+        return res
+
+    def ops_rec(self, ast):
+        ops, _, op = ast
+        lz = Symbol[List[E]].fresh()
+        d = Symbol.fresh()
+        zz = Symbol.fresh()
+
+        with expressions_behave_as_objects():
+            lz_head = lz[Constant(0)]
+            lz_tail = lz[Constant(slice(1, None))]
+            z = Symbol[E].fresh()
+            label = Lambda(
+                (z,),
+                Conjunction((
+                    Label[S](z, lz_head),
+                    ops(lz_tail)(Lambda((zz,), d(Cons(lz_head, zz))))
+                ))
+            )
+            res = Lambda((lz,), Lambda((d,), op(label)))
         return res
 
     def cp_pp(self, ast):
@@ -851,11 +1039,26 @@ class SquallTransformer(lark.Transformer):
         )
         return res
 
+    def verb1(self, ast):
+        name = LEMMATIZER.lemmatize(ast[0].name.lower(), 'v')
+        return ast[0].apply(name)
+
+    def verb2(self, ast):
+        name = LEMMATIZER.lemmatize(ast[0].name.lower(), 'v')
+        return ast[0].apply(name)
+
+    def verbn(self, ast):
+        name = LEMMATIZER.lemmatize(ast[0].name.lower(), 'v')
+        return ast[0].apply(name)
+
     def intransitive(self, ast):
         return ast[0].cast(P1)
 
     def transitive(self, ast):
         return ast[0].cast(P2)
+
+    def transitive_multiple(self, ast):
+        return ast[0].cast(PN)
 
     def term(self, ast):
         return ast[0]
@@ -1212,13 +1415,19 @@ def parser(code, locals=None, globals=None, return_tree=False, process=True, **k
         raise NeuroLangFrontendException("\n" + err + expected_formatted) from None
     except lark.exceptions.UnexpectedException as ex:
         raise ex from None
+    except NeuroLangException as ex:
+        raise ex from None
 
-    if process:
-        intermediate_representation = SquallTransformer(locals=locals, globals=globals).transform(tree)
-    else:
-        intermediate_representation = None
+    try:
+        if process:
+            intermediate_representation = SquallTransformer(locals=locals, globals=globals).transform(tree)
+        else:
+            intermediate_representation = None
 
-    if return_tree:
-        return intermediate_representation, tree
-    else:
-        return intermediate_representation
+        if return_tree:
+            return intermediate_representation, tree
+        else:
+            return intermediate_representation
+    except NeuroLangException as ex:
+        raise ex from None
+

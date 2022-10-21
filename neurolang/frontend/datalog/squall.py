@@ -1,6 +1,6 @@
 from collections import Counter
 from operator import add, eq, mul, ne, neg, pow, sub, truediv
-from typing import Callable, TypeVar, NewType
+from typing import Callable, List, NewType, TypeVar
 
 from ...datalog.aggregation import AggregationApplication
 from ...exceptions import NeuroLangFrontendException
@@ -53,6 +53,7 @@ S = bool
 E = TypeVar("Entity")
 P1 = Callable[[E], S]
 P2 = Callable[[E, E], S]
+PN = Callable[[E, List[E]], S]
 S1 = Callable[[P1], S]
 S2 = Callable[[P1], S1]
 
@@ -102,6 +103,19 @@ class Aggregation(Definition):
         return "Aggregate[{}, {}, {}]".format(
             self.functor, self.criteria, self.values
         )
+
+
+class ExpandListArgument(Definition):
+    def __init__(self, expression, list_to_replace):
+        self._symbols = expression._symbols | list_to_replace._symbols
+        self.expression = expression
+        self.list_to_replace = list_to_replace
+
+    def __repr__(self):
+        return "ExpandListArgument[{}, {}]".format(
+            self.expression, self.list_to_replace
+        )
+
 
 
 class Ref(Expression):
@@ -221,7 +235,7 @@ class PullUniversalUpImplicationMixin(PatternWalker):
                 {consequent.head: new_head}
             ).walk(consequent.body)
         return UniversalPredicate(
-            (new_head,), Implication(new_consequent, antecedent)
+            new_head, Implication(new_consequent, antecedent)
         )
 
 
@@ -319,6 +333,13 @@ class SimplifyNestedImplicationsMixin(PullUniversalUpImplicationMixin):
 
 
 class PrepositionSolverMixin(PatternWalker):
+    @add_match(Arg(..., (..., Arg)))
+    def arg_arg(self, expression):
+        internal = self.walk(expression.args[1])
+        if internal is not expression.args[1]:
+            expression = Arg(expression.preposition, (expression.args[0], internal))
+        return expression
+
     @add_match(
         Arg(..., (..., ForArg)),
         lambda exp: exp.preposition == exp.args[1].preposition
@@ -397,6 +418,40 @@ class SquallIntermediateSolver(PatternWalker):
 
         return Conjunction[S](formulas)
 
+    @add_match(ExpandListArgument)
+    def expand_list_argument(self, expression):
+        exp = self.walk(expression.expression)
+        list_to_replace = expression.list_to_replace
+
+        labeled_projections = list(sorted(
+            (
+                s for _, s in expression_iterator(exp)
+                if (
+                    isinstance(s, Label) and
+                    isinstance(s.label, Projection) and
+                    s.label.collection == list_to_replace
+                )
+            ),
+            key=lambda s: s.label.item.value
+        ))
+
+        built_list = tuple(s.variable for s in labeled_projections[::-1])
+        exp = ReplaceExpressionWalker({s: TRUE for s in labeled_projections}).walk(exp)
+        exp = ReplaceExpressionWalker({list_to_replace: built_list}).walk(exp)
+
+        return exp
+
+
+
+class Cons(Expression):
+    def __init__(self, head, tail):
+        self._symbols = head._symbols | tail._symbols
+        self.head = head
+        self.tail = tail
+
+    def __repr__(self):
+        return f"{self.head}::{self.tail}"
+
 
 class SimplifyNestedProjectionMixin(PatternWalker):
     @add_match(
@@ -414,6 +469,16 @@ class SimplifyNestedProjectionMixin(PatternWalker):
         new_item = Constant(item.value + start)
 
         return self.walk(Projection(collection, new_item))
+
+    @add_match(
+        Cons(
+            Projection(..., Constant[int](0)),
+            Projection(..., Constant(slice(1, None)))
+        ),
+        lambda exp: exp.head.collection == exp.tail.collection
+    )
+    def cons_head_tail(self, expression):
+        return expression.head.collection
 
 
 class SquallSolver(
