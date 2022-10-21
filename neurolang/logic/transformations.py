@@ -17,6 +17,7 @@ from ..utils.orderedset import OrderedSet
 from . import (
     FALSE,
     TRUE,
+    BinaryLogicOperator,
     Conjunction,
     Constant,
     Disjunction,
@@ -88,6 +89,17 @@ class LogicExpressionWalker(PatternWalker):
             return self.walk(Implication(consequent, antecedent))
         else:
             return expression
+
+    @add_match(BinaryLogicOperator)
+    def walk_binary_logic_expression(self, expression):
+        left, right = expression.unapply()
+        new_left = self.walk(left)
+        new_right = self.walk(right)
+
+        if new_left is not left or new_right is not right:
+            expression = expression.apply(new_left, new_right)
+
+        return expression
 
 
 class EliminateImplications(LogicExpressionWalker):
