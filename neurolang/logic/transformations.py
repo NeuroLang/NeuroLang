@@ -286,6 +286,48 @@ class FactorQuantifiersMixin(PatternWalker):
         )
         return self.walk(exp)
 
+    @add_match(
+        Implication(..., UniversalPredicate),
+        lambda exp: (
+            exp.antecedent.head
+            not in extract_logic_free_variables(exp.consequent)
+        )
+    )
+    def implication_universal_antecedent(self, expression):
+        head = expression.antecedent.head
+        exp = ExistentialPredicate(
+            head,
+            Implication(expression.consequent, expression.antecedent.body)
+        )
+        return self.walk(exp)
+
+    @add_match(
+        Implication(ExistentialPredicate, ...),
+        lambda exp: (
+            exp.consequent.head
+            not in extract_logic_free_variables(exp.antecedent)
+        )
+    )
+    def implication_existential_consequent(self, expression):
+        exp = expression.consequent.apply(
+            expression.consequent.head,
+            expression.apply(
+                expression.consequent.body,
+                expression.antecedent
+            )
+        )
+        return exp
+
+    @add_match(
+        Implication(UniversalPredicate, ...),
+        lambda exp: (
+            exp.consequent.head
+            not in extract_logic_free_variables(exp.antecedent)
+        )
+    )
+    def implication_universal_consequent(self, expression):
+        return self.implication_existential_consequent(expression)
+
     @staticmethod
     def _extract_quantifiers_freshen_variables(expression):
         formulas = []

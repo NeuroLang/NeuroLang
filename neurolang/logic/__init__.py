@@ -115,7 +115,8 @@ class Implication(LogicOperator):
 
 
 class Quantifier(LogicOperator):
-    pass
+    def __init__(self, head, body):
+        raise NeuroLangException("Class Meant for Pattern Matching")
 
 
 class ExistentialPredicate(Quantifier):
