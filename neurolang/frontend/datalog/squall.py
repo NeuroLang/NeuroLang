@@ -1,5 +1,6 @@
 from collections import Counter
 from operator import add, eq, mul, ne, neg, pow, sub, truediv
+from pyclbr import Function
 from typing import Callable, List, NewType, TypeVar
 
 from ...datalog.aggregation import AggregationApplication
@@ -10,7 +11,8 @@ from ...expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
     add_match,
-    expression_iterator
+    expression_iterator,
+    IdentityWalker
 )
 from ...expressions import (
     Constant,
@@ -41,6 +43,12 @@ from ...logic.transformations import (
     PushExistentialsDownMixin,
     PushUniversalsDown,
     RemoveTrivialOperationsMixin
+)
+from ...logic.expression_processing import extract_logic_free_variables
+from ...probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate
 )
 from ...type_system import get_args
 
@@ -78,6 +86,7 @@ NEG = Constant(neg)
 POW = Constant(pow)
 SUB = Constant(sub)
 
+ProbabilisticPredicateSymbol = Symbol("ProbabilisticPredicateSymbol")
 
 class Label(FunctionApplication):
     def __init__(self, variable, label):
@@ -171,6 +180,11 @@ class The(Quantifier):
         return "The[{}; {}, {}]".format(self.head, self.arg1, self.arg2)
 
 
+class ExtendedLogicExpressionWalker(LogicExpressionWalker):
+    @add_match(ProbabilisticPredicate)
+    def probabilistic_predicate(self, expression):
+        return expression
+
 
 class LambdaSolverMixin(PatternWalker):
     @add_match(Lambda, lambda exp: len(exp.args) > 1)
@@ -239,7 +253,7 @@ class PullUniversalUpImplicationMixin(PatternWalker):
         )
 
 
-class LogicPreprocessing(FactorQuantifiersMixin, PullUniversalUpImplicationMixin, LogicExpressionWalker):
+class LogicPreprocessing(FactorQuantifiersMixin, PullUniversalUpImplicationMixin, ExtendedLogicExpressionWalker):
     @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
     def explode_quantifier_tuples(self, expression):
         head = expression.head
@@ -257,7 +271,7 @@ def _label_in_quantifier_body(expression):
     return res
 
 
-class ExplodeTupleArguments(LogicExpressionWalker):
+class ExplodeTupleArguments(ExtendedLogicExpressionWalker):
     @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
     def explode_quantifier_tuples(self, expression):
         head = expression.head
@@ -296,7 +310,7 @@ def _repeated_labels(expression):
     return [l for l in labels if label_counts[l] > 1]
 
 
-class DuplicatedLabelsVerification(LogicExpressionWalker):
+class DuplicatedLabelsVerification(ExtendedLogicExpressionWalker):
     @add_match(
         LogicOperator,
         lambda exp: _repeated_labels(exp)
@@ -305,7 +319,7 @@ class DuplicatedLabelsVerification(LogicExpressionWalker):
         raise RepeatedLabelException("Repeated appositions are not permitted")
 
 
-class SolveLabels(LogicExpressionWalker):
+class SolveLabels(ExtendedLogicExpressionWalker):
     @add_match(
         Quantifier,
         _label_in_quantifier_body
@@ -440,7 +454,6 @@ class SquallIntermediateSolver(PatternWalker):
         exp = ReplaceExpressionWalker({list_to_replace: built_list}).walk(exp)
 
         return exp
-
 
 
 class Cons(Expression):
@@ -603,7 +616,7 @@ class LogicSimplifier(
     CollapseDisjunctionsMixin,
     FactorQuantifiersMixin,
     SimplifiyEqualitiesMixin,
-    LogicExpressionWalker
+    ExtendedLogicExpressionWalker
 ):
     @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
     def explode_quantifiers(self, expression):
@@ -614,7 +627,6 @@ class LogicSimplifier(
         return res
 
 
-
 NONE = Constant(None)
 
 
@@ -623,7 +635,7 @@ class EliminateSpuriousEqualities(
     CollapseConjunctionsMixin,
     CollapseDisjunctionsMixin,
     RemoveTrivialOperationsMixin,
-    LogicExpressionWalker
+    ExtendedLogicExpressionWalker
 ):
     @add_match(ExistentialPredicate(..., EQ(..., ...)))
     def eliminate_trivial_existential(self, _):
@@ -658,6 +670,156 @@ class PushUniversalsDownWithImplications(PushUniversalsDown):
         return expression
 
 
+class GuaranteeUnion(IdentityWalker):
+    @add_match(..., lambda e: not isinstance(e, Union))
+    def guarantee_conjunction(self, expression):
+        return Union((expression,))
+
+
+class CollapseUnions(IdentityWalker):
+    @add_match(
+        Union,
+        lambda exp: any(isinstance(f, Union) for f in exp.formulas)
+    )
+    def collapse_union(self, expression):
+        formulas = tuple()
+        for formula in expression.formulas:
+            if isinstance(formula, Union):
+                formulas += formula.formulas
+            else:
+                formulas += (formula,)
+
+        return self.walk(Union(formulas))
+
+
+def _is_aggregation_implication(expression):
+    return (
+        isinstance(expression, Implication) and
+        isinstance(expression.consequent, FunctionApplication) and
+        any(
+            isinstance(arg, AggregationApplication)
+            for arg in expression.consequent.args
+        )
+    )
+
+
+class SquallExpressionsToNeuroLang(ExpressionWalker):
+    @add_match(UniversalPredicate(..., Union))
+    def push_universal_down_union(self, expression):
+        new_formulas = tuple()
+        count = 0
+        for formula in expression.body.formulas:
+            if expression.head in extract_logic_free_variables(formula):
+                formula = UniversalPredicate(expression.head, formula)
+                count += 1
+            new_formulas += (formula,)
+
+        if count <= 1:
+            return self.walk(expression.body.apply(new_formulas))
+        else:
+            return expression
+
+    @add_match(ExistentialPredicate(..., Union))
+    def push_existential_down_union(self, expression):
+        new_formulas = tuple()
+        for formula in expression.body.formulas:
+            if expression.head in extract_logic_free_variables(formula):
+                if _is_aggregation_implication(formula):
+                    formula = UniversalPredicate(expression.head, formula)
+                else:
+                    formula = ExistentialPredicate(expression.head, formula)
+            new_formulas += (formula,)
+        return self.walk(expression.body.apply(new_formulas))
+
+    @add_match(
+        UniversalPredicate(..., Implication),
+        lambda exp: (
+            exp.head in exp.body.consequent._symbols or
+            exp.head in exp.body.antecedent._symbols
+        )
+    )
+    def make_datalog_rule_universal(self, expression):
+        return self.walk(expression.body)
+
+    @add_match(
+        ExistentialPredicate(..., Implication(..., Conjunction)),
+        lambda exp: (
+            exp.head not in exp.body.consequent._symbols and
+            any(
+                exp.head in formula.antecedent._symbols
+                for formula in exp.body.antecedent.formulas
+                if _is_aggregation_implication(formula)
+            )
+        )
+    )
+    def make_datalog_rule_existential_aggregation(self, expression):
+        return self.walk(expression.body)
+
+    @add_match(FunctionApplication(ProbabilisticPredicateSymbol, (..., ...)))
+    def probabilistic_predicate_symobl(self, expression):
+        return ProbabilisticPredicate(*expression.args)
+
+    @add_match(
+        ExistentialPredicate(..., Implication(Conjunction, ...)),
+        lambda expression: any(
+            isinstance(formula, FunctionApplication) and
+            formula.functor == EQ and
+            expression.head in formula.args
+            for formula in expression.body.consequent.formulas
+        )
+    )
+    def move_head_equalities_to_body(self, expression):
+        head = expression.head
+        eq_formulas = tuple()
+        other_formulas = tuple()
+        for formula in expression.body.consequent.formulas:
+            if (
+                isinstance(formula, FunctionApplication) and
+                formula.functor == EQ and
+                head in formula.args
+            ):
+                eq_formulas += (formula,)
+            else:
+                other_formulas += (formula,)
+
+        if len(other_formulas) == 1:
+            consequent = other_formulas[0]
+        else:
+            consequent = Conjunction[S](other_formulas)
+        expression = expression.body.apply(
+            consequent,
+            Conjunction[S](eq_formulas + (expression.body.antecedent,))
+        )
+
+        return self.walk(expression)
+
+    @add_match(
+        Implication(..., Conjunction),
+        lambda exp: any(
+            _is_aggregation_implication(e)
+            for e in exp.antecedent.formulas
+        )
+    )
+    def nested_implication_aggregation(self, expression):
+        antecedent_formulas = expression.antecedent.formulas
+        formulas_to_keep = tuple()
+        aggregation_formulas = tuple()
+        for formula in antecedent_formulas:
+            if _is_aggregation_implication(formula):
+                aggregation_formulas += (formula,)
+            else:
+                formulas_to_keep += (formula,)
+
+        rule = expression.apply(
+            expression.consequent,
+            expression.antecedent.apply(formulas_to_keep)
+        )
+
+        aggregation_formulas += (rule,)
+
+        return self.walk(Union(aggregation_formulas))
+
+
 def squall_to_fol(expression):
     cw = ChainedWalker(
         SquallSolver(),
@@ -668,7 +830,10 @@ def squall_to_fol(expression):
         ExplodeTupleArguments(),
         LogicSimplifier(),
         EliminateSpuriousEqualities(),
-        PushUniversalsDownWithImplications()
+        SquallExpressionsToNeuroLang(),
+        CollapseUnions(),
+        LogicSimplifier(),
+        GuaranteeUnion()
     )
 
     return cw.walk(expression)

@@ -1,11 +1,14 @@
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
 from typing import Callable, List, TypeVar
-import nltk
-from nltk.stem.wordnet import WordNetLemmatizer
+from warnings import warn
+
 import lark
+from nltk.corpus import wordnet
+from nltk.stem.snowball import EnglishStemmer
+from nltk.stem.wordnet import WordNetLemmatizer
 
 from ...exceptions import NeuroLangException, NeuroLangFrontendException
-from ...expression_walker import ExpressionWalker, PatternWalker, add_match
+from ...expression_walker import ExpressionWalker, add_match
 from ...expressions import (
     Constant,
     Definition,
@@ -50,11 +53,13 @@ from .squall import (
     K,
     Label,
     LambdaSolver,
+    ProbabilisticPredicateSymbol,
     S,
     SquallSolver,
     The,
     squall_to_fol
 )
+
 # nltk.download('omw-1.4')
 
 
@@ -62,7 +67,19 @@ alpha = TypeVar("alpha")
 K_alpha = Callable[[Callable[[E], alpha]], alpha]
 
 LEMMATIZER = WordNetLemmatizer()
+STEMMER = EnglishStemmer()
 
+
+def lemmatize(word, pos):
+    lemmatized = LEMMATIZER.lemmatize(word, pos)
+    if (
+        lemmatized == word and
+        word not in wordnet.all_lemma_names()
+    ):
+        lemmatized = STEMMER.stem(word)
+        if lemmatized == word and " " not in word:
+            warn(f"Word {word} couldn't be lemmatized")
+    return lemmatized
 
 
 RTO = RemoveTrivialOperations()
@@ -94,34 +111,50 @@ KEYWORDS = [
     'conditioned',
     'define',
     'defines',
+    'do',
+    'does',
+    'did',
     'every',
     'equal',
+    'from',
     'for',
     'greater',
-    'is',
-    'isn\'t',
     'has',
     'hasn\'t',
+    'have',
+    'had',
+    'if',
+    'in',
+    'is',
+    'isn\'t',
     'lower',
     'no',
     'not',
     'of',
     'or',
+    'per',
+    'probability',
+    'probably',
     'some',
     'such',
+    'than',
     'that',
     'the',
     'there',
+    'to',
     'was',
     'were',
     'where',
     'which',
+    'with',
+    'who',
     'whom',
     'whose',
 ]
 
 
-GRAMMAR = r"""
+GRAMMAR = (
+r"""
 ?start: ["squall"] squall
 
 squall : s
@@ -130,8 +163,9 @@ squall : s
 ?rule  : rule_op
        | rulen
 
-rule_op :"define" "as" [PROBABLY] verb1 rule_body1 "."?
+rule_op : "define" "as" [PROBABLY] verb1 rule_body1 "."?
         | "define" "as" PROBABLY verb1 rule_body1_cond "."?
+        | "define" "as" verb1 _WITH _PROBABILITY np rule_body1 "."? -> rule_op_prob
 
 //      | "define" "as" [PROBABLY] verb2 np _BREAK? prep op "."? -> rule_op2
 
@@ -139,17 +173,16 @@ rule_op :"define" "as" [PROBABLY] verb1 rule_body1 "."?
        | "define" "as" PROBABLY verb2 rule_body2_cond "."?                            -> rule_op2_cond
        | "define" "as" [PROBABLY] verb2 prep op _BREAK? np "."? -> rule_op2_b
 
-?rulen : "define" "as" verbn rule_body1 _BREAK ops "."? -> rule_opnn
+?rulen : "define" "as" verbn rule_body1 _BREAK? ops "."? -> rule_opnn
+       | "define" "as" PROBABLY verbn rule_body1 _BREAK? ops "."? -> rule_opnn_per
 
-rule_body1 : det ng1
+rule_body1 : prep? det ng1
 rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
                 | s _CONDITIONED _TO det ng1 -> rule_body1_cond_posterior
 
 rule_body2_cond : det ng1 _CONDITIONED _TO det ng1
 
-PROBABLY : "probably"
-_TO : "to"
-_CONDITIONED : "conditioned"
+PROBABLY : _PROBABLY
 _BREAK : "," | ";"
 
 vpcons : verb1        -> vpcons_v1
@@ -160,10 +193,9 @@ opcons : term
 ?s : bool{s_b}
 ?s_b : np [ "," ]  vp          -> s_np_vp
       | _FOR np ","  s  -> s_for
-      | "there" be np   -> s_be
+      | _THERE be np   -> s_be
 //    | pp s            -> s_pp
 
-_FOR : "for"
 _CONSEQUENCE : /define[s]{0,1}/
 
 ?np : expr{np_b}    -> expr_np
@@ -175,17 +207,18 @@ det : det1  -> det_some
     | EVERY -> det_every
     | THE   -> det_the
 
-EVERY : "every" | "all"
-THE : "the"
+EVERY : _EVERY | _ALL
+THE : _THE
 
 det1 : SOME -> det1_some
      | AN   -> det1_some
      | NO   -> det1_no
      | AN adj_aggreg [ app ] [ rel ] -> det_agg
 
-SOME : "some"
-AN : /an{0,1}/
-NO : "no"
+SOME : _SOME
+AN : _A
+   | _AN
+NO : _NO
 
 np2 : det ng2
 
@@ -195,7 +228,7 @@ ng2 : noun2 [ app ]
 
 
 
-app : "in" number"D" -> app_dimension
+app : _IN number"D" -> app_dimension
     | label          -> app_label
 
 dims : dim                    -> dims_base
@@ -204,25 +237,21 @@ dims : dim                    -> dims_base
 dim : _PER ng2      -> dim_ng2
     | _PER npc{THE} -> dim_npc
 
-_PER : "per"
-
 ?rel : bool{rel_b}
      | _DASH bool{rel_b} _DASH
 
-_OF : "of"
-
 _DASH : "--"
 
-rel_b : ("that" | "which" | "where" | "who" ) vp               -> rel_vp
-      | ("that" | "which" | "where" | "whom" ) np verb2 [ cp ] -> rel_vp2
-      | np2 "of" "which" vp                                    -> rel_np2
-      | "whose" ng2 vp                                         -> rel_ng2
-      | "such" "that" s                                        -> rel_s
-      | comparison "than" op                                   -> rel_comp
+rel_b : (_THAT | _WHICH | _WHERE | _WHO ) vp               -> rel_vp
+      | (_THAT | _WHICH | _WHERE | _WHOM ) np verb2 [ cp ] -> rel_vp2
+      | np2 _OF _WHICH vp                                  -> rel_np2
+      | _WHOSE ng2 vp                                      -> rel_ng2
+      | _SUCH _THAT s                                      -> rel_s
+      | comparison (_THAN | _TO) op                        -> rel_comp
 
-!comparison : "greater" [ "equal" ]
-            | "lower"   [ "equal" ]
-            | [ "not" ] "equal"
+!comparison : _GREATER [ _EQUAL ]
+            | _LOWER   [ _EQUAL ]
+            | [ _NOT ] _EQUAL 
 
 
 term : label
@@ -239,18 +268,18 @@ vpdo : verb1 [ cp ]         -> vpdo_v1
      | verb2 [ DOPREP ] op  -> vpdo_v2
      | verbn [ DOPREP ] ops -> vpdo_vn
 
-DOPREP : "with"
+DOPREP : _WITH
 
 vpbe : "there"       -> vpbe_there
      | rel           -> vpbe_rel
      | npc{a_an_the} -> vpbe_npc
      | npc_p{in}     -> vpbe_npc
 
-a_an_the : "a"
-         | "an"
-         | "the"
+a_an_the : _A
+         | _AN
+         | _THE
 
-in : "in"
+in : _IN
 
 vphave : noun2 op -> vphave_noun2
        | np2 [ rel ] -> vphave_np2
@@ -258,20 +287,20 @@ vphave : noun2 op -> vphave_noun2
 aux{verb} : verb                         -> aux_id
           | (verb "\s+not" | verb"n't")  -> aux_not
 
-npc{det_} : term     -> npc_term
+npc{det_} : term        -> npc_term
           | det_ WS ng1 -> npc_det
 
 npc_p{prep_} : prep_ WS ng1 -> npc_det
 
-?be : ( "is" | "are" | "was" | "were" )
-?have: ( "has" | "had" | "have" )
-?do: ( "does" | "do" | "did" )
+?be : ( _IS | _ARE | _WAS | _WERE )
+?have: ( _HAS | _HAD | _HAVE )
+?do: ( _DOES | _DO | _DID )
 
 ?adj1 : intransitive
 ?adj2 : transitive
 
-?noun1 : intransitive
-?noun2 : transitive
+noun1 : intransitive
+noun2 : transitive
 
 verb1 : BELONG
       | intransitive
@@ -297,21 +326,23 @@ ops : [ prep ] op          -> ops_base
 
 pp : prep np -> pp_np
 
-!prep : "to"
-      | "from"
-      | "with"
-      | "for"
+!prep : _FOR
+      | _FROM
+      | _OF
+      | _TO
+      | _WHERE
+      | _WITH
 
 cp : pp [ cp ] -> cp_pp
 
 label : "?" identifier
       | "(" "?" identifier (";" "?" identifier )* ")"
 
-upper_identifier : /[A-Z]/NAME
+upper_identifier : UPPER_NAME
                  | /`[A-Z][^`]*`/
 
-identifier : NAME
-           | /`[^`]*`/
+identifier : LOWER_NAME
+           | /`[a-z][^`]*`/
 
 ?literal : "'"string"'"
          | number
@@ -331,10 +362,10 @@ bool_atom{x} : _NEGATION bool_atom{x} -> bool_negation
          | "(" bool{x} ")"
          | x
 
-_CONJUNCTION : "&" | "\N{LOGICAL AND}" | "and"
-_DISJUNCTION : "|" | "\N{LOGICAL OR}" | "or"
-_IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}" | "if"
-_NEGATION : "not" | "\N{Not Sign}"
+_CONJUNCTION : "&" | "\N{LOGICAL AND}" | _AND
+_DISJUNCTION : "|" | "\N{LOGICAL OR}" | _OR
+_IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}" | _IF
+_NEGATION : _NOT | "\N{Not Sign}"
 
 ?expr{x} : expr_sum{x}
 expr_sum{x} : ( expr_sum{x} SUM )? expr_mul{x}
@@ -342,7 +373,7 @@ expr_mul{x} : ( expr_mul{x} MUL )? expr_pow{x}
 expr_pow{x} : expr_exponent{x} (pow expr_exponential{x})?
 ?expr_exponent{x} : expr_atom{x}
 ?expr_exponential{x} : expr_atom{x}
-expr_atom{x} : "(" expr{x} ")"
+expr_atom{x} : "(" expr{x} ")"                             -> expr_atom_par
              | identifier"(" (expr{x} ("," expr{x})*)? ")" -> expr_atom_fun
              | term                                        -> expr_atom_term
              | x
@@ -350,11 +381,15 @@ expr_atom{x} : "(" expr{x} ")"
 SUM : "+" 
     | "-"
 
-MUL : "*" 
+MUL : "*"
     | "/"
 
 ?pow : "**"
 
+__KEYWORD_RULES__
+
+LOWER_NAME : /(?!(\b(_KEYWORD)\b))//[a-z_]\w*/
+UPPER_NAME : /(?!(\b(_KEYWORD)\b))//[A-Z]\w*/
 NAME : /(?!(\b(_KEYWORD)\b))//[a-zA-Z_]\w*/
 STRING : /[^']+/
 
@@ -363,7 +398,17 @@ STRING : /[^']+/
 %import common.SIGNED_FLOAT
 %import common.WS
 %ignore WS
-""".replace("_KEYWORD", "|".join(KEYWORDS))
+"""
+.replace(
+    '__KEYWORD_RULES__',
+    '\n'.join(
+        '_{} : "{}"'.
+        format(kw.upper().replace("'", "_"), kw.lower())
+        for kw in KEYWORDS
+    ) + '\n'
+)
+.replace("_KEYWORD", "|".join(KEYWORDS))
+)
 
 
 class Apply_(Definition):
@@ -520,6 +565,18 @@ class SquallTransformer(lark.Transformer):
             verb = verb1(x)
         return op(Lambda((x,), verb))
 
+    def rule_op_prob(self, ast):
+        verb1, probability, op = ast
+        x = Symbol[E].fresh()
+        p = Symbol[E].fresh()
+        prob = Lambda((p,), p)
+        pps = (
+            ProbabilisticPredicateSymbol
+            .cast(Callable[[E], Callable[[E], S]])
+        )
+        verb = pps(probability(prob), verb1(x))
+        return op(Lambda((x,), verb))
+
     def rule_op_cond1(self, ast):
         probably, verb1, op = ast
         x = Symbol[E].fresh()
@@ -619,11 +676,24 @@ class SquallTransformer(lark.Transformer):
         res = rule_body1(verb_obj)
         return res
 
+    def rule_opnn_per(self, ast):
+        _, verbn, rule_body1, ops = ast
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        ly = Symbol[List[E]].fresh()
+        prob = PROB.cast(Callable[[E, List[E]], float])
+        verb_obj = ExpandListArgument(
+            Lambda((x,), ops(ly)(Lambda((y,), verbn(x, y, prob(x, y))))),
+            ly
+        )
+        res = rule_body1(verb_obj)
+        return res
+
     def rule_body1(self, ast):
-        return self.np_quantified(ast)
+        return self.np_quantified(ast[-2:])
 
     def rule_body1_cond_prior(self, ast):
-        det, ng1, s = ast
+        det, ng1, s = ast[-3:]
         d = Symbol[P1].fresh()
         x = Symbol[E].fresh()
         res = Lambda[S1](
@@ -1039,16 +1109,24 @@ class SquallTransformer(lark.Transformer):
         )
         return res
 
+    def noun1(self, ast):
+        name = lemmatize(ast[0].name.lower(), 'n')
+        return ast[0].apply(name)
+
+    def noun2(self, ast):
+        name = lemmatize(ast[0].name.lower(), 'n')
+        return ast[0].apply(name)
+
     def verb1(self, ast):
-        name = LEMMATIZER.lemmatize(ast[0].name.lower(), 'v')
+        name = lemmatize(ast[0].name.lower(), 'v')
         return ast[0].apply(name)
 
     def verb2(self, ast):
-        name = LEMMATIZER.lemmatize(ast[0].name.lower(), 'v')
+        name = lemmatize(ast[0].name.lower(), 'v')
         return ast[0].apply(name)
 
     def verbn(self, ast):
-        name = LEMMATIZER.lemmatize(ast[0].name.lower(), 'v')
+        name = lemmatize(ast[0].name.lower(), 'v')
         return ast[0].apply(name)
 
     def intransitive(self, ast):
@@ -1277,6 +1355,9 @@ class SquallTransformer(lark.Transformer):
             return ast[0]
         return self.apply_expression(POW, ast)
 
+    def expr_atom_par(self, ast):
+        return ast[0]
+
     def expr_atom_term(self, ast):
         term = ast[0]
         k = Symbol[Callable[[E], alpha]].fresh()
@@ -1379,6 +1460,8 @@ class SquallTransformer(lark.Transformer):
         return res
 
     NAME = str
+    LOWER_NAME = str
+    UPPER_NAME = str
     SIGNED_INT = int
     SIGNED_FLOAT = float
     STRING = str
@@ -1387,6 +1470,8 @@ class SquallTransformer(lark.Transformer):
 COMPILED_GRAMMAR = lark.Lark(GRAMMAR, parser="earley")
 
 
+# Errors to check:
+#   * If there is an existential variable at the beginning of a rule, then the variable was badly quantified
 def parser(code, locals=None, globals=None, return_tree=False, process=True, **kwargs):
     try:
         tree = COMPILED_GRAMMAR.parse(code)
