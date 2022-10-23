@@ -18,9 +18,10 @@ from ....logic import (
     UniversalPredicate
 )
 from ....probabilistic.expressions import ProbabilisticPredicate
-from ..squall_syntax import LogicSimplifier
+from ..squall import LogicSimplifier
 from ..squall_syntax_lark import parser
 from ..standard_syntax import ExternalSymbol
+from ...probabilistic_frontend import RegionFrontendCPLogicSolver, Chase
 
 
 LOGGER = logging.getLogger()
@@ -418,3 +419,66 @@ def test_squall():
     # parser("squall every voxel that a study --that ~reports no region-- ~reports activates")
 
     assert res
+
+
+@pytest.fixture
+def datalog_simple():
+    datalog = RegionFrontendCPLogicSolver()
+
+    datalog.add_extensional_predicate_from_tuples(
+        Symbol("item"),
+        [('a',), ('b',), ('c',), ('d',)]
+    )
+
+    datalog.add_extensional_predicate_from_tuples(
+        Symbol("item_count"),
+        [('a', 0), ('a', 1), ('b', 2), ('c', 3)]
+    )
+
+    datalog.add_extensional_predicate_from_tuples(
+        Symbol("quantity"),
+        [(i,) for i in range(5)]
+    )
+    return datalog
+
+
+def test_lark_semantics_item_selection(datalog_simple):
+    code = (
+        "define as Large every Item "
+        "that has an item_count greater equal than 2."
+    )
+    logic_code = parser(code)
+    datalog_simple.walk(logic_code)
+    chase = Chase(datalog_simple)
+    solution = chase.build_chase_solution()['large'].value
+    expected = set([('b',), ('c',)])
+
+    assert solution == expected
+
+
+def test_lark_semantics_join(datalog_simple):
+    code = (
+        "define as merge for every Item ?i ;"
+        " with every Quantity that ?i item_counts"
+    )
+    logic_code = parser(code)
+    datalog_simple.walk(logic_code)
+    chase = Chase(datalog_simple)
+    solution = chase.build_chase_solution()['merge'].value
+    expected = set([('a', 0), ('a', 1), ('b', 2), ('c', 3)])
+
+    assert solution == expected
+
+
+def test_lark_semantics_aggregation(datalog_simple):
+    code = """
+        define as max_items for every Item ?i ;
+            every Max of the Quantity per ?i item_counts.
+    """
+    logic_code = parser(code)
+
+    datalog_simple.walk(logic_code)
+    chase = Chase(datalog_simple)
+    solution = chase.build_chase_solution()["max_item"].value
+    expected = set([('a', 1), ('b', 2), ('c', 3)])
+    assert solution == expected

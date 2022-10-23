@@ -25,6 +25,7 @@ from ...logic import (
     ExistentialPredicate,
     Implication,
     Negation,
+    Union,
     UniversalPredicate
 )
 from ...logic.transformations import RemoveTrivialOperations
@@ -46,6 +47,7 @@ from .squall import (
     TO,
     Aggregation,
     Arg,
+    CollapseUnions,
     Cons,
     E,
     ExpandListArgument,
@@ -158,7 +160,9 @@ r"""
 ?start: ["squall"] squall
 
 squall : s
-       | rule
+       | rule ( _LINE_BREAK rule )*
+
+_LINE_BREAK : ( "." | "\n" )+
 
 ?rule  : rule_op
        | rulen
@@ -200,7 +204,7 @@ _CONSEQUENCE : /define[s]{0,1}/
 
 ?np : expr{np_b}    -> expr_np
 ?np_b : det ng1     -> np_quantified
-      | np2 "of" np -> np_np2
+      | np2 _OF np -> np_np2
 //      | term        -> np_term
 
 det : det1  -> det_some
@@ -223,7 +227,7 @@ NO : _NO
 np2 : det ng2
 
 ng1 : noun1 [ app ] [ rel ]                    -> ng1_noun
-    | noun_aggreg [ app ] _OF npc{THE} [ dims ] -> ng1_agg
+    | noun_aggreg [ app ] _OF npc{_THE} [ dims ] -> ng1_agg
 ng2 : noun2 [ app ]
 
 
@@ -308,8 +312,8 @@ verb2 : RELATE
       | transitive
 verbn : transitive_multiple
 
-noun_aggreg : identifier
-adj_aggreg : identifier
+noun_aggreg : upper_identifier
+adj_aggreg : upper_identifier
 
 BELONG : /belong[s]{0,1}/
 RELATE : /relate[s]{0,1}/
@@ -362,7 +366,7 @@ bool_atom{x} : _NEGATION bool_atom{x} -> bool_negation
          | "(" bool{x} ")"
          | x
 
-_CONJUNCTION : "&" | "\N{LOGICAL AND}" | _AND
+_CONJUNCTION : "&" | "," | "\N{LOGICAL AND}" | _AND
 _DISJUNCTION : "|" | "\N{LOGICAL OR}" | _OR
 _IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}" | _IF
 _NEGATION : _NOT | "\N{Not Sign}"
@@ -543,7 +547,9 @@ class SquallTransformer(lark.Transformer):
         self.globals = globals
 
     def squall(self, ast):
-        return squall_to_fol(ast[0])
+        return CollapseUnions().walk(
+            Union(tuple(squall_to_fol(node) for node in ast))
+        )
 
     def rule_simple(self, ast):
         np, vpcons = ast
@@ -1001,20 +1007,22 @@ class SquallTransformer(lark.Transformer):
         lz = Symbol[List[E]].fresh()
 
         inner = (npc(y),)
+        formulas = tuple()
         if dims:
             inner += (dims(y)(lz),)
+
+        if app:
+            formulas += (app(v),)
+
         inner = Conjunction[S](inner)
 
-        formulas = (aggreg(Lambda(
+        formulas += (aggreg(Lambda(
             (lz,),
             Lambda(
                 (y,),
                 inner
             )
         ))(v),)
-
-        if app:
-            formulas += (app(v),)
 
         formulas = Conjunction[S](formulas)
 
@@ -1187,7 +1195,7 @@ class SquallTransformer(lark.Transformer):
         ng2 = ast[0]
         y = Symbol[E].fresh()
         z = Symbol[E].fresh()
-        res = Lambda((y,), Lambda((z,), ng2(y)(z)))
+        res = Lambda((z,), Lambda((y,), ng2(y)(z)))
         return res
 
     def dim_npc(self, ast):
@@ -1447,7 +1455,8 @@ class SquallTransformer(lark.Transformer):
         return self.adj_aggreg(ast)
 
     def adj_aggreg(self, ast):
-        functor = ast[0].cast(Callable[[Callable[[List[E]], P1]], P1])
+        functor = ast[0].apply(ast[0].name.lower())
+        functor = functor.cast(Callable[[Callable[[List[E]], P1]], P1])
         d = Symbol[List[E]].fresh()
         x = Symbol[P1].fresh()
         res = Lambda(

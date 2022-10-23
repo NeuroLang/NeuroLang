@@ -292,7 +292,7 @@ class ExplodeTupleArguments(ExtendedLogicExpressionWalker):
             new_args += arg
             type_args = get_args(expression.functor.type)
             new_type = Callable[[arg.type for arg in new_args], type_args[-1]]
-        return self.walk(FunctionApplication(
+        return self.walk(expression.apply(
             expression.functor.cast(new_type), new_args
         ))
 
@@ -383,34 +383,35 @@ class SquallIntermediateSolver(PatternWalker):
         functor = expression.functor
         criteria = expression.criteria
         value = expression.values
-        predicate = Symbol.fresh()
-        groups = Symbol.fresh()
-        aggregate_var = Symbol.fresh()
+        groups = Symbol[List[E]].fresh()
+        aggregate_var = Symbol[E].fresh()
         solved_criteria = self.walk(criteria(groups)(aggregate_var))
 
         n_groups = max(
-            s.item.value
-            for _, s in expression_iterator(solved_criteria)
-            if isinstance(s, Projection) and s.collection == groups
+            -1, -1, *(
+                s.item.value
+                for _, s in expression_iterator(solved_criteria)
+                if isinstance(s, Projection) and s.collection == groups
+            )
         ) + 1
-
+        predicate = Symbol[Callable[[E] * (n_groups + 1), S]].fresh()
         group_vars = tuple(Symbol[E].fresh() for _ in range(n_groups))
         solved_criteria = ReplaceExpressionWalker({
             Projection(groups, Constant(i)): var
             for i, var in enumerate(group_vars)
         }).walk(solved_criteria)
 
-        aggregate_var_label = tuple(
-            l for _, l in expression_iterator(solved_criteria)
-            if isinstance(l, Label) and l.variable == aggregate_var
-        )
-
         group_var_labels = tuple(
             l for _, l in expression_iterator(solved_criteria)
-            if isinstance(l, Label) and l.variable in group_vars
+            if (
+                isinstance(l, FunctionApplication) and
+                l.functor == EQ and
+                l.args[0] in group_vars
+            )
         )
 
         solved_criteria = ReplaceExpressionWalker({l: TRUE for l in group_var_labels}).walk(solved_criteria)
+        solved_criteria = ReplaceExpressionWalker({l.args[1]: l.args[0] for l in group_var_labels}).walk(solved_criteria)
 
         aggregation_rule = UniversalPredicate(aggregate_var, Implication(
             FunctionApplication(predicate, group_vars + (AggregationApplication(functor, (aggregate_var,)),)),
@@ -421,14 +422,7 @@ class SquallIntermediateSolver(PatternWalker):
         aggregation_predicate = FunctionApplication(predicate, group_vars + (value,))
         formulas = (aggregation_predicate, aggregation_rule)
 
-        formulas += tuple(EQ(l.label, l.variable) for l in group_var_labels)
-
-        if aggregate_var_label and isinstance(aggregate_var_label[0].label, tuple):
-            new_tuple = tuple(Symbol[E].fresh() for _ in aggregate_var_label[0].label)
-            aggregate_var_label = ReplaceExpressionWalker(
-                {aggregate_var_label[0]: Label(value, new_tuple)}
-            ).walk(aggregate_var_label)
-            formulas += aggregate_var_label
+        formulas += group_var_labels
 
         return Conjunction[S](formulas)
 
@@ -825,9 +819,9 @@ def squall_to_fol(expression):
         SquallSolver(),
         ExplodeTupleArguments(),
         DuplicatedLabelsVerification(),
-        LogicPreprocessing(),
         SolveLabels(),
         ExplodeTupleArguments(),
+        LogicPreprocessing(),
         LogicSimplifier(),
         EliminateSpuriousEqualities(),
         SquallExpressionsToNeuroLang(),
