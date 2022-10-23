@@ -472,8 +472,8 @@ def test_lark_semantics_join(datalog_simple):
 
 def test_lark_semantics_aggregation(datalog_simple):
     code = """
-        define as max_items every Item ?i ;
-            with every Max of the Quantity where ?i item_count per ?i.
+        define as max_items for every Item ?i ;
+            where every Max of the Quantity where ?i item_count per ?i.
     """
     logic_code = parser(code)
 
