@@ -337,7 +337,27 @@ class DuplicatedLabelsVerification(ExtendedLogicExpressionWalker):
 
 
 class FactorQuantifiers(FactorQuantifiersMixin, ExtendedLogicExpressionWalker):
-    pass
+    @add_match(Condition(..., Quantifier))
+    def factor_existential_out_of_condition(self, expression):
+        return expression.conditioning.apply(
+            expression.conditioning.head,
+            expression.apply(
+                expression.conditioned,
+                expression.conditioning.body
+            )
+        )
+
+    @add_match(Condition(Quantifier, ...))
+    def factor_existential_out_of_conditional(self, expression):
+        return expression.conditioned(
+            expression.conditioned.head,
+            expression.apply(
+                expression.conditioned.body,
+                expression.conditioning
+            )
+        )
+
+
 
 
 class SolveLabels(ExtendedLogicExpressionWalker):
@@ -864,7 +884,7 @@ class SquallExpressionsToNeuroLang(ExpressionWalker):
             d(*consequent.args), antecedent
         ))
         return res
-
+        
 
 def squall_to_fol(expression, type_predicate_symbols=None):
     if type_predicate_symbols is None:

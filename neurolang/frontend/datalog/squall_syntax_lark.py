@@ -166,16 +166,16 @@ GRAMMAR = (
 r"""
 ?start: ["squall"] squall
 
-squall : s
-       | rule ( _LINE_BREAK rule )*
+squall : rule ( _LINE_BREAK rule )*
 
 _LINE_BREAK : ( "." | "\n" )+
 
 ?rule  : rule_op
        | rulen
        | query
+       | COMMENT
 
-query : _OBTAIN op _LINE_BREAK?
+query : _OBTAIN ops _LINE_BREAK?
 
 rule_op : "define" "as" [PROBABLY] verb1 rule_body1 "."?
         | "define" "as" PROBABLY verb1 rule_body1_cond "."?
@@ -236,7 +236,7 @@ NO : _NO
 
 np2 : det ng2
 
-ng1 : noun1 [ app ] [ rel ]                      -> ng1_noun
+ng1 : [ npc{_THE} _OF ] noun1 [ app ] [ rel ]    -> ng1_noun
     | noun_aggreg [ app ] _OF npc{_THE} [ dims ] -> ng1_agg_npc
     | noun_aggreg [ app ] ng1 [ dims ]           -> ng1_agg_ng1
 ng2 : noun2 [ app ]
@@ -265,7 +265,8 @@ rel_b : (_THAT | _WHICH | _WHERE | _WHO ) vp               -> rel_vp
       | _SUCH _THAT s                                      -> rel_s
       | comparison (_THAN | _TO) op                        -> rel_comp
       | adj1 [ cp ]                                        -> rel_adj1
-      | adj2 op                                            -> rel_adj2
+      | adjn ops                                           -> rel_adjn
+
 
 !comparison : _GREATER [ _EQUAL ]
             | _LOWER   [ _EQUAL ]
@@ -316,21 +317,17 @@ npc_p{prep_} : prep_ WS ng1 -> npc_det
 
 adj1 : intransitive
 adj2 : transitive
+adjn : transitive_multiple
 
 noun1 : intransitive
 noun2 : transitive
 
-verb1 : BELONG
-      | intransitive
-verb2 : RELATE
-      | transitive
+verb1 : intransitive
+verb2 : transitive
 verbn : transitive_multiple
 
 noun_aggreg : upper_identifier
 adj_aggreg : upper_identifier
-
-BELONG : /belong[s]{0,1}/
-RELATE : /relate[s]{0,1}/
 
 intransitive : upper_identifier
 transitive : identifier
@@ -414,6 +411,7 @@ LOWER_NAME : /(?!(\b(_KEYWORD)\b))//[a-z_]\w*/
 UPPER_NAME : /(?!(\b(_KEYWORD)\b))//[A-Z]\w*/
 NAME : /(?!(\b(_KEYWORD)\b))//[a-zA-Z_]\w*/
 STRING : /[^']+/
+COMMENT : "%"/.*/
 
 %import common._STRING_ESC_INNER
 %import common.SIGNED_INT
@@ -589,10 +587,11 @@ class SquallTransformer(lark.Transformer):
         return np(Lambda((x,), rule))
 
     def query(self, ast):
-        op = ast[0]
+        ops = ast[0]
+        d = Query[Callable[[List[E]], S]]()
         x = Symbol[E].fresh()
-        d = Query[P1]()
-        res = op(Lambda((x,), FunctionApplication(d, (x,))))
+        lx = Symbol[List[E]].fresh()
+        res = ExpandListArgument(ops(lx)(Lambda((x,), d(x))), lx)
         return res
 
     def rule_op(self, ast):
@@ -625,15 +624,6 @@ class SquallTransformer(lark.Transformer):
             verb = verb1(x, FunctionApplication[float](prob, (x,)))
         else:
             verb = verb1(x)
-        return op(Lambda((x,), verb))
-
-    def rule_op_pc(self, ast):
-        _, verb1, op, _, _, s = ast
-        x = Symbol[E].fresh()
-        d = Symbol[P1].fresh()
-        prob = PROB.cast(Callable[[E], float])
-        verb = verb1(x, FunctionApplication[float](prob, (x,)))
-        op = Lambda((d,), Condition(op(d), s) )
         return op(Lambda((x,), verb))
 
     def rule_op2_cond(self, ast):
@@ -1034,7 +1024,14 @@ class SquallTransformer(lark.Transformer):
 
     def ng1_noun(self, ast):
         x = Symbol[E].fresh()
-        noun1, app, rel = ast
+        prep, noun1, app, rel = ast
+
+        if prep is not None:
+            noun1 = noun1.cast[P2]
+            y = Symbol[E].fresh()
+            z = Symbol[E].fresh()
+            noun1 = Lambda((y,), prep(Lambda((z,), noun1(y, z))))
+
         args = (noun1, app, rel)
         return Lambda[P1]((x,), Conjunction[S](tuple(
             FunctionApplication(a, (x,))
@@ -1166,6 +1163,10 @@ class SquallTransformer(lark.Transformer):
         return ast[0].apply(name)
 
     def adj2(self, ast):
+        name = lemmatize(ast[0].name.lower(), 'a')
+        return ast[0].apply(name)
+
+    def adjn(self, ast):
         name = lemmatize(ast[0].name.lower(), 'a')
         return ast[0].apply(name)
 
@@ -1342,6 +1343,18 @@ class SquallTransformer(lark.Transformer):
             res = Lambda((x,), adj1(x))
         return res
 
+    def rel_adjn(self, ast):
+        adjn, ops = ast
+        x = Symbol[E].fresh()
+        adjn = adjn.cast(Callable[[E, List[E]], S])
+        y = Symbol[E].fresh()
+        ly = Symbol[List[E]].fresh()
+        res = ExpandListArgument(
+            Lambda((x,), ops(ly)(Lambda((y,), adjn(x, y)))),
+            ly
+        )
+        return res
+
     def comparison(self, ast):
         comp = ' '.join(a for a in ast if a)
         comp_dict = {
@@ -1496,27 +1509,6 @@ class SquallTransformer(lark.Transformer):
                 return Negation[type_](ast[0])
             else:
                 return op[type_](tuple(ast))
-
-    def belong(self, ast):
-        x = Symbol.fresh()
-        c = Symbol[Callable[[alpha], Callable[[alpha], alpha]]].fresh()
-        return Lambda[P1](
-            (x,),
-            ForArg(TO, Lambda((c,), OfType(x, c)))
-        )
-
-    def relate(self, ast):
-        x = Symbol[E].fresh()
-        y = Symbol[E].fresh()
-        p = Symbol.fresh()
-
-        return Lambda(
-            (p,),
-            Lambda(
-                (x,),
-                ForArg(TO, Lambda((y,), p(x, y)))
-            )
-        )
 
     def external_literal(self, ast):
         name = ast[0]

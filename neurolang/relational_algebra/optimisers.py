@@ -1436,6 +1436,7 @@ class CommuteJoinsAvoidCrossProducts(ew.PatternWalker):
             )
         return res
 
+
 class RelationalAlgebraOptimiser(
     RewriteSelections,
     ProductSimplification,
