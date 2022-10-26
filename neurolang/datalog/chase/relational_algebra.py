@@ -347,6 +347,7 @@ class ChaseNamedRelationalAlgebraMixin:
         LOG.info(f"Translating and optimising CQ {conjunction} to RA")
         ra_code = traslator_to_named_ra.walk(conjunction)
         ra_code = NamedRelationalAlgebraOptimiser().walk(ra_code)
+        ra_code = RelationalAlgebraOptimiser().walk(ra_code)
         return ra_code
 
     def compute_result_set(

@@ -1,4 +1,5 @@
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
+import os
 from typing import Callable, List, TypeVar
 from warnings import warn
 
@@ -56,6 +57,7 @@ from .squall import (
     Label,
     LambdaSolver,
     ProbabilisticPredicateSymbol,
+    Query,
     S,
     SquallSolver,
     The,
@@ -110,6 +112,7 @@ KEYWORDS = [
     'an',
     'and',
     'are',
+    'by',
     'conditioned',
     'define',
     'defines',
@@ -121,6 +124,8 @@ KEYWORDS = [
     'from',
     'for',
     'greater',
+    'given',
+    'obtain',
     'has',
     'hasn\'t',
     'have',
@@ -142,10 +147,12 @@ KEYWORDS = [
     'than',
     'that',
     'the',
+    'then',
     'there',
     'to',
     'was',
     'were',
+    'when',
     'where',
     'which',
     'with',
@@ -166,6 +173,9 @@ _LINE_BREAK : ( "." | "\n" )+
 
 ?rule  : rule_op
        | rulen
+       | query
+
+query : _OBTAIN op _LINE_BREAK?
 
 rule_op : "define" "as" [PROBABLY] verb1 rule_body1 "."?
         | "define" "as" PROBABLY verb1 rule_body1_cond "."?
@@ -178,9 +188,9 @@ rule_op : "define" "as" [PROBABLY] verb1 rule_body1 "."?
        | "define" "as" [PROBABLY] verb2 prep op _BREAK? np "."? -> rule_op2_b
 
 ?rulen : "define" "as" verbn rule_body1 _BREAK? ops "."? -> rule_opnn
-       | "define" "as" PROBABLY verbn rule_body1 _BREAK? ops "."? -> rule_opnn_per
+       | "define" "as" PROBABLY verbn rule_body1 _CONDITIONED? _BREAK? ops "."? -> rule_opnn_per
 
-rule_body1 : prep? det ng1
+rule_body1 : prep? _GIVEN? det ng1
 rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
                 | s _CONDITIONED _TO det ng1 -> rule_body1_cond_posterior
 
@@ -226,8 +236,9 @@ NO : _NO
 
 np2 : det ng2
 
-ng1 : noun1 [ app ] [ rel ]                    -> ng1_noun
-    | noun_aggreg [ app ] _OF npc{_THE} [ dims ] -> ng1_agg
+ng1 : noun1 [ app ] [ rel ]                      -> ng1_noun
+    | noun_aggreg [ app ] _OF npc{_THE} [ dims ] -> ng1_agg_npc
+    | noun_aggreg [ app ] ng1 [ dims ]           -> ng1_agg_ng1
 ng2 : noun2 [ app ]
 
 
@@ -247,15 +258,18 @@ dim : _PER ng2      -> dim_ng2
 _DASH : "--"
 
 rel_b : (_THAT | _WHICH | _WHERE | _WHO ) vp               -> rel_vp
-      | (_THAT | _WHICH | _WHERE | _WHOM ) np verb2 [ cp ] -> rel_vp2
+      | (_THAT | _WHICH | _WHERE | _WHOM ) np verb2        -> rel_vp2
+      | (_THAT | _WHICH | _WHERE | _WHOM ) np verbn ops    -> rel_vpn
       | np2 _OF _WHICH vp                                  -> rel_np2
       | _WHOSE ng2 vp                                      -> rel_ng2
       | _SUCH _THAT s                                      -> rel_s
       | comparison (_THAN | _TO) op                        -> rel_comp
+      | adj1 [ cp ]                                        -> rel_adj1
+      | adj2 op                                            -> rel_adj2
 
 !comparison : _GREATER [ _EQUAL ]
             | _LOWER   [ _EQUAL ]
-            | [ _NOT ] _EQUAL 
+            | [ _NOT ] _EQUAL
 
 
 term : label
@@ -300,8 +314,8 @@ npc_p{prep_} : prep_ WS ng1 -> npc_det
 ?have: ( _HAS | _HAD | _HAVE )
 ?do: ( _DOES | _DO | _DID )
 
-?adj1 : intransitive
-?adj2 : transitive
+adj1 : intransitive
+adj2 : transitive
 
 noun1 : intransitive
 noun2 : transitive
@@ -322,7 +336,7 @@ intransitive : upper_identifier
 transitive : identifier
 transitive_multiple : identifier
 
-op : np  -> op_np
+op : prep? np  -> op_np
 //   | pp op     -> op_pp
 
 ops : [ prep ] op          -> ops_base
@@ -330,14 +344,18 @@ ops : [ prep ] op          -> ops_base
 
 pp : prep np -> pp_np
 
-!prep : _FOR
+!prep : _BY
+      | _FOR
       | _FROM
       | _OF
+      | _THEN
       | _TO
+      | _WHEN
       | _WHERE
       | _WITH
 
-cp : pp [ cp ] -> cp_pp
+//cp : pp [ cp ] -> cp_pp
+?cp : ops
 
 label : "?" identifier
       | "(" "?" identifier (";" "?" identifier )* ")"
@@ -414,6 +432,9 @@ STRING : /[^']+/
 .replace("_KEYWORD", "|".join(KEYWORDS))
 )
 
+
+with open(os.path.join(os.path.dirname(__file__), "neurolang_natural.lark"), 'w') as f:
+    f.write(GRAMMAR)
 
 class Apply_(Definition):
     """Apply Operator defined in the SQUALL paper
@@ -535,20 +556,26 @@ class CastExpr(ExpressionWalker):
 
 
 class SquallTransformer(lark.Transformer):
-    def __init__(self, locals=None, globals=None):
+    def __init__(self, type_predicate_symbols=None, locals=None, globals=None):
         super().__init__()
 
+        if type_predicate_symbols is None:
+            type_predicate_symbols = {}
         if locals is None:
             locals = {}
         if globals is None:
             globals = {}
 
+        self.type_predicate_symbols = type_predicate_symbols
         self.locals = locals
         self.globals = globals
 
     def squall(self, ast):
         return CollapseUnions().walk(
-            Union(tuple(squall_to_fol(node) for node in ast))
+            Union(tuple(
+                squall_to_fol(node, self.type_predicate_symbols)
+                for node in ast)
+            )
         )
 
     def rule_simple(self, ast):
@@ -560,6 +587,13 @@ class SquallTransformer(lark.Transformer):
         x = Symbol[E].fresh()
         np, rule = ast
         return np(Lambda((x,), rule))
+
+    def query(self, ast):
+        op = ast[0]
+        x = Symbol[E].fresh()
+        d = Query[P1]()
+        res = op(Lambda((x,), FunctionApplication(d, (x,))))
+        return res
 
     def rule_op(self, ast):
         probably, verb1, op = ast
@@ -817,9 +851,16 @@ class SquallTransformer(lark.Transformer):
     def vpdo_v1(self, ast):
         x = Symbol[E].fresh()
         verb1, cp = ast
-        res = verb1.cast(P1)(x)
         if cp:
-            res = cp(res)
+            verb1 = verb1.cast(PN)
+            y = Symbol[E].fresh()
+            ly = Symbol[List[E]].fresh()
+            res = ExpandListArgument(
+                Lambda((x,), cp(ly)(Lambda((y,), verb1(x, y)))),
+                ly
+            )(x)
+        else:            
+            res = verb1.cast(P1)(x)
         res = Lambda[P1]((x,), res)
         return res
 
@@ -904,7 +945,7 @@ class SquallTransformer(lark.Transformer):
         return Lambda((x,), ng1(x))
 
     def op_np(self, ast):
-        np = ast[0]
+        np = ast[-1]
 
         d = Symbol[P1].fresh()
         y = Symbol[E].fresh()
@@ -1000,7 +1041,7 @@ class SquallTransformer(lark.Transformer):
             for a in args if a is not None
         )))
 
-    def ng1_agg(self, ast):
+    def ng1_agg_npc(self, ast):
         aggreg, app, npc, dims = ast
         v = Symbol[S].fresh()
         y = Symbol[E].fresh()
@@ -1028,6 +1069,9 @@ class SquallTransformer(lark.Transformer):
 
         res = Lambda((v,), formulas)
         return res
+
+    def ng1_agg_ng1(self, ast):
+        return self.ng1_agg_npc(ast)
 
     def ng2(self, ast):
         x = Symbol[E].fresh()
@@ -1116,6 +1160,14 @@ class SquallTransformer(lark.Transformer):
             )
         )
         return res
+
+    def adj1(self, ast):
+        name = lemmatize(ast[0].name.lower(), 'a')
+        return ast[0].apply(name)
+
+    def adj2(self, ast):
+        name = lemmatize(ast[0].name.lower(), 'a')
+        return ast[0].apply(name)
 
     def noun1(self, ast):
         name = lemmatize(ast[0].name.lower(), 'n')
@@ -1212,12 +1264,23 @@ class SquallTransformer(lark.Transformer):
     def rel_vp2(self, ast):
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
-        np, verb2, cp = ast
+        np, verb2 = ast
         res = verb2.cast(P2)(x, y)
-        if cp:
-            res = cp(res)
         res = np(Lambda((x,), res))
         res = Lambda((y,), res)
+        return res
+
+    def rel_vpn(self, ast):
+        np, verbn, ops = ast
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        z = Symbol[E].fresh()
+        lz = Symbol[List[E]].fresh()
+        res = ExpandListArgument(
+            Lambda((x,), ops(lz)(Lambda((z,), verbn(x, y, z)))),
+            lz
+        )
+        res = Lambda((y,), np(res))
         return res
 
     def rel_np2(self, ast):
@@ -1245,7 +1308,7 @@ class SquallTransformer(lark.Transformer):
                         ng2(x)(y),
                         vp(y)
                     ))
-                )
+                )(y)
             )
         )
         return res
@@ -1263,6 +1326,21 @@ class SquallTransformer(lark.Transformer):
             (x,),
             op(Lambda((y,), comp(x, y)))
         )
+
+    def rel_adj1(self, ast):
+        adj1, cp = ast
+        x = Symbol[E].fresh()
+        if cp:
+            adj1 = adj1.cast(PN)
+            y = Symbol[E].fresh()
+            ly = Symbol[List[E]].fresh()
+            res = ExpandListArgument(
+                Lambda((x,), cp(ly)(Lambda((y,), adj1(x, y)))),
+                ly
+            )
+        else:
+            res = Lambda((x,), adj1(x))
+        return res
 
     def comparison(self, ast):
         comp = ' '.join(a for a in ast if a)
@@ -1481,7 +1559,11 @@ COMPILED_GRAMMAR = lark.Lark(GRAMMAR, parser="earley")
 
 # Errors to check:
 #   * If there is an existential variable at the beginning of a rule, then the variable was badly quantified
-def parser(code, locals=None, globals=None, return_tree=False, process=True, **kwargs):
+def parser(
+    code,
+    type_predicate_symbols=None, locals=None,
+    globals=None, return_tree=False, process=True, **kwargs
+):
     try:
         tree = COMPILED_GRAMMAR.parse(code)
     except lark.exceptions.UnexpectedEOF as ex:
@@ -1514,7 +1596,11 @@ def parser(code, locals=None, globals=None, return_tree=False, process=True, **k
 
     try:
         if process:
-            intermediate_representation = SquallTransformer(locals=locals, globals=globals).transform(tree)
+            intermediate_representation = SquallTransformer(
+                type_predicate_symbols=type_predicate_symbols,
+                locals=locals,
+                globals=globals
+            ).transform(tree)
         else:
             intermediate_representation = None
 

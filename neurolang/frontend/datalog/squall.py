@@ -21,6 +21,7 @@ from ...expressions import (
     FunctionApplication,
     Lambda,
     Projection,
+    Query as EQuery,
     Symbol
 )
 from ...logic import (
@@ -88,6 +89,7 @@ SUB = Constant(sub)
 
 ProbabilisticPredicateSymbol = Symbol("ProbabilisticPredicateSymbol")
 
+
 class Label(FunctionApplication):
     def __init__(self, variable, label):
         self.functor = Constant(None)
@@ -124,7 +126,6 @@ class ExpandListArgument(Definition):
         return "ExpandListArgument[{}, {}]".format(
             self.expression, self.list_to_replace
         )
-
 
 
 class Ref(Expression):
@@ -180,9 +181,25 @@ class The(Quantifier):
         return "The[{}; {}, {}]".format(self.head, self.arg1, self.arg2)
 
 
+class Query(Expression):
+    def __init__(self):
+        pass
+    
+    def __repr__(self):
+        return "Query?"
+
+
 class ExtendedLogicExpressionWalker(LogicExpressionWalker):
     @add_match(ProbabilisticPredicate)
     def probabilistic_predicate(self, expression):
+        return expression
+
+    @add_match(Query)
+    def query(self, expression):
+        return expression
+
+    @add_match(EQuery)
+    def query(self, expression):
         return expression
 
 
@@ -319,6 +336,10 @@ class DuplicatedLabelsVerification(ExtendedLogicExpressionWalker):
         raise RepeatedLabelException("Repeated appositions are not permitted")
 
 
+class FactorQuantifiers(FactorQuantifiersMixin, ExtendedLogicExpressionWalker):
+    pass
+
+
 class SolveLabels(ExtendedLogicExpressionWalker):
     @add_match(
         Quantifier,
@@ -449,6 +470,14 @@ class SquallIntermediateSolver(PatternWalker):
 
         return exp
 
+    @add_match(FunctionApplication(Symbol, ...))
+    def replace_type_symbols(self, expression):
+        sims = getattr(self, 'type_predicate_symbols', {})
+        if expression.functor.name in sims:
+            return TRUE
+        else:
+            return expression
+
 
 class Cons(Expression):
     def __init__(self, head, tail):
@@ -495,7 +524,10 @@ class SquallSolver(
     SquallIntermediateSolver,
     ExpressionWalker
 ):
-    pass
+    def __init__(self, type_predicate_symbols=None):
+        if type_predicate_symbols is None:
+            type_predicate_symbols = {}
+        self.type_predicate_symbols = type_predicate_symbols
 
 
 class LambdaSolver(LambdaSolverMixin, ExpressionWalker):
@@ -736,6 +768,16 @@ class SquallExpressionsToNeuroLang(ExpressionWalker):
         return self.walk(expression.body)
 
     @add_match(
+        UniversalPredicate(..., EQuery),
+        lambda exp: (
+            exp.head in exp.body.head._symbols or
+            exp.head in exp.body.body._symbols
+        )
+    )
+    def make_datalog_query_universal(self, expression):
+        return self.walk(expression.body)
+
+    @add_match(
         ExistentialPredicate(..., Implication(..., Conjunction)),
         lambda exp: (
             exp.head not in exp.body.consequent._symbols and
@@ -813,12 +855,25 @@ class SquallExpressionsToNeuroLang(ExpressionWalker):
 
         return self.walk(Union(aggregation_formulas))
 
+    @add_match(Implication(FunctionApplication(Query, ...), ...))
+    def query_implication(self, expression):
+        antecedent = expression.antecedent
+        consequent = expression.consequent
+        d = Symbol[consequent.functor.type].fresh()
+        res = self.walk(EQuery(
+            d(*consequent.args), antecedent
+        ))
+        return res
 
-def squall_to_fol(expression):
+
+def squall_to_fol(expression, type_predicate_symbols=None):
+    if type_predicate_symbols is None:
+        type_predicate_symbols = {}
     cw = ChainedWalker(
-        SquallSolver(),
+        SquallSolver(type_predicate_symbols),
         ExplodeTupleArguments(),
         DuplicatedLabelsVerification(),
+        FactorQuantifiers(),
         SolveLabels(),
         ExplodeTupleArguments(),
         LogicPreprocessing(),

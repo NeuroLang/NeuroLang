@@ -7,6 +7,7 @@ in an ergonomic manner, and attention is paid to their representation
 """
 import operator as op
 from functools import wraps
+import re
 from types import BuiltinFunctionType
 from typing import (
     AbstractSet,
@@ -247,7 +248,17 @@ class Expression(object):
             if self.expression.is_fresh and not (
                 hasattr(self, "in_ontology") and self.in_ontology
             ):
-                return "..."
+                tr = {
+                    str(i): chr(0x2080 + i)
+                    for i in range(10)
+                }
+                tr = str.maketrans(tr)
+                name = self.expression.name
+                name = re.sub(
+                    'fresh_0*', '\N{Greek Small Letter Epsilon}',
+                    name
+                )
+                return name.translate(tr)
             else:
                 return f"{self.expression.name}"
         else:

@@ -13,6 +13,7 @@ from typing import (
     Iterable,
     List,
     Optional,
+    Set,
     Tuple,
     Type,
     Union,
@@ -35,6 +36,7 @@ from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.standard_syntax import parser as datalog_parser
 from .datalog.natural_syntax import parser as nat_datalog_parser
+from .datalog.squall_syntax_lark import parser as cet_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
@@ -79,6 +81,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
         self.datalog_parser = datalog_parser
         self.nat_datalog_parser = nat_datalog_parser
+        self.cet_datalog_parser = cet_datalog_parser
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -271,6 +274,48 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         intermediate_representation = self.nat_datalog_parser(code)
         self.program_ir.walk(intermediate_representation)
+ 
+    def execute_controlled_english_program(self, code: str, type_symbol_names: Optional[Set[str]]=None) -> None:
+        """Execute a controlled English language Datalog program
+
+        Parameters
+        ----------
+        code : string
+            Controlled English NeuroLang program.
+        """
+        intermediate_representation = self.cet_datalog_parser(code, type_predicate_symbols=type_symbol_names)
+        queries = [
+            rule
+            for rule in intermediate_representation.formulas
+            if isinstance(rule, ir.Query)
+        ]
+        if len(queries) == 0:
+            self.program_ir.walk(intermediate_representation)
+            return
+        elif len(queries) == 1:
+            query = self.frontend_translator.walk(queries[0])
+            program = logic.Union(
+                [
+                    rule
+                    for rule in intermediate_representation.formulas
+                    if not isinstance(rule, ir.Query)
+                ]
+            )
+            self.program_ir.walk(program)
+            return self.query(query.head.arguments, query.body)
+        else:
+            raise UnsupportedProgramError(
+                "Only one query, in the form of ans(...) :- R(...) is "
+                "supported. Datalog program has more than one query rule: "
+                "{}".format(
+                    "\n".join(
+                        [
+                            str(self.frontend_translator.walk(q))
+                            for q in queries
+                        ]
+                    )
+                )
+            )
 
     def query(
         self, *args
