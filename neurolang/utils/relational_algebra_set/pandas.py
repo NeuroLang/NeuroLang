@@ -351,7 +351,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def _extract_unified_column_types(self, other):
         col_types = dict()
-        for col in self._container.columns & other._container.columns:
+        for col in self._container.columns.intersection(other._container.columns):
             s_dtype = self._container[col].dtype
             o_dtype = other._container[col].dtype
             if s_dtype != o_dtype:
@@ -862,8 +862,7 @@ class NamedRelationalAlgebraFrozenSet(
 
         for dst, fun in aggs_multi_column.items():
             new_col = (
-                groups
-                .apply(fun)
+                self._apply_aggregation(groups, fun)
                 .rename(dst)
                 .to_frame()
             )
@@ -884,6 +883,21 @@ class NamedRelationalAlgebraFrozenSet(
             columns=list(new_container.columns),
         )
         return output
+
+    @staticmethod
+    def _apply_aggregation(groups, fun):
+        fun_dict = {
+            len: 'count',
+            max: 'max',
+            min: 'min',
+            sum: 'sum'
+        }
+        if fun in fun_dict:
+            res = getattr(groups, fun_dict[fun])()
+            res = res.iloc[:, 0]
+        else:
+            res = groups.apply(fun)
+        return res
 
     def _keep_column_types(self, new_container, skip=None, check_for_na=True):
         column_types = {
