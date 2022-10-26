@@ -15,6 +15,9 @@ from ..logic.expression_processing import (
 )
 from ..utils.orderedset import OrderedSet
 from . import (
+    FALSE,
+    TRUE,
+    BinaryLogicOperator,
     Conjunction,
     Constant,
     Disjunction,
@@ -87,6 +90,17 @@ class LogicExpressionWalker(PatternWalker):
         else:
             return expression
 
+    @add_match(BinaryLogicOperator)
+    def walk_binary_logic_expression(self, expression):
+        left, right = expression.unapply()
+        new_left = self.walk(left)
+        new_right = self.walk(right)
+
+        if new_left is not left or new_right is not right:
+            expression = expression.apply(new_left, new_right)
+
+        return expression
+
 
 class EliminateImplications(LogicExpressionWalker):
     """
@@ -108,6 +122,30 @@ class RemoveTrivialOperationsMixin(PatternWalker):
     @add_match(Negation(Negation(...)))
     def remove_double_negation(self, expression):
         return self.walk(expression.formula.formula)
+
+    @add_match(Conjunction(...), lambda e: any(f == TRUE for f in e.formulas))
+    def remove_trivial_conjunctions_true(self, expression):
+        formulas = tuple(f for f in expression.formulas if f != TRUE)
+        if formulas:
+            return Conjunction(formulas)
+        else:
+            return TRUE
+
+    @add_match(Conjunction(...), lambda e: any(f == FALSE for f in e.formulas))
+    def remove_trivial_conjunctions_false(self, expression):
+        return FALSE
+
+    @add_match(Disjunction(...), lambda e: any(f == FALSE for f in e.formulas))
+    def remove_trivial_disjunction_false(self, expression):
+        formulas = tuple(f for f in expression.formulas if f != FALSE)
+        if formulas:
+            return Conjunction(formulas)
+        else:
+            return FALSE
+
+    @add_match(Disjunction(...), lambda e: any(f == TRUE for f in e.formulas))
+    def remove_trivial_disjunction_true(self, expression):
+        return TRUE
 
 
 class MoveNegationsToAtomsSimpleOperationsMixin(PatternWalker):
@@ -232,6 +270,63 @@ class FactorQuantifiersMixin(PatternWalker):
         for q in reversed(quantifiers):
             exp = q.apply(q.head, exp)
         return self.walk(exp)
+
+    @add_match(
+        Implication(..., ExistentialPredicate),
+        lambda exp: (
+            exp.antecedent.head
+            not in extract_logic_free_variables(exp.consequent)
+        )
+    )
+    def implication_existential_antecedent(self, expression):
+        head = expression.antecedent.head
+        exp = UniversalPredicate(
+            head,
+            Implication(expression.consequent, expression.antecedent.body)
+        )
+        return self.walk(exp)
+
+    @add_match(
+        Implication(..., UniversalPredicate),
+        lambda exp: (
+            exp.antecedent.head
+            not in extract_logic_free_variables(exp.consequent)
+        )
+    )
+    def implication_universal_antecedent(self, expression):
+        head = expression.antecedent.head
+        exp = ExistentialPredicate(
+            head,
+            Implication(expression.consequent, expression.antecedent.body)
+        )
+        return self.walk(exp)
+
+    @add_match(
+        Implication(ExistentialPredicate, ...),
+        lambda exp: (
+            exp.consequent.head
+            not in extract_logic_free_variables(exp.antecedent)
+        )
+    )
+    def implication_existential_consequent(self, expression):
+        exp = expression.consequent.apply(
+            expression.consequent.head,
+            expression.apply(
+                expression.consequent.body,
+                expression.antecedent
+            )
+        )
+        return exp
+
+    @add_match(
+        Implication(UniversalPredicate, ...),
+        lambda exp: (
+            exp.consequent.head
+            not in extract_logic_free_variables(exp.antecedent)
+        )
+    )
+    def implication_universal_consequent(self, expression):
+        return self.implication_existential_consequent(expression)
 
     @staticmethod
     def _extract_quantifiers_freshen_variables(expression):
@@ -568,12 +663,6 @@ def convert_to_pnf_with_dnf_matrix(expression):
     return walker.walk(expression)
 
 
-class ExtractFOLFreeVariables(ExtractFreeVariablesWalker):
-    @add_match(Implication)
-    def extract_variables_s(self, exp):
-        return self.walk(exp.consequent) | self.walk(exp.antecedent)
-
-
 class DistributeUniversalQuantifiers(PatternWalker):
     @add_match(UniversalPredicate(..., Conjunction))
     def distribute_universal_quantifier(self, uq):
@@ -585,7 +674,7 @@ class DistributeUniversalQuantifiers(PatternWalker):
 
     def _apply_quantifier(self, var):
         def foo(exp):
-            fv = ExtractFOLFreeVariables().walk(exp)
+            fv = ExtractFreeVariablesWalker().walk(exp)
             if var in fv:
                 exp = UniversalPredicate(var, exp)
             return exp

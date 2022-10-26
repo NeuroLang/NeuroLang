@@ -16,6 +16,8 @@ from the chapter 4 of [1]_.
 import operator
 from functools import reduce
 from typing import Callable
+import typing
+
 
 from ..datalog.expressions import Fact
 from ..datalog.negation import is_conjunctive_negation
@@ -271,7 +273,10 @@ def convert_srnf_to_horn_clauses(head, expression):
         raise NeuroLangTranslateToHornClauseException(
             "Expression is not safe range: {}".format(expression)
         )
-    if not set(head.args) <= range_restricted_variables(expression):
+    if (
+        extract_logic_free_variables(head) >
+        range_restricted_variables(expression)
+    ):
         raise NeuroLangTranslateToHornClauseException(
             "Variables in head ({}) must be present in body ({})".format(
                 head, expression
@@ -304,8 +309,9 @@ def _to_horn_clause(head, body):
 
 
 def _restrict_variables(head, body, restrictive_atoms):
-    while not set(head.args).issubset(_restricted_variables(body)):
-        uv = set(head.args) - _restricted_variables(body)
+    head_vars = extract_logic_free_variables(head)
+    while not head_vars.issubset(_restricted_variables(body)):
+        uv = head_vars - _restricted_variables(body)
         new_atoms = _choose_restriction_atoms(uv, restrictive_atoms, head)
         body = new_atoms + body
     return body
@@ -313,8 +319,9 @@ def _restrict_variables(head, body, restrictive_atoms):
 
 def _choose_restriction_atoms(unrestricted_variables, available_atoms, head):
     x = list(unrestricted_variables)[0]
+    head_vars = extract_logic_free_variables(head)
     valid_choices = [
-        (a, (set(a.args) - set(head.args)))
+        (a, (set(a.args) - head_vars))
         for a in available_atoms
         if (x in a.args) and (a != head)
     ]
@@ -336,7 +343,9 @@ def _restrictive_atoms(atoms):
 
 def _is_restriction(atom):
     if isinstance(atom, FunctionApplication):
-        if is_leq_informative(atom.functor.type, Unknown):
+        if is_leq_informative(
+            atom.functor.type, typing.Union[Callable[..., bool], Unknown]
+        ):
             return True
         elif atom.functor == operator.eq and any(
             isinstance(a, Constant) for a in atom.args
