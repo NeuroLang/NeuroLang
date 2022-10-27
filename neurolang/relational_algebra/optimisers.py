@@ -1389,6 +1389,54 @@ class PushUnnamedSelectionsUp(ew.PatternWalker):
         )
 
 
+class CommuteJoinsAvoidCrossProducts(ew.PatternWalker):
+    @ew.add_match(
+        NaturalJoin(..., NaturalJoin),
+        lambda exp: (
+            exp.relation_left.columns() & exp.relation_right.columns() and
+            not exp.relation_right.relation_left.columns() & exp.relation_right.relation_right.columns()
+        )
+    )
+    def commute_right(self, expression):
+        left, right = expression.unapply()
+        right_left, right_right = right.unapply()
+
+        if left.columns() & right_right.columns():
+            res = expression.apply(
+                right_left,
+                expression.apply(left, right_right)
+            )
+        elif left.columns() & right_left.columns():
+            res = expression.apply(
+                right_right,
+                expression.apply(left, right_left)
+            )
+        return res
+
+    @ew.add_match(
+        NaturalJoin(NaturalJoin, ...),
+        lambda exp: (
+            exp.relation_left.columns() & exp.relation_right.columns() and
+            not exp.relation_left.relation_left.columns() & exp.relation_left.relation_right.columns()
+        )
+    )
+    def commute_left(self, expression):
+        left, right = expression.unapply()
+        left_left, left_right = left.unapply()
+
+        if right.columns() & left_right.columns():
+            res = expression.apply(
+                left_left,
+                expression.apply(right, left_right)
+            )
+        elif right.columns() & left_left.columns():
+            res = expression.apply(
+                left_right,
+                expression.apply(right, left_left)
+            )
+        return res
+
+
 class RelationalAlgebraOptimiser(
     RewriteSelections,
     ProductSimplification,
@@ -1396,6 +1444,7 @@ class RelationalAlgebraOptimiser(
     PushInSelections,
     RenameOptimizations,
     PushUnnamedSelectionsUp,
+    CommuteJoinsAvoidCrossProducts,
     ew.ExpressionWalker,
 ):
     """
