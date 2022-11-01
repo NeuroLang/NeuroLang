@@ -6,18 +6,19 @@ from typing import Callable, Iterable, Union
 
 import matplotlib
 import matplotlib.pyplot as plt
-import seaborn as sns
 import nibabel as nib
 import numpy as np
 import pandas as pd
-from neurolang.frontend import NeurolangDL, NeurolangPDL
-from neurolang.frontend.neurosynth_utils import StudyID
-from neurolang.regions import (
-    ExplicitVBR,
-    ExplicitVBROverlay,
-    region_union,
-)
+import seaborn as sns
 from nilearn import datasets, image
+
+from neurolang.frontend import NeurolangDL, NeurolangPDL
+from neurolang.frontend.neurosynth_utils import (
+    StudyID,
+    get_ns_mni_peaks_reported,
+    get_ns_term_study_associations
+)
+from neurolang.regions import ExplicitVBR, ExplicitVBROverlay, region_union
 
 
 class NeurolangEngineSet:
@@ -148,77 +149,41 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
         return nl
 
 
+class NeurosynthCETEngineConf(NeurosynthEngineConf):
+    def __init__(self, data_dir: Path, resolution=None) -> None:
+        super().__init__(data_dir, resolution=resolution)
+
+    @property
+    def key(self):
+        return "neurosynth_cet"
+
+    def create(self) -> NeurolangPDL:
+        mask = self.brain_mask
+        if self.resolution is not None:
+            mask = image.resample_img(mask, np.eye(3) * self.resolution)
+        nl = init_frontend(mask)
+        add_ploting_functions(nl)
+        load_neurosynth_data_cet(self.data_dir, nl, mask)
+        load_destrieux_atlas(self.data_dir, nl)
+        nl.execute_datalog_program = (
+            lambda query: nl.execute_controlled_english_program(
+                query,
+                type_symbol_names={"tfidf", "probability", "quantity", "studyid", "tuple", "value"}
+            )
+        )
+        return nl
+
+
 def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
-    ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
-        data_dir / "neurosynth",
-        [
-            (
-                "database.txt",
-                "https://github.com/neurosynth/neurosynth-data/raw/e8f27c4a9a44dbfbc0750366166ad2ba34ac72d6/current_data.tar.gz",
-                {"uncompress": True},
-            ),
-            (
-                "features.txt",
-                "https://github.com/neurosynth/neurosynth-data/raw/e8f27c4a9a44dbfbc0750366166ad2ba34ac72d6/current_data.tar.gz",
-                {"uncompress": True},
-            ),
-        ],
-    )
-
-    activations = pd.read_csv(ns_database_fn, sep="\t")
-    activations["id"] = activations["id"].apply(StudyID)
-    mni_peaks = activations.loc[activations.space == "MNI"][
-        ["x", "y", "z", "id"]
-    ]
-    non_mni_peaks = activations.loc[activations.space == "TAL"][
-        ["x", "y", "z", "id"]
-    ]
-    proj_mat = np.linalg.pinv(
-        np.array(
-            [
-                [0.9254, 0.0024, -0.0118, -1.0207],
-                [-0.0048, 0.9316, -0.0871, -1.7667],
-                [0.0152, 0.0883, 0.8924, 4.0926],
-                [0.0, 0.0, 0.0, 1.0],
-            ]
-        ).T
-    )
-    projected = np.round(
-        np.dot(
-            np.hstack(
-                (
-                    non_mni_peaks[["x", "y", "z"]].values,
-                    np.ones((len(non_mni_peaks), 1)),
-                )
-            ),
-            proj_mat,
-        )[:, 0:3]
-    )
-    projected_df = pd.DataFrame(
-        np.hstack([projected, non_mni_peaks[["id"]].values]),
-        columns=["x", "y", "z", "id"],
-    )
-    peak_data = pd.concat([projected_df, mni_peaks]).astype(
-        {"x": int, "y": int, "z": int}
-    )
-    study_ids = peak_data[["id"]].drop_duplicates()
-
-    features = pd.read_csv(ns_features_fn, sep="\t")
-    features.rename(columns={"pmid": "id"}, inplace=True)
-
-    term_data = pd.melt(
-        features,
-        var_name="term",
-        id_vars="id",
-        value_name="tfidf",
-    ).query("tfidf > 0")[["term", "tfidf", "id"]]
-    term_data["id"] = term_data["id"].apply(StudyID)
+    term_data = get_ns_term_study_associations(data_dir / "neurosynth", convert_study_ids=True)
+    peak_data = get_ns_mni_peaks_reported(data_dir / "neurosynth", convert_study_ids=True)
+    study_id = peak_data[["id"]].drop_duplicates()
 
     nl.add_tuple_set(peak_data, name="PeakReported")
-    nl.add_tuple_set(study_ids, name="Study")
+    nl.add_tuple_set(study_id, name="Study")
     nl.add_tuple_set(term_data, name="TermInStudyTFIDF")
     nl.add_uniform_probabilistic_choice_over_set(
-        study_ids, name="SelectedStudy"
+        study_id, name="SelectedStudy"
     )
     nl.add_tuple_set(
         np.round(
@@ -228,6 +193,33 @@ def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
             )
         ).astype(int),
         name="Voxel",
+    )
+
+
+def load_neurosynth_data_cet(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
+    term_data = get_ns_term_study_associations(data_dir / "neurosynth", convert_study_ids=True)
+    peak_data = get_ns_mni_peaks_reported(data_dir / "neurosynth", convert_study_ids=True)
+    study_id = peak_data[["id"]].drop_duplicates()
+    term = term_data[["term"]].drop_duplicates()
+    focus = peak_data[["x", "y", "z"]].drop_duplicates()
+
+    nl.add_tuple_set(term, name="term")
+    nl.add_tuple_set(focus, name="focus")
+    nl.add_tuple_set(peak_data[["id", "x", "y", "z"]], name="report")
+    nl.add_tuple_set(term_data[["id", "term", "tfidf"]], name="mention")
+    nl.add_tuple_set(study_id, name="study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        study_id, name="selected studi"
+    )
+
+    nl.add_tuple_set(
+        np.round(
+            nib.affines.apply_affine(
+                mni_mask.affine,
+                np.transpose(mni_mask.get_fdata().astype(int).nonzero()),
+            )
+        ).astype(int),
+        name="voxel",
     )
 
 
@@ -386,6 +378,9 @@ class DestrieuxEngineConf(NeurolangEngineConfiguration):
         )
 
         load_destrieux_atlas(self.data_dir, nl)
+        nl.add_symbol(nl.symbols["agg_create_region_overlay"], name="create region overlay")
+        nl.add_symbol(nl.symbols["agg_create_region"], name="create region")
+
         return nl
 
 
@@ -396,7 +391,7 @@ def load_destrieux_atlas(data_dir, nl):
 
     destrieux_atlas_images = nib.load(destrieux_atlas["maps"])
     destrieux_atlas_labels = {
-        label: str(name.decode("utf8").replace("-", " ").replace("_", " "))
+        label: str(name.replace("-", " ").replace("_", " "))
         for label, name in destrieux_atlas["labels"]
         if name != b"Background"
     }

@@ -18,15 +18,20 @@ import tornado.options
 import tornado.web
 import tornado.websocket
 import yaml
-from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
 from tornado.options import define, options
 
-from .engines import DestrieuxEngineConf, NeurosynthEngineConf
+from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
+
+from .engines import (
+    DestrieuxEngineConf,
+    NeurosynthCETEngineConf,
+    NeurosynthEngineConf
+)
 from .queries import NeurolangQueryManager
 from .responses import (
     CustomQueryResultsEncoder,
     QueryResults,
-    base64_encode_nifti,
+    base64_encode_nifti
 )
 
 define("port", default=8888, help="run on the given port", type=int)
@@ -618,6 +623,7 @@ def main():
     opts = {
         NeurosynthEngineConf(data_dir, resolution=2): 2,
         DestrieuxEngineConf(data_dir): 2,
+        NeurosynthCETEngineConf(data_dir): 2
     }
     nqm = NeurolangQueryManager(opts)
 

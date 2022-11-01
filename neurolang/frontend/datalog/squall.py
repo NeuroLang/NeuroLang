@@ -8,13 +8,14 @@ from ...exceptions import NeuroLangFrontendException
 from ...expression_walker import (
     ChainedWalker,
     ExpressionWalker,
+    IdentityWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match,
-    expression_iterator,
-    IdentityWalker
+    expression_iterator
 )
 from ...expressions import (
+    Command,
     Constant,
     Definition,
     Expression,
@@ -36,6 +37,7 @@ from ...logic import (
     Union,
     UniversalPredicate
 )
+from ...logic.expression_processing import extract_logic_free_variables
 from ...logic.transformations import (
     CollapseConjunctionsMixin,
     CollapseDisjunctionsMixin,
@@ -45,13 +47,13 @@ from ...logic.transformations import (
     PushUniversalsDown,
     RemoveTrivialOperationsMixin
 )
-from ...logic.expression_processing import extract_logic_free_variables
 from ...probabilistic.expressions import (
     PROB,
     Condition,
     ProbabilisticPredicate
 )
 from ...type_system import get_args
+from .sugar.spatial import EUCLIDEAN
 
 
 class RepeatedLabelException(NeuroLangFrontendException):
@@ -202,6 +204,10 @@ class ExtendedLogicExpressionWalker(LogicExpressionWalker):
     def query(self, expression):
         return expression
 
+    @add_match(Command)
+    def command(self, expression):
+        return expression
+
 
 class LambdaSolverMixin(PatternWalker):
     @add_match(Lambda, lambda exp: len(exp.args) > 1)
@@ -289,6 +295,38 @@ def _label_in_quantifier_body(expression):
 
 
 class ExplodeTupleArguments(ExtendedLogicExpressionWalker):
+    #@add_match(
+    #    Quantifier(Symbol, ...),
+    #    lambda exp: any(
+    #        isinstance(e, FunctionApplication) and
+    #        e.functor == EQ and
+    #        any(arg == exp.head for arg in e.args) and
+    #        any(isinstance(arg, tuple) for arg in e.args)
+    #        for _, e in expression_iterator(exp.body)
+    #    )
+    #)
+    def tuple_equality(self, expression):
+        replacements = {}
+        for _, exp in expression_iterator(expression.body):
+            if (
+                isinstance(exp, FunctionApplication) and
+                exp.functor == EQ and
+                any(arg == expression.head for arg in exp.args) and
+                any(isinstance(arg, tuple) for arg in exp.args)
+            ):
+                if isinstance(exp.args[0], tuple):
+                    label = exp.args[1]
+                    value = exp.args[0]
+                else:
+                    label = exp.args[0]
+                    value = exp.args[1]
+                
+                if label in replacements:
+                    replacements[replacements[label]] = value
+                replacements[label] = value
+                replacements[exp] = TRUE
+        return expression.apply(value, ReplaceExpressionWalker(replacements).walk(expression.body))
+
     @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
     def explode_quantifier_tuples(self, expression):
         head = expression.head
@@ -349,15 +387,13 @@ class FactorQuantifiers(FactorQuantifiersMixin, ExtendedLogicExpressionWalker):
 
     @add_match(Condition(Quantifier, ...))
     def factor_existential_out_of_conditional(self, expression):
-        return expression.conditioned(
+        return expression.conditioned.apply(
             expression.conditioned.head,
             expression.apply(
                 expression.conditioned.body,
                 expression.conditioning
             )
         )
-
-
 
 
 class SolveLabels(ExtendedLogicExpressionWalker):
@@ -884,7 +920,7 @@ class SquallExpressionsToNeuroLang(ExpressionWalker):
             d(*consequent.args), antecedent
         ))
         return res
-        
+
 
 def squall_to_fol(expression, type_predicate_symbols=None):
     if type_predicate_symbols is None:
@@ -902,7 +938,11 @@ def squall_to_fol(expression, type_predicate_symbols=None):
         SquallExpressionsToNeuroLang(),
         CollapseUnions(),
         LogicSimplifier(),
-        GuaranteeUnion()
+        GuaranteeUnion(),
+        ReplaceExpressionWalker({
+            Symbol("euclidean"): EUCLIDEAN,
+            Symbol("euclidean distance"): EUCLIDEAN
+        })
     )
 
     return cw.walk(expression)

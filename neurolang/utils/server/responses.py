@@ -1,24 +1,23 @@
 import base64
 import hashlib
-from io import BytesIO
 import json
 from concurrent.futures import Future
+from io import BytesIO
+from typing import Any, Dict, List, Tuple, Type, Union
 
 import matplotlib
-from neurolang.frontend.query_resolution_expressions import Symbol
-from typing import Any, Dict, List, Tuple, Type, Union
+import nibabel as nib
+import numpy as np
+import pandas as pd
 from nibabel.nifti1 import Nifti1Image
 from nibabel.spatialimages import SpatialImage
 from tatsu.exceptions import FailedParse
 
-import numpy as np
-import pandas as pd
-import nibabel as nib
+from neurolang.exceptions import NeuroLangFrontendException
+from neurolang.frontend.query_resolution_expressions import Symbol
 from neurolang.regions import EmptyRegion, ExplicitVBR, ExplicitVBROverlay
 from neurolang.type_system import get_args
-from neurolang.utils.relational_algebra_set import (
-    RelationalAlgebraFrozenSet,
-)
+from neurolang.utils.relational_algebra_set import RelationalAlgebraFrozenSet
 
 
 def base64_encode_nifti(image):
@@ -198,6 +197,9 @@ class QueryResults:
                 "col": line_info.col,
                 "text": error.message,
             }
+        elif isinstance(error, NeuroLangFrontendException):
+            self.message = "Error parsing the query."
+            self.errorDoc = str(error)
         else:
             self.message = str(error)
             if error.__doc__ is not None:

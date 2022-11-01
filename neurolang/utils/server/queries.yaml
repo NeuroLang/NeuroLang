@@ -104,3 +104,73 @@ destrieux:
         * its principal direction is along the superior-inferior axis.
         * no other sulcus satisfying the same conditions is anterior to the PC.
 
+neurosynth_cet:
+  - id: "neurosynth_cet1"
+    title: "Reverse Meta Analysis of the VWFA"
+    shortTitle: "Reverse Meta Analysis of the VWFA"
+    query: |
+      define as VWFA every Focus (?x; ?y; ?z) 
+          such that ((?x - (-45)) ** 2 + (?y - (-57)) ** 2 + (?z - (-12)) ** 2) ** .5 is lower than 5.
+
+      define as `VWFA image` all Agg_create_region of the VWFA in 3D.
+
+      define as `Mentions VWFA` every Study that reports the VWFA in 3D.
+
+      define as probably `Linked to VWFA`
+          every Term that a Study ?s mentions
+          conditioned to ?s is a `Selected study` and ?s `Mentions VWFA`.
+
+      define as probably Marginal every Term that a `Selected study` mentions.
+      
+      define as `specific to the VWFA` every Term ?term
+          that is `Linked to VWFA` with a Probability ?p and is Marginal with a Probability ?p0;
+          by every Quantity ?lor that is equal to log10(?p / ?p0).
+    description: |
+      TBD
+
+  - id: "neurosynth_cet2"
+    title: "NeuroSynth CET"
+    shortTitle: "NeuroSynth CET"
+    query: |
+      define as `Study of interest` every Study 
+        that mentions a Term --that is 'auditory' or is 'memory' -- with a TfIdf greater than 0.001
+        and that does not mention a Term --that is 'language'-- with a TfIdf greater than 0.001.
+        
+      define as probably Active 
+        every Voxel in 3D that a Study ?s reports
+        conditioned to ?s is a `Chosen Study` and is a `Study of interest`.
+
+      define as Threshold
+        every Percentile95 of the Probability ?p
+        such that a Voxel in 3D is Active with a Probability that is ?p.
+              
+      define as Images 
+        every Region_overlay from the Tuples (?x; ?y; ?z; ?p)
+        such that (?x; ?y; ?z) is a Voxel that is Active with a Probability ?p greater than the Threshold.
+
+      obtain every Image.
+    description: |
+      TBD
+
+  - id: "neurosynth_cet3"
+    title: "NeuroSynth CET"
+    shortTitle: "NeuroSynth CET"
+    query: |
+      define as `Study of interest` every Study ?s
+        such that ?s mentions a Term --that is 'auditory' or is 'memory' -- with a TfIdf greater than 0.0001
+        and such that ?s doesn't mention a Term that is 'language' with a TfIdf greater than 0.
+
+      define as `reports as active` every Study
+        that reports a Focus (?fx; ?fy; ?fz);
+        for every Voxel (?x; ?y; ?z) such that `euclidean distance`(?x,?y,?z,?fx,?fy,?fz) is lower than 4.
+
+      define as probably Active every Voxel in 3D
+        that ?s `reports as active` conditioned to the `Selected Study` ?s is a `Study of interest`.
+      
+      define as Images
+        all Agg_create_region_overlay of the Active (?x; ?y; ?z; ?p).
+
+      obtain every Image.
+    description: |
+      TBD
+

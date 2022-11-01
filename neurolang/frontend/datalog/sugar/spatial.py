@@ -232,8 +232,8 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         max_dist: float,
     ) -> numpy.array:
         with log_performance(LOG, "spatial bound resolution"):
-            first_ckd_tree = scipy.spatial.cKDTree(first_coord_array)
-            second_ckd_tree = scipy.spatial.cKDTree(second_coord_array)
+            first_ckd_tree = scipy.spatial.KDTree(first_coord_array)
+            second_ckd_tree = scipy.spatial.KDTree(second_coord_array)
             dist_mat = first_ckd_tree.sparse_distance_matrix(
                 second_ckd_tree,
                 max_dist,

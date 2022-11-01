@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import AbstractSet, Dict, Tuple
 
+import numpy as np
 import nibabel
 import pandas as pd
 from nibabel.dataobj_images import DataobjImage
@@ -62,6 +63,32 @@ class CommandsMixin(PatternWalker):
         data = data.rename(columns={n: i for i, n in enumerate(data.columns)})
         self.add_extensional_predicate_from_tuples(symbol, data)
 
+    @add_match(Command(Symbol("load_neuro_image"), ..., ...))
+    def load_neuro_image(self, command):
+        try:
+            if len(command.args) == 3:
+                symbol, atlas_url, base_url = command.args
+                base_url = _unwrap_expr(base_url)
+            elif len(command.args) == 2:
+                symbol, atlas_url = command.args
+                base_url = None
+            if not isinstance(symbol, Symbol):
+                symbol = Symbol(symbol)
+            atlas_url = _unwrap_expr(atlas_url)
+            kwargs = {
+                _unwrap_expr(k): _unwrap_expr(v) for k, v in command.kwargs
+            }
+        except ValueError:
+            raise InvalidCommandExpression(
+                "Could not extract Symbol name and url from arguments."
+            )
+
+        atlas_labels, spatial_image = self._fetch_atlas_map_and_labels(
+            atlas_url, None, base_url, kwargs
+        )
+
+        self._add_neuro_image(symbol, spatial_image)
+
     @add_match(Command(Symbol("load_atlas"), ..., ...))
     def load_atlas(self, command):
         """
@@ -120,23 +147,29 @@ class CommandsMixin(PatternWalker):
         self, atlas_url, labels_url, base_url, kwargs
     ):
         data_dir = Path.home() / "neurolang_data"
+        atlas_labels = None
         if base_url is None:
             opts = {}
             p = Path(atlas_url)
             files = [
                 (p.name, p.parent, opts),
             ]
-            p = Path(labels_url)
-            files.append((p.name, p.parent, opts),)
+            if atlas_url is not None:
+                p = Path(labels_url)
+                files.append((p.name, p.parent, opts),)
         else:
             opts = {"uncompress": True}
-            files = [(atlas_url, base_url, opts), (labels_url, base_url, opts)]
+            files = [(atlas_url, base_url, opts)]
+            if labels_url is not None:
+                files.append((labels_url, base_url, opts))
 
         files_ = _fetch_files(data_dir, files)
-        atlas_labels = pd.read_csv(files_[1], **kwargs)
-        atlas_labels = {
-            label: name for label, name in atlas_labels.to_records(index=False)
-        }
+
+        if labels_url is not None:
+            atlas_labels = pd.read_csv(files_[1], **kwargs)
+            atlas_labels = {
+                label: name for label, name in atlas_labels.to_records(index=False)
+            }
         spatial_image = nibabel.load(files_[0])
         return atlas_labels, spatial_image
 
@@ -156,6 +189,23 @@ class CommandsMixin(PatternWalker):
         type_ = Tuple[str, ExplicitVBR]
         self.add_extensional_predicate_from_tuples(
             Symbol[AbstractSet[type_]](symbol.name), atlas_set, type_=type_
+        )
+
+    def _add_neuro_image(
+        self,
+        symbol: Symbol,
+        spatial_image: DataobjImage,
+    ) -> None:
+
+        fdata = spatial_image.get_fdata()
+        non_zero_coords = np.transpose(fdata.nonzero())
+
+        coords_xyz = nibabel.affines.apply_affine(spatial_image.affine, non_zero_coords[:, :3])
+        data = np.c_[coords_xyz, non_zero_coords[:, 3:], fdata[tuple(non_zero_coords.T)]]
+
+        type_ = Tuple[(float,) * data.shape[1]]
+        self.add_extensional_predicate_from_tuples(
+            Symbol[AbstractSet[type_]](symbol.name), data, type_=type_
         )
 
     @add_match(Command)

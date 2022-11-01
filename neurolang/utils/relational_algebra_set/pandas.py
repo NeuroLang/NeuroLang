@@ -193,7 +193,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         new_container.columns = pd.RangeIndex(len(columns))
         output = self._empty_set_same_structure()
         output._container = new_container
-        if (len(columns) == self.arity):
+        if (len(set(columns)) == self.arity):
             output._might_have_duplicates = self._might_have_duplicates
         return output
 
@@ -587,9 +587,11 @@ class NamedRelationalAlgebraFrozenSet(
             return type(self)(columns)
         if self.arity == 0:
             return self
+        might_have_duplicates = len(set(columns)) == self.arity
         new_container = self._container[list(columns)]
         return self._light_init_same_structure(
-            new_container, might_have_duplicates=True, columns=columns
+            new_container, might_have_duplicates=might_have_duplicates,
+            columns=columns
         )
 
     def projection_to_unnamed(self, *columns):
