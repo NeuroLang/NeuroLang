@@ -609,14 +609,13 @@ class SquallTransformer(lark.Transformer):
     def rule_op_prob(self, ast):
         verb1, probability, op = ast
         x = Symbol[E].fresh()
-        p = Symbol[E].fresh()
-        prob = Lambda((p,), p)
+        y = Symbol[E].fresh()
         pps = (
             ProbabilisticPredicateSymbol
-            .cast(Callable[[E], Callable[[E], S]])
+            .cast(Callable[[E, S], S])
         )
-        verb = pps(probability(prob), verb1(x))
-        return op(Lambda((x,), verb))
+        verb = Lambda((x,), probability(Lambda((y,), pps(y, verb1(x)))))
+        return op(verb)
 
     def rule_op_cond1(self, ast):
         probably, verb1, op = ast
