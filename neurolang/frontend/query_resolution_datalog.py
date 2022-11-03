@@ -317,6 +317,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 )
             )
 
+    def completion_for_controlled_english_program(self, code: str) -> List[str]:
+        completions = self.cet_datalog_parser(code, complete=True)
+        return completions
+
     def query(
         self, *args
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:

@@ -109,22 +109,22 @@ neurosynth_cet:
     title: "Reverse Meta Analysis of the VWFA"
     shortTitle: "Reverse Meta Analysis of the VWFA"
     query: |
-      define as VWFA every Focus (?x; ?y; ?z) 
-          such that ((?x - (-45)) ** 2 + (?y - (-57)) ** 2 + (?z - (-12)) ** 2) ** .5 is lower than 5.
+      define as VWFA every Focus (@x; @y; @z) 
+          such that ((@x - (-45)) ** 2 + (@y - (-57)) ** 2 + (@z - (-12)) ** 2) is lower than 5 ** 2 .
 
       define as `VWFA image` all Agg_create_region of the VWFA in 3D.
 
       define as `Mentions VWFA` every Study that reports the VWFA in 3D.
 
       define as probably `Linked to VWFA`
-          every Term that a Study ?s mentions
-          conditioned to ?s is a `Selected study` and ?s `Mentions VWFA`.
+          every Term that a Study @s mentions
+          conditioned to @s is a `Selected study` that `Mentions VWFA`.
 
       define as probably Marginal every Term that a `Selected study` mentions.
-      
-      define as `specific to the VWFA` every Term ?term
-          that is `Linked to VWFA` with a Probability ?p and is Marginal with a Probability ?p0;
-          by every Quantity ?lor that is equal to log10(?p / ?p0).
+
+      define as `specific to the VWFA` every Term @term
+          (that is `Linked to VWFA` with a Probability @p and  Marginal with a Probability @p0)
+          by every Quantity @lor that is equal to log10(@p / @p0).
     description: |
       TBD
 
@@ -133,7 +133,7 @@ neurosynth_cet:
     shortTitle: "NeuroSynth CET"
     query: |
       define as `Study of interest` every Study 
-        that mentions a Term --that is 'auditory' or is 'memory' -- with a TfIdf greater than 0.001
+        that mentions a Term --that is 'auditory' or that is 'memory' -- with a TfIdf greater than 0.001
         and that does not mention a Term --that is 'language'-- with a TfIdf greater than 0.001.
         
       define as probably Active 
@@ -157,7 +157,7 @@ neurosynth_cet:
     shortTitle: "NeuroSynth CET"
     query: |
       define as `Study of interest` every Study ?s
-        such that ?s mentions a Term --that is 'auditory' or is 'memory' -- with a TfIdf greater than 0.0001
+        such that ?s mentions a Term --that is 'auditory' or that is 'memory' -- with a TfIdf greater than 0.0001
         and such that ?s doesn't mention a Term that is 'language' with a TfIdf greater than 0.
 
       define as `reports as active` every Study

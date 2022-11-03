@@ -245,7 +245,6 @@ dim : _PER ng2      -> dim_ng2
     | _PER npc{THE} -> dim_npc
 
 ?rel : bool{rel_b}
-     | _DASH bool{rel_b} _DASH
 
 _DASH : "--"
 

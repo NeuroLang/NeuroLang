@@ -94,6 +94,10 @@ class Application(tornado.web.Application):
                 QuerySocketHandler,
             ),
             (
+                r"/v1/completion",
+                CompletionHandler,
+            ),
+            (
                 r"/v1/atlas",
                 NiftiiImageHandler,
             ),
@@ -339,6 +343,27 @@ class QuerySocketHandler(tornado.websocket.WebSocketHandler):
         self.write_message(
             query_results_to_json(QueryResults(self.uuid, future), status)
         )
+
+
+class CompletionHandler(JSONRequestHandler):
+    """
+    Handler to get code completions
+    """
+    def get(self):
+        query = self.get_argument("query", None)
+        engine = self.get_argument("engine", None)
+        line = int(self.get_argument("line", None))
+        character = int(self.get_argument("character", None))
+        LOG.debug("Received query for completions: \n %s \n for engine %s at %s", query, engine, (line, character))
+        completions = self.query_completion(query, line, character, engine)
+        self.write_json_reponse(completions)
+
+    def query_completion(self, query: str, line: int, character: int, engine):
+        completions = (
+            self.application
+            .nqm.submit_query_for_completions(query, line, character, engine)
+        )
+        return completions
 
 
 class QueryHandler(JSONRequestHandler):

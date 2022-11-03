@@ -13,7 +13,7 @@ from nibabel.nifti1 import Nifti1Image
 from nibabel.spatialimages import SpatialImage
 from tatsu.exceptions import FailedParse
 
-from neurolang.exceptions import NeuroLangFrontendException
+from neurolang.exceptions import NeuroLangFailedParseException, NeuroLangFrontendException
 from neurolang.frontend.query_resolution_expressions import Symbol
 from neurolang.regions import EmptyRegion, ExplicitVBR, ExplicitVBROverlay
 from neurolang.type_system import get_args
@@ -197,6 +197,15 @@ class QueryResults:
                 "col": line_info.col,
                 "text": error.message,
             }
+        elif isinstance(error, NeuroLangFailedParseException):
+            self.message = "An error occured while parsing your query."
+            self.errorDoc = str(error)
+            if error.line is not None and error.column is not None:
+                self.line_info = {
+                    "line": error.line,
+                    "col": error.column,
+                    "text": str(error)
+                }
         elif isinstance(error, NeuroLangFrontendException):
             self.message = "Error parsing the query."
             self.errorDoc = str(error)

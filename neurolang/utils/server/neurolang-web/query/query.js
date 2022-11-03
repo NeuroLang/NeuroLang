@@ -1,12 +1,31 @@
 import 'codemirror/lib/codemirror.css'
 import 'codemirror/theme/xq-light.css'
+import 'codemirror/addon/hint/show-hint.css'
 import 'codemirror/addon/display/autorefresh'
+import 'codemirror/addon/hint/show-hint'
+
 import './datalog'
 import CodeMirror from 'codemirror'
+
 import './query.css'
 import $ from '../jquery-bundler'
 import { SymbolsController } from '../symbols/symbols'
 import { API_ROUTE } from '../constants'
+
+
+function myCompletions(context) {
+  let word = context.matchBefore(/\w*/)
+  if (word.from == word.to && !context.explicit)
+    return null
+  return {
+    from: word.from,
+    options: [
+      {label: "match", type: "keyword"},
+      {label: "hello", type: "variable", info: "(World)"},
+      {label: "magic", type: "text", apply: "⠁⭒*.✩.*⭒⠁", detail: "macro"}
+    ]
+  }
+}
 
 /**
  * Class to manage query submission.
@@ -17,6 +36,8 @@ export class QueryController {
     /// Initialize the query box with the CodeMirror plugin
     this.queryTextArea = document.querySelector('#queryTextArea')
     this.editor = CodeMirror.fromTextArea(this.queryTextArea, {
+      extraKeys: { "Ctrl-Space": "autocomplete" },
+      hintOptions: {hint: () => this.completion() },
       mode: 'datalog',
       theme: 'xq-light',
       autoRefresh: true,
@@ -54,6 +75,66 @@ export class QueryController {
     this._clearAlert()
     this.sc.hide()
     this.sc.setRouteEngine(engine)
+  }
+
+  completion() {
+    const cm = this.editor
+    const query = cm.getValue().trim().replace('"', '\"')
+
+    console.log("Looking for completion")
+    console.log(cm)
+
+    const cursor = cm.getCursor()
+    const start = cursor.ch
+    const end = cursor.ch
+
+    const msg = {
+      query: query,
+      engine: this.engine,
+      line: cursor.line,
+      character: start,
+    }
+
+    return new Promise(function (accept) {
+      setTimeout(function () {
+        console.log("Sending request for completions %s", query)
+        $.ajax({
+          url: `${API_ROUTE.completion}`,
+          type: 'get',
+          data: msg
+        }).done((data) => {
+          console.log(data)
+          if ('status' in data && data.status === 'ok') {
+            // Fetching the symbols done with success
+            const completions = data.data.completions.map(
+              function (item) {
+                if (item == "NEW IDENTIFIER") {
+                  return {text: "", displayText: "-- insert a new identifier --"}
+                } else {
+                  return item
+                }
+              }
+            )
+            console.log("Completions received: %s", completions)
+            return accept({
+              list: completions,
+              from: CodeMirror.Pos(cursor.line, start),
+              to: CodeMirror.Pos(cursor.line, end),
+            })
+          } else {
+            console.log('No completion available ')
+            console.log(data)
+            return accept({
+              list: [],
+              from: CodeMirror.Pos(cursor.line, start),
+              to: CodeMirror.Pos(cursor.line, end),            
+            })
+          }
+        })
+       },
+        100
+      )
+    })
   }
 
   _submitQuery () {

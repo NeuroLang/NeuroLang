@@ -168,10 +168,25 @@ class NeurosynthCETEngineConf(NeurosynthEngineConf):
         nl.execute_datalog_program = (
             lambda query: nl.execute_controlled_english_program(
                 query,
-                type_symbol_names={"tfidf", "probability", "quantity", "studyid", "tuple", "value"}
+                type_symbol_names={
+                    "tfidf", "probability", "quantity",
+                    "studyid", "tuple", "value"
+                }
             )
         )
+
+        self.set_completion_engine(nl)
         return nl
+
+    def set_completion_engine(self, nl):
+        def get_completions(query, line, character):
+            lines = query.split("\n")
+            new_query = '\n'.join(lines[:line])
+            if line < len(lines):
+                new_line = lines[line][:character]
+                new_query += '\n' + new_line
+            return nl.completion_for_controlled_english_program(new_query)
+        nl.get_completions = get_completions
 
 
 def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):

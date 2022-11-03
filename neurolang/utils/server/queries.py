@@ -6,7 +6,7 @@ from neurolang.expressions import Command
 from neurolang.frontend.query_resolution_expressions import Symbol
 from neurolang.type_system import get_args, is_leq_informative
 from threading import RLock, get_ident
-from typing import AbstractSet, Callable, Dict, Union
+from typing import AbstractSet, Callable, Dict, List, Union
 from collections import OrderedDict
 
 import nibabel
@@ -220,6 +220,29 @@ class NeurolangQueryManager:
         )
         self.results_cache[uuid] = future_res
         return future_res
+
+    def submit_query_for_completions(
+        self, query: str, line: int, character: int, engine_type: str
+    ) -> Dict[str, List[str]]:
+        LOG.debug(
+            "Submitting query for completion to executor pool of %s engines.",
+            engine_type
+        )
+
+        completions = []
+
+        if engine_type in self.engines:
+            engine_set = self.engines[engine_type]
+            with engine_set.engine() as engine:
+                LOG.debug(
+                    "Engine type %s.",
+                    type(engine)
+                )
+                if hasattr(engine, "get_completions"):
+                    completions = engine.get_completions(query, line, character)
+                    LOG.debug("Obtained completions %s", completions)
+
+        return {"completions": completions}
 
     def get_result(self, uuid: str) -> Future:
         """
