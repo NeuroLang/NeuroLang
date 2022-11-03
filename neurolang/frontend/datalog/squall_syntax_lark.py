@@ -370,6 +370,7 @@ bool_conjunction{x} : bool_atom{x}
                     | bool_conjunction{x} _CONJUNCTION bool_atom{x}
 bool_atom{x} : _NEGATION bool_atom{x} -> bool_negation
          | "(" bool{x} ")"
+         | _DASH bool{x} _DASH
          | x
 
 _CONJUNCTION : "&" | "," | "\N{LOGICAL AND}" | _AND
