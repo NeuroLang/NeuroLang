@@ -413,7 +413,7 @@ COMMENT : /\%\%[^\n]*/ NEWLINE
 %import common.SIGNED_FLOAT
 %import common.WS
 %import unicode.WS_INLINE
-%import unicode.NEWLINE
+%import common.NEWLINE
 %import common.CNAME
 %ignore WS
 %ignore WS_INLINE
