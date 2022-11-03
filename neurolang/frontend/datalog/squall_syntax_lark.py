@@ -1,6 +1,5 @@
 import re
 from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
-import os
 from typing import Callable, List, TypeVar
 from warnings import warn
 
@@ -9,7 +8,7 @@ from nltk.corpus import wordnet
 from nltk.stem.snowball import EnglishStemmer
 from nltk.stem.wordnet import WordNetLemmatizer
 
-from ...exceptions import NeuroLangException, NeuroLangFrontendException
+from ...exceptions import NeuroLangException, NeuroLangFailedParseException, NeuroLangFrontendException
 from ...expression_walker import ExpressionWalker, add_match
 from ...expressions import (
     Command,

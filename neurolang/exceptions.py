@@ -133,6 +133,13 @@ class NeuroLangFrontendException(NeuroLangException):
     pass
 
 
+class NeuroLangFailedParseException(NeuroLangFrontendException):
+    def __init__(self, *args, line=None, column=None):
+        super().__init__(*args)
+        self.line = line
+        self.column = column
+
+
 class SymbolNotFoundError(NeuroLangException):
     """
     A symbol is being used in a rule without having been previously
