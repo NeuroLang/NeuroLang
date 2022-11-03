@@ -1547,12 +1547,83 @@ COMPILED_GRAMMAR = lark.Lark(GRAMMAR, parser="lalr")
 #   * If there is an existential variable at the beginning of a rule, then the variable was badly quantified
 def parser(
     code,
-    type_predicate_symbols=None, locals=None,
+    type_predicate_symbols=None, locals=None, complete=False,
     globals=None, return_tree=False, process=True, **kwargs
 ):
     global COMPILED_GRAMMAR
     if "parser" in kwargs and kwargs["parser"] != COMPILED_GRAMMAR.options.parser:
         COMPILED_GRAMMAR = lark.Lark(GRAMMAR, parser=kwargs["parser"])
+    if not complete:
+        try:
+            return parse_to_neurolang_ir(
+                code,
+                type_predicate_symbols=type_predicate_symbols, locals=locals,
+                globals=globals, return_tree=return_tree, process=process
+            )
+        except Exception as ex:
+            raise ex from None
+    else:
+        completions = extract_completions(code)
+        return list(sorted(completions))
+
+
+def _callback(collection):
+    def callback_(token):
+        collection.add(token.value)
+        return token
+    return callback_
+
+
+def extract_completions(code: str):
+    transitive = set()
+    intransitive = set()
+    labels = set()
+    lexer_sets = {
+        'UPPER_NAME': transitive, 'UPPER_NAME_QUOTED': transitive,
+        'LOWER_NAME': intransitive, 'LOWER_NAME_QUOTED': intransitive,
+        'CNAME': labels
+    }
+    lexer_callbacks = {k: _callback(v) for k, v in lexer_sets.items()}
+
+    completions = []
+    try:
+        parser = lark.Lark(
+            COMPILED_GRAMMAR.grammar,
+            parser=COMPILED_GRAMMAR.options.parser,
+            lexer_callbacks=lexer_callbacks
+        )
+        parser.parse(code)
+        parser.parse("")
+    except lark.exceptions.UnexpectedInput as ex:
+        if ex.token.type != '$END':
+            return []
+        expected = ex.interactive_parser.accepts()
+        completions += terminals_to_options(lexer_sets, expected)
+
+    return list(sorted(set(completions)))
+
+
+def terminals_to_options(lexer_sets, expected) -> List[str]:
+    completions = []
+    for candidate in expected:
+        token = COMPILED_GRAMMAR.get_terminal(candidate)
+        if isinstance(token.pattern, lark.lexer.PatternStr):
+            completions.append(token.pattern.value)
+        elif token.name in lexer_sets:
+            completions += list(lexer_sets[token.name])
+        elif isinstance(token.pattern, lark.lexer.PatternRE):
+            match = re.match(r"^\(\?\:(\w+)(?:\|(\w+))+\)$", token.pattern.value)
+            if match:
+                completions += list(match.groups())
+    return completions
+
+
+def parse_to_neurolang_ir(
+    code: str,
+    type_predicate_symbols=None,
+    locals=None, globals=None,
+    return_tree=False, process=True, **kwargs
+) -> Expression:
     try:
         tree = COMPILED_GRAMMAR.parse(code)
     except lark.exceptions.UnexpectedEOF as ex:
@@ -1562,31 +1633,23 @@ def parser(
             "%s : %s" % (t, COMPILED_GRAMMAR.get_terminal(t).pattern.to_regexp())
             for t in sorted(expected)
         )
-        raise NeuroLangFrontendException("\n" + err + expected_formatted) from None
+        raise NeuroLangFailedParseException(
+            "\n" + err + expected_formatted, line=ex.line - 1, column=ex.column
+        ) from None
     except lark.exceptions.UnexpectedInput as ex:
         err = ex.get_context(code, span=80)
-        print(err)
         if hasattr(ex, "interactive_parser"):
-            expected = ex.accepts
-            expected_formatted = '\n\t* ' + '\n\t* '.join(
-                "%s" % (t if not t.startswith("_") else t[1:],)
-                for t in sorted(expected)
-            )
-
+            expected = terminals_to_options({}, ex.accepts)
+            expected_formatted = '\n\t* ' + '\n\t* '.join(sorted(expected))
         else:
             expected = ex.allowed
             expected_formatted = '\n\t* ' + '\n\t* '.join(
                 "%s : %s" % (t, COMPILED_GRAMMAR.get_terminal(t).pattern.to_regexp())
                 for t in sorted(expected)
             )
-        if "interactive" in kwargs:
-            next_rules = [k for k in sorted(ex.interactive_parser.choices()) if re.match('[a-z]', k[0])]
-            #print(next_rules)
-            #print(ex.expected)
-            #print("\n".join(ex.considered_rules))
-            #print(ex.state)
-            #print(str(ex))
-        raise NeuroLangFrontendException("\n" + err + expected_formatted) from None
+        raise NeuroLangFailedParseException(
+            "\n" + err + expected_formatted, line=ex.line - 1, column=ex.column
+        ) from None
     except lark.exceptions.UnexpectedException as ex:
         raise ex from None
     except NeuroLangException as ex:
