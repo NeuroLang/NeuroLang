@@ -1607,12 +1607,12 @@ def extract_completions(code: str):
         if ex.token.type != '$END':
             return []
         expected = ex.interactive_parser.accepts()
-        completions += terminals_to_options(lexer_sets, expected)
+        completions += terminals_to_options(lexer_sets, expected, ex.interactive_parser)
 
     return list(sorted(set(completions)))
 
 
-def terminals_to_options(lexer_sets, expected) -> List[str]:
+def terminals_to_options(lexer_sets, expected, interactive_parser=None) -> List[str]:
     completions = []
     for candidate in expected:
         token = COMPILED_GRAMMAR.get_terminal(candidate)
@@ -1621,9 +1621,20 @@ def terminals_to_options(lexer_sets, expected) -> List[str]:
         elif token.name in lexer_sets:
             completions += list(lexer_sets[token.name])
         elif isinstance(token.pattern, lark.lexer.PatternRE):
-            match = re.match(r"^\(\?\:(\w+)(?:\|(\w+))+\)$", token.pattern.value)
+            match = re.match(r"^\(\?\:([^\|]+)(?:\|([^\|]+))+\)$", token.pattern.value)
             if match:
                 completions += list(match.groups())
+    if (
+        interactive_parser and
+        len(interactive_parser.parser_state.value_stack) > 1 and
+        [
+            t.type for t in interactive_parser.parser_state.value_stack[-2:]
+            if isinstance(t, lark.common.Token)
+        ] in [["_DEFINE", "_AS"], ["PROBABLY"]]
+    ):
+        completions += list(lexer_sets[token.name])
+        completions.append("NEW IDENTIFIER")
+ 
     return completions
 
 
