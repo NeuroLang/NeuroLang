@@ -132,45 +132,22 @@ neurosynth_cet:
     title: "NeuroSynth CET"
     shortTitle: "NeuroSynth CET"
     query: |
-      define as `Study of interest` every Study 
-        that mentions a Term --that is 'auditory' or that is 'memory' -- with a TfIdf greater than 0.001
-        and that does not mention a Term --that is 'language'-- with a TfIdf greater than 0.001.
-        
-      define as probably Active 
-        every Voxel in 3D that a Study ?s reports
-        conditioned to ?s is a `Chosen Study` and is a `Study of interest`.
-
-      define as Threshold
-        every Percentile95 of the Probability ?p
-        such that a Voxel in 3D is Active with a Probability that is ?p.
-              
-      define as Images 
-        every Region_overlay from the Tuples (?x; ?y; ?z; ?p)
-        such that (?x; ?y; ?z) is a Voxel that is Active with a Probability ?p greater than the Threshold.
-
-      obtain every Image.
-    description: |
-      TBD
-
-  - id: "neurosynth_cet3"
-    title: "NeuroSynth CET"
-    shortTitle: "NeuroSynth CET"
-    query: |
       define as `Study of interest` every Study ?s
-        such that ?s mentions a Term --that is 'auditory' or that is 'memory' -- with a TfIdf greater than 0.0001
-        and such that ?s doesn't mention a Term that is 'language' with a TfIdf greater than 0.
+        that mentions a Term --that is 'language' or that is 'memory' -- with a TfIdf greater than 0.0001,
+        and that does not mention a Term that is 'auditory' with a TfIdf greater than 0 .
 
       define as `reports as active` every Study
-        that reports a Focus (?fx; ?fy; ?fz);
-        for every Voxel (?x; ?y; ?z) such that `euclidean distance`(?x,?y,?z,?fx,?fy,?fz) is lower than 4.
+        (that reports a Focus (?fx; ?fy; ?fz));
+        with every Voxel (?x; ?y; ?z) such that `euclidean distance`(?x,?y,?z,?fx,?fy,?fz) is lower than 4 .
 
       define as probably Active every Voxel in 3D
-        that ?s `reports as active` conditioned to the `Selected Study` ?s is a `Study of interest`.
-      
-      define as Images
-        all Agg_create_region_overlay of the Active (?x; ?y; ?z; ?p).
+        that ?s `reports as active` conditioned to the `Chosen Study` ?s is a `Study of interest`.
 
+      define as Images 
+        every `Create region overlay` from the Tuples (?x; ?y; ?z; ?p)
+        such that (?x; ?y; ?z) is a Voxel that is Active with a Probability ?p .
+            
       obtain every Image.
     description: |
       TBD
-
+  

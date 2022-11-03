@@ -170,7 +170,7 @@ class NeurosynthCETEngineConf(NeurosynthEngineConf):
                 query,
                 type_symbol_names={
                     "tfidf", "probability", "quantity",
-                    "studyid", "tuple", "value"
+                    "studyid", "tuple", "value", "tupl"
                 }
             )
         )
@@ -224,7 +224,7 @@ def load_neurosynth_data_cet(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
     nl.add_tuple_set(term_data[["id", "term", "tfidf"]], name="mention")
     nl.add_tuple_set(study_id, name="study")
     nl.add_uniform_probabilistic_choice_over_set(
-        study_id, name="selected studi"
+        study_id, name="chosen studi"
     )
 
     nl.add_tuple_set(
@@ -248,6 +248,14 @@ def init_frontend(mni_mask):
         the Neurolang engine
     """
     nl = NeurolangPDL()
+
+    @nl.add_symbol
+    def percentile95(values: Iterable) -> float:
+        """
+        Aggregation which produces the 95th percentile
+        of a set of values.
+        """
+        return np.percentile(values, 95)
 
     @nl.add_symbol
     def agg_create_region_ijk(
@@ -357,6 +365,8 @@ def init_frontend(mni_mask):
             main_dir = c[sort_dir[-1]]
         return (direction == main_dir) or (direction[::-1] == main_dir)
 
+    nl.add_symbol(nl.symbols["agg_create_region_overlay"], name="create region overlay")
+    nl.add_symbol(nl.symbols["agg_create_region"], name="create region")
     return nl
 
 
@@ -393,9 +403,6 @@ class DestrieuxEngineConf(NeurolangEngineConfiguration):
         )
 
         load_destrieux_atlas(self.data_dir, nl)
-        nl.add_symbol(nl.symbols["agg_create_region_overlay"], name="create region overlay")
-        nl.add_symbol(nl.symbols["agg_create_region"], name="create region")
-
         return nl
 
 

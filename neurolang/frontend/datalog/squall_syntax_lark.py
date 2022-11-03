@@ -188,8 +188,8 @@ rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
         | _rule_start PROBABLY verb1 rule_body1_cond
         | _rule_start verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
 
-?rulen : _rule_start verbn rule_body1 _BREAK? ops -> rule_opnn
-       | _rule_start PROBABLY verbn rule_body1 _CONDITIONED? _BREAK? ops -> rule_opnn_per
+?rulen : _rule_start verbn rule_body1 ops -> rule_opnn
+       | _rule_start PROBABLY verbn rule_body1 _CONDITIONED? ops -> rule_opnn_per
 
 rule_body1 : prep? det ng1
 rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
@@ -317,14 +317,14 @@ transitive_multiple : identifier
 op_np : np
 
  op : prep? op_np
-    | prep? op_np
+    | _DASH prep? op_np _DASH
 
 ?opn : ops
      | ops
 
-ops : op                                 -> ops_base
-    | ops _BREAK? prep op_np             -> ops_rec
-    | ops _BREAK? prep op_np -> ops_rec
+ops : _BREAK? op  _BREAK?                -> ops_base
+    | ops prep op_np _BREAK?             -> ops_rec
+    | ops _DASH prep op_np _DASH _BREAK? -> ops_rec
 
 pp : prep np -> pp_np
 
@@ -372,8 +372,10 @@ bool_disjunction{x} : bool_conjunction{x}
 bool_conjunction{x} : bool_atom{x}
                     | bool_conjunction{x} _CONJUNCTION bool_atom{x}
 bool_atom{x} : _NEGATION bool_atom{x} -> bool_negation
-         | "(" bool{x} ")"
          | _DASH bool{x} _DASH
+         | "(" bool{x} ")"
+         | "[" bool{x} "]"
+         | "," bool{x} ","
          | x
 
 _CONJUNCTION : "&" | "," | "\N{LOGICAL AND}" | _AND

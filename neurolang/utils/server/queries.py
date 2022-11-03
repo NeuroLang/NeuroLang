@@ -165,6 +165,12 @@ class NeurolangQueryManager:
                 with engine.scope:
                     LOG.debug("[Thread - %s] - Solving query...", get_ident())
                     res = engine.execute_datalog_program(query)
+                    LOG.debug(
+                        "[Thread - %s] - \n\t%s",
+                        get_ident(),
+                        '\n\t'.join(str(e) for e in engine.current_program)
+                    )
+
                     if res is None:
                         res = engine.solve_all()
                     else:
