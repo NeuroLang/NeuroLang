@@ -265,7 +265,7 @@ rel_b : (_THAT | _WHICH | _WHERE | _WHO ) vp                -> rel_vp
 term : label
      | literal
 
-?vp : bool{vp_b}
+?vp : vp_b
 ?vp_b : vpdo
       | aux{be} vpbe      -> vp_aux
       | aux{have} vphave  -> vp_aux
