@@ -272,10 +272,8 @@ term : label
       | aux{have} vphave  -> vp_aux
       | aux{do} vpdo      -> vp_aux
 
-vpdo : verb1 [ cp ]         -> vpdo_v1
-     | verbn [ DOPREP ] opn -> vpdo_vn
-
-DOPREP : _WITH
+vpdo : verb1 [ cp ] -> vpdo_v1
+     | verbn opn    -> vpdo_vn
 
 vpbe : "there"       -> vpbe_there
      | rel           -> vpbe_rel
