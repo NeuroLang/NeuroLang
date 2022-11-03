@@ -114,6 +114,7 @@ KEYWORDS = [
     'an',
     'and',
     'are',
+    'as',
     'by',
     'conditioned',
     'define',
