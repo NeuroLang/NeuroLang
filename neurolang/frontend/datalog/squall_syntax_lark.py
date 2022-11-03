@@ -166,7 +166,7 @@ KEYWORDS = [
 
 GRAMMAR = (
 r"""
-?start: ["squall"] squall
+?start: squall
 
 squall : ( rule _LINE_BREAK )* rule _LINE_BREAK
 
@@ -289,8 +289,8 @@ in : _IN
 vphave : noun2 op -> vphave_noun2
        | np2 [ rel ] -> vphave_np2
 
-aux{verb} : verb                     -> aux_id
-          | (verb _NOT | verb"n't")  -> aux_not
+aux{verb} : verb       -> aux_id
+          | verb _NOT  -> aux_not
 
 npc{det_} : term        -> npc_term
           | det_ ng1 -> npc_det
@@ -338,9 +338,9 @@ pp : prep np -> pp_np
 
 ?cp : opn
 
-label : _LABEL_MARKER identifier
+label : _LABEL_MARKER label_identifier
       | ANONYMOUS_LABEL
-      | "(" _LABEL_MARKER identifier (";" _LABEL_MARKER identifier )* ")"
+      | "(" _LABEL_MARKER label_identifier (";" _LABEL_MARKER label_identifier )* ")"
 
 _LABEL_MARKER : "?"
               | "@"
@@ -352,6 +352,8 @@ upper_identifier : UPPER_NAME
 
 identifier : LOWER_NAME
            | LOWER_NAME_QUOTED
+
+label_identifier : CNAME
 
 ?literal : "'"string"'"
          | number
