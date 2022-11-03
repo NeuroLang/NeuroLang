@@ -1261,7 +1261,7 @@ class SquallTransformer(lark.Transformer):
         y = Symbol[E].fresh()
         z = Symbol[E].fresh()
         lz = Symbol[List[E]].fresh()
-        res = ExpandListArgument(
+        res = ExpandListArgument[P1](
             Lambda((x,), ops(lz)(Lambda((z,), verbn(x, y, z)))),
             lz
         )
@@ -1319,7 +1319,7 @@ class SquallTransformer(lark.Transformer):
             adj1 = adj1.cast(PN)
             y = Symbol[E].fresh()
             ly = Symbol[List[E]].fresh()
-            res = ExpandListArgument(
+            res = ExpandListArgument[P1](
                 Lambda((x,), cp(ly)(Lambda((y,), adj1(x, y)))),
                 ly
             )
@@ -1333,7 +1333,7 @@ class SquallTransformer(lark.Transformer):
         adjn = adjn.cast(Callable[[E, List[E]], S])
         y = Symbol[E].fresh()
         ly = Symbol[List[E]].fresh()
-        res = ExpandListArgument(
+        res = ExpandListArgument[P1](
             Lambda((x,), ops(ly)(Lambda((y,), adjn(x, y)))),
             ly
         )
@@ -1363,6 +1363,9 @@ class SquallTransformer(lark.Transformer):
         return Symbol[E](ast)
 
     def identifier(self, ast):
+        return Symbol[E](ast[0])
+
+    def label_identifier(self, ast):
         return Symbol[E](ast[0])
 
     def number(self, ast):
@@ -1526,6 +1529,7 @@ class SquallTransformer(lark.Transformer):
         )
         return res
 
+    CNAME = str
     NAME = str
     LOWER_NAME = str
     LOWER_NAME_QUOTED = lambda self, s: s[1:-1]
