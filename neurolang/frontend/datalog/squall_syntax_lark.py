@@ -320,7 +320,6 @@ op_np : np
     | _DASH prep? op_np _DASH
 
 ?opn : ops
-     | ops
 
 ops : _BREAK? op  _BREAK?                -> ops_base
     | ops prep op_np _BREAK?             -> ops_rec
