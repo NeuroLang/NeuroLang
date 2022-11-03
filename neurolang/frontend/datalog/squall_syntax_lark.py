@@ -196,7 +196,6 @@ rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
 rule_body2_cond : det ng1 _CONDITIONED _TO det ng1
 
 PROBABLY : _PROBABLY
-_BREAK : "," | ";"
 
 ?s : bool{s_b}
 ?s_b : np [ "," ]  vp          -> s_np_vp
@@ -426,6 +425,7 @@ NEWLINE: "\n"
     ) + '\n'
 )
 .replace("_KEYWORD", "|".join(KEYWORDS))
+.replace("_BREAK", '(";"|",")')
 )
 
 
