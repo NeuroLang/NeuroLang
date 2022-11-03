@@ -405,15 +405,19 @@ NAME : /(?!(\b(_KEYWORD)\b))//[a-zA-Z_]\w*/
 UPPER_NAME_QUOTED : /`[A-Z][^`]*`/
 LOWER_NAME_QUOTED : /`[a-z][^`]*`/
 STRING : /[^']+/
-COMMENT : "%"/.*/
+COMMENT : /\%\%[^\n]*/ NEWLINE
 
 %import common._STRING_ESC_INNER
 %import common.SIGNED_INT
 %import common.SIGNED_FLOAT
 %import common.WS
+%import unicode.WS_INLINE
+%import unicode.NEWLINE
+%import common.CNAME
 %ignore WS
-NEWLINE: "\n"
+%ignore WS_INLINE
 %ignore NEWLINE  // comment out to avoid crash
+%ignore COMMENT
 
 """
 .replace(
