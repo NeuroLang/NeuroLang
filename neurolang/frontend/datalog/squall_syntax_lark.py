@@ -168,28 +168,30 @@ GRAMMAR = (
 r"""
 ?start: squall
 
-squall : ( rule _LINE_BREAK )* rule _LINE_BREAK
+squall : ( rule )* rule
 
-_LINE_BREAK : ( WS* "." WS* NEWLINE* WS* )+
+_SEPARATOR : "."
 
-?rule  : rule_op
-       | rulen
-       | query
+?rule  : rule_op _SEPARATOR
+       | rulen _SEPARATOR
+       | query _SEPARATOR
        | COMMENT
-       | command
+       | command _SEPARATOR
 
-command : "#" identifier "(" (term ("," term)* )* ")" "."
+command : "#" identifier "(" (term ("," term)* )* ")"
 
 query : _OBTAIN ops
 
-rule_op : "define" "as" [ PROBABLY ] verb1 rule_body1 "."?
-        | "define" "as" PROBABLY verb1 rule_body1_cond "."?
-        | "define" "as" verb1 _WITH _PROBABILITY np rule_body1 "."? -> rule_op_prob
+?_rule_start : _DEFINE _AS
 
-?rulen : "define" "as" verbn rule_body1 _BREAK? ops "."? -> rule_opnn
-       | "define" "as" PROBABLY verbn rule_body1 _CONDITIONED? _BREAK? ops "."? -> rule_opnn_per
+rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
+        | _rule_start PROBABLY verb1 rule_body1_cond
+        | _rule_start verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
 
-rule_body1 : prep? _GIVEN? det ng1
+?rulen : _rule_start verbn rule_body1 _BREAK? ops -> rule_opnn
+       | _rule_start PROBABLY verbn rule_body1 _CONDITIONED? _BREAK? ops -> rule_opnn_per
+
+rule_body1 : prep? det ng1
 rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
                 | s _CONDITIONED _TO det ng1 -> rule_body1_cond_posterior
 
