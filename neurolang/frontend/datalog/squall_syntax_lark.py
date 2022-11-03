@@ -589,7 +589,7 @@ class SquallTransformer(lark.Transformer):
         d = Query[Callable[[List[E]], S]]()
         x = Symbol[E].fresh()
         lx = Symbol[List[E]].fresh()
-        res = ExpandListArgument(ops(lx)(Lambda((x,), d(x))), lx)
+        res = ExpandListArgument[S](ops(lx)(Lambda((x,), d(x))), lx)
         return res
 
     def command(self, ast):
@@ -700,7 +700,7 @@ class SquallTransformer(lark.Transformer):
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
         ly = Symbol[List[E]].fresh()
-        verb_obj = ExpandListArgument(
+        verb_obj = ExpandListArgument[P1](
             Lambda((x,), ops(ly)(Lambda((y,), verbn(x, y)))),
             ly
         )
@@ -713,7 +713,7 @@ class SquallTransformer(lark.Transformer):
         y = Symbol[E].fresh()
         ly = Symbol[List[E]].fresh()
         prob = PROB.cast(Callable[[E, List[E]], float])
-        verb_obj = ExpandListArgument(
+        verb_obj = ExpandListArgument[P1](
             Lambda((x,), ops(ly)(Lambda((y,), verbn(x, y, prob(x, y))))),
             ly
         )
@@ -825,11 +825,11 @@ class SquallTransformer(lark.Transformer):
             verb1 = verb1.cast(PN)
             y = Symbol[E].fresh()
             ly = Symbol[List[E]].fresh()
-            res = ExpandListArgument(
+            res = ExpandListArgument[P1](
                 Lambda((x,), cp(ly)(Lambda((y,), verb1(x, y)))),
                 ly
             )(x)
-        else:            
+        else:
             res = verb1.cast(P1)(x)
         res = Lambda[P1]((x,), res)
         return res
@@ -847,11 +847,11 @@ class SquallTransformer(lark.Transformer):
         return res
 
     def vpdo_vn(self, ast):
-        verbn, _, ops = ast
+        verbn, ops = ast
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
         ly = Symbol[List[E]].fresh()
-        res = ExpandListArgument(
+        res = ExpandListArgument[P1](
             Lambda((x,), ops(ly)(Lambda((y,), verbn(x, y)))),
             ly
         )
@@ -1671,4 +1671,3 @@ def parse_to_neurolang_ir(
             return intermediate_representation
     except NeuroLangException as ex:
         raise ex from None
-
