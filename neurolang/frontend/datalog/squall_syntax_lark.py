@@ -321,9 +321,9 @@ op : prep? np             -> op_np
 
 ops : op                              -> ops_base
     | ops _BREAK? prep op             -> ops_rec
-    | ops _BREAK? _DASH prep op _DASH -> ops_rec
-
-pp : prep np -> pp_np
+ops : op                                 -> ops_base
+    | ops _BREAK? prep op_np             -> ops_rec
+    | ops _BREAK? _DASH prep op_np _DASH -> ops_rec
 
 !prep : _BY
       | _FOR
