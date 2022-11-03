@@ -313,17 +313,19 @@ intransitive : upper_identifier
 transitive : identifier
 transitive_multiple : identifier
 
-op : prep? np             -> op_np
-   | _DASH prep? np _DASH -> op_np
+op_np : np
+
+ op : prep? op_np
+    | prep? op_np
 
 ?opn : ops
-     | _DASH ops _DASH
+     | ops
 
-ops : op                              -> ops_base
-    | ops _BREAK? prep op             -> ops_rec
 ops : op                                 -> ops_base
     | ops _BREAK? prep op_np             -> ops_rec
-    | ops _BREAK? _DASH prep op_np _DASH -> ops_rec
+    | ops _BREAK? prep op_np -> ops_rec
+
+pp : prep np -> pp_np
 
 !prep : _BY
       | _FOR
@@ -933,6 +935,9 @@ class SquallTransformer(lark.Transformer):
         )
 
         return res
+
+    def op(self, ast):
+        return ast[-1]
 
     def op_pp(self, ast):
         pp, op = ast
