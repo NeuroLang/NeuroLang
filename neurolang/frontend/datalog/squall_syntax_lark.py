@@ -434,9 +434,6 @@ COMMENT : /\%\%[^\n]*/ NEWLINE
 )
 
 
-with open(os.path.join(os.path.dirname(__file__), "neurolang_natural.lark"), 'w') as f:
-    f.write(GRAMMAR)
-
 class Apply_(Definition):
     """Apply Operator defined in the SQUALL paper
     by Ferré, section 4.4.11.
