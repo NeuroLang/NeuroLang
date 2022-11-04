@@ -1,7 +1,6 @@
 from collections import Counter
 from operator import add, eq, mul, ne, neg, pow, sub, truediv
-from pyclbr import Function
-from typing import Callable, List, NewType, TypeVar
+from typing import Callable, List, TypeVar
 
 from ...datalog.aggregation import AggregationApplication
 from ...exceptions import NeuroLangFrontendException
