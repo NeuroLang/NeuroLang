@@ -188,7 +188,7 @@ rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
         | _rule_start PROBABLY verb1 rule_body1_cond
         | _rule_start verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
 
-?rulen : _rule_start verbn rule_body1 ops -> rule_opnn
+?rulen : _rule_start verbn rule_body1 ";" ops -> rule_opnn
        | _rule_start PROBABLY verbn rule_body1 _CONDITIONED? ops -> rule_opnn_per
 
 rule_body1 : prep? det ng1
@@ -321,9 +321,11 @@ op_np : np
 
 ?opn : ops
 
-ops : _BREAK? op  _BREAK?                -> ops_base
-    | ops prep op_np _BREAK?             -> ops_rec
-    | ops _DASH prep op_np _DASH _BREAK? -> ops_rec
+ops : _COMMA? op  _COMMA?                -> ops_base
+    | ops prep op_np _COMMA?             -> ops_rec
+    | ops _DASH prep op_np _DASH _COMMA? -> ops_rec
+
+_COMMA : ","
 
 pp : prep np -> pp_np
 
@@ -434,7 +436,6 @@ COMMENT : /\%\%[^\n]*/ NEWLINE
     ) + '\n'
 )
 .replace("_KEYWORD", "|".join(KEYWORDS))
-.replace("_BREAK", '(";"|",")')
 )
 
 

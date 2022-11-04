@@ -137,7 +137,7 @@ neurosynth_cet:
         and that does not mention a Term that is 'auditory' with a TfIdf greater than 0 .
 
       define as `reports as active` every Study
-        (that reports a Focus (?fx; ?fy; ?fz));
+        that reports a Focus (?fx; ?fy; ?fz);
         with every Voxel (?x; ?y; ?z) such that `euclidean distance`(?x,?y,?z,?fx,?fy,?fz) is lower than 4 .
 
       define as probably Active every Voxel in 3D
