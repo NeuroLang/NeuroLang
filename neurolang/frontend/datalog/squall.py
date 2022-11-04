@@ -47,7 +47,6 @@ from ...logic.transformations import (
     RemoveTrivialOperationsMixin
 )
 from ...probabilistic.expressions import (
-    PROB,
     Condition,
     ProbabilisticPredicate
 )
