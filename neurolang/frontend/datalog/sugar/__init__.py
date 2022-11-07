@@ -20,7 +20,8 @@ from ....logic import TRUE, Conjunction, Implication
 from ....probabilistic.expressions import (
     PROB,
     Condition,
-    ProbabilisticPredicate,
+    ProbabilisticFact,
+    ProbabilisticChoice,
     ProbabilisticQuery,
 )
 from ....type_system import (
@@ -540,5 +541,23 @@ class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):
     def query_based_probfact_wannabe(self, impl):
         pred_symb, probability = impl.consequent.functor.args
         body = pred_symb(*impl.consequent.args)
-        new_consequent = ProbabilisticPredicate(probability, body)
+        new_consequent = ProbabilisticFact(probability, body)
+        return self.walk(Implication(new_consequent, impl.antecedent))
+
+    @ew.add_match(
+        Implication(
+            FunctionApplication(
+                FunctionApplication(
+                    Constant[Callable[[Any, Any], Any]](op.xor),
+                    ...,
+                ),
+                ...,
+            ),
+            ...,
+        ),
+    )
+    def query_based_probchoice_wannabe(self, impl):
+        pred_symb, probability = impl.consequent.functor.args
+        body = pred_symb(*impl.consequent.args)
+        new_consequent = ProbabilisticChoice(probability, body)
         return self.walk(Implication(new_consequent, impl.antecedent))

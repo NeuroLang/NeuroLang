@@ -12,7 +12,7 @@ from .....expressions import Constant, Symbol
 from .....logic import Conjunction, Implication
 from .....probabilistic.expressions import (
     PROB,
-    ProbabilisticPredicate,
+    ProbabilisticFact,
     ProbabilisticQuery,
 )
 from ... import sugar
@@ -255,6 +255,6 @@ def test_translation_sugar_syntax():
     translator = TestTranslateQueryBasedProbabilisticFact()
     result = translator.walk(pfact)
     expected = Implication(
-        ProbabilisticPredicate(p / Constant(2), P(x)), Q(x, p)
+        ProbabilisticFact(p / Constant(2), P(x)), Q(x, p)
     )
     assert result == expected

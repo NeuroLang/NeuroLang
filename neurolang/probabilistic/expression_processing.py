@@ -25,7 +25,7 @@ from ..relational_algebra import (
 from ..relational_algebra.optimisers import RelationalAlgebraOptimiser
 from ..utils import OrderedSet
 from .exceptions import DistributionDoesNotSumToOneError
-from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
+from .expressions import PROB, ProbabilisticPredicate, ProbabilisticFact, ProbabilisticQuery
 
 
 def is_probabilistic_fact(expression):
@@ -49,13 +49,13 @@ def is_probabilistic_fact(expression):
     """
     return (
         isinstance(expression, Implication)
-        and isinstance(expression.consequent, ProbabilisticPredicate)
+        and isinstance(expression.consequent, ProbabilisticFact)
         and isinstance(expression.consequent.body, FunctionApplication)
         and expression.antecedent == TRUE
     )
 
 
-def is_query_based_probfact(expression):
+def is_query_based_probpredicate(expression):
     return (
         isinstance(expression, Implication)
         and isinstance(expression.consequent, ProbabilisticPredicate)

@@ -18,7 +18,7 @@ from ...logic import ExistentialPredicate
 from ...probabilistic.expressions import (
     PROB,
     Condition,
-    ProbabilisticPredicate
+    ProbabilisticFact
 )
 
 GRAMMAR = u"""
@@ -190,7 +190,7 @@ class DatalogSemantics:
 
     def probabilistic_fact(self, ast):
         return Implication(
-            ProbabilisticPredicate(ast[0], ast[2]),
+            ProbabilisticFact(ast[0], ast[2]),
             Constant(True),
         )
 
@@ -209,7 +209,7 @@ class DatalogSemantics:
         probability = ast[2]
         body = ast[4]
         return Implication(
-            ProbabilisticPredicate(probability, head),
+            ProbabilisticFact(probability, head),
             body,
         )
 

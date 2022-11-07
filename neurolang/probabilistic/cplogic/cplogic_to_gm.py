@@ -20,7 +20,7 @@ from ...relational_algebra import (
 from ..expressions import (
     Grounding,
     ProbabilisticChoiceGrounding,
-    ProbabilisticPredicate,
+    ProbabilisticFact,
 )
 from .grounding import get_grounding_pred_symb, topological_sort_groundings
 
@@ -273,7 +273,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
             node_symbol, node, parent_node_symbols={choice_node_symb}
         )
 
-    @add_match(Grounding(Implication(ProbabilisticPredicate, ...), ...))
+    @add_match(Grounding(Implication(ProbabilisticFact, ...), ...))
     def probfact_set_grounding(self, grounding):
         """
         Represent a set of probabilistic facts with a Bernoulli node.
