@@ -1216,6 +1216,19 @@ def test_qbased_pchoice():
     assert_almost_equal(sol, expected)
 
 
+def test_qbased_pchoice_equiprobable():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("a",), ("b",), ("c",)], name="P")
+    nl.add_tuple_set([(1, "a"), (1, "c"), (2, "b")], name="R")
+    with nl.environment as e:
+        e.S[e.count(e.x)] = e.P(e.x)
+        (e.Q ^ (1. / e.p))[e.x] = e.P(e.x) & e.S(e.p)
+        e.Query[e.x, e.PROB(e.x)] = e.R(e.x, e.y) & e.Q(e.y)
+        sol = nl.query((e.x, e.p), e.Query(e.x, e.p))
+    expected = {(1, 2 / 3.), (2, 1 / 3.)}
+    assert_almost_equal(sol, expected)
+
+
 def test_noisy_or_probabilistic_query():
     nl = NeurolangPDL()
     nl.add_probabilistic_facts_from_tuples(
