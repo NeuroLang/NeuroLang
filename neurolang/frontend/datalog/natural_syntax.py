@@ -2,14 +2,14 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
 
-from ...probabilistic.expressions import ProbabilisticPredicate
 from ...datalog import Implication
 from ...datalog.aggregation import AggregationApplication
 from ...expressions import Expression, FunctionApplication
-from .standard_syntax import (
-    DatalogSemantics as DatalogClassicSemantics
+from ...probabilistic.expressions import (
+    ProbabilisticFact,
+    ProbabilisticPredicate
 )
-
+from .standard_syntax import DatalogSemantics as DatalogClassicSemantics
 
 GRAMMAR = u"""
     @@grammar::Datalog
@@ -170,7 +170,7 @@ class DatalogSemantics(DatalogClassicSemantics):
 
         if isinstance(expression, Implication):
             return Implication(
-                ProbabilisticPredicate(probability, expression.consequent),
+                ProbabilisticFact(probability, expression.consequent),
                 expression.antecedent,
             )
         else:

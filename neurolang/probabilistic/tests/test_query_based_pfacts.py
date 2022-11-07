@@ -6,7 +6,7 @@ from ...exceptions import ForbiddenDisjunctionError
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication, Union
 from ..cplogic.program import CPLogicProgram
-from ..expressions import ProbabilisticPredicate
+from ..expressions import ProbabilisticFact
 from ..query_resolution import QueryBasedProbFactToDetRule
 
 P = Symbol("P")
@@ -33,7 +33,7 @@ def test_query_based_pfact():
 
     """
     pfact = Implication(
-        ProbabilisticPredicate(p / Constant(2), P(x)),
+        ProbabilisticFact(p / Constant(2), P(x)),
         Q(x, p),
     )
     program = QueryBasedProbFactToDetRuleProgramTest()
@@ -54,7 +54,7 @@ def test_query_based_pfact():
         )
     )
     assert any(
-        isinstance(formula.consequent, ProbabilisticPredicate)
+        isinstance(formula.consequent, ProbabilisticFact)
         and formula.consequent.probability == det_rule.consequent.args[0]
         and formula.antecedent == det_rule.consequent
         and formula.consequent.body == P(x)
@@ -64,7 +64,7 @@ def test_query_based_pfact():
 
 def test_prevent_combination_of_query_based_and_set_based():
     pfact = Implication(
-        ProbabilisticPredicate(p / Constant(2), P(x)),
+        ProbabilisticFact(p / Constant(2), P(x)),
         Q(x, p),
     )
     cpl = QueryBasedProbFactToDetRuleProgramTest()
@@ -78,7 +78,7 @@ def test_callable_symbol_probability():
     cpl = QueryBasedProbFactToDetRuleProgramTest()
     cpl.symbol_table[fun] = Constant(lambda x: x ** 2)
     pfact = Implication(
-        ProbabilisticPredicate(fun(x), P(y)),
+        ProbabilisticFact(fun(x), P(y)),
         Q(x, y),
     )
     cpl.walk(Union((pfact,)))
@@ -98,7 +98,7 @@ def test_callable_symbol_probability():
         )
     )
     assert any(
-        isinstance(formula.consequent, ProbabilisticPredicate)
+        isinstance(formula.consequent, ProbabilisticFact)
         and formula.consequent.probability == det_rule.consequent.args[0]
         and formula.antecedent == det_rule.consequent
         and formula.consequent.body == P(y)

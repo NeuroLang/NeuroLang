@@ -5,7 +5,7 @@ from ....datalog.aggregation import AggregationApplication
 from ....expressions import Constant, Query, Symbol
 from ..standard_syntax import ExternalSymbol
 from ..natural_syntax import parser
-from ....probabilistic.expressions import ProbabilisticPredicate
+from ....probabilistic.expressions import ProbabilisticFact
 
 
 def test_facts():
@@ -252,7 +252,7 @@ def test_probabilistic_fact():
     res = parser('p::A(3)')
     assert res == Union((
         Implication(
-            ProbabilisticPredicate(p, A(Constant(3.))),
+            ProbabilisticFact(p, A(Constant(3.))),
             Constant(True)
         ),
     ))
@@ -260,7 +260,7 @@ def test_probabilistic_fact():
     res = parser('0.8::A("a b", 3)')
     assert res == Union((
         Implication(
-            ProbabilisticPredicate(
+            ProbabilisticFact(
                 Constant(0.8),
                 A(Constant("a b"), Constant(3.))
             ),
@@ -275,7 +275,7 @@ def test_probabilistic_fact_nsd():
     res = parser('with probability p "john" is cat')
     assert res == Union((
         Implication(
-            ProbabilisticPredicate(p, cat(Constant("john"))),
+            ProbabilisticFact(p, cat(Constant("john"))),
             Constant(True)
         ),
     ))
@@ -283,7 +283,7 @@ def test_probabilistic_fact_nsd():
     res = parser("with probability p 'john' is 'george''s cat")
     assert res == Union((
         Implication(
-            ProbabilisticPredicate(p, cat(Constant("john"), Constant("george"))),
+            ProbabilisticFact(p, cat(Constant("john"), Constant("george"))),
             Constant(True)
         ),
     ))

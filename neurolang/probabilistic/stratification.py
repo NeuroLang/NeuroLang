@@ -13,7 +13,7 @@ from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
 from ..logic import TRUE, Implication, Negation, Union
 from ..datalog.constraints_representation import RightImplication
-from .expressions import ProbabilisticPredicate
+from .expressions import ProbabilisticFact
 
 
 def _iter_implication_or_union_of_implications(expression):
@@ -212,7 +212,7 @@ def _check_for_query_based_probfact_dependency_on_prob_relation(
             for atom in extract_logic_atoms(rule.antecedent)
         )
         for rule in prob_idb
-        if isinstance(rule.consequent, ProbabilisticPredicate)
+        if isinstance(rule.consequent, ProbabilisticFact)
         and rule.antecedent != TRUE
     ):
         raise UnsupportedProgramError(
