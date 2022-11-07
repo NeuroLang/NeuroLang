@@ -7,7 +7,6 @@ from ...datalog.aggregation import AggregationApplication
 from ...expressions import Expression, FunctionApplication
 from ...probabilistic.expressions import (
     ProbabilisticFact,
-    ProbabilisticPredicate
 )
 from .standard_syntax import DatalogSemantics as DatalogClassicSemantics
 
