@@ -172,11 +172,11 @@ squall : ( rule )* rule
 
 _SEPARATOR : "."
 
-?rule  : rule_op _SEPARATOR
-       | rulen _SEPARATOR
-       | query _SEPARATOR
-       | COMMENT
-       | command _SEPARATOR
+rule  : rule1 _SEPARATOR
+      | rulen _SEPARATOR
+      | query _SEPARATOR
+      | COMMENT
+      | command _SEPARATOR
 
 command : "#" identifier "(" (term ("," term)* )* ")"
 
@@ -184,12 +184,15 @@ query : _OBTAIN ops
 
 ?_rule_start : _DEFINE _AS
 
-rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
-        | _rule_start PROBABLY verb1 rule_body1_cond
-        | _rule_start verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
+?rule1 : _rule_start rule1_body
+rule1_body : [ PROBABLY ] verb1 rule_body1
+           |  PROBABLY verb1 rule_body1_cond
+           |  verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
 
-?rulen : _rule_start verbn rule_body1 ";" ops -> rule_opnn
-       | _rule_start PROBABLY verbn rule_body1 _CONDITIONED? ops -> rule_opnn_per
+?rulen : _rule_start rulen_body
+?rulen_body : verbn rule_body1 ";" ops -> rule_opnn
+            | PROBABLY verbn rule_body1 [";" ops] _CONDITIONED? ops -> rule_opnn_per
+
 
 rule_body1 : prep? det ng1
 rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
@@ -246,8 +249,6 @@ dim : _PER ng2      -> dim_ng2
 
 ?rel : bool{rel_b}
 
-_DASH : "--"
-
 rel_b : (_THAT | _WHICH | _WHERE | _WHO ) vp                -> rel_vp
       | (_THAT | _WHICH | _WHERE | _WHOM ) np verbn [ ops ] -> rel_vpn
       | np2 _OF _WHICH vp                                   -> rel_np2
@@ -289,8 +290,7 @@ in : _IN
 vphave : noun2 op -> vphave_noun2
        | np2 [ rel ] -> vphave_np2
 
-aux{verb} : verb       -> aux_id
-          | verb _NOT  -> aux_not
+aux{verb} : verb _NOT?
 
 npc{det_} : term        -> npc_term
           | det_ ng1 -> npc_det
@@ -316,14 +316,11 @@ transitive_multiple : identifier
 
 op_np : np
 
- op : prep? op_np
-    | _DASH prep? op_np _DASH
+op : prep? op_np
 
 ?opn : ops
 
-ops : _COMMA? op  _COMMA?                -> ops_base
-    | ops prep op_np _COMMA?             -> ops_rec
-    | ops _DASH prep op_np _DASH _COMMA? -> ops_rec
+ops : [prep] ( op_np prep )* op_np
 
 _COMMA : ","
 
@@ -373,11 +370,16 @@ bool_disjunction{x} : bool_conjunction{x}
 bool_conjunction{x} : bool_atom{x}
                     | bool_conjunction{x} _CONJUNCTION bool_atom{x}
 bool_atom{x} : _NEGATION bool_atom{x} -> bool_negation
-         | _DASH bool{x} _DASH
-         | "(" bool{x} ")"
-         | "[" bool{x} "]"
-         | "," bool{x} ","
-         | x
+             | "--" bool{x} "--"
+             | "(" bool{x} ")"
+             | "[" bool{x} "]"
+             | "," bool{x} ","
+             | x
+
+?parenthesized{x} : x
+                  | "(" x ")"
+                  | "," x ","
+                  | "--" x "--"
 
 _CONJUNCTION : "&" | "," | "\N{LOGICAL AND}" | _AND
 _DISJUNCTION : "|" | "\N{LOGICAL OR}" | _OR
@@ -574,12 +576,13 @@ class SquallTransformer(lark.Transformer):
         self.globals = globals
 
     def squall(self, ast):
-        return CollapseUnions().walk(
-            Union(tuple(
-                squall_to_fol(node, self.type_predicate_symbols)
-                for node in ast)
-            )
-        )
+        return CollapseUnions().walk(Union(tuple(ast)))
+
+    def rule(self, ast):
+        try:
+            return squall_to_fol(ast[0], self.type_predicate_symbols)
+        except NeuroLangException as e:
+            raise NeuroLangFrontendException(str(e))
 
     def rule_simple(self, ast):
         np, vpcons = ast
@@ -603,7 +606,7 @@ class SquallTransformer(lark.Transformer):
         res = Command(ast[0], tuple(ast[1:]), ())
         return res
 
-    def rule_op(self, ast):
+    def rule1_body(self, ast):
         probably, verb1, op = ast
         x = Symbol[E].fresh()
         if probably:
@@ -856,7 +859,7 @@ class SquallTransformer(lark.Transformer):
     def vpdo_vn(self, ast):
         verbn, ops = ast
         x = Symbol[E].fresh()
-        y = Symbol[E].fresh()
+        y = Symbol[List[E]].fresh()
         ly = Symbol[List[E]].fresh()
         res = ExpandListArgument[P1](
             Lambda((x,), ops(ly)(Lambda((y,), verbn(x, y)))),
@@ -864,13 +867,12 @@ class SquallTransformer(lark.Transformer):
         )
         return res
 
-    def aux_id(self, ast):
+    def aux(self, ast):
         s = Symbol[S].fresh()
-        return Lambda((s,), s)
-
-    def aux_not(self, ast):
-        s = Symbol[S].fresh()
-        return Lambda((s,), Negation(s))
+        if len(ast) > 1:
+            return Lambda((s,), Negation(s))
+        else:
+            return Lambda((s,), s)
 
     def vpbe_there(self, ast):
         x = Symbol[E].fresh()
@@ -948,43 +950,21 @@ class SquallTransformer(lark.Transformer):
         res = Lambda((x,), pp(op(x)))
         return res
 
-    def ops_base(self, ast):
-        op = ast[0]
+    def ops(self, ast):
+        ops = ast[1::2]
         lz = Symbol[List[E]].fresh()
-        d = Symbol[P1].fresh()
-        with expressions_behave_as_objects():
-            lz_head = lz[Constant(0)]
-            lz_tail = lz[Constant(slice(1, None))]
-            z = Symbol[E].fresh()
-            pred = Lambda(
-                (z,),
-                Conjunction[S]((
-                    Label[S](z, lz_head),
-                    d(Cons(lz_head, lz_tail))
-                ))
-            )
-            res = Lambda((lz,), Lambda((d,), op(pred)))
-        return res
+        d = Symbol[Callable[[List[E]], S]].fresh()
 
-    def ops_rec(self, ast):
-        ops, _, op = ast
-        lz = Symbol[List[E]].fresh()
-        d = Symbol.fresh()
-        zz = Symbol.fresh()
-
+        body = d(lz)
         with expressions_behave_as_objects():
-            lz_head = lz[Constant(0)]
-            lz_tail = lz[Constant(slice(1, None))]
-            z = Symbol[E].fresh()
-            label = Lambda(
-                (z,),
-                Conjunction((
-                    Label[S](z, lz_head),
-                    ops(lz_tail)(Lambda((zz,), d(Cons(lz_head, zz))))
-                ))
-            )
-            res = Lambda((lz,), Lambda((d,), op(label)))
-        return res
+            for i, op in enumerate(ops[::-1]):
+                z = Symbol[E].fresh()
+                body = op(Lambda(
+                    (z,),
+                    Conjunction[S]((Label[S](z, lz[Constant[int](i)]), body)))
+                )
+
+        return Lambda((lz,), Lambda((d,), body))
 
     def cp_pp(self, ast):
         pp, cp = ast
