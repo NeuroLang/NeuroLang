@@ -274,7 +274,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         intermediate_representation = self.nat_datalog_parser(code)
         self.program_ir.walk(intermediate_representation)
- 
+
     def execute_controlled_english_program(self, code: str, type_symbol_names: Optional[Set[str]]=None) -> None:
         """Execute a controlled English language Datalog program
 
@@ -293,16 +293,21 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.program_ir.walk(intermediate_representation)
             return
         elif len(queries) == 1:
-            query = self.frontend_translator.walk(queries[0])
-            program = logic.Union(
-                [
-                    rule
-                    for rule in intermediate_representation.formulas
-                    if not isinstance(rule, ir.Query)
-                ]
-            )
+            query = queries[0]
+            rules = [
+                rule
+                for rule in intermediate_representation.formulas
+                if not isinstance(rule, ir.Query)
+            ]
+            if not isinstance(query.body, ir.FunctionApplication):
+                aux_head = ir.Symbol.fresh()
+                new_rule = logic.Implication(aux_head(*query.head.args), query.body)
+                query = query.apply(query.head, new_rule.consequent)
+                rules.append(new_rule)
+            query_fe = self.frontend_translator.walk(query)
+            program = logic.Union(tuple(rules))
             self.program_ir.walk(program)
-            return self.query(query.head.arguments, query.body)
+            return self.query(query_fe.head.arguments, query_fe.body)
         else:
             raise UnsupportedProgramError(
                 "Only one query, in the form of ans(...) :- R(...) is "
