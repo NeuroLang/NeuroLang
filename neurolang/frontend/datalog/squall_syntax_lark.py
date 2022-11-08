@@ -57,11 +57,14 @@ from .squall import (
     K,
     Label,
     LambdaSolver,
-    ProbabilisticPredicateSymbol,
+    ProbabilisticFactSymbol,
+    ProbabilisticChoiceSymbol,
     Query,
     S,
     SquallSolver,
     The,
+    TheToUniversal,
+    TheToExistential,
     squall_to_fol
 )
 
@@ -115,6 +118,7 @@ KEYWORDS = [
     'are',
     'as',
     'by',
+    'choice',
     'conditioned',
     'define',
     'defines',
@@ -187,7 +191,8 @@ query : _OBTAIN ops
 ?rule1 : _rule_start rule1_body
 rule1_body : [ PROBABLY ] verb1 rule_body1
            |  PROBABLY verb1 rule_body1_cond
-           |  verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
+           |  verb1 _WITH _PROBABILITY op rule_body1 -> rule_op_fact
+           |  _CHOICE verb1 _WITH _PROBABILITY op rule_body1 -> rule_op_choice
 
 ?rulen : _rule_start rulen_body
 ?rulen_body : verbn rule_body1 ";" ops -> rule_opnn
@@ -512,8 +517,8 @@ class ChangeApplies(ExpressionWalker):
         y = Symbol[E].fresh()
         res = The[S](
             (y,),
-            EQ(d_, y),
-            k_(y, *z_)
+            k_(y, *z_),
+            EQ(d_, y)
         )
 
         lambda_args = (k_, d_) + z_
@@ -596,6 +601,7 @@ class SquallTransformer(lark.Transformer):
 
     def query(self, ast):
         ops = ast[0]
+        ops = TheToUniversal[ops.type](ops)
         d = Query[Callable[[List[E]], S]]()
         x = Symbol[E].fresh()
         lx = Symbol[List[E]].fresh()
@@ -614,17 +620,32 @@ class SquallTransformer(lark.Transformer):
             verb = verb1(x, FunctionApplication[float](prob, (x,)))
         else:
             verb = verb1(x)
+
+        op = TheToUniversal[op.type](op)
         return op(Lambda((x,), verb))
 
-    def rule_op_prob(self, ast):
+    def rule_op_fact(self, ast):
         verb1, probability, op = ast
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
         pps = (
-            ProbabilisticPredicateSymbol
+            ProbabilisticFactSymbol
             .cast(Callable[[E, S], S])
         )
-        verb = Lambda((x,), probability(Lambda((y,), pps(y, verb1(x)))))
+        verb = Lambda((x,), TheToUniversal[probability.type](probability(Lambda((y,), pps(y, verb1(x))))))
+        op = TheToUniversal[op.type](op)
+        return op(verb)
+
+    def rule_op_choice(self, ast):
+        verb1, probability, op = ast
+        x = Symbol[E].fresh()
+        y = Symbol[E].fresh()
+        pps = (
+            ProbabilisticChoiceSymbol
+            .cast(Callable[[E, S], S])
+        )
+        verb = Lambda((x,), TheToUniversal[probability.type](probability(Lambda((y,), pps(y, verb1(x))))))
+        op = TheToUniversal[op.type](op)
         return op(verb)
 
     def rule_op_cond1(self, ast):
@@ -635,6 +656,7 @@ class SquallTransformer(lark.Transformer):
             verb = verb1(x, FunctionApplication[float](prob, (x,)))
         else:
             verb = verb1(x)
+        op = TheToUniversal[op.type](op)
         return op(Lambda((x,), verb))
 
     def rule_op2_cond(self, ast):
@@ -710,6 +732,7 @@ class SquallTransformer(lark.Transformer):
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
         ly = Symbol[List[E]].fresh()
+        ops = TheToUniversal[ops.type](ops)
         verb_obj = ExpandListArgument[P1](
             Lambda((x,), ops(ly)(Lambda((y,), verbn(x, y)))),
             ly
@@ -731,7 +754,8 @@ class SquallTransformer(lark.Transformer):
         return res
 
     def rule_body1(self, ast):
-        return self.np_quantified(ast[-2:])
+        res = self.np_quantified(ast[-2:])
+        return TheToUniversal[res.type](res)
 
     def rule_body1_cond_prior(self, ast):
         det, ng1, s = ast[-3:]

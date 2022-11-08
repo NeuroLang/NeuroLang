@@ -1,5 +1,6 @@
 from collections import Counter
 from operator import add, eq, mul, ne, neg, pow, sub, truediv
+from re import I
 from typing import Callable, List, TypeVar
 
 from ...datalog.aggregation import AggregationApplication
@@ -48,6 +49,8 @@ from ...logic.transformations import (
 )
 from ...probabilistic.expressions import (
     Condition,
+    ProbabilisticFact,
+    ProbabilisticChoice,
     ProbabilisticPredicate
 )
 from ...type_system import get_args
@@ -87,7 +90,8 @@ NEG = Constant(neg)
 POW = Constant(pow)
 SUB = Constant(sub)
 
-ProbabilisticPredicateSymbol = Symbol("ProbabilisticPredicateSymbol")
+ProbabilisticFactSymbol = Symbol("ProbabilisticFactSymbol")
+ProbabilisticChoiceSymbol = Symbol("ProbabilistiChoiceSymbol")
 
 
 class Label(FunctionApplication):
@@ -181,10 +185,32 @@ class The(Quantifier):
         return "The[{}; {}, {}]".format(self.head, self.arg1, self.arg2)
 
 
+class TheMarker(Expression):
+    pass
+
+
+class TheToUniversal(TheMarker):
+    def __init__(self, expression):
+        self.expression = expression
+        self._symbols = expression._symbols
+    
+    def __repr__(self):
+        return "The->Universal[{}]".format(self.expression)
+
+
+class TheToExistential(TheMarker):
+    def __init__(self, expression):
+        self.expression = expression
+        self._symbols = expression._symbols
+
+    def __repr__(self):
+        return "The->Existential[{}]".format(self.expression)
+
+
 class Query(Expression):
     def __init__(self):
         pass
-    
+
     def __repr__(self):
         return "Query?"
 
@@ -420,6 +446,44 @@ class SimplifyNestedImplicationsMixin(PullUniversalUpImplicationMixin):
         )
         return Implication(consequent, antecedent)
 
+    @add_match(
+        Implication(Conjunction, ...),
+        lambda exp: (
+            any(isinstance(f, Implication) for f in exp.consequent.formulas) and
+            any(isinstance(f, FunctionApplication) for f in exp.consequent.formulas)
+        )
+    )
+    def implication_conjunction_implication_other(self, expression):
+        consequent_implications = []
+        implication_functors = []
+        consequent_other = []
+        for formula in expression.consequent.formulas:
+            if isinstance(formula, Implication):
+                consequent_implications.append(formula)
+                implication_functors.append(formula.consequent.functor)
+            else:
+                consequent_other.append(formula)
+
+        consequent_final = []
+        move_to_antecedent = []
+        for formula in consequent_other:
+            if (
+                isinstance(formula, FunctionApplication) and
+                formula.functor in implication_functors
+            ):
+                move_to_antecedent.append(formula)
+            else:
+                consequent_final.append(formula)
+
+        res = Union[S](
+            tuple(consequent_implications) +
+            (expression.apply(
+                Conjunction[S](tuple(consequent_final)),
+                Conjunction[S]((expression.antecedent,) + tuple(move_to_antecedent))
+            ),)
+        )
+        return res
+
 
 class PrepositionSolverMixin(PatternWalker):
     @add_match(Arg(..., (..., Arg)))
@@ -447,11 +511,36 @@ class PrepositionSolverMixin(PatternWalker):
         return new_lambda_exp
 
 
-class SquallIntermediateSolver(PatternWalker):
+class TheToExistentialWalker(ExpressionWalker):
     @add_match(The)
     def replace_the_existential(self, expression):
         head, d1, d2 = expression.unapply()
         return ExistentialPredicate[S](head, Conjunction[S]((d2, d1)))
+
+    @add_match(TheMarker)
+    def stop_replacing_the(self, expression):
+        return expression
+
+
+class TheToUniversalWalker(ExpressionWalker):
+    @add_match(The)
+    def replace_the_universal(self, expression):
+        head, d1, d2 = expression.unapply()
+        return UniversalPredicate[S](head, Implication[S](d1, d2))
+
+    @add_match(TheMarker)
+    def stop_replacing_the(self, expression):
+        return expression
+
+
+class SquallIntermediateSolver(PatternWalker):
+    @add_match(TheToExistential)
+    def replace_the_existential(self, expression):
+        return TheToExistentialWalker().walk(expression.expression)
+
+    @add_match(TheToUniversal)
+    def replace_the_universal(self, expression):
+        return TheToUniversalWalker().walk(expression.expression)
 
     @add_match(Aggregation(..., Lambda, Symbol))
     def translate_aggregation(self, expression):
@@ -845,9 +934,13 @@ class SquallExpressionsToNeuroLang(ExpressionWalker):
     def make_datalog_rule_existential_aggregation(self, expression):
         return self.walk(expression.body)
 
-    @add_match(FunctionApplication(ProbabilisticPredicateSymbol, (..., ...)))
-    def probabilistic_predicate_symobl(self, expression):
-        return ProbabilisticPredicate(*expression.args)
+    @add_match(FunctionApplication(ProbabilisticFactSymbol, (..., ...)))
+    def probabilistic_fact_symbol(self, expression):
+        return ProbabilisticFact(*expression.args)
+
+    @add_match(FunctionApplication(ProbabilisticChoiceSymbol, (..., ...)))
+    def probabilistic_choice_symbol(self, expression):
+        return ProbabilisticChoice(*expression.args)
 
     @add_match(
         ExistentialPredicate(..., Implication(Conjunction, ...)),

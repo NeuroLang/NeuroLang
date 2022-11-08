@@ -22,6 +22,7 @@ from typing import (
 )
 
 from .. import datalog as dl, expressions as ir, logic as lg
+from ..probabilistic import expressions as pr
 from ..datalog import constraints_representation as cr
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expression_walker import (
