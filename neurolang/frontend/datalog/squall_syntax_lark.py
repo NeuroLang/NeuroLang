@@ -186,7 +186,7 @@ command : "#" identifier "(" (term ("," term)* )* ")"
 
 query : _OBTAIN ops
 
-?_rule_start : _DEFINE _AS
+_rule_start : _DEFINE _AS
 
 ?rule1 : _rule_start rule1_body
 rule1_body : [ PROBABLY ] verb1 rule_body1
