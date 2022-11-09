@@ -224,7 +224,7 @@ def load_neurosynth_data_cet(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
     nl.add_tuple_set(term_data[["id", "term", "tfidf"]], name="mention")
     nl.add_tuple_set(study_id, name="study")
     nl.add_uniform_probabilistic_choice_over_set(
-        study_id, name="chosen studi"
+        study_id, name="selected studi"
     )
 
     nl.add_tuple_set(
@@ -366,7 +366,9 @@ def init_frontend(mni_mask):
         return (direction == main_dir) or (direction[::-1] == main_dir)
 
     nl.add_symbol(nl.symbols["agg_create_region_overlay"], name="create region overlay")
+    nl.add_symbol(nl.symbols["agg_create_region_overlay"], name="created region overlay")
     nl.add_symbol(nl.symbols["agg_create_region"], name="create region")
+    nl.add_symbol(nl.symbols["agg_create_region"], name="created region")
     return nl
 
 

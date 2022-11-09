@@ -112,19 +112,24 @@ neurosynth_cet:
       define as VWFA every Focus (@x; @y; @z) 
           such that ((@x - (-45)) ** 2 + (@y - (-57)) ** 2 + (@z - (-12)) ** 2) is lower than 5 ** 2 .
 
-      define as `VWFA image` all Agg_create_region of the VWFA in 3D.
+      define as `VWFA image` the `Created Region` of the VWFA in 3D.
 
       define as `Mentions VWFA` every Study that reports the VWFA in 3D.
 
+      define as choice `Given study` with probability 1 / (the Count of the Studies)
+        every Study.
+
       define as probably `Linked to VWFA`
           every Term that a Study @s mentions
-          conditioned to @s is a `Chosen study` that `Mentions VWFA`.
+          conditioned to @s is a `Given study` that `Mentions VWFA`.
 
-      define as probably Marginal every Term that a `Chosen study` mentions.
+      define as probably Universal every Term that a `Given study` mentions.
 
-      define as `specific to the VWFA` every Term @term
-          (that is `Linked to VWFA` with a Probability @p and  Marginal with a Probability @p0);
+      define as `specific to the VWFA` every Term
+          that is `Linked to VWFA` with a Probability @p and  Universal with a Probability @p0;
           by every Quantity @lor that is equal to log10(@p / @p0).
+
+      obtain every Term @t with every Quantity @lor such that @t `specific to the VWFA` with @lor.
     description: |
       TBD
 
@@ -140,11 +145,14 @@ neurosynth_cet:
         that reports a Focus (@fx; @fy; @fz);
         with every Voxel (@x; @y; @z) such that `euclidean distance`(@x,@y,@z,@fx,@fy,@fz) is lower than 4 .
 
+      define as choice `Given study` with probability 1 / (the Count of the Studies)
+        every Study.
+
       define as probably Active every Voxel in 3D
-        that @s `reports as active` conditioned to the `Chosen Study` @s is a `Study of interest`.
+        that @s `reports as active` conditioned to a `Given Study` @s is a `Study of interest`.
 
       define as Images 
-        every `Create region overlay` from the Tuples (@x; @y; @z; @p)
+        every `Created region overlay` from the Tuples (@x; @y; @z; @p)
         such that (@x; @y; @z) is a Voxel that is Active with a Probability @p .
             
       obtain every Image.
