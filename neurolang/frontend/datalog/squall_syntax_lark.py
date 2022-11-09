@@ -1256,7 +1256,8 @@ class SquallTransformer(lark.Transformer):
 
     def rel_vp(self, ast):
         x = Symbol[E].fresh()
-        return Lambda((x,), ast[0](x))
+        res = Lambda((x,), ast[0](x))
+        return TheToExistential[res.type](res)
 
     def rel_vp2(self, ast):
         x = Symbol[E].fresh()
@@ -1265,7 +1266,7 @@ class SquallTransformer(lark.Transformer):
         res = verb2.cast(P2)(x, y)
         res = np(Lambda((x,), res))
         res = Lambda((y,), res)
-        return res
+        return TheToExistential[res.type](res)
 
     def rel_vpn(self, ast):
         np, verbn, ops = ast
@@ -1280,7 +1281,7 @@ class SquallTransformer(lark.Transformer):
             lz
         )
         res = Lambda((y,), np(res))
-        return res
+        return TheToExistential[res.type](res)
 
     def rel_np2(self, ast):
         x = Symbol[E].fresh()
@@ -1289,7 +1290,7 @@ class SquallTransformer(lark.Transformer):
             (x,),
             np2(x)(vp)
         )
-        return res
+        return TheToExistential[res.type](res)
 
     def rel_ng2(self, ast):
         x = Symbol[E].fresh()
@@ -1310,21 +1311,23 @@ class SquallTransformer(lark.Transformer):
                 )(y)
             )
         )
-        return res
+        return TheToExistential[res.type](res)
 
     def rel_s(self, ast):
         s = ast[0]
         x = Symbol[E].fresh()
-        return Lambda((x,), s)
+        res = Lambda((x,), s)
+        return TheToExistential[res.type](res)
 
     def rel_comp(self, ast):
         comp, op = ast
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
-        return Lambda(
+        res = Lambda(
             (x,),
             op(Lambda((y,), comp(x, y)))
         )
+        return TheToExistential[res.type](res)
 
     def rel_adj1(self, ast):
         adj1, cp = ast
@@ -1339,7 +1342,7 @@ class SquallTransformer(lark.Transformer):
             )
         else:
             res = Lambda((x,), adj1(x))
-        return res
+        return TheToExistential[res.type](res)
 
     def rel_adjn(self, ast):
         adjn, ops = ast

@@ -1,6 +1,5 @@
 from collections import Counter
 from operator import add, eq, mul, ne, neg, pow, sub, truediv
-from re import I
 from typing import Callable, List, TypeVar
 
 from ...datalog.aggregation import AggregationApplication
@@ -783,7 +782,6 @@ class LogicSimplifier(
     RemoveTrivialOperationsMixin,
     CollapseConjunctionsMixin,
     CollapseDisjunctionsMixin,
-    FactorQuantifiersMixin,
     SimplifiyEqualitiesMixin,
     ExtendedLogicExpressionWalker
 ):
@@ -908,7 +906,17 @@ class SquallExpressionsToNeuroLang(ExpressionWalker):
         )
     )
     def make_datalog_rule_universal(self, expression):
-        return self.walk(expression.body)
+        if expression.head in expression.body.consequent._symbols:
+            expression = expression.body
+        else:
+            expression = expression.body.apply(
+                expression.body.consequent,
+                ExistentialPredicate[expression.type](
+                    expression.head,
+                    expression.body.antecedent
+                )
+            )
+        return self.walk(expression)
 
     @add_match(
         UniversalPredicate(..., EQuery),
@@ -1031,8 +1039,8 @@ def squall_to_fol(expression, type_predicate_symbols=None):
         LogicSimplifier(),
         GuaranteeUnion(),
         ReplaceExpressionWalker({
-            Symbol("euclidean"): EUCLIDEAN,
-            Symbol("euclidean distance"): EUCLIDEAN
+            Symbol[EUCLIDEAN.type]("euclidean"): EUCLIDEAN,
+            Symbol[EUCLIDEAN.type]("euclidean distance"): EUCLIDEAN
         })
     )
 

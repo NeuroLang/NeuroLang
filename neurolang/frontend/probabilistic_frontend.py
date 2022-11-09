@@ -6,6 +6,7 @@ Complements QueryBuilderDatalog class with probabilistic capabilities
 2- sove probabilistic queries
 """
 import collections
+from operator import and_
 import typing
 from typing import (
     AbstractSet,
@@ -341,10 +342,14 @@ class NeurolangPDL(QueryBuilderDatalog):
             raise UnsupportedQueryError(
                 "Queries on probabilistic predicates are not supported"
             )
-        query = self.program_ir.symbol_table[query_pred_symb].formulas[0]
 
         try:
             with self.scope:
+                if query_pred_symb == ir.Constant(and_):
+                    new_pred_symb = ir.Symbol.fresh()
+                    new_rule = Implication(new_pred_symb(*query_pred_args), predicate.expression)
+                    self.program_ir.walk(new_rule)
+                query = self.program_ir.symbol_table[query_pred_symb].formulas[0]
                 goal, magic_rules = magic_rewrite(
                     query.consequent, self.program_ir
                 )
