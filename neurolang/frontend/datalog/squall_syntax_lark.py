@@ -664,64 +664,6 @@ class SquallTransformer(lark.Transformer):
         res = np2(verb)
         return res
 
-    def rule_op2(self, ast):
-        probably, verb2, np, prep, op = ast
-        s = Symbol[S].fresh()
-        x = Symbol[E].fresh()
-        y = Symbol[E].fresh()
-        z = Symbol[E].fresh()
-
-        if probably:
-            prob = PROB.cast(Callable[[E, E], float])
-            verb = verb2(x, y, FunctionApplication[float](prob, (x, y)))
-        else:
-            verb = verb2(x, y)
-
-        pp = Lambda((s,), op(Lambda((z,), Arg(prep, (z, s)))))
-        vp = Lambda((x,), ForArg(prep, Lambda((y,), verb)))
-        vp_pp = Lambda((x,), pp(vp(x)))
-        res = np(vp_pp)
-        return res
-
-    def rule_opn(self, ast):
-        probably, verb2, np = ast[:3]
-        n_op = len(ast[3:]) // 2
-        args = tuple(Symbol[E].fresh() for _ in range(n_op + 1))
-        if probably:
-            args += (FunctionApplication[float](Symbol[Callable[[E], float]]("PROB"), args),)
-
-        vp_pp = verb2(*args)
-        arg_ant = args[0]
-        for prep, op, arg in zip(ast[3::2], ast[4::2], args[1:]):
-            s = Symbol[S].fresh()
-            z = Symbol[E].fresh()
-            x = Symbol[E].fresh()
-            pp = Lambda((s,), op(Lambda((z,), Arg(prep, (z, s)))))
-            vp = Lambda((arg_ant,), ForArg(prep, Lambda((arg,), vp_pp)))
-            vp_pp = Lambda((x,), pp(vp(x)))
-            arg_ant = arg
-
-        res = np(vp_pp)
-        return res
-
-    def rule_op2_b(self, ast):
-        probably, verb2, prep, op, np = ast
-        s = Symbol[S].fresh()
-        x = Symbol[E].fresh()
-        y = Symbol[E].fresh()
-        z = Symbol[E].fresh()
-
-        if probably:
-            verb = verb2(x, y, FunctionApplication[float](Symbol[Callable[[E], float]]("PROB"), (x, y)))
-        else:
-            verb = verb2(x, y)
-
-        pp = Lambda((s,), op(Lambda((z,), Arg(prep, (z, s)))))
-        vp = Lambda((x,), ForArg(prep, Lambda((y,), verb)))
-        vp_pp = Lambda((x,), pp(vp(x)))
-        res = np(vp_pp)
-        return res
-
     def rule_opnn(self, ast):
         verbn, rule_body1, ops = ast
         x = Symbol[E].fresh()
