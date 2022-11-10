@@ -102,8 +102,6 @@ NEG = Constant(neg)
 POW = Constant(pow)
 SUB = Constant(sub)
 
-OfType = Symbol[Callable[[E], E]]("rdf:type")
-
 
 KEYWORDS = [
     'a',
@@ -323,8 +321,6 @@ op : prep? op_np
 ops : [prep] ( op_np prep )* op_np
 
 _COMMA : ","
-
-pp : prep np -> pp_np
 
 !prep : _BY
       | _FOR
@@ -742,10 +738,6 @@ class SquallTransformer(lark.Transformer):
         x = Symbol[E].fresh()
         return np(Lambda((x,), TRUE))
 
-    def s_pp(self, ast):
-        pp, s = ast
-        return pp(s)
-
     def np_term(self, ast):
         d = Symbol[P1].fresh()
         return Lambda[S1]((d,), d(ast[0]))
@@ -780,13 +772,6 @@ class SquallTransformer(lark.Transformer):
         aux, vp = ast
         x = Symbol[E].fresh()
         res = Lambda((x,), aux(vp(x)))
-        return res
-
-    def vp_pp(self, ast):
-        pp, vp = ast
-        x = Symbol[E].fresh()
-        res = Lambda((x,), pp(vp(x)))
-
         return res
 
     def vpdo_v1(self, ast):
@@ -927,30 +912,8 @@ class SquallTransformer(lark.Transformer):
 
         return Lambda((lz,), Lambda((d,), body))
 
-    def cp_pp(self, ast):
-        pp, cp = ast
-        s = Symbol[S].fresh()
-        if cp:
-            res = cp(s)
-        else:
-            res = s
-        res = Lambda((s,), pp(res))
-        return res
-
     def prep(self, ast):
-        if ast[0].lower() == "from":
-            res = FROM
-        elif ast[0].lower() == "to":
-            res = TO
-        else:
-            res = Constant[str](ast[0].lower())
-        return res
-
-    def pp_np(self, ast):
-        prep, np = ast
-        s = Symbol[S].fresh()
-        z = Symbol[E].fresh()
-        res = Lambda((s,), np(Lambda((z,), Arg(prep, ((z, s))))))
+        res = Constant[str](ast[0].lower())
         return res
 
     def ng1_noun(self, ast):
