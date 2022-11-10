@@ -40,20 +40,15 @@ from ...type_system import (
     is_parameterized
 )
 from .squall import (
-    FROM,
     P1,
     P2,
     PN,
     S1,
     S2,
-    TO,
     Aggregation,
-    Arg,
     CollapseUnions,
-    Cons,
     E,
     ExpandListArgument,
-    ForArg,
     K,
     Label,
     LambdaSolver,
