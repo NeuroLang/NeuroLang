@@ -40,7 +40,7 @@ from .cplogic.program import CPLogicProgram
 from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
     construct_within_language_succ_result,
-    is_query_based_probfact,
+    is_query_based_probpredicate,
     is_within_language_prob_query,
     within_language_succ_query_to_intensional_rule
 )
@@ -51,12 +51,6 @@ from .probabilistic_semiring_solver import (
 
 AND = Constant(operator.and_)
 NE = Constant(operator.ne)
-
-ZERO = Constant[float](0.)
-GT = Constant(operator.gt)
-
-ZERO = Constant[float](0.)
-GT = Constant(operator.gt)
 
 ZERO = Constant[float](0.)
 GT = Constant(operator.gt)
@@ -103,7 +97,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     @add_match(
         Union,
         lambda union: any(
-            is_query_based_probfact(formula)
+            is_query_based_probpredicate(formula)
             and _qbased_probfact_needs_translation(formula)
             for formula in union.formulas
         ),
@@ -111,7 +105,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     def union_with_query_based_pfact(self, union):
         new_formulas = list()
         for formula in union.formulas:
-            if is_query_based_probfact(
+            if is_query_based_probpredicate(
                 formula
             ) and _qbased_probfact_needs_translation(formula):
                 (
@@ -128,7 +122,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
 
     @add_match(
         Implication,
-        lambda implication: is_query_based_probfact(implication)
+        lambda implication: is_query_based_probpredicate(implication)
         and _qbased_probfact_needs_translation(implication),
     )
     def query_based_probafact(self, impl):
@@ -160,7 +154,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
             )
         det_antecedent = conjunct_formulas(impl.antecedent, eq_formula)
         det_rule = Implication(det_consequent, det_antecedent)
-        prob_consequent = ProbabilisticPredicate(
+        prob_consequent = impl.consequent.apply(
             prob_symb, impl.consequent.body
         )
         prob_rule = Implication(prob_consequent, prob_antecedent)
@@ -286,7 +280,7 @@ def lift_solve_marg_query(rule, cpl, succ_solver):
     return provset
 
 
-def _discard_query_based_probfacts(prob_idb):
+def _discard_query_based_probpredicates(prob_idb):
     return Union(
         tuple(
             formula
@@ -368,7 +362,7 @@ def _build_probabilistic_program(
     # remove query-based probabilistic facts that have already been processed
     # and transformed into probabilistic tables based on the deterministic
     # solution of their probability and antecedent
-    prob_idb = _discard_query_based_probfacts(prob_idb)
+    prob_idb = _discard_query_based_probpredicates(prob_idb)
     cpl.walk(prob_idb)
     return cpl, prob_idb
 

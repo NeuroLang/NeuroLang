@@ -5,7 +5,7 @@ from ...exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ...expressions import Constant, Symbol
 from ...logic import TRUE, Conjunction, Implication, Union
 from ..cplogic.program import CPLogicProgram
-from ..expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
+from ..expressions import PROB, ProbabilisticFact, ProbabilisticQuery
 from ..query_resolution import QueryBasedProbFactToDetRule
 from ..stratification import stratify_program
 
@@ -56,7 +56,7 @@ def test_stratify_deterministic_probabilistic():
         (
             Fact(Q(a)),
             Fact(R(b)),
-            Implication(ProbabilisticPredicate(Constant(0.5), S(a)), TRUE),
+            Implication(ProbabilisticFact(Constant(0.5), S(a)), TRUE),
             Implication(P(x, y), Conjunction((Q(x), R(y)))),
             Implication(Z(x), S(x)),
         )
@@ -90,7 +90,7 @@ def test_stratify_deterministic_probabilistic_wlq():
         [
             Fact(Q(a)),
             Fact(R(b)),
-            Implication(ProbabilisticPredicate(Constant(0.5), S(a)), TRUE),
+            Implication(ProbabilisticFact(Constant(0.5), S(a)), TRUE),
             Fact(A(b)),
             Fact(C(b)),
         ]
@@ -132,8 +132,8 @@ def test_stratify_multiple_wlqs():
         [
             Fact(Q(a)),
             Fact(R(b)),
-            Implication(ProbabilisticPredicate(Constant(0.5), S(a)), TRUE),
-            Implication(ProbabilisticPredicate(Constant(0.5), T(a)), TRUE),
+            Implication(ProbabilisticFact(Constant(0.5), S(a)), TRUE),
+            Implication(ProbabilisticFact(Constant(0.5), T(a)), TRUE),
             Fact(A(b)),
             Fact(C(b)),
         ]
@@ -169,8 +169,8 @@ def test_wlq_dependence_on_other_wlq():
         [
             Fact(Q(a)),
             Fact(R(b)),
-            Implication(ProbabilisticPredicate(Constant(0.5), S(a)), TRUE),
-            Implication(ProbabilisticPredicate(Constant(0.5), T(a)), TRUE),
+            Implication(ProbabilisticFact(Constant(0.5), S(a)), TRUE),
+            Implication(ProbabilisticFact(Constant(0.5), T(a)), TRUE),
         ]
         + det_idb
         + prob_idb
@@ -205,7 +205,7 @@ def test_stratification_multiple_post_probabilistic_rules():
     facts = [Fact(R(a)), Fact(R(b)), Fact(B(a)), Fact(B(c)), Fact(B(b))]
     det_idb = [Implication(A(x, y), Conjunction((B(y), R(x))))]
     pfacts = [
-        Implication(ProbabilisticPredicate(Constant(0.2), C(a, b)), TRUE)
+        Implication(ProbabilisticFact(Constant(0.2), C(a, b)), TRUE)
     ]
     prob_idb = [
         Implication(
@@ -240,11 +240,11 @@ def test_stratify_query_based_probfact():
             Fact(Q(a, Constant(0.4))),
             Fact(Q(b, Constant(0.2))),
             Implication(
-                ProbabilisticPredicate(p / Constant(2), P(x)),
+                ProbabilisticFact(p / Constant(2), P(x)),
                 Q(x, p),
             ),
             Implication(
-                ProbabilisticPredicate(p / Constant(4), Z(y)),
+                ProbabilisticFact(p / Constant(4), Z(y)),
                 Q(y, p),
             ),
         )
@@ -279,11 +279,11 @@ def test_cannot_stratify_qbased_probfact_with_prob_dependency():
     code = Union(
         (
             Implication(
-                ProbabilisticPredicate(Constant(0.2), P(a)),
+                ProbabilisticFact(Constant(0.2), P(a)),
                 TRUE,
             ),
             Implication(
-                ProbabilisticPredicate(Constant(0.6), Q(x)),
+                ProbabilisticFact(Constant(0.6), Q(x)),
                 P(x),
             ),
         )
@@ -298,8 +298,8 @@ def test_cannot_stratify_qbased_probfact_with_prob_dependency():
 def test_stratification_deep_post_probabilistic_dependency():
     code = Union(
         (
-            Implication(ProbabilisticPredicate(Constant(0.2), P(a)), TRUE),
-            Implication(ProbabilisticPredicate(Constant(0.4), T(a)), TRUE),
+            Implication(ProbabilisticFact(Constant(0.2), P(a)), TRUE),
+            Implication(ProbabilisticFact(Constant(0.4), T(a)), TRUE),
             Implication(Z(x, y, p1, p2), Conjunction((Q(x, p1), R(y, p2)))),
             Implication(Q(x, ProbabilisticQuery(PROB, (x,))), P(x)),
             Implication(R(y, ProbabilisticQuery(PROB, (y,))), T(x)),

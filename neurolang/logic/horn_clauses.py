@@ -47,7 +47,8 @@ from .transformations import (
     LogicExpressionWalker,
     MoveNegationsToAtoms,
     PushExistentialsDown,
-    RemoveUniversalPredicates
+    RemoveUniversalPredicates,
+    WalkLogicProgramAggregatingSets
 )
 
 
@@ -190,7 +191,7 @@ def range_restricted_variables(e):
     return RangeRestrictedVariables().walk(e)
 
 
-class RangeRestrictedVariables(LogicExpressionWalker):
+class RangeRestrictedVariables(WalkLogicProgramAggregatingSets):
     """
     The set of variables which are range restricted in a expression.
 
