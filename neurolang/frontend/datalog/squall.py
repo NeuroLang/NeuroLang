@@ -246,8 +246,9 @@ class LambdaSolverMixin(PatternWalker):
         args = self.walk(expression.args)
         lambda_args = functor.args
         lambda_fun = self.walk(functor.function_expression)
-        replacements = {arg: value for arg, value in zip(lambda_args, args)}
-        res = LambdaReplacementsWalker(replacements).walk(lambda_fun)
+        for src, dst in zip(lambda_args, args):
+            lambda_fun = LambdaReplacementsWalker(src, dst).walk(lambda_fun)
+        res = lambda_fun
         if len(lambda_args) < len(args):
             res = FunctionApplication(res, args[len(lambda_args):])
         elif len(lambda_args) > len(args):
@@ -256,11 +257,22 @@ class LambdaSolverMixin(PatternWalker):
 
 
 class LambdaReplacementsWalker(ExpressionWalker):
-    def __init__(self, replacements):
-        self.replacements = replacements
+    def __init__(self, src, dst):
+        self.src = src
+        self.dst = dst
 
     @add_match(Lambda)
     def process_lambda(self, expression):
+        if self.src not in expression.args:
+            function_expression = self.walk(expression.function_expression)
+            if function_expression is not expression.function_expression:
+                expression = expression.apply(
+                    expression.args,
+                    self.walk(expression.function_expression)
+                )
+        return expression
+
+    def process_lambda_(self, expression):
         new_replacements = {
             k: v for k, v in self.replacements.items()
             if k not in expression.args
@@ -279,7 +291,10 @@ class LambdaReplacementsWalker(ExpressionWalker):
 
     @add_match(Symbol)
     def process_symbol(self, expression):
-        return self.replacements.get(expression, expression)
+        if expression == self.src:
+            return self.dst
+        else:
+            return expression
 
 
 class PullUniversalUpImplicationMixin(PatternWalker):
