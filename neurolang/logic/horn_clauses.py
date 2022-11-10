@@ -14,7 +14,6 @@ from the chapter 4 of [1]_.
 .. [1] Abiteboul, Hull, and Vianu, Foundations of Databases: The Logical Level.
 """
 import operator
-import typing
 from functools import reduce
 from typing import Callable
 
