@@ -188,9 +188,8 @@ rule1_body : [ PROBABLY ] verb1 rule_body1
            |  _CHOICE verb1 _WITH _PROBABILITY op rule_body1 -> rule_op_choice
 
 ?rulen : _rule_start rulen_body
-?rulen_body : verbn rule_body1 ";" ops -> rule_opnn
-            | PROBABLY verbn rule_body1 [";" ops] _CONDITIONED? ops -> rule_opnn_per
-
+?rulen_body : PROBABLY? verbn rule_body1 ";" ops -> rule_opn
+            | PROBABLY verbn rule_body1 [ ";" ops ] _CONDITIONED ops -> rule_opn_per
 
 rule_body1 : prep? det ng1
 rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
@@ -660,7 +659,7 @@ class SquallTransformer(lark.Transformer):
         res = np2(verb)
         return res
 
-    def rule_opnn(self, ast):
+    def rule_opn(self, ast):
         verbn, rule_body1, ops = ast
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
@@ -671,10 +670,10 @@ class SquallTransformer(lark.Transformer):
             ly
         )
         res = rule_body1(verb_obj)
-        return res
+        return TheToUniversal[res.type](res)
 
-    def rule_opnn_per(self, ast):
-        _, verbn, rule_body1, ops = ast
+    def rule_opn_per(self, ast):
+        _, verbn, rule_body1, ops, conditioned_ops = ast
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
         ly = Symbol[List[E]].fresh()
@@ -889,12 +888,6 @@ class SquallTransformer(lark.Transformer):
 
     def op(self, ast):
         return ast[-1]
-
-    def op_pp(self, ast):
-        pp, op = ast
-        x = Symbol[E].fresh()
-        res = Lambda((x,), pp(op(x)))
-        return res
 
     def ops(self, ast):
         ops = ast[1::2]
