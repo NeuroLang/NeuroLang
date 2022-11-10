@@ -77,9 +77,6 @@ def K(type_):
     return Callable[[Callable[[E], type_]], type_]
 
 
-TO = Constant("to")
-FROM = Constant("from")
-
 EQ = Constant(eq)
 NE = Constant(ne)
 ADD = Constant(add)
@@ -137,33 +134,6 @@ class Ref(Expression):
 
     def __repr__(self):
         return "Ref[{}]".format(self.label)
-
-
-class Arg(Definition):
-    def __init__(self, preposition, args):
-        self.preposition = preposition
-        self.args = args
-
-    def __repr__(self):
-        return "Arg[{}, {}]".format(self.preposition, self.args)
-
-
-class From(FunctionApplication):
-    def __init__(self, args):
-        self.functor = "TO"
-        self.args = args
-
-    def __repr__(self):
-        return "To[{}]".format(self.args)
-
-
-class ForArg(Definition):
-    def __init__(self, preposition, arg):
-        self.preposition = preposition
-        self.arg = arg
-
-    def __repr__(self):
-        return "ForArg[{}, {}]".format(self.preposition, self.arg)
 
 
 class Expr(Definition):
@@ -663,16 +633,6 @@ class SquallIntermediateSolver(PatternWalker):
             return expression
 
 
-class Cons(Expression):
-    def __init__(self, head, tail):
-        self._symbols = head._symbols | tail._symbols
-        self.head = head
-        self.tail = tail
-
-    def __repr__(self):
-        return f"{self.head}::{self.tail}"
-
-
 class SimplifyNestedProjectionMixin(PatternWalker):
     @add_match(
         Projection(Projection(..., Constant[slice]), Constant[int]),
@@ -689,16 +649,6 @@ class SimplifyNestedProjectionMixin(PatternWalker):
         new_item = Constant(item.value + start)
 
         return self.walk(Projection(collection, new_item))
-
-    @add_match(
-        Cons(
-            Projection(..., Constant[int](0)),
-            Projection(..., Constant(slice(1, None)))
-        ),
-        lambda exp: exp.head.collection == exp.tail.collection
-    )
-    def cons_head_tail(self, expression):
-        return expression.head.collection
 
 
 class SquallSolver(
