@@ -393,3 +393,9 @@ class InvalidCommandExpression(ForbiddenExpressionError):
     """
 
     pass
+
+class NeuroLangTranslateToHornClauseException(NeuroLangException):
+    pass
+
+class ExpressionIsNotSafeRange(NeuroLangTranslateToHornClauseException):
+    pass

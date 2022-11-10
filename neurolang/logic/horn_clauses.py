@@ -21,7 +21,7 @@ import typing
 
 from ..datalog.expressions import Fact
 from ..datalog.negation import is_conjunctive_negation
-from ..exceptions import NeuroLangException
+from ..exceptions import NeuroLangException, NeuroLangTranslateToHornClauseException, ExpressionIsNotSafeRange
 from ..expression_walker import ChainedWalker, PatternWalker, add_match
 from ..expressions import ExpressionBlock
 from ..type_system import Unknown, is_leq_informative
@@ -50,10 +50,6 @@ from .transformations import (
     RemoveUniversalPredicates,
     WalkLogicProgramAggregatingSets
 )
-
-
-class NeuroLangTranslateToHornClauseException(NeuroLangException):
-    pass
 
 
 class HornClause(LogicOperator):
@@ -271,7 +267,7 @@ def convert_srnf_to_horn_clauses(head, expression):
     """
 
     if not is_safe_range(expression):
-        raise NeuroLangTranslateToHornClauseException(
+        raise ExpressionIsNotSafeRange(
             "Expression is not safe range: {}".format(expression)
         )
     if (
@@ -469,6 +465,8 @@ class Fol2DatalogMixin(PatternWalker):
             program = fol_query_to_datalog_program(
                 imp.consequent, imp.antecedent
             )
+        except ExpressionIsNotSafeRange as e:
+            raise
         except NeuroLangException as e:
             raise Fol2DatalogTranslationException from e
         return self.walk(program)
