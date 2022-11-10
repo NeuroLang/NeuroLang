@@ -192,7 +192,7 @@ class TheToUniversal(TheMarker):
     def __init__(self, expression):
         self.expression = expression
         self._symbols = expression._symbols
-    
+
     def __repr__(self):
         return "The->Universal[{}]".format(self.expression)
 
@@ -224,7 +224,7 @@ class ExtendedLogicExpressionWalker(LogicExpressionWalker):
         return expression
 
     @add_match(EQuery)
-    def query(self, expression):
+    def equery(self, expression):
         return expression
 
     @add_match(Command)
@@ -314,7 +314,11 @@ class PullUniversalUpImplicationMixin(PatternWalker):
         )
 
 
-class LogicPreprocessing(FactorQuantifiersMixin, PullUniversalUpImplicationMixin, ExtendedLogicExpressionWalker):
+class LogicPreprocessing(
+    FactorQuantifiersMixin,
+    PullUniversalUpImplicationMixin,
+    ExtendedLogicExpressionWalker
+):
     @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
     def explode_quantifier_tuples(self, expression):
         head = expression.head
@@ -333,7 +337,7 @@ def _label_in_quantifier_body(expression):
 
 
 class ExplodeTupleArguments(ExtendedLogicExpressionWalker):
-    #@add_match(
+    # @add_match(
     #    Quantifier(Symbol, ...),
     #    lambda exp: any(
     #        isinstance(e, FunctionApplication) and
@@ -342,7 +346,7 @@ class ExplodeTupleArguments(ExtendedLogicExpressionWalker):
     #        any(isinstance(arg, tuple) for arg in e.args)
     #        for _, e in expression_iterator(exp.body)
     #    )
-    #)
+    # )
     def tuple_equality(self, expression):
         replacements = {}
         for _, exp in expression_iterator(expression.body):
@@ -358,12 +362,15 @@ class ExplodeTupleArguments(ExtendedLogicExpressionWalker):
                 else:
                     label = exp.args[0]
                     value = exp.args[1]
-                
+
                 if label in replacements:
                     replacements[replacements[label]] = value
                 replacements[label] = value
                 replacements[exp] = TRUE
-        return expression.apply(value, ReplaceExpressionWalker(replacements).walk(expression.body))
+        return expression.apply(
+            value,
+            ReplaceExpressionWalker(replacements).walk(expression.body)
+        )
 
     @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
     def explode_quantifier_tuples(self, expression):
@@ -381,6 +388,24 @@ class ExplodeTupleArguments(ExtendedLogicExpressionWalker):
         new_args = tuple()
         for arg in expression.args:
             if not isinstance(arg, tuple):
+                arg = (arg,)
+            new_args += arg
+            type_args = get_args(expression.functor.type)
+            new_type = Callable[[arg.type for arg in new_args], type_args[-1]]
+        return self.walk(expression.apply(
+            expression.functor.cast(new_type), new_args
+        ))
+
+    @add_match(
+        FunctionApplication,
+        lambda exp: any(isinstance(arg, Constant[List[E]]) for arg in exp.args)
+    )
+    def explode_function_applications_list(self, expression):
+        new_args = tuple()
+        for arg in expression.args:
+            if isinstance(arg, Constant[List[E]]):
+                arg = tuple(arg.value)
+            else:
                 arg = (arg,)
             new_args += arg
             type_args = get_args(expression.functor.type)
@@ -448,7 +473,12 @@ class SolveLabels(ExtendedLogicExpressionWalker):
             expression = ReplaceExpressionWalker(
                 {labels[0]: TRUE, labels[0].variable: labels[0].label}
             ).walk(expression)
-        return self.walk(expression.apply(expression.head, self.walk(expression.body)))
+        return self.walk(
+            expression.apply(
+                expression.head,
+                self.walk(expression.body)
+            )
+        )
 
 
 class SimplifyNestedImplicationsMixin(PullUniversalUpImplicationMixin):
@@ -463,8 +493,12 @@ class SimplifyNestedImplicationsMixin(PullUniversalUpImplicationMixin):
     @add_match(
         Implication(Conjunction, ...),
         lambda exp: (
-            any(isinstance(f, Implication) for f in exp.consequent.formulas) and
-            any(isinstance(f, FunctionApplication) for f in exp.consequent.formulas)
+            any(isinstance(f, Implication) for f in exp.consequent.formulas)
+            and
+            any(
+                isinstance(f, FunctionApplication)
+                for f in exp.consequent.formulas
+            )
         )
     )
     def implication_conjunction_implication_other(self, expression):
@@ -493,36 +527,13 @@ class SimplifyNestedImplicationsMixin(PullUniversalUpImplicationMixin):
             tuple(consequent_implications) +
             (expression.apply(
                 Conjunction[S](tuple(consequent_final)),
-                Conjunction[S]((expression.antecedent,) + tuple(move_to_antecedent))
+                Conjunction[S](
+                    (expression.antecedent,) +
+                    tuple(move_to_antecedent)
+                )
             ),)
         )
         return res
-
-
-class PrepositionSolverMixin(PatternWalker):
-    @add_match(Arg(..., (..., Arg)))
-    def arg_arg(self, expression):
-        internal = self.walk(expression.args[1])
-        if internal is not expression.args[1]:
-            expression = Arg(expression.preposition, (expression.args[0], internal))
-        return expression
-
-    @add_match(
-        Arg(..., (..., ForArg)),
-        lambda exp: exp.preposition == exp.args[1].preposition
-    )
-    def arg_forarg(self, expression):
-        return expression.args[1].arg(expression.args[0])
-
-    @add_match(Arg(..., (..., Lambda)))
-    def arg(self, expression):
-        lambda_exp = expression.args[1]
-        new_lambda_exp = Lambda(
-            lambda_exp.args,
-            Arg(expression.preposition, (expression.args[0], lambda_exp.function_expression))
-        )
-
-        return new_lambda_exp
 
 
 class TheToExistentialWalker(ExpressionWalker):
@@ -550,11 +561,13 @@ class TheToUniversalWalker(ExpressionWalker):
 class SquallIntermediateSolver(PatternWalker):
     @add_match(TheToExistential)
     def replace_the_existential(self, expression):
-        return TheToExistentialWalker().walk(expression.expression)
+        expression = self.walk(expression.expression)
+        return TheToExistentialWalker().walk(expression)
 
     @add_match(TheToUniversal)
     def replace_the_universal(self, expression):
-        return TheToUniversalWalker().walk(expression.expression)
+        expression = self.walk(expression.expression)
+        return TheToUniversalWalker().walk(expression)
 
     @add_match(Aggregation(..., Lambda, Symbol))
     def translate_aggregation(self, expression):
@@ -588,16 +601,27 @@ class SquallIntermediateSolver(PatternWalker):
             )
         )
 
-        solved_criteria = ReplaceExpressionWalker({l: TRUE for l in group_var_labels}).walk(solved_criteria)
-        solved_criteria = ReplaceExpressionWalker({l.args[1]: l.args[0] for l in group_var_labels}).walk(solved_criteria)
+        solved_criteria = ReplaceExpressionWalker(
+            {l: TRUE for l in group_var_labels}
+        ).walk(solved_criteria)
+        solved_criteria = ReplaceExpressionWalker(
+            {l.args[1]: l.args[0] for l in group_var_labels}
+        ).walk(solved_criteria)
 
         aggregation_rule = UniversalPredicate(aggregate_var, Implication(
-            FunctionApplication(predicate, group_vars + (AggregationApplication(functor, (aggregate_var,)),)),
+            FunctionApplication(
+                predicate,
+                group_vars +
+                (AggregationApplication(functor, (aggregate_var,)),)
+            ),
             solved_criteria
         ))
         for var in group_vars:
             aggregation_rule = UniversalPredicate(var, aggregation_rule)
-        aggregation_predicate = FunctionApplication(predicate, group_vars + (value,))
+        aggregation_predicate = FunctionApplication(
+            predicate,
+            group_vars + (value,)
+        )
         formulas = (aggregation_predicate, aggregation_rule)
 
         formulas += group_var_labels
@@ -622,7 +646,10 @@ class SquallIntermediateSolver(PatternWalker):
         ))
 
         built_list = tuple(s.variable for s in labeled_projections[::-1])
-        exp = ReplaceExpressionWalker({s: TRUE for s in labeled_projections}).walk(exp)
+        built_list = Constant[List[E]](built_list, verify_type=False)
+        exp = ReplaceExpressionWalker(
+            {s: TRUE for s in labeled_projections}
+        ).walk(exp)
         exp = ReplaceExpressionWalker({list_to_replace: built_list}).walk(exp)
 
         return exp
@@ -677,7 +704,6 @@ class SimplifyNestedProjectionMixin(PatternWalker):
 class SquallSolver(
     SimplifyNestedProjectionMixin,
     LambdaSolverMixin,
-    PrepositionSolverMixin,
     SquallIntermediateSolver,
     ExpressionWalker
 ):
@@ -718,11 +744,14 @@ class SplitNestedImplicationsMixin(PatternWalker):
             ):
                 new_formulas += (formula.body.consequent,)
                 code += (formula,)
-        new_rule = Implication(expression.consequent, Conjunction(new_formulas))
+        new_rule = Implication(
+            expression.consequent,
+            Conjunction(new_formulas)
+        )
 
         code += (new_rule,)
 
-        res = Union(code) 
+        res = Union(code)
         return res
 
 
@@ -838,7 +867,9 @@ class PushUniversalsDownWithImplications(PushUniversalsDown):
     def push_universal_down_implication(self, expression):
         if expression.head in expression.body.consequent.args:
             new_antecedent = self.walk(expression.body.antecedent)
-            expression = self.walk(Implication(expression.body.consequent, new_antecedent))
+            expression = self.walk(
+                Implication(expression.body.consequent, new_antecedent)
+            )
         else:
             expression = self.walk(
                 Implication(
