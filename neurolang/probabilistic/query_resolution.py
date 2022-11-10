@@ -55,12 +55,6 @@ NE = Constant(operator.ne)
 ZERO = Constant[float](0.)
 GT = Constant(operator.gt)
 
-ZERO = Constant[float](0.)
-GT = Constant(operator.gt)
-
-ZERO = Constant[float](0.)
-GT = Constant(operator.gt)
-
 
 def _qbased_probfact_needs_translation(formula: Implication) -> bool:
     if isinstance(formula.antecedent, FunctionApplication):

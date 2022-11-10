@@ -8,6 +8,7 @@ from ..utils import OrderedSet
 from . import (
     FALSE,
     TRUE,
+    BinaryLogicOperator,
     Conjunction,
     Disjunction,
     ExistentialPredicate,
@@ -189,6 +190,20 @@ class WalkLogicProgramAggregatingSets(PatternWalker):
     @add_match(Quantifier)
     def quantifier(self, expression):
         return self.walk(expression.body)
+
+    @add_match(NaryLogicOperator)
+    def walk_nary(self, expression):
+        fvs = OrderedSet()
+        for arg in expression.unapply():
+            fvs |= self.walk(arg)
+        return fvs
+
+    @add_match(BinaryLogicOperator)
+    def walk_binary_logic_expression(self, expression):
+        left, right = expression.unapply()
+        new_left = self.walk(left)
+        new_right = self.walk(right)
+        return new_left | new_right
 
     @add_match(LogicOperator)
     def logic_operator(self, expression):
