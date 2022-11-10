@@ -38,6 +38,20 @@ class ProbabilisticPredicate(Definition):
         )
 
 
+class ProbabilisticChoice(ProbabilisticPredicate):
+    def __repr__(self):
+        return "ProbabilisticChoice{{{} :: {} : {}}}".format(
+            self.body, self.probability, self.type
+        )
+
+
+class ProbabilisticFact(ProbabilisticPredicate):
+    def __repr__(self):
+        return "ProbabilisticFact{{{} :: {} : {}}}".format(
+            self.body, self.probability, self.type
+        )
+
+
 class Grounding(Definition):
     def __init__(self, expression, relation):
         self.expression = expression

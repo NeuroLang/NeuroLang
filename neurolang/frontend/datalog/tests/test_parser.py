@@ -18,7 +18,7 @@ from ....expressions import (
 from ....probabilistic.expressions import (
     PROB,
     Condition,
-    ProbabilisticPredicate
+    ProbabilisticFact
 )
 from ..standard_syntax import ExternalSymbol, parser
 
@@ -199,7 +199,7 @@ def test_probabilistic_fact():
     res = parser('p::A(3)')
     assert res == Union((
         Implication(
-            ProbabilisticPredicate(p, A(Constant(3.))),
+            ProbabilisticFact(p, A(Constant(3.))),
             Constant(True)
         ),
     ))
@@ -207,7 +207,7 @@ def test_probabilistic_fact():
     res = parser('0.8::A("a b", 3)')
     assert res == Union((
         Implication(
-            ProbabilisticPredicate(
+            ProbabilisticFact(
                 Constant(0.8),
                 A(Constant("a b"), Constant(3.))
             ),
@@ -223,7 +223,7 @@ def test_probabilistic_fact():
     expected = Union(
         (
             Implication(
-                ProbabilisticPredicate(
+                ProbabilisticFact(
                     FunctionApplication(
                         exp,
                         (
