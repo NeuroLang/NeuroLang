@@ -14,6 +14,7 @@ from the chapter 4 of [1]_.
 .. [1] Abiteboul, Hull, and Vianu, Foundations of Databases: The Logical Level.
 """
 import operator
+import typing
 from functools import reduce
 from typing import Callable
 
@@ -45,7 +46,8 @@ from .transformations import (
     LogicExpressionWalker,
     MoveNegationsToAtoms,
     PushExistentialsDown,
-    RemoveUniversalPredicates
+    RemoveUniversalPredicates,
+    WalkLogicProgramAggregatingSets
 )
 
 
@@ -188,7 +190,7 @@ def range_restricted_variables(e):
     return RangeRestrictedVariables().walk(e)
 
 
-class RangeRestrictedVariables(LogicExpressionWalker):
+class RangeRestrictedVariables(WalkLogicProgramAggregatingSets):
     """
     The set of variables which are range restricted in a expression.
 
