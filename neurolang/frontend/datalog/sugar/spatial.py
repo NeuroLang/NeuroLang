@@ -18,7 +18,7 @@ from ....logic import Conjunction, Implication
 from ....relational_algebra import RelationalAlgebraSet
 from ....utils import log_performance
 
-EUCLIDEAN = Symbol("EUCLIDEAN")
+EUCLIDEAN = Symbol[typing.Callable[..., float]]("EUCLIDEAN")
 
 LOG = logging.getLogger(__name__)
 
