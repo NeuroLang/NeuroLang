@@ -1,6 +1,6 @@
 from ...datalog.negation import is_conjunctive_negation
+from ...exceptions import ExpressionIsNotSafeRange, NeuroLangException
 from ...expression_walker import PatternWalker, add_match
-from ...expressions import NeuroLangException
 from ...logic import Implication
 from ...logic.horn_clauses import (
     Fol2DatalogTranslationException,
@@ -37,6 +37,8 @@ class ProbFol2DatalogMixin(PatternWalker):
             program = fol_query_to_datalog_program(
                 imp.consequent, imp.antecedent
             )
+        except ExpressionIsNotSafeRange:
+            raise
         except NeuroLangException as e:
             raise Fol2DatalogTranslationException from e
         return self.walk(program)
