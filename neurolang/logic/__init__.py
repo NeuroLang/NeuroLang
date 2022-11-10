@@ -181,7 +181,7 @@ class UniversalPredicate(Quantifier):
             head_symbols = {head}
         else:
             head_symbols = set(head)
-        self._symbols = body._symbols - head_symbols    
+        self._symbols = body._symbols - head_symbols
 
     def __repr__(self):
         r = (
