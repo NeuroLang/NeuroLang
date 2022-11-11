@@ -787,6 +787,18 @@ class LogicSimplifier(
 
         return res
 
+    @add_match(
+        ExistentialPredicate(..., Implication),
+        lambda expression: (
+            expression.head not in extract_logic_free_variables(expression.body.consequent)
+        )
+    )
+    def push_existential_down_implication(self, expression):
+        return expression.body.apply(
+            expression.body.consequent,
+            expression.apply(expression.head, expression.body.antecedent)
+        )
+
 
 NONE = Constant(None)
 
@@ -1015,6 +1027,58 @@ class SquallExpressionsToNeuroLang(ExpressionWalker):
             d(*consequent.args), antecedent
         ))
         return res
+
+    @add_match(Condition(Implication, ...))
+    def factor_implication_from_conditioned(self, expression):
+        return Implication[S](
+            expression.conditioned.consequent,
+            Condition[S](expression.conditioned.antecedent, expression.conditioning)
+        )
+
+    @add_match(Condition(..., Implication))
+    def factor_implication_from_conditioning(self, expression):
+        return Implication[S](
+            expression.conditioning.consequent,
+            Condition[S](expression.conditioned, expression.conditioning.antecedent)
+        )
+
+    @add_match(
+        Implication(..., Implication),
+        lambda exp: exp.consequent == exp.antecedent.consequent
+    )
+    def nested_implication_equal_consequent(self, expression):
+        return expression.antecedent
+
+    @add_match(Implication(..., Implication(TRUE, ...)))
+    def nested_implication_2nd_True(self, expression):
+        return expression.apply(
+            expression.consequent,
+            expression.antecedent.antecedent
+        )
+
+    @add_match(Implication(TRUE, Implication))
+    def nested_implication_1st_True(self, expression):
+        return expression.antecedent
+
+    @add_match(Condition(..., Quantifier))
+    def factor_existential_out_of_condition(self, expression):
+        return expression.conditioning.apply(
+            expression.conditioning.head,
+            expression.apply(
+                expression.conditioned,
+                expression.conditioning.body
+            )
+        )
+
+    @add_match(Condition(Quantifier, ...))
+    def factor_existential_out_of_conditional(self, expression):
+        return expression.conditioned.apply(
+            expression.conditioned.head,
+            expression.apply(
+                expression.conditioned.body,
+                expression.conditioning
+            )
+        )
 
 
 def squall_to_fol(expression, type_predicate_symbols=None):

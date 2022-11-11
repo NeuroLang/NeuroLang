@@ -189,7 +189,7 @@ rule1_body : [ PROBABLY ] verb1 rule_body1
 
 ?rulen : _rule_start rulen_body
 ?rulen_body : PROBABLY? verbn rule_body1 ";" ops -> rule_opn
-            | PROBABLY verbn rule_body1 [ ";" ops ] _CONDITIONED ops -> rule_opn_per
+            | PROBABLY verbn condition -> rule_opnc_per
 
 rule_body1 : prep? det ng1
 rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
@@ -358,6 +358,10 @@ string : STRING
 number : SIGNED_INT
        | SIGNED_FLOAT
 
+condition : ops _CONDITIONED prep ops -> condition_oo
+          | s _CONDITIONED prep ops   -> condition_so
+          | ops _CONDITIONED prep s   -> condition_os
+          | s _CONDITIONED s          -> condition_ss
 
 ?bool{x} : bool_disjunction{x}
 bool_disjunction{x} : bool_conjunction{x}
@@ -672,17 +676,14 @@ class SquallTransformer(lark.Transformer):
         res = rule_body1(verb_obj)
         return TheToUniversal[res.type](res)
 
-    def rule_opn_per(self, ast):
-        _, verbn, rule_body1, ops, conditioned_ops = ast
+    def rule_opnc_per(self, ast):
+        _, verbn, condition = ast
         x = Symbol[E].fresh()
-        y = Symbol[E].fresh()
-        ly = Symbol[List[E]].fresh()
-        prob = PROB.cast(Callable[[E, List[E]], float])
-        verb_obj = ExpandListArgument[P1](
-            Lambda((x,), ops(ly)(Lambda((y,), verbn(x, y, prob(x, y))))),
-            ly
-        )
-        res = rule_body1(verb_obj)
+        lx = Symbol[List[E]].fresh()
+        prob = PROB.cast(Callable[[List[E]], float])
+        verb_obj = verbn(x, prob(x))
+        verb_obj = ExpandListArgument[P1](condition(lx)(Lambda((x,), verb_obj)), lx)
+        res = verb_obj
         return res
 
     def rule_body1(self, ast):
@@ -1283,6 +1284,38 @@ class SquallTransformer(lark.Transformer):
 
     def string(self, ast):
         return Constant[str](ast[0])
+
+    def condition_oo(self, ast):
+        ops1, _, ops2 = ast
+        lx = Symbol[List[E]].fresh()
+        d = Symbol[P1].fresh()
+        res = Lambda((lx,), Lambda((d,), Condition[S](ops1(lx)(d), ops2(lx)(d))))
+
+        return res
+
+    def condition_so(self, ast):
+        s, _, ops = ast
+        lx = Symbol[List[E]].fresh()
+        d = Symbol[P1].fresh()
+        res = Lambda((lx,), Lambda((d,), Condition[S](s, ops(lx)(d))))
+
+        return res
+
+    def condition_os(self, ast):
+        ops, _, s = ast
+        lx = Symbol[List[E]].fresh()
+        d = Symbol[P1].fresh()
+        res = Lambda((lx,), Lambda((d,), Condition[S](ops(lx)(d), s)))
+
+        return res
+
+    def condition_ss(self, ast):
+        s, _, s = ast
+        lx = Symbol[List[E]].fresh()
+        d = Symbol[P1].fresh()
+        res = Lambda((lx,), Lambda((d,), Condition[S](s, s)))
+
+        return res
 
     def bool_disjunction(self, ast):
         return self._boolean_application_by_type(
