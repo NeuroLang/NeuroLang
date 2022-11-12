@@ -407,7 +407,7 @@ class DuplicatedLabelsVerification(ExtendedLogicExpressionWalker):
         raise RepeatedLabelException("Repeated appositions are not permitted")
 
 
-class FactorQuantifiers(FactorQuantifiersMixin, ExtendedLogicExpressionWalker):
+class FactorQuantifierConditionMixin(PatternWalker):
     @add_match(Condition(..., Quantifier))
     def factor_existential_out_of_condition(self, expression):
         return expression.conditioning.apply(
@@ -428,6 +428,9 @@ class FactorQuantifiers(FactorQuantifiersMixin, ExtendedLogicExpressionWalker):
             )
         )
 
+
+class FactorQuantifiers(FactorQuantifierConditionMixin, FactorQuantifiersMixin, ExtendedLogicExpressionWalker):
+    pass 
 
 class SolveLabels(ExtendedLogicExpressionWalker):
     @add_match(
@@ -504,6 +507,24 @@ class SimplifyNestedImplicationsMixin(PullUniversalUpImplicationMixin):
             ),)
         )
         return res
+
+    @add_match(
+        Implication(..., Implication),
+        lambda exp: exp.consequent == exp.antecedent.consequent
+    )
+    def nested_implication_equal_consequent(self, expression):
+        return expression.antecedent
+
+    @add_match(Implication(..., Implication(TRUE, ...)))
+    def nested_implication_2nd_True(self, expression):
+        return expression.apply(
+            expression.consequent,
+            expression.antecedent.antecedent
+        )
+
+    @add_match(Implication(TRUE, Implication))
+    def nested_implication_1st_True(self, expression):
+        return expression.antecedent
 
 
 class TheToExistentialWalker(ExpressionWalker):
@@ -790,7 +811,8 @@ class LogicSimplifier(
     @add_match(
         ExistentialPredicate(..., Implication),
         lambda expression: (
-            expression.head not in extract_logic_free_variables(expression.body.consequent)
+            expression.head
+            not in extract_logic_free_variables(expression.body.consequent)
         )
     )
     def push_existential_down_implication(self, expression):
@@ -878,7 +900,7 @@ def _is_aggregation_implication(expression):
     )
 
 
-class SquallExpressionsToNeuroLang(ExpressionWalker):
+class SquallExpressionsToNeuroLang(FactorQuantifierConditionMixin, ExpressionWalker):
     @add_match(UniversalPredicate(..., Union))
     def push_universal_down_union(self, expression):
         new_formulas = tuple()
@@ -1059,26 +1081,6 @@ class SquallExpressionsToNeuroLang(ExpressionWalker):
     @add_match(Implication(TRUE, Implication))
     def nested_implication_1st_True(self, expression):
         return expression.antecedent
-
-    @add_match(Condition(..., Quantifier))
-    def factor_existential_out_of_condition(self, expression):
-        return expression.conditioning.apply(
-            expression.conditioning.head,
-            expression.apply(
-                expression.conditioned,
-                expression.conditioning.body
-            )
-        )
-
-    @add_match(Condition(Quantifier, ...))
-    def factor_existential_out_of_conditional(self, expression):
-        return expression.conditioned.apply(
-            expression.conditioned.head,
-            expression.apply(
-                expression.conditioned.body,
-                expression.conditioning
-            )
-        )
 
 
 def squall_to_fol(expression, type_predicate_symbols=None):
