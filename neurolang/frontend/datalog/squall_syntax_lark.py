@@ -185,12 +185,12 @@ query : _OBTAIN ops
 _rule_start : _DEFINE _AS
 
 ?rule1 : _rule_start rule1_body
-rule1_body : [ PROBABLY ] verb1 rule_body1
-           |  PROBABLY verb1 rule_body1_cond
+rule1_body : [ PROBABLY ] verb1 prep? rule_body1
+           |  PROBABLY verb1 prep? rule_body1_cond
            |  verb1 _WITH _PROBABILITY op rule_body1 -> rule_op_fact
            |  _CHOICE verb1 _WITH _PROBABILITY op rule_body1 -> rule_op_choice
 
-rule_body1 : prep? det ng1
+rule_body1 : det ng1
 rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
                 | s _CONDITIONED _TO det ng1 -> rule_body1_cond_posterior
 
