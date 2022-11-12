@@ -1,7 +1,7 @@
 from ...datalog.negation import is_conjunctive_negation
 from ...exceptions import ExpressionIsNotSafeRange, NeuroLangException
 from ...expression_walker import PatternWalker, add_match
-from ...logic import Implication
+from ...logic import Implication, ExistentialPredicate
 from ...logic.horn_clauses import (
     Fol2DatalogTranslationException,
     fol_query_to_datalog_program
@@ -10,10 +10,28 @@ from ...probabilistic.exceptions import ForbiddenConditionalQueryNonConjunctive
 from ...probabilistic.expressions import Condition
 
 
+def _is_existentially_quantified_condition(expression):
+    antecedent = expression.antecedent
+    while isinstance(antecedent, ExistentialPredicate):
+        antecedent = antecedent.body
+
+    return isinstance(antecedent, Condition)
+
+
 class ProbFol2DatalogMixin(PatternWalker):
     """Mixin to translate first order logic expressions
     to datalog expressions, including MARG queries
     """
+    @add_match(
+        Implication(..., ExistentialPredicate),
+        _is_existentially_quantified_condition 
+    )
+    def eliminate_existential_on_marg_query(self, imp):
+        antecedent = imp.antecedent
+        while isinstance(antecedent, ExistentialPredicate):
+            antecedent = antecedent.body
+        new_imp = imp.apply(imp.consequent, antecedent)
+        return self.walk(new_imp)
 
     @add_match(
         Implication(..., Condition),
