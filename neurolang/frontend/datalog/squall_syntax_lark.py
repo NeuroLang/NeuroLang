@@ -8,7 +8,11 @@ from nltk.corpus import wordnet
 from nltk.stem.snowball import EnglishStemmer
 from nltk.stem.wordnet import WordNetLemmatizer
 
-from ...exceptions import NeuroLangException, NeuroLangFailedParseException, NeuroLangFrontendException
+from ...exceptions import (
+    NeuroLangException,
+    NeuroLangFailedParseException,
+    NeuroLangFrontendException
+)
 from ...expression_walker import ExpressionWalker, add_match
 from ...expressions import (
     Command,
@@ -52,14 +56,14 @@ from .squall import (
     K,
     Label,
     LambdaSolver,
-    ProbabilisticFactSymbol,
     ProbabilisticChoiceSymbol,
+    ProbabilisticFactSymbol,
     Query,
     S,
     SquallSolver,
     The,
-    TheToUniversal,
     TheToExistential,
+    TheToUniversal,
     squall_to_fol
 )
 
@@ -67,7 +71,6 @@ from .squall import (
 
 
 alpha = TypeVar("alpha")
-K_alpha = Callable[[Callable[[E], alpha]], alpha]
 
 LEMMATIZER = WordNetLemmatizer()
 STEMMER = EnglishStemmer()
@@ -187,15 +190,18 @@ rule1_body : [ PROBABLY ] verb1 rule_body1
            |  verb1 _WITH _PROBABILITY op rule_body1 -> rule_op_fact
            |  _CHOICE verb1 _WITH _PROBABILITY op rule_body1 -> rule_op_choice
 
-?rulen : _rule_start rulen_body
-?rulen_body : PROBABLY? verbn rule_body1 ";" ops -> rule_opn
-            | PROBABLY verbn condition -> rule_opnc_per
-
 rule_body1 : prep? det ng1
 rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
                 | s _CONDITIONED _TO det ng1 -> rule_body1_cond_posterior
 
-rule_body2_cond : det ng1 _CONDITIONED _TO det ng1
+?rulen : _rule_start rulen_body
+?rulen_body : PROBABLY? verbn prep? rule_body1 ";" ops -> rule_opn
+            | PROBABLY verbn condition -> rule_opnc_per
+
+condition : ops _CONDITIONED prep ops -> condition_oo
+          | s _CONDITIONED prep ops   -> condition_so
+          | ops _CONDITIONED prep s   -> condition_os
+          | s _CONDITIONED s          -> condition_ss
 
 PROBABLY : _PROBABLY
 
@@ -357,11 +363,6 @@ label_identifier : CNAME
 string : STRING
 number : SIGNED_INT
        | SIGNED_FLOAT
-
-condition : ops _CONDITIONED prep ops -> condition_oo
-          | s _CONDITIONED prep ops   -> condition_so
-          | ops _CONDITIONED prep s   -> condition_os
-          | s _CONDITIONED s          -> condition_ss
 
 ?bool{x} : bool_disjunction{x}
 bool_disjunction{x} : bool_conjunction{x}
@@ -709,18 +710,6 @@ class SquallTransformer(lark.Transformer):
             (d,),
             det(Lambda((x,), Condition[S](s, ng1(x))))(d)
         )
-        return res
-
-    def rule_body2_cond(self, ast):
-        det_1, ng1_1, det_2, ng1_2 = ast
-        d = Symbol[P2].fresh()
-        x = Symbol[E].fresh() 
-        y = Symbol[E].fresh()       
-
-        np = self.np_quantified((det_1, ng1_1))
-        op = self.np_quantified((det_2, ng1_2))
-
-        res = Lambda((d,), np(Lambda((x,), op(Lambda((y,), d(x, y))))))
         return res
 
     def s_np_vp(self, ast):
