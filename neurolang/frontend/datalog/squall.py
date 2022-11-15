@@ -429,8 +429,12 @@ class FactorQuantifierConditionMixin(PatternWalker):
         )
 
 
-class FactorQuantifiers(FactorQuantifierConditionMixin, FactorQuantifiersMixin, ExtendedLogicExpressionWalker):
-    pass 
+class FactorQuantifiers(
+    FactorQuantifierConditionMixin,
+    FactorQuantifiersMixin,
+    ExtendedLogicExpressionWalker
+):
+    pass
 
 
 class SolveLabels(ExtendedLogicExpressionWalker):
