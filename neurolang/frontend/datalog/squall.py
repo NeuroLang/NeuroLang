@@ -599,11 +599,13 @@ class SquallIntermediateSolver(PatternWalker):
             {l.args[1]: l.args[0] for l in group_var_labels}
         ).walk(solved_criteria)
 
+        application = self.walk(FunctionApplication(functor, (aggregate_var,)))
+
         aggregation_rule = UniversalPredicate(aggregate_var, Implication(
             FunctionApplication(
                 predicate,
                 group_vars +
-                (AggregationApplication(functor, (aggregate_var,)),)
+                (AggregationApplication(*application.unapply()),)
             ),
             solved_criteria
         ))
