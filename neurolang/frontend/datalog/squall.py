@@ -906,6 +906,9 @@ class CollapseUnions(IdentityWalker):
 
 
 def _is_aggregation_implication(expression):
+    while isinstance(expression, ExistentialPredicate):
+        expression = expression.body
+
     return (
         isinstance(expression, Implication) and
         isinstance(expression.consequent, FunctionApplication) and
@@ -1055,6 +1058,8 @@ class SquallExpressionsToNeuroLang(
         aggregation_formulas = tuple()
         for formula in antecedent_formulas:
             if _is_aggregation_implication(formula):
+                while isinstance(formula, ExistentialPredicate):
+                    formula = formula.body
                 aggregation_formulas += (formula,)
             else:
                 formulas_to_keep += (formula,)
