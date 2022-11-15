@@ -432,6 +432,7 @@ class FactorQuantifierConditionMixin(PatternWalker):
 class FactorQuantifiers(FactorQuantifierConditionMixin, FactorQuantifiersMixin, ExtendedLogicExpressionWalker):
     pass 
 
+
 class SolveLabels(ExtendedLogicExpressionWalker):
     @add_match(
         Quantifier,
