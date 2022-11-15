@@ -684,6 +684,7 @@ class SimplifyNestedProjectionMixin(PatternWalker):
 
 
 class SquallSolver(
+    RemoveTrivialOperationsMixin,
     SimplifyNestedProjectionMixin,
     LambdaSolverMixin,
     SquallIntermediateSolver,
