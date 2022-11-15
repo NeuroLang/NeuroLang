@@ -916,7 +916,10 @@ def _is_aggregation_implication(expression):
     )
 
 
-class SquallExpressionsToNeuroLang(FactorQuantifierConditionMixin, ExpressionWalker):
+class SquallExpressionsToNeuroLang(
+    FactorQuantifierConditionMixin,
+    ExpressionWalker
+):
     @add_match(UniversalPredicate(..., Union))
     def push_universal_down_union(self, expression):
         new_formulas = tuple()
