@@ -961,6 +961,29 @@ class SquallExpressionsToNeuroLang(FactorQuantifierConditionMixin, ExpressionWal
         return self.walk(expression)
 
     @add_match(
+        ExistentialPredicate(Symbol, Conjunction),
+        lambda expression: any(
+            expression.head not in extract_logic_free_variables(formula)
+            for formula in expression.body.formulas
+        )
+    )
+    def push_existential_down_conjunction(self, expression):
+        new_formulas_in = tuple()
+        new_formulas_out = tuple()
+        head = expression.head
+        for formula in expression.body.formulas:
+            if head in extract_logic_free_variables(formula):
+                new_formulas_in += (formula,)
+            else:
+                new_formulas_out += (formula,)
+        e_formula = expression.apply(
+            head,
+            expression.body.apply(new_formulas_in)
+        )
+        new_formulas = new_formulas_out + (e_formula,)
+        return expression.body.apply(new_formulas)
+
+    @add_match(
         UniversalPredicate(..., EQuery),
         lambda exp: (
             exp.head in exp.body.head._symbols or
