@@ -651,7 +651,15 @@ class SquallIntermediateSolver(PatternWalker):
         if expression.functor.name in sims:
             return TRUE
         else:
-            return expression
+            functor = self.walk(expression.functor)
+            args = self.walk(expression.args)
+            if (
+                functor is expression.functor and
+                all(a is a_ for a, a_ in zip(args, expression.args))
+            ):
+                return expression
+            else:
+                return expression.apply(functor, args)
 
 
 class SimplifyNestedProjectionMixin(PatternWalker):
