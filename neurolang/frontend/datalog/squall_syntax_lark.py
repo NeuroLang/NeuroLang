@@ -235,7 +235,7 @@ NO : _NO
 np2 : det ng2
 
 ng1 : noun1 [ app ] [ rel ] -> ng1_noun
-    | noun1 [ app ] ( _OF | _FROM ) npc{_THE}  [ dims ]   -> ng1_agg_npc
+    | noun1 [ app ] ( _OF | _FROM ) npc{_THE} [ ops ] [ dims ]   -> ng1_agg_npc
     // | noun1 [ app ] ng1 [ dims ]           -> ng1_agg_ng1
 ng2 : noun2 [ app ]
 
@@ -917,7 +917,16 @@ class SquallTransformer(lark.Transformer):
         )))
 
     def ng1_agg_npc(self, ast):
-        noun1, app, npc, dims = ast
+        noun1, app, npc, ops, dims = ast
+        if ops:
+            x = Symbol[E].fresh()
+            w = Symbol[E].fresh()
+            lw = Symbol[List[E]].fresh()
+            noun1 = noun1.cast(Callable[[E, List[E]], bool])
+            noun1 = ExpandListArgument[P1](
+                Lambda((x,), ops(lw)(Lambda((w,), noun1(x, w)))),
+                lw
+            )
         aggreg = self.adj_aggreg([noun1])
         v = Symbol[S].fresh()
         y = Symbol[E].fresh()
@@ -1448,8 +1457,7 @@ class SquallTransformer(lark.Transformer):
         return self.adj_aggreg(ast)
 
     def adj_aggreg(self, ast):
-        functor = ast[0].apply(ast[0].name.lower())
-        functor = functor.cast(Callable[[Callable[[List[E]], P1]], P1])
+        functor = ast[0].cast(Callable[[Callable[[List[E]], P1]], P1])
         d = Symbol[List[E]].fresh()
         x = Symbol[P1].fresh()
         res = Lambda(
