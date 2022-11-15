@@ -970,20 +970,6 @@ class SquallExpressionsToNeuroLang(FactorQuantifierConditionMixin, ExpressionWal
     def make_datalog_query_universal(self, expression):
         return self.walk(expression.body)
 
-    @add_match(
-        ExistentialPredicate(..., Implication(..., Conjunction)),
-        lambda exp: (
-            exp.head not in exp.body.consequent._symbols and
-            any(
-                exp.head in formula.antecedent._symbols
-                for formula in exp.body.antecedent.formulas
-                if _is_aggregation_implication(formula)
-            )
-        )
-    )
-    def make_datalog_rule_existential_aggregation(self, expression):
-        return self.walk(expression.body)
-
     @add_match(FunctionApplication(ProbabilisticFactSymbol, (..., ...)))
     def probabilistic_fact_symbol(self, expression):
         return ProbabilisticFact(*expression.args)
