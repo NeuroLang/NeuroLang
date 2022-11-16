@@ -289,13 +289,17 @@ class LogicPreprocessing(
     PullUniversalUpImplicationMixin,
     ExtendedLogicExpressionWalker
 ):
-    @add_match(Quantifier, lambda exp: isinstance(exp.head, tuple))
-    def explode_quantifier_tuples(self, expression):
+    @add_match(ExistentialPredicate, lambda exp: isinstance(exp.head, tuple))
+    def explode_existential_tuples(self, expression):
         head = expression.head
         res = expression.body
         for h in sorted(head, key=repr):
             res = expression.apply(h, res)
         return self.walk(res)
+
+    @add_match(UniversalPredicate, lambda exp: isinstance(exp.head, tuple))
+    def explode_universal_tuples(self, expression):
+        return self.explode_existential_tuples(expression)
 
 
 def _label_in_quantifier_body(expression):
@@ -427,6 +431,10 @@ class FactorQuantifierConditionMixin(PatternWalker):
                 expression.conditioning
             )
         )
+    
+    @add_match(ExistentialPredicate(..., Condition))
+    def remove_existential_on_condition(self, expression):
+        return expression.body
 
 
 class FactorQuantifiers(

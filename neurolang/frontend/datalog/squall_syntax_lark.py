@@ -195,7 +195,7 @@ rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
                 | s _CONDITIONED _TO det ng1 -> rule_body1_cond_posterior
 
 ?rulen : _rule_start rulen_body
-?rulen_body : PROBABLY? verbn prep? rule_body1 ";" ops -> rule_opn
+?rulen_body : PROBABLY? verbn [ prep ] rule_body1 ";" ops -> rule_opn
             | PROBABLY verbn condition -> rule_opnc_per
 
 condition : ops _CONDITIONED prep ops -> condition_oo
@@ -323,7 +323,7 @@ op : prep? op_np
 
 ?opn : ops
 
-ops : [prep] ( op_np ";"? prep )* op_np ";"?
+ops : [prep] ( op_np prep )* op_np
 
 _COMMA : ","
 
@@ -640,8 +640,8 @@ class SquallTransformer(lark.Transformer):
             .cast(Callable[[E, S], S])
         )
         verb = Lambda((x,), TheToUniversal[probability.type](probability(Lambda((y,), pps(y, verb1(x))))))
-        op = TheToUniversal[op.type](op)
-        return op(verb)
+        res = op(verb)
+        return TheToUniversal[res.type](res)
 
     def rule_op_cond1(self, ast):
         probably, verb1, op = ast
@@ -665,7 +665,7 @@ class SquallTransformer(lark.Transformer):
         return res
 
     def rule_opn(self, ast):
-        verbn, rule_body1, ops = ast
+        verbn, _, rule_body1, ops = ast
         x = Symbol[E].fresh()
         y = Symbol[E].fresh()
         ly = Symbol[List[E]].fresh()
@@ -685,7 +685,7 @@ class SquallTransformer(lark.Transformer):
         verb_obj = verbn(x, prob(x))
         verb_obj = ExpandListArgument[P1](condition(lx)(Lambda((x,), verb_obj)), lx)
         res = verb_obj
-        return res
+        return TheToUniversal[res.type](res)
 
     def rule_body1(self, ast):
         res = self.np_quantified(ast[-2:])
