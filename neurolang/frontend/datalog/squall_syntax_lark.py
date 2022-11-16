@@ -234,8 +234,8 @@ NO : _NO
 
 np2 : det ng2
 
-ng1 : noun1 [ app ] [ rel ] -> ng1_noun
-    | noun1 [ app ] ( _OF | _FROM ) npc{_THE} [ ops ] [ dims ]   -> ng1_agg_npc
+ng1 : noun1 [ app ] [ rel ]                                                   -> ng1_noun
+    | noun1 [ app ] [ _COMMA ops _COMMA ] ( _OF | _FROM ) npc{_THE}  [ dims ] -> ng1_agg_npc
     // | noun1 [ app ] ng1 [ dims ]           -> ng1_agg_ng1
 ng2 : noun2 [ app ]
 
@@ -323,7 +323,7 @@ op : prep? op_np
 
 ?opn : ops
 
-ops : [prep] ( op_np prep )* op_np
+ops : [prep] ( op_np ";"? prep )* op_np ";"?
 
 _COMMA : ","
 
@@ -917,7 +917,7 @@ class SquallTransformer(lark.Transformer):
         )))
 
     def ng1_agg_npc(self, ast):
-        noun1, app, npc, ops, dims = ast
+        noun1, app, ops, npc, dims = ast
         if ops:
             x = Symbol[E].fresh()
             w = Symbol[E].fresh()
