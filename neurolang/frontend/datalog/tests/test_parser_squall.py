@@ -17,7 +17,7 @@ from ....logic import (
     NaryLogicOperator,
     UniversalPredicate
 )
-from ....probabilistic.expressions import ProbabilisticPredicate
+from ....probabilistic.expressions import ProbabilisticPredicate, Condition, PROB
 from ..squall import LogicSimplifier
 from ..squall_syntax_lark import parser
 from ..standard_syntax import ExternalSymbol
@@ -67,6 +67,14 @@ class LogicWeakEquivalence(ExpressionWalker):
                 sorted(left.formulas, key=repr),
                 sorted(right.formulas, key=repr)
             )
+        )
+
+    @add_match(EQ(Condition, Condition))
+    def eq_condition(self, expression):
+        left, right = expression.args
+        return (
+            self.walk(EQ(left.conditioned, right.conditioned)) and
+            self.walk(EQ(left.conditioning, right.conditioning))
         )
 
     @add_match(EQ(LogicOperator, LogicOperator))
@@ -147,7 +155,7 @@ def test_lark_semantics_item_selection_the_operator(datalog_simple):
 def test_lark_semantics_join(datalog_simple):
     code = (
         "define as merge for every Item ?i ;"
-        " with every Quantity that ?i item_counts"
+        " with every Quantity that ?i item_counts."
     )
     logic_code = parser(code)
     datalog_simple.walk(logic_code)
@@ -170,3 +178,65 @@ def test_lark_semantics_aggregation(datalog_simple):
     solution = chase.build_chase_solution()["max_item"].value
     expected = set([('a', 1), ('b', 2), ('c', 3)])
     assert solution == expected
+
+
+def test_intransitive_per_conditional(datalog_simple):
+    code = """
+        define as probably Active every Focus (@x; @y; @z) that a Study @s reports
+            conditioned to @s mentions a Term  @t that is Synonym of 'pain'.
+    """
+    active = Symbol('active')
+    mention = Symbol('mention')
+    term = Symbol('term')
+    focus = Symbol('focus')
+    study = Symbol('study')
+    synonym = Symbol('synonym')
+    report = Symbol('report')
+    x = Symbol('x')
+    y = Symbol('y')
+    z = Symbol('z')
+    s = Symbol('s')
+    t = Symbol('t')
+
+    expected = Implication(
+        active(x, y, z, PROB(x, y, z)),
+        Condition(
+            Conjunction((focus(x, y, z), study(s), report(s, x, y, z))),
+            Conjunction((mention(s, t), term(t), synonym(t, Constant('pain'))))
+        )
+    )
+
+    logic_code = parser(code)
+    datalog_simple.walk(logic_code)
+
+    assert weak_logic_eq(logic_code.formulas[0], expected)
+
+
+def test_server_example_VWFA():
+    code = """
+        define as VWFA every Focus (@x; @y; @z) 
+            such that ((@x - (-45)) ** 2 + (@y - (-57)) ** 2 + (@z - (-12)) ** 2) is lower than 5 ** 2 .
+
+        define as `VWFA image` the `Created Region` of the VWFA in 3D.
+
+        define as `Mentions VWFA` every Study that reports the VWFA in 3D.
+
+        define as choice `Given study` with probability 1 / (the Count of the Studies)
+        every Study.
+
+        define as probably `Linked to VWFA`
+            every Term that a Study @s mentions
+            conditioned to @s is a `Given study` that `Mentions VWFA`.
+
+        define as probably Universal every Term that a `Given study` mentions.
+
+        define as `specific to the VWFA` every Term
+            that is `Linked to VWFA` with a Probability @p and  Universal with a Probability @p0;
+            by every Quantity @lor that is equal to log10(@p / @p0).
+
+        obtain every Term @t with every Quantity @lor such that @t `specific to the VWFA` with @lor.
+    """
+    logic_code = parser(code)
+    datalog_simple.walk(logic_code)
+
+    assert True
