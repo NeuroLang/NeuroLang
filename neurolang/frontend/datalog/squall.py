@@ -855,6 +855,20 @@ class LogicSimplifier(
         )
 
 
+class LogicSimplifierPost(
+    SimplifyNestedImplicationsMixin,
+    RemoveTrivialOperationsMixin,
+    CollapseConjunctionsMixin,
+    CollapseDisjunctionsMixin,
+    SimplifiyEqualitiesMixin,
+    FactorQuantifiersMixin,
+    ExtendedLogicExpressionWalker
+):
+    @add_match(UniversalPredicate(..., Implication))
+    def univesal_implication_to_rule(self, expression):
+        return expression.body
+
+
 NONE = Constant(None)
 
 
@@ -1148,7 +1162,7 @@ def squall_to_fol(expression, type_predicate_symbols=None):
         EliminateSpuriousEqualities(),
         SquallExpressionsToNeuroLang(),
         CollapseUnions(),
-        LogicSimplifier(),
+        LogicSimplifierPost(),
         GuaranteeUnion(),
         ReplaceExpressionWalker({
             Symbol[EUCLIDEAN.type]("euclidean"): EUCLIDEAN,
