@@ -670,11 +670,20 @@ class SquallIntermediateSolver(PatternWalker):
             args = self.walk(expression.args)
             if (
                 functor is expression.functor and
-                all(a is a_ for a, a_ in zip(args, expression.args))
+                self._tuples_are_the_same(args, expression.args)
             ):
                 return expression
             else:
                 return expression.apply(functor, args)
+
+    def _tuples_are_the_same(self, t1, t2):
+        for e1, e2, in zip(t1, t2):
+            if isinstance(e1, tuple) and isinstance(e2, tuple):
+                if not self._tuples_are_the_same(e1, e2):
+                    return False
+            elif e1 is not e2:
+                return False
+        return True
 
 
 class SimplifyNestedProjectionMixin(PatternWalker):
