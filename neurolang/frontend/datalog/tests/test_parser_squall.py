@@ -1,7 +1,7 @@
+import logging
 from inspect import signature
 from itertools import product
 from operator import add, eq, mul, pow, sub, truediv
-import logging
 
 import pytest
 
@@ -17,12 +17,15 @@ from ....logic import (
     NaryLogicOperator,
     UniversalPredicate
 )
-from ....probabilistic.expressions import ProbabilisticPredicate, Condition, PROB
+from ....probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate
+)
+from ...probabilistic_frontend import Chase, RegionFrontendCPLogicSolver
 from ..squall import LogicSimplifier
 from ..squall_syntax_lark import parser
 from ..standard_syntax import ExternalSymbol
-from ...probabilistic_frontend import RegionFrontendCPLogicSolver, Chase
-
 
 LOGGER = logging.getLogger()
 
@@ -103,8 +106,8 @@ def weak_logic_eq(left, right):
     return LogicWeakEquivalence().walk(EQ(left, right))
 
 
-@pytest.fixture
-def datalog_simple():
+@pytest.fixture(scope="module")
+def datalog_base():
     datalog = RegionFrontendCPLogicSolver()
 
     datalog.add_extensional_predicate_from_tuples(
@@ -121,7 +124,28 @@ def datalog_simple():
         Symbol("quantity"),
         [(i,) for i in range(5)]
     )
+    datalog.add_extensional_predicate_from_tuples(
+        Symbol("voxel"),
+        [(0, 0, 0)]
+    )
+    datalog.add_extensional_predicate_from_tuples(
+        Symbol("focus"),
+        [(0, 0, 0)]
+    )
+
+    datalog.add_extensional_predicate_from_tuples(
+        Symbol("report"),
+        [(0, 0, 0, 0)]
+    )
+
     return datalog
+
+
+@pytest.fixture(scope="function")
+def datalog_simple(datalog_base):
+    datalog_base.push_scope()
+    yield datalog_base
+    datalog_base.pop_scope()
 
 
 def test_lark_semantics_item_selection(datalog_simple):
@@ -181,16 +205,14 @@ def test_lark_semantics_aggregation(datalog_simple):
 
 
 def test_intransitive_per_conditional(datalog_simple):
-    code = """
-        define as probably Active every Focus (@x; @y; @z) that a Study @s reports
-            conditioned to @s mentions a Term  @t that is Synonym of 'pain'.
-    """
+
     active = Symbol('active')
     mention = Symbol('mention')
     term = Symbol('term')
     focus = Symbol('focus')
     study = Symbol('study')
     synonym = Symbol('synonym')
+    syn_active = Symbol('syn act')
     report = Symbol('report')
     x = Symbol('x')
     y = Symbol('y')
@@ -198,6 +220,10 @@ def test_intransitive_per_conditional(datalog_simple):
     s = Symbol('s')
     t = Symbol('t')
 
+    code = """
+        define as probably Active every Focus (@x; @y; @z) that a Study @s reports
+            conditioned to @s mentions a Term  @t that is Synonym of 'pain'.
+    """
     expected = Implication(
         active(x, y, z, PROB(x, y, z)),
         Condition(
@@ -211,11 +237,30 @@ def test_intransitive_per_conditional(datalog_simple):
 
     assert weak_logic_eq(logic_code.formulas[0], expected)
 
-
-def test_server_example_VWFA():
     code = """
-        define as VWFA every Focus (@x; @y; @z) 
-            such that ((@x - (-45)) ** 2 + (@y - (-57)) ** 2 + (@z - (-12)) ** 2) is lower than 5 ** 2 .
+        define as probably `Syn active` a Study @s reports a Focus (@x; @y; @z)
+            conditioned to every Term @t that @s mentions and
+            that is Synonym of 'pain'.
+    """
+    expected = Implication(
+        syn_active(t, PROB(t)),
+        Condition(
+            Conjunction((focus(x, y, z), study(s), report(s, x, y, z))),
+            Conjunction((mention(s, t), term(t), synonym(t, Constant('pain'))))
+        )
+    )
+
+    logic_code = parser(code)
+    datalog_simple.walk(logic_code)
+
+    assert weak_logic_eq(logic_code.formulas[0], expected)
+
+
+def test_server_example_VWFA(datalog_simple):
+    code = """
+        define as VWFA every Focus (@x; @y; @z)
+            such that ((@x - (-45)) ** 2 + (@y - (-57)) ** 2 + (@z - (-12)) ** 2)
+            is lower than 5 ** 2 .
 
         define as `VWFA image` the `Created Region` of the VWFA in 3D.
 
@@ -231,9 +276,39 @@ def test_server_example_VWFA():
         define as probably Universal every Term that a `Given study` mentions.
 
         define as `specific to the VWFA` every Term
-            that is `Linked to VWFA` with a Probability @p and  Universal with a Probability @p0;
-            by every Quantity @lor that is equal to log10(@p / @p0).
+            that is `Linked to VWFA` with a Probability @p and 
+            Universal with a Probability @p0;
+                by every Quantity @lor that is equal to log10(@p / @p0).
 
+        obtain every Term @t with every Quantity @lor such that @t `specific to the VWFA` with @lor.
+    """
+    logic_code = parser(code)
+    datalog_simple.walk(logic_code)
+
+    assert True
+
+
+def test_server_example_activation_map(datalog_simple):
+    code = """
+      define as `Study of interest` every Study @s,
+        that mentions a Term --that is 'language' or that is 'memory' -- with a TfIdf greater than 0.0001,
+        and that does not mention a Term that is 'auditory' with a TfIdf greater than 0 .
+
+      define as `reports as active` every Study
+        that reports a Focus (@fx; @fy; @fz);
+        with every Voxel (@x; @y; @z) such that `euclidean distance`(@x,@y,@z,@fx,@fy,@fz) is lower than 4 .
+
+      define as choice `Given study` with probability 1 / (the Count of the Studies)
+        every Study.
+
+      define as probably Active every Voxel in 3D
+        that @s `reports as active` conditioned to a `Given Study` @s is a `Study of interest`.
+
+      define as Images
+        every `Created region overlay` from the Tuples (@x; @y; @z; @p)
+        such that (@x; @y; @z) is a Voxel that is Active with a Probability @p .
+
+      obtain every Image.
         obtain every Term @t with every Quantity @lor such that @t `specific to the VWFA` with @lor.
     """
     logic_code = parser(code)
