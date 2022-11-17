@@ -4,6 +4,7 @@ from typing import Callable, List, TypeVar
 from warnings import warn
 
 import lark
+from nltk import download
 from nltk.corpus import wordnet
 from nltk.stem.snowball import EnglishStemmer
 from nltk.stem.wordnet import WordNetLemmatizer
@@ -77,14 +78,18 @@ STEMMER = EnglishStemmer()
 
 
 def lemmatize(word, pos):
-    lemmatized = LEMMATIZER.lemmatize(word, pos)
-    if (
-        lemmatized == word and
-        word not in wordnet.all_lemma_names()
-    ):
-        lemmatized = STEMMER.stem(word)
-        if lemmatized == word and " " not in word:
-            warn(f"Word {word} couldn't be lemmatized")
+    try:
+        lemmatized = LEMMATIZER.lemmatize(word, pos)
+        if (
+            lemmatized == word and
+            word not in wordnet.all_lemma_names()
+        ):
+            lemmatized = STEMMER.stem(word)
+            if lemmatized == word and " " not in word:
+                warn(f"Word {word} couldn't be lemmatized")
+    except Exception:
+        download('wordnet')
+        lemmatized = lemmatize(word, pos)
     return lemmatized
 
 
