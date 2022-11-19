@@ -587,7 +587,10 @@ class NamedRelationalAlgebraFrozenSet(
             return type(self)(columns)
         if self.arity == 0:
             return self
-        might_have_duplicates = len(set(columns)) == self.arity
+        might_have_duplicates = (
+            (len(set(columns)) < self.arity) or
+            self._might_have_duplicates
+        )
         new_container = self._container[list(columns)]
         return self._light_init_same_structure(
             new_container, might_have_duplicates=might_have_duplicates,
