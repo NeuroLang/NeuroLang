@@ -314,6 +314,29 @@ def test_lark_semantics_aggregation(datalog_simple):
     assert solution == expected
 
 
+def test_lark_aggregation_with_parameter(datalog_simple):
+    code = """
+        define as Top the Percentile, by 95, from the Items.
+    """
+    logic_code = parser(code)
+    datalog_simple.walk(logic_code)
+    top = Symbol("top")
+    aggregation_symbol = Symbol.fresh()
+    x = Symbol.fresh()
+    y = Symbol.fresh()
+    item = Symbol("item")
+    expected = Union((
+        Implication(
+            aggregation_symbol(
+                AggregationApplication(Symbol("percentile"), (y, Constant(95)))
+            ),
+            item(y)
+        ),
+        Implication(top(x), aggregation_symbol(x))
+    ))
+    assert weak_logic_eq(logic_code, expected)
+
+
 def test_intransitive_per_conditional(datalog_simple):
 
     active = Symbol('active')
@@ -386,7 +409,7 @@ def test_server_example_VWFA(datalog_simple):
         define as probably Universal every Term that a `Given study` mentions.
 
         define as `specific to the VWFA` every Term
-            that is `Linked to VWFA` with a Probability @p and 
+            that is `Linked to VWFA` with a Probability @p and
             Universal with a Probability @p0;
                 by every Quantity @lor that is equal to log10(@p / @p0).
 
