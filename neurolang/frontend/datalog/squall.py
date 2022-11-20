@@ -803,10 +803,16 @@ class SimplifiyEqualitiesMixin(NormalizeEqualities):
             any(
                 _cmp_equalities(formula, formula_) != 0
                 for formula_ in exp.formulas[i + 1:]
-                if isinstance(formula_, FunctionApplication) and formula_.functor == EQ
+                if (
+                    isinstance(formula_, FunctionApplication) and
+                    formula_.functor == EQ
+                )
             )
             for i, formula in enumerate(exp.formulas)
-            if isinstance(formula, FunctionApplication) and formula.functor == EQ
+            if (
+                isinstance(formula, FunctionApplication) and
+                formula.functor == EQ
+            )
         )
     )
     def simplify_equalities(self, expression):
