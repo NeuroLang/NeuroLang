@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch
 import operator
 
-from ..exceptions import NeuroLangException
+from ..exceptions import NeuroLangException, ExpressionIsNotSafeRange
 from ..expressions import (
     Symbol,
     Constant,
@@ -1213,7 +1213,7 @@ def test_fol2datalog_unsafe_disjunction():
     V = Symbol("V")
 
     dl = Datalog2()
-    with pytest.raises(Fol2DatalogTranslationException):
+    with pytest.raises(ExpressionIsNotSafeRange):
         dl.walk(
             ExpressionBlock((Implication(G(x), Disjunction((V(y), T(x)))),))
         )
@@ -1264,7 +1264,7 @@ def test_fol2datalog_unsafe_complex_formula():
     R = Symbol("R")
 
     dl = Datalog2()
-    with pytest.raises(Fol2DatalogTranslationException):
+    with pytest.raises(ExpressionIsNotSafeRange):
         dl.walk(
             ExpressionBlock(
                 (

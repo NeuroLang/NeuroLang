@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from ...exceptions import (
+    ExpressionIsNotSafeRange,
     NegativeFormulaNotNamedRelationException,
     NegativeFormulaNotSafeRangeException,
     NeuroLangException,
@@ -834,6 +835,7 @@ def test_solve_marg_query_disjunction():
         (
             ForbiddenConditionalQueryNonConjunctive,
             Fol2DatalogTranslationException,
+            ExpressionIsNotSafeRange
         )
     ):
         with nl.environment as e:
