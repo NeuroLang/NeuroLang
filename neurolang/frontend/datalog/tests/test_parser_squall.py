@@ -10,7 +10,13 @@ from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....datalog.aggregation import AggregationApplication
 from ....expression_pattern_matching import add_match
 from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
-from ....expressions import Constant, Definition, Query, Symbol
+from ....expressions import (
+    Constant,
+    Definition,
+    FunctionApplication,
+    Query,
+    Symbol
+)
 from ....logic import (
     ExistentialPredicate,
     LogicOperator,
@@ -167,6 +173,89 @@ def datalog_simple(datalog_base):
     datalog_base.push_scope()
     yield datalog_base
     datalog_base.pop_scope()
+
+
+def test_rules():
+    A = Symbol('a')
+    B = Symbol('b')
+    C = Symbol('c')
+    f = Symbol('f')
+    x = Symbol('x')
+    y = Symbol('y')
+    z = Symbol('z')
+    res = parser(
+        """
+        define as A every Element @x
+            whose b is an Element @y and
+            such that 3 c an Element @z.
+        """,
+        type_predicate_symbols={"element"}
+    )
+    expected = Union((
+        Implication(A(x), Conjunction((B(x, y), C(Constant(3), z)))),
+    ))
+    assert weak_logic_eq(res, expected)
+
+    res = parser(
+        """
+            define as A every Element @x that is not B.
+        """,
+        type_predicate_symbols={"element"}
+    )
+    expected = Union((
+        Implication(A(x), Negation(B(x))),
+    ))
+    assert weak_logic_eq(res, expected)
+
+    res = parser(
+        """
+        define as A every Element @x
+        whose b is an Element @y and
+        such that 3 c an Element @z that is 4 .
+        """,
+        type_predicate_symbols={"element"}
+    )
+    expected = Union((
+        Implication(
+            A(x),
+            Conjunction((
+                B(x, y), C(Constant(3), z), Constant(eq)(z, Constant(4))
+            ))
+        ),
+    ))
+    assert weak_logic_eq(res, expected)
+
+    res = parser(
+        """
+        define as A the Element @x
+            such that f(@x + 5 * 2) is whose b is an Element @y and
+            such that 3 c an Element @z that is 4 .
+        """,
+        type_predicate_symbols={"element"}
+    )
+    fresh = Symbol.fresh()
+    expected = Union((
+        (Implication(
+            A(x),
+            Conjunction((
+                B(fresh, y),
+                C(Constant(3), z), Constant(eq)(z, Constant(4)),
+                EQ(fresh,
+                    FunctionApplication(
+                        f,
+                        (
+                            Constant(add)(
+                                x,
+                                Constant(mul)(Constant(5), Constant(2))
+                            ),
+                        )
+                    )
+                )
+            )),
+        ),)
+    ))
+
+    assert weak_logic_eq(res, expected)
 
 
 def test_lark_semantics_item_selection(datalog_simple):
