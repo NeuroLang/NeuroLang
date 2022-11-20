@@ -475,7 +475,7 @@ class SimplifyNestedImplicationsMixin(PullUniversalUpImplicationMixin):
         antecedent = Conjunction(
             (expression.consequent.antecedent, expression.antecedent)
         )
-        return Implication(consequent, antecedent)
+        return self.walk(Implication(consequent, antecedent))
 
     @add_match(
         Implication(Conjunction, ...),
@@ -520,59 +520,59 @@ class SimplifyNestedImplicationsMixin(PullUniversalUpImplicationMixin):
                 )
             ),)
         )
-        return res
+        return self.walk(res)
 
     @add_match(
         Implication(..., Implication),
         lambda exp: exp.consequent == exp.antecedent.consequent
     )
     def nested_implication_equal_consequent(self, expression):
-        return expression.antecedent
+        return self.walk(expression.antecedent)
 
     @add_match(Implication(..., Implication(TRUE, ...)))
     def nested_implication_2nd_True(self, expression):
-        return expression.apply(
+        return self.walk(expression.apply(
             expression.consequent,
             expression.antecedent.antecedent
-        )
+        ))
 
     @add_match(Implication(TRUE, Implication))
     def nested_implication_1st_True(self, expression):
-        return expression.antecedent
+        return self.walk(expression.antecedent)
 
 
 class TheToExistentialWalker(ExpressionWalker):
     @add_match(The)
     def replace_the_existential(self, expression):
         head, d1, d2 = expression.unapply()
-        return ExistentialPredicate[S](head, Conjunction[S]((d2, d1)))
+        return self.walk(ExistentialPredicate[S](head, Conjunction[S]((d2, d1))))
 
     @add_match(TheMarker)
     def stop_replacing_the(self, expression):
-        return expression
+        return self.walk(expression)
 
 
 class TheToUniversalWalker(ExpressionWalker):
     @add_match(The)
     def replace_the_universal(self, expression):
         head, d1, d2 = expression.unapply()
-        return UniversalPredicate[S](head, Implication[S](d1, d2))
+        return self.walk(UniversalPredicate[S](head, Implication[S](d1, d2)))
 
     @add_match(TheMarker)
     def stop_replacing_the(self, expression):
-        return expression
+        return self.walk(expression)
 
 
 class SquallIntermediateSolver(PatternWalker):
     @add_match(TheToExistential)
     def replace_the_existential(self, expression):
         expression = self.walk(expression.expression)
-        return TheToExistentialWalker().walk(expression)
+        return self.walk(TheToExistentialWalker().walk(expression))
 
     @add_match(TheToUniversal)
     def replace_the_universal(self, expression):
         expression = self.walk(expression.expression)
-        return TheToUniversalWalker().walk(expression)
+        return self.walk(TheToUniversalWalker().walk(expression))
 
     @add_match(Aggregation(..., Lambda, Symbol))
     def translate_aggregation(self, expression):
@@ -633,7 +633,7 @@ class SquallIntermediateSolver(PatternWalker):
 
         formulas += group_var_labels
 
-        return Conjunction[S](formulas)
+        return self.walk(Conjunction[S](formulas))
 
     @add_match(ExpandListArgument)
     def expand_list_argument(self, expression):
@@ -659,7 +659,7 @@ class SquallIntermediateSolver(PatternWalker):
         ).walk(exp)
         exp = ReplaceExpressionWalker({list_to_replace: built_list}).walk(exp)
 
-        return exp
+        return self.walk(exp)
 
     @add_match(FunctionApplication(Symbol, ...))
     def replace_type_symbols(self, expression):
@@ -675,7 +675,7 @@ class SquallIntermediateSolver(PatternWalker):
             ):
                 return expression
             else:
-                return expression.apply(functor, args)
+                return self.walk(expression.apply(functor, args))
 
     def _tuples_are_the_same(self, t1, t2):
         for e1, e2, in zip(t1, t2):
@@ -727,7 +727,7 @@ class MergeQuantifiersMixin(PatternWalker):
     def merge_universals(self, expression):
         new_head = tuple(sorted(expression.head + expression.body.head))
         new_body = expression.body.body
-        return UniversalPredicate(new_head, new_body)
+        return self.walk(UniversalPredicate(new_head, new_body))
 
 
 class SplitNestedImplicationsMixin(PatternWalker):
@@ -757,7 +757,7 @@ class SplitNestedImplicationsMixin(PatternWalker):
         code += (new_rule,)
 
         res = Union(code)
-        return res
+        return self.walk(res)
 
 
 class SplitQuantifiersMixin(PatternWalker):
@@ -856,7 +856,7 @@ class LogicSimplifier(
         for h in expression.head:
             res = expression.apply(h, res)
 
-        return res
+        return self.walk(res)
 
     @add_match(
         ExistentialPredicate(..., Implication),
@@ -866,10 +866,10 @@ class LogicSimplifier(
         )
     )
     def push_existential_down_implication(self, expression):
-        return expression.body.apply(
+        return self.walk(expression.body.apply(
             expression.body.consequent,
             expression.apply(expression.head, expression.body.antecedent)
-        )
+        ))
 
 
 class LogicSimplifierPost(
@@ -883,7 +883,14 @@ class LogicSimplifierPost(
 ):
     @add_match(UniversalPredicate(..., Implication))
     def univesal_implication_to_rule(self, expression):
-        return expression.body
+        return self.walk(expression.body)
+
+    @add_match(Implication(..., ExistentialPredicate))
+    def existential_predicate_antecedent_remove(self, expression):
+        return self.walk(expression.apply(
+            expression.consequent,
+            expression.antecedent.body
+        ))
 
 
 NONE = Constant(None)
@@ -905,9 +912,9 @@ class EliminateSpuriousEqualities(
         lambda exp: any(e == NONE for e in exp.formulas)
     )
     def eliminate_element(self, expression):
-        return expression.apply(
+        return self.walk(expression.apply(
             tuple(e for e in expression.formulas if e != NONE)
-        )
+        ))
 
 
 class PushUniversalsDownWithImplications(PushUniversalsDown):

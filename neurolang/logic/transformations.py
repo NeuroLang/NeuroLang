@@ -97,7 +97,7 @@ class LogicExpressionWalker(PatternWalker):
         new_right = self.walk(right)
 
         if new_left is not left or new_right is not right:
-            expression = expression.apply(new_left, new_right)
+            expression = self.walk(expression.apply(new_left, new_right))
 
         return expression
 
@@ -316,7 +316,7 @@ class FactorQuantifiersMixin(PatternWalker):
                 expression.antecedent
             )
         )
-        return exp
+        return self.walk(exp)
 
     @add_match(
         Implication(UniversalPredicate, ...),
