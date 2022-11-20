@@ -819,7 +819,10 @@ class SimplifiyEqualitiesMixin(NormalizeEqualities):
         equalities = []
         non_equalities = []
         for formula in expression.formulas:
-            if isinstance(formula, FunctionApplication) and formula.functor == EQ:
+            if (
+                isinstance(formula, FunctionApplication) and
+                formula.functor == EQ
+            ):
                 equalities.append(formula)
             else:
                 non_equalities.append(formula)
@@ -1137,14 +1140,20 @@ class SquallExpressionsToNeuroLang(
     def factor_implication_from_conditioned(self, expression):
         return Implication[S](
             expression.conditioned.consequent,
-            Condition[S](expression.conditioned.antecedent, expression.conditioning)
+            Condition[S](
+                expression.conditioned.antecedent,
+                expression.conditioning
+            )
         )
 
     @add_match(Condition(..., Implication))
     def factor_implication_from_conditioning(self, expression):
         return Implication[S](
             expression.conditioning.consequent,
-            Condition[S](expression.conditioned, expression.conditioning.antecedent)
+            Condition[S](
+                expression.conditioned,
+                expression.conditioning.antecedent
+            )
         )
 
     @add_match(

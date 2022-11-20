@@ -4,7 +4,6 @@ from typing import Callable, List, TypeVar
 from warnings import warn
 
 import lark
-from nltk import download
 from nltk.corpus import wordnet
 from nltk.stem.snowball import EnglishStemmer
 from nltk.stem.wordnet import WordNetLemmatizer
@@ -401,7 +400,7 @@ expr_atom{x} : "(" expr{x} ")"                             -> expr_atom_par
              | term                                        -> expr_atom_term
              | x
 
-SUM : "+" 
+SUM : "+"
     | "-"
 
 MUL : "*"
@@ -432,15 +431,15 @@ COMMENT : /\%\%[^\n]*/ NEWLINE
 %ignore COMMENT
 
 """
-.replace(
-    '__KEYWORD_RULES__',
-    '\n'.join(
-        '_{} : "{}"'.
-        format(kw.upper().replace("'", "_"), kw.lower())
-        for kw in KEYWORDS
-    ) + '\n'
-)
-.replace("_KEYWORD", "|".join(KEYWORDS))
+    .replace(
+        '__KEYWORD_RULES__',
+        '\n'.join(
+            '_{} : "{}"'.
+            format(kw.upper().replace("'", "_"), kw.lower())
+            for kw in KEYWORDS
+        ) + '\n'
+    )
+    .replace("_KEYWORD", "|".join(KEYWORDS))
 )
 
 
