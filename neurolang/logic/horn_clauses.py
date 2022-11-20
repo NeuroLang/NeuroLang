@@ -15,7 +15,7 @@ from the chapter 4 of [1]_.
 """
 import operator
 from functools import reduce
-from typing import Callable
+from typing import AbstractSet, Callable
 import typing
 
 
@@ -71,8 +71,8 @@ class HornClause(LogicOperator):
 
         if not self._is_valid_as_body(body):
             raise NeuroLangException(
-                f"Body must be a Conjunction of literals, a single"
-                " literal or TRUE, {body} given"
+                "Body must be a Conjunction of literals, a single"
+                f" literal or TRUE, {body} given"
             )
 
     def _is_valid_as_head(self, exp):
@@ -340,8 +340,13 @@ def _restrictive_atoms(atoms):
 
 def _is_restriction(atom):
     if isinstance(atom, FunctionApplication):
-        if is_leq_informative(
-            atom.functor.type, typing.Union[Callable[..., bool], Unknown]
+        if (
+            isinstance(atom.functor, Symbol) and
+            is_leq_informative(
+                atom.functor.type, typing.Union[
+                    AbstractSet, Callable[..., bool], Unknown
+                ]
+            )
         ):
             return True
         elif atom.functor == operator.eq and any(
