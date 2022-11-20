@@ -1,7 +1,7 @@
 import logging
 from inspect import signature
 from itertools import product
-from operator import add, eq, mul, pow, sub, truediv
+from operator import add, attrgetter, eq, mul, pow, sub, truediv
 
 import pytest
 
@@ -10,7 +10,7 @@ from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....datalog.aggregation import AggregationApplication
 from ....expression_pattern_matching import add_match
 from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
-from ....expressions import Constant, Query, Symbol
+from ....expressions import Constant, Definition, Query, Symbol
 from ....logic import (
     ExistentialPredicate,
     LogicOperator,
@@ -37,6 +37,9 @@ EQ = Constant(eq)
 
 
 class LogicWeakEquivalence(ExpressionWalker):
+    def __init__(self):
+        self.fresh_equivalences = dict()
+
     @add_match(EQ(UniversalPredicate, UniversalPredicate))
     def eq_universal_predicates(self, expression):
         left, right = expression.args
@@ -82,6 +85,9 @@ class LogicWeakEquivalence(ExpressionWalker):
 
     @add_match(EQ(LogicOperator, LogicOperator))
     def eq_logic_operator(self, expression):
+        return self._compare_composite_equality(expression)
+
+    def _compare_composite_equality(self, expression):
         left, right = expression.args
         for l, r in zip(left.unapply(), right.unapply()):
             if isinstance(l, tuple) and isinstance(r, tuple):
@@ -94,6 +100,21 @@ class LogicWeakEquivalence(ExpressionWalker):
                 )
             else:
                 return self.walk(EQ(l, r))
+
+    @add_match(EQ(Definition, Definition))
+    def eq_definition(self, expression):
+        return self._compare_composite_equality(expression)
+
+    @add_match(EQ(Symbol, Symbol))
+    def eq_symbols(self, expression):
+        left, right = expression.args
+        if left.is_fresh and right.is_fresh:
+            left, right = sorted((left, right), key=attrgetter('name'))
+            if left not in self.fresh_equivalences:
+                self.fresh_equivalences[left] = right
+            return self.fresh_equivalences[left] == right
+        else:
+            return left == right
 
     @add_match(EQ(..., ...))
     def eq_expression(self, expression):
