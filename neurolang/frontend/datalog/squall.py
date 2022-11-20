@@ -837,9 +837,9 @@ class SimplifiyEqualitiesMixin(NormalizeEqualities):
 
     @add_match(Negation(FunctionApplication(EQ, ...)))
     def negation_eq_to_ne(self, expression):
-        return FunctionApplication(
-            NE, expression.formula.args
-        )
+        return self.walk(expression.formula.apply(
+            NE.cast(expression.functor.type), expression.formula.args
+        ))
 
 
 class LogicSimplifier(
