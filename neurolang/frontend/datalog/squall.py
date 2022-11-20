@@ -1,4 +1,5 @@
 from collections import Counter
+from functools import cmp_to_key
 from operator import add, eq, mul, ne, neg, pow, sub, truediv
 from typing import Callable, List, TypeVar
 
@@ -768,21 +769,49 @@ class SplitQuantifiersMixin(PatternWalker):
         exp = expression.body
         for head in expression.head[::-1]:
             exp = UniversalPredicate((head,), exp)
-        return exp
+        return self.walk(exp)
 
 
-class SimplifiyEqualitiesMixin(PatternWalker):
+class NormalizeEqualities(PatternWalker):
+    @add_match(
+        EQ(..., Symbol),
+        lambda expression: (
+            not isinstance(expression.args[0], Symbol) or
+            expression.args[0].name > expression.args[1].name
+        )
+    )
+    def flip_equality(self, expression):
+        return self.walk(expression.apply(
+            expression.functor,
+            expression.args[::-1]
+        ))
+
+
+def _cmp_equalities(left, right):
+    if left == right:
+        return 0
+    if left.args[0] in right.args[1]._symbols:
+        return -1
+    elif right.args[0] in left.args[1]._symbols:
+        return 1
+    else:
+        return 0
+
+
+class SimplifiyEqualitiesMixin(NormalizeEqualities):
     @add_match(
         Conjunction,
         lambda exp: any(
             isinstance(formula, FunctionApplication) and
             formula.functor == EQ and
             any(
-                isinstance(formula_, FunctionApplication) and
                 formula_.functor == EQ and
-                formula_.args[1] in formula_._symbols
+                _cmp_equalities(formula, formula_) != 0
                 for formula_ in exp.formulas
-                if formula_ != formula
+                if (
+                    isinstance(formula_, FunctionApplication) and
+                    formula_.functor == EQ
+                )
             )
             for formula in exp.formulas
         )
@@ -798,25 +827,13 @@ class SimplifiyEqualitiesMixin(PatternWalker):
                 equalities.append(formula)
             else:
                 non_equalities.append(formula)
+        equalities = list(sorted(equalities, key=cmp_to_key(_cmp_equalities)))
         equality_replacements = {
-            formula.args[1]: formula.args[0]
-            for formula in equalities
+            equalities[0].args[0]: equalities[0].args[1]
         }
         rew = ReplaceExpressionWalker(equality_replacements)
-        changed = True
-        while changed:
-            changed = False
-            new_equalities = []
-            for equality in equalities:
-                left, right = equality.args
-                left = rew.walk(left)
-                if left != equality.args[0]:
-                    equality = EQ(left, right)
-                    changed = True
-                new_equalities.append(equality)
-            equalities = new_equalities
-
-        return Conjunction(tuple(non_equalities + equalities))
+        new_equalities = [rew.walk(equality) for equality in equalities[1:]]
+        return self.walk(Conjunction(tuple(non_equalities + new_equalities)))
 
     @add_match(Negation(FunctionApplication(EQ, ...)))
     def negation_eq_to_ne(self, expression):
