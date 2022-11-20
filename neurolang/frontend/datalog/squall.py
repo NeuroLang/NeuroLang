@@ -788,8 +788,6 @@ class NormalizeEqualities(PatternWalker):
 
 
 def _cmp_equalities(left, right):
-    if left == right:
-        return 0
     if left.args[0] in right.args[1]._symbols:
         return -1
     elif right.args[0] in left.args[1]._symbols:
@@ -802,35 +800,26 @@ class SimplifiyEqualitiesMixin(NormalizeEqualities):
     @add_match(
         Conjunction,
         lambda exp: any(
-            isinstance(formula, FunctionApplication) and
-            formula.functor == EQ and
             any(
-                formula_.functor == EQ and
                 _cmp_equalities(formula, formula_) != 0
-                for formula_ in exp.formulas
-                if (
-                    isinstance(formula_, FunctionApplication) and
-                    formula_.functor == EQ
-                )
+                for formula_ in exp.formulas[i + 1:]
+                if isinstance(formula_, FunctionApplication) and formula_.functor == EQ
             )
-            for formula in exp.formulas
+            for i, formula in enumerate(exp.formulas)
+            if isinstance(formula, FunctionApplication) and formula.functor == EQ
         )
     )
     def simplify_equalities(self, expression):
         equalities = []
         non_equalities = []
         for formula in expression.formulas:
-            if (
-                isinstance(formula, FunctionApplication) and
-                formula.functor == EQ
-            ):
+            if isinstance(formula, FunctionApplication) and formula.functor == EQ:
                 equalities.append(formula)
             else:
                 non_equalities.append(formula)
+
         equalities = list(sorted(equalities, key=cmp_to_key(_cmp_equalities)))
-        equality_replacements = {
-            equalities[0].args[0]: equalities[0].args[1]
-        }
+        equality_replacements = {equalities[0].args[0]: equalities[0].args[1]}
         rew = ReplaceExpressionWalker(equality_replacements)
         new_equalities = [rew.walk(equality) for equality in equalities[1:]]
         return self.walk(Conjunction(tuple(non_equalities + new_equalities)))
