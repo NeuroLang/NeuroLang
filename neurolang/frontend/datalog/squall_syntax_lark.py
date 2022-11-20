@@ -295,7 +295,8 @@ in : _IN
 vphave : noun2 op -> vphave_noun2
        | np2 [ rel ] -> vphave_np2
 
-aux{verb} : verb _NOT?
+aux{verb} : verb not?
+not : _NOT
 
 npc{det_} : term        -> npc_term
           | det_ ng1 -> npc_det
