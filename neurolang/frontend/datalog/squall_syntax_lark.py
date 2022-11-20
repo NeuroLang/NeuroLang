@@ -86,7 +86,6 @@ def lemmatize(word, pos):
             if lemmatized == word and " " not in word:
                 warn(f"Word {word} couldn't be lemmatized")
     except Exception:
-        download('wordnet')
         lemmatized = lemmatize(word, pos)
     return lemmatized
 
