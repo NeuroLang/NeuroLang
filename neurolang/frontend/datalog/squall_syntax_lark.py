@@ -68,8 +68,6 @@ from .squall import (
     squall_to_fol
 )
 
-# nltk.download('omw-1.4')
-
 
 alpha = TypeVar("alpha")
 
