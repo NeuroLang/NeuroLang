@@ -433,10 +433,6 @@ class FactorQuantifierConditionMixin(PatternWalker):
             )
         ))
 
-    @add_match(ExistentialPredicate(..., Condition))
-    def remove_existential_on_condition(self, expression):
-        return self.walk(expression.body)
-
 
 class FactorQuantifiers(
     FactorQuantifierConditionMixin,
