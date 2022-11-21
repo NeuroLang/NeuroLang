@@ -415,27 +415,27 @@ class DuplicatedLabelsVerification(ExtendedLogicExpressionWalker):
 class FactorQuantifierConditionMixin(PatternWalker):
     @add_match(Condition(..., Quantifier))
     def factor_existential_out_of_condition(self, expression):
-        return expression.conditioning.apply(
+        return self.walk(expression.conditioning.apply(
             expression.conditioning.head,
             expression.apply(
                 expression.conditioned,
                 expression.conditioning.body
             )
-        )
+        ))
 
     @add_match(Condition(Quantifier, ...))
     def factor_existential_out_of_conditional(self, expression):
-        return expression.conditioned.apply(
+        return self.walk(expression.conditioned.apply(
             expression.conditioned.head,
             expression.apply(
                 expression.conditioned.body,
                 expression.conditioning
             )
-        )
-    
+        ))
+
     @add_match(ExistentialPredicate(..., Condition))
     def remove_existential_on_condition(self, expression):
-        return expression.body
+        return self.walk(expression.body)
 
 
 class FactorQuantifiers(
@@ -652,7 +652,7 @@ class SquallIntermediateSolver(PatternWalker):
             key=lambda s: s.label.item.value
         ))
 
-        built_list = tuple(s.variable for s in labeled_projections[::-1])
+        built_list = tuple(s.variable for s in labeled_projections)
         built_list = Constant[List[E]](built_list, verify_type=False)
         exp = ReplaceExpressionWalker(
             {s: TRUE for s in labeled_projections}

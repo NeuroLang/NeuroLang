@@ -383,12 +383,20 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
         expression_first = self.walk(expression.formulas[0])
         bound_variables_first = ExtractBoundVariables().walk(expression_first)
 
-        new_expression_tail = expression.apply(tuple(
+        new_tail_formulas = tuple(
             FreshenVariablesWhenQuantified(
                 free_variables | bound_variables_first
             ).walk(formula)
             for formula in expression.formulas[1:]
-        ))
+        )
+
+        if all(
+            formula is new_formula for formula, new_formula
+            in zip(expression.formulas[1:], new_tail_formulas)
+        ):
+            return expression
+
+        new_expression_tail = expression.apply(new_tail_formulas)
         new_expression_tail = self.walk(new_expression_tail)
 
         new_expression = expression.apply(
@@ -399,6 +407,10 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
 
     @add_match(Quantifier)
     def quantifier(self, expression):
+        new_body = self.walk(expression.body)
+
+        if new_body is expression.body:
+            return expression
         return expression.apply(
             expression.head,
             self.walk(expression.body)

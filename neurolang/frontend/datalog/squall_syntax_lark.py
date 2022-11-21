@@ -888,7 +888,7 @@ class SquallTransformer(lark.Transformer):
 
         body = d(lz)
         with expressions_behave_as_objects():
-            for i, op in enumerate(ops[::-1]):
+            for i, op in enumerate(ops):
                 z = Symbol[E].fresh()
                 body = op(Lambda(
                     (z,),

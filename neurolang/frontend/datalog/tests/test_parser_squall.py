@@ -392,6 +392,42 @@ def test_intransitive_per_conditional(datalog_simple):
     assert weak_logic_eq(logic_code.formulas[0], expected)
 
 
+def test_transitive_per_conditional(datalog_simple):
+
+    related = Symbol('relate')
+    mention = Symbol('mention')
+    term = Symbol('term')
+    focus = Symbol('focus')
+    study = Symbol('study')
+    synonym = Symbol('synonym')
+    report = Symbol('report')
+    x = Symbol('x')
+    y = Symbol('y')
+    z = Symbol('z')
+    s = Symbol('s')
+    t = Symbol.fresh()
+
+    code = """
+        define as probably related every Focus (@x; @y; @z)
+        that a Study @s reports
+            conditioned to every Term
+                that is Synonym of 'pain' and
+                that @s mentions.
+    """
+    expected = Implication(
+        related(x, y, z, t, PROB(x, y, z, t)),
+        Condition(
+            Conjunction((focus(x, y, z), study(s), report(s, x, y, z))),
+            Conjunction((mention(s, t), term(t), synonym(t, Constant('pain'))))
+        )
+    )
+
+    logic_code = parser(code)
+    datalog_simple.walk(logic_code)
+
+    assert weak_logic_eq(logic_code.formulas[0], expected)
+
+
 def test_server_example_VWFA(datalog_simple):
     code = """
         define as VWFA every Focus (@x; @y; @z)
