@@ -97,7 +97,7 @@ class LogicWeakEquivalence(ExpressionWalker):
         left, right = expression.args
         for l, r in zip(left.unapply(), right.unapply()):
             if isinstance(l, tuple) and isinstance(r, tuple):
-                return (
+                equal = (
                     (len(l) == len(r)) and
                     all(
                         self.walk(EQ(ll, rr))
@@ -105,7 +105,10 @@ class LogicWeakEquivalence(ExpressionWalker):
                     )
                 )
             else:
-                return self.walk(EQ(l, r))
+                equal = self.walk(EQ(l, r))
+            if not equal:
+                return False
+        return True
 
     @add_match(EQ(Definition, Definition))
     def eq_definition(self, expression):
