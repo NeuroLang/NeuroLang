@@ -243,7 +243,8 @@ def test_rules():
             Conjunction((
                 B(fresh, y),
                 C(Constant(3), z), Constant(eq)(z, Constant(4)),
-                EQ(fresh,
+                EQ(
+                    fresh,
                     FunctionApplication(
                         f,
                         (
@@ -258,6 +259,62 @@ def test_rules():
         ),)
     ))
 
+    assert weak_logic_eq(res, expected)
+
+
+def test_transitive_rules():
+    relate = Symbol('relate')
+    B = Symbol('b')
+    join = Symbol('join')
+    x = Symbol('x')
+    y = Symbol('y')
+    z = Symbol('z')
+    fresh = Symbol.fresh()
+    fresh1 = Symbol.fresh()
+    res = parser(
+        """
+        define as related every Element @x
+            whose b is an Element @y;
+            with every Element that @y joins.
+        """,
+        type_predicate_symbols={"element"}
+    )
+    expected = Union((
+        Implication(relate(x, fresh), Conjunction((B(x, y), join(y, fresh)))),
+    ))
+    assert weak_logic_eq(res, expected)
+
+    res = parser(
+        """
+        define as related every Element @x
+            whose b is an Element @y;
+            with every Element that @y joins with an Element @z by an Element.
+        """,
+        type_predicate_symbols={"element"}
+    )
+    expected = Union((
+        Implication(
+            relate(x, fresh),
+            Conjunction((B(x, y), join(y, fresh, z, fresh1)))
+        ),
+    ))
+    assert weak_logic_eq(res, expected)
+
+    res = parser(
+        """
+        define as related every Element @x
+            whose b is an Element @y;
+            with every Element (that @y joins with @z by an Element)
+            with every Element @z.
+        """,
+        type_predicate_symbols={"element"}
+    )
+    expected = Union((
+        Implication(
+            relate(x, fresh, z),
+            Conjunction((B(x, y), join(y, fresh, z, fresh1)))
+        ),
+    ))
     assert weak_logic_eq(res, expected)
 
 

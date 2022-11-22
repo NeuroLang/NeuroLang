@@ -1,5 +1,19 @@
 import re
-from operator import add, eq, ge, gt, le, lt, mul, ne, neg, pow, sub, truediv
+from operator import (
+    add,
+    eq,
+    ge,
+    gt,
+    itemgetter,
+    le,
+    lt,
+    mul,
+    ne,
+    neg,
+    pow,
+    sub,
+    truediv
+)
 from typing import Callable, List, TypeVar
 from warnings import warn
 
@@ -66,7 +80,6 @@ from .squall import (
     TheToUniversal,
     squall_to_fol
 )
-
 
 alpha = TypeVar("alpha")
 
@@ -166,7 +179,7 @@ KEYWORDS = [
 
 
 GRAMMAR = (
-r"""
+    r"""
 ?start: squall
 
 squall : ( rule )* rule
@@ -430,7 +443,7 @@ COMMENT : /\%\%[^\n]*/ NEWLINE
 %ignore NEWLINE  // comment out to avoid crash
 %ignore COMMENT
 
-"""
+    """
     .replace(
         '__KEYWORD_RULES__',
         '\n'.join(
@@ -629,7 +642,12 @@ class SquallTransformer(lark.Transformer):
             ProbabilisticFactSymbol
             .cast(Callable[[E, S], S])
         )
-        verb = Lambda((x,), TheToUniversal[probability.type](probability(Lambda((y,), pps(y, verb1(x))))))
+        verb = Lambda(
+            (x,),
+            TheToUniversal[probability.type](
+                probability(Lambda((y,), pps(y, verb1(x))))
+            )
+        )
         op = TheToUniversal[op.type](op)
         return op(verb)
 
@@ -641,7 +659,12 @@ class SquallTransformer(lark.Transformer):
             ProbabilisticChoiceSymbol
             .cast(Callable[[E, S], S])
         )
-        verb = Lambda((x,), TheToUniversal[probability.type](probability(Lambda((y,), pps(y, verb1(x))))))
+        verb = Lambda(
+            (x,),
+            TheToUniversal[probability.type](
+                probability(Lambda((y,), pps(y, verb1(x))))
+            )
+        )
         res = op(verb)
         return TheToUniversal[res.type](res)
 
@@ -685,7 +708,10 @@ class SquallTransformer(lark.Transformer):
         lx = Symbol[List[E]].fresh()
         prob = PROB.cast(Callable[[List[E]], float])
         verb_obj = verbn(x, prob(x))
-        verb_obj = ExpandListArgument[P1](condition(lx)(Lambda((x,), verb_obj)), lx)
+        verb_obj = ExpandListArgument[P1](
+            condition(lx)(Lambda((x,), verb_obj)),
+            lx
+        )
         res = verb_obj
         return TheToUniversal[res.type](res)
 
@@ -1006,7 +1032,7 @@ class SquallTransformer(lark.Transformer):
                 det(Lambda((y,), ng2(x)(y)))(d)
             )
         )
-        return res  
+        return res
 
     def det_some(self, ast):
         det1 = ast[0]
@@ -1289,7 +1315,10 @@ class SquallTransformer(lark.Transformer):
         ops1, _, ops2 = ast
         lx = Symbol[List[E]].fresh()
         d = Symbol[P1].fresh()
-        res = Lambda((lx,), Lambda((d,), Condition[S](ops1(lx)(d), ops2(lx)(d))))
+        res = Lambda(
+            (lx,),
+            Lambda((d,), Condition[S](ops1(lx)(d), ops2(lx)(d)))
+        )
 
         return res
 
@@ -1474,9 +1503,9 @@ class SquallTransformer(lark.Transformer):
     CNAME = str
     NAME = str
     LOWER_NAME = str
-    LOWER_NAME_QUOTED = lambda self, s: s[1:-1]
+    LOWER_NAME_QUOTED = itemgetter(slice(1, -1))
     UPPER_NAME = str
-    UPPER_NAME_QUOTED = lambda self, s: s[1:-1]
+    UPPER_NAME_QUOTED = itemgetter(slice(1, -1))
     SIGNED_INT = int
     SIGNED_FLOAT = float
     STRING = str
@@ -1540,7 +1569,9 @@ def extract_completions(code: str):
         if ex.token.type != '$END':
             return []
         expected = ex.interactive_parser.accepts()
-        completions += terminals_to_options(lexer_sets, expected, ex.interactive_parser)
+        completions += terminals_to_options(
+            lexer_sets, expected, ex.interactive_parser
+        )
 
     return list(sorted(set(completions)))
 
@@ -1567,7 +1598,7 @@ def terminals_to_options(lexer_sets, expected, interactive_parser=None) -> List[
     ):
         completions += list(lexer_sets[token.name])
         completions.append("NEW IDENTIFIER")
- 
+
     return completions
 
 
