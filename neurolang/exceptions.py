@@ -140,6 +140,14 @@ class NeuroLangFailedParseException(NeuroLangFrontendException):
         self.column = column
 
 
+class RepeatedLabelException(NeuroLangFrontendException):
+    """Expression detecting when
+    a label is declared twice in the same
+    code rule.
+    """
+    pass
+
+
 class SymbolNotFoundError(NeuroLangException):
     """
     A symbol is being used in a rule without having been previously
