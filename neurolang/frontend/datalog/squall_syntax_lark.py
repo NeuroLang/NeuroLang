@@ -596,6 +596,8 @@ class SquallTransformer(lark.Transformer):
     def rule(self, ast):
         try:
             return squall_to_fol(ast[0], self.type_predicate_symbols)
+        except NeuroLangFrontendException as e:
+            raise e from None
         except NeuroLangException as e:
             raise NeuroLangFrontendException(str(e))
 
@@ -1522,7 +1524,10 @@ def parser(
     globals=None, return_tree=False, process=True, **kwargs
 ):
     global COMPILED_GRAMMAR
-    if "parser" in kwargs and kwargs["parser"] != COMPILED_GRAMMAR.options.parser:
+    if (
+        "parser" in kwargs and
+        kwargs["parser"] != COMPILED_GRAMMAR.options.parser
+    ):
         COMPILED_GRAMMAR = lark.Lark(GRAMMAR, parser=kwargs["parser"])
     if not complete:
         try:
@@ -1531,6 +1536,8 @@ def parser(
                 type_predicate_symbols=type_predicate_symbols, locals=locals,
                 globals=globals, return_tree=return_tree, process=process
             )
+        except lark.exceptions.VisitError as ex:
+            raise ex.orig_exc
         except Exception as ex:
             raise ex from None
     else:

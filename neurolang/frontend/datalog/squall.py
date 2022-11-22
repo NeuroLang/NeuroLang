@@ -4,7 +4,7 @@ from operator import add, eq, mul, ne, neg, pow, sub, truediv
 from typing import Callable, List, TypeVar
 
 from ...datalog.aggregation import AggregationApplication
-from ...exceptions import NeuroLangFrontendException
+from ...exceptions import NeuroLangFrontendException, RepeatedLabelException
 from ...expression_walker import (
     ChainedWalker,
     ExpressionWalker,
@@ -55,10 +55,6 @@ from ...probabilistic.expressions import (
 )
 from ...type_system import get_args
 from .sugar.spatial import EUCLIDEAN
-
-
-class RepeatedLabelException(NeuroLangFrontendException):
-    pass
 
 
 S = bool
@@ -400,7 +396,7 @@ def _label_expressions(expression):
 def _repeated_labels(expression):
     labels = _label_expressions(expression)
     label_counts = Counter(label.label for label in labels)
-    return [l for l in labels if label_counts[l] > 1]
+    return [l for l in label_counts if label_counts[l] > 1]
 
 
 class DuplicatedLabelsVerification(ExtendedLogicExpressionWalker):

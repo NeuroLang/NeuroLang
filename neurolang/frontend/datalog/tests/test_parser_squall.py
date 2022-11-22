@@ -8,6 +8,7 @@ import pytest
 from .... import config
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....datalog.aggregation import AggregationApplication
+from ....exceptions import RepeatedLabelException
 from ....expression_pattern_matching import add_match
 from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ....expressions import (
@@ -316,6 +317,17 @@ def test_transitive_rules():
         ),
     ))
     assert weak_logic_eq(res, expected)
+
+
+def test_duplicate_labeling():
+    with pytest.raises(RepeatedLabelException):
+        parser(
+            """
+            define as Active every Element @x
+                whose b is an Element @x.
+            """
+        )
+
 
 
 def test_lark_semantics_item_selection(datalog_simple):

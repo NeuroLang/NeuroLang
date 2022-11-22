@@ -371,8 +371,8 @@ class MoveQuantifiersUpFONegE(FactorQuantifiersMixin, FONegELogicExpression):
     pass
 
 
-def _quantified_variables_with_same_head(expression):
-    seen_quantified_variables = set()
+def _has_ambiguous_quantified_variables(expression):
+    seen_quantified_variables = extract_logic_free_variables(expression)
     for _, exp in expression_iterator(expression):
         if isinstance(exp, Quantifier):
             if exp.head in seen_quantified_variables:
@@ -389,7 +389,7 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
         NaryLogicOperator,
         lambda expression: (
             len(expression.formulas) > 1 and
-            _quantified_variables_with_same_head(expression)
+            _has_ambiguous_quantified_variables(expression)
         )
     )
     def nary_logic_operator(self, expression):
