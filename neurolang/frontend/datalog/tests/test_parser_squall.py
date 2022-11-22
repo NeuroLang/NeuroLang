@@ -329,8 +329,7 @@ def test_duplicate_labeling():
         )
 
 
-
-def test_lark_semantics_item_selection(datalog_simple):
+def test_semantics_item_selection(datalog_simple):
     code = (
         "define as Large every Item "
         "that has an item_count greater equal than 2 ."
@@ -344,7 +343,7 @@ def test_lark_semantics_item_selection(datalog_simple):
     assert solution == expected
 
 
-def test_lark_semantics_item_selection_the_operator(datalog_simple):
+def test_semantics_item_selection_the_operator(datalog_simple):
     code = (
         "define as Large the Item "
         "that has the item_count greater equal than 2 ."
@@ -358,7 +357,7 @@ def test_lark_semantics_item_selection_the_operator(datalog_simple):
     assert solution == expected
 
 
-def test_lark_semantics_join(datalog_simple):
+def test_semantics_join(datalog_simple):
     code = (
         "define as merge for every Item ?i ;"
         " with every Quantity that ?i item_counts."
@@ -372,7 +371,7 @@ def test_lark_semantics_join(datalog_simple):
     assert solution == expected
 
 
-def test_lark_semantics_aggregation(datalog_simple):
+def test_semantics_aggregation(datalog_simple):
     code = """
         define as max_items for every Item ?i ;
             where every Max of the Quantity where ?i item_count per ?i.
@@ -386,7 +385,7 @@ def test_lark_semantics_aggregation(datalog_simple):
     assert solution == expected
 
 
-def test_lark_aggregation_with_parameter(datalog_simple):
+def test_aggregation_with_parameter(datalog_simple):
     code = """
         define as Top the Percentile, by 95, from the Items.
     """
@@ -426,7 +425,8 @@ def test_intransitive_per_conditional(datalog_simple):
     t = Symbol('t')
 
     code = """
-        define as probably Active every Focus (@x; @y; @z) that a Study @s reports
+        define as probably Active every Focus (@x; @y; @z)
+            that a Study @s reports
             conditioned to @s mentions a Term  @t that is Synonym of 'pain'.
     """
     expected = Implication(
