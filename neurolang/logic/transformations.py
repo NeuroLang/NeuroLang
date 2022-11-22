@@ -6,7 +6,8 @@ from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
-    add_match
+    add_match,
+    expression_iterator
 )
 from ..logic.expression_processing import (
     ExtractFreeVariablesWalker,
@@ -370,13 +371,26 @@ class MoveQuantifiersUpFONegE(FactorQuantifiersMixin, FONegELogicExpression):
     pass
 
 
+def _quantified_variables_with_same_head(expression):
+    seen_quantified_variables = set()
+    for _, exp in expression_iterator(expression):
+        if isinstance(exp, Quantifier):
+            if exp.head in seen_quantified_variables:
+                return True
+            seen_quantified_variables.add(exp.head)
+    return False
+
+
 class DesambiguateQuantifiedVariables(LogicExpressionWalker):
     """
-    Replaces each quantified variale to a fresh one.
+    Replaces each repeated quantified variable to a fresh one.
     """
     @add_match(
         NaryLogicOperator,
-        lambda expression: len(expression.formulas) > 1
+        lambda expression: (
+            len(expression.formulas) > 1 and
+            _quantified_variables_with_same_head(expression)
+        )
     )
     def nary_logic_operator(self, expression):
         free_variables = extract_logic_free_variables(expression)
@@ -389,12 +403,6 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
             ).walk(formula)
             for formula in expression.formulas[1:]
         )
-
-        if all(
-            formula is new_formula for formula, new_formula
-            in zip(expression.formulas[1:], new_tail_formulas)
-        ):
-            return expression
 
         new_expression_tail = expression.apply(new_tail_formulas)
         new_expression_tail = self.walk(new_expression_tail)
