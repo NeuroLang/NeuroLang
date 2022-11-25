@@ -605,16 +605,6 @@ class SquallTransformer(lark.Transformer):
         except NeuroLangException as e:
             raise NeuroLangFrontendException(str(e))
 
-    def rule_simple(self, ast):
-        np, vpcons = ast
-        res = np(vpcons)
-        return res
-
-    def rule_rec(self, ast):
-        x = Symbol[E].fresh()
-        np, rule = ast
-        return np(Lambda((x,), rule))
-
     def query(self, ast):
         ops = ast[0]
         ops = TheToUniversal[ops.type](ops)
@@ -690,27 +680,6 @@ class SquallTransformer(lark.Transformer):
         res = op(verb)
         return TheToUniversal[res.type](res)
 
-    def rule_op_cond1(self, ast):
-        probably, verb1, op = ast
-        x = Symbol[E].fresh()
-        if probably:
-            prob = PROB.cast(Callable[[E], float])
-            verb = verb1(x, FunctionApplication[float](prob, (x,)))
-        else:
-            verb = verb1(x)
-        op = TheToUniversal[op.type](op)
-        return op(Lambda((x,), verb))
-
-    def rule_op2_cond(self, ast):
-        verb2, np2 = ast[-2:]
-        x = Symbol[E].fresh()
-        y = Symbol[E].fresh()
-        prob = PROB.cast(Callable[[E, E], float])
-
-        verb = verb2(x, y, FunctionApplication[float](prob, (x, y)))
-        res = np2(verb)
-        return res
-
     def rule_opn(self, ast):
         verbn, _, rule_body1, ops = ast
         x = Symbol[E].fresh()
@@ -777,10 +746,6 @@ class SquallTransformer(lark.Transformer):
         x = Symbol[E].fresh()
         return np(Lambda((x,), TRUE))
 
-    def np_term(self, ast):
-        d = Symbol[P1].fresh()
-        return Lambda[S1]((d,), d(ast[0]))
-
     def np_quantified(self, ast):
         det, ng1 = ast
         d = Symbol[P1].fresh()
@@ -796,15 +761,6 @@ class SquallTransformer(lark.Transformer):
         x = Symbol[E].fresh()
 
         res = Lambda((d,), np(Lambda((x,), np2(x)(d))))
-        return res
-
-    def np_every_1(self, ast):
-        det, ng1 = ast
-        d = Symbol[P1].fresh()
-        res = Lambda[S1](
-            (d,),
-            det(ng1)(d)
-        )
         return res
 
     def vp_aux(self, ast):
@@ -827,18 +783,6 @@ class SquallTransformer(lark.Transformer):
         else:
             res = verb1.cast(P1)(x)
         res = Lambda[P1]((x,), res)
-        return res
-
-    def vpdo_v2(self, ast):
-        verb2, _, op = ast
-        x = Symbol[E].fresh()
-        y = Symbol[E].fresh()
-        res = Lambda(
-            (x,),
-            op(
-                Lambda((y,), verb2.cast(P2)(x, y))
-            )
-        )
         return res
 
     def vpdo_vn(self, ast):
@@ -1097,10 +1041,6 @@ class SquallTransformer(lark.Transformer):
         return res
 
     def adj1(self, ast):
-        name = lemmatize(ast[0].name.lower(), 'a')
-        return ast[0].apply(name)
-
-    def adj2(self, ast):
         name = lemmatize(ast[0].name.lower(), 'a')
         return ast[0].apply(name)
 
