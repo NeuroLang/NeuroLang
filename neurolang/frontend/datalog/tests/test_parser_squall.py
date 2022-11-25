@@ -12,6 +12,7 @@ from ....exceptions import RepeatedLabelException
 from ....expression_pattern_matching import add_match
 from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ....expressions import (
+    Command,
     Constant,
     Definition,
     FunctionApplication,
@@ -260,6 +261,32 @@ def test_rules():
         ),)
     ))
 
+    assert weak_logic_eq(res, expected)
+
+    res = parser(
+        """
+        define as A the Element @x
+            such that the color of @x is there.
+        """,
+        type_predicate_symbols={"element"}
+    )
+    color = Symbol("color")
+    expected = Union((
+        (Implication(A(x), color(x, fresh))),
+    ))
+    assert weak_logic_eq(res, expected)
+
+    res = parser(
+        """
+        define as A the Element @x
+            such that there is a color of @x.
+        """,
+        type_predicate_symbols={"element"}
+    )
+    color = Symbol("color")
+    expected = Union((
+        (Implication(A(x), color(x, fresh))),
+    ))
     assert weak_logic_eq(res, expected)
 
 

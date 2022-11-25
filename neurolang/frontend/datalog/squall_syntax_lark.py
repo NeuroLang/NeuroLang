@@ -241,14 +241,10 @@ det : det1  -> det_some
 EVERY : _EVERY | _ALL
 THE : _THE
 
-det1 : SOME -> det1_some
-     | AN   -> det1_some
-     | NO   -> det1_no
-
-SOME : _SOME
-AN : _A
-   | _AN
-NO : _NO
+det1 : _SOME -> det1_some
+     | _A   -> det1_some
+     | _AN  -> det1_some
+     | _NO   -> det1_no
 
 np2 : det ng2
 
