@@ -192,7 +192,11 @@ rule  : rule1 _SEPARATOR
       | COMMENT
       | command _SEPARATOR
 
-command : "#" identifier "(" (term ("," term)* )* ")"
+command : "#" identifier "(" arguments ")"
+
+arguments: (argument ("," argument)* )*
+argument : term                 -> arg
+         | identifier "=" term  -> kwd
 
 query : _OBTAIN ops
 
@@ -621,8 +625,24 @@ class SquallTransformer(lark.Transformer):
         return res
 
     def command(self, ast):
-        res = Command(ast[0], tuple(ast[1:]), ())
+        args = tuple()
+        kws = tuple()
+        for a in ast[1]:
+            if isinstance(a, Label):
+                kws += (a.unapply(),)
+            else:
+                args += (a,)
+        res = Command(ast[0], args, kws)
         return res
+
+    def arguments(self, ast):
+        return tuple(ast)
+
+    def arg(self, ast):
+        return ast[0]
+
+    def kwd(self, ast):
+        return Label(ast[0], ast[1])
 
     def rule1_body(self, ast):
         probably, verb1, op = ast
