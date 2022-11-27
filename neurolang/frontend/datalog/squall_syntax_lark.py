@@ -186,11 +186,11 @@ squall : ( rule )* rule
 
 _SEPARATOR : "."
 
-rule  : rule1 _SEPARATOR
-      | rulen _SEPARATOR
-      | query _SEPARATOR
+rule  : rule1 _SEPARATOR?
+      | rulen _SEPARATOR?
+      | query _SEPARATOR?
       | COMMENT
-      | command _SEPARATOR
+      | command _SEPARATOR?
 
 command : "#" identifier "(" arguments ")"
 
