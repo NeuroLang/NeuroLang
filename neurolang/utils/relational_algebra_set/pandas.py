@@ -26,7 +26,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     as container for the elements.
     """
 
-    def __init__(self, iterable=None):
+    def __init__(self, iterable=None, has_duplicates=True):
         """
         Create a new RelationalAlgebraFrozenSet.
         A RelationalAlgebraSet is a set of n elements, each element being
@@ -36,6 +36,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         ----------
         iterable : Iterable
             Initial values for the set
+        
+        has_duplicates : bool
+            Indicate wether the iterable has duplicate rows
 
         Examples
         --------
@@ -56,10 +59,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         RelationalAlgebraFrozenSet
         """
         self._container = None
-        self._might_have_duplicates = True
+        self._might_have_duplicates = has_duplicates
         if iterable is not None:
             if isinstance(iterable, RelationalAlgebraFrozenSet):
                 self._container = iterable._container
+                self._might_have_duplicates = iterable._might_have_duplicates
             elif isinstance(iterable, pd.DataFrame):
                 self._container = iterable.copy()
             else:
@@ -491,14 +495,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 class NamedRelationalAlgebraFrozenSet(
     RelationalAlgebraFrozenSet, abc.NamedRelationalAlgebraFrozenSet
 ):
-    def __init__(self, columns, iterable=None):
+    def __init__(self, columns, iterable=None, has_duplicates=True):
         if isinstance(columns, NamedRelationalAlgebraFrozenSet):
             iterable = columns
             columns = columns.columns
         # ensure there is no duplicated column
         self._check_for_duplicated_columns(columns)
         self._columns = tuple(columns)
-        self._might_have_duplicates = True
+        self._might_have_duplicates = has_duplicates
         if iterable is None:
             iterable = []
 

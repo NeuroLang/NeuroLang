@@ -204,7 +204,8 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         new_pred_symb = Symbol.fresh()
         spatial_bound_solution_pred = new_pred_symb(i1, j1, k1, i2, j2, k2, d)
         self.add_extensional_predicate_from_tuples(
-            new_pred_symb, spatial_bound_solution
+            new_pred_symb, spatial_bound_solution,
+            has_duplicates=False
         )
         removed_formulas = {
             var_to_euclidean_equality_formula,
