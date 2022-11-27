@@ -1,3 +1,4 @@
+import logging
 from collections import OrderedDict
 import logging
 from typing import Iterable, Callable, Dict, Union
@@ -5,8 +6,13 @@ from uuid import uuid1
 
 import numpy as np
 import pandas as pd
+
+from ..various import log_performance
 from . import abstract as abc
 from ..various import log_performance
+
+
+LOG = logging.getLogger(__name__)
 
 
 LOG = logging.getLogger(__name__)
@@ -208,6 +214,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         output._container = new_container
         if (len(set(columns)) == self.arity):
             output._might_have_duplicates = self._might_have_duplicates
+        else:
+            LOG.info("Generating duplicates projection %s %s", columns, self.arity)
+ 
         return output
 
     def selection(

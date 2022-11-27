@@ -14,7 +14,7 @@ class RelationalAlgebraColumnStr(str, RelationalAlgebraColumn):
 
 
 class RelationalAlgebraFrozenSet(Set):
-    def __init__(self, columns):
+    def __init__(self, columns, has_duplicates=True):
         raise NotImplementedError()
 
     @classmethod
@@ -119,7 +119,7 @@ class RelationalAlgebraFrozenSet(Set):
 
 
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
-    def __init__(self, columns, iterable=None):
+    def __init__(self, columns, iterable=None, has_duplicates=True):
         raise NotImplementedError()
 
     @classmethod

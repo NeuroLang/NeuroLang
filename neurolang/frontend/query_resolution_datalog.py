@@ -555,7 +555,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.symbol_table.clear()
 
     def add_tuple_set(
-        self, iterable: Iterable, type_: Type = Unknown, name: str = None
+        self, iterable: Iterable, type_: Type = Unknown, name: str = None,
+        has_duplicates: bool = True
     ) -> fe.Symbol:
         """
         Creates an AbstractSet fe.Symbol containing the elements specified in
@@ -603,7 +604,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 columns={n: i for i, n in enumerate(iterable.columns)}
             )
         self.program_ir.add_extensional_predicate_from_tuples(
-            symbol, iterable, type_=type_
+            symbol, iterable, type_=type_, has_duplicates=has_duplicates
         )
 
         return fe.Symbol(self, name)

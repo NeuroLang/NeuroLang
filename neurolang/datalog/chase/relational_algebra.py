@@ -142,13 +142,6 @@ class ChaseRelationalAlgebraPlusCeriMixin:
         return substitutions
 
 
-class NamedRelationalAlgebraOptimiser(
-    PushInSelections,
-    ExpressionWalker
-):
-    pass
-
-
 class ChaseNamedRelationalAlgebraMixin:
     """
     Conjunctive query solving using the algorithm 5.4.8 from Abiteboul et al
@@ -346,7 +339,7 @@ class ChaseNamedRelationalAlgebraMixin:
         traslator_to_named_ra = TranslateToNamedRA()
         LOG.info(f"Translating and optimising CQ {conjunction} to RA")
         ra_code = traslator_to_named_ra.walk(conjunction)
-        ra_code = NamedRelationalAlgebraOptimiser().walk(ra_code)
+        ra_code = RelationalAlgebraOptimiser().walk(ra_code)
         return ra_code
 
     def compute_result_set(
