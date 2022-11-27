@@ -103,7 +103,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             res = False
         else:
             col = True
-            for e, c in zip(element, self._container.iteritems()):
+            for e, c in zip(element, self._container.items()):
                 col = col & (c[1] == e)
             res = col.any()
         return res
@@ -1176,7 +1176,7 @@ class RelationalAlgebraSet(
             try:
                 value = self._normalise_element(value)
                 col = True
-                for e, c in zip(value, self._container.iteritems()):
+                for e, c in zip(value, self._container.items()):
                     col = col & (c[1] == e)
                 ix = self._container.index[col]
                 self._container.drop(index=ix, inplace=True)

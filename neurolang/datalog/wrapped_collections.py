@@ -19,7 +19,7 @@ REBV = ReplaceExpressionsByValues(dict())
 
 class WrappedTypeMap:
     row_maps = {
-        np.int64: int,
+        np.integer: int,
         np.float64: float
     }
 
