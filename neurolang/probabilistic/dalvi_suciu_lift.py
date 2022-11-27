@@ -642,7 +642,7 @@ def connected_components(adjacency_matrix):
         component_follow = [idx]
         while component_follow:
             idx = component_follow.pop()
-            idxs = set(adjacency_matrix[idx].nonzero()[0]) - component
+            idxs = set(np.atleast_2d(adjacency_matrix[idx]).nonzero()[0]) - component
             component |= idxs
             component_follow += idxs
         components.append(component)
