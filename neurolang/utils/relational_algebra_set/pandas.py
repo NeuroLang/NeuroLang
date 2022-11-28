@@ -1,6 +1,5 @@
 import logging
 from collections import OrderedDict
-import logging
 from typing import Iterable, Callable, Dict, Union
 from uuid import uuid1
 
@@ -9,11 +8,6 @@ import pandas as pd
 
 from ..various import log_performance
 from . import abstract as abc
-from ..various import log_performance
-
-
-LOG = logging.getLogger(__name__)
-
 
 LOG = logging.getLogger(__name__)
 
@@ -1040,6 +1034,8 @@ class NamedRelationalAlgebraFrozenSet(
             (len(seen_pure_columns) == len(self.columns))
             and not self._might_have_duplicates
         )
+        if might_have_duplicates:
+            LOG.info("Extended projection might have duplicates %s", new_container.head(1))
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=might_have_duplicates,
