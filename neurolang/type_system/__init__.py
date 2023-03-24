@@ -75,7 +75,7 @@ else:
 
 
 type_order = {
-    np.int64: (np.int,),
+    np.int64: (np.int64,),
     np.bool_: (bool,),
     bool: (np.bool_,),
     int: (np.int64, float, complex),
