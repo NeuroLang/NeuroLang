@@ -492,7 +492,8 @@ class Symbol(NonConstant):
 
     def cast(self, type_):
         new_symbol = Expression.cast(self, type_)
-        new_symbol.is_fresh = self.is_fresh
+        if hasattr(new_symbol, "is_fresh"):
+            new_symbol.is_fresh = self.is_fresh
         return new_symbol
 
 
