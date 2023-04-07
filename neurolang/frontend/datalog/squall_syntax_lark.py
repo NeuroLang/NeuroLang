@@ -407,8 +407,8 @@ expr_mul{x} : ( expr_mul{x} MUL )? expr_pow{x}
 expr_pow{x} : expr_exponent{x} (pow expr_exponential{x})?
 ?expr_exponent{x} : expr_atom{x}
 ?expr_exponential{x} : expr_atom{x}
-expr_atom{x} : "(" expr{x} ")"                             -> expr_atom_par
-             | "(" expr{x} (";" expr{x})+ ")"              -> expr_atom_tuple
+expr_atom{x} : "(" expr{x} (";" expr{x})+ ")"              -> expr_atom_tuple
+             | "(" expr{x} ")"                             -> expr_atom_par
              | identifier"(" (expr{x} ("," expr{x})*)? ")" -> expr_atom_fun
              | term                                        -> expr_atom_term
              | x
@@ -1442,9 +1442,6 @@ class SquallTransformer(lark.Transformer):
                 f"Variable {name} not found in environment"
             )
 
-    def noun_aggreg(self, ast):
-        return self.adj_aggreg(ast)
-
     def adj_aggreg(self, ast):
         functor = ast[0].cast(Callable[[Callable[[List[E]], P1]], P1])
         d = Symbol[List[E]].fresh()
@@ -1597,7 +1594,7 @@ def parse_to_neurolang_ir(
         raise NeuroLangFailedParseException(
             "\n" + err + expected_formatted, line=ex.line - 1, column=ex.column
         ) from None
-    except lark.exceptions.UnexpectedException as ex:
+    except lark.exceptions.LarkError as ex:
         raise ex from None
     except NeuroLangException as ex:
         raise ex from None
