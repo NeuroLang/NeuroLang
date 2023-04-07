@@ -480,6 +480,53 @@ def test_ng1_agg_npc_dims_rec():
     assert weak_logic_eq(res, expected)
 
 
+def test_ng2():
+    res = parser(
+        """
+        define as Interesting every Voxel whose report @r is Selected
+        """
+    )
+
+    x = Symbol.fresh()
+    r = Symbol('r')
+    expected = Union((
+        Implication(
+            Symbol("interest")(x),
+            Conjunction((
+                Symbol("voxel")(x),
+                Symbol("report")(x, r),
+                Symbol("selected")(r),
+            ))
+        ),
+    ))
+
+    assert weak_logic_eq(res, expected)
+
+
+def test_rel_np2():
+    res = parser(
+        """
+        define as Interesting every Voxel a report of which has an activation
+        """
+    )
+
+    x = Symbol.fresh()
+    y = Symbol.fresh()
+    z = Symbol.fresh()
+    expected = Union((
+        Implication(
+            Symbol("interest")(x),
+            Conjunction((
+                Symbol("voxel")(x),
+                Symbol("report")(x, y),
+                Symbol("activation")(y, z)
+            ))
+        ),
+    ))
+
+    assert weak_logic_eq(res, expected)
+
+
 def test_bool_negation():
     res = parser(
         """
