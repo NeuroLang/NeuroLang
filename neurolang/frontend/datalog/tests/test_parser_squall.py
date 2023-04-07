@@ -451,6 +451,35 @@ def test_ng1_agg_npc():
     assert weak_logic_eq(res, expected)
 
 
+def test_ng1_agg_npc_dims_rec():
+    res = parser(
+        """
+        define as Volume the Count @c of the Voxels
+               per activation and per `region activation`
+        """
+    )
+
+    f = Symbol.fresh()
+    c = Symbol("c")
+    x = Symbol.fresh()
+    y = Symbol.fresh()
+    z = Symbol.fresh()
+    expected = Union((
+        Implication(
+            f(y, z, AggregationApplication(Symbol("count"), (x,))),
+            Conjunction((
+                Symbol("voxel")(x),
+                Symbol("activation")(y, x),
+                Symbol("region activ")(z, x)
+            ))
+        ),
+        Implication(Symbol("volume")(c), f(z, y, c))
+        ),
+    )
+
+    assert weak_logic_eq(res, expected)
+
+
 def test_bool_negation():
     res = parser(
         """
