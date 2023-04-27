@@ -1,6 +1,7 @@
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
+from lark import Lark
 
 from neurolang.logic import ExistentialPredicate
 
@@ -27,12 +28,8 @@ GRAMMAR = u"""
     @@parseinfo :: True
     @@whitespace :: /[\t ]+/
     @@eol_comments :: /#([^\n]*?)$/
-
     start = expressions $ ;
-
     expressions = ( newline ).{ expression };
-
-
     expression = rule
                | constraint
                | fact
@@ -60,7 +57,6 @@ GRAMMAR = u"""
     reserved_words = exists
                    | 'st'
                    | 'ans' ;
-
     conjunction_symbol = ',' | '&' | '\N{LOGICAL AND}' ;
     implication = ':-' | '\N{LEFTWARDS ARROW}' ;
     right_implication = '-:' | '\N{RIGHTWARDS ARROW}' ;
@@ -72,50 +68,35 @@ GRAMMAR = u"""
               | comparison
               | logical_constant
               | '(' @:predicate ')';
-
     constant_predicate = identifier'(' ','.{ literal } ')' ;
-
     negated_predicate = ('~' | '\u00AC' ) predicate ;
     existential_body = arguments such_that ( conjunction_symbol ).{ predicate }+ ;
     existential_predicate = \
         exists '(' @:existential_body ')' ;
-
     comparison = argument comparison_operator argument ;
-
     arguments = ','.{ argument }+ ;
     argument = arithmetic_operation
              | function_application
              | '...' ;
-
     signed_int_ext_identifier = [ '-' ] int_ext_identifier ;
     int_ext_identifier = identifier | ext_identifier | lambda_expression;
     ext_identifier = '@'identifier;
-
     lambda_expression = 'lambda' arguments ':' argument;
-
     function_application = '(' @:lambda_expression ')' '(' [ @:arguments ] ')'
                          | @:int_ext_identifier '(' [ @:arguments ] ')' ;
-
     arithmetic_operation = term [ ('+' | '-') term ] ;
-
     term = factor [ ( '*' | '/' ) factor ] ;
-
     factor =  exponent [ '**' exponential ];
-
     exponential = exponent ;
-
     exponent = literal
              | function_application
              | signed_int_ext_identifier
              | '(' @:argument ')' ;
-
     literal = number
             | text
             | ext_identifier ;
-
     identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/
                | '`'@:?"[0-9a-zA-Z/#%._:-]+"'`';
-
     cmd_identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/ ;
     cmd_args = @:pos_args [ ',' @:keyword_args ]
              | @:keyword_args ;
@@ -125,12 +106,9 @@ GRAMMAR = u"""
     keyword_item = identifier '=' pos_item ;
     python_string = '"' @:/[^"]*/ '"'
                   | "'" @:/[^']*/ "'" ;
-
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
-
     text = '"' /[a-zA-Z0-9 ]*/ '"'
           | "'" /[a-zA-Z0-9 ]*/ "'" ;
-
     number = float | integer ;
     integer = [ '+' | '-' ] /[0-9]+/ ;
     float = [ '+' | '-' ] /[0-9]*/'.'/[0-9]+/
@@ -138,10 +116,53 @@ GRAMMAR = u"""
     logical_constant = TRUE | FALSE ;
     TRUE = 'True' | '\u22A4' ;
     FALSE = 'False' | '\u22A5' ;
-
     newline = {['\\u000C'] ['\\r'] '\\n'}+ ;
 """
 
+GRAMMAR_lark = u"""
+    // Lark grammar starts with the start rule
+    
+    // The test of EOF with the $ sign works only with LALR (see https://github.com/lark-parser/lark/issues/237 , then https://github.com/lark-parser/lark/pull/880)
+    // Others have had the same problem before me :
+    // https://stackoverflow.com/questions/74169478/how-to-define-end-of-file-in-a-lark-grammar
+    // Proposed solution with newline symbol (for Early parsing algorithm): 
+    // https://stackoverflow.com/questions/70966085/how-does-one-match-eol-newline-with-lark
+    start : /expressions $/
+    expressions : "toto"
+    
+    lambda_expression = "lambda" arguments ":" argument
+    arguments = "," /.{ argument }+/
+    arguments : type name [function_argument ("," function_argument)*]
+    argument = arithmetic_operation
+             | function_application
+             | "..."
+    
+    literal : number
+            | text
+            | ext_identifier
+    ext_identifier : /@ identifier/
+    identifier : /!reserved_words [a-zA-Z_][a-zA-Z0-9_]*/
+               | /`[0-9a-zA-Z\/#%._:-]+`/
+    reserved_words : exists
+                   | "st"
+                   | "ans"
+    exists : "exists" | "\u2203" | "EXISTS"
+    python_string : /"[^"]*"/
+                  | /'[^']*'/
+    comparison_operator : "==" | "<" | "<=" | ">=" | ">" | "!="
+    text : /"[a-zA-Z0-9 ]*"/
+          | /'[a-zA-Z0-9 ]*'/
+    
+    number : float | integer
+    integer : [ "+" | "-" ] /[0-9]+/
+    float : [ "+" | "-" ] /[0-9]*/"."/[0-9]+/
+          | [ "+" | "-" ] /[0-9]+/"."/[0-9]*/
+    
+    logical_constant : TRUE | FALSE
+    TRUE : "True" | "\u22A4"
+    FALSE : "False" | "\u22A5"
+    newline : /(\\u000C | \\r | \\n)+/
+"""
 
 OPERATOR = {
     "+": add,
@@ -159,6 +180,7 @@ OPERATOR = {
 
 
 COMPILED_GRAMMAR = tatsu.compile(GRAMMAR)
+COMPILED_GRAMMAR_lark = Lark(GRAMMAR_lark, parser='lalr')
 
 
 class ExternalSymbol(Symbol):
@@ -418,9 +440,14 @@ class DatalogSemantics:
         return ast
 
 
-def parser(code, locals=None, globals=None):
+def parser_tatsu(code, locals=None, globals=None):
     return tatsu.parse(
         COMPILED_GRAMMAR,
         code.strip(),
         semantics=DatalogSemantics(locals=locals, globals=globals),
+    )
+
+def parser(code, locals=None, globals=None):
+    return COMPILED_GRAMMAR_lark.parse(
+        code.strip()
     )
