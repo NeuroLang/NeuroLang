@@ -161,8 +161,9 @@ command : "." cmd_identifier "(" [ cmd_args ] ")"
 head : head_predicate
 body : conjunction
 condition :	composite_predicate "//" composite_predicate
-conjunction : predicate [conjunction_symbol predicate]+ ;
-composite_predicate "(" conjunction ")"
+
+conjunction : predicate [conjunction_symbol predicate]+
+composite_predicate : "(" conjunction ")"
 	| predicate
 
 such_that : "st"
@@ -191,7 +192,7 @@ predicate : int_ext_identifier"(" [ arguments ] ")"
 
 constant_predicate : identifier "(" literal ["," literal]+
 
-negated_predicate : ("~" | "\u00AC"" ) predicate
+negated_predicate : ("~" | "\u00AC" ) predicate
 
 existential_body : arguments such_that predicate [conjunction_symbol predicate ]+
 
@@ -216,14 +217,20 @@ lambda_expression : "lambda" arguments ":" argument
 function_application : "(" lambda_expression ")" "(" [ arguments ] ")"
                         | int_ext_identifier "(" [ arguments ] ")"
 
-arithmetic_operation = term [ ("+" | "-") term ]
+cmd_args : arithmetic_operation
 
+keyword_args : keyword_item ( "," keyword_item )*
+
+keyword_item : identifier "=" pos_item
+
+pos_args : pos_item ("," pos_item)*
+pos_item : ( arithmetic_operation | python_string ) EQ~0
+EQ : "="
+
+arithmetic_operation : term [ ("+" | "-") term ]
 term : factor [ ( "*" | "/" ) factor ]
-
 factor :  exponent [ "**" exponential ]
-
 exponential : exponent
-
 exponent : literal
 
 literal : number
@@ -465,24 +472,24 @@ class DatalogSemantics:
         return op(*ast[0::2])
 
     def term(self, ast):
-        print()
-        print("___term___")
-        print("ast :", ast)
+        #print()
+        #print("___term___")
+        #print("ast :", ast)
         if isinstance(ast, Expression):
             return ast
         elif len(ast) == 1:
-            print("len(ast) == 1")
-            print("ast[0] :", ast[0])
+            #print("len(ast) == 1")
+            #print("ast[0] :", ast[0])
             return ast[0]
 
-        print("len(ast) != 1")
-        print("ast[0] :", ast[0])
-        print("ast[1] :", ast[1])
-        print("ast[2] :", ast[2])
-        print("OPERATOR[ast[1]] :", OPERATOR[ast[1]])
+        #print("len(ast) != 1")
+        #print("ast[0] :", ast[0])
+        #print("ast[1] :", ast[1])
+        #print("ast[2] :", ast[2])
+        #print("OPERATOR[ast[1]] :", OPERATOR[ast[1]])
         op = Constant(OPERATOR[ast[1]])
-        print("op = Constant(OPERATOR[ast[1]]) :", Constant(OPERATOR[ast[1]]))
-        print("op(ast[0], ast[2]) :",op(ast[0], ast[2]) )
+        #print("op = Constant(OPERATOR[ast[1]]) :", Constant(OPERATOR[ast[1]]))
+        #print("op(ast[0], ast[2]) :",op(ast[0], ast[2]) )
 
         return op(ast[0], ast[2])
 
@@ -570,7 +577,12 @@ class DatalogSemantics:
         return (key, ast[2])
 
     def pos_item(self, ast):
+        print()
+        print("___pos_item___")
+        print("ast :",ast)
         if not isinstance(ast, Expression):
+            print("not isinstance(ast, Expression)")
+            print("Constant(ast) :", Constant(ast))
             return Constant(ast)
         return ast
 
