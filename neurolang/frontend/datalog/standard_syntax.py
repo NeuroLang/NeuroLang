@@ -79,8 +79,7 @@ GRAMMAR_tatsu = u"""
 
     negated_predicate = ('~' | '\u00AC' ) predicate ;
     existential_body = arguments such_that ( conjunction_symbol ).{ predicate }+ ;
-    existential_predicate = \
-        exists '(' @:existential_body ')' ;
+    existential_predicate = exists '(' @:existential_body ')' ;
 
     comparison = argument comparison_operator argument ;
 
@@ -150,6 +149,12 @@ expressions : (expression)+
 
 expression : fact | command | probabilistic_fact | statement_function | statement | constraint | rule
 
+existential_predicate : exists "(" existential_body ")"
+existential_body : arguments such_that predicate ( conjunction_symbol predicate )*
+such_that : "st" | ";"
+
+probabilistic_rule : head "::" ( arithmetic_operation | int_ext_identifier ) implication (condition | body)
+
 rule : (head | query) implication (condition | body)
 query : "ans(" [ arguments ] ")"
 implication : ":-" | "\N{LEFTWARDS ARROW}"
@@ -172,6 +177,7 @@ conjunction : (predicate | function_application_identifier) ( conjunction_symbol
 conjunction_symbol : "," | "&" | "\N{LOGICAL AND}"
 predicate : function_application_identifier
               | negated_predicate
+              | existential_predicate
               | comparison
               | logical_constant
               | "(" predicate ")"
@@ -337,26 +343,37 @@ class DatalogSemantics:
         return ast[0](*ast[2])
 
     def rule(self, ast):
-        print()
-        print("___rule___")
-        print("ast :", ast)
+        #print()
+        #print("___rule___")
+        #print("ast :", ast)
         head = ast[0]
-        print("head = ast[0] :", head = ast[0])
-        print("ast[0] :", ast[0])
-        print("ast[2] :", ast[2])
+        #print("head = ast[0] :", head)
+        #print("ast[2] :", ast[2])
         if isinstance(head, Expression) and head.functor == Symbol("ans"):
-            print("isinstance(head, Expression) and head.functor == Symbol(\"ans\")")
-            print("res = Query(ast[0], ast[2]) :", Query(ast[0], ast[2]))
+            #print("isinstance(head, Expression) and head.functor == Symbol(\"ans\")")
+            #print("res = Query(ast[0], ast[2]) :", Query(ast[0], ast[2]))
             return Query(ast[0], ast[2])
         else:
-            print(" not isinstance(head, Expression) and head.functor == Symbol(\"ans\")")
-            print("res = Implication(ast[0], ast[2]) :", Query(ast[0], ast[2]))
+            #print("not isinstance(head, Expression) and head.functor == Symbol(\"ans\")")
+            #print("res = Implication(ast[0], ast[2]) :", Implication(ast[0], ast[2]))
             return Implication(ast[0], ast[2])
 
     def probabilistic_rule(self, ast):
+        #print()
+        #print("___probabilistic_rule___")
+        #print("ast :", ast)
+        #print()
         head = ast[0]
+        #print("head = ast[0] :", head)
         probability = ast[2]
+        #print("probability = ast[2] :", probability)
         body = ast[4]
+        #print("body = ast[4] :", body)
+        #print("ProbabilisticFact(probability, head) :", ProbabilisticFact(probability, head))
+        #print("res = Implication(ProbabilisticFact(probability, head), body,) :", Implication(
+        #    ProbabilisticFact(probability, head),
+        #    body,
+        #))
         return Implication(
             ProbabilisticFact(probability, head),
             body,
@@ -473,14 +490,30 @@ class DatalogSemantics:
         return Negation(ast[1])
 
     def existential_predicate(self, ast):
+        #print()
+        #print("___existential_predicate___")
+        #print("ast :", ast)
         exp = ast[2]
+        #print("exp = ast[2] :", exp)
         if len(exp) == 1:
+            #print("len(exp) == 1")
             exp = exp[0]
+            #print("exp = exp[0] :", exp)
         else:
+            #print("len(exp) != 1")
+            #print("exp avant :", exp)
+            #print("tuple(exp) :", tuple(exp))
             exp = Conjunction(tuple(exp))
+            #print("exp = Conjunction(tuple(exp)) :", exp)
 
+        #print("ast[0] :", ast[0])
+        #print("for arg in ast[0]")
         for arg in ast[0]:
+            #print("arg :", arg)
+            #print("exp 1 :", exp)
             exp = ExistentialPredicate(arg, exp)
+            #print("exp = ExistentialPredicate(arg, exp) :", exp)
+        #print("res = exp : ", exp)
         return exp
 
     def comparison(self, ast):
