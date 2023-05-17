@@ -113,7 +113,7 @@ GRAMMAR_tatsu = u"""
 
     literal = number
             | text
-            | ext_identifier ;
+                | ext_identifier ;
 
     identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/
                | '`'@:?"[0-9a-zA-Z/#%._:-]+"'`';
@@ -144,121 +144,105 @@ GRAMMAR_tatsu = u"""
     newline = {['\\u000C'] ['\\r'] '\\n'}+ ;
 """
 
-GRAMMAR = u"""
+grammar_lark = u"""
 start: expressions
-expressions : (_expression)+
+expressions : (expression)+
 
-_expression : (comparison_operator | python_string | reserved_words | cmd_identifier | term)+
+expression : fact | command | probabilistic_fact | statement_function | statement | constraint | rule
 
-fact : constant_predicate
-probabilistic_fact : (arithmetic_operation | int_ext_identifier) "::" constant_predicate
 rule : (head | query) implication (condition | body)
-probabilistic_rule : head "::" ( arithmetic_operation | int_ext_identifier ) implication (condition | body)
-constraint : body right_implication head 
-statement : identifier ":=" ( lambda_expression | arithmetic_operation | int_ext_identifier )
-statement_function : identifier"(" [ arguments ] ")" ":=" argument
-command : "." cmd_identifier "(" [ cmd_args ] ")"
-head : head_predicate
-body : conjunction
-condition :	composite_predicate "//" composite_predicate
-
-conjunction : predicate [conjunction_symbol predicate]+
-composite_predicate : "(" conjunction ")"
-	| predicate
-
-such_that : "st"
-	| ";"
-
-conjunction_symbol : ","
-	| "&"
-	| "\N{LOGICAL AND}"
-
-implication : ":-"
- | "\N{LEFTWARDS ARROW}"
-
-right_implication : "-:" 
-| "\N{RIGHTWARDS ARROW}"
-
-head_predicate : identifier"(" [ arguments ] ")"
-
 query : "ans(" [ arguments ] ")"
+implication : ":-" | "\N{LEFTWARDS ARROW}"
 
-predicate : int_ext_identifier"(" [ arguments ] ")"
-             | negated_predicate
-             | existential_predicate
-             | comparison
-             | logical_constant
-             | "(" predicate ")"
-
-constant_predicate : identifier "(" literal ["," literal]+
+condition : composite_predicate "//" composite_predicate
+composite_predicate : "(" conjunction ")"
+                        | predicate
 
 negated_predicate : ("~" | "\u00AC" ) predicate
 
-existential_body : arguments such_that predicate [conjunction_symbol predicate ]+
+constraint : body right_implication head
+right_implication : "-:" | "\N{RIGHTWARDS ARROW}"
+head : head_predicate
+head_predicate : identifier "(" [ arguments ] ")"
 
-existential_predicate : \
-       exists "(" existential_body ")"
+body : conjunction
+conjunction : (predicate | function_application_identifier) ( conjunction_symbol (predicate | function_application_identifier) )*
+            | "()"
 
-comparison : argument comparison_operator argument
+conjunction_symbol : "," | "&" | "\N{LOGICAL AND}"
+predicate : function_application_identifier
+              | negated_predicate
+              | comparison
+              | logical_constant
+              | "(" predicate ")"
 
-arguments : argument ["," argument]+
+function_application_identifier : int_ext_identifier "(" [ arguments ] ")"
 
-argument : arithmetic_operation
-            | function_application
-            | "..."
+comparison : argument COMPARISON_OPERATOR argument
+COMPARISON_OPERATOR : "==" | "<" | "<=" | ">=" | ">" | "!="
+
+statement : identifier ":=" ( arithmetic_operation )
+
+statement_function : identifier "(" [ arguments ] ")" ":=" argument
+
+//statement : identifier ":=" ( arithmetic_operation | int_ext_identifier )
+
+probabilistic_fact : ( arithmetic_operation | int_ext_identifier ) "::" constant_predicate
+
+//function_application : "(" lambda_expression ")" "(" [ arguments ] ")"
+//                     | (int_ext_identifier | ext_identifier) "(" [ arguments ] ")"
+
+function_application : "(" lambda_expression ")" "(" [ arguments ] ")"
 
 signed_int_ext_identifier : [ "-" ] int_ext_identifier
-
-int_ext_identifier :  ext_identifier 
-| lambda_expression
+int_ext_identifier : identifier | lambda_expression
 
 lambda_expression : "lambda" arguments ":" argument
 
-function_application : "(" lambda_expression ")" "(" [ arguments ] ")"
-                        | int_ext_identifier "(" [ arguments ] ")"
-
-cmd_args : arithmetic_operation
+command : "." cmd_identifier "(" [ cmd_args ] ")"
+cmd_args : pos_args [ "," keyword_args ] | keyword_args
 
 keyword_args : keyword_item ( "," keyword_item )*
-
 keyword_item : identifier "=" pos_item
 
 pos_args : pos_item ("," pos_item)*
-pos_item : ( arithmetic_operation | python_string ) EQ~0
-EQ : "="
-
-arithmetic_operation : term [ ("+" | "-") term ]
-term : factor [ ( "*" | "/" ) factor ]
-factor :  exponent [ "**" exponential ]
-exponential : exponent
-exponent : literal
-
-literal : number
-        | text
-        | ext_identifier
-
-ext_identifier : "@" identifier
-
-identifier : reserved_words~0 /[a-zA-Z_][a-zA-Z0-9_]*/
-           | "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
-
-cmd_identifier : reserved_words~0 /[a-zA-Z_][a-zA-Z0-9_]*/
-
-reserved_words : exists
-                   | ST
-                   | ANS
-ST : "st"
-ANS : "ans"
-
-exists : "exists" | "\u2203" | "EXISTS"
+pos_item : arithmetic_operation | python_string
 
 python_string : PYTHON_STRING
 PYTHON_STRING : DOUBLE_QUOTE NO_DBL_QUOTE_STR DOUBLE_QUOTE
               | SINGLE_QUOTE NO_DBL_QUOTE_STR SINGLE_QUOTE
 NO_DBL_QUOTE_STR : /[^"]*/
 
-comparison_operator : COMPARISON_OPERATOR
-COMPARISON_OPERATOR : "==" | "<" | "<=" | ">=" | ">" | "!="
+arguments : argument ("," argument)*
+//argument : arithmetic_operation | function_application | "..."
+// 
+argument : arithmetic_operation | "..."
+
+arithmetic_operation : term | arithmetic_operation "+" term | arithmetic_operation "-" term
+term : factor | term "*" factor | term "/" factor
+factor : exponent | factor "**" exponent
+//exponent : literal | function_application | signed_int_ext_identifier | "(" argument ")"
+exponent : literal | function_application | function_application_identifier | signed_int_ext_identifier | "(" argument ")"
+
+fact : constant_predicate
+constant_predicate : identifier "(" literal ("," literal)* ")" | identifier "()"
+
+literal : number | text | signed_ext_identifier
+
+signed_ext_identifier : [ "-" ] ext_identifier
+ext_identifier : "@" identifier
+
+identifier : cmd_identifier | "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
+
+cmd_identifier : CMD_IDENTIFIER
+CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
+
+reserved_words : exists | ST | ANS
+ST : "st"
+ANS : "ans"
+
+exists : EXISTS
+EXISTS : "exists" | "\u2203" | "EXISTS"
 
 text : TEXT
 TEXT : DOUBLE_QUOTE ALPHANUM_STR DOUBLE_QUOTE
@@ -268,23 +252,23 @@ DOUBLE_QUOTE : "\\""
 SINGLE_QUOTE : "'"
 
 number : integer | float
-integer : SIGNED_INT
-float : SIGNED_FLOAT
+integer : INT | "-" INT -> neg_int
+float : FLOAT | "-" FLOAT -> neg_float
 
 logical_constant : FALSE | TRUE
 TRUE             : "True" | "\u22A4"
 FALSE            : "False" | "\u22A5"
 
 WHITESPACE : /[\t ]+/
+//NEWLINE : /[(\\u000C)? (\\r)? \\n]+/
+
+%import common.INT
+%import common.FLOAT
+%import common.NEWLINE
+
 %ignore WHITESPACE
-
-NEWLINE : /[\\u000C)? (\\r)? \\n]+/
 %ignore NEWLINE
-
-%import common.SIGNED_INT
-%import common.SIGNED_FLOAT
 """
-
 
 OPERATOR = {
     "+": add,
@@ -302,7 +286,7 @@ OPERATOR = {
 
 
 COMPILED_GRAMMAR_tatsu = tatsu.compile(GRAMMAR_tatsu)
-COMPILED_GRAMMAR = Lark(GRAMMAR, parser='lalr')
+
 
 class ExternalSymbol(Symbol):
     def __repr__(self):
@@ -330,6 +314,9 @@ class DatalogSemantics:
         return Union(ast)
 
     def fact(self, ast):
+        #print()
+        #print("___fact___")
+        #print("ast :", ast)
         return Fact(ast)
 
     def probabilistic_fact(self, ast):
@@ -339,13 +326,31 @@ class DatalogSemantics:
         )
 
     def constant_predicate(self, ast):
+        #print()
+        #print("___constant_predicate___")
+        #print("ast :", ast)
+        #print("len(ast) :", len(ast))
+        #print("ast[0] :", ast[0])
+        #print("ast[1] :", ast[1])
+        #print("ast[2] :", ast[2])
+        #print("ast[0](*ast[2]) :", ast[0](*ast[2]))
         return ast[0](*ast[2])
 
     def rule(self, ast):
+        print()
+        print("___rule___")
+        print("ast :", ast)
         head = ast[0]
+        print("head = ast[0] :", head = ast[0])
+        print("ast[0] :", ast[0])
+        print("ast[2] :", ast[2])
         if isinstance(head, Expression) and head.functor == Symbol("ans"):
+            print("isinstance(head, Expression) and head.functor == Symbol(\"ans\")")
+            print("res = Query(ast[0], ast[2]) :", Query(ast[0], ast[2]))
             return Query(ast[0], ast[2])
         else:
+            print(" not isinstance(head, Expression) and head.functor == Symbol(\"ans\")")
+            print("res = Implication(ast[0], ast[2]) :", Query(ast[0], ast[2]))
             return Implication(ast[0], ast[2])
 
     def probabilistic_rule(self, ast):
@@ -358,30 +363,66 @@ class DatalogSemantics:
         )
 
     def constraint(self, ast):
+        #print()
+        #print("___constraint___")
+        #print("ast[0] :", ast[0])
+        #print("ast[1] :", ast[1])
+        #print("ast[2] :", ast[2])
+        #print("res = RightImplication(ast[0], ast[2]) :", RightImplication(ast[0], ast[2]))
         return RightImplication(ast[0], ast[2])
 
     def statement(self, ast):
+        #print()
+        #print("___statement___")
+        #print("ast :", ast)
+        #print("ast[0] :", ast[0])
+        #print("ast[2] :", ast[2])
+        #print("Statement(ast[0], ast[2]) :", Statement(ast[0], ast[2]))
         return Statement(ast[0], ast[2])
 
     def statement_function(self, ast):
+        #print()
+        #print("___statement_function___")
+        #print("ast :", ast)
+        #print("ast[0] :", ast[0])
+        #print("ast[2] :", ast[2])
+        #print("ast[-1] :", ast[-1])
+        #print("res = Lambda(ast[2], ast[-1]) :", Lambda(ast[2], ast[-1]))
         return Statement(
             ast[0],
             Lambda(ast[2], ast[-1])
         )
 
     def body(self, ast):
+        #print()
+        #print()
+        #print("___body___")
+        #print("ast :", ast)
+        #print("res = Conjunction(ast) :", Conjunction(ast))
         return Conjunction(ast)
 
     def condition(self, ast):
 
+        #print()
+        #print("___condition___")
+        #print("ast :", ast)
         conditioned = ast[0]
+        #print("conditioned = ast[0] :", conditioned)
         if isinstance(conditioned, list):
+            #print("isinstance(conditioned, list)")
             conditioned = Conjunction(tuple(conditioned))
+            #print("conditioned = Conjunction(tuple(conditioned)) :", conditioned)
+        #else:
+        #    print(" not isinstance(conditioned, list) :")
 
         condition = ast[2]
+        #print("condition = ast[2] :", condition)
         if isinstance(condition, list):
+            #print("isinstance(condition, list)")
             condition = Conjunction(tuple(condition))
+            #print("condition = Conjunction(tuple(condition)) :", condition)
 
+        #print("res = Condition(conditioned, condition) :", Condition(conditioned, condition))
         return Condition(conditioned, condition)
 
     def head_predicate(self, ast):
@@ -424,6 +465,11 @@ class DatalogSemantics:
         return ast
 
     def negated_predicate(self, ast):
+        #print()
+        #print("___negated_predicate___")
+        #print("ast :", ast)
+        #print("ast[1] : ", ast[1])
+        #print("res = Negation(ast[1] :", Negation(ast[1]))
         return Negation(ast[1])
 
     def existential_predicate(self, ast):
@@ -438,7 +484,16 @@ class DatalogSemantics:
         return exp
 
     def comparison(self, ast):
+        #print()
+        #print("___comparison___")
+        #print("ast :", ast)
+        #print("ast[0] :", ast[0])
+        #print("ast[1] :", ast[1])
+        #print("ast[2] :", ast[2])
+        #print("OPERATOR[ast[1]] :", OPERATOR[ast[1]])
         operator = Constant(OPERATOR[ast[1]])
+        #print("operator = Constant(OPERATOR[ast[1]]) :", operator)
+        #print("res = operator(ast[0], ast[2]) :", operator(ast[0], ast[2]))
         return operator(ast[0], ast[2])
 
     def arguments(self, ast):
@@ -452,63 +507,64 @@ class DatalogSemantics:
         #print("ast :", ast)
         ast = ast[1]
         #print("ast[1] :", ast)
-        #print("(ast[1]).type :", ast.type)
-        #print("(ast[1]).name :", ast.name)
-        #print("ExternalSymbol[(ast[1]).type]((ast[1]).name) :", ExternalSymbol[ast.type](ast.name))
+        #print("(ast[1]).type :", (ast).type)
+        #print("(ast[1]).name :", (ast).name)
+        #print("ExternalSymbol[ast[1].type](ast[1].name) :", ExternalSymbol[ast.type](ast.name))
         return ExternalSymbol[ast.type](ast.name)
 
     def lambda_expression(self, ast):
+        #print()
+        #print("___lambda_expression___")
+        #print("ast :", ast)
+        #print("ast[1] :", ast[1])
+        #print("ast[3] :", ast[3])
+        #print("Lambda(ast[1], ast[3]) :", Lambda(ast[1], ast[3]))
         return Lambda(ast[1], ast[3])
 
     def arithmetic_operation(self, ast):
+        #print()
+        #print("___arithmetic_operation___")
+        #print("ast :", ast)
         if isinstance(ast, Expression):
+            #print("is isinstance(ast, Expression)")
             return ast
 
         if len(ast) == 1:
+            #print("not isinstance(ast, Expression) - len(ast) ==1")
+            #print("ast[0] :", ast[0])
             return ast[0]
 
+        #print("not isinstance(ast, Expression) - len(ast) !=1")
         op = Constant(OPERATOR[ast[1]])
+        #print("ast[1] :", ast[1])
+        #print("OPERATOR[ast[1]] :", OPERATOR[ast[1]])
+        #print("op = Constant(OPERATOR[ast[1]]) :", op)
+        #print("*ast :", *ast)
+        #print("*ast[0::2] :", *ast[0::2])
+        #print("op(*ast[0::2]) :", op(*ast[0::2]))
 
         return op(*ast[0::2])
 
     def term(self, ast):
         #print()
         #print("___term___")
-        #print("ast :", ast)
         if isinstance(ast, Expression):
             return ast
         elif len(ast) == 1:
-            #print("len(ast) == 1")
-            #print("ast[0] :", ast[0])
             return ast[0]
 
-        #print("len(ast) != 1")
-        #print("ast[0] :", ast[0])
-        #print("ast[1] :", ast[1])
-        #print("ast[2] :", ast[2])
-        #print("OPERATOR[ast[1]] :", OPERATOR[ast[1]])
         op = Constant(OPERATOR[ast[1]])
-        #print("op = Constant(OPERATOR[ast[1]]) :", Constant(OPERATOR[ast[1]]))
-        #print("op(ast[0], ast[2]) :",op(ast[0], ast[2]) )
 
         return op(ast[0], ast[2])
 
     def factor(self, ast):
         #print()
         #print("___factor___")
-        #print("ast :", ast)
         if isinstance(ast, Expression):
             return ast
         elif len(ast) == 1:
-            #print("* len(ast) == 1")
-            #print("ast[0] :", ast[0])
             return ast[0]
         else:
-            #print("* len(ast) != 1")
-            #print("ast[0] :", ast[0])
-            #print("ast[1] :", ast[1])
-            #print("ast[2] :", ast[2])
-            #print("Constant(pow)(ast[0], ast[2]) :", Constant(pow)(ast[0], ast[2]))
             return Constant(pow)(ast[0], ast[2])
 
     def function_application(self, ast):
@@ -539,23 +595,29 @@ class DatalogSemantics:
             return ast
 
     def text(self, ast):
-        #print()
-        #print("___text___")
-        #print("ast :", ast)
-        #print("ast[1] :", ast[1])
-        #print("Constant(ast[1]) :", Constant(ast[1]))
+        # print()
+        # print("___text___")
+        # print("ast :", ast)
+        # print("ast[1] :", ast[1])
+        # print("Constant(ast[1]) :", Constant(ast[1]))
         return Constant(ast[1])
 
     def integer(self, ast):
+        # print()
+        # print("___integer___")
+        # print("ast :", ast)
+        # print("\"\".join(ast) :", "".join(ast))
+        # print("int(\"\".join(ast)) :", int("".join(ast)))
+        # print("Constant(int(\"\".join(ast))) :", Constant(int("".join(ast))))
         return Constant(int("".join(ast)))
 
     def float(self, ast):
-        #print()
-        #print("___float___")
-        #print("ast :", ast)
-        #print("\"\".join(ast) :", "".join(ast))
-        #print("float(\"\".join(ast)) :", float("".join(ast)))
-        #print("Constant(float(\"\".join(ast))) :", Constant(float("".join(ast))))
+        # print()
+        # print("___float___")
+        # print("ast :", ast)
+        # print("\"\".join(ast) :", "".join(ast))
+        # print("float(\"\".join(ast)) :", float("".join(ast)))
+        # print("Constant(float(\"\".join(ast))) :", Constant(float("".join(ast))))
         return Constant(float("".join(ast)))
 
     def cmd_identifier(self, ast):
@@ -567,49 +629,90 @@ class DatalogSemantics:
         return Symbol(ast)
 
     def pos_args(self, ast):
+        #print()
+        #print("___pos_args___")
+        #print("ast :", ast)
         args = [ast[0]]
+        #print("args = [ast[0]] :", args)
         for arg in ast[1]:
             args.append(arg[1])
+        #print("args after append :", args)
+        #print("res = tuple(args)", tuple(args))
         return tuple(args)
 
     def keyword_item(self, ast):
+        #print()
+        #print("___keyword_item___")
+        #print("ast :", ast)
         key = ast[0]
+        #print("key = ast[0] :", ast[0])
+        #print("ast[1] :", ast[1])
+        #print("ast[2] :", ast[2])
+        #print("(key, ast[2]) :", (key, ast[2]))
         return (key, ast[2])
 
     def pos_item(self, ast):
-        print()
-        print("___pos_item___")
-        print("ast :",ast)
+        #print()
+        #print("___pos_item___")
+        #print("ast :", ast)
         if not isinstance(ast, Expression):
-            print("not isinstance(ast, Expression)")
-            print("Constant(ast) :", Constant(ast))
+            #print("not isinstance(ast, Expression)")
+            #print("Constant(ast) :", Constant(ast))
             return Constant(ast)
+        #print("is isinstance(ast, Expression)")
+        #print("res = ast")
         return ast
 
     def keyword_args(self, ast):
+        #print()
+        #print("___keyword_args___")
+        #print("ast :", ast)
         kwargs = [ast[0]]
+        #print("kwargs = [ast[0]] :", kwargs)
         for kwarg in ast[1]:
             kwargs.append(kwarg[1])
+        #print("kwargs after append :", kwargs)
+        #print("tuple(kwargs) :", tuple(kwargs))
         return tuple(kwargs)
 
     def cmd_args(self, ast):
+        #print()
+        #print("___cmd_args___")
+        #print("ast :", ast)
         if isinstance(ast, list) and len(ast) == 2:
+            #print("is isinstance(ast, list) and len(ast) == 2")
             args, kwargs = ast
+            #print("args from \"args, kwargs = ast\" :", args)
+            #print("kwargs from \"args, kwargs = ast\" :", kwargs)
         elif isinstance(ast[0], tuple):
+            #print(" is isinstance(ast[0], tuple)")
             args = ()
             kwargs = ast
+            #print("kwargs = ast :", kwargs)
         else:
+            #print("else")
             args = ast
             kwargs = ()
+            #print("args = ast :", args)
+
         return args, kwargs
 
     def command(self, ast):
+        #print()
+        #print("___command___")
+        #print("ast :", ast)
         if not isinstance(ast, list):
+            #print("not isinstance(ast, list)")
             cmd = Command(ast, (), ())
+            #print("res = Command(ast, (), ()) :", cmd)
         else:
+            #print("is isinstance(ast, list)")
             name = ast[0]
             args, kwargs = ast[1]
+            #print("name = ast[0] :", name)
+            #print("args, kwargs = ast[1]", ast[1])
             cmd = Command(name, args, kwargs)
+            #print("res = Command(name, args, kwargs) :", cmd)
         return cmd
 
     def _default(self, ast):
@@ -629,6 +732,161 @@ class DatalogTransformer(Transformer):
         self.locals = locals
         self.globals = globals
 
+    def lambda_expression(self, ast):
+        #print()
+        #print("___lambda_expression___")
+        #print("ast :", ast)
+        #print("ast[1] :", ast[1])
+        #print("ast[3] :", ast[3])
+        #print("Lambda(ast[1], ast[3]) :", Lambda(ast[1], ast[3]))
+        return Lambda(ast[1], ast[3])
+
+    def command(self, ast):
+        # print()
+        # print("___command___")
+        # print("ast :", ast)
+        if not isinstance(ast, list):
+            # print("not isinstance(ast, list)")
+            cmd = Command(ast, (), ())
+            # print("res = Command(ast, (), ()) :", cmd)
+        else:
+            # print("is isinstance(ast, list)")
+            name = ast[0]
+            args, kwargs = ast[1]
+            # print("name = ast[0] :", name)
+            # print("args, kwargs = ast[1]", ast[1])
+            cmd = Command(name, args, kwargs)
+            # print("res = Command(name, args, kwargs) :", cmd)
+        return cmd
+
+    def cmd_args(self, ast):
+        #print()
+        #print("___cmd_args___")
+        #print("ast :", ast)
+        if isinstance(ast, list) and len(ast) == 2:
+            #print("is isinstance(ast, list) and len(ast) == 2")
+            args, kwargs = ast
+            #print("args from \"args, kwargs = ast\" :", args)
+            #print("kwargs from \"args, kwargs = ast\" :", kwargs)
+        elif isinstance(ast[0], tuple):
+            #print(" is isinstance(ast[0], tuple)")
+            args = ()
+            kwargs = ast
+            #print("kwargs = ast :", kwargs)
+        else:
+            #print("else")
+            args = ast
+            kwargs = ()
+            #print("args = ast :", args)
+
+        return args, kwargs
+
+    def keyword_args(self, ast):
+        #print()
+        #print("___keyword_args___")
+        #print("ast :", ast)
+        kwargs = [ast[0]]
+        #print("kwargs = [ast[0]] :", kwargs)
+        for kwarg in ast[1]:
+            kwargs.append(kwarg[1])
+        #print("kwargs after append :", kwargs)
+        #print("tuple(kwargs) :", tuple(kwargs))
+        return tuple(kwargs)
+
+    def keyword_item(self, ast):
+        #print()
+        #print("___keyword_item___")
+        #print("ast :", ast)
+        key = ast[0]
+        #print("key = ast[0] :", ast[0])
+        #print("ast[1] :", ast[1])
+        #print("ast[2] :", ast[2])
+        #print("(key, ast[2]) :", (key, ast[2]))
+        return (key, ast[2])
+
+    def pos_args(self, ast):
+        #print()
+        #print("___pos_args___")
+        #print("ast :", ast)
+        args = [ast[0]]
+        #print("args = [ast[0]] :", args)
+        for arg in ast[1]:
+            args.append(arg[1])
+        #print("args after append :", args)
+        #print("res = tuple(args)", tuple(args))
+        return tuple(args)
+
+    def pos_item(self, ast):
+        #print()
+        #print("___pos_item___")
+        #print("ast :", ast)
+        if not isinstance(ast, Expression):
+            #print("not isinstance(ast, Expression)")
+            #print("Constant(ast) :", Constant(ast))
+            return Constant(ast)
+        #print("is isinstance(ast, Expression)")
+        #print("res = ast")
+        return ast
+
+    def arithmetic_operation(self, ast):
+        #print()
+        #print("___arithmetic_operation___")
+        #print("ast :", ast)
+        if isinstance(ast, Expression):
+            #print("is isinstance(ast, Expression)")
+            return ast
+
+        if len(ast) == 1:
+            #print("not isinstance(ast, Expression) - len(ast) ==1")
+            #print("ast[0] :", ast[0])
+            return ast[0]
+
+        #print("not isinstance(ast, Expression) - len(ast) !=1")
+        op = Constant(OPERATOR[ast[1]])
+        #print("ast[1] :", ast[1])
+        #print("OPERATOR[ast[1]] :", OPERATOR[ast[1]])
+        #print("op = Constant(OPERATOR[ast[1]]) :", op)
+        #print("*ast :", *ast)
+        #print("*ast[0::2] :", *ast[0::2])
+        #print("op(*ast[0::2]) :", op(*ast[0::2]))
+
+        return op(*ast[0::2])
+
+    def term(self, ast):
+        #print()
+        #print("___term___")
+        if isinstance(ast, Expression):
+            return ast
+        elif len(ast) == 1:
+            return ast[0]
+    def factor(self, ast):
+        #print()
+        #print("___factor___")
+        if isinstance(ast, Expression):
+            return ast
+        elif len(ast) == 1:
+            return ast[0]
+        else:
+            return Constant(pow)(ast[0], ast[2])
+
+    def fact(self, ast):
+        #print()
+        #print("___fact___")
+        #print("ast :", ast)
+        return Fact(ast)
+
+    def constant_predicate(self, ast):
+        #print()
+        #print("___constant_predicate___")
+        #print("ast :", ast)
+        #print("len(ast) :", len(ast))
+        #print("ast[0] :", ast[0])
+        #print("ast[1] :", ast[1])
+        #print("ast[2] :", ast[2])
+        #print("ast[0](*ast[2]) :", ast[0](*ast[2]))
+        return ast[0](*ast[2])
+
+    # A revoir qd verif lark
     def ext_identifier(self, ast):
         #print()
         #print("___ext_identifier___")
@@ -665,8 +923,3 @@ def parser(code, locals=None, globals=None):
         semantics=DatalogSemantics(locals=locals, globals=globals),
     )
 
-def parser_lark(code, locals=None, globals=None):
-    lark_tree = COMPILED_GRAMMAR.parse(
-        code.strip()
-    )
-    return DatalogTransformer().transform(lark_tree)
