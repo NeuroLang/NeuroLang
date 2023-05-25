@@ -1,7 +1,7 @@
 from operator import add, eq, lt, mul, pow, sub, truediv
 
 import pytest
-from tatsu.exceptions import FailedParse
+from lark.exceptions import UnexpectedCharacters
 
 from neurolang.logic import ExistentialPredicate
 
@@ -324,7 +324,7 @@ def test_existential():
 
     assert res == expected
 
-    with pytest.raises(FailedParse):
+    with pytest.raises(UnexpectedCharacters):
         res = parser("C(x) :- B(x), exists(s1; )")
 
 
