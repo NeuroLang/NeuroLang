@@ -20,7 +20,7 @@ REBV = ReplaceExpressionsByValues(dict())
 class WrappedTypeMap:
     row_maps = {
         np.integer: int,
-        np.float: float
+        np.float64: float
     }
 
     @lru_cache(maxsize=256)
