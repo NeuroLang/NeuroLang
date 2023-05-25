@@ -530,7 +530,7 @@ def test_rel_np2():
 def test_bool_negation():
     res = parser(
         """
-        define as Interesting every Voxel not Reported
+        define as Interesting every Voxel that is not Reported
         """
     )
 
@@ -556,6 +556,27 @@ def test_rule_op_fact(datalog_simple):
         type_predicate_symbols={"element"}
     )
 
+    x = Symbol.fresh()
+
+    expected = Union((
+        Implication(
+            ProbabilisticPredicate(Constant(0.5), Symbol("active")(x)),
+            Symbol("voxel")(x)
+        ),
+    ))
+
+    assert weak_logic_eq(res, expected)
+
+
+def test_rule_condition_os():
+    res = parser(
+        """
+        define as probably active for every Voxel Reported
+        conditioned to Study @s mentions
+        """,
+        return_tree=True,
+        process=False
+    )
     x = Symbol.fresh()
 
     expected = Union((
