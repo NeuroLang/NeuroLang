@@ -1,7 +1,8 @@
 from operator import add, eq, lt, mul, pow, sub, truediv
 
 import pytest
-from tatsu.exceptions import FailedParse
+import json
+from lark.exceptions import UnexpectedCharacters
 
 from neurolang.logic import ExistentialPredicate
 
@@ -324,7 +325,7 @@ def test_existential():
 
     assert res == expected
 
-    with pytest.raises(FailedParse):
+    with pytest.raises(UnexpectedCharacters):
         res = parser("C(x) :- B(x), exists(s1; )")
 
 
@@ -471,3 +472,22 @@ def test_command_syntax():
         )
     )
     assert res == expected
+
+def test_empty_rule():
+    c = Symbol("c")
+    x = Symbol("x")
+
+    res = parser("")
+    print(res)
+    expected = {
+        "rule": " :- ",
+        "constraint": "body -: head",
+        "fact": "",
+        "probabilistic_rule": "head :: ( arithmetic_operation | int_ext_identifier ) :- (condition | body)",
+        "probabilistic_fact": "( arithmetic_operation | int_ext_identifier ) :: constant_predicate",
+        "statement": "identifier := ( lambda_expression | arithmetic_operation | int_ext_identifier )",
+        "statement_function": "identifier ( [ arguments ] ) := argument",
+        "command": ". cmd_identifier ( [ cmd_args ] )"
+    }
+    print("expected :", expected)
+    assert expected == res
