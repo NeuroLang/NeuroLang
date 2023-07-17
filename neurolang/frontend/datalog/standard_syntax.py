@@ -24,14 +24,11 @@ from ...probabilistic.expressions import (
     ProbabilisticFact
 )
 
-import json
-
 GRAMMAR_lark = u"""
 start: expressions
 expressions : (expression)+
 
-?expression :                    -> empty
-            | rule
+?expression : rule
             | constraint
             | fact
             | probabilistic_rule
@@ -128,8 +125,13 @@ constant_predicate : identifier "(" literal ("," literal)* ")"
 ?literal : number | text | ext_identifier
 
 ext_identifier : "@" identifier
-identifier : cmd_identifier | "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
-cmd_identifier : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
+
+identifier : cmd_identifier | identifier_regexp
+identifier_regexp : IDENTIFIER_REGEXP
+IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
+
+cmd_identifier : CMD_IDENTIFIER
+CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
 
 reserved_words : exists | ST | ANS
 ST : "st"
@@ -180,7 +182,7 @@ OPERATOR = {
 }
 
 
-COMPILED_GRAMMAR_lark = Lark(GRAMMAR_lark, debug=True)
+COMPILED_GRAMMAR_lark = Lark(GRAMMAR_lark, parser='lalr', debug=True)
 
 
 class ExternalSymbol(Symbol):
@@ -202,54 +204,16 @@ class DatalogTransformer(Transformer):
         self.globals = globals
 
     def start(self, ast):
-        print()
-        print("___ start() ___")
-        print("ast :", ast)
-        print("length(ast) :", len(ast))
-        print("ast[0] :", ast[0])
         return ast[0]
 
     def expressions(self, ast):
-        print()
-        print("___ expressions() ___")
-        print("---------------------")
-
         if isinstance(ast[0], Expression):
-            print("isinstance(ast[0], Expression)")
-            print("ast :", ast)
-            print("length(ast) :", len(ast))
-            print("ast[0] :", ast[0])
-            # print("type(ast[0]) :", type(ast[0]))
-            print("Union(ast) :", Union(ast))
             return Union(ast)
         else:
-            print("not isinstance(ast[0], Expression)")
             ast = ast[0]
-            print("type(ast) :", type(ast))
-            print(ast)
-            # print("Union(ast) :", Union(ast))
-        return ast
+        return Union(ast)
 
-    def empty(self, ast):
-        print()
-        print("___ empty() ___")
-        print(ast)
-        ast = {
-            "rule"               : " :- ",
-            "constraint"         : "body -: head",
-            "fact"               : "",
-            "probabilistic_rule" : "head :: ( arithmetic_operation | int_ext_identifier ) :- (condition | body)",
-            "probabilistic_fact" : "( arithmetic_operation | int_ext_identifier ) :: constant_predicate",
-            "statement"          : "identifier := ( lambda_expression | arithmetic_operation | int_ext_identifier )",
-            "statement_function" : "identifier ( [ arguments ] ) := argument",
-            "command"            : ". cmd_identifier ( [ cmd_args ] )"
-        }
-
-        # convert into JSON and return
-        # ast = json.dumps(ast)
-        print("ast :\n", ast)
-        print("type(ast) :", type(ast))
-        return ast
+    #     return 0
 
     def probabilistic_rule(self, ast):
         head = ast[0]
@@ -556,9 +520,12 @@ class DatalogTransformer(Transformer):
     def identifier(self, ast):
         ast = ast[0]
         if not isinstance(ast, Symbol):
-            return Symbol(ast.value)
+            return Symbol(ast)
 
         return ast
+
+    def identifier_regexp(self, ast):
+        return (ast[0]).value.replace('`', '')
 
     def cmd_identifier(self, ast):
         return Symbol((ast[0]).value)
@@ -585,3 +552,39 @@ class DatalogTransformer(Transformer):
 def parser(code, locals=None, globals=None):
     jp = COMPILED_GRAMMAR_lark.parse(code.strip())
     return DatalogTransformer().transform(jp)
+
+def parser_interactive(code, locals=None, globals=None):
+    ip = COMPILED_GRAMMAR_lark.parse_interactive(code)  # Create an interactive parser on a specific input
+    ip_choices = ip.choices()   # Possibles options
+
+    # Cleaning the choices dictionary
+    del ip_choices['__expressions_plus_0']
+    del ip_choices['start']
+    del ip_choices['expressions']
+
+    # Resulting dictionary initialisation ->
+    a = {}
+    for i in ip_choices.keys():
+        a[i] = []
+
+    for t in ip.choices():
+        val0 = list((ip.choices()[t])[1])   # current choice value
+
+        for i in val0:
+            j = str(i).replace(' ', '').replace("<", "").replace('*>', '').replace('>', '').strip()
+            val = j.split(':')
+            k = val[0]
+            v = val[1]
+            if k in ip.choices().keys():
+                a[k].append(v)
+
+    for i in a:
+        if a[i]:
+            a[i] = ' | '.join(a[i])
+        else:
+            a[i] = ''
+
+    # Get terminal values from the grammar and insert them in the resulting dictionary
+    for i in a:
+        if i in COMPILED_GRAMMAR_lark._terminals_dict.keys():
+            a[i] = str(COMPILED_GRAMMAR_lark.get_terminal(i).pattern).replace("(?:", '').replace(')', '').replace("\\\\", "\\")
