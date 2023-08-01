@@ -49,17 +49,28 @@ condition : composite_predicate "//" composite_predicate
 constraint : body RIGHT_IMPLICATION head
 RIGHT_IMPLICATION : "-:" | "\N{RIGHTWARDS ARROW}"
 
+existential_predicate : exists "(" existential_body ")"
+?existential_body : arguments SUCH_THAT predicate ( CONJUNCTION_SYMBOL predicate )*
+SUCH_THAT : "st" | ";"
+
+?head : head_predicate
+//head_predicate : identifier "(" [ arguments ] ")"
+head_predicate : identifier ( "(" arguments ")" | EMPTY_PAR_HEAD )
+EMPTY_PAR_HEAD : "(" ")"
+
 ?body : conjunction
 // tatsu version : ( conjunction_symbol ).{ predicate }
 conjunction : predicate (CONJUNCTION_SYMBOL predicate)*
-
-existential_predicate : exists "(" existential_body ")"
-?existential_body : arguments SUCH_THAT predicate ( CONJUNCTION_SYMBOL predicate )*
 CONJUNCTION_SYMBOL : "," | "&" | "\N{LOGICAL AND}"
-SUCH_THAT : "st" | ";"
 
 negated_predicate : ("~" | "\u00AC" ) predicate
-predicate : int_ext_identifier "(" [ arguments ] ")"
+//predicate : int_ext_identifier "(" [ arguments ] ")"
+//          | negated_predicate
+//          | existential_predicate
+//          | comparison
+//          | logical_constant
+//          | "(" predicate ")"
+predicate : int_ext_identifier_predicate "(" [ arguments ] ")"
           | negated_predicate
           | existential_predicate
           | comparison
@@ -69,12 +80,12 @@ predicate : int_ext_identifier "(" [ arguments ] ")"
 comparison : argument COMPARISON_OPERATOR argument
 COMPARISON_OPERATOR : "==" | "<" | "<=" | ">=" | ">" | "!="
 
-?head : head_predicate
-head_predicate : identifier "(" [ arguments ] ")"
+
 
 query : "ans(" [ arguments ] ")"
 
-statement : identifier ":=" ( lambda_expression | arithmetic_operation | int_ext_identifier )
+//statement : identifier ":=" ( lambda_expression | arithmetic_operation | int_ext_identifier )
+statement : identifier ":=" arithmetic_operation
 statement_function : identifier "(" [ arguments ] ")" ":=" argument
 
 probabilistic_fact : ( arithmetic_operation | int_ext_identifier ) "::" constant_predicate
@@ -98,6 +109,7 @@ function_application : "(" lambda_expression ")" "(" [ arguments ] ")" -> lambda
 
 signed_int_ext_identifier : int_ext_identifier     -> signed_int_ext_identifier
                           | "-" int_ext_identifier -> minus_signed_id
+?int_ext_identifier_predicate : int_ext_identifier
 ?int_ext_identifier : identifier
                     | ext_identifier
                     | lambda_expression
@@ -105,7 +117,8 @@ signed_int_ext_identifier : int_ext_identifier     -> signed_int_ext_identifier
 lambda_expression : "lambda" arguments ":" argument
 
 arguments : argument ("," argument)*
-argument : arithmetic_operation | function_application | DOTS
+//argument : arithmetic_operation | function_application | DOTS
+argument : arithmetic_operation | DOTS
 DOTS : "..."
 
 arithmetic_operation : term                          -> sing_op
@@ -119,10 +132,13 @@ factor : exponent             -> sing_factor
 ?exponent : literal | function_application | signed_int_ext_identifier | "(" argument ")"
 
 fact : constant_predicate
-constant_predicate : identifier "(" literal ("," literal)* ")"
+//constant_predicate : identifier "(" literal ("," literal)* ")"
+//                   | identifier "(" ")"
+constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
 
-?literal : number | text | ext_identifier
+//?literal : number | text | ext_identifier
+?literal : number | text
 
 ext_identifier : "@" identifier
 
@@ -133,9 +149,10 @@ IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
 cmd_identifier : CMD_IDENTIFIER
 CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
 
-reserved_words : exists | ST | ANS
-ST : "st"
-ANS : "ans"
+// Tatsu version :
+//reserved_words : exists | ST | ANS
+//ST : "st"
+//ANS : "ans"
 
 exists : EXISTS
 EXISTS : "exists" | "\u2203" | "EXISTS"
@@ -182,8 +199,8 @@ OPERATOR = {
 }
 
 
-COMPILED_GRAMMAR_lark = Lark(GRAMMAR_lark, parser='lalr', debug=True)
-
+COMPILED_GRAMMAR_lark = Lark(GRAMMAR_lark, debug=True)
+# COMPILED_GRAMMAR_lark = Lark(GRAMMAR_lark, parser='lalr', debug=True)
 
 class ExternalSymbol(Symbol):
     def __repr__(self):
@@ -549,33 +566,34 @@ class DatalogTransformer(Transformer):
         return ast
 
 
-def parser(code, locals=None, globals=None):
-    jp = COMPILED_GRAMMAR_lark.parse(code.strip())
-    return DatalogTransformer().transform(jp)
+def get_rule_names(ip):
+    ip_choices = ip.choices()
+    # for t in ip_choices:
+    #     print("*", t, ":", ip_choices[t])
+    return ip_choices
 
-def parser_interactive(code, locals=None, globals=None):
-    ip = COMPILED_GRAMMAR_lark.parse_interactive(code)  # Create an interactive parser on a specific input
-    ip_choices = ip.choices()   # Possibles options
+def get_terminal_names(ip):
+    # print(ip.accepts())
+    return ip.accepts()
 
-    # Cleaning the choices dictionary
-    del ip_choices['__expressions_plus_0']
-    del ip_choices['start']
-    del ip_choices['expressions']
-
+def create_res_rules(ip_choices, grammar):
     # Resulting dictionary initialisation ->
     a = {}
-    for i in ip_choices.keys():
+    for i in ip_choices:
         a[i] = []
 
-    for t in ip.choices():
-        val0 = list((ip.choices()[t])[1])   # current choice value
+    # Fill the resulting dictionary
+    for t in ip_choices:
+        # print("t :", t)
+        # print("/tip_choices[t] :", (ip_choices[t])[1])
+        val0 = list((ip_choices[t])[1])  # current choice value
 
         for i in val0:
             j = str(i).replace(' ', '').replace("<", "").replace('*>', '').replace('>', '').strip()
             val = j.split(':')
             k = val[0]
             v = val[1]
-            if k in ip.choices().keys():
+            if k in ip_choices.keys():
                 a[k].append(v)
 
     for i in a:
@@ -584,7 +602,84 @@ def parser_interactive(code, locals=None, globals=None):
         else:
             a[i] = ''
 
-    # Get terminal values from the grammar and insert them in the resulting dictionary
+    # Get terminal definitions from the grammar and insert them in the resulting dictionary
     for i in a:
-        if i in COMPILED_GRAMMAR_lark._terminals_dict.keys():
-            a[i] = str(COMPILED_GRAMMAR_lark.get_terminal(i).pattern).replace("(?:", '').replace(')', '').replace("\\\\", "\\")
+        if i in grammar._terminals_dict.keys():
+            a[i] = str(grammar.get_terminal(i).pattern).replace("(?:", '').replace(')', '').replace(
+                "\\\\", "\\")
+
+    return a
+
+def parser_interactive(code, locals=None, globals=None):
+    ip = COMPILED_GRAMMAR_lark.parse_interactive(code)  # Create an interactive parser on a specific input
+
+    # Get all rule names and definitions
+    # print("")
+    # print("___All choices___")
+    # print("")
+    ip_choices = get_rule_names(ip)
+
+    # Get all terminal names
+    # print("")
+    # print("\n___All terminal names___\n")
+    # print("")
+    all_terminal_names = get_terminal_names(ip)
+
+    # Cleaning the choices dictionary
+    # del ip_choices['__expressions_plus_0']
+    # del ip_choices['start']
+    # del ip_choices['expressions']
+
+    # Get all rule names and definitions
+    a = create_res_rules(ip_choices, COMPILED_GRAMMAR_lark)
+
+    # All rules
+    # print("")
+    # print("____All resulting rules___")
+    # print("")
+    # for t in a:
+    #     print("*", t, ":", a[t])
+
+    # Get current token rule
+    # feeds the text given to above into the parsers. This is not done automatically.
+    # print("")
+    # print("___Current token rule___")
+    # print("")
+    el = ip.exhaust_lexer()
+    # print("el :", el)
+
+    # Accepted next tokens
+    # print("")
+    # print("___Accepted options___")
+    # print("")
+    accepted_next_tokens = get_rule_names(ip)
+
+    # Accepted terminal names
+    # print("")
+    # print("___Accepted terminal names___")
+    # print("")
+    accepted_terminals = get_terminal_names(ip)
+
+    # Result
+    # print("")
+    # print("___Returned dictinary___")
+    # print("")
+    res_dico = {}
+    res_dico["all_rules"] = a
+    res_dico["all_terminals"] = all_terminal_names
+    res_dico["current_token"] = el
+    res_dico["accepted_options"] = accepted_next_tokens
+    res_dico["accepted_terminals"] = accepted_terminals
+
+    # for k in res_dico:
+    #     print(k, ":", res_dico[k])
+
+    return res_dico
+
+
+def parser(code, locals=None, globals=None, interactive=None):
+    if interactive:
+        return parser_interactive(code)
+    else:
+        jp = COMPILED_GRAMMAR_lark.parse(code.strip())
+        return DatalogTransformer().transform(jp)
