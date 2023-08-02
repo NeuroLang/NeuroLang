@@ -54,9 +54,12 @@ existential_predicate : exists "(" existential_body ")"
 SUCH_THAT : "st" | ";"
 
 ?head : head_predicate
-//head_predicate : identifier "(" [ arguments ] ")"
-head_predicate : identifier ( "(" arguments ")" | EMPTY_PAR_HEAD )
-EMPTY_PAR_HEAD : "(" ")"
+// Previous version :
+// head_predicate : identifier "(" [ arguments ] ")"
+// (See comment of identifier rule)
+head_predicate : identifier L_PAR_HEAD [ arguments ] R_PAR_HEAD
+R_PAR_HEAD : ")"
+L_PAR_HEAD : "("
 
 ?body : conjunction
 // tatsu version : ( conjunction_symbol ).{ predicate }
@@ -64,27 +67,32 @@ conjunction : predicate (CONJUNCTION_SYMBOL predicate)*
 CONJUNCTION_SYMBOL : "," | "&" | "\N{LOGICAL AND}"
 
 negated_predicate : ("~" | "\u00AC" ) predicate
-//predicate : int_ext_identifier "(" [ arguments ] ")"
+
+// Previous version :
+// predicate : int_ext_identifier "(" [ arguments ] ")"
 //          | negated_predicate
 //          | existential_predicate
 //          | comparison
 //          | logical_constant
 //          | "(" predicate ")"
-predicate : int_ext_identifier_predicate "(" [ arguments ] ")"
+// (See comments of int_ext_identifier rule (Collision message 2))
+predicate : int_ext_identifier L_PAR_PRED [ arguments ] R_PAR_PRED
           | negated_predicate
           | existential_predicate
           | comparison
           | logical_constant
-          | "(" predicate ")"
+          | L_PAR_PRED predicate R_PAR_PRED
+R_PAR_PRED : ")"
+L_PAR_PRED : "("
 
 comparison : argument COMPARISON_OPERATOR argument
 COMPARISON_OPERATOR : "==" | "<" | "<=" | ">=" | ">" | "!="
 
-
-
 query : "ans(" [ arguments ] ")"
 
+// Previous version :
 //statement : identifier ":=" ( lambda_expression | arithmetic_operation | int_ext_identifier )
+// (See comments of lambda_expression and int_ext_identifier (Collision message 1) rules)
 statement : identifier ":=" arithmetic_operation
 statement_function : identifier "(" [ arguments ] ")" ":=" argument
 
@@ -104,20 +112,60 @@ PYTHON_STRING : DOUBLE_QUOTE NO_DBL_QUOTE_STR DOUBLE_QUOTE
               | SINGLE_QUOTE NO_DBL_QUOTE_STR SINGLE_QUOTE
 NO_DBL_QUOTE_STR : /[^"]*/
 
-function_application : "(" lambda_expression ")" "(" [ arguments ] ")" -> lambda_application
-                     | int_ext_identifier "(" [ arguments ] ")"        -> id_application
+// Previous version :
+//function_application : "(" lambda_expression ")" "(" [ arguments ] ")" -> lambda_application
+//                     | int_ext_identifier "(" [ arguments ] ")"        -> id_application
+// (See comment of int_ext_identifier rule (Collision message 2))
+// Collision message :
+// collision occurred in state: {
+//	<argument : function_application * >
+//	<exponent : function_application * >
+// Solution :
+// - in argument rule : remove 'function_application'
+function_application : L_PAR_FUNC lambda_expression R_PAR_FUNC L_PAR_FUNC [ arguments ] R_PAR_FUNC -> lambda_application
+                     | int_ext_identifier L_PAR_FUNC [ arguments ] R_PAR_FUNC        -> id_application
+R_PAR_FUNC : ")"
+L_PAR_FUNC : "("
 
 signed_int_ext_identifier : int_ext_identifier     -> signed_int_ext_identifier
                           | "-" int_ext_identifier -> minus_signed_id
-?int_ext_identifier_predicate : int_ext_identifier
+
+// Collision message 1 :
+// collision occurred in state: {
+//	<function_application : int_ext_identifier * LPAR arguments RPAR>
+//	<signed_int_ext_identifier : int_ext_identifier * >
+//	<statement : identifier __ANON_0 int_ext_identifier * >
+//	<function_application : int_ext_identifier * LPAR RPAR>
+// Solution :
+// - in statement rule : remove 'int_ext_identifier'
+//
+// Collision message 2 :
+// collision occurred in state: {
+//	<predicate : int_ext_identifier LPAR arguments RPAR * >
+//	<function_application : int_ext_identifier LPAR arguments RPAR * >
+// and
+// collision occurred in state: {
+//	<predicate : int_ext_identifier LPAR RPAR * >
+//	<function_application : int_ext_identifier LPAR RPAR * >
+// Solution :
+// - Create terminals 'R_PAR_PRED : ")"' and 'L_PAR_PRED : "("' and then use them in predicate rule
+// - create terminals 'R_PAR_FUNC : ")"' and 'L_PAR_FUNC : "("' and then use them in function_application rule
 ?int_ext_identifier : identifier
                     | ext_identifier
                     | lambda_expression
 
+// Collision message :
+// collision occurred in state: {
+//	<statement : identifier __ANON_0 lambda_expression * >
+//	<int_ext_identifier : lambda_expression * >
+// Solution :
+// - in statement rule : remove 'lambda_expression'
 lambda_expression : "lambda" arguments ":" argument
 
 arguments : argument ("," argument)*
-//argument : arithmetic_operation | function_application | DOTS
+// Previous version :
+// argument : arithmetic_operation | function_application | DOTS
+// (See comment of function_application rule)
 argument : arithmetic_operation | DOTS
 DOTS : "..."
 
@@ -132,16 +180,47 @@ factor : exponent             -> sing_factor
 ?exponent : literal | function_application | signed_int_ext_identifier | "(" argument ")"
 
 fact : constant_predicate
-//constant_predicate : identifier "(" literal ("," literal)* ")"
-//                   | identifier "(" ")"
+// Previous version :
+// constant_predicate : identifier "(" literal ("," literal)* ")"
+//                    | identifier "(" ")"
+// (See comment of ext_identifier rule)
 constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
 
-//?literal : number | text | ext_identifier
+// Previous version :
+// ?literal : number | text | ext_identifier
+// (See comment of ext_identifier rule)
 ?literal : number | text
 
+// Collision message :
+// collision occurred in state: {
+//        <literal : ext_identifier * >
+//        <int_ext_identifier : ext_identifier * >
+// Solution :
+// - in literal rule : remove 'ext_identifier'
+// - in constant_predicate rule : replace 'literal' by 'literal | ext_identifier'
 ext_identifier : "@" identifier
 
+// Bug arisen during the process of adaptation of the grammar :
+// 1/ Input : '''
+// A(x)-:B(x)'''
+// 2/ Error message :
+// UnexpectedToken: Unexpected token Token('RIGHT_IMPLICATION', '-:') at line 2, column 5.
+// Expected one of: 
+//	* ":="
+// Previous tokens: [Token('R_PAR_FUNC', ')')]
+// 3/ Cause : the parser recognise an identifier instead of 
+// 4/ Solution :
+// - Separate identifier from int_ext_identifier
+// - replace int_ext_identifier by (int_ext_identifier | identifier) in all rules
+// 
+// Collision message :
+//collision occurred in state: {
+//	<head_predicate : identifier L_PAR_FUNC R_PAR_FUNC * >
+//	<constant_predicate : identifier L_PAR_FUNC R_PAR_FUNC * >
+//	<statement_function : identifier L_PAR_FUNC R_PAR_FUNC * __ANON_0 argument>
+// Solution :
+// - Create terminals 'R_PAR_HEAD : ")"' and 'L_PAR_HEAD : "("' and then use them in head_predicate rule
 identifier : cmd_identifier | identifier_regexp
 identifier_regexp : IDENTIFIER_REGEXP
 IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
@@ -200,7 +279,7 @@ OPERATOR = {
 
 
 COMPILED_GRAMMAR_lark = Lark(GRAMMAR_lark, debug=True)
-# COMPILED_GRAMMAR_lark = Lark(GRAMMAR_lark, parser='lalr', debug=True)
+
 
 class ExternalSymbol(Symbol):
     def __repr__(self):
@@ -288,12 +367,23 @@ class DatalogTransformer(Transformer):
         return operator(ast[0], ast[2])
 
     def predicate(self, ast):
+        # print("")
+        # print("___predicate()___")
+        # print("ast :", ast)
         if not isinstance(ast, Expression):
+            # print("not isinstance(ast, Expression)")
             if isinstance(ast, list):
+                # print("isinstance(ast, list)")
                 if len(ast) == 1:
+                    # print("len(ast) == 1")
                     ast = ast[0]
                 else:
+                    # print("len(ast) != 1")
                     ast = ast[0](*ast[1])
+            # else:
+                # print("not isinstance(ast, list)")
+        # print("isinstance(ast, Expression)")
+        # print("res = ast :", ast)
         return ast
 
     def head_predicate(self, ast):
@@ -389,11 +479,17 @@ class DatalogTransformer(Transformer):
         return ast
 
     def lambda_application(self, ast):
+        print("")
+        print("___lambda_application()___")
+        print("ast :", ast)
         if not isinstance(ast[0], Expression):
+            print("not isinstance(ast[0], Expression)")
             f = Symbol(ast[0])
         else:
+            print("isinstance(ast[0], Expression)")
             f = ast[0]
-
+        print("res = FunctionApplication(f, args=ast[1]) :")
+        print(FunctionApplication(f, args=ast[1]))
         return FunctionApplication(f, args=ast[1])
 
     def id_application(self, ast):
@@ -566,120 +662,9 @@ class DatalogTransformer(Transformer):
         return ast
 
 
-def get_rule_names(ip):
-    ip_choices = ip.choices()
-    # for t in ip_choices:
-    #     print("*", t, ":", ip_choices[t])
-    return ip_choices
-
-def get_terminal_names(ip):
-    # print(ip.accepts())
-    return ip.accepts()
-
-def create_res_rules(ip_choices, grammar):
-    # Resulting dictionary initialisation ->
-    a = {}
-    for i in ip_choices:
-        a[i] = []
-
-    # Fill the resulting dictionary
-    for t in ip_choices:
-        # print("t :", t)
-        # print("/tip_choices[t] :", (ip_choices[t])[1])
-        val0 = list((ip_choices[t])[1])  # current choice value
-
-        for i in val0:
-            j = str(i).replace(' ', '').replace("<", "").replace('*>', '').replace('>', '').strip()
-            val = j.split(':')
-            k = val[0]
-            v = val[1]
-            if k in ip_choices.keys():
-                a[k].append(v)
-
-    for i in a:
-        if a[i]:
-            a[i] = ' | '.join(a[i])
-        else:
-            a[i] = ''
-
-    # Get terminal definitions from the grammar and insert them in the resulting dictionary
-    for i in a:
-        if i in grammar._terminals_dict.keys():
-            a[i] = str(grammar.get_terminal(i).pattern).replace("(?:", '').replace(')', '').replace(
-                "\\\\", "\\")
-
-    return a
-
-def parser_interactive(code, locals=None, globals=None):
-    ip = COMPILED_GRAMMAR_lark.parse_interactive(code)  # Create an interactive parser on a specific input
-
-    # Get all rule names and definitions
-    # print("")
-    # print("___All choices___")
-    # print("")
-    ip_choices = get_rule_names(ip)
-
-    # Get all terminal names
-    # print("")
-    # print("\n___All terminal names___\n")
-    # print("")
-    all_terminal_names = get_terminal_names(ip)
-
-    # Cleaning the choices dictionary
-    # del ip_choices['__expressions_plus_0']
-    # del ip_choices['start']
-    # del ip_choices['expressions']
-
-    # Get all rule names and definitions
-    a = create_res_rules(ip_choices, COMPILED_GRAMMAR_lark)
-
-    # All rules
-    # print("")
-    # print("____All resulting rules___")
-    # print("")
-    # for t in a:
-    #     print("*", t, ":", a[t])
-
-    # Get current token rule
-    # feeds the text given to above into the parsers. This is not done automatically.
-    # print("")
-    # print("___Current token rule___")
-    # print("")
-    el = ip.exhaust_lexer()
-    # print("el :", el)
-
-    # Accepted next tokens
-    # print("")
-    # print("___Accepted options___")
-    # print("")
-    accepted_next_tokens = get_rule_names(ip)
-
-    # Accepted terminal names
-    # print("")
-    # print("___Accepted terminal names___")
-    # print("")
-    accepted_terminals = get_terminal_names(ip)
-
-    # Result
-    # print("")
-    # print("___Returned dictinary___")
-    # print("")
-    res_dico = {}
-    res_dico["all_rules"] = a
-    res_dico["all_terminals"] = all_terminal_names
-    res_dico["current_token"] = el
-    res_dico["accepted_options"] = accepted_next_tokens
-    res_dico["accepted_terminals"] = accepted_terminals
-
-    # for k in res_dico:
-    #     print(k, ":", res_dico[k])
-
-    return res_dico
-
-
 def parser(code, locals=None, globals=None, interactive=None):
     if interactive:
-        return parser_interactive(code)
+        return None
     else:
         jp = COMPILED_GRAMMAR_lark.parse(code.strip())
         return DatalogTransformer().transform(jp)
