@@ -1,6 +1,8 @@
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
+from lark import Lark
+from lark import Transformer
 
 from neurolang.logic import ExistentialPredicate
 
@@ -22,126 +24,146 @@ from ...probabilistic.expressions import (
     ProbabilisticFact
 )
 
-GRAMMAR = u"""
-    @@grammar::Datalog
-    @@parseinfo :: True
-    @@whitespace :: /[\t ]+/
-    @@eol_comments :: /#([^\n]*?)$/
+GRAMMAR_lark = u"""
+start: expressions
+expressions : (expression)+
 
-    start = expressions $ ;
+?expression : rule
+            | constraint
+            | fact
+            | probabilistic_rule
+            | probabilistic_fact
+            | statement
+            | statement_function
+            | command
 
-    expressions = ( newline ).{ expression };
+probabilistic_rule : head "::" ( arithmetic_operation | int_ext_identifier ) IMPLICATION (condition | body)
 
+rule : (head | query) IMPLICATION (condition | body)
+IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}"
 
-    expression = rule
-               | constraint
-               | fact
-               | probabilistic_rule
-               | probabilistic_fact
-               | statement
-               | statement_function
-               | command ;
-    fact = constant_predicate ;
-    probabilistic_fact = ( arithmetic_operation | int_ext_identifier ) '::' constant_predicate ;
-    rule = (head | query) implication (condition | body) ;
-    probabilistic_rule = head '::' ( arithmetic_operation | int_ext_identifier ) implication (condition | body) ;
-    constraint = body right_implication head ;
-    statement = identifier ':=' ( lambda_expression | arithmetic_operation | int_ext_identifier ) ;
-    statement_function = identifier'(' [ arguments ] ')' ':=' argument ;
-    command = '.' @:cmd_identifier '(' [ @:cmd_args ] ')';
-    head = head_predicate ;
-    body = conjunction ;
-    condition = composite_predicate '//' composite_predicate ;
-    conjunction = ( conjunction_symbol ).{ predicate } ;
-    composite_predicate = '(' @:conjunction ')'
-                        | predicate ;
-    exists = 'exists' | '\u2203' | 'EXISTS';
-    such_that = 'st' | ';' ;
-    reserved_words = exists
-                   | 'st'
-                   | 'ans' ;
+query : "ans(" [ arguments ] ")"
 
-    conjunction_symbol = ',' | '&' | '\N{LOGICAL AND}' ;
-    implication = ':-' | '\N{LEFTWARDS ARROW}' ;
-    right_implication = '-:' | '\N{RIGHTWARDS ARROW}' ;
-    head_predicate = identifier'(' [ arguments ] ')' ;
-    query = 'ans(' [ arguments ] ')' ;
-    predicate = int_ext_identifier'(' [ arguments ] ')'
-              | negated_predicate
-              | existential_predicate
-              | comparison
-              | logical_constant
-              | '(' @:predicate ')';
+condition : composite_predicate "//" composite_predicate
+?composite_predicate : "(" conjunction ")"
+                        | predicate
 
-    constant_predicate = identifier'(' ','.{ literal } ')' ;
+constraint : body RIGHT_IMPLICATION head
+RIGHT_IMPLICATION : "-:" | "\N{RIGHTWARDS ARROW}"
 
-    negated_predicate = ('~' | '\u00AC' ) predicate ;
-    existential_body = arguments such_that ( conjunction_symbol ).{ predicate }+ ;
-    existential_predicate = \
-        exists '(' @:existential_body ')' ;
+existential_predicate : exists "(" existential_body ")"
+?existential_body : arguments SUCH_THAT predicate ( CONJUNCTION_SYMBOL predicate )*
+SUCH_THAT : "st" | ";"
 
-    comparison = argument comparison_operator argument ;
+?head : head_predicate
+head_predicate : identifier "(" [ arguments ] ")"
 
-    arguments = ','.{ argument }+ ;
-    argument = arithmetic_operation
-             | function_application
-             | '...' ;
+?body : conjunction
+conjunction : predicate (CONJUNCTION_SYMBOL predicate)*
+CONJUNCTION_SYMBOL : "," | "&" | "\N{LOGICAL AND}"
 
-    signed_int_ext_identifier = [ '-' ] int_ext_identifier ;
-    int_ext_identifier = identifier | ext_identifier | lambda_expression;
-    ext_identifier = '@'identifier;
+negated_predicate : ("~" | "\u00AC" ) predicate
+predicate : int_ext_identifier "(" [ arguments ] ")"
+          | negated_predicate
+          | existential_predicate
+          | comparison
+          | logical_constant
+          | "(" predicate ")"
 
-    lambda_expression = 'lambda' arguments ':' argument;
+comparison : argument COMPARISON_OPERATOR argument
+COMPARISON_OPERATOR : "==" | "<" | "<=" | ">=" | ">" | "!="
 
-    function_application = '(' @:lambda_expression ')' '(' [ @:arguments ] ')'
-                         | @:int_ext_identifier '(' [ @:arguments ] ')' ;
+statement : identifier ":=" ( lambda_expression | arithmetic_operation | int_ext_identifier )
+statement_function : identifier "(" [ arguments ] ")" ":=" argument
 
-    arithmetic_operation = term [ ('+' | '-') term ] ;
+probabilistic_fact : ( arithmetic_operation | int_ext_identifier ) "::" constant_predicate
 
-    term = factor [ ( '*' | '/' ) factor ] ;
+command : "." cmd_identifier "(" [ cmd_args ] ")"
+cmd_args : pos_args [ "," keyword_args ] | keyword_args
 
-    factor =  exponent [ '**' exponential ];
+keyword_args : keyword_item ( "," keyword_item )*
+keyword_item : identifier "=" pos_item
 
-    exponential = exponent ;
+pos_args : pos_item ("," pos_item)*
+pos_item : arithmetic_operation | python_string
 
-    exponent = literal
-             | function_application
-             | signed_int_ext_identifier
-             | '(' @:argument ')' ;
+python_string : PYTHON_STRING
+PYTHON_STRING : DOUBLE_QUOTE NO_DBL_QUOTE_STR DOUBLE_QUOTE
+              | SINGLE_QUOTE NO_DBL_QUOTE_STR SINGLE_QUOTE
+NO_DBL_QUOTE_STR : /[^"]*/
 
-    literal = number
-            | text
-            | ext_identifier ;
+function_application : "(" lambda_expression ")" "(" [ arguments ] ")" -> lambda_application
+                     | int_ext_identifier "(" [ arguments ] ")"        -> id_application
 
-    identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/
-               | '`'@:?"[0-9a-zA-Z/#%._:-]+"'`';
+signed_int_ext_identifier : int_ext_identifier     -> signed_int_ext_identifier
+                          | "-" int_ext_identifier -> minus_signed_id
+?int_ext_identifier : identifier
+                    | ext_identifier
+                    | lambda_expression
 
-    cmd_identifier = !reserved_words /[a-zA-Z_][a-zA-Z0-9_]*/ ;
-    cmd_args = @:pos_args [ ',' @:keyword_args ]
-             | @:keyword_args ;
-    pos_args = pos_item { ',' pos_item }* ;
-    pos_item = ( arithmetic_operation | python_string ) !'=' ;
-    keyword_args = keyword_item { ',' keyword_item }* ;
-    keyword_item = identifier '=' pos_item ;
-    python_string = '"' @:/[^"]*/ '"'
-                  | "'" @:/[^']*/ "'" ;
+lambda_expression : "lambda" arguments ":" argument
 
-    comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
+arguments : argument ("," argument)*
+argument : arithmetic_operation | function_application | DOTS
+DOTS : "..."
 
-    text = '"' /[a-zA-Z0-9 ]*/ '"'
-          | "'" /[a-zA-Z0-9 ]*/ "'" ;
+arithmetic_operation : term                          -> sing_op
+                     | arithmetic_operation "+" term -> plus_op
+                     | arithmetic_operation "-" term -> minus_op
+term : factor          -> sing_term
+     | term "*" factor -> mul_term
+     | term "/" factor -> div_term
+factor : exponent             -> sing_factor
+       | factor "**" exponent -> pow_factor
+?exponent : literal | function_application | signed_int_ext_identifier | "(" argument ")"
 
-    number = float | integer ;
-    integer = [ '+' | '-' ] /[0-9]+/ ;
-    float = [ '+' | '-' ] /[0-9]*/'.'/[0-9]+/
-          | [ '+' | '-' ] /[0-9]+/'.'/[0-9]*/ ;
-    logical_constant = TRUE | FALSE ;
-    TRUE = 'True' | '\u22A4' ;
-    FALSE = 'False' | '\u22A5' ;
+fact : constant_predicate
+constant_predicate : identifier "(" literal ("," literal)* ")"
+                   | identifier "(" ")"
 
-    newline = {['\\u000C'] ['\\r'] '\\n'}+ ;
+?literal : number | text | ext_identifier
+
+ext_identifier : "@" identifier
+identifier : cmd_identifier | identifier_regexp
+identifier_regexp : IDENTIFIER_REGEXP
+IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
+cmd_identifier : CMD_IDENTIFIER
+CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
+
+// Tatsu version :
+//reserved_words : exists | ST | ANS
+//ST : "st"
+//ANS : "ans"
+
+exists : EXISTS
+EXISTS : "exists" | "\u2203" | "EXISTS"
+
+text : TEXT
+TEXT : DOUBLE_QUOTE /[a-zA-Z0-9 ]*/ DOUBLE_QUOTE
+     | SINGLE_QUOTE /[a-zA-Z0-9 ]*/ SINGLE_QUOTE
+DOUBLE_QUOTE : "\\""
+SINGLE_QUOTE : "'"
+
+?number : integer | float
+?integer : INT     -> pos_int
+         | "-" INT -> neg_int
+?float : FLOAT     -> pos_float
+       | "-" FLOAT -> neg_float
+
+logical_constant : FALSE | TRUE
+TRUE             : "True" | "\u22A4"
+FALSE            : "False" | "\u22A5"
+
+WHITESPACE : /[\t ]+/
+//NEWLINE : /[(\\u000C)? (\\r)? \\n]+/
+
+%import common.INT
+%import common.FLOAT
+%import common.NEWLINE
+
+%ignore WHITESPACE
+%ignore NEWLINE
 """
-
 
 OPERATOR = {
     "+": add,
@@ -158,7 +180,7 @@ OPERATOR = {
 }
 
 
-COMPILED_GRAMMAR = tatsu.compile(GRAMMAR)
+COMPILED_GRAMMAR_lark = Lark(GRAMMAR_lark, debug=True)
 
 
 class ExternalSymbol(Symbol):
@@ -166,7 +188,8 @@ class ExternalSymbol(Symbol):
         return "@S{{{}: {}}}".format(self.name, self.__type_repr__)
 
 
-class DatalogSemantics:
+class DatalogTransformer(Transformer):
+
     def __init__(self, locals=None, globals=None):
         super().__init__()
 
@@ -179,24 +202,25 @@ class DatalogSemantics:
         self.globals = globals
 
     def start(self, ast):
-        return ast
+        return ast[0]
 
     def expressions(self, ast):
-        if isinstance(ast, Expression):
-            ast = (ast,)
+        if isinstance(ast[0], Expression):
+            return Union(ast)
+        else:
+            ast = ast[0]
         return Union(ast)
 
-    def fact(self, ast):
-        return Fact(ast)
+    #     return 0
 
-    def probabilistic_fact(self, ast):
+    def probabilistic_rule(self, ast):
+        head = ast[0]
+        probability = ast[1]
+        body = ast[3]
         return Implication(
-            ProbabilisticFact(ast[0], ast[2]),
-            Constant(True),
+            ProbabilisticFact(probability, head),
+            body,
         )
-
-    def constant_predicate(self, ast):
-        return ast[0](*ast[2])
 
     def rule(self, ast):
         head = ast[0]
@@ -205,121 +229,214 @@ class DatalogSemantics:
         else:
             return Implication(ast[0], ast[2])
 
-    def probabilistic_rule(self, ast):
-        head = ast[0]
-        probability = ast[2]
-        body = ast[4]
-        return Implication(
-            ProbabilisticFact(probability, head),
-            body,
-        )
+    def condition(self, ast):
+        conditioned = ast[0]
+        condition = ast[1]
+        return Condition(conditioned, condition)
 
     def constraint(self, ast):
         return RightImplication(ast[0], ast[2])
 
-    def statement(self, ast):
-        return Statement(ast[0], ast[2])
-
-    def statement_function(self, ast):
-        return Statement(
-            ast[0],
-            Lambda(ast[2], ast[-1])
-        )
-
-    def body(self, ast):
-        return Conjunction(ast)
-
-    def condition(self, ast):
-
-        conditioned = ast[0]
-        if isinstance(conditioned, list):
-            conditioned = Conjunction(tuple(conditioned))
-
-        condition = ast[2]
-        if isinstance(condition, list):
-            condition = Conjunction(tuple(condition))
-
-        return Condition(conditioned, condition)
-
-    def head_predicate(self, ast):
-        if not isinstance(ast, Expression):
-            if len(ast) == 4:
-                arguments = []
-                for arg in ast[2]:
-                    arguments.append(arg)
-
-                if PROB in arguments:
-                    ix_prob = arguments.index(PROB)
-                    arguments_not_prob = (
-                        arguments[:ix_prob] +
-                        arguments[ix_prob + 1:]
-                    )
-                    prob_arg = PROB(*arguments_not_prob)
-                    arguments = (
-                        arguments[:ix_prob] +
-                        [prob_arg] +
-                        arguments[ix_prob + 1:]
-                    )
-
-                ast = ast[0](*arguments)
-            else:
-                ast = ast[0]()
-        return ast
-
-    def query(self, ast):
-        if len(ast) == 3:
-            # Query head has arguments
-            arguments = ast[1]
-            return Symbol("ans")(*arguments)
-        else:
-            # Query head has no arguments
-            return Symbol("ans")()
-
-    def predicate(self, ast):
-        if not isinstance(ast, Expression):
-            ast = ast[0](*ast[2])
-        return ast
-
-    def negated_predicate(self, ast):
-        return Negation(ast[1])
+    def conjunction(self, ast):
+        conj = []
+        for c in ast:
+            if isinstance(c, Expression):
+                conj.append(c)
+        return Conjunction(conj)
 
     def existential_predicate(self, ast):
-        exp = ast[2]
+        ast1 = ast[1].children
+        exp = []
+        for i in ast1:
+            if isinstance(i, FunctionApplication):
+                exp.append(i)
+
         if len(exp) == 1:
             exp = exp[0]
         else:
             exp = Conjunction(tuple(exp))
 
-        for arg in ast[0]:
+        for arg in ast1[0]:
             exp = ExistentialPredicate(arg, exp)
+
         return exp
 
+    def negated_predicate(self, ast):
+        return Negation(ast[0])
+
     def comparison(self, ast):
-        operator = Constant(OPERATOR[ast[1]])
+        operator = Constant(OPERATOR[ast[1].value])
         return operator(ast[0], ast[2])
 
-    def arguments(self, ast):
-        if isinstance(ast, Expression):
-            return (ast,)
-        return tuple(ast)
+    def predicate(self, ast):
+        if not isinstance(ast, Expression):
+            if isinstance(ast, list):
+                if len(ast) == 1:
+                    ast = ast[0]
+                else:
+                    ast = ast[0](*ast[1])
+        return ast
 
-    def ext_identifier(self, ast):
-        ast = ast[1]
-        return ExternalSymbol[ast.type](ast.name)
+    def head_predicate(self, ast):
+        if ast[1] != None:
+            arguments = list(ast[1])
 
-    def lambda_expression(self, ast):
-        return Lambda(ast[1], ast[3])
+            if PROB in arguments:
+                ix_prob = arguments.index(PROB)
+                arguments_not_prob = (
+                        arguments[:ix_prob] +
+                        arguments[ix_prob + 1:]
+                )
+                prob_arg = PROB(*arguments_not_prob)
+                arguments = (
+                        arguments[:ix_prob] +
+                        [prob_arg] +
+                        arguments[ix_prob + 1:]
+                )
 
-    def arithmetic_operation(self, ast):
-        if isinstance(ast, Expression):
-            return ast
+            ast = ast[0](*arguments)
+        else:
+            ast = ast[0]()
+        return ast
+
+    def query(self, ast):
+        ast = ast[0]
+        if ast != None:
+            if isinstance(ast, tuple):
+                arguments = ast
+            else:
+                arguments = tuple(ast)
+
+            return Symbol("ans")(*arguments)
+        else:
+            return Symbol("ans")()
+
+    def statement(self, ast):
+        return Statement(ast[0], ast[1])
+
+    def statement_function(self, ast):
+        return Statement(
+            ast[0],
+            Lambda(ast[1], ast[2])
+        )
+
+    def probabilistic_fact(self, ast):
+        return Implication(
+            ProbabilisticFact(ast[0], ast[1]),
+            Constant(True),
+        )
+
+    def command(self, ast):
+        if ast[1] == None:
+            cmd = Command(ast[0], (), ())
+        else:
+            # only args, only kwargs or both
+            name = ast[0]
+            args, kwargs = ast[1]
+            cmd = Command(name, args, kwargs)
+        return cmd
+
+    def cmd_args(self, ast):
 
         if len(ast) == 1:
-            return ast[0]
+            # No args
+            args = ()
+            kwargs = ast[0]
+        else:
+            if (ast[1] == None):
+                # only args. ex : A,"http://myweb/file.csv"
+                args = ast[0]
+                kwargs = ()
+            else:
+                # args and kwargs
+                args, kwargs = ast
+
+        return args, kwargs
+
+    def keyword_args(self, ast):
+        return tuple(ast)
+
+    def keyword_item(self, ast):
+        key = ast[0]
+        return (key, ast[1])
+
+    def pos_args(self, ast):
+        return tuple(ast)
+
+    def pos_item(self, ast):
+        ast = ast[0]
+        if not isinstance(ast, Expression):
+            return Constant((ast.children[0]).value.replace('"', ''))
+        return ast
+
+    def lambda_application(self, ast):
+        if not isinstance(ast[0], Expression):
+            f = Symbol(ast[0])
+        else:
+            f = ast[0]
+
+        return FunctionApplication(f, args=ast[1])
+
+    def id_application(self, ast):
+        if not isinstance(ast[0], Expression):
+            f = Symbol(ast[0])
+        else:
+            f = ast[0]
+
+        return FunctionApplication(f, args=ast[1])
+
+    def minus_signed_id(self, ast):
+        return Constant(mul)(Constant(-1), ast[0])
+
+    def signed_int_ext_identifier(self, ast):
+        return ast[0]
+
+    def lambda_expression(self, ast):
+        return Lambda(ast[0], ast[1])
+
+    def arguments(self, ast):
+        return tuple(ast)
+
+    def argument(self, ast):
+        ast = ast[0]
+        if isinstance(ast, Expression):
+            return ast
+        else:
+            return Symbol.fresh()
+
+    def minus_op(self, ast):
+        if len(ast) == 1:
+            if isinstance(ast[0], Expression):
+                return ast[0]
+
+            else:
+                return ast[0]
+
+        op_str = "-"
+        op = Constant(OPERATOR[op_str])
+        return op(*ast)
+
+    def plus_op(self, ast):
+        if len(ast) == 1:
+            if isinstance(ast[0], Expression):
+                return ast[0]
+            else:
+                return ast[0]
+
+        op_str = "+"
+        op = Constant(OPERATOR[op_str])
+        return op(*ast)
+
+    def sing_op(self, ast):
+        if len(ast) == 1:
+            if isinstance(ast[0], Expression):
+                return ast[0]
+
+            else:
+                return ast[0]
 
         op = Constant(OPERATOR[ast[1]])
-
-        return op(*ast[0::2])
+        return 0
 
     def term(self, ast):
         if isinstance(ast, Expression):
@@ -327,100 +444,109 @@ class DatalogSemantics:
         elif len(ast) == 1:
             return ast[0]
 
-        op = Constant(OPERATOR[ast[1]])
+    def div_term(self, ast):
+        if len(ast) == 1:
+            if isinstance(ast[0], Expression):
+                return ast[0]
+            else:
+                return 0
 
-        return op(ast[0], ast[2])
+        op_str = "/"
+        op = Constant(OPERATOR[op_str])
+
+        return op(ast[0], ast[1])
+
+    def mul_term(self, ast):
+        if len(ast) == 1:
+            if isinstance(ast[0], Expression):
+                return ast[0]
+            else:
+                return 0
+
+        op_str = "*"
+        op = Constant(OPERATOR[op_str])
+
+        return op(ast[0], ast[1])
+
+    def sing_term(self, ast):
+        if len(ast) == 1:
+            if isinstance(ast[0], Expression):
+                return ast[0]
+            else:
+                return 0
+        else:
+            return 0
 
     def factor(self, ast):
-        if isinstance(ast, Expression):
-            return ast
-        elif len(ast) == 1:
+        if isinstance(ast[0], Expression):
             return ast[0]
+        elif len(ast) == 1:
+            return 0
         else:
-            return Constant(pow)(ast[0], ast[2])
+            return 0
 
-    def function_application(self, ast):
-        if not isinstance(ast[0], Expression):
-            f = Symbol(ast[0])
+    def pow_factor(self, ast):
+        if len(ast) == 1:
+            if isinstance(ast[0], Expression):
+                return ast[0]
+            else:
+                return 0
         else:
-            f = ast[0]
-        return FunctionApplication(f, args=ast[1])
+            return Constant(pow)(ast[0], ast[1])
 
-    def signed_int_ext_identifier(self, ast):
-        if isinstance(ast, Expression):
-            return ast
+    def sing_factor(self, ast):
+        if len(ast) == 1:
+            if isinstance(ast[0], Expression):
+                return ast[0]
+            else:
+                return 0
         else:
-            return Constant(mul)(Constant(-1), ast[1])
+            return 0
+
+    def fact(self, ast):
+        return Fact(ast[0])
+
+    def constant_predicate(self, ast):
+        predicate_name = ast[0]
+        del ast[0]
+        return predicate_name(*ast)
+
+    def ext_identifier(self, ast):
+        ast = ast[0]
+        return ExternalSymbol[ast.type](ast.name)
 
     def identifier(self, ast):
-        return Symbol(ast)
+        ast = ast[0]
+        if not isinstance(ast, Symbol):
+            return Symbol(ast)
 
-    def argument(self, ast):
-        if ast == "...":
-            return Symbol.fresh()
-        else:
-            return ast
-
-    def text(self, ast):
-        return Constant(ast[1])
-
-    def integer(self, ast):
-        return Constant(int("".join(ast)))
-
-    def float(self, ast):
-        return Constant(float("".join(ast)))
-
-    def cmd_identifier(self, ast):
-        return Symbol(ast)
-
-    def pos_args(self, ast):
-        args = [ast[0]]
-        for arg in ast[1]:
-            args.append(arg[1])
-        return tuple(args)
-
-    def keyword_item(self, ast):
-        key = ast[0]
-        return (key, ast[2])
-
-    def pos_item(self, ast):
-        if not isinstance(ast, Expression):
-            return Constant(ast)
         return ast
 
-    def keyword_args(self, ast):
-        kwargs = [ast[0]]
-        for kwarg in ast[1]:
-            kwargs.append(kwarg[1])
-        return tuple(kwargs)
+    def identifier_regexp(self, ast):
+        return (ast[0]).value.replace('`', '')
 
-    def cmd_args(self, ast):
-        if isinstance(ast, list) and len(ast) == 2:
-            args, kwargs = ast
-        elif isinstance(ast[0], tuple):
-            args = ()
-            kwargs = ast
-        else:
-            args = ast
-            kwargs = ()
-        return args, kwargs
+    def cmd_identifier(self, ast):
+        return Symbol((ast[0]).value)
 
-    def command(self, ast):
-        if not isinstance(ast, list):
-            cmd = Command(ast, (), ())
-        else:
-            name = ast[0]
-            args, kwargs = ast[1]
-            cmd = Command(name, args, kwargs)
-        return cmd
+    def text(self, ast):
+        return Constant((ast[0].replace("'", "")).replace('"', ''))
+
+    def pos_int(self, ast):
+        return Constant(eval(ast[0]))
+
+    def neg_int(self, ast):
+        return Constant(0 - eval(ast[0]))
+
+    def pos_float(self, ast):
+        return Constant(eval(ast[0]))
+
+    def neg_float(self, ast):
+        return Constant(0 - eval(ast[0]))
 
     def _default(self, ast):
         return ast
 
 
 def parser(code, locals=None, globals=None):
-    return tatsu.parse(
-        COMPILED_GRAMMAR,
-        code.strip(),
-        semantics=DatalogSemantics(locals=locals, globals=globals),
-    )
+    jp = COMPILED_GRAMMAR_lark.parse(code.strip())
+    return DatalogTransformer().transform(jp)
