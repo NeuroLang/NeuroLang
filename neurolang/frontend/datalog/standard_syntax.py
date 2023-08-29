@@ -435,9 +435,6 @@ class DatalogTransformer(Transformer):
             else:
                 return ast[0]
 
-        op = Constant(OPERATOR[ast[1]])
-        return 0
-
     def term(self, ast):
         if isinstance(ast, Expression):
             return ast
@@ -532,16 +529,16 @@ class DatalogTransformer(Transformer):
         return Constant((ast[0].replace("'", "")).replace('"', ''))
 
     def pos_int(self, ast):
-        return Constant(eval(ast[0]))
+        return Constant(int((ast[0]).value))
 
     def neg_int(self, ast):
-        return Constant(0 - eval(ast[0]))
+        return Constant(0 - int((ast[0]).value))
 
     def pos_float(self, ast):
-        return Constant(eval(ast[0]))
+        return Constant(float((ast[0]).value))
 
     def neg_float(self, ast):
-        return Constant(0 - eval(ast[0]))
+        return Constant(0 - float((ast[0]).value))
 
     def _default(self, ast):
         return ast
