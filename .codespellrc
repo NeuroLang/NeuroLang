@@ -1,4 +1,6 @@
 [codespell]
-skip = .git,*.pdf,*.svg,versioneer.py
+skip = .git,*.pdf,*.svg,versioneer.py,*.js,package-lock.json
+# all images and other binaries embedded in .ipynb jsons
+ignore-regex = "image/png": ".*|^ *".*data:\S+;base64.*
 #
-# ignore-words-list =
+ignore-words-list = dum,ans,fo,ot,iif
