@@ -133,7 +133,7 @@ def is_linear_rule(rule):
 
 
 def all_body_preds_in_set(implication, predicate_set):
-    """Checks wether all predicates in the antecedent
+    """Checks whether all predicates in the antecedent
     are in the functor_set or are the consequent functor.
 
     Parameters
@@ -156,7 +156,7 @@ def all_body_preds_in_set(implication, predicate_set):
 
 
 def any_body_preds_in_set(implication, predicate_set):
-    """Checks wether any predicates in the antecedent
+    """Checks whether any predicates in the antecedent
     are in the predicate_set.
 
     Parameters
@@ -252,7 +252,7 @@ def stratify(union, datalog_instance):
     Returns
     -------
         list of lists of `Implications`, boolean
-            Strata and wether it was stratisfiable.
+            Strata and whether it was stratisfiable.
             If it was not, all non-stratified predicates
             will be in the last strata.
 

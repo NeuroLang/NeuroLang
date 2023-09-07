@@ -142,7 +142,7 @@ class DaskContextManager(ABC):
         # FIXME: We should preferably try to use GroupBy-aggregations
         # instead of GroupBy-apply when doing aggregations. I.e.
         # create a dd.Aggregation from the given function and register it
-        # on the context. But this doesnt work in all cases, since dask
+        # on the context. But this doesn't work in all cases, since dask
         # applies GroupBy-aggregations first on each chunk, then again to
         # the results of all the chunk aggregations.
         # So transformative aggregation will not work properly, for

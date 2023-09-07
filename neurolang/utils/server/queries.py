@@ -361,7 +361,7 @@ def _get_commands(engine) -> Dict[str, Dict]:
     """
     Add the command processing functions in CommandsMixin to the list
     of symbols available on an engine. This is useful to display the
-    docstring of theses commands in the frontend.
+    docstring of these commands in the frontend.
 
     Parameters
     ----------

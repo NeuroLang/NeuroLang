@@ -338,10 +338,10 @@ def test_empty_rewrite():
     qB = dt.walk(qB)
 
     orw = OntologyRewriter(qB, constraints)
-    rewrited = orw.Xrewrite()
+    rewritten = orw.Xrewrite()
 
-    assert len(rewrited) == 1
-    imp = rewrited.pop()
+    assert len(rewritten) == 1
+    imp = rewritten.pop()
     assert imp == q
 
 
@@ -391,22 +391,22 @@ def test_ontology_parsed_rewrite():
     qB = dt.walk(qB)
 
     orw = OntologyRewriter(qB, constraints)
-    rewrited = orw.Xrewrite()
+    rewritten = orw.Xrewrite()
 
-    rewrited = list(rewrited)
+    rewritten = list(rewritten)
 
-    assert len(rewrited) == 3
-    assert q in rewrited
-    index_no_q = [i for i, e in enumerate(rewrited) if e != q]
+    assert len(rewritten) == 3
+    assert q in rewritten
+    index_no_q = [i for i, e in enumerate(rewritten) if e != q]
     assert len(index_no_q) == 2
     index_1 = index_no_q[0]
     index_2 = index_no_q[1]
 
-    if rewrited[index_1].antecedent == chair(x):
-        assert len(rewrited[index_2].antecedent.args) == 2
-        assert rewrited[index_2].antecedent.args[0] == rewrited[index_2].consequent.args[0]
-    elif rewrited[index_2].antecedent == chair(x):
-        assert len(rewrited[index_1].antecedent.args) == 2
-        assert rewrited[index_1].antecedent.args[0] == rewrited[index_1].consequent.args[0]
+    if rewritten[index_1].antecedent == chair(x):
+        assert len(rewritten[index_2].antecedent.args) == 2
+        assert rewritten[index_2].antecedent.args[0] == rewritten[index_2].consequent.args[0]
+    elif rewritten[index_2].antecedent == chair(x):
+        assert len(rewritten[index_1].antecedent.args) == 2
+        assert rewritten[index_1].antecedent.args[0] == rewritten[index_1].consequent.args[0]
     else:
         assert False

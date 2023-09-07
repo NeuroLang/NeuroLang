@@ -149,7 +149,7 @@ def is_atom_a_deterministic_relation(
     atom : Expression
         neurolang Expression
     symbol_table : Mapping[Any, Expression]
-        mapping maching symbols to expressions.
+        mapping matching symbols to expressions.
 
     Returns
     -------
@@ -175,7 +175,7 @@ def is_atom_a_probabilistic_fact_relation(
     atom : Expression
         neurolang Expression
     symbol_table : Mapping[Any, Expression]
-        mapping maching symbols to expressions.
+        mapping matching symbols to expressions.
 
     Returns
     -------
@@ -201,7 +201,7 @@ def is_atom_a_probabilistic_choice_relation(
     atom : Expression
         neurolang Expression
     symbol_table : Mapping[Any, Expression]
-        mapping maching symbols to expressions.
+        mapping matching symbols to expressions.
 
     Returns
     -------

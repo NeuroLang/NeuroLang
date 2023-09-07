@@ -279,7 +279,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Performs an inferential query on the database.
         There are three modalities
         1. If there is only one argument, the query returns `True` or `False`
-        depending on wether the query could be inferred.
+        depending on whether the query could be inferred.
         2. If there are two arguments and the first is a tuple of `fe.Symbol`,
         it returns the set of results meeting the query in the second argument.
         3. If the first argument is a predicate (e.g. `Q(x)`) it performs the

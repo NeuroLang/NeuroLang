@@ -54,13 +54,13 @@ def reachable_code_from_query(query, program):
 
 def stratify_program(query, program):
     """
-    Statically analyse the program to isolate its deterministic strat, its
-    probabilistic strats and its post-probabilistic-query deterministic strat.
+    Statically analyse the program to isolate its deterministic strata, its
+    probabilistic strats and its post-probabilistic-query deterministic strata.
 
     A query can be solved through stratification if the probabilistic and
     deterministic parts are well separated. In case there exists one
     within-language probabilistic query dependency, no probabilistic predicate
-    should appear in the strat that depends on the query.
+    should appear in the strata that depends on the query.
 
     Parameters
     ----------

@@ -329,7 +329,7 @@ def init_frontend(mni_mask):
         Returns
         -------
         bool
-            wether the principal variance of
+            whether the principal variance of
             `s` is `direction`.
         """
         # Assuming RAS coding os the xyz space.
