@@ -53,7 +53,7 @@ class NeurolangQueryManager:
     This class is initialized with a dict of `NeurolangEngineConfiguration`
     that defines which Neurolang engine to create and how many.
     The NeurolangQueryManager creates a pool of thread workers (as many as
-    there are engines) to execute the queries that are submited.
+    there are engines) to execute the queries that are submitted.
 
     It also keeps track of results in memory, in a results_cache which is a
     dict of uuid -> Future.
@@ -72,7 +72,7 @@ class NeurolangQueryManager:
         Parameters
         ----------
         options : Dict[NeurolangEngineConfiguration, int]
-            a dictionnary defining the types of engines and the number of each
+            a dictionary defining the types of engines and the number of each
             type to create.
         cache_len : int, optional
             the maximum size for the results cache, by default 15
@@ -97,7 +97,7 @@ class NeurolangQueryManager:
         Parameters
         ----------
         options : Dict[NeurolangEngineConfiguration, int]
-            a dictionnary defining the types of engines and the number of each
+            a dictionary defining the types of engines and the number of each
             type to create.
         """
 

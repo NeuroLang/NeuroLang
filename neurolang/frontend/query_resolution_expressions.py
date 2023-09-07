@@ -768,7 +768,7 @@ class RightImplication(Expression):
 
 class Fact(Expression):
     """
-    A Fact reprsents an information considered
+    A Fact represents an information considered
     as True. It can be seen as the Implication:
     fact ← True, e.g. Even(2) ← True
     """

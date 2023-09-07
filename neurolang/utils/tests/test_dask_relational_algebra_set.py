@@ -162,7 +162,7 @@ def test_infer_types():
         index=("a", "b", "c", "d", "e", "f"),
     )
 
-    # lambda expression cannot be infered, should return default type
+    # lambda expression cannot be inferred, should return default type
     assert (
         try_to_infer_type_of_operation(lambda x: x + 1, row_types) is Unknown
     )

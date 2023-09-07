@@ -28,8 +28,8 @@ def _iter_implication_or_union_of_implications(expression):
 
 def reachable_code_from_query(query, program):
     """
-    Find the part of the intensional database of the program that is needed to
-    answer a rule-based query Head :- Body such that Head is not necesarrily
+    Find the part of the intentional database of the program that is needed to
+    answer a rule-based query Head :- Body such that Head is not necessarily
     part of the program.
 
     This is useful if the query is formulated as a rule instead of simply a

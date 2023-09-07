@@ -192,7 +192,7 @@ class ForbiddenRecursivityError(UnsupportedProgramError):
 
     This program cannot be stratified because it contains a loop in
     the dependencies of each rule. Rule `B(x) :- A(x), C(x)` depends
-    on the second rule through its occurence of the predicate `A(x)`.
+    on the second rule through its occurrence of the predicate `A(x)`.
     But rule `A(x) :- B(x)` in turn depends on the first rule through
     the `B(x)` predicate.
     """
@@ -282,7 +282,7 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
     relational algebra representation. This is probably because the
     formula is not in *modified relational algebra normal form*.
 
-    Generaly speaking, the formula must be expressed in *conjunctive normal
+    Generally speaking, the formula must be expressed in *conjunctive normal
     form* (CNF) or *disjunctive normal form* (DNF): as either a conjunction of
     disjunctions or disjunction of conjunctions.
 

@@ -2,7 +2,7 @@
 Compiler for the intermediate representation of a Datalog program.
 The :class:`DatalogProgram` class processes the
 intermediate representation of a program and extracts
-the extensional, intensional, and builtin
+the extensional, intentional, and builtin
 sets.
 """
 
@@ -64,7 +64,7 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
     is a set of tuples `a` representing `S(*a)` as facts. The type of the
     symbol must be more informative than `AbstractSet[Tuple]`
 
-    * If `S` is part of the intensional database then its value is an
+    * If `S` is part of the intentional database then its value is an
     `Union` of `Implications`. For instance
     `Q(x) :- R(x, x)` and `Q(x) :- T(x)` is represented as a symbol `Q`
      with value
@@ -130,7 +130,7 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
         if isinstance(fact_set, Union):
             raise NeuroLangException(
                 f'{fact.functor} has been previously '
-                'define as intensional predicate.'
+                'define as intentional predicate.'
             )
 
         fact_set.value.add(fact.args)

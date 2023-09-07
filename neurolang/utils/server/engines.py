@@ -58,7 +58,7 @@ class NeurolangEngineSet:
 
         Parameters
         ----------
-        timout : int
+        timeout : int
             When invoked with a timeout other than None, it will block for
             at most timeout seconds.
 

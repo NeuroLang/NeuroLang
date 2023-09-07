@@ -57,7 +57,7 @@ class CommandsMixin(PatternWalker):
             data = pd.read_csv(url, **kwargs)
         except ParserError as e:
             raise InvalidCommandExpression(
-                f"An error occured while parsing data from {url}: "
+                f"An error occurred while parsing data from {url}: "
             ) from e
         data = data.rename(columns={n: i for i, n in enumerate(data.columns)})
         self.add_extensional_predicate_from_tuples(symbol, data)
@@ -75,7 +75,7 @@ class CommandsMixin(PatternWalker):
             - symbol: str, the name of the symbol to load the data into
             - atlas_url: str, the url for the atlas file
             - labels_url: str, the url for the atlas labels
-            - base_url: str, optinal. if given, atlas and labels url are
+            - base_url: str, optional. if given, atlas and labels url are
                         considered relative to this base_url
         Other keyword arguments are passed to pandas' `read_csv` method.
 

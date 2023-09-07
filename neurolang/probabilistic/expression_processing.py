@@ -329,7 +329,7 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
 
 def lift_optimization_for_choice_predicates(query, program):
     """Replace multiple instances of choice predicates by
-    single instances enforncing the definition that the probability
+    single instances enforcing the definition that the probability
     that two different grounded choice predicates are mutually exclusive.
 
     Parameters

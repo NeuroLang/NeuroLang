@@ -253,7 +253,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
             choice_node_symb, expression, relation, probability_column
         )
         self.add_plate_node(choice_node_symb, choice_node)
-        # remove the probability column as it is not neeeded to represent the
+        # remove the probability column as it is not needed to represent the
         # CPD factories of boolean random variables whose value is
         # deterministically determined by the value of their parent choice
         # variable
@@ -292,7 +292,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
     @add_match(Grounding(Implication, Constant[AbstractSet]))
     def intensional_rule_grounding(self, grounding):
         """
-        Represent a deterministic intensional rule with an AND node.
+        Represent a deterministic intentional rule with an AND node.
         """
         expression = grounding.expression
         node_symbol = get_grounding_pred_symb(expression)

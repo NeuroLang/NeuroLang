@@ -342,7 +342,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
-        [Internal usage - documentation for developpers]
+        [Internal usage - documentation for developers]
 
         Performs an inferential query. Will return as first output
         an AbstractSet with as many elements as solutions of the
@@ -506,7 +506,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         Creates an AbstractSet fe.Symbol containing the elements specified in
         the iterable with a List[Tuple[Any, ...]] format (see examples).
-        Typically used to crate extensional facts from existing databases
+        Typically used to create extensional facts from existing databases
 
         Parameters
         ----------
