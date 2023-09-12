@@ -34,7 +34,6 @@ from ..datalog.expression_processing import (
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.standard_syntax import parser as datalog_parser
-from .datalog.natural_syntax import parser as nat_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
@@ -78,7 +77,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
         self.datalog_parser = datalog_parser
-        self.nat_datalog_parser = nat_datalog_parser
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -260,17 +258,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     )
                 )
             )
-
-    def execute_nat_datalog_program(self, code: str) -> None:
-        """Execute a natural language Datalog program in classical syntax
-
-        Parameters
-        ----------
-        code : string
-            Datalog program.
-        """
-        intermediate_representation = self.nat_datalog_parser(code)
-        self.program_ir.walk(intermediate_representation)
 
     def query(
         self, *args
