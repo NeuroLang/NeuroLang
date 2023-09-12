@@ -1,12 +1,14 @@
-import tatsu
+import lark
 
 from .ast import ASTNode
 
 
-class TatsuASTConverter(object):
+
+class LarkASTConverter(object):
+
     @staticmethod
     def _default(ast):
-        if isinstance(ast, tatsu.ast.AST):
+        if isinstance(ast, lark.tree.Tree):
             return ASTNode(
                 ast['parseinfo'].rule,
                 ast

@@ -9,7 +9,7 @@ from neurolang.frontend.query_resolution_expressions import Symbol
 from typing import Any, Dict, List, Tuple, Type, Union
 from nibabel.nifti1 import Nifti1Image
 from nibabel.spatialimages import SpatialImage
-from tatsu.exceptions import FailedParse
+from lark.exceptions import UnexpectedInput
 
 import numpy as np
 import pandas as pd
@@ -185,13 +185,12 @@ class QueryResults:
 
     def set_error_details(self, error):
         self.errorName = str(type(error))
-        if isinstance(error, FailedParse):
-            self.message = "An error occurred while parsing your query."
+        if isinstance(error, UnexpectedInput):
+            self.message = "An error occurred while parsing your query.""
             self.errorDoc = str(error)
             try:
                 line_info = error.tokenizer.line_info(error.pos)
             except AttributeError:
-                # support tatsu 4.x
                 line_info = error.buf.line_info(error.pos)
             self.line_info = {
                 "line": line_info.line,
