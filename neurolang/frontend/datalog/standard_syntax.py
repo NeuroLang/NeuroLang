@@ -1,6 +1,5 @@
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
-import tatsu
 from lark import Lark
 from lark import Transformer
 
@@ -24,7 +23,7 @@ from ...probabilistic.expressions import (
     ProbabilisticFact
 )
 
-GRAMMAR_lark = u"""
+GRAMMAR = u"""
 start: expressions
 expressions : (expression)+
 
@@ -130,11 +129,6 @@ IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
 cmd_identifier : CMD_IDENTIFIER
 CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
 
-// Tatsu version :
-//reserved_words : exists | ST | ANS
-//ST : "st"
-//ANS : "ans"
-
 exists : EXISTS
 EXISTS : "exists" | "\u2203" | "EXISTS"
 
@@ -180,7 +174,7 @@ OPERATOR = {
 }
 
 
-COMPILED_GRAMMAR_lark = Lark(GRAMMAR_lark, debug=True)
+COMPILED_GRAMMAR = Lark(GRAMMAR, debug=True)
 
 
 class ExternalSymbol(Symbol):
@@ -434,6 +428,7 @@ class DatalogTransformer(Transformer):
 
             else:
                 return ast[0]
+        return 0
 
     def term(self, ast):
         if isinstance(ast, Expression):
@@ -545,5 +540,5 @@ class DatalogTransformer(Transformer):
 
 
 def parser(code, locals=None, globals=None):
-    jp = COMPILED_GRAMMAR_lark.parse(code.strip())
+    jp = COMPILED_GRAMMAR.parse(code.strip())
     return DatalogTransformer().transform(jp)
