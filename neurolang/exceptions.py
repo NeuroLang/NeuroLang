@@ -386,3 +386,6 @@ class InvalidCommandExpression(ForbiddenExpressionError):
     """
 
     pass
+
+class UnexpectedTokenError(NeuroLangException):
+    pass

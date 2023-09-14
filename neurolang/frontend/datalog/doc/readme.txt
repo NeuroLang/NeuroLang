@@ -4,5 +4,6 @@ This directory contains the following files :
   These are the graphical representation of the NeuroLang grammar written in Lark
   format in ../standard_syntax.py file.
 
-- grammar_lark.txt :
-  This is the grammar in PlantUML format to generate the preceding figures with https://www.planttext.com/
+In both of the images, the dashed arrows represent the removed relationships,
+the red arrows and expressions represent the new ones and the modifications.
+
