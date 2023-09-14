@@ -337,7 +337,6 @@ class DatalogTransformer(Transformer):
                 kwargs = kwargs + (a,)
             else:
                 args = args + (a,)
-        
         return args, kwargs
 
     def keyword_args(self, ast):

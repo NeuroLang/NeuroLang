@@ -4,7 +4,7 @@ from unittest.mock import create_autospec
 from uuid import uuid4
 
 import pytest
-from lark.exceptions import UnexpectedCharacters
+from lark.exceptions import UnexpectedToken
 from neurolang.frontend.probabilistic_frontend import NeurolangPDL
 from neurolang.exceptions import NeuroLangException
 from ..app import NeurolangQueryManager
@@ -40,7 +40,7 @@ def test_nqm_submits_queries(conf):
     assert res is nqm.get_result(uuid)
 
     # wait for future execution. It should raise the exception
-    with pytest.raises(UnexpectedCharacters):
+    with pytest.raises(UnexpectedToken):
         res.result()
         raise NeuroLangException
 
