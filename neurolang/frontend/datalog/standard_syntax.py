@@ -2,6 +2,7 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from lark import Lark
 from lark import Transformer
+from lark.exceptions import UnexpectedToken
 
 from neurolang.logic import ExistentialPredicate
 
@@ -22,6 +23,7 @@ from ...probabilistic.expressions import (
     Condition,
     ProbabilisticFact
 )
+from ...exceptions import UnexpectedTokenError
 
 GRAMMAR = u"""
 start: expressions
@@ -532,5 +534,10 @@ class DatalogTransformer(Transformer):
 
 
 def parser(code, locals=None, globals=None):
-    jp = COMPILED_GRAMMAR.parse(code.strip())
-    return DatalogTransformer().transform(jp)
+
+    try :
+        jp = COMPILED_GRAMMAR.parse(code.strip())
+        return DatalogTransformer().transform(jp)
+    except UnexpectedToken as e :
+        raise UnexpectedTokenError from e
+

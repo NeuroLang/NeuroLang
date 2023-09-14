@@ -1,7 +1,7 @@
 from operator import add, eq, lt, mul, pow, sub, truediv
 
 import pytest
-from lark.exceptions import UnexpectedToken
+
 
 from neurolang.logic import ExistentialPredicate
 
@@ -15,6 +15,7 @@ from ....expressions import (
     Statement,
     Symbol
 )
+from ....exceptions import UnexpectedTokenError
 from ....probabilistic.expressions import (
     PROB,
     Condition,
@@ -324,9 +325,12 @@ def test_existential():
 
     assert res == expected
 
-    with pytest.raises(UnexpectedToken):
+    # try :
+    #     res = parser("C(x) :- B(x), exists(s1; )")
+    # except UnexpectedToken as e:
+    #     raise UnexpectedTokenError from e
+    with pytest.raises(UnexpectedTokenError):
         res = parser("C(x) :- B(x), exists(s1; )")
-
 
 def test_query():
     ans = Symbol("ans")
