@@ -36,7 +36,7 @@ expressions : (expression)+
             | statement_function
             | command
 
-probabilistic_rule : head "::" ( arithmetic_operation | int_ext_identifier ) IMPLICATION (condition | body)
+probabilistic_rule : head "::" arithmetic_operation IMPLICATION (condition | body)
 
 rule : (head | query) IMPLICATION (condition | body)
 IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}"
@@ -51,39 +51,38 @@ constraint : body RIGHT_IMPLICATION head
 RIGHT_IMPLICATION : "-:" | "\N{RIGHTWARDS ARROW}"
 
 existential_predicate : exists "(" existential_body ")"
-?existential_body : arguments SUCH_THAT predicate ( CONJUNCTION_SYMBOL predicate )*
+?existential_body : arguments SUCH_THAT predicate ( "," predicate )*
 SUCH_THAT : "st" | ";"
 
 ?head : head_predicate
 head_predicate : identifier "(" [ arguments ] ")"
 
 ?body : conjunction
-conjunction : predicate (CONJUNCTION_SYMBOL predicate)*
-CONJUNCTION_SYMBOL : "," | "&" | "\N{LOGICAL AND}"
+conjunction : predicate ("," predicate)*
 
 negated_predicate : ("~" | "\u00AC" ) predicate
-predicate : int_ext_identifier "(" [ arguments ] ")"
+predicate : id_application
           | negated_predicate
           | existential_predicate
-          | comparison
+          | "(" comparison ")"
           | logical_constant
-          | "(" predicate ")"
+
+id_application : int_ext_identifier "(" [ arguments ] ")"
 
 comparison : argument COMPARISON_OPERATOR argument
 COMPARISON_OPERATOR : "==" | "<" | "<=" | ">=" | ">" | "!="
 
-statement : identifier ":=" ( lambda_expression | arithmetic_operation | int_ext_identifier )
+statement : identifier ":=" arithmetic_operation
 statement_function : identifier "(" [ arguments ] ")" ":=" argument
 
 probabilistic_fact : ( arithmetic_operation | int_ext_identifier ) "::" constant_predicate
 
 command : "." cmd_identifier "(" [ cmd_args ] ")"
-cmd_args : pos_args [ "," keyword_args ] | keyword_args
+cmd_args : cmd_arg ("," cmd_arg)*
+?cmd_arg : pos_item
+         | keyword_item
 
-keyword_args : keyword_item ( "," keyword_item )*
 keyword_item : identifier "=" pos_item
-
-pos_args : pos_item ("," pos_item)*
 pos_item : arithmetic_operation | python_string
 
 python_string : PYTHON_STRING
@@ -91,8 +90,8 @@ PYTHON_STRING : DOUBLE_QUOTE NO_DBL_QUOTE_STR DOUBLE_QUOTE
               | SINGLE_QUOTE NO_DBL_QUOTE_STR SINGLE_QUOTE
 NO_DBL_QUOTE_STR : /[^"]*/
 
-function_application : "(" lambda_expression ")" "(" [ arguments ] ")" -> lambda_application
-                     | int_ext_identifier "(" [ arguments ] ")"        -> id_application
+?function_application : "(" lambda_expression ")" "(" [ arguments ] ")" -> lambda_application
+                     | id_application
 
 signed_int_ext_identifier : int_ext_identifier     -> signed_int_ext_identifier
                           | "-" int_ext_identifier -> minus_signed_id
@@ -103,7 +102,7 @@ signed_int_ext_identifier : int_ext_identifier     -> signed_int_ext_identifier
 lambda_expression : "lambda" arguments ":" argument
 
 arguments : argument ("," argument)*
-argument : arithmetic_operation | function_application | DOTS
+argument : arithmetic_operation | DOTS
 DOTS : "..."
 
 arithmetic_operation : term                          -> sing_op
@@ -117,10 +116,10 @@ factor : exponent             -> sing_factor
 ?exponent : literal | function_application | signed_int_ext_identifier | "(" argument ")"
 
 fact : constant_predicate
-constant_predicate : identifier "(" literal ("," literal)* ")"
+constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
 
-?literal : number | text | ext_identifier
+?literal : number | text
 
 ext_identifier : "@" identifier
 identifier : cmd_identifier | identifier_regexp
@@ -174,7 +173,7 @@ OPERATOR = {
 }
 
 
-COMPILED_GRAMMAR = Lark(GRAMMAR, debug=True)
+COMPILED_GRAMMAR = Lark(GRAMMAR, parser='lalr', debug=True)
 
 
 class ExternalSymbol(Symbol):
@@ -331,20 +330,14 @@ class DatalogTransformer(Transformer):
         return cmd
 
     def cmd_args(self, ast):
-
-        if len(ast) == 1:
-            # No args
-            args = ()
-            kwargs = ast[0]
-        else:
-            if (ast[1] == None):
-                # only args. ex : A,"http://myweb/file.csv"
-                args = ast[0]
-                kwargs = ()
+        args = ()
+        kwargs = ()
+        for a in ast :
+            if isinstance(a, tuple):
+                kwargs = kwargs + (a,)
             else:
-                # args and kwargs
-                args, kwargs = ast
-
+                args = args + (a,)
+        
         return args, kwargs
 
     def keyword_args(self, ast):

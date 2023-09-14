@@ -65,15 +65,16 @@ ext_identifier : "@" identifier
 identifier --|> ext_identifier
 
 object literal
-literal : number | text | ext_identifier
+literal : number | text <color:red><s>| ext_identifier</s></color>
 number --|> literal
 text --|> literal
-ext_identifier --|> literal
+ext_identifier ..|> literal
 
 object constant_predicate
-constant_predicate : identifier "(" literal ("," literal)* ")" | identifier "(" ")"
-identifier --|> constant_predicate
-literal    --|> constant_predicate
+constant_predicate : identifier "(" <color:red>(</color>literal <color:red>| ext_identifier )</color> ("," <color:red>(</color>literal <color:red>| ext_identifier )</color>)* ")" | identifier "(" ")"
+identifier           --|> constant_predicate
+literal              --|> constant_predicate
+ext_identifier -[#red]-|> constant_predicate
 
 object fact
 fact : constant_predicate
@@ -101,7 +102,7 @@ term --|> arithmetic_operation
 object DOTS
 DOTS : "..."
 object argument
-argument : arithmetic_operation | function_application | DOTS
+argument : arithmetic_operation <color:red><s>| function_application</s></color> | DOTS
 arithmetic_operation --|> argument
 DOTS                 --|> argument
 argument --|> exponent
@@ -127,12 +128,12 @@ int_ext_identifier        --|> signed_int_ext_identifier
 signed_int_ext_identifier --|> exponent
 
 object function_application
-function_application : "(" lambda_expression ")" "(" [ arguments ] ")" | int_ext_identifier "(" [ arguments ] ")"
+function_application : "(" lambda_expression ")" "(" [ arguments ] ")" | <color:red>id_application</color>
 lambda_expression  --|> function_application
 arguments          --|> function_application
 int_ext_identifier --|> function_application
 function_application --|> exponent
-function_application --|> argument
+function_application ..|> argument
 
 object NO_DBL_QUOTE_STR
 NO_DBL_QUOTE_STR : /[^"]*/
@@ -151,23 +152,19 @@ pos_item : arithmetic_operation | python_string
 arithmetic_operation --|> pos_item
 python_string        --|> pos_item
 
-object pos_args
-pos_args : pos_item ("," pos_item)*
-pos_item --|> pos_args
-
 object keyword_item
 keyword_item : identifier "=" pos_item
 identifier --|> keyword_item
 pos_item   --|> keyword_item
 
-object keyword_args
-keyword_args : keyword_item ( "," keyword_item )*
-keyword_item --|> keyword_args
+object cmd_arg
+cmd_arg : <color:red>pos_item | keyword_item</color>
+pos_item     -[#red]-|> cmd_arg
+keyword_item -[#red]-|> cmd_arg
 
 object cmd_args
-cmd_args : pos_args [ "," keyword_args ] | keyword_args
-keyword_args --|> cmd_args
-pos_args --|> cmd_args
+cmd_args : <color:red>cmd_arg ("," cmd_arg)*</color>
+cmd_arg      -[#red]-|> cmd_args
 
 object command
 command : "." cmd_identifier "(" [ cmd_args ] ")"
@@ -187,11 +184,11 @@ arguments --|>  statement_function
 argument --|> statement_function
 
 object statement
-statement : identifier ":=" ( lambda_expression | arithmetic_operation | int_ext_identifier )
+statement : identifier ":=" <color:red><s>( lambda_expression |</s></color> arithmetic_operation <color:red><s>| int_ext_identifier )</s></color>
 identifier           --|> statement
-lambda_expression    --|> statement
+lambda_expression    ..|> statement
 arithmetic_operation --|> statement
-int_ext_identifier   --|> statement
+int_ext_identifier   ..|> statement
 
 object COMPARISON_OPERATOR
 COMPARISON_OPERATOR : "==" | "<" | "<=" | ">=" | ">" | "!="
@@ -200,9 +197,15 @@ comparison : argument COMPARISON_OPERATOR argument
 argument --|> comparison
 COMPARISON_OPERATOR --|> comparison
 
+object id_application
+id_application : <color:red>int_ext_identifier "(" [ arguments ] ")"</color>
+int_ext_identifier -[#red]-|> id_application
+arguments          -[#red]-|> id_application
+id_application     -[#red]-|> function_application
+
 object predicate
-predicate : int_ext_identifier "(" [ arguments ] ")" | negated_predicate | existential_predicate | comparison | logical_constant | "(" predicate ")"
-int_ext_identifier --|> predicate
+predicate : <color:red>id_application</color> | negated_predicate | existential_predicate | <color:red>"("</color> comparison <color:red>")"</color> | logical_constant <color:red><s>| "(" predicate ")"</s></color>
+id_application -[#red]-|> predicate
 arguments --|> predicate
 comparison --|> predicate
 logical_constant --|> predicate
@@ -213,13 +216,9 @@ negated_predicate : ("~" | "\u00AC" ) predicate
 predicate --|> negated_predicate
 negated_predicate --|> predicate
 
-object CONJUNCTION_SYMBOL
-CONJUNCTION_SYMBOL : "," | "&" | "\N{LOGICAL AND}"
-
 object conjunction
-conjunction : predicate (CONJUNCTION_SYMBOL predicate)*
+conjunction : predicate (<color:red>","</color> predicate)*
 predicate --|> conjunction
-CONJUNCTION_SYMBOL --|> conjunction
 
 object body
 body : conjunction
@@ -237,11 +236,10 @@ head_predicate --|> head
 object SUCH_THAT
 SUCH_THAT : "st" | ";"
 object existential_body
-existential_body : arguments SUCH_THAT predicate ( CONJUNCTION_SYMBOL predicate )*
+existential_body : arguments SUCH_THAT predicate ( <color:red>","</color> predicate )*
 arguments --|> existential_body
 SUCH_THAT --|> existential_body
 predicate --|> existential_body
-CONJUNCTION_SYMBOL --|> existential_body
 
 object existential_predicate
 existential_predicate : exists "(" existential_body ")"
@@ -281,9 +279,9 @@ condition --|> rule
 body --|> rule
 
 object probabilistic_rule
-probabilistic_rule : head "::" ( arithmetic_operation | int_ext_identifier ) IMPLICATION (condition | body)
+probabilistic_rule : head "::" <color:red><s>(</s></color> arithmetic_operation <color:red><s>| int_ext_identifier )</s></color> IMPLICATION (condition | body)
 arithmetic_operation --|> probabilistic_rule
-int_ext_identifier --|> probabilistic_rule
+int_ext_identifier ..|> probabilistic_rule
 IMPLICATION --|> probabilistic_rule
 condition --|> probabilistic_rule
 body --|> probabilistic_rule

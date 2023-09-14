@@ -1,0 +1,153 @@
+Modification 1 :
+--------------
+
+Cause :
+For 18 terminals : INT, TRUE, __ANON_3, FALSE, DOT, CMD_IDENTIFIER, TEXT, AT, IDENTIFIER_REGEXP, TILDE, LPAR, MINUS, LAMBDA, DOTS, $END, __ANON_2, EXISTS, FLOAT
+
+Reduce/Reduce collision in Terminal('...') between the following rules: 
+	- <int_ext_identifier : lambda_expression>
+	- <statement : identifier __ANON_4 lambda_expression>
+    collision occurred in state: {
+	<int_ext_identifier : lambda_expression * >
+	<statement : identifier __ANON_4 lambda_expression * >
+    }
+
+==> Solution (in the grammar written in ../standard_syntax.py) :
+- in the 'statement' rule : remove 'lambda_expression' because lambda_expression
+  is included in both int_ext_identifier and statement, which introduces
+  redundancy.
+
+
+Modification 2 :
+--------------
+
+Cause :
+For 32 terminals : INT', __ANON_3, FALSE, DOT, CMD_IDENTIFIER, __ANON_1, RIGHT_IMPLICATION, SUCH_THAT, AT, RPAR, LPAR, __ANON_0, COLON, __ANON_5, DOTS, $END, __ANON_2, CONJUNCTION_SYMBOL, EXISTS, COMMA, TRUE, COMPARISON_OPERATOR, PLUS, STAR, TEXT, SLASH, IDENTIFIER_REGEXP, TILDE, IMPLICATION, MINUS, LAMBDA, FLOAT
+
+Reduce/Reduce collision in Terminal('...') between the following rules: 
+	- <literal : ext_identifier>
+	- <int_ext_identifier : ext_identifier>
+    collision occurred in state: {
+	<int_ext_identifier : ext_identifier * >
+	<literal : ext_identifier * >
+    }
+
+==> Solution (in the grammar written in ../standard_syntax.py) :
+- in literal rule : remove 'ext_identifier'
+- in constant_predicate rule : replace 'literal' by '(literal | ext_identifier)'
+- not replace 'literal' by '(literal | ext_identifier)' in exponent because
+  it causes a collision saying that ext_identifier can be resolved by both
+  int_ext_identifier and exponent, which will finally be fixed by removing
+  ext_identifier in exponent (because int_ext_identifier can also be reduced by
+  exponent indirectly)
+
+
+Modification 3 :
+--------------
+
+Cause :
+For 29 terminals : INT, TRUE, __ANON_3, FALSE, DOT, CMD_IDENTIFIER, PLUS, STAR, TEXT, SLASH, AT, IDENTIFIER_REGEXP, TILDE, LPAR, MINUS, LAMBDA, __ANON_5, DOTS, $END, __ANON_2, EXISTS, FLOAT, SUCH_THAT, COMMA, COMPARISON_OPERATOR, __ANON_0, RPAR, COLON, __ANON_1, RIGHT_IMPLICATION, CONJUNCTION_SYMBOL, IMPLICATION
+
+Reduce/Reduce collision in Terminal('INT') between the following rules: 
+	- <argument : function_application>
+	- <exponent : function_application>
+    collision occurred in state: {
+	<exponent : function_application * >
+	<argument : function_application * >
+    }
+
+==> Solution (in the grammar written in ../standard_syntax.py) :
+- in argument rule : remove 'function_application' because exponent is resolved indirectly by argument
+
+
+Modification 4 :
+--------------
+
+Cause :
+For 18 terminals : INT, TRUE, __ANON_3, FALSE, DOT, CMD_IDENTIFIER, TEXT, AT, IDENTIFIER_REGEXP, TILDE, LPAR, MINUS, LAMBDA, DOTS, $END, __ANON_2, EXISTS, FLOAT
+
+Reduce/Reduce collision in Terminal('...') between the following rules: 
+	- <signed_int_ext_identifier : int_ext_identifier>
+	- <statement : identifier __ANON_4 int_ext_identifier>
+    collision occurred in state: {
+	<statement : identifier __ANON_4 int_ext_identifier * >
+	<function_application : int_ext_identifier * LPAR RPAR>
+	<function_application : int_ext_identifier * LPAR arguments RPAR>
+	<signed_int_ext_identifier : int_ext_identifier * >
+    }
+
+==> Solution (in the grammar written in ../standard_syntax.py) :
+- in statement rule : remove 'int_ext_identifier' because int_ext_identifier is resolved indirectly by arithmetic_operation
+
+
+Modification 5 :
+--------------
+
+Cause :
+int_ext_identifier is resolved indirectly by arithmetic_operation, which can induce redundancy.
+
+==> Solution (in the grammar written in ../standard_syntax.py) :
+- in probabilistic_rule rule : replaced ( arithmetic_operation | int_ext_identifier ) by arithmetic_operation
+
+
+Modification 6 :
+--------------
+
+Cause :
+For 2 terminals : MINUS, RPAR
+
+Reduce/Reduce collision in Terminal('...') between the following rules: 
+	- <function_application : int_ext_identifier LPAR arguments RPAR>
+	- <predicate : int_ext_identifier LPAR arguments RPAR>
+    collision occurred in state: {
+	<function_application : int_ext_identifier LPAR arguments RPAR * >
+	<predicate : int_ext_identifier LPAR arguments RPAR * >
+    }
+
+Reduce/Reduce collision in Terminal('...') between the following rules: 
+	- <function_application : int_ext_identifier LPAR RPAR>
+	- <predicate : int_ext_identifier LPAR RPAR>
+    collision occurred in state: {
+	<function_application : int_ext_identifier LPAR RPAR * >
+	<predicate : int_ext_identifier LPAR RPAR * >
+    }
+
+==> Solution :
+
+1/ In the grammar written in ../standard_syntax.py :
+- created the rule 'id_application'
+- in function_application : replaced 'int_ext_identifier "(" [ arguments ] ")"  -> id_application'
+                            by       'id_application'
+- in predicate : replaced 'int_ext_identifier "(" [ arguments ] ")"' by 'id_application'
+                 and added parenthesis around 'comparison'
+- in conjunction and existential_body : only "," as conjunction symbol is left
+- CONJUNCTION_SYMBOL terminal removed
+
+2/ In ../tests/test_parser.py :
+- added parenthesis around comparisons (they are now mandatory)
+- replaced '&' conjuction symbol by ','
+
+
+Modification 7 :
+--------------
+
+Cause (with pytest) :
+FAILED tests/test_parser.py::test_command_syntax - lark.exceptions.UnexpectedToken: Unexpected token Token('EQUAL', '=') at line 1, column 42.
+
+==> Solution :
+
+In ../standard_syntax.py :
+- create cmd_arg rule
+- modify the expression of cmd_args rule in the grammar and its evaluation in DatalogTansformer class
+- remove keyword_args and pos_args rules
+
+
+Modification 8 :
+--------------
+
+Cause (with pytest) :
+FAILED tests/test_parser.py::test_existential - lark.exceptions.UnexpectedToken: Unexpected token Token('RPAR', ')') at line 1, column 26.
+
+==> Solution :
+In ../tests/test_parser.py :
+- replace UnexpectedCharacters by UnexpectedToken
