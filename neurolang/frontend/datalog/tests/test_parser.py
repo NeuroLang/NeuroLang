@@ -475,3 +475,20 @@ def test_command_syntax():
         )
     )
     assert res == expected
+
+def test_autocompletion():
+    print("")
+    print("input : ''")
+    res = parser('', interactive=True)
+    expected = {'__ANON_1', 'IDENTIFIER_REGEXP', 'LPAR', 'DOT', 'EXISTS', 'INT', 'FLOAT', 'LAMBDA', 'TILDE', 'CMD_IDENTIFIER', 'MINUS', 'TEXT', '__ANON_3', 'FALSE', 'TRUE', 'AT'}
+    assert res == expected
+    print("res :")
+    print(res)
+
+    print("")
+    print("input : .load_csv")
+    res = parser('.load_csv', interactive=True)
+    expected = {'LPAR'}
+    assert res == expected
+    print("res :")
+    print(res)
