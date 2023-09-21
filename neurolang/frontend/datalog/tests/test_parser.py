@@ -482,6 +482,7 @@ def test_autocompletion():
     res = parser('', interactive=True)
     expected = {'__ANON_1', 'IDENTIFIER_REGEXP', 'LPAR', 'DOT', 'EXISTS', 'INT', 'FLOAT', 'LAMBDA', 'TILDE', 'CMD_IDENTIFIER', 'MINUS', 'TEXT', '__ANON_3', 'FALSE', 'TRUE', 'AT'}
     assert res == expected
+    # assert res == 0
     print("res :")
     print(res)
 
@@ -490,5 +491,6 @@ def test_autocompletion():
     res = parser('.load_csv', interactive=True)
     expected = {'LPAR'}
     assert res == expected
+    # assert res == 0
     print("res :")
     print(res)

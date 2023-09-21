@@ -2,16 +2,11 @@ from __future__ import annotations
 
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
-from lark import Lark
-from lark import Transformer
+from lark import Lark, Transformer, UnexpectedCharacters
 from lark.exceptions import UnexpectedToken
+from lark.parsers.lalr_interactive_parser import InteractiveParser
 
 from dataclasses import dataclass
-
-from lark import UnexpectedCharacters
-from lark.parsers.lalr_interactive_parser import InteractiveParser
-from lark.indenter import PythonIndenter
-
 
 from neurolang.logic import ExistentialPredicate
 
@@ -129,7 +124,7 @@ factor : exponent             -> sing_factor
 fact : constant_predicate
 constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
-
+//COMMA : ","
 ?literal : number | text
 
 ext_identifier : "@" identifier
@@ -547,6 +542,8 @@ class CompleteResult:
     prefix: str
     token_options: set[str]
 
+    def to_dictionary(self):
+        return {"pos" : self.pos, "prefix" : self.prefix, "token_options" : self.token_options}
 
 class LarkCompleter:
     def __init__(self, lark: Lark, start: str = None):
@@ -583,7 +580,9 @@ def parser(code, locals=None, globals=None, interactive=False):
         if (interactive) :
             completer = LarkCompleter(COMPILED_GRAMMAR)
             res = completer.complete(code.strip())
+            # print(res)
             return res.token_options
+            # return 0
         else :
             jp = COMPILED_GRAMMAR.parse(code.strip())
             return DatalogTransformer().transform(jp)

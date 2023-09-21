@@ -520,6 +520,20 @@ def test_neurolang_dl_datalog_code_statement():
         ("x",),
     }
 
+def test_neurolang_dl_datalog_code_statement_autocompletion():
+    neurolang = frontend.NeurolangDL()
+    res = neurolang.compute_datalog_program_for_autocompletion(
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    five := 5
+    B(x,y) :- A(x, y)
+    B(x,y) :- 
+    """
+    )
+    expected = {'TILDE', 'LAMBDA', 'AT', 'EXISTS', 'CMD_IDENTIFIER', '__ANON_3', 'LPAR', 'TRUE', 'IDENTIFIER_REGEXP', 'FALSE'}
+    assert res == expected
 
 def test_neurolang_dl_datalog_code_lambda_def():
     neurolang = frontend.NeurolangDL()

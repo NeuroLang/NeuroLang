@@ -259,6 +259,37 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 )
             )
 
+    def compute_datalog_program_for_autocompletion(
+            self, code: str
+    ) -> Dict:
+        """
+        Computes a Datalog program in classical syntax.
+        Returns the next accepted tokens of the program.
+
+        Parameters
+        ----------
+        code : string
+            Datalog program.
+
+        Examples
+        --------
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
+        >>> prog = '''
+        ...        l2(x, y) :- l(x, y), (x == y)
+        ...        ans(x) :-
+        ...        '''
+        >>> with nl.environment as e:
+        ...     q = nl.compute_datalog_program_for_autocompletion(prog)
+        >>> q
+        ... {'TILDE', 'LAMBDA', 'AT', 'EXISTS', 'CMD_IDENTIFIER', '__ANON_3', 'LPAR', 'TRUE', 'IDENTIFIER_REGEXP', 'FALSE'}
+        """
+        # print("")
+        # res = self.datalog_parser(code, interactive=True)
+        # print(res)
+        # print(type(res))
+        return self.datalog_parser(code, interactive=True)
+
     def query(
         self, *args
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
