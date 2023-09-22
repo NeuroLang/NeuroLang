@@ -85,6 +85,10 @@ class Application(tornado.web.Application):
                 QueryHandler,
             ),
             (
+                r"/v1/autocompletion",
+                QueryAutocompletionHandler,
+            ),
+            (
                 r"/v1/statementsocket",
                 QuerySocketHandler,
             ),
@@ -347,6 +351,22 @@ class QueryHandler(JSONRequestHandler):
         uuid = str(uuid4())
         LOG.debug("Submitting query with uuid %s.", uuid)
         self.application.nqm.submit_query(uuid, query, engine)
+        return self.write_json_reponse({"query": query, "uuid": uuid})
+
+
+class QueryAutocompletionHandler(JSONRequestHandler):
+    """
+    Main endpoint to submit a query autocompletion using a GET request.
+    """
+
+    async def get(self):
+        print("")
+        print("___QueryAutocompletionHandler.get()___")
+        query = self.get_argument("query")
+        engine = self.get_argument("engine", "neurosynth")
+        uuid = str(uuid4())
+        LOG.debug("Submitting query with uuid %s.", uuid)
+        self.application.nqm.submit_query_autocompletion(uuid, query, engine)
         return self.write_json_reponse({"query": query, "uuid": uuid})
 
 
