@@ -113,3 +113,31 @@ def test_nqm_cancels_queries(conf):
     # release engine to finish first task
     nqm.engines[conf.key].sema.release()
     assert res1.result() is not None
+
+def test_nqm_computes_autocompletion(conf):
+    # create two engines
+    opts = {conf: 2}
+    nqm = NeurolangQueryManager(opts)
+    time.sleep(.2)
+
+    # acquire the two engines manually to block execution
+    nqm.engines[conf.key].sema.acquire()
+    nqm.engines[conf.key].sema.acquire()
+
+    # submit one task
+    id1 = uuid4()
+
+    input = '''
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    five := 5
+    B(x,y) :- A(x, y)
+    B(x,y) :- 
+    '''
+    res = nqm.submit_query_autocompletion(id1, input, conf.key)
+
+    assert isinstance(res, Future)
+
+    # cancel the task
+    cancelled = nqm.cancel(id1)

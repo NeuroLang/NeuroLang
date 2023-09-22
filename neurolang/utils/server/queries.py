@@ -192,6 +192,48 @@ class NeurolangQueryManager:
                     "[Thread - %s] - Engine of type %s released.", get_ident(), engine_type
                 )
 
+    def _compute_query_autocompletion(
+            self, query: str, engine_type: str
+    ) -> Dict:
+        """
+        Function executed on a ThreadPoolExecutor worker to compute a query
+        autocompletion against a neurolang engine.
+
+        Parameters
+        ----------
+        query : str
+            the query to execute
+        engine_type : str
+            the type of engine on which to execute the query
+
+        Returns
+        -------
+        Dict
+            the result of the query autocompletion
+        """
+        LOG.debug("[Thread - %s] - Computing query auto-completion...", get_ident())
+        LOG.debug("[Thread - %s] - Query :\n%s", get_ident(), query)
+        engine_set = self.engines[engine_type]
+        with engine_set.engine() as engine:
+            LOG.debug(
+                "[Thread - %s] - Engine of type %s acquired.",
+                get_ident(), engine_type
+            )
+            try:
+                with engine.scope:
+                    LOG.debug("[Thread - %s] - Solving query...", get_ident())
+                    res = engine.compute_datalog_program_for_autocompletion(query)
+                    return res
+            except Exception as e:
+                LOG.debug(
+                    "[Thread - %s] - Query auto-completion raised %s.", get_ident(), e
+                )
+                raise e
+            finally:
+                LOG.debug(
+                    "[Thread - %s] - Engine of type %s released.", get_ident(), engine_type
+                )
+
     def submit_query(self, uuid: str, query: str, engine_type: str) -> Future:
         """
         Submit a query to one of the available engines / workers.
@@ -217,6 +259,34 @@ class NeurolangQueryManager:
 
         future_res = self.executor.submit(
             self._execute_neurolang_query, query, engine_type
+        )
+        self.results_cache[uuid] = future_res
+        return future_res
+
+    def submit_query_autocompletion(self, uuid: str, query: str, engine_type: str) -> Future:
+        """
+        Submit a query autocompletion to one of the available engines / workers.
+
+        Parameters
+        ----------
+        uuid : str
+            the uuid for the query.
+        query : str
+            the datalog query to autocomplete.
+        engine_type : str
+            the type of engine to use for autocompleting the query.
+
+        Returns
+        -------
+        Future
+            a future result for the query autocompletion.
+        """
+        LOG.debug(
+            "Submitting query for auto-computation with uuid %s to executor pool of %s engines.",
+            uuid, engine_type
+        )
+        future_res = self.executor.submit(
+            self._compute_query_autocompletion, query, engine_type
         )
         self.results_cache[uuid] = future_res
         return future_res
