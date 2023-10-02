@@ -359,7 +359,7 @@ class QueryAutocompletionHandler(JSONRequestHandler):
     Main endpoint to submit a query autocompletion using a GET request.
     """
 
-    async def get(self):
+    async def post(self):
         print("")
         print("___QueryAutocompletionHandler.get()___")
         query = self.get_argument("query")
