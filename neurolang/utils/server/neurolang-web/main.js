@@ -10,7 +10,10 @@ import { EnginesController } from './engines/engines'
 dt(window, $)
 
 const qc = new QueryController()
-const ec = new EnginesController(qc)
+// const ec = new EnginesController(qc)
+
+window.qc = qc
+const ec = new EnginesController(window.qc)
 
 const routes = [
   { path: '/:engine/:queryId', onRouteChange: (rp) => ec.setRouteEngine(rp) },
