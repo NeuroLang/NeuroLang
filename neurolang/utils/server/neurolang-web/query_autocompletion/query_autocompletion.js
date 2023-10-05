@@ -1,17 +1,9 @@
-import 'codemirror/lib/codemirror.css'
-import 'codemirror/theme/xq-light.css'
-import 'codemirror/addon/display/autorefresh'
-import './datalog'
-import CodeMirror from 'codemirror'
-import './query.css'
-import $ from '../jquery-bundler'
-import { SymbolsController } from '../symbols/symbols'
 import { API_ROUTE } from '../constants'
 
 /**
  * Class to manage query autocompletion.
  */
-class QueryAutocompletionController {
+export class QueryAutocompletionController {
 	constructor() {
     	this.textarea = document.getElementById('textareaId');
     	this.initEventListeners();
