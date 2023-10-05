@@ -201,9 +201,10 @@ export class QueryController {
 
   _requestAutocomplete(content) {
     $.post(API_ROUTE.autocompletion, { text: content }, data => {
-        if (data.tokens && data.tokens.length > 0) {
-            this._showTooltipAtCursor(data.tokens);
-        }
+        // if (data.tokens && data.tokens.length > 0) {
+        //     this._showTooltipAtCursor(data.tokens);
+        // }
+        this._showTooltipAtCursor(data.tokens);
     });
  }
 
