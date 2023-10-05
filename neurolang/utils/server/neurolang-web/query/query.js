@@ -7,7 +7,6 @@ import './query.css'
 import $ from '../jquery-bundler'
 import { SymbolsController } from '../symbols/symbols'
 import { API_ROUTE } from '../constants'
-//import { QueryAutocompletionController } from '../query_autocompletion/query_autocompletion'
 
 /**
  * Class to manage query submission.
@@ -55,8 +54,6 @@ export class QueryController {
     /// Results Manager
     this.sc = new SymbolsController()
 
-    /// Initialise the autocompletion
-    this.autocompletion = new QueryAutocompletionController();
   }
 
   /**
