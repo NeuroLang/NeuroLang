@@ -29,10 +29,10 @@ export class QueryController {
     })
 
     this.editor.on("keydown", (cm, event) => {
-      console.log("keydown detected");
-      if (event.ctrlKey) {
+      console.log(`keydown detected ${event.key}`);
+      if (event.shiftKey && event.keyCode === 9) {
         // Get content from the start to the cursor position
-        console.log("control key detected");
+        console.log("Shift + Tab detected");
         const cursorPosition = this.editor.getCursor();
         const contentToCursor = this.editor.getRange({line: 0, ch: 0}, cursorPosition);
 
