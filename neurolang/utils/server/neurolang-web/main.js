@@ -6,7 +6,7 @@ import 'fomantic-ui-css/semantic'
 import { QueryController } from './query/query'
 import { Router } from './router/router'
 import { EnginesController } from './engines/engines'
-import { QueryAutocompletionController } from './query_autocompletion/query_autocompletion'
+//import { QueryAutocompletionController } from './query_autocompletion/query_autocompletion'
 
 dt(window, $)
 

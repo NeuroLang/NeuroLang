@@ -7,6 +7,7 @@ import './query.css'
 import $ from '../jquery-bundler'
 import { SymbolsController } from '../symbols/symbols'
 import { API_ROUTE } from '../constants'
+//import { QueryAutocompletionController } from '../query_autocompletion/query_autocompletion'
 
 /**
  * Class to manage query submission.
@@ -27,6 +28,17 @@ export class QueryController {
         { className: 'marks', style: 'width: .9em' }
       ]
     })
+
+    this.editor.on("keydown", (cm, event) => {
+      if (event.ctrlKey) {
+        // Get content from the start to the cursor position
+        const cursorPosition = this.editor.getCursor();
+        const contentToCursor = this.editor.getRange({line: 0, ch: 0}, cursorPosition);
+
+        this._requestAutocomplete(contentToCursor);
+      }
+    });
+
     /// Query Button & Alert box
     this.runQueryBtn = $('#runQueryBtn')
     this.queryAlert = $('#queryAlert')
@@ -42,6 +54,9 @@ export class QueryController {
 
     /// Results Manager
     this.sc = new SymbolsController()
+
+    /// Initialise the autocompletion
+    this.autocompletion = new QueryAutocompletionController();
   }
 
   /**
@@ -186,4 +201,30 @@ export class QueryController {
     this.editor.clearGutter('marks')
     this.editor.getAllMarks().forEach((elt) => elt.clear())
   }
+
+  _requestAutocomplete(content) {
+    $.post(API_ROUTE.autocompletion, { text: content }, data => {
+        if (data.tokens && data.tokens.length > 0) {
+            this._showTooltipAtCursor(data.tokens);
+        }
+    });
+ }
+
+ _showTooltipAtCursor(tokens) {
+    const cursorPos = this.editor.cursorCoords(true, "page");
+    const tooltip = $('<div class="autocomplete-tooltip"></div>').text(tokens.join(", ")).css({
+        top: cursorPos.top + "px",
+        left: cursorPos.left + "px"
+    }).appendTo(document.body);
+
+    // Close the tooltip on cursor movement or click outside
+    this.editor.on("cursorActivity", () => {
+        tooltip.remove();
+    });
+    $(document).on('click', () => {
+        tooltip.remove();
+    });
+ }
+
+
 }

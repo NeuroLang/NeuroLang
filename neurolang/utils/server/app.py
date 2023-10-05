@@ -356,18 +356,18 @@ class QueryHandler(JSONRequestHandler):
 
 class QueryAutocompletionHandler(JSONRequestHandler):
     """
-    Main endpoint to submit a query autocompletion using a GET request.
+    Main endpoint to submit a query autocompletion using a POST request.
     """
 
     async def post(self):
         print("")
         print("___QueryAutocompletionHandler.get()___")
-        query = self.get_argument("query")
+        text = self.get_argument("text", '')
         engine = self.get_argument("engine", "neurosynth")
         uuid = str(uuid4())
         LOG.debug("Submitting query with uuid %s.", uuid)
-        self.application.nqm.submit_query_autocompletion(uuid, query, engine)
-        return self.write_json_reponse({"query": query, "uuid": uuid})
+        self.application.nqm.submit_query_autocompletion(uuid, text, engine)
+        return self.write_json_reponse({"query": text, "uuid": uuid})
 
 
 class NiftiiImageHandler(JSONRequestHandler):

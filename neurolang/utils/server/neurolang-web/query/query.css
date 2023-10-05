@@ -41,3 +41,12 @@
 #queryAlert .nl-query-message {
   margin: 0;
 }
+
+.autocomplete-tooltip {
+    position: absolute;
+    background-color: #fff;
+    border: 1px solid #aaa;
+    padding: 5px;
+    border-radius: 4px;
+    z-index: 1000;
+}
