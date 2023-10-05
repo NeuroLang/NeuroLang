@@ -29,8 +29,10 @@ export class QueryController {
     })
 
     this.editor.on("keydown", (cm, event) => {
+      console.log("keydown detected");
       if (event.ctrlKey) {
         // Get content from the start to the cursor position
+        console.log("control key detected");
         const cursorPosition = this.editor.getCursor();
         const contentToCursor = this.editor.getRange({line: 0, ch: 0}, cursorPosition);
 
@@ -200,6 +202,7 @@ export class QueryController {
   }
 
   _requestAutocomplete(content) {
+    console.log("Requesting autocomplete for:", content);
     $.post(API_ROUTE.autocompletion, { text: content }, data => {
         // if (data.tokens && data.tokens.length > 0) {
         //     this._showTooltipAtCursor(data.tokens);
@@ -209,6 +212,7 @@ export class QueryController {
  }
 
  _showTooltipAtCursor(tokens) {
+   console.log("Displaying tokens:", tokens);
     const cursorPos = this.editor.cursorCoords(true, "page");
     const tooltip = $('<div class="autocomplete-tooltip"></div>').text(tokens.join(", ")).css({
         top: cursorPos.top + "px",
