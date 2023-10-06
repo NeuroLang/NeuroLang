@@ -151,7 +151,7 @@ def test_or_operations():
     gx = F_(S_('b'), (S_('x'),))
 
     res = fx | gx
-    assert res == F_(C_(op.or_), (fx, gx)) 
+    assert res == F_(C_(op.or_), (fx, gx))
 
     x = S_('x')
     y = S_('y')

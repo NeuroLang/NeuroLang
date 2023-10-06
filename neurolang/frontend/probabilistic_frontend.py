@@ -23,7 +23,6 @@ from uuid import uuid1
 import pandas as pd
 from neurolang.type_system import (
     get_args,
-    get_origin,
     replace_type_variable_fix_python36_37,
 )
 

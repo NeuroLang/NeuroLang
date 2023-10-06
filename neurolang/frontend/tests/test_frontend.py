@@ -831,7 +831,6 @@ def test_first_column_sugar_body_s():
 
     with qr.scope as e:
         e.s[e.x] = (e.x == e.y) & e.dd('one', e.y)
-        e.dd.s['one']
         e.r[e.x] = (e.x == (e.dd.s['one']))
         res_all = qr.solve_all()
 
