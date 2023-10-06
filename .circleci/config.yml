@@ -111,7 +111,7 @@ commands:
 jobs:
   py37:
     docker:
-      - image: cimg/python:3.7
+      - image: circleci/python:3.7
 
     working_directory: ~/repo
 
@@ -122,7 +122,7 @@ jobs:
 
   py38:
     docker:
-      - image: cimg/python:3.8
+      - image: circleci/python:3.8
 
     working_directory: ~/repo
 
@@ -133,7 +133,7 @@ jobs:
 
   py37dask:
     docker:
-      - image: cimg/python:3.7
+      - image: circleci/python:3.7
 
     working_directory: ~/repo
 
@@ -145,7 +145,7 @@ jobs:
 
   py38dask:
     docker:
-      - image: cimg/python:3.8
+      - image: circleci/python:3.8
 
     working_directory: ~/repo
 
@@ -157,7 +157,7 @@ jobs:
 
   py310:
     docker:
-      - image: cimg/python:3.10
+      - image: circleci/python:3.10
 
     working_directory: ~/repo
 
@@ -168,7 +168,7 @@ jobs:
 
   py39:
     docker:
-      - image: cimg/python:3.9
+      - image: circleci/python:3.9
 
     working_directory: ~/repo
 
@@ -181,7 +181,7 @@ jobs:
 
   benchmark:
     docker:
-      - image: cimg/python:3.7
+      - image: circleci/python:3.7
 
     working_directory: ~/repo
 
@@ -215,7 +215,7 @@ jobs:
 
   docs:
     docker:
-      - image: cimg/python:3.8
+      - image: circleci/python:3.8
 
     working_directory: ~/repo
 
@@ -266,7 +266,7 @@ jobs:
 
   deploy_docs:
     docker:
-      - image: cimg/python:3.8
+      - image: circleci/python:3.8
     steps:
       - attach_workspace:
           at: /tmp/build
