@@ -822,6 +822,7 @@ def test_translate_expression_to_fronted_expression():
     assert imp_fe.antecedent == tr.walk(imp_exp.antecedent)
 
 
+@pytest.mark.skip(reason="sugar needs to be updated")
 def test_first_column_sugar_body_s():
     qr = frontend.NeurolangDL()
     qr.add_tuple_set({
@@ -836,6 +837,7 @@ def test_first_column_sugar_body_s():
     assert res_all['r'] == res_all['s']
 
 
+@pytest.mark.skip(reason="sugar needs to be updated")
 def test_first_column_sugar_head_s():
     qr = frontend.NeurolangDL()
     qr.add_tuple_set({

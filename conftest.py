@@ -10,11 +10,16 @@ https://github.com/jpype-project/jpype/issues/933 for reference.
 """
 import warnings
 import pytest
-import dask_sql
+try:
+    import dask_sql
+    from neurolang.utils.relational_algebra_set.dask_helpers import (
+        DaskContextManager,
+    )
+
+    HAS_DASK = True
+except ImportError:
+    HAS_DASK = False
 from neurolang import config
-from neurolang.utils.relational_algebra_set.dask_helpers import (
-    DaskContextManager,
-)
 
 
 def pytest_addoption(parser):

@@ -266,7 +266,7 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
         return arity
 
 
-GETATTR = ir.Constant(getattr)
+GETATTR = ir.Constant[Callable[[Unknown, str], Unknown]](getattr)
 
 
 class ConvertAttrSToSelectByColumn(ew.ExpressionWalker):
