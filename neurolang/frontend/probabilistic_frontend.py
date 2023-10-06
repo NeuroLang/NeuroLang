@@ -556,9 +556,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         proj_row_type = tuple(
             type_args[cols.index(symb.name)] for symb in head_symbols
         )
-        origin = get_origin(query_row_type)
         query_solution.row_type = replace_type_variable_fix_python36_37(
-            query_row_type, origin, proj_row_type
+            query_row_type, proj_row_type
         )
         return ir.Constant[AbstractSet](query_solution)
 

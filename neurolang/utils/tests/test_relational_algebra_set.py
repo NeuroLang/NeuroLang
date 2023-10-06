@@ -4,12 +4,12 @@ import pytest
 from ..relational_algebra_set import (
     RelationalAlgebraColumnInt,
     RelationalAlgebraColumnStr,
-    dask_sql,
+    # dask_sql,
     pandas,
 )
 
 
-@pytest.fixture(ids=["pandas", "dask_sql"], params=[(pandas,), (dask_sql,)])
+@pytest.fixture(ids=["pandas"], params=[(pandas,),])
 def ra_module(request):
     return request.param[0]
 

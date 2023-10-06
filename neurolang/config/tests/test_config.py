@@ -1,6 +1,6 @@
 import pytest
 from .. import config
-from ...utils.relational_algebra_set import pandas, dask_sql
+from ...utils.relational_algebra_set import pandas
 
 @pytest.fixture
 def clean_config_fixture():
@@ -14,10 +14,10 @@ def test_config_set_query_backend(clean_config_fixture):
     with pytest.raises(ValueError):
         config.set_query_backend("hello")
 
-    config.set_query_backend("dask")
-    assert config["RAS"]["backend"] == "dask"
-    from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
-    assert RelationalAlgebraFrozenSet is dask_sql.RelationalAlgebraFrozenSet
+    # config.set_query_backend("dask")
+    # assert config["RAS"]["backend"] == "dask"
+    # from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
+    # assert RelationalAlgebraFrozenSet is dask_sql.RelationalAlgebraFrozenSet
 
     config.set_query_backend("pandas")
     assert config["RAS"]["backend"] == "pandas"

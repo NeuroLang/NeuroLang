@@ -145,6 +145,19 @@ def test_symbol_application():
     ) == -15
 
 
+def test_or_operations():
+
+    fx = F_(S_('f'), (S_('x'),))
+    gx = F_(S_('b'), (S_('x'),))
+
+    res = fx | gx
+    assert res == F_(C_(op.or_), (fx, gx)) 
+
+    x = S_('x')
+    y = S_('y')
+    assert (x | y) == F_(C_(op.or_), (x, y))
+
+
 def test_symbol_method_and_operator():
     with expressions_behave_as_objects():
 
