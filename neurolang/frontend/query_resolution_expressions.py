@@ -355,7 +355,7 @@ def rop_bind(op):
     return fun
 
 
-force_linking = [op.eq, op.ne, op.gt, op.lt, op.ge, op.le]
+force_linking = [op.eq, op.ne, op.gt, op.lt, op.ge, op.le, op.or_]
 
 for operator_name in dir(op):
     operator = getattr(op, operator_name)
