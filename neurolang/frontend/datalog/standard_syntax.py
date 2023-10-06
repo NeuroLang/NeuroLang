@@ -2,7 +2,7 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from lark import Lark
 from lark import Transformer
-from lark.exceptions import UnexpectedToken
+from lark.exceptions import UnexpectedToken, UnexpectedCharacters
 
 from neurolang.logic import ExistentialPredicate
 
@@ -23,7 +23,7 @@ from ...probabilistic.expressions import (
     Condition,
     ProbabilisticFact
 )
-from ...exceptions import UnexpectedTokenError
+from ...exceptions import UnexpectedTokenError, UnexpectedCharactersError
 
 GRAMMAR = u"""
 start: expressions
@@ -60,7 +60,8 @@ SUCH_THAT : "st" | ";"
 head_predicate : identifier "(" [ arguments ] ")"
 
 ?body : conjunction
-conjunction : predicate ("," predicate)*
+conjunction : predicate (CONJUNCTION_OPERATOR predicate)*
+CONJUNCTION_OPERATOR : "," | "&"
 
 negated_predicate : ("~" | "\u00AC" ) predicate
 predicate : id_application
@@ -540,4 +541,6 @@ def parser(code, locals=None, globals=None):
         return DatalogTransformer().transform(jp)
     except UnexpectedToken as e :
         raise UnexpectedTokenError from e
+    except UnexpectedCharacters as e:
+        raise UnexpectedCharactersError from e
 

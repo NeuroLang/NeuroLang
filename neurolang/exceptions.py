@@ -387,5 +387,13 @@ class InvalidCommandExpression(ForbiddenExpressionError):
 
     pass
 
-class UnexpectedTokenError(NeuroLangException):
+
+class ParserError(NeuroLangException):
+    pass
+
+
+class UnexpectedTokenError(ParserError):
+    pass
+
+class UnexpectedCharactersError(ParserError):
     pass
