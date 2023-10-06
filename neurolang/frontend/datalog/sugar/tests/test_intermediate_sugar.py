@@ -245,7 +245,7 @@ def test_wlq_floordiv_translation_boolean_denominator():
     fnum = num.consequent.functor
     assert fnum.is_fresh
     assert num == Implication(
-        fnum(x, ProbabilisticQuery(PROB, (x))),
+        fnum(x, ProbabilisticQuery(PROB, (x,))),
         Conjunction((P(x, y), R(y))),
     )
 
@@ -267,7 +267,7 @@ def test_wlq_floordiv_translation_boolean_denominator():
         Q(x, p),
         Conjunction(
             (
-                fnum(x,p0),
+                fnum(x, p0),
                 fdenum(p1),
                 EQ_(p, Constant(operator.truediv)(p0, p1)),
             )
