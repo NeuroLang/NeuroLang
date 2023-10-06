@@ -54,14 +54,16 @@ RIGHT_IMPLICATION : "-:" | "\N{RIGHTWARDS ARROW}"
 
 existential_predicate : exists "(" existential_body ")"
 ?existential_body : arguments SUCH_THAT predicate ( "," predicate )*
+                  | arguments SUCH_THAT predicate ( "&" predicate )*
+
 SUCH_THAT : "st" | ";"
 
 ?head : head_predicate
 head_predicate : identifier "(" [ arguments ] ")"
 
 ?body : conjunction
-conjunction : predicate (CONJUNCTION_OPERATOR predicate)*
-CONJUNCTION_OPERATOR : "," | "&"
+conjunction : predicate ("," predicate)*
+            | predicate ("&" predicate)*
 
 negated_predicate : ("~" | "\u00AC" ) predicate
 predicate : id_application
