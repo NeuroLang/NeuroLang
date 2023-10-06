@@ -48,18 +48,7 @@ if not (NEW_TYPING_37 or NEW_TYPING_39):
             raise TypeError("Unknown cannot be used with issubclass().")
 
     Unknown = _Unknown(_root=True)
-elif NEW_TYPING_37:
-    from typing import _SpecialForm, _Final, _Immutable, _GenericAlias
-
-    Unknown = _SpecialForm(
-        'Unknown', doc="""
-        Special type indicating an unknown type.
-
-        - Unknown is compatible with every type.
-        - Unknown is less informative than all types.
-        """
-    )
-elif NEW_TYPING_39:
+elif NEW_TYPING_37 or NEW_TYPING_39:
     from typing import _Final, _Immutable, _GenericAlias
 
     class Unknown(_Final, _Immutable, _root=True):
