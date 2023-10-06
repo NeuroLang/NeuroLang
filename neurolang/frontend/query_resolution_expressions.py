@@ -28,7 +28,7 @@ from ..expression_walker import (
     ReplaceExpressionsByValues,
     add_match
 )
-from ..type_system import is_leq_informative
+from ..type_system import is_leq_informative, Unknown
 from ..utils import RelationalAlgebraFrozenSet
 
 
@@ -269,7 +269,8 @@ class Expression(object):
         else:
             name_ = ir.Constant[str](name)
         new_expression = ir.FunctionApplication(
-            ir.Constant(getattr), (self.expression, name_,),
+            ir.Constant[Callable[[self.expression.type, str], Unknown]](getattr),
+            (self.expression, name_,),
         )
         return Operation(self.query_builder, new_expression, self, (name,))
 
@@ -588,7 +589,8 @@ class Symbol(Expression):
         else:
             name_ = ir.Constant[str](name)
         new_expression = ir.FunctionApplication(
-            ir.Constant(getattr), (self.neurolang_symbol, name_,),
+            ir.Constant[Callable[[self.neurolang_symbol.type, str], Unknown]](getattr),
+            (self.neurolang_symbol, name_,),
         )
         return Operation(self.query_builder, new_expression, self, (name,))
 

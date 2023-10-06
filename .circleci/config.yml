@@ -166,6 +166,19 @@ jobs:
       - install
       - test
 
+  py39:
+    docker:
+      - image: circleci/python:3.9
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - install
+      - test
+
+
+
   benchmark:
     docker:
       - image: circleci/python:3.7
@@ -327,10 +340,11 @@ workflows:
         # - py37dask
       - py38
         # - py38dask
+      - py39
       - py310
       - docs:
          requires:
-          - py38
+          - py310
       - deploy_docs:
          requires:
            - docs
