@@ -254,7 +254,7 @@ def test_wlq_floordiv_translation_boolean_denominator():
     fdenum = denum.consequent.functor
     assert fdenum.is_fresh
     assert denum == Implication(
-        fdenum(ProbabilisticQuery(PROB, (,))), R(y)
+        fdenum(ProbabilisticQuery(PROB, tuple())), R(y)
     )
 
     # assert cond == Q(x, y, p) :- fresh_01(x, y, p0) & fresh_02(x, y, p1) & (p == p0 / p1)
