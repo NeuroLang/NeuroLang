@@ -225,6 +225,56 @@ def test_wlq_floordiv_translation():
     )
 
 
+def test_wlq_floordiv_translation_boolean_denominator():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    R = Symbol("R")
+    x = Symbol("x")
+    y = Symbol("y")
+    EQ_ = Constant(operator.eq)
+
+    wlq = Implication(
+        Q(x, PROB(x)), Constant(operator.floordiv)(P(x, y), R(y))
+    )
+    translator = _TestTranslator()
+    result = translator.walk(wlq)
+
+    # assert num == fresh_01(x, PROB) :- P(x, y) & R(y)
+    assert len(result) == 3
+    num = result[0]
+    fnum = num.consequent.functor
+    assert fnum.is_fresh
+    assert num == Implication(
+        fnum(x, ProbabilisticQuery(PROB, (x,))),
+        Conjunction((P(x, y), R(y))),
+    )
+
+    # assert denum == fresh_02(PROB) :- R(y)
+    denum = result[1]
+    fdenum = denum.consequent.functor
+    assert fdenum.is_fresh
+    assert denum == Implication(
+        fdenum(ProbabilisticQuery(PROB, tuple())), R(y)
+    )
+
+    # assert cond == Q(x, y, p) :- fresh_01(x, y, p0) & fresh_02(x, y, p1) & (p == p0 / p1)
+    cond = result[2]
+    p = [a for a in cond.consequent.args if a.is_fresh][0]
+    p0 = [a for a in cond.antecedent.formulas[0].args if a.is_fresh][0]
+    p1 = [a for a in cond.antecedent.formulas[1].args if a.is_fresh][0]
+
+    assert cond == Implication(
+        Q(x, p),
+        Conjunction(
+            (
+                fnum(x, p0),
+                fdenum(p1),
+                EQ_(p, Constant(operator.truediv)(p0, p1)),
+            )
+        ),
+    )
+
+
 def test_wlq_marg_bad_syntax():
     P = Symbol("P")
     Q = Symbol("Q")

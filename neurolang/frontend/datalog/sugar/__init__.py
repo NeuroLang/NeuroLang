@@ -448,7 +448,7 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
             extract_logic_free_variables(implication.consequent)
             & extract_logic_free_variables(implication.antecedent.conditioning)
         )
-        > 0,
+        >= 0,
     )
     def rewrite_conditional_query(self, impl):
         """

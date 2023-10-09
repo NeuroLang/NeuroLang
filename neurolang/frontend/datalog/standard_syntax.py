@@ -2,7 +2,7 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from lark import Lark
 from lark import Transformer
-from lark.exceptions import UnexpectedToken
+from lark.exceptions import UnexpectedToken, UnexpectedCharacters, LarkError
 
 from neurolang.logic import ExistentialPredicate
 
@@ -23,7 +23,7 @@ from ...probabilistic.expressions import (
     Condition,
     ProbabilisticFact
 )
-from ...exceptions import UnexpectedTokenError
+from ...exceptions import UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException
 
 GRAMMAR = u"""
 start: expressions
@@ -54,6 +54,8 @@ RIGHT_IMPLICATION : "-:" | "\N{RIGHTWARDS ARROW}"
 
 existential_predicate : exists "(" existential_body ")"
 ?existential_body : arguments SUCH_THAT predicate ( "," predicate )*
+                  | arguments SUCH_THAT predicate ( "&" predicate )*
+
 SUCH_THAT : "st" | ";"
 
 ?head : head_predicate
@@ -61,6 +63,7 @@ head_predicate : identifier "(" [ arguments ] ")"
 
 ?body : conjunction
 conjunction : predicate ("," predicate)*
+            | predicate ("&" predicate)*
 
 negated_predicate : ("~" | "\u00AC" ) predicate
 predicate : id_application
@@ -535,9 +538,12 @@ class DatalogTransformer(Transformer):
 
 def parser(code, locals=None, globals=None):
 
-    try :
+    try:
         jp = COMPILED_GRAMMAR.parse(code.strip())
         return DatalogTransformer().transform(jp)
-    except UnexpectedToken as e :
-        raise UnexpectedTokenError from e
-
+    except UnexpectedToken as e:
+        raise UnexpectedTokenError(str(e), line=e.line - 1, column=e.column - 1) from e
+    except UnexpectedCharacters as e:
+        raise UnexpectedCharactersError(str(e), line=e.line - 1, column=e.column - 1) from e
+    except LarkError as e:
+        raise NeuroLangException from e
