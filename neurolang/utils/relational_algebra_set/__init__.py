@@ -1,7 +1,7 @@
 from neurolang.config import config
 from .abstract import RelationalAlgebraColumnInt, RelationalAlgebraColumnStr
 
-if config["RAS"].get("backend") == "dask":
+if "RAS" in config and (config["RAS"].get("backend") == "dask"):
     from .dask_sql import (
         NamedRelationalAlgebraFrozenSet,
         RelationalAlgebraFrozenSet,
