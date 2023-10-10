@@ -30,7 +30,9 @@ export class QueryController {
 
     this.editor.on("keydown", (cm, event) => {
       console.log(`keydown detected ${event.key}`);
-      if (event.shiftKey && event.keyCode === 9) {
+      if (event.shiftKey && event.key == 'Tab') {
+        // Prevent the defalt behaviour of the tab key
+        event.preventDefault();
         // Get content from the start to the cursor position
         console.log("Shift + Tab detected");
         const cursorPosition = this.editor.getCursor();
@@ -202,8 +204,22 @@ export class QueryController {
   }
 
   _requestAutocomplete(content) {
-    console.log("Requesting autocomplete for:", content);
-    $.post(API_ROUTE.autocompletion, { text: content }, data => {
+    console.log("Requesting autocomplete for:");
+    console.log(content);
+//    console.log(`this.engine before : ${this.engine}`);
+    // const actEng = this.router.getActive.Engine();
+//    var activeEngine = ""
+//    if (this.engine) {
+//        activeEngine = this.engine
+//      }
+//    console.log(`this.engine before : ${this.engine}`);
+//    console.log(`activeEngine : ${activeEngine}`)
+//    console.log(`this.sc.engine ${this.sc.engine}`);
+    $.post(API_ROUTE.autocompletion, {text: content, engine: this.engine }, data => {
+//        console.log(`data returned : ${data}`);
+//        var t = Object.prototype.toString.call(data);
+//        console.log(`type of data returned : ${t}`)
+//        console.log(`data.tokens returned : ${data.tokens}`);
         // if (data.tokens && data.tokens.length > 0) {
         //     this._showTooltipAtCursor(data.tokens);
         // }
