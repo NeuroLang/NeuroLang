@@ -155,6 +155,8 @@ class NeurolangQueryManager:
         """
         LOG.debug("[Thread - %s] - Executing query...", get_ident())
         LOG.debug("[Thread - %s] - Query :\n%s", get_ident(), query)
+        # print("engine type :", engine_type)
+        # print("self.engines keys :", self.engines.keys())
         engine_set = self.engines[engine_type]
         with engine_set.engine() as engine:
             LOG.debug(
@@ -211,8 +213,13 @@ class NeurolangQueryManager:
         Dict
             the result of the query autocompletion
         """
+        # print("")
+        # print("___NeurolangQueryManager - _compute_query_autocompletion()___")
         LOG.debug("[Thread - %s] - Computing query auto-completion...", get_ident())
         LOG.debug("[Thread - %s] - Query :\n%s", get_ident(), query)
+        # print("")
+        # print("engine type :", engine_type)
+        # print("self.engines keys :", self.engines.keys())
         engine_set = self.engines[engine_type]
         with engine_set.engine() as engine:
             LOG.debug(
