@@ -5,8 +5,7 @@ Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
-from neurolang.datalog.magic_sets import magic_rewrite
-from neurolang.exceptions import UnsupportedProgramError
+
 from typing import (
     AbstractSet,
     Dict,
@@ -31,12 +30,14 @@ from ..datalog.expression_processing import (
     TranslateToDatalogSemantics,
     reachable_code,
 )
+from ..datalog.magic_sets import magic_rewrite
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.standard_syntax import parser as datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
+from ..exceptions import UnsupportedProgramError
 from . import query_resolution_expressions as fe
 
 __all__ = ["QueryBuilderDatalog"]

@@ -4,10 +4,11 @@ from unittest.mock import create_autospec
 from uuid import uuid4
 
 import pytest
-from neurolang.frontend.probabilistic_frontend import NeurolangPDL
+
 from ..app import NeurolangQueryManager
 from ..engines import NeurolangEngineConfiguration
 from ....exceptions import UnexpectedTokenError
+from ....frontend.probabilistic_frontend import NeurolangPDL
 
 
 @pytest.fixture

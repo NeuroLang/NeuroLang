@@ -8,8 +8,7 @@ from lark.parsers.lalr_interactive_parser import InteractiveParser
 
 from dataclasses import dataclass
 
-from neurolang.logic import ExistentialPredicate
-
+from ...logic import ExistentialPredicate
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
 from ...expressions import (

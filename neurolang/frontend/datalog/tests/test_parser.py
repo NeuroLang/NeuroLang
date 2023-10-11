@@ -3,7 +3,7 @@ from operator import add, eq, lt, mul, pow, sub, truediv
 import pytest
 
 
-from neurolang.logic import ExistentialPredicate
+from ....logic import ExistentialPredicate
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....expressions import (

@@ -1,24 +1,25 @@
 import logging
 from concurrent.futures import Future, ThreadPoolExecutor
 import types
-from neurolang.commands import CommandsMixin
-from neurolang.expressions import Command
-from neurolang.frontend.query_resolution_expressions import Symbol
-from neurolang.type_system import get_args, is_leq_informative
+
 from threading import RLock, get_ident
 from typing import AbstractSet, Callable, Dict, Union
 from collections import OrderedDict
 
 import nibabel
-from neurolang.utils.relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraFrozenSet,
-)
+
 from .engines import (
     NeurolangEngineConfiguration,
     NeurolangEngineSet,
 )
-
+from ..relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+)
+from ...commands import CommandsMixin
+from ...expressions import Command
+from ...frontend.query_resolution_expressions import Symbol
+from ...type_system import get_args, is_leq_informative
 
 LOG = logging.getLogger(__name__)
 

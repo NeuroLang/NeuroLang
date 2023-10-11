@@ -18,9 +18,9 @@ import tornado.options
 import tornado.web
 import tornado.websocket
 import yaml
-from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
 from tornado.options import define, options
 
+from ...regions import ExplicitVBR, ExplicitVBROverlay
 from .engines import DestrieuxEngineConf, NeurosynthEngineConf
 from .queries import NeurolangQueryManager
 from .responses import (
