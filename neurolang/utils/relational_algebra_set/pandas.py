@@ -62,14 +62,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     @property
     def might_have_duplicates(self):
-        """Sets the flag manually on wether the set might have duplicates.
+        """Sets the flag manually on whether the set might have duplicates.
         Careful, if you set it to False and it's not, then the semantics of
         the queries will break.
 
         Returns
         -------
         bool
-            returns wether the set might have duplicates.
+            returns whether the set might have duplicates.
         """
         return self._might_have_duplicates
 
