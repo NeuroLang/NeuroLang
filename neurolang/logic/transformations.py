@@ -90,7 +90,7 @@ class LogicExpressionWalker(PatternWalker):
 
 class EliminateImplications(LogicExpressionWalker):
     """
-    Removes the implication ocurrences of an expression.
+    Removes the implication occurrences of an expression.
     """
 
     @add_match(Implication(..., ...))
@@ -173,13 +173,13 @@ class FONegELogicExpression(LogicExpressionWalker):
     @add_match(UniversalPredicate)
     def abort_universal_predicate(self, expression):
         raise NotInFONegE(
-            f"Forumla {expression} not in FO Existental Negation"
+            f"Formula {expression} not in FO Existental Negation"
         )
 
     @add_match(Implication)
     def abort_implication(self, expression):
         raise NotInFONegE(
-            f"Forumla {expression} not in FO Existental Negation"
+            f"Formula {expression} not in FO Existental Negation"
         )
 
 

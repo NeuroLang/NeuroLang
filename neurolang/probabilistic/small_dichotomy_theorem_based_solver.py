@@ -1,5 +1,5 @@
 """
-Implentation of probabilistic query resolution for
+Implementation of probabilistic query resolution for
 hierarchical queries [^1]. Using this we apply the small dichotomy
 theorem [^1, ^2]:
 Let Q be a conjunctive query without self-joins or a non-repeating relational

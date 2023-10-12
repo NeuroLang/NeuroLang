@@ -187,7 +187,7 @@ class QueryResults:
     def set_error_details(self, error):
         self.errorName = str(type(error))
         if isinstance(error, ParserError):
-            self.message = "An error occured while parsing your query."
+            self.message = "An error occurred while parsing your query."
             self.errorDoc = str(error)
             if hasattr(error, 'tokenizer'):
                 line_info = error.tokenizer.line_info(error.pos)

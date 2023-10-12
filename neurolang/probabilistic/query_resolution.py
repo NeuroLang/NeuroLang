@@ -500,7 +500,7 @@ def compute_projections_needed_to_reintroduce_head_terms(
 
     1. A head variable was repeated, such as in `ans(y, y)` and the extensional
     plan computes all possible values for `y` but will output only one column.
-    This function makes sure that a second column for `y` is outputed, and that
+    This function makes sure that a second column for `y` is outputted, and that
     the resulting solution set will be a binary relation, as required.
 
     2. The query's head contains a constant, such as in `ans(2, y)`, in which

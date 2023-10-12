@@ -51,7 +51,7 @@ def solve_succ_query(query_predicate, cpl_program):
     where
 
         -   P(x) is a positive literal
-        -   P is any (probabilistic, intensional, extensional)
+        -   P is any (probabilistic, intentional, extensional)
             predicate symbol
         -   x is a universally-quantified variable
 

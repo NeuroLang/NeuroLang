@@ -2,7 +2,7 @@
 Compiler for the intermediate representation of a Datalog program.
 The :class:`DatalogProgram` class processes the
 intermediate representation of a program and extracts
-the extensional, intensional, and builtin
+the extensional, intentional, and builtin
 sets and has support for constraints.
 """
 
@@ -64,7 +64,7 @@ class DatalogConstraintsMixin(PatternWalker):
         return self.symbol_table.get(sym_constraints, Union(()))
 
     def set_constraints(self, categorized_constraints):
-        '''This function receives a dictionary with the contraints organized
+        '''This function receives a dictionary with the constraints organized
         according to the functor of its consequent and is in charge of setting
         it both in the symbol table and in the global variable
         `categorized_contraints`, useful for XRewriter optimizations.
@@ -74,7 +74,7 @@ class DatalogConstraintsMixin(PatternWalker):
         categorized_constraints : dict
             Dictionary of constraints where each key is
             the functor of the consequent of the rules
-            and the values are lists of contraints with
+            and the values are lists of constraints with
             each rule associated to the corresponding functor.
         '''
         sym_constraints = Symbol("__constraints__")
@@ -85,7 +85,7 @@ class DatalogConstraintsMixin(PatternWalker):
             self.categorized_constraints = categorized_constraints
 
     def get_constraints(self):
-        '''Returns the contraints in a dictionary, where the key is the functor
+        '''Returns the constraints in a dictionary, where the key is the functor
         of the consequent of each of the rules.
 
         Returns

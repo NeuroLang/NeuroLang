@@ -120,7 +120,7 @@ class Tokenizer:
                 rem = text[e:].lstrip()
                 return on_match(span), rem
 
-        raise TokenizeException(f"Couldnt match token at: {text}")
+        raise TokenizeException(f"Couldn't match token at: {text}")
 
 
 class Chart(list):

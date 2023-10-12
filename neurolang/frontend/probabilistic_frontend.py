@@ -262,7 +262,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
-        [Internal usage - documentation for developpers]
+        [Internal usage - documentation for developers]
 
         Performs an inferential query: will return as first output
         an AbstractSet with as many elements as solutions
@@ -581,7 +581,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         In the tuple (p, a, b, ...), p is the float probability
         of tuple (a, b, ...) to be True in any possible world.
 
-        Note that each tuple from the iterable is independant
+        Note that each tuple from the iterable is independent
         from the others, meaning that multiple tuples can be True
         in the same possible world, contrary to a probabilistic choice.
         See example for details.
@@ -718,7 +718,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         Add uniform probabilistic choice over values in the iterable.
 
         Every tuple in the iterable will be assigned the same probability to
-        be True, with all remaning tuples False, in any possible world.
+        be True, with all remaining tuples False, in any possible world.
 
         Note that, contrary to a list of probabilistic facts, this represents
         a choice among possible values for the predicate, meaning that tuples

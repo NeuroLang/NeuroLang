@@ -58,7 +58,7 @@ class NeurolangEngineSet:
 
         Parameters
         ----------
-        timout : int
+        timeout : int
             When invoked with a timeout other than None, it will block for
             at most timeout seconds.
 
@@ -329,7 +329,7 @@ def init_frontend(mni_mask):
         Returns
         -------
         bool
-            wether the principal variance of
+            whether the principal variance of
             `s` is `direction`.
         """
         # Assuming RAS coding os the xyz space.

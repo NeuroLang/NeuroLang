@@ -152,7 +152,7 @@ class QueryBuilderBase:
         """
         Existential predicate on the body. The predicate
         will be cosidered satisfied if any instance of
-        `quantified_variable` satifies `body`.
+        `quantified_variable` satisfies `body`.
 
         Parameters
         ----------
@@ -188,7 +188,7 @@ class QueryBuilderBase:
         """
         Universal predicate on the body. The predicate
         will be cosidered satisfied if all instances of
-        `quantified_variable` satify `body`.
+        `quantified_variable` satisfy `body`.
 
         Parameters
         ----------
@@ -374,7 +374,7 @@ class QueryBuilderBase:
         """
         Creates a symbol with given value and adds it to the
         current symbol_table.
-        Can typicaly be used to decorate callables, or add an
+        Can typically be used to decorate callables, or add an
         ir.Constant to the program.
 
         Parameters
@@ -987,7 +987,7 @@ class QuerySymbolsProxy:
         return len(self._query_builder.symbol_table)
 
     def __dir__(self):
-        """Descibes self and lists symbols in current symbol_table"""
+        """Describes self and lists symbols in current symbol_table"""
         init = object.__dir__(self)
         init += [symbol.name for symbol in self._query_builder.symbol_table]
         return init

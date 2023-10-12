@@ -240,7 +240,7 @@ class SymbolsHandler(JSONRequestHandler):
     def get(self, engine: str):
         """
         Return the symbols available on an engine.
-        This method is syncronous and will block until an engine is
+        This method is synchronous and will block until an engine is
         available to get its symbols.
 
         Optional query parameters are :

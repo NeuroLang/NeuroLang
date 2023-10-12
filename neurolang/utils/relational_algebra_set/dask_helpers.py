@@ -47,7 +47,7 @@ LOG = logging.getLogger(__name__)
 def timeit(func):
     """
     This decorator logs the execution time for the decorated function.
-    Log times will not be acurate for Dask operations if using asynchronous
+    Log times will not be accurate for Dask operations if using asynchronous
     scheduler.
     """
 
@@ -142,7 +142,7 @@ class DaskContextManager(ABC):
         # FIXME: We should preferably try to use GroupBy-aggregations
         # instead of GroupBy-apply when doing aggregations. I.e.
         # create a dd.Aggregation from the given function and register it
-        # on the context. But this doesnt work in all cases, since dask
+        # on the context. But this doesn't work in all cases, since dask
         # applies GroupBy-aggregations first on each chunk, then again to
         # the results of all the chunk aggregations.
         # So transformative aggregation will not work properly, for
@@ -283,12 +283,12 @@ def try_to_infer_type_of_operation(
         The dtypes series mapping the dtype for each column.
         Used if operation references a known column.
     default_type : Type, optional
-        The return value if type cannot be infered, by default np.float64
+        The return value if type cannot be inferred, by default np.float64
 
     Returns
     -------
     Type
-        An infered return type for the operation.
+        An inferred return type for the operation.
     """
     try:
         # 1. First we try to guess the return type of the operation

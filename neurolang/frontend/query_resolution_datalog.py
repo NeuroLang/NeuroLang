@@ -266,7 +266,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Performs an inferential query on the database.
         There are three modalities
         1. If there is only one argument, the query returns `True` or `False`
-        depending on wether the query could be inferred.
+        depending on whether the query could be inferred.
         2. If there are two arguments and the first is a tuple of `fe.Symbol`,
         it returns the set of results meeting the query in the second argument.
         3. If the first argument is a predicate (e.g. `Q(x)`) it performs the
@@ -329,7 +329,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
-        [Internal usage - documentation for developpers]
+        [Internal usage - documentation for developers]
 
         Performs an inferential query. Will return as first output
         an AbstractSet with as many elements as solutions of the
@@ -493,7 +493,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         Creates an AbstractSet fe.Symbol containing the elements specified in
         the iterable with a List[Tuple[Any, ...]] format (see examples).
-        Typically used to crate extensional facts from existing databases
+        Typically used to create extensional facts from existing databases
 
         Parameters
         ----------
