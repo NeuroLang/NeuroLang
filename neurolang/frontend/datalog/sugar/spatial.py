@@ -206,6 +206,10 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         self.add_extensional_predicate_from_tuples(
             new_pred_symb, spatial_bound_solution
         )
+        spatial_bound_constant = self.symbol_table[new_pred_symb].value
+        if hasattr(spatial_bound_constant, "might_have_duplicates"):
+            spatial_bound_constant.might_have_duplicates = False
+
         removed_formulas = {
             var_to_euclidean_equality_formula,
             distance_upper_bound_formula,
