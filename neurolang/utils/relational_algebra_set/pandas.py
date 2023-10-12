@@ -72,7 +72,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             returns wether the set might have duplicates.
         """
         return self._might_have_duplicates
-    
+
     @might_have_duplicates.setter
     def might_have_duplicates(self, value):
         self._might_have_duplicates = bool(value)
