@@ -60,6 +60,23 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             else:
                 self._container = pd.DataFrame(iterable)
 
+    @property
+    def might_have_duplicates(self):
+        """Sets the flag manually on wether the set might have duplicates.
+        Careful, if you set it to False and it's not, then the semantics of
+        the queries will break.
+
+        Returns
+        -------
+        bool
+            returns wether the set might have duplicates.
+        """
+        return self._might_have_duplicates
+
+    @might_have_duplicates.setter
+    def might_have_duplicates(self, value):
+        self._might_have_duplicates = bool(value)
+
     def _drop_duplicates_if_needed(self):
         if self._might_have_duplicates:
             self._container = self._drop_duplicates(self._container)
