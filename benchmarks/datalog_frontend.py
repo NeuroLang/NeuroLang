@@ -39,7 +39,7 @@ class TimeRegionComparisons:
             if len(voxels) == 0:
                 continue
             rset.append((
-                name.decode('utf8'),
+                name,
                 fe.ExplicitVBR(
                     voxels, aff,
                     image_dim=img.shape, prebuild_tree=True

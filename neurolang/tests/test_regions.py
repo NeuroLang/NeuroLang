@@ -545,7 +545,7 @@ def destrieux():
         if k == 0:
             continue
         destrieux[
-            v.decode("utf8").replace("-", " ").replace("_", " ")
+            v.replace("-", " ").replace("_", " ")
         ] = ExplicitVBR.from_spatial_image_label(destrieux_atlas_image, k)
     return destrieux
 
