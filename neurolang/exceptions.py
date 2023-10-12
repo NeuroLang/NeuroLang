@@ -386,3 +386,21 @@ class InvalidCommandExpression(ForbiddenExpressionError):
     """
 
     pass
+
+
+class ParserError(NeuroLangException):
+    def __init__(self, message, line=None, column=None):
+        self.message = message
+        self.line = line
+        self.column = column
+
+    def __str__(self):
+        return self.message
+
+
+class UnexpectedTokenError(ParserError):
+    pass
+
+
+class UnexpectedCharactersError(ParserError):
+    pass

@@ -3,13 +3,13 @@ import hashlib
 from io import BytesIO
 import json
 from concurrent.futures import Future
+from collections import namedtuple
 
 import matplotlib
 from neurolang.frontend.query_resolution_expressions import Symbol
 from typing import Any, Dict, List, Tuple, Type, Union
 from nibabel.nifti1 import Nifti1Image
 from nibabel.spatialimages import SpatialImage
-from lark.exceptions import UnexpectedInput
 
 import numpy as np
 import pandas as pd
@@ -19,6 +19,7 @@ from neurolang.type_system import get_args
 from neurolang.utils.relational_algebra_set import (
     RelationalAlgebraFrozenSet,
 )
+from neurolang.exceptions import ParserError
 
 
 def base64_encode_nifti(image):
@@ -185,13 +186,16 @@ class QueryResults:
 
     def set_error_details(self, error):
         self.errorName = str(type(error))
-        if isinstance(error, UnexpectedInput):
-            self.message = "An error occurred while parsing your query.""
+        if isinstance(error, ParserError):
+            self.message = "An error occured while parsing your query."
             self.errorDoc = str(error)
-            try:
+            if hasattr(error, 'tokenizer'):
                 line_info = error.tokenizer.line_info(error.pos)
-            except AttributeError:
+            elif hasattr(error, 'buf'):
                 line_info = error.buf.line_info(error.pos)
+            elif hasattr(error, 'line') and hasattr(error, 'column'):
+                LineInfo = namedtuple("LineInfo", ["line", "col"])
+                line_info = LineInfo(line=error.line, col=error.column)
             self.line_info = {
                 "line": line_info.line,
                 "col": line_info.col,

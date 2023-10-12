@@ -266,7 +266,7 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
         return arity
 
 
-GETATTR = ir.Constant(getattr)
+GETATTR = ir.Constant[Callable[[Unknown, str], Unknown]](getattr)
 
 
 class ConvertAttrSToSelectByColumn(ew.ExpressionWalker):
@@ -448,7 +448,7 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
             extract_logic_free_variables(implication.consequent)
             & extract_logic_free_variables(implication.antecedent.conditioning)
         )
-        > 0,
+        >= 0,
     )
     def rewrite_conditional_query(self, impl):
         """

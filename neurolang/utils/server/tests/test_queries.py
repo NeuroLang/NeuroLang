@@ -4,11 +4,10 @@ from unittest.mock import create_autospec
 from uuid import uuid4
 
 import pytest
-from lark.exceptions import UnexpectedCharacters
 from neurolang.frontend.probabilistic_frontend import NeurolangPDL
-from neurolang.exceptions import NeuroLangException
 from ..app import NeurolangQueryManager
 from ..engines import NeurolangEngineConfiguration
+from ....exceptions import UnexpectedTokenError
 
 
 @pytest.fixture
@@ -40,9 +39,8 @@ def test_nqm_submits_queries(conf):
     assert res is nqm.get_result(uuid)
 
     # wait for future execution. It should raise the exception
-    with pytest.raises(UnexpectedCharacters):
+    with pytest.raises(UnexpectedTokenError):
         res.result()
-        raise NeuroLangException
 
 def test_nqm_waits_for_engines_to_be_available(conf):
     # create two engines
