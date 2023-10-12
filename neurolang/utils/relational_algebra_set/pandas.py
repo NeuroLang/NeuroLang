@@ -111,7 +111,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             res = False
         else:
             col = True
-            for e, c in zip(element, self._container.iteritems()):
+            for e, c in zip(element, self._container.items()):
                 col = col & (c[1] == e)
             res = col.any()
         return res
@@ -476,6 +476,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             ):
                 group_set = self._empty_set_same_structure()
                 group_set._container = group
+                if len(g_id) == 1:
+                    g_id = g_id[0]
                 yield g_id, group_set
 
     def itervalues(self):
@@ -845,6 +847,8 @@ class NamedRelationalAlgebraFrozenSet(
                 might_have_duplicates=self._might_have_duplicates,
                 columns=self.columns,
             )
+            if len(g_id) == 1:
+                g_id = g_id[0]
             yield g_id, group_set
 
     def aggregate(self, group_columns, aggregate_function):
@@ -1166,7 +1170,7 @@ class RelationalAlgebraSet(
             try:
                 value = self._normalise_element(value)
                 col = True
-                for e, c in zip(value, self._container.iteritems()):
+                for e, c in zip(value, self._container.items()):
                     col = col & (c[1] == e)
                 ix = self._container.index[col]
                 self._container.drop(index=ix, inplace=True)
