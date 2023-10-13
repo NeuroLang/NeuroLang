@@ -145,6 +145,18 @@ jobs:
           dask: true
       - test
 
+  py39:
+    docker:
+      - image: circleci/python:3.9
+    resource_class: large
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - install
+      - test
+
   py310:
     docker:
       - image: circleci/python:3.10
@@ -159,9 +171,9 @@ jobs:
       - test
     # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
 
-  py39:
+  py311:
     docker:
-      - image: circleci/python:3.9
+      - image: circleci/python:3.11
     resource_class: large
 
     working_directory: ~/repo
@@ -208,7 +220,7 @@ jobs:
 
   docs:
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.11
 
     working_directory: ~/repo
 
@@ -258,7 +270,7 @@ jobs:
 
   deploy_docs:
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.11
     steps:
       - attach_workspace:
           at: /tmp/build
@@ -332,9 +344,10 @@ workflows:
         # - py38dask
       - py39
       - py310
+      - py311
       - docs:
           requires:
-            - py310
+            - py311
       - deploy_docs:
           requires:
             - docs
