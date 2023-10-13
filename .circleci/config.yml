@@ -209,6 +209,7 @@ jobs:
   docs:
     docker:
       - image: circleci/python:3.10
+    resource_class: large
 
     working_directory: ~/repo
 
