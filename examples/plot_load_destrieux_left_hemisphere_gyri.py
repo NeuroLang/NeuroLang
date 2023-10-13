@@ -30,7 +30,7 @@ nl = NeurolangDL()
 
 atlas_destrieux = datasets.fetch_atlas_destrieux_2009()
 atlas_labels = {
-    label: str(name.decode('utf8'))
+    label: str(name)
     for label, name in atlas_destrieux['labels']
 }
 

@@ -109,20 +109,10 @@ commands:
           path: test_reports
           when: always
 jobs:
-  py37:
-    docker:
-      - image: circleci/python:3.7
-
-    working_directory: ~/repo
-
-    steps:
-      - checkout
-      - install
-      - test
-
   py38:
     docker:
       - image: circleci/python:3.8
+    resource_class: large
 
     working_directory: ~/repo
 
@@ -155,20 +145,10 @@ jobs:
           dask: true
       - test
 
-  py310:
-    docker:
-      - image: circleci/python:3.10
-
-    working_directory: ~/repo
-
-    steps:
-      - checkout
-      - install
-      - test
-
   py39:
     docker:
       - image: circleci/python:3.9
+    resource_class: large
 
     working_directory: ~/repo
 
@@ -177,11 +157,24 @@ jobs:
       - install
       - test
 
+  py310:
+    docker:
+      - image: circleci/python:3.10
+    resource_class: large
 
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - install
+      - test
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
 
   benchmark:
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.10
+    resource_class: large
 
     working_directory: ~/repo
 
@@ -215,7 +208,8 @@ jobs:
 
   docs:
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.10
+    resource_class: large
 
     working_directory: ~/repo
 
@@ -236,7 +230,9 @@ jobs:
             - v1-docs-{{ .Branch }}--
       - run:
           name: Install Texlive and dvipng
-          command: 'sudo apt update && sudo apt install texlive texlive-xetex texlive-fonts-extra texlive-latex-extra texlive-plain-generic dvipng'
+          command: 'sudo apt update && sudo apt install texlive texlive-xetex
+            texlive-fonts-extra texlive-latex-extra texlive-plain-generic
+            dvipng'
       - run:
           name: Install extra packages & build documentation
           command: |
@@ -261,12 +257,9 @@ jobs:
           paths:
             - html
 
-
-
-
   deploy_docs:
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.10
     steps:
       - attach_workspace:
           at: /tmp/build
@@ -330,8 +323,6 @@ jobs:
               fi
             fi
 
-
-
 workflows:
   version: 2
   test_benchmark_build:
@@ -343,12 +334,11 @@ workflows:
       - py39
       - py310
       - docs:
-         requires:
-          - py310
+          requires:
+            - py310
       - deploy_docs:
-         requires:
-           - docs
-
+          requires:
+            - docs
         #      - benchmark:
         #  requires:
         #    - py37
