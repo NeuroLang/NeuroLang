@@ -62,14 +62,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     @property
     def might_have_duplicates(self):
-        """Sets the flag manually on whether the set might have duplicates.
+        """Sets the flag manually on wether the set might have duplicates.
         Careful, if you set it to False and it's not, then the semantics of
         the queries will break.
 
         Returns
         -------
         bool
-            returns whether the set might have duplicates.
+            returns wether the set might have duplicates.
         """
         return self._might_have_duplicates
 
@@ -111,7 +111,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             res = False
         else:
             col = True
-            for e, c in zip(element, self._container.items()):
+            for e, c in zip(element, self._container.iteritems()):
                 col = col & (c[1] == e)
             res = col.any()
         return res
@@ -476,8 +476,6 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             ):
                 group_set = self._empty_set_same_structure()
                 group_set._container = group
-                if isinstance(g_id, tuple) and len(g_id) == 1:
-                    g_id = g_id[0]
                 yield g_id, group_set
 
     def itervalues(self):
@@ -847,8 +845,6 @@ class NamedRelationalAlgebraFrozenSet(
                 might_have_duplicates=self._might_have_duplicates,
                 columns=self.columns,
             )
-            if isinstance(g_id, tuple) and len(g_id) == 1:
-                g_id = g_id[0]
             yield g_id, group_set
 
     def aggregate(self, group_columns, aggregate_function):
@@ -1170,7 +1166,7 @@ class RelationalAlgebraSet(
             try:
                 value = self._normalise_element(value)
                 col = True
-                for e, c in zip(value, self._container.items()):
+                for e, c in zip(value, self._container.iteritems()):
                     col = col & (c[1] == e)
                 ix = self._container.index[col]
                 self._container.drop(index=ix, inplace=True)

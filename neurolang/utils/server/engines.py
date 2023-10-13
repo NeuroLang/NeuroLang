@@ -396,7 +396,7 @@ def load_destrieux_atlas(data_dir, nl):
 
     destrieux_atlas_images = nib.load(destrieux_atlas["maps"])
     destrieux_atlas_labels = {
-        label: str(name.replace("-", " ").replace("_", " "))
+        label: str(name.decode("utf8").replace("-", " ").replace("_", " "))
         for label, name in destrieux_atlas["labels"]
         if name != b"Background"
     }

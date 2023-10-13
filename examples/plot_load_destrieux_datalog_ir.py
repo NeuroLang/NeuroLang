@@ -58,7 +58,7 @@ for label, name in atlas_destrieux['labels']:
             voxels,
             image.affine, image_dim=image.shape
     )
-    region_dict[name] = r
+    region_dict[name.decode('utf8')] = r
 
 plotting.plot_roi(region_dict['L S_temporal_sup'].spatial_image())
 
