@@ -154,6 +154,8 @@ jobs:
       - checkout
       - install
       - test
+    # The resource_class feature allows configuring CPU and RAM resources for each job. Different resource classes are available for different executors. https://circleci.com/docs/2.0/configuration-reference/#resourceclass
+    resource_class: large
 
   py39:
     docker:
@@ -165,8 +167,6 @@ jobs:
       - checkout
       - install
       - test
-
-
 
   benchmark:
     docker:
@@ -225,7 +225,9 @@ jobs:
             - v1-docs-{{ .Branch }}--
       - run:
           name: Install Texlive and dvipng
-          command: 'sudo apt update && sudo apt install texlive texlive-xetex texlive-fonts-extra texlive-latex-extra texlive-plain-generic dvipng'
+          command: 'sudo apt update && sudo apt install texlive texlive-xetex
+            texlive-fonts-extra texlive-latex-extra texlive-plain-generic
+            dvipng'
       - run:
           name: Install extra packages & build documentation
           command: |
@@ -249,9 +251,6 @@ jobs:
           root: doc/_build
           paths:
             - html
-
-
-
 
   deploy_docs:
     docker:
@@ -319,8 +318,6 @@ jobs:
               fi
             fi
 
-
-
 workflows:
   version: 2
   test_benchmark_build:
@@ -332,12 +329,11 @@ workflows:
       #- py39
       - py310
       - docs:
-         requires:
-          - py310
+          requires:
+            - py310
       - deploy_docs:
-         requires:
-           - docs
-
+          requires:
+            - docs
         #      - benchmark:
         #  requires:
         #    - py37
