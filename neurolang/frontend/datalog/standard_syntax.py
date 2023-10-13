@@ -724,9 +724,9 @@ def parser(code, locals=None, globals=None, interactive=False):
         if (interactive) :
             completer = LarkCompleter(COMPILED_GRAMMAR)
             res = completer.complete(code.strip())
-            print(res)
-            # return res.token_options
-            return 0
+            # print(res)
+            return res.token_options
+            # return 0
         else :
             jp = COMPILED_GRAMMAR.parse(code.strip())
             return DatalogTransformer().transform(jp)

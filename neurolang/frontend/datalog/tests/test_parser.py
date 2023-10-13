@@ -499,8 +499,8 @@ def test_autocompletion():
     print("input : ''")
     res = parser('', interactive=True)
     expected = {'DOT', 'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'NEG_UNICODE', 'LAMBDA', 'INT', 'TRUE', 'TEXT', 'FLOAT', 'AT', 'LPAR', 'ANS', 'FALSE', 'EXISTS', 'MINUS', 'TILDE'}
-    assert res == expected
-    # assert res == 0
+    # assert res == expected
+    assert res == 0
     print("res :")
     print(res)
 
