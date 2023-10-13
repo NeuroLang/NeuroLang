@@ -40,7 +40,7 @@ Eb_ = expressions.ExpressionBlock
 atlas_destrieux = nilearn.datasets.fetch_atlas_destrieux_2009()
 
 image = nib.load(atlas_destrieux['maps'])
-image_data = image.get_data()
+image_data = image.get_fdata().astype(int)
 
 
 ##################################################
