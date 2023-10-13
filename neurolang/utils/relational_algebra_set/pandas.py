@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Iterable, Callable, Dict, Sized, Union
+from typing import Iterable, Callable, Dict, Union
 from uuid import uuid1
 
 import numpy as np
@@ -476,7 +476,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             ):
                 group_set = self._empty_set_same_structure()
                 group_set._container = group
-                if isinstance(g_id, Sized) and len(g_id) == 1:
+                if isinstance(g_id, tuple) and len(g_id) == 1:
                     g_id = g_id[0]
                 yield g_id, group_set
 
@@ -847,7 +847,7 @@ class NamedRelationalAlgebraFrozenSet(
                 might_have_duplicates=self._might_have_duplicates,
                 columns=self.columns,
             )
-            if isinstance(g_id, Sized) and len(g_id) == 1:
+            if isinstance(g_id, tuple) and len(g_id) == 1:
                 g_id = g_id[0]
             yield g_id, group_set
 
