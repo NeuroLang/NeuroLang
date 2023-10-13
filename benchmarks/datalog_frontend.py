@@ -30,7 +30,7 @@ class TimeRegionComparisons:
 
         img = nib.load(destrieux_atlas['maps'])
         aff = img.affine
-        data = img.get_data()
+        data = img.get_fdata().astype(int)
         rset = []
         for label, name in destrieux_atlas['labels']:
             if label == 0:
