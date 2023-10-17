@@ -223,12 +223,32 @@ export class QueryController {
         // if (data.tokens && data.tokens.length > 0) {
         //     this._showTooltipAtCursor(data.tokens);
         // }
+        console.log(`type of data.tokens avant 1 : ${typeof data.tokens}`)
+        console.log(`type of data.tokens avant 2 : ${Object.prototype.toString.call(data.tokens)}`)
+        console.log(`data.tokens avant : ${data.tokens}`)
+        data.tokens = this._addSymbolsInAutocompletionTokens(data.tokens);
+        console.log(`data.tokens apres : ${data.tokens}`)
         this._showTooltipAtCursor(data.tokens);
     });
- }
+  }
 
- _showTooltipAtCursor(tokens) {
-   console.log("Displaying tokens:", tokens);
+  _addSymbolsInAutocompletionTokens(tokens) {
+    console.log(`__in _addSymbolsInAutocompletionTokens()___`)
+    console.log("Displaying tokens:", tokens);
+    // ajouter les elememts ici
+    var curSymbols = Object.keys(window.qc.sc.symbols.results)
+    .filter(elt => !window.qc.sc.symbols.results[elt].function && !window.qc.sc.symbols.results[elt].command)
+    var curFunctions = Object.keys(window.qc.sc.symbols.results)
+    .filter(elt => window.qc.sc.symbols.results[elt].function)
+    var curCommands = Object.keys(window.qc.sc.symbols.results)
+    .filter(elt => window.qc.sc.symbols.results[elt].command)
+
+    return [].concat(tokens, curSymbols, curFunctions, curCommands)
+  }
+
+  _showTooltipAtCursor(tokens) {
+    console.log(`___in _showTooltipAtCursor()___`)
+    console.log("Displaying tokens:", tokens);
     const cursorPos = this.editor.cursorCoords(true, "page");
     const tooltip = $('<div class="autocomplete-tooltip"></div>').text(tokens.join(", ")).css({
         top: cursorPos.top + "px",
@@ -242,7 +262,7 @@ export class QueryController {
     $(document).on('click', () => {
         tooltip.remove();
     });
- }
+  }
 
 
 }
