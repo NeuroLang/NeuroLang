@@ -15,8 +15,8 @@ neurosynth:
     shortTitle: "CBMA Single Term"
     query: |
       TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(term, tfidf, study)
-      TermAssociation(term) :- SelectedStudy(study) , TermInStudy(term, study)
-      Activation(x, y, z) :- SelectedStudy(s) , PeakReported(x, y, z, s)
+      TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
+      Activation(x, y, z) :- SelectedStudy(s) & PeakReported(x, y, z, s)
       ActivationGivenTerm(x, y, z, PROB) :- Activation(x, y, z) // TermAssociation("emotion")
       ActivationGivenTermImage(agg_create_region_overlay(x, y, z, p)) :- ActivationGivenTerm(x, y, z, p)
     description: |
@@ -33,11 +33,11 @@ neurosynth:
     shortTitle: "CBMA Multiple Terms"
     query: |
       TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(term, tfidf, study)
-      TermAssociation(term) :- SelectedStudy(study) , TermInStudy(term, study)
+      TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
       TermsToSelect("emotion")
       TermsToSelect("fear")
-      Activation(x, y, z) :- SelectedStudy(s) , PeakReported(x, y, z, s)
-      ActivationGivenTerm(x, y, z, t, PROB) :- Activation(x, y, z) // (TermAssociation(t) , TermsToSelect(t))
+      Activation(x, y, z) :- SelectedStudy(s) & PeakReported(x, y, z, s)
+      ActivationGivenTerm(x, y, z, t, PROB) :- Activation(x, y, z) // (TermAssociation(t) & TermsToSelect(t))
       ProbDistributions(agg_kde(t, p)) :- ActivationGivenTerm(x, y, z, t, p)
       ActivationGivenTermImage(t, agg_create_region_overlay(x, y, z, p)) :- ActivationGivenTerm(x, y, z, t, p)
     description: |
@@ -46,10 +46,10 @@ neurosynth:
     title: "Coordinate-based meta-analysis (CBMA) with spatial prior smoothing"
     shortTitle: "CBMA Spatial Prior"
     query: |
-      VoxelReported (x, y, z, study) :- PeakReported(x2, y2, z2, study) , Voxel(x, y, z) , (d == EUCLIDEAN(x, y, z, x2, y2, z2)) , (d < 4)
+      VoxelReported (x, y, z, study) :- PeakReported(x2, y2, z2, study) & Voxel(x, y, z) & (d == EUCLIDEAN(x, y, z, x2, y2, z2)) & (d < 4)
       TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(term, tfidf, study)
-      TermAssociation(term) :- SelectedStudy(study) , TermInStudy(term, study)
-      Activation(x, y, z) :- SelectedStudy(s) , VoxelReported(x, y, z, s)
+      TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
+      Activation(x, y, z) :- SelectedStudy(s) & VoxelReported(x, y, z, s)
       ActivationGivenTerm(x, y, z, PROB) :- Activation(x, y, z) // TermAssociation("emotion")
       ActivationGivenTermImage(agg_create_region_overlay(x, y, z, p)) :- ActivationGivenTerm(x, y, z, p)
     description: |
@@ -65,9 +65,9 @@ destrieux:
     title: "Union of Destrieux atlas regions"
     shortTitle: "Union of atlas regions"
     query: |
-      LeftRegion(s, r):- destrieux(s, r) , startswith("L", s)
-      AnteriorOfCentralSulcus(s, r) :- LeftRegion(s, r) , anterior_of(r, ls) , destrieux("L S central", ls)
-      SuperiorOfTemporalGyrus(s, r) :- LeftRegion(s, r) , superior_of(r, ts) , destrieux("L G temp sup Lateral", ts)
+      LeftRegion(s, r):- destrieux(s, r) & startswith("L", s)
+      AnteriorOfCentralSulcus(s, r) :- LeftRegion(s, r) & anterior_of(r, ls) & destrieux("L S central", ls)
+      SuperiorOfTemporalGyrus(s, r) :- LeftRegion(s, r) & superior_of(r, ts) & destrieux("L G temp sup Lateral", ts)
       RegionUnion(region_union(r)) :- AnteriorOfCentralSulcus(..., r)
     description: |
       In this example, we show how to select regions from the Destrieux et al. Atlas based on their cardinal positions.
@@ -81,7 +81,7 @@ destrieux:
     title: "Sulcal Identification Query Example in Neurolang"
     shortTitle: "Sulcal identification"
     query: |
-      LeftSulcus(name_, region) :- destrieux(name_, region) , startswith("L S", name_)
+      LeftSulcus(name_, region) :- destrieux(name_, region) & startswith("L S", name_)
       LeftPrimarySulcusName("L S central")
       LeftPrimarySulcusName("L Lat Fis post")
       LeftPrimarySulcusName("L S pericallosal")
@@ -89,9 +89,9 @@ destrieux:
       LeftPrimarySulcusName("L S calcarine")
       LeftPrimarySulcusName("L Lat Fis ant Vertical")
       LeftPrimarySulcusName("L Lat Fis ant Horizont")
-      LeftPrimarySulcus(name_, region) :- destrieux(name_, region) , LeftPrimarySulcusName(name_)
-      LeftFrontalLobeSulcus(region) :- LeftSulcus(..., region) , anatomical_anterior_of(region, lscregion) , destrieux("L S central", lscregion) , anatomical_superior_of(region, llfavregion) , destrieux("L Lat Fis ant Vertical", llfavregion)
-      LPrecentralSulcus(r) :- LeftFrontalLobeSulcus(r) , principal_direction(r, "SI") , ~exists(r2; LeftFrontalLobeSulcus(r2) , LeftFrontalLobeSulcus(r) , ~(r2 == r) , anatomical_posterior_of(r2, r))
+      LeftPrimarySulcus(name_, region) :- destrieux(name_, region) & LeftPrimarySulcusName(name_)
+      LeftFrontalLobeSulcus(region) :- LeftSulcus(..., region) & anatomical_anterior_of(region, lscregion) & destrieux("L S central", lscregion) & anatomical_superior_of(region, llfavregion) & destrieux("L Lat Fis ant Vertical", llfavregion)
+      LPrecentralSulcus(r) :- LeftFrontalLobeSulcus(r) & principal_direction(r, "SI") & ~exists(r2; LeftFrontalLobeSulcus(r2) & LeftFrontalLobeSulcus(r) & ~(r2 == r) & anatomical_posterior_of(r2, r))
     description: |
       In this example, we first caracterise some of the sulci in the Destrieux et al. Atlas. We characterise:
         * the left hemisphere primary sulci, by name

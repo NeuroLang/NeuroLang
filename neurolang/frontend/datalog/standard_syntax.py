@@ -64,7 +64,9 @@ SUCH_THAT : "st" | ";"
 head_predicate : identifier "(" [ arguments ] ")"
 
 ?body : conjunction
-conjunction : predicate ("," predicate)*
+//conjunction : predicate ("," predicate)*
+conjunction : predicate (("," | CONJUNCTION_SYMBOL) predicate)*
+CONJUNCTION_SYMBOL : "&" | "\N{LOGICAL AND}"
 
 negated_predicate : ("~" | NEG_UNICODE ) predicate
 NEG_UNICODE : "\u00AC"
