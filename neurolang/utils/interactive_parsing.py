@@ -46,4 +46,13 @@ class LarkCompleter:
         return CompleteResult(e.pos_in_stream, prefix, interactive.accepts())
 
     def compute_options_no_error(self, interactive: InteractiveParser, text: str) -> CompleteResult:
-        return CompleteResult(len(text), "", interactive.accepts())
+        # print("")
+        # print("accepts :", accepts)
+        # print("type(accepts) :", type(accepts))
+        accepts = {}
+        for f in interactive.accepts():
+            term_def = next(t for t in self.parser.terminals if t.name == f)
+            # print(term_def.name)
+            # print(str(term_def.pattern).replace("'", ""))
+            accepts[term_def.name] = str(term_def.pattern).replace("'", "")
+        return CompleteResult(len(text), "", accepts)
