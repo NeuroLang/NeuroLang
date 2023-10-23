@@ -97,7 +97,7 @@ def lemmatize(word, pos):
             lemmatized = STEMMER.stem(word)
             if lemmatized == word and " " not in word:
                 warn(f"Word {word} couldn't be lemmatized")
-    except Exception:
+    except Exception as e:
         lemmatized = lemmatize(word, pos)
     return lemmatized
 
