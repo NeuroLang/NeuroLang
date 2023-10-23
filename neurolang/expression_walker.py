@@ -185,7 +185,7 @@ class EntryPointPatternWalker(PatternWalker):
 
 
 class IdentityWalker(PatternWalker):
-    """Walks through expresssions without doing
+    """Walks through expressions without doing
     a thing.
     """
 

@@ -863,7 +863,7 @@ def find_separator_variables(query, symbol_table):
       b. for every relation symbol R in Q1, there exists an attribute (R, iR)
       such that every atom with symbol R has z in position iR.
 
-    This algorithm assumes that Q1 can't be splitted into independent
+    This algorithm assumes that Q1 can't be split into independent
     formulas.
 
     .. [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
@@ -973,7 +973,7 @@ def is_pure_lifted_plan(query):
 
 def separator_variable_plan(expression, separator_variables, symbol_table):
     """Generate RAP plan for the logic query expression assuming it has
-    the given separator varialbes.
+    the given separator variables.
 
     Parameters
     ----------

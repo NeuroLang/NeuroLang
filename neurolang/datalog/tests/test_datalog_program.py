@@ -175,7 +175,7 @@ def test_intensional_extensional_database():
         T_(R0(C_('a'), C_(1), C_(3))),
     ))
 
-    intensional = ExpressionBlock((
+    intentional = ExpressionBlock((
         Imp_(R(x, y, z), R0(x, y, z)),
         Imp_(R(x, y, z), Q(x, y) & Q(y, z)),
         Imp_(T(x, z), Q(x, y) & Q(y, z)),
@@ -198,7 +198,7 @@ def test_intensional_extensional_database():
         C_((C_('a'), C_(1), C_(3))),
     )))
 
-    dl.walk(DT.walk(intensional))
+    dl.walk(DT.walk(intentional))
     edb = dl.extensional_database()
 
     assert edb.keys() == {'R0', 'Q'}

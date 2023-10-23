@@ -40,7 +40,7 @@ Eb_ = expressions.ExpressionBlock
 atlas_destrieux = nilearn.datasets.fetch_atlas_destrieux_2009()
 
 image = nib.load(atlas_destrieux['maps'])
-image_data = image.get_data()
+image_data = image.get_fdata().astype(int)
 
 
 ##################################################
@@ -58,7 +58,7 @@ for label, name in atlas_destrieux['labels']:
             voxels,
             image.affine, image_dim=image.shape
     )
-    region_dict[name.decode('utf8')] = r
+    region_dict[name] = r
 
 plotting.plot_roi(region_dict['L S_temporal_sup'].spatial_image())
 

@@ -569,8 +569,8 @@ def nl():
 def test_neurosynth_query(nl):
     query = """
     TermInStudy(term, study) :: (1 / (1 + exp(-300 * (tfidf - 0.001)))) :- TermInStudyTFIDF(study, term, tfidf)
-    TermAssociation(term) :- SelectedStudy(study) & TermInStudy(term, study)
-    Activation(x, y, z) :- SelectedStudy(s) & PeakReported(x, y, z, s)
+    TermAssociation(term) :- SelectedStudy(study) , TermInStudy(term, study)
+    Activation(x, y, z) :- SelectedStudy(s) , PeakReported(x, y, z, s)
     ActivationGivenTerm(x, y, z, t, PROB) :- Activation(x, y, z) // TermAssociation(t)
     QueryActivation(x, y, z, p) :- ActivationGivenTerm(x, y, z, "emotion", p)
     ans(x, y, z, p) :- QueryActivation(x, y, z, p)

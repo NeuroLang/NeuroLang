@@ -327,7 +327,7 @@ def magic_rewrite(
     )
     # 2. Check that there is a constant in the code
     if len(constant_predicates) == 0:
-        # No constants present in the code, magic sets is not usefull
+        # No constants present in the code, magic sets is not useful
         raise NoConstantPredicateFoundError(
             "No predicate with constant argument found."
         )

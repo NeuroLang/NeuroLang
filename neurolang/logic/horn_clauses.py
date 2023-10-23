@@ -245,23 +245,23 @@ def convert_srnf_to_horn_clauses(head, expression):
 
     The algorithm is implemented using a stack of queries to process, which
     starts with the query given as parameter. In each iteration, a query is
-    processed and the result is a Horn clause with a remainder of auxiliar
+    processed and the result is a Horn clause with a remainder of auxiliary
     queries which appear in the clause. The clause is then added to the result
     and the remainder queries are added to the stack.
 
-    The cases where auxiliar queries are needed are the negation over an
-    existential predicate and the disjunction. For the disjunction an auxiliar
+    The cases where auxiliary queries are needed are the negation over an
+    existential predicate and the disjunction. For the disjunction an auxiliary
     query is introduced for each formula in the disjunction, but all with the
     same head. For a negated existential another query is added because
     negation can only be applied over atoms.
 
-    Care must be taken to ensure that the auxiliar queries are also range
+    Care must be taken to ensure that the auxiliary queries are also range
     restricted. To do so, a set of the positive atoms which appear in the
     parent expressions is added alongside each query in the stack. Those
     atoms are precisely the ones that restrict the range of the variables. If
     is the case that a query is not range restricted then some of those atoms
     are added to the body of the query to ensure the range restriction. This
-    restricts the result set of the auxiliar queries but does not alter the
+    restricts the result set of the auxiliary queries but does not alter the
     equivalence for the overall query because the range of those variables was
     already restricted in some of its parents.
     """
@@ -364,7 +364,7 @@ def _atom_variables(atom):
 class ConvertSRNFToHornClause(PatternWalker):
     """
     Converts a expression in safe range normal form into the atoms of a horn
-    clause and a list of auxiliar queries remaining to be processed.
+    clause and a list of auxiliary queries remaining to be processed.
 
     See `convert_srnf_to_horn_clauses`.
     """

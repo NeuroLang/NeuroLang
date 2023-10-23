@@ -2,7 +2,10 @@ import base64
 import hashlib
 import json
 from concurrent.futures import Future
-from io import BytesIO
+from collections import namedtuple
+
+import matplotlib
+from neurolang.frontend.query_resolution_expressions import Symbol
 from typing import Any, Dict, List, Tuple, Type, Union
 
 import matplotlib
@@ -11,7 +14,6 @@ import numpy as np
 import pandas as pd
 from nibabel.nifti1 import Nifti1Image
 from nibabel.spatialimages import SpatialImage
-from tatsu.exceptions import FailedParse
 
 from neurolang.exceptions import NeuroLangFailedParseException, NeuroLangFrontendException
 from neurolang.frontend.query_resolution_expressions import Symbol
@@ -184,14 +186,16 @@ class QueryResults:
 
     def set_error_details(self, error):
         self.errorName = str(type(error))
-        if isinstance(error, FailedParse):
-            self.message = "An error occured while parsing your query."
+        if isinstance(error, ParserError):
+            self.message = "An error occurred while parsing your query."
             self.errorDoc = str(error)
-            try:
+            if hasattr(error, 'tokenizer'):
                 line_info = error.tokenizer.line_info(error.pos)
-            except AttributeError:
-                # support tatsu 4.x
+            elif hasattr(error, 'buf'):
                 line_info = error.buf.line_info(error.pos)
+            elif hasattr(error, 'line') and hasattr(error, 'column'):
+                LineInfo = namedtuple("LineInfo", ["line", "col"])
+                line_info = LineInfo(line=error.line, col=error.column)
             self.line_info = {
                 "line": line_info.line,
                 "col": line_info.col,

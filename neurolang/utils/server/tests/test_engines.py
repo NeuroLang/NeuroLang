@@ -35,7 +35,7 @@ def test_neurolang_engine_set(engine):
     # test that resources are released even when an exception is raised
     try:
         with es.engine() as engine_:
-            raise RuntimeError("Oops an error occured")
+            raise RuntimeError("Oops an error occurred")
     except RuntimeError:
         pass
     assert len(es.engines) == 1

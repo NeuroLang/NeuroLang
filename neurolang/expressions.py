@@ -697,7 +697,10 @@ class FunctionApplication(Definition):
             if self.functor.type in (Unknown, typing.Any):
                 pass
             elif isinstance(self.functor.type, typing.Callable):
-                self.type = self.functor.type.__args__[-1]
+                if hasattr(self.functor.type, '__args__'):
+                    self.type = self.functor.type.__args__[-1]
+                else:
+                    self.type = Unknown
             else:
                 if not (
                     self.functor.type in (Unknown, typing.Any)
@@ -916,7 +919,10 @@ for operator_name in dir(op):
 
     for c in (Constant, Symbol, FunctionApplication,
               Statement, Query):
-        if not hasattr(c, name):
+        if (
+            not hasattr(c, name) or
+            isinstance(getattr(c, name), types.MethodWrapperType)
+        ):
             setattr(c, name, op_bind(operator))
 
 

@@ -35,7 +35,6 @@ from ..datalog.expression_processing import (
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.standard_syntax import parser as datalog_parser
-from .datalog.natural_syntax import parser as nat_datalog_parser
 from .datalog.squall_syntax_lark import parser as cet_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
@@ -80,7 +79,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
         self.datalog_parser = datalog_parser
-        self.nat_datalog_parser = nat_datalog_parser
         self.cet_datalog_parser = cet_datalog_parser
 
     @property
@@ -333,7 +331,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Performs an inferential query on the database.
         There are three modalities
         1. If there is only one argument, the query returns `True` or `False`
-        depending on wether the query could be inferred.
+        depending on whether the query could be inferred.
         2. If there are two arguments and the first is a tuple of `fe.Symbol`,
         it returns the set of results meeting the query in the second argument.
         3. If the first argument is a predicate (e.g. `Q(x)`) it performs the
@@ -396,7 +394,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
-        [Internal usage - documentation for developpers]
+        [Internal usage - documentation for developers]
 
         Performs an inferential query. Will return as first output
         an AbstractSet with as many elements as solutions of the
@@ -561,7 +559,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         Creates an AbstractSet fe.Symbol containing the elements specified in
         the iterable with a List[Tuple[Any, ...]] format (see examples).
-        Typically used to crate extensional facts from existing databases
+        Typically used to create extensional facts from existing databases
 
         Parameters
         ----------

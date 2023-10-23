@@ -30,7 +30,7 @@ from ..expression_walker import (
     ReplaceExpressionsByValues,
     add_match
 )
-from ..type_system import is_leq_informative
+from ..type_system import is_leq_informative, Unknown
 from ..utils import RelationalAlgebraFrozenSet
 
 
@@ -281,7 +281,8 @@ class Expression(object):
         else:
             name_ = ir.Constant[str](name)
         new_expression = ir.FunctionApplication(
-            ir.Constant(getattr), (self.expression, name_,),
+            ir.Constant[Callable[[self.expression.type, str], Unknown]](getattr),
+            (self.expression, name_,),
         )
         return Operation(self.query_builder, new_expression, self, (name,))
 
@@ -367,7 +368,7 @@ def rop_bind(op):
     return fun
 
 
-force_linking = [op.eq, op.ne, op.gt, op.lt, op.ge, op.le]
+force_linking = [op.eq, op.ne, op.gt, op.lt, op.ge, op.le, op.or_]
 
 for operator_name in dir(op):
     operator = getattr(op, operator_name)
@@ -600,7 +601,8 @@ class Symbol(Expression):
         else:
             name_ = ir.Constant[str](name)
         new_expression = ir.FunctionApplication(
-            ir.Constant(getattr), (self.neurolang_symbol, name_,),
+            ir.Constant[Callable[[self.neurolang_symbol.type, str], Unknown]](getattr),
+            (self.neurolang_symbol, name_,),
         )
         return Operation(self.query_builder, new_expression, self, (name,))
 
@@ -780,7 +782,7 @@ class RightImplication(Expression):
 
 class Fact(Expression):
     """
-    A Fact reprsents an information considered
+    A Fact represents an information considered
     as True. It can be seen as the Implication:
     fact ← True, e.g. Even(2) ← True
     """

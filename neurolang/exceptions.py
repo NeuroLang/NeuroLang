@@ -207,7 +207,7 @@ class ForbiddenRecursivityError(UnsupportedProgramError):
 
     This program cannot be stratified because it contains a loop in
     the dependencies of each rule. Rule `B(x) :- A(x), C(x)` depends
-    on the second rule through its occurence of the predicate `A(x)`.
+    on the second rule through its occurrence of the predicate `A(x)`.
     But rule `A(x) :- B(x)` in turn depends on the first rule through
     the `B(x)` predicate.
     """
@@ -297,7 +297,7 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
     relational algebra representation. This is probably because the
     formula is not in *modified relational algebra normal form*.
 
-    Generaly speaking, the formula must be expressed in *conjunctive normal
+    Generally speaking, the formula must be expressed in *conjunctive normal
     form* (CNF) or *disjunctive normal form* (DNF): as either a conjunction of
     disjunctions or disjunction of conjunctions.
 
@@ -395,6 +395,7 @@ class NotRankedException(NonLiftableException):
 class NotUnateException(NonLiftableException):
     pass
 
+
 class InvalidCommandExpression(ForbiddenExpressionError):
     """
     Invalid Command statement.
@@ -408,4 +409,26 @@ class NeuroLangTranslateToHornClauseException(NeuroLangException):
 
 
 class ExpressionIsNotSafeRange(NeuroLangTranslateToHornClauseException):
+    pass
+
+
+class NeuroLangTranslateToHornClauseException(NeuroLangException):
+    pass
+
+
+class ParserError(NeuroLangException):
+    def __init__(self, message, line=None, column=None):
+        self.message = message
+        self.line = line
+        self.column = column
+
+    def __str__(self):
+        return self.message
+
+
+class UnexpectedTokenError(ParserError):
+    pass
+
+
+class UnexpectedCharactersError(ParserError):
     pass

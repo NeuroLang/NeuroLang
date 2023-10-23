@@ -350,7 +350,7 @@ def has_existential_quantifiers(query):
     Parameters
     ----------
     query : LogicExpression
-        Logic expression to check wether existential
+        Logic expression to check whether existential
         quantifiers exists inside.
 
     Returns

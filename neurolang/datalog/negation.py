@@ -140,7 +140,7 @@ class DatalogProgramNegationMixin(PatternWalker):
         if isinstance(fact_set, Union):
             raise NeuroLangException(
                 f'{fact.functor.name} has been previously '
-                'define as intensional predicate.'
+                'define as intentional predicate.'
             )
 
         fact_set.value.add(Constant(fact.args))

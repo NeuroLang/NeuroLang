@@ -145,7 +145,7 @@ def is_linear_rule(rule):
 
 
 def all_body_preds_in_set(implication, predicate_set):
-    """Checks wether all predicates in the antecedent
+    """Checks whether all predicates in the antecedent
     are in the functor_set or are the consequent functor.
 
     Parameters
@@ -168,7 +168,7 @@ def all_body_preds_in_set(implication, predicate_set):
 
 
 def any_body_preds_in_set(implication, predicate_set):
-    """Checks wether any predicates in the antecedent
+    """Checks whether any predicates in the antecedent
     are in the predicate_set.
 
     Parameters
@@ -264,7 +264,7 @@ def stratify(union, datalog_instance):
     Returns
     -------
         list of lists of `Implications`, boolean
-            Strata and wether it was stratisfiable.
+            Strata and whether it was stratisfiable.
             If it was not, all non-stratified predicates
             will be in the last strata.
 
@@ -377,8 +377,8 @@ def reachable_code(query, datalog):
 
 
 def dependency_matrix(datalog, rules=None, instance=None):
-    """Produces the dependecy matrix for a datalog's
-    instance intensional database (IDB).
+    """Produces the dependency matrix for a datalog's
+    instance intentional database (IDB).
 
     Parameters
     ----------
@@ -408,7 +408,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
     ------
     SymbolNotFoundError
         If there is a predicate in the antecedent of a rule which
-        is not a constant or an extensional/intensional predicate.
+        is not a constant or an extensional/intentional predicate.
 
     """
     idb = datalog.intensional_database()
@@ -666,7 +666,7 @@ def flatten_query(query, program):
     ----------
     query : predicate or conjunction of predicates
         The query for which the conjunction is constructed.
-    program : a program with an intensional database
+    program : a program with an intentional database
         Program with logical rules that will be used to construct the
         conjunction corresponding to the given query.
 
@@ -677,7 +677,7 @@ def flatten_query(query, program):
     """
     if not hasattr(program, "intensional_database"):
         raise UnsupportedProgramError(
-            "Only program with an intensional database are supported"
+            "Only program with an intentional database are supported"
         )
     try:
         res = FlattenQueryInNonRecursiveUCQ(program).walk(query)

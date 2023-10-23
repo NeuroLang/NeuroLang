@@ -1,7 +1,7 @@
 from operator import add, eq, lt, mul, pow, sub, truediv
 
 import pytest
-from tatsu.exceptions import FailedParse
+
 
 from neurolang.logic import ExistentialPredicate
 
@@ -15,6 +15,7 @@ from ....expressions import (
     Statement,
     Symbol
 )
+from ....exceptions import UnexpectedTokenError
 from ....probabilistic.expressions import (
     PROB,
     Condition,
@@ -75,7 +76,7 @@ def test_rules():
         Implication(A(x), Conjunction((B(x, fresh_arg),))),
     ))
 
-    res = parser('A(x):-B(x, y), C(3, z), z == 4')
+    res = parser('A(x):-B(x, y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
             A(x),
@@ -85,7 +86,7 @@ def test_rules():
         ),
     ))
 
-    res = parser('A(x):-B(x + 5 * 2, y), C(3, z), z == 4')
+    res = parser('A(x):-B(x + 5 * 2, y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
             A(x),
@@ -101,7 +102,7 @@ def test_rules():
         ),
     ))
 
-    res = parser('A(x):-B(x / 2, y), C(3, z), z == 4')
+    res = parser('A(x):-B(x / 2, y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
             A(x),
@@ -115,7 +116,7 @@ def test_rules():
         ),
     ))
 
-    res = parser('A(x):-B(f(x), y), C(3, z), z == 4')
+    res = parser('A(x):-B(f(x), y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
             A(x),
@@ -219,7 +220,7 @@ def test_probabilistic_fact():
     d = Symbol("d")
     x = Symbol("x")
     B = Symbol("B")
-    res = parser("B(x) :: exp(-d / 5.0) :- A(x, d) & (d < 0.8)")
+    res = parser("B(x) :: exp(-d / 5.0) :- A(x, d) , (d < 0.8)")
     expected = Union(
         (
             Implication(
@@ -324,9 +325,12 @@ def test_existential():
 
     assert res == expected
 
-    with pytest.raises(FailedParse):
+    # try :
+    #     res = parser("C(x) :- B(x), exists(s1; )")
+    # except UnexpectedToken as e:
+    #     raise UnexpectedTokenError from e
+    with pytest.raises(UnexpectedTokenError):
         res = parser("C(x) :- B(x), exists(s1; )")
-
 
 def test_query():
     ans = Symbol("ans")

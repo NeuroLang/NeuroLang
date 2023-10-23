@@ -55,7 +55,7 @@ class OntologyParser:
 
         Returns
         -------
-        Two dictionaries. One with contraints, for example, rules derived
+        Two dictionaries. One with constraints, for example, rules derived
         from restrictions of type someValuesFrom. The other one, with the
         implications derived from the rest of the ontological information,
         for example, the label property. Both dictionaries index lists of
@@ -390,7 +390,7 @@ class OntologyParser:
             entity to be parsed.
 
         prop : URIRef
-            propertie associated with the entity.
+            properties associated with the entity.
 
         nodes : list
             list of the values associated with the entity and the property.
@@ -450,7 +450,7 @@ class OntologyParser:
             entity to be parsed.
 
         prop : URIRef
-            propertie associated with the entity.
+            properties associated with the entity.
 
         nodes : list
             list of the values associated with the entity and the property.
@@ -478,7 +478,7 @@ class OntologyParser:
             entity to be parsed.
 
         prop : URIRef
-            propertie associated with the entity.
+            properties associated with the entity.
 
         nodes : list
             list of the values associated with the entity and the property.
@@ -575,7 +575,7 @@ class OntologyParser:
             entity to be parsed.
 
         prop : URIRef
-            propertie associated with the entity.
+            properties associated with the entity.
 
         nodes : URIRef
             value associated with the entity and the property.

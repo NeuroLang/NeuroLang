@@ -121,7 +121,7 @@ def test_command_end2end():
         return s.startswith(prefix)
 
     query = """.load_atlas(Destrieux, "destrieux2009_rois_lateralized.nii.gz", "destrieux2009_rois_labels_lateralized.csv", "https://www.nitrc.org/frs/download.php/11942/destrieux2009.tgz")
-    LeftSulcus(name_, region) :- Destrieux(name_, region) & startswith("L S", name_)"""
+    LeftSulcus(name_, region) :- Destrieux(name_, region) , startswith("L S", name_)"""
 
     with nl.scope:
         nl.execute_datalog_program(query)
