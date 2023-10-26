@@ -57,16 +57,16 @@ constraint : body RIGHT_IMPLICATION head
 RIGHT_IMPLICATION : "-:" | "\N{RIGHTWARDS ARROW}"
 
 existential_predicate : exists "(" existential_body ")"
-?existential_body : arguments SUCH_THAT predicate ( "," predicate )*
-SUCH_THAT : "st" | ";"
+?existential_body : arguments (";" | SUCH_THAT_WORD) predicate ( "," predicate )*
+SUCH_THAT_WORD : "st"
 
 ?head : head_predicate
 head_predicate : identifier "(" [ arguments ] ")"
 
 ?body : conjunction
 //conjunction : predicate ("," predicate)*
-conjunction : predicate (("," | CONJUNCTION_SYMBOL) predicate)*
-CONJUNCTION_SYMBOL : "&" | "\N{LOGICAL AND}"
+conjunction : predicate (("," | "&" | AND_SYMBOL) predicate)*
+AND_SYMBOL : "\N{LOGICAL AND}"
 
 negated_predicate : ("~" | NEG_UNICODE ) predicate
 NEG_UNICODE : "\u00AC"
@@ -140,8 +140,9 @@ IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
 cmd_identifier : CMD_IDENTIFIER
 CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
 
-exists : EXISTS
-EXISTS : "exists" | "\u2203" | "EXISTS"
+exists : EXISTS_WORD | EXISTS_SYMBOL
+EXISTS_WORD : "exists" | "EXISTS"
+EXISTS_SYMBOL : "\u2203"
 
 text : TEXT
 TEXT : DOUBLE_QUOTE /[a-zA-Z0-9 ]*/ DOUBLE_QUOTE
@@ -689,9 +690,9 @@ def parser(code, locals=None, globals=None, interactive=False):
         if (interactive) :
             completer = LarkCompleter(COMPILED_GRAMMAR)
             res = completer.complete(code.strip())
-            # print(res)
-            return res.token_options
-            # return 0
+            print(res)
+            # return res.token_options
+            return 0
         else :
             jp = COMPILED_GRAMMAR.parse(code.strip())
             return DatalogTransformer().transform(jp)
