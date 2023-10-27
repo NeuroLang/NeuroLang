@@ -5,6 +5,7 @@ import os
 import os.path
 import sys
 from concurrent.futures import Future
+from concurrent.futures import as_completed
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -332,8 +333,8 @@ class SymbolsHandler(JSONRequestHandler):
         tornado.web.HTTPError
             raises 404 if engine id does not exist
         """
-        # print("")
-        # print("____SymbolsHandler - start get()____")
+        print("")
+        print("____SymbolsHandler - start get()____")
         # print("")
         # print("nqm engines :", self.application.nqm.engines)
         LOG.debug("Accessing symbols for engine %s.", engine)
@@ -345,12 +346,24 @@ class SymbolsHandler(JSONRequestHandler):
             raise tornado.web.HTTPError(
                 status_code=404, log_message="engine not found"
             )
+        print("")
+        print("symbols :", symbols)
         uuid = f"ENGINE_SYMBOLS_{engine}"
         symbol = self.get_argument("symbol", None)
+        print("")
+        print("symbol :", symbol)
         start = int(self.get_argument("start", 0))
+        print("")
+        print("start :", start)
         length = int(self.get_argument("length", 50))
+        print("")
+        print("length :", length)
         sort = int(self.get_argument("sort", -1))
+        print("")
+        print("sort :", sort)
         asc = bool(int(self.get_argument("asc", 1)))
+        print("")
+        print("asc :", asc)
         # print("")
         # print("nqm engines :", self.application.nqm.engines)
         # print("")
@@ -457,8 +470,8 @@ class QueryAutocompletionHandler(JSONRequestHandler):
     """
 
     async def post(self):
-        # print("")
-        # print("___QueryAutocompletionHandler.get()___")
+        print("")
+        print("___QueryAutocompletionHandler.get()___")
         text = self.get_argument("text", '')
         # print("")
         # print("text :")
@@ -473,7 +486,7 @@ class QueryAutocompletionHandler(JSONRequestHandler):
         self.uuid = str(uuid4())
         LOG.debug("Submitting query autocompletion with uuid %s.", self.uuid)
         f = self.application.nqm.submit_query_autocompletion(self.uuid, text, engine)
-        # ff = as_completed([f])
+        # ff = as_completed([f], timeout=3)
         # print("")
         # print("ff :", (next(ff)).result())
         # qr = QueryResults(self.uuid, f)
@@ -489,11 +502,12 @@ class QueryAutocompletionHandler(JSONRequestHandler):
 
         # print("type(f) :", type(f))
         # print("nqm res :", self.application.nqm.get_result(self.uuid).result())
-        # print("f res:", f.result())
-        # print("type f res :", type(f.result()))
+        print("f res:", f.result())
+        print("type f res :", type(f.result()))
         # print("text :", text)
          # self.write_json_reponse({"data": list(f.result()), "uuid": self.uuid})
-        self.write(json.dumps({"tokens": list(f.result())}))
+        # self.write(json.dumps({"tokens": list(f.result())}))
+        self.write(json.dumps({"tokens": json.dumps(f.result())}))
          # self.write({"id": str(uuid4())})
 
 
