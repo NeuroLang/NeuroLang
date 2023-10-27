@@ -166,4 +166,4 @@ class LarkCompleter:
         # print(accepts)
         # print("type(accepts) :", type(accepts))
         print("")
-        return CompleteResult(len(text), "", accepts)
+        return CompleteResult(len(text), "", toks)
