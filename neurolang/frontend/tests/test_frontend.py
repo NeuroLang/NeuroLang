@@ -532,8 +532,14 @@ def test_neurolang_dl_datalog_code_statement_autocompletion():
     B(x,y) :- 
     """
     )
-    expected = {'LPAR', 'CMD_IDENTIFIER', 'LAMBDA', 'TRUE', 'NEG_UNICODE', 'TILDE', 'EXISTS', 'IDENTIFIER_REGEXP', 'FALSE', 'AT'}
-    # expected = 0
+    expected = {
+        'Boleans': {'⊤', 'True', 'False', '⊥'},
+        'Functions': {'lambda'},
+        'Operators': {'~', '¬'},
+        'Reserved words': {'exists', 'EXISTS'},
+        'Signs': {'∃', '@', '('},
+        'Strings': {'<command identifier>', '<identifier regular expression>'}
+    }
     assert res == expected
 
 def test_neurolang_dl_datalog_code_lambda_def():
