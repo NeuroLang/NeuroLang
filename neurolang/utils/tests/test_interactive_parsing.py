@@ -1,243 +1,259 @@
-# from operator import add, eq, lt, mul, pow, sub, truediv
-#
 import pytest
-#
-#
-# from ....logic import ExistentialPredicate
-#
-# from ....datalog import Conjunction, Fact, Implication, Negation, Union
-from  ...expressions import Symbol
-# from ....expressions import (
-#     Command,
-#     Constant,
-#     FunctionApplication,
-#     Lambda,
-#     Query,
-#     Statement,
-#     Symbol
-# )
-# from ....exceptions import UnexpectedTokenError
+
+from ...expressions import Symbol
 from ...exceptions import UnexpectedTokenError
-# from ....probabilistic.expressions import (
-#     PROB,
-#     Condition,
-#     ProbabilisticFact
-# )
 from ...frontend.datalog.standard_syntax import parser
-# from ..standard_syntax import ExternalSymbol
+
+def test_interactive_empty_input():
+    input = ""
+    res = parser(input, interactive=True)
+    expected = {
+        'Signs'             : {'(', '@', '∃'},
+        'Numbers'           : {'<float>', '<integer>'},
+        'Operators'         : {'-', '~', '¬'},
+        'Functions'         : {'lambda'},
+        'Reserved words'    : {'ans', 'exists', 'EXISTS'},
+        'Boleans'           : {'True', '⊤', 'False', '⊥'},
+        'Expression symbols': {'.'},
+        'Strings'           : {'<text>', '<command identifier>', '<identifier regular expression>'}
+    }
+    assert res == expected
 
 
 def test_interactive_facts():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_facts() ____")
-    input = 'A('
-    # print("***")
-    # print(input)
-    # print("res :")
+    input = 'A'
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'DOTS', 'LPAR', 'AT', 'INT', 'TEXT', 'MINUS', 'RPAR', 'LAMBDA', 'FLOAT'}
+    expected = {'Signs': {'('}, 'Operators': {'*', '-', '**', '/', '+'}, 'Expression symbols': {':=', '::'}}
+    assert res == expected
+
+    input = 'A('
+    res = parser(input, interactive=True)
+    expected = {
+        'Signs'    : {'@', ')','(', '...'},
+        'Numbers'  : {'<float>', '<integer>'},
+        'Operators': {'-'},
+        'Functions': {'lambda'},
+        'Strings'  : {'<identifier regular expression>', '<command identifier>', '<text>'}
+    }
+    assert res == expected
+
+    input = 'A()'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'(', '@', '∃'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'¬', '-', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'⊤', 'False', 'True', '⊥'}, 'Expression symbols': {':=', ':-', '←', '.', '::'}, 'Strings': {'<command identifier>', '<text>', '<identifier regular expression>'}}
+    assert res == expected
+
+    input = 'A(3'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {')', ','}, 'Operators': {'/', '**', '+', '*', '-'}}
+    assert res == expected
+
+    input = 'A(3)'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'∃', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-', '¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊤', 'True', '⊥', 'False'}, 'Expression symbols': {'.'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
     assert res == expected
 
     input = 'A("x"'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'POW', 'STAR', 'PLUS', 'MINUS', 'RPAR', 'COMMA', 'SLASH'}
+    expected = {
+        'Signs'    : {')', ','},
+        'Operators': {'**', '*', '-', '/', '+'}
+    }
+    assert res == expected
+
+    input = 'A("x")'
+    res = parser(input, interactive=True)
+    expected = {
+        'Signs': {'∃', '@', '('},
+        'Numbers': {'<integer>', '<float>'},
+        'Operators': {'-', '¬', '~'},
+        'Functions': {'lambda'},
+        'Reserved words': {'exists', 'ans', 'EXISTS'},
+        'Boleans': {'True', '⊤', 'False', '⊥'},
+        'Expression symbols': {'.'},        # because the grammar ignores spaces and new lines, so the dot is accepted as the command of the next line
+        'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}}
+    assert res == expected
+
+    input = 'A("x",'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Strings': {'<text>'}}
     assert res == expected
 
     input = "A('x', 3"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'RPAR', 'COMMA'}
+    expected = {
+        'Signs': {')',','}
+    }
     assert res == expected
 
     input = "A('x', 3,"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'AT', 'INT', 'TEXT', 'MINUS', 'FLOAT'}
+    expected = {'Signs': {'@'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Strings': {'<text>'}}
+    assert res == expected
+
+    input = "A('x', 3)"
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'∃', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'¬', '~', '-'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'False', '⊤', 'True', '⊥'}, 'Expression symbols': {'.'}, 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = '''
     `http://uri#test-fact`("x")
     A("x", 3
     '''
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'RPAR', 'COMMA'}
+    expected = {'Signs': {')', ','}}
     assert res == expected
 
 
 def test_interactive_rules():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_rules() ____")
-    input = 'A(x):-'
-    # print("***")
-    # print(input)
-    # print("res :")
+    input = 'A(x'
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'IDENTIFIER_REGEXP', 'LPAR', 'CMD_IDENTIFIER', 'NEG_UNICODE', 'EXISTS', 'LAMBDA', 'TILDE', 'FALSE', 'TRUE', 'AT'}
+    expected = {'Signs': {'(', ',', ')'}, 'Operators': {'/', '-', '*', '**', '+'}}
+    assert res == expected
+
+    input = 'A(x)'
+    res = parser(input, interactive=True)
+    expected = {'Expression symbols': {':=', ':-', '←', '::'}}
+    assert res == expected
+
+    input = 'A(x):-'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'∃', '@', '('}, 'Operators': {'¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊤', '⊥', 'False', 'True'}, 'Strings': {'<identifier regular expression>', '<command identifier>'}}
+    assert res == expected
+
+    input = 'A(x):-B'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'('}}
+    assert res == expected
+
+    input = 'A(x):-B('
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'...', '(', ')', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
+    assert res == expected
+
+    input = 'A(x):-B()'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'∃', '@', '(', ',', '∧', '&'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-', '//', '~', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'ans', 'exists', 'EXISTS'}, 'Boleans': {'⊤', '⊥', 'False', 'True'}, 'Expression symbols': {'.'}, 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}}
+    assert res == expected
+
+    input = 'A(x):-B(x'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {')', '(', ','}, 'Operators': {'-', '**', '/', '*', '+'}}
+    assert res == expected
+
+    input = 'A(x):-B(x,'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'...', '@', '('}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}}
     assert res == expected
 
     input = 'A(x):-B(x, y'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'PLUS', 'LPAR', 'POW', 'STAR', 'RPAR', 'COMMA', 'SLASH'}
+    expected = {'Signs': {')', ',', '('}, 'Operators': {'-', '**', '*', '/', '+'}}
     assert res == expected
 
     input = 'A(x):-B(x, y)'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'IDENTIFIER_REGEXP', 'EXISTS', 'FALSE', '$END', 'ANS', 'NEG_UNICODE', 'TRUE', 'FLOAT', 'AT', 'COMMA', 'INT', 'CONDITION_OP', 'TEXT', 'LPAR', 'CMD_IDENTIFIER', 'CONJUNCTION_SYMBOL', 'LAMBDA', 'TILDE', 'DOT'}
+    expected = {'Signs': {'@', '∧', '∃', '(', '&', ','}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'~', '-', '¬', '//'}, 'Functions': {'lambda'}, 'Reserved words': {'ans', 'EXISTS', 'exists'}, 'Boleans': {'True', '⊥', '⊤', 'False'}, 'Expression symbols': {'.'}, 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}}
     assert res == expected
 
     input = 'A(x):-B(x, y),'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'IDENTIFIER_REGEXP', 'LPAR', 'CMD_IDENTIFIER', 'NEG_UNICODE', 'EXISTS', 'LAMBDA', 'TILDE', 'FALSE', 'TRUE', 'AT'}
+    expected = {'Signs': {'∃', '@', '('}, 'Operators': {'~', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Strings': {'<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = 'A(x):-B(x, y), C(3, z)'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'IDENTIFIER_REGEXP', 'EXISTS', 'FALSE', '$END', 'ANS', 'NEG_UNICODE', 'TRUE', 'FLOAT', 'AT', 'COMMA', 'INT', 'TEXT', 'LPAR', 'CMD_IDENTIFIER', 'CONJUNCTION_SYMBOL', 'LAMBDA', 'TILDE', 'DOT'}
+    expected = {'Signs': {',', '∧', '(', '@', '&', '∃'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-', '¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists', 'ans'}, 'Boleans': {'⊥', 'True', 'False', '⊤'}, 'Expression symbols': {'.'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
+    assert res == expected
+
+    input = 'A(x):-~'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'(', '∃', '@'}, 'Operators': {'¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'⊥', '⊤', 'False', 'True'}, 'Strings': {'<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = 'A(x):-~B(x)'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'IDENTIFIER_REGEXP', 'EXISTS', 'FALSE', '$END', 'ANS', 'NEG_UNICODE', 'TRUE', 'FLOAT', 'AT', 'COMMA', 'INT', 'CONDITION_OP', 'TEXT', 'LPAR', 'CMD_IDENTIFIER', 'CONJUNCTION_SYMBOL', 'LAMBDA', 'TILDE', 'DOT'}
+    expected = {'Signs': {',', '@', '&', '∧', '∃', '('}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-', '~', '//', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊥', '⊤', 'True', 'False'}, 'Expression symbols': {'.'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
     assert res == expected
 
     input = 'A(x):-~B(x),'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'IDENTIFIER_REGEXP', 'EXISTS', 'FALSE', '$END', 'ANS', 'NEG_UNICODE', 'TRUE', 'FLOAT', 'AT', 'COMMA', 'INT', 'CONDITION_OP', 'TEXT', 'LPAR', 'CMD_IDENTIFIER', 'CONJUNCTION_SYMBOL', 'LAMBDA', 'TILDE', 'DOT'}
+    expected = {'Signs': {'(', '∃', '@'}, 'Operators': {'~', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'True', 'False', '⊥', '⊤'}, 'Strings': {'<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = 'A(x):-B(x, ...)'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'IDENTIFIER_REGEXP', 'EXISTS', 'FALSE', '$END', 'ANS', 'NEG_UNICODE', 'TRUE', 'FLOAT', 'AT', 'COMMA', 'INT', 'CONDITION_OP', 'TEXT', 'LPAR', 'CMD_IDENTIFIER', 'CONJUNCTION_SYMBOL', 'LAMBDA', 'TILDE', 'DOT'}
+    expected = {'Signs': {'&', '∃', '@', ',', '(', '∧'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'//', '-', '~', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'⊤', 'True', '⊥', 'False'}, 'Expression symbols': {'.'}, 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}}
+    assert res == expected
+
+    input = 'A(x):-B(x, y), C(3, z), ('
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'(', '@', '...'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
     assert res == expected
 
     input = 'A(x):-B(x, y), C(3, z), (z'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'IDENTIFIER_REGEXP', 'LPAR', 'CMD_IDENTIFIER', 'LAMBDA', 'DOTS', 'AT', 'INT', 'TEXT', 'FLOAT'}
+    expected = {'Signs': {'('}, 'Operators': {'*', '>', '==', '<', '-', '+', '<=', '**', '/', '!=', '>='}}
     assert res == expected
 
     input = 'A(x):-B(x, y), C(3, z), (z =='
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'IDENTIFIER_REGEXP', 'LPAR', 'CMD_IDENTIFIER', 'LAMBDA', 'DOTS', 'AT', 'INT', 'TEXT', 'FLOAT'}
+    expected = {'Signs': {'(', '...', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}}
     assert res == expected
 
     input = 'A(x):-B(x + 5 *'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'IDENTIFIER_REGEXP', 'LPAR', 'CMD_IDENTIFIER', 'LAMBDA', 'AT', 'INT', 'TEXT', 'FLOAT'}
+    expected = {'Signs': {'@', '('}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
     assert res == expected
 
     input = 'A(x):-B(x / 2'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'PLUS', 'POW', 'STAR', 'RPAR', 'COMMA', 'SLASH'}
+    expected = {'Signs': {',', ')'}, 'Operators': {'+', '*', '/', '**', '-'}}
     assert res == expected
 
     input = 'A(x):-B(f(x'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'PLUS', 'LPAR', 'POW', 'STAR', 'RPAR', 'COMMA', 'SLASH'}
+    expected = {'Signs': {'(', ',', ')'}, 'Operators': {'*', '/', '-', '**', '+'}}
     assert res == expected
 
-    input = 'A(x):-B(x + (-5), "a'
-    # print("***")
-    # print(input)
-    # print("res :")
+    input = 'A(x):-B(x + (-5),'
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'MINUS', 'IDENTIFIER_REGEXP', 'LPAR', 'CMD_IDENTIFIER', 'LAMBDA', 'DOTS', 'AT', 'INT', 'TEXT', 'FLOAT'}
+    expected = {'Signs': {'...', '@', '('}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}}
+    assert res == expected
+
+    input = 'A(x):-B(x + (-5), "a"'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {')', ','}, 'Operators': {'+', '**', '*', '-', '/'}}
     assert res == expected
 
     input = 'A(x):-B(x - 5 * 2, @'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'IDENTIFIER_REGEXP', 'CMD_IDENTIFIER'}
+    expected = {'Strings': {'<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
 
 def test_interactive_aggregation():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_aggregation() ____")
-    input = 'A(x, f(y'
-    # print("***")
-    # print(input)
-    # print("res :")
+    input = 'A(x, f('
     res = parser(input, interactive=True)
-    expected = {'RPAR', 'PLUS', 'STAR', 'POW', 'COMMA', 'SLASH', 'LPAR', 'MINUS'}
-    expected = 0
+    expected = {'Signs': {')', '...', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}}
+    assert res == expected
+
+    input = 'A(x, f(y'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'(', ')', ','}, 'Operators': {'*', '/', '+', '**', '-'}}
+    assert res == expected
+
+    input = 'A(x, f(y)'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {')', ','}, 'Operators': {'+', '*', '/', '**', '-'}}
+    assert res == expected
+
+    input = 'A(x, f(y))'
+    res = parser(input, interactive=True)
+    expected = {'Expression symbols': {'←', ':=', '::', ':-'}}
     assert res == expected
 
 
 def test_interactive_uri():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_uri() ____")
     from rdflib import RDFS
 
     label = Symbol(name=str(RDFS.label))
@@ -246,586 +262,403 @@ def test_interactive_uri():
     )
 
     input = f'`{str(label.name)}`'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'PLUS', 'POW', 'SLASH', 'STAR', 'PROBA_OP', 'MINUS', 'STATEMENT_OP', 'LPAR'}
-    expected = 0
+    expected = {'Signs': {'('}, 'Operators': {'/', '*', '**', '-', '+'}, 'Expression symbols': {'::', ':='}}
     assert res == expected
 
     input = f'`{str(label.name)}`(x)'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'IMPLICATION', 'PROBA_OP', 'STATEMENT_OP'}
-    expected = 0
+    expected = {'Expression symbols': {':-', '←', '::', ':='}}
     assert res == expected
 
     input = f'`{str(label.name)}`(x):-'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'TILDE', 'NEG_UNICODE', 'AT', 'TRUE', 'FALSE', 'EXISTS', 'LAMBDA', 'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'LPAR'}
-    expected = 0
-    assert res == expected
-
-    input = f'`{str(label.name)}`(x):-`'
-    # print("***")
-    # print(input)
-    # print("res :")
-    res = parser(input, interactive=True)
-    expected = {'TILDE', 'NEG_UNICODE', 'AT', 'TRUE', 'FALSE', 'EXISTS', 'LAMBDA', 'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'LPAR'}
-    expected = 0
-    assert res == expected
-
-    input = f'`{str(label.name)}`(x):-`{str(regional_part.name)}'
-    # print("***")
-    # print(input)
-    # print("res :")
-    res = parser(input, interactive=True)
-    expected = {'TILDE', 'NEG_UNICODE', 'AT', 'TRUE', 'FALSE', 'EXISTS', 'LAMBDA', 'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'LPAR'}
-    expected = 0
+    expected = {'Signs': {'(', '@', '∃'}, 'Operators': {'¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'⊤', 'False', 'True', '⊥'}, 'Strings': {'<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = f'`{str(label.name)}`(x):-`{str(regional_part.name)}`'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'LPAR'}
-    expected = 0
+    expected = {'Signs': {'('}}
     assert res == expected
 
     input = f'`{str(label.name)}`(x):-`{str(regional_part.name)}`(x, y)'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'TILDE', 'AT', 'CMD_IDENTIFIER', 'CONJUNCTION_SYMBOL', 'IDENTIFIER_REGEXP', 'INT', 'COMMA', 'DOT', 'TRUE', 'CONDITION_OP', 'LAMBDA', 'ANS', 'LPAR', 'FLOAT', 'EXISTS', '$END', 'NEG_UNICODE', 'FALSE', 'MINUS', 'TEXT'}
-    expected = 0
+    expected = {'Signs': {'(', '&', ',', '∃', '∧', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'~', '¬', '-', '//'}, 'Functions': {'lambda'}, 'Reserved words': {'ans', 'EXISTS', 'exists'}, 'Boleans': {'False', '⊥', 'True', '⊤'}, 'Expression symbols': {'.'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
     assert res == expected
 
 
 def test_interactive_probabilistic_fact():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_probabilistic_fact() ____")
     input = 'p::'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'IDENTIFIER_REGEXP', 'CMD_IDENTIFIER'}
-    expected = 0
+    expected = {'Strings': {'<identifier regular expression>', '<command identifier>'}}
+    assert res == expected
+
+    input = 'p::A'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'('}}
+    assert res == expected
+
+    input = 'p::A('
+    res = parser(input, interactive=True)
+    expected = {'Signs': {')', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Strings': {'<text>'}}
+    assert res == expected
+
+    input = 'p::A(3'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {')', ','}}
     assert res == expected
 
     input = 'p::A(3)'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'MINUS', 'CMD_IDENTIFIER', 'FLOAT', 'TILDE', 'NEG_UNICODE', 'INT', '$END', 'LPAR', 'LAMBDA', 'IDENTIFIER_REGEXP', 'TRUE', 'EXISTS', 'DOT', 'AT', 'FALSE', 'TEXT', 'ANS'}
-    expected = 0
+    expected = {'Signs': {'(', '∃', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'¬', '-', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': {'.'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
+    assert res == expected
+
+    input = '0.8::A("a b",'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'@'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Strings': {'<text>'}}
+    assert res == expected
+
+    input = '0.8::A("a b", 3'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {',', ')'}}
     assert res == expected
 
     input = '0.8::A("a b", 3)'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'MINUS', 'CMD_IDENTIFIER', 'FLOAT', 'TILDE', 'NEG_UNICODE', 'INT', '$END', 'LPAR', 'LAMBDA', 'IDENTIFIER_REGEXP', 'TRUE', 'EXISTS', 'DOT', 'AT', 'FALSE', 'TEXT', 'ANS'}
-    expected = 0
+    expected = {'Signs': {'@', '(', '∃'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'¬', '-', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'True', 'False', '⊤', '⊥'}, 'Expression symbols': {'.'}, 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = "B(x) :: exp(-d / 5.0)"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'POW', 'MINUS', 'PLUS', 'IMPLICATION', 'SLASH', 'STAR'}
-    expected = 0
+    expected = {'Operators': {'*', '**', '-', '+', '/'}, 'Expression symbols': {':-', '←'}}
     assert res == expected
 
     input = "B(x) :: exp(-d / 5.0) :-"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'CMD_IDENTIFIER', 'NEG_UNICODE', 'TILDE', 'LPAR', 'IDENTIFIER_REGEXP', 'LAMBDA', 'TRUE', 'EXISTS', 'AT', 'FALSE'}
-    expected = 0
+    expected = {'Signs': {'(', '∃', '@'}, 'Operators': {'~', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'⊤', '⊥', 'True', 'False'}, 'Strings': {'<identifier regular expression>', '<command identifier>'}}
     assert res == expected
 
     input = "B(x) :: exp(-d / 5.0) :- A(x, d)"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'CMD_IDENTIFIER', 'NEG_UNICODE', 'TILDE', 'LPAR', 'IDENTIFIER_REGEXP', 'LAMBDA', 'TRUE', 'EXISTS', 'AT',
-                'FALSE'}
-    expected = 0
+    expected = {'Signs': {'∃', ',', '(', '@', '&', '∧'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'¬', '-', '~', '//'}, 'Functions': {'lambda'}, 'Reserved words': {'ans', 'EXISTS', 'exists'}, 'Boleans': {'True', '⊤', '⊥', 'False'}, 'Expression symbols': {'.'}, 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}}
     assert res == expected
 
     input = "B(x) :: exp(-d / 5.0) :- A(x, d) &"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'CMD_IDENTIFIER', 'NEG_UNICODE', 'TILDE', 'LPAR', 'IDENTIFIER_REGEXP', 'LAMBDA', 'TRUE', 'EXISTS', 'AT', 'FALSE'}
-    expected = 0
+    expected = {'Signs': {'∃', '@', '('}, 'Operators': {'¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'False', 'True', '⊥', '⊤'}, 'Strings': {'<identifier regular expression>', '<command identifier>'}}
     assert res == expected
 
     input = "B(x) :: exp(-d / 5.0) :- A(x, d) & (d < 0.8)"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'FLOAT', 'TILDE', 'INT', 'COMMA', 'LAMBDA', 'AT', 'MINUS', 'CONJUNCTION_SYMBOL', 'NEG_UNICODE', '$END', 'LPAR', 'IDENTIFIER_REGEXP', 'DOT', 'CMD_IDENTIFIER', 'TRUE', 'EXISTS', 'FALSE', 'TEXT', 'ANS'}
-    expected = 0
+    expected = {'Signs': {'∧', '∃', '@', '(', ',', '&'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'~', '-', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊥', 'True', 'False', '⊤'}, 'Expression symbols': {'.'}, 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}}
     assert res == expected
 
 
 def test_interactive_condition():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_condition() ____")
     input = 'C(x) :- A(x) //'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'NEG_UNICODE', 'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'LAMBDA', 'FALSE', 'EXISTS', 'AT', 'TILDE', 'LPAR', 'TRUE'}
-    expected = 0
+    expected = {'Signs': {'@', '∃', '('}, 'Operators': {'~', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊥', '⊤', 'True', 'False'}, 'Strings': {'<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = 'C(x) :- A(x) // B(x)'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'DOT', 'NEG_UNICODE', 'FLOAT', '$END', 'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'LAMBDA', 'INT', 'FALSE', 'AT', 'MINUS', 'EXISTS', 'TILDE', 'LPAR', 'ANS', 'TEXT', 'TRUE'}
-    expected = 0
-    assert res == expected
-
-    input = 'C(x) :- (A(x), B(x)) // B(x)'
-    # print("***")
-    # print(input)
-    # print("res :")
-    res = parser(input, interactive=True)
-    expected = {'DOT', 'NEG_UNICODE', 'FLOAT', '$END', 'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'LAMBDA', 'INT', 'FALSE', 'AT', 'MINUS', 'EXISTS', 'TILDE', 'LPAR', 'ANS', 'TEXT', 'TRUE'}
-    expected = 0
+    expected = {'Signs': {'@', '(', '∃'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-', '¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'ans', 'EXISTS', 'exists'}, 'Boleans': {'False', '⊤', '⊥', 'True'}, 'Expression symbols': {'.'}, 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}}
     assert res == expected
 
     input = 'C(x) :- A(x) // (A(x),'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'NEG_UNICODE', 'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'LAMBDA', 'FALSE', 'EXISTS', 'AT', 'TILDE', 'LPAR', 'TRUE'}
-    expected = 0
+    expected = {'Signs': {'@', '(', '∃'}, 'Operators': {'¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'True', '⊤', '⊥', 'False'}, 'Strings': {'<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = 'C(x) :- A(x) // (A(x), B(x))'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'DOT', 'NEG_UNICODE', 'FLOAT', '$END', 'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'LAMBDA', 'INT', 'FALSE', 'AT', 'MINUS', 'EXISTS', 'TILDE', 'LPAR', 'ANS', 'TEXT', 'TRUE'}
-    expected = 0
+    expected = {'Signs': {'∃', '@', '('}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-', '¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists', 'ans'}, 'Boleans': {'⊥', 'False', 'True', '⊤'}, 'Expression symbols': {'.'}, 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}}
+    assert res == expected
+
+    input = 'C(x) :- (A(x), B(x)) // B(x)'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'@', '(', '∃'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'~', '¬', '-'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'⊤', 'False', 'True', '⊥'}, 'Expression symbols': {'.'}, 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
 
 def test_interactive_existential():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_existential() ____")
+    input = "C(x) :- B(x), exists"
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'('}}
+    assert res == expected
+
+    input = "C(x) :- B(x), exists("
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'@', '(', '...'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<text>', '<identifier regular expression>'}}
+    assert res == expected
 
     input = "C(x) :- B(x), exists(s1"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'LPAR'}
-    expected = 0
+    expected = {'Signs': {'(', ',', ';'}, 'Operators': {'**', '+', '-', '*', '/'}, 'Reserved words': {'st'}}
     assert res == expected
 
     input = "C(x) :- B(x), exists(s1;"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'EXISTS', 'CMD_IDENTIFIER', 'TRUE', 'LPAR', 'AT', 'TILDE', 'LAMBDA', 'FALSE', 'IDENTIFIER_REGEXP', 'NEG_UNICODE'}
-    expected = 0
+    expected = {'Signs': {'@', '∃', '('}, 'Operators': {'¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊥', 'False', 'True', '⊤'}, 'Strings': {'<identifier regular expression>', '<command identifier>'}}
     assert res == expected
 
     input = "C(x) :- B(x), exists(s1; A(s1))"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'EXISTS', 'LPAR', 'FLOAT', 'INT', 'DOT', 'MINUS', 'CMD_IDENTIFIER', 'ANS', 'CONJUNCTION_SYMBOL', 'AT', 'FALSE', 'IDENTIFIER_REGEXP', 'NEG_UNICODE', '$END', 'TRUE', 'TILDE', 'TEXT', 'LAMBDA', 'COMMA'}
-    expected = 0
+    expected = {'Signs': {',', '&', '∃', '@', '∧', '('}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-', '¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'ans', 'exists', 'EXISTS'}, 'Boleans': {'⊥', '⊤', 'False', 'True'}, 'Expression symbols': {'.'}, 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}}
+    assert res == expected
+
+    input = "C(x) :- B(x), ∃"
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'('}}
+    assert res == expected
+
+    input = "C(x) :- B(x), ∃("
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'(', '@', '...'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}}
     assert res == expected
 
     input = "C(x) :- B(x), ∃(s1"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'EXISTS', 'LPAR', 'FLOAT', 'INT', 'DOT', 'MINUS', 'CMD_IDENTIFIER', 'ANS', 'CONJUNCTION_SYMBOL', 'AT', 'FALSE', 'IDENTIFIER_REGEXP', 'NEG_UNICODE', '$END', 'TRUE', 'TILDE', 'TEXT', 'LAMBDA', 'COMMA'}
+    expected = {'Signs': {',', '(', ';'}, 'Operators': {'/', '+', '*', '**', '-'}, 'Reserved words': {'st'}}
+    assert res == expected
+
+    input = "C(x) :- B(x), ∃(s1 st"
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'@', '∃', '('}, 'Operators': {'~', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊥', '⊤', 'True', 'False'}, 'Strings': {'<identifier regular expression>', '<command identifier>'}}
     assert res == expected
 
     input = "C(x) :- B(x), ∃(s1 st A(s1))"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'EXISTS', 'LPAR', 'FLOAT', 'INT', 'DOT', 'MINUS', 'CMD_IDENTIFIER', 'ANS', 'CONJUNCTION_SYMBOL', 'AT', 'FALSE', 'IDENTIFIER_REGEXP', 'NEG_UNICODE', '$END', 'TRUE', 'TILDE', 'TEXT', 'LAMBDA', 'COMMA'}
+    expected = {'Signs': {'@', '&', '∃', '∧', '(', ','}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-', '¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'⊤', '⊥', 'True', 'False'}, 'Expression symbols': {'.'}, 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}}
     assert res == expected
 
     input = "C(x) :- B(x), exists(s1, s2; A(s1),"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'EXISTS', 'CMD_IDENTIFIER', 'TRUE', 'LPAR', 'AT', 'TILDE', 'LAMBDA', 'FALSE', 'IDENTIFIER_REGEXP', 'NEG_UNICODE'}
-    expected = 0
+    expected = {'Signs': {'(', '∃', '@'}, 'Operators': {'¬', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Strings': {'<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = "C(x) :- B(x), exists(s1, s2; A(s1), A(s2))"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'EXISTS', 'LPAR', 'FLOAT', 'INT', 'DOT', 'MINUS', 'CMD_IDENTIFIER', 'ANS', 'CONJUNCTION_SYMBOL', 'AT', 'FALSE', 'IDENTIFIER_REGEXP', 'NEG_UNICODE', '$END', 'TRUE', 'TILDE', 'TEXT', 'LAMBDA', 'COMMA'}
-    expected = 0
+    expected = {'Signs': {'@', '&', '∃', '∧', ',', '('}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'~', '¬', '-'}, 'Functions': {'lambda'}, 'Reserved words': {'ans', 'EXISTS', 'exists'}, 'Boleans': {'True', 'False', '⊤', '⊥'}, 'Expression symbols': {'.'}, 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}}
     assert res == expected
 
     with pytest.raises(UnexpectedTokenError):
         input = "C(x) :- B(x), exists(s1; )"
-        # print("***")
-        # print(input)
-        # print("res :")
         res = parser(input, interactive=True)
 
 
 def test_interactive_query():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_query() ____")
     input = "ans("
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'TEXT', 'IDENTIFIER_REGEXP', 'MINUS', 'LAMBDA', 'DOTS', 'LPAR', 'CMD_IDENTIFIER', 'INT', 'AT', 'FLOAT', 'RPAR'}
-    expected = 0
+    expected = {'Signs': {'(', '...', '@', ')'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<text>', '<identifier regular expression>'}}
     assert res == expected
 
     input = "ans(x)"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'IMPLICATION'}
-    expected = 0
+    expected = {'Expression symbols': {':-', '←'}}
     assert res == expected
 
     input = "ans(x) :-"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'TRUE', 'IDENTIFIER_REGEXP', 'FALSE', 'LAMBDA', 'TILDE', 'LPAR', 'CMD_IDENTIFIER', 'NEG_UNICODE', 'AT', 'EXISTS'}
-    expected = 0
+    expected = {'Signs': {'(', '∃', '@'}, 'Operators': {'~', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊤', 'False', '⊥', 'True'}, 'Strings': {'<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = "ans(x) :- B(x, y), C(3, y)"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'IDENTIFIER_REGEXP', 'COMMA', 'ANS', 'EXISTS', 'TRUE', '$END', 'MINUS', 'TILDE', 'NEG_UNICODE', 'TEXT', 'DOT', 'CONJUNCTION_SYMBOL', 'FALSE', 'INT', 'CMD_IDENTIFIER', 'AT', 'LAMBDA', 'LPAR', 'FLOAT'}
-    expected = 0
+    expected = {'Signs': {',', '(', '&', '∃', '@', '∧'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'~', '¬', '-'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': {'.'}, 'Strings': {'<command identifier>', '<text>', '<identifier regular expression>'}}
     assert res == expected
 
 
 def test_interactive_prob_implicit():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_prob_implicit() ____")
     input = "B(x, PROB"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'STAR', 'MINUS', 'SLASH', 'PLUS', 'LPAR', 'POW', 'COMMA', 'RPAR'}
-    expected = 0
+    expected = {'Signs': {',', '(', ')'}, 'Operators': {'**', '/', '+', '*', '-'}}
+    assert res == expected
+
+    input = "B(x, PROB,"
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'...', '@', '('}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}}
+    assert res == expected
+
+    input = "B(x, PROB, y)"
+    res = parser(input, interactive=True)
+    expected = {'Expression symbols': {'←', ':=', ':-', '::'}}
     assert res == expected
 
     input = "B(x, PROB, y) :- C(x, y)"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'FLOAT', 'FALSE', 'CONJUNCTION_SYMBOL', '$END', 'EXISTS', 'INT', 'CONDITION_OP', 'ANS', 'MINUS', 'LAMBDA', 'COMMA', 'TEXT', 'NEG_UNICODE', 'IDENTIFIER_REGEXP', 'LPAR', 'DOT', 'TILDE', 'CMD_IDENTIFIER', 'AT', 'TRUE'}
-    expected = 0
+    expected = {'Signs': {'∃', '∧', ',', '(', '&', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'//', '~', '-', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'False', '⊥', 'True', '⊤'}, 'Expression symbols': {'.'}, 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}}
     assert res == expected
 
 
 def test_interactive_prob_explicit():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_prob_explicit() ____")
-    input = "B(x, PROB("
-    # print("***")
-    # print(input)
-    # print("res :")
+    input = "B(x, PROB"
     res = parser(input, interactive=True)
-    expected = {'CMD_IDENTIFIER', 'INT', 'FLOAT', 'RPAR', 'TEXT', 'IDENTIFIER_REGEXP', 'DOTS', 'MINUS', 'LPAR', 'LAMBDA', 'AT'}
-    expected = 0
+    expected = {'Signs': {')', ',', '('}, 'Operators': {'*', '/', '+', '-', '**'}}
+    assert res == expected
+
+    input = "B(x, PROB("
+    res = parser(input, interactive=True)
+    expected = {'Signs': {')', '@', '...', '('}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
     assert res == expected
 
     input = "B(x, PROB(x,"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'CMD_IDENTIFIER', 'INT', 'FLOAT', 'TEXT', 'IDENTIFIER_REGEXP', 'DOTS', 'MINUS', 'LPAR', 'LAMBDA', 'AT'}
-    expected = 0
+    expected = {'Signs': {'@', '...', '('}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
+    assert res == expected
+
+    input = "B(x, PROB(x, y)"
+    res = parser(input, interactive=True)
+    expected = {'Signs': {')', ','}, 'Operators': {'*', '/', '+', '-', '**'}}
+    assert res == expected
+
+    input = "B(x, PROB(x, y),"
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'@', '...', '('}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
+    assert res == expected
+
+    input = "B(x, PROB(x, y), y)"
+    res = parser(input, interactive=True)
+    expected = {'Expression symbols': {'::', '←', ':=', ':-'}}
     assert res == expected
 
     input = "B(x, PROB(x, y), y) :- C(x, y)"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'FALSE', 'EXISTS', 'INT', 'TILDE', 'COMMA', '$END', 'DOT', 'LPAR', 'LAMBDA', 'AT', 'CMD_IDENTIFIER', 'ANS', 'IDENTIFIER_REGEXP', 'CONJUNCTION_SYMBOL', 'NEG_UNICODE', 'MINUS', 'TRUE', 'CONDITION_OP', 'FLOAT', 'TEXT'}
-    expected = 0
+    expected = {'Signs': {'∧', '@', '&', '∃', '(', ','}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'~', '-', '¬', '//'}, 'Functions': {'lambda'}, 'Reserved words': {'ans', 'exists', 'EXISTS'}, 'Boleans': {'⊥', 'False', 'True', '⊤'}, 'Expression symbols': {'.'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
     assert res == expected
 
 
 def test_interactive_lambda_definition():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_lambda_definition() ____")
-
     input = "c"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'PROBA_OP', 'STAR', 'SLASH', 'POW', 'STATEMENT_OP', 'LPAR', 'PLUS', 'MINUS'}
-    expected = 0
+    expected = {'Signs': {'('}, 'Operators': {'**', '-', '/', '+', '*'}, 'Expression symbols': {':=', '::'}}
     assert res == expected
 
     input = "c :="
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'IDENTIFIER_REGEXP', 'FLOAT', 'INT', 'CMD_IDENTIFIER', 'AT', 'LPAR', 'MINUS', 'LAMBDA', 'TEXT'}
-    expected = 0
+    expected = {'Signs': {'(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<text>', '<identifier regular expression>'}}
     assert res == expected
 
     input = "c := lambda"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'IDENTIFIER_REGEXP', 'FLOAT', 'INT', 'CMD_IDENTIFIER', 'AT', 'LPAR', 'DOTS', 'MINUS', 'LAMBDA', 'TEXT'}
-    expected = 0
+    expected = {'Signs': {'...', '(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<text>', '<identifier regular expression>'}}
     assert res == expected
 
     input = "c := lambda x"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'STAR', 'COMMA', 'SLASH', 'POW', 'LPAR', 'PLUS', 'MINUS', 'COLON'}
-    expected = 0
+    expected = {'Signs': {':', '(', ','}, 'Operators': {'**', '-', '/', '+', '*'}}
     assert res == expected
 
     input = "c := lambda x:"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'IDENTIFIER_REGEXP', 'FLOAT', 'INT', 'CMD_IDENTIFIER', 'AT', 'LPAR', 'DOTS', 'MINUS', 'LAMBDA', 'TEXT'}
-    expected = 0
+    expected = {'Signs': {'...', '(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<text>', '<identifier regular expression>'}}
     assert res == expected
 
     input = "c := lambda x: x + 1"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'INT', 'SLASH', 'AT', 'MINUS', 'TILDE', 'CMD_IDENTIFIER', 'TRUE', 'IDENTIFIER_REGEXP', 'LAMBDA', 'TEXT', 'DOT', 'FALSE', 'NEG_UNICODE', 'PLUS', 'ANS', 'EXISTS', 'STAR', '$END', 'FLOAT', 'POW', 'LPAR'}
-    expected = 0
+    expected = {'Signs': {'@', '∃', '('}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'**', '¬', '-', '/', '+', '*', '~'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊤', 'False', 'True', '⊥'}, 'Expression symbols': {'.'}, 'Strings': {'<command identifier>', '<text>', '<identifier regular expression>'}}
     assert res == expected
 
 
 def test_interactive_lambda_definition_statement():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_lambda_definition_statement() ____")
-
-    input = "c(x, y) :="
-    # print("***")
-    # print(input)
-    # print("res :")
+    input = "c(x, y) := x +"
     res = parser(input, interactive=True)
-    expected = {'LPAR', 'INT', 'DOTS', 'MINUS', 'CMD_IDENTIFIER', 'TEXT', 'IDENTIFIER_REGEXP', 'AT', 'LAMBDA', 'FLOAT'}
-    expected = 0
+    expected = {'Signs': {'@', '('}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
     assert res == expected
 
     input = "c(x, y) := x + y"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'TRUE', 'NEG_UNICODE', 'DOT', 'INT', 'PLUS', 'ANS', 'CMD_IDENTIFIER', 'IDENTIFIER_REGEXP', 'STAR', 'MINUS', 'POW', 'FALSE', 'LAMBDA', 'FLOAT', 'TEXT', 'SLASH', 'AT', 'EXISTS', 'LPAR', 'TILDE', '$END'}
-    expected = 0
+    expected = {'Signs': {'@', '(', '∃'}, 'Numbers': {'<integer>', '<float>'}, 'Operators': {'*', '+', '/', '-', '**', '~', '¬'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists', 'ans'}, 'Boleans': {'⊤', 'True', 'False', '⊥'}, 'Expression symbols': {'.'}, 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}}
     assert res == expected
 
 
 def test_interactive_lambda_application():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_lambda_application() ____")
-
     input = "c := (lambda"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'INT', 'TEXT', 'DOTS', 'IDENTIFIER_REGEXP', 'MINUS', 'FLOAT', 'LAMBDA', 'LPAR', 'AT', 'CMD_IDENTIFIER'}
+    expected = {'Signs': {'(', '@', '...'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}}
+    assert res == expected
+
+    input = "c := (lambda x"
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'(', ',', ':'}, 'Operators': {'/', '**', '-', '*', '+'}}
     assert res == expected
 
     input = "c := (lambda x:"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'INT', 'TEXT', 'DOTS', 'IDENTIFIER_REGEXP', 'MINUS', 'FLOAT', 'LAMBDA', 'LPAR', 'AT', 'CMD_IDENTIFIER'}
+    expected = {'Signs': {'(', '@', '...'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}}
+    assert res == expected
+
+    input = "c := (lambda x: x"
+    res = parser(input, interactive=True)
+    expected = {'Signs': {')', '('}, 'Operators': {'/', '**', '-', '*', '+'}}
     assert res == expected
 
     input = "c := (lambda x: x + 1)"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'LPAR'}
+    expected = {'Signs': {'('}}
     assert res == expected
 
     input = "c := (lambda x: x + 1)(2)"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'INT', 'TRUE', 'TILDE', 'EXISTS', 'NEG_UNICODE', 'CMD_IDENTIFIER', '$END', 'ANS', 'STAR', 'IDENTIFIER_REGEXP', 'LPAR', 'POW', 'DOT', 'TEXT', 'FALSE', 'FLOAT', 'SLASH', 'MINUS', 'PLUS', 'LAMBDA', 'AT'}
+    expected = {'Signs': {'(', '∃', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'/', '**', '¬', '-', '*', '~', '+'}, 'Functions': {'lambda'}, 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'⊤', 'True', '⊥', 'False'}, 'Expression symbols': {'.'}, 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}}
     assert res == expected
 
 
 def test_interactive_command_syntax():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_command_syntax() ____")
-    input = '.load_csv'
-    # print("***")
-    # print(input)
-    # print("res :")
+    input = '.'
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'LPAR'}
+    expected = {'Strings': {'<command identifier>'}}
+    assert res == expected
+
+    input = '.load_csv'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'('}}
     assert res == expected
 
     input = '.load_csv('
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'TEXT', 'MINUS', 'RPAR', 'IDENTIFIER_REGEXP', 'CMD_IDENTIFIER', 'AT', 'LAMBDA', 'FLOAT', 'LPAR', 'INT', 'PYTHON_STRING'}
-    assert res == expected
-
-    input = '.load_csv(A,'
-    # print("***")
-    # print(input)
-    # print("res :")
-    res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'TEXT', 'MINUS', 'IDENTIFIER_REGEXP', 'CMD_IDENTIFIER', 'AT', 'LAMBDA', 'FLOAT', 'LPAR', 'INT', 'PYTHON_STRING'}
-    assert res == expected
-
-    input = '.load_csv(A, "http://myweb/file.csv", B)'
-    # print("***")
-    # print(input)
-    # print("res :")
-    res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'EXISTS', 'TEXT', 'MINUS', 'IDENTIFIER_REGEXP', 'CMD_IDENTIFIER', 'ANS', 'AT', 'NEG_UNICODE', '$END', 'LAMBDA', 'FALSE', 'FLOAT', 'INT', 'LPAR', 'TILDE', 'DOT', 'TRUE'}
+    expected = {'Signs': {'(', ')', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<quoted string>', '<text>', '<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = ".load_csv()"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'EXISTS', 'TEXT', 'MINUS', 'IDENTIFIER_REGEXP', 'CMD_IDENTIFIER', 'ANS', 'AT', 'NEG_UNICODE', '$END', 'LAMBDA', 'FALSE', 'FLOAT', 'INT', 'LPAR', 'TILDE', 'DOT', 'TRUE'}
+    expected = {'Signs': {'∃', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'~', '¬', '-'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists', 'ans'}, 'Boleans': {'⊤', 'False', '⊥', 'True'}, 'Expression symbols': {'.'}, 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}}
+    assert res == expected
+
+    input = '.load_csv(A,'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<quoted string>', '<text>', '<command identifier>', '<identifier regular expression>'}}
+    assert res == expected
+
+    input = '.load_csv(A, "http://myweb/file.csv", B)'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'∃', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'~', '¬', '-'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists', 'ans'}, 'Boleans': {'⊤', 'False', '⊥', 'True'}, 'Expression symbols': {'.'}, 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
     input = '.load_csv(sep'
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'TEXT', 'MINUS', 'IDENTIFIER_REGEXP', 'CMD_IDENTIFIER', 'AT', 'LAMBDA', 'FLOAT', 'LPAR', 'INT', 'PYTHON_STRING'}
+    expected = {'Signs': {'(', ',', '=', ')'}, 'Operators': {'*', '+', '/', '**', '-'}}
     assert res == expected
 
     input = '.load_csv(sep='
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = 0
-    # expected = {'TEXT', 'MINUS', 'IDENTIFIER_REGEXP', 'CMD_IDENTIFIER', 'AT', 'LAMBDA', 'FLOAT', 'LPAR', 'INT', 'PYTHON_STRING'}
+    expected = {'Signs': {'(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'-'}, 'Functions': {'lambda'}, 'Strings': {'<quoted string>', '<text>', '<command identifier>', '<identifier regular expression>'}}
+    assert res == expected
+
+    input = '.load_csv(sep=","'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {',', ')'}}
+    assert res == expected
+
+    input = '.load_csv(sep=",")'
+    res = parser(input, interactive=True)
+    expected = {'Signs': {'∃', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Operators': {'~', '¬', '-'}, 'Functions': {'lambda'}, 'Reserved words': {'EXISTS', 'exists', 'ans'}, 'Boleans': {'⊤', 'False', '⊥', 'True'}, 'Expression symbols': {'.'}, 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}}
     assert res == expected
 
 
 def test_interactive_constraint():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_interactive_constraint() ____")
     input = "(x == y)"
-    # print("***")
-    # print(input)
-    # print("res :")
     res = parser(input, interactive=True)
-    expected = {'FLOAT', 'IDENTIFIER_REGEXP', 'MINUS', 'LAMBDA', 'EXISTS', 'NEG_UNICODE', 'DOT', 'INT', 'CMD_IDENTIFIER', 'FALSE', 'TEXT', 'LPAR', 'ANS', 'TRUE', 'AT', 'TILDE'}
-    expected = 0
+    expected = {'Signs': {'∧', ',', '&'}, 'Expression symbols': {'-:', '→'}}
     assert res == expected
 
-
-def test_interactive_empty_input():
-    # print("")
-    # print("__________________________________")
-    # print("____ test_empty_input() ____")
-    input = ""
-    # print("***")
-    # print(input)
-    # print("res :")
-    res = parser(input, interactive=True)
-    # expected = {'FLOAT', 'IDENTIFIER_REGEXP', 'MINUS', 'LAMBDA', 'EXISTS', 'NEG_UNICODE', 'DOT', 'INT', 'CMD_IDENTIFIER', 'FALSE', 'TEXT', 'LPAR', 'ANS', 'TRUE', 'AT', 'TILDE'}
-    expected = 0
-    assert res == expected

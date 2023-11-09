@@ -98,8 +98,9 @@ pos_item : arithmetic_operation | python_string
 
 python_string : PYTHON_STRING
 PYTHON_STRING : DOUBLE_QUOTE NO_DBL_QUOTE_STR DOUBLE_QUOTE
-              | SINGLE_QUOTE NO_DBL_QUOTE_STR SINGLE_QUOTE
+              | SINGLE_QUOTE NO_SING_QUOTE_STR SINGLE_QUOTE
 NO_DBL_QUOTE_STR : /[^"]*/
+NO_SING_QUOTE_STR : /[^']*/
 
 ?function_application : "(" lambda_expression ")" "(" [ arguments ] ")" -> lambda_application
                      | id_application
@@ -209,15 +210,9 @@ class DatalogTransformer(Transformer):
         self.globals = globals
 
     def start(self, ast):
-        print("")
-        print("___start()___")
-        print("ast :", ast)
         return ast[0]
 
     def expressions(self, ast):
-        print("")
-        print("___expressions()___")
-        print("ast :", ast)
         if isinstance(ast[0], Expression):
             return Union(ast)
         else:
@@ -225,9 +220,6 @@ class DatalogTransformer(Transformer):
         return Union(ast)
 
     def probabilistic_rule(self, ast):
-        print("")
-        print("___probabilistic_rule()___")
-        print("ast :", ast)
         head = ast[0]
         probability = ast[2]
         body = ast[4]
@@ -237,9 +229,6 @@ class DatalogTransformer(Transformer):
         )
 
     def rule(self, ast):
-        print("")
-        print("___rule()___")
-        print("ast :", ast)
         head = ast[0]
         if isinstance(head, Expression) and head.functor == Symbol("ans"):
             return Query(ast[0], ast[2])
@@ -247,23 +236,14 @@ class DatalogTransformer(Transformer):
             return Implication(ast[0], ast[2])
 
     def condition(self, ast):
-        print("")
-        print("___condition()___")
-        print("ast :", ast)
         conditioned = ast[0]
         condition = ast[2]
         return Condition(conditioned, condition)
 
     def constraint(self, ast):
-        print("")
-        print("___constraint()___")
-        print("ast :", ast)
         return RightImplication(ast[0], ast[2])
 
     def conjunction(self, ast):
-        print("")
-        print("___conjunction()___")
-        print("ast :", ast)
         conj = []
         for c in ast:
             if isinstance(c, Expression):
@@ -271,9 +251,6 @@ class DatalogTransformer(Transformer):
         return Conjunction(conj)
 
     def existential_predicate(self, ast):
-        print("")
-        print("___existential_predicate()___")
-        print("ast :", ast)
         ast1 = ast[1].children
         exp = []
         for i in ast1:
@@ -291,22 +268,13 @@ class DatalogTransformer(Transformer):
         return exp
 
     def negated_predicate(self, ast):
-        print("")
-        print("___negated_predicate()___")
-        print("ast :", ast)
         return Negation(ast[0])
 
     def comparison(self, ast):
-        print("")
-        print("___comparison()___")
-        print("ast :", ast)
         operator = Constant(OPERATOR[ast[1].value])
         return operator(ast[0], ast[2])
 
     def predicate(self, ast):
-        print("")
-        print("___predicate()___")
-        print("ast :", ast)
         if not isinstance(ast, Expression):
             if isinstance(ast, list):
                 if len(ast) == 1:
@@ -316,9 +284,6 @@ class DatalogTransformer(Transformer):
         return ast
 
     def head_predicate(self, ast):
-        print("")
-        print("___head_predicate()___")
-        print("ast :", ast)
         if ast[1] != None:
             arguments = list(ast[1])
 
@@ -341,9 +306,6 @@ class DatalogTransformer(Transformer):
         return ast
 
     def query(self, ast):
-        print("")
-        print("___query()___")
-        print("ast :", ast)
         ast = ast[0]
         if ast != None:
             if isinstance(ast, tuple):
@@ -356,33 +318,21 @@ class DatalogTransformer(Transformer):
             return Symbol("ans")()
 
     def statement(self, ast):
-        print("")
-        print("___statement()___")
-        print("ast :", ast)
         return Statement(ast[0], ast[2])
 
     def statement_function(self, ast):
-        print("")
-        print("___statement_function()___")
-        print("ast :", ast)
         return Statement(
             ast[0],
             Lambda(ast[1], ast[3])
         )
 
     def probabilistic_fact(self, ast):
-        print("")
-        print("___probabilistic_fact()___")
-        print("ast :", ast)
         return Implication(
             ProbabilisticFact(ast[0], ast[2]),
             Constant(True),
         )
 
     def command(self, ast):
-        print("")
-        print("___command()___")
-        print("ast :", ast)
         if ast[1] == None:
             cmd = Command(ast[0], (), ())
         else:
@@ -393,9 +343,6 @@ class DatalogTransformer(Transformer):
         return cmd
 
     def cmd_args(self, ast):
-        print("")
-        print("___cmd_args()___")
-        print("ast :", ast)
         args = ()
         kwargs = ()
         for a in ast :
@@ -406,37 +353,22 @@ class DatalogTransformer(Transformer):
         return args, kwargs
 
     def keyword_args(self, ast):
-        print("")
-        print("___keyword_args()___")
-        print("ast :", ast)
         return tuple(ast)
 
     def keyword_item(self, ast):
-        print("")
-        print("___keyword_item()___")
-        print("ast :", ast)
         key = ast[0]
         return (key, ast[1])
 
     def pos_args(self, ast):
-        print("")
-        print("___pos_args()___")
-        print("ast :", ast)
         return tuple(ast)
 
     def pos_item(self, ast):
-        print("")
-        print("___pos_item()___")
-        print("ast :", ast)
         ast = ast[0]
         if not isinstance(ast, Expression):
             return Constant((ast.children[0]).value.replace('"', ''))
         return ast
 
     def lambda_application(self, ast):
-        print("")
-        print("___lambda_application()___")
-        print("ast :", ast)
         if not isinstance(ast[0], Expression):
             f = Symbol(ast[0])
         else:
@@ -445,9 +377,6 @@ class DatalogTransformer(Transformer):
         return FunctionApplication(f, args=ast[1])
 
     def id_application(self, ast):
-        print("")
-        print("___id_application()___")
-        print("ast :", ast)
         if not isinstance(ast[0], Expression):
             f = Symbol(ast[0])
         else:
@@ -456,33 +385,18 @@ class DatalogTransformer(Transformer):
         return FunctionApplication(f, args=ast[1])
 
     def minus_signed_id(self, ast):
-        print("")
-        print("___minus_signed_id()___")
-        print("ast :", ast)
         return Constant(mul)(Constant(-1), ast[0])
 
     def signed_int_ext_identifier(self, ast):
-        print("")
-        print("___signed_int_ext_identifier()___")
-        print("ast :", ast)
         return ast[0]
 
     def lambda_expression(self, ast):
-        print("")
-        print("___lambda_expression()___")
-        print("ast :", ast)
         return Lambda(ast[0], ast[1])
 
     def arguments(self, ast):
-        print("")
-        print("___arguments()___")
-        print("ast :", ast)
         return tuple(ast)
 
     def argument(self, ast):
-        print("")
-        print("___argument()___")
-        print("ast :", ast)
         ast = ast[0]
         if isinstance(ast, Expression):
             return ast
@@ -490,9 +404,6 @@ class DatalogTransformer(Transformer):
             return Symbol.fresh()
 
     def minus_op(self, ast):
-        print("")
-        print("___minus_op()___")
-        print("ast :", ast)
         if len(ast) == 1:
             if isinstance(ast[0], Expression):
                 return ast[0]
@@ -505,8 +416,6 @@ class DatalogTransformer(Transformer):
         return op(*ast)
 
     def plus_op(self, ast):
-        print("")
-        print("___plus_op()___")
         if len(ast) == 1:
             if isinstance(ast[0], Expression):
                 return ast[0]
@@ -518,8 +427,6 @@ class DatalogTransformer(Transformer):
         return op(*ast)
 
     def sing_op(self, ast):
-        print("")
-        print("___sing_op()___")
         if len(ast) == 1:
             if isinstance(ast[0], Expression):
                 return ast[0]
@@ -529,16 +436,12 @@ class DatalogTransformer(Transformer):
         return 0
 
     def term(self, ast):
-        print("")
-        print("___term()___")
         if isinstance(ast, Expression):
             return ast
         elif len(ast) == 1:
             return ast[0]
 
     def div_term(self, ast):
-        print("")
-        print("___div_term()___")
         if len(ast) == 1:
             if isinstance(ast[0], Expression):
                 return ast[0]
@@ -551,8 +454,6 @@ class DatalogTransformer(Transformer):
         return op(ast[0], ast[1])
 
     def mul_term(self, ast):
-        print("")
-        print("___mul_term()___")
         if len(ast) == 1:
             if isinstance(ast[0], Expression):
                 return ast[0]
@@ -565,8 +466,6 @@ class DatalogTransformer(Transformer):
         return op(ast[0], ast[1])
 
     def sing_term(self, ast):
-        print("")
-        print("___sing_term()___")
         if len(ast) == 1:
             if isinstance(ast[0], Expression):
                 return ast[0]
@@ -576,12 +475,6 @@ class DatalogTransformer(Transformer):
             return 0
 
     def factor(self, ast):
-        print("")
-        print("___factor()___")
-        print("ast :", ast)
-        print("len(ast) :", len(ast))
-        for i in ast:
-            print("* ", i)
         if isinstance(ast[0], Expression):
             return ast[0]
         elif len(ast) == 1:
@@ -590,9 +483,6 @@ class DatalogTransformer(Transformer):
             return 0
 
     def pow_factor(self, ast):
-        print("")
-        print("___pow_factor()___")
-        print("ast :", ast)
         if len(ast) == 1:
             if isinstance(ast[0], Expression):
                 return ast[0]
@@ -602,8 +492,6 @@ class DatalogTransformer(Transformer):
             return Constant(pow)(ast[0], ast[2])
 
     def sing_factor(self, ast):
-        print("")
-        print("___sing_factor()___")
         if len(ast) == 1:
             if isinstance(ast[0], Expression):
                 return ast[0]
@@ -613,28 +501,18 @@ class DatalogTransformer(Transformer):
             return 0
 
     def fact(self, ast):
-        print("")
-        print("___fact()___")
         return Fact(ast[0])
 
     def constant_predicate(self, ast):
-        print("")
-        print("___constant_predicate()___")
-        print("ast :", ast)
         predicate_name = ast[0]
         del ast[0]
         return predicate_name(*ast)
 
     def ext_identifier(self, ast):
-        print("")
-        print("___ext_identifier()___")
         ast = ast[0]
         return ExternalSymbol[ast.type](ast.name)
 
     def identifier(self, ast):
-        print("")
-        print("___identifier()___")
-        print("ast :", ast)
         ast = ast[0]
         if not isinstance(ast, Symbol):
             return Symbol(ast)
@@ -642,60 +520,38 @@ class DatalogTransformer(Transformer):
         return ast
 
     def identifier_regexp(self, ast):
-        print("")
-        print("___identifier_regexp()___")
         return (ast[0]).value.replace('`', '')
 
     def cmd_identifier(self, ast):
-        print("")
-        print("___cmd_identifier()___")
-        print("ast :", ast)
         return Symbol((ast[0]).value)
 
     def text(self, ast):
-        print("")
-        print("___text()___")
         return Constant((ast[0].replace("'", "")).replace('"', ''))
 
     def pos_int(self, ast):
-        print("")
-        print("___pos_int()___")
-        print("ast :", ast)
         return Constant(int((ast[0]).value))
 
     def neg_int(self, ast):
-        print("")
-        print("___neg_int()___")
         return Constant(0 - int((ast[0]).value))
 
     def pos_float(self, ast):
-        print("")
-        print("___pos_float()___")
         return Constant(float((ast[0]).value))
 
     def neg_float(self, ast):
-        print("")
-        print("___neg_float()___")
         return Constant(0 - float((ast[0]).value))
 
     def _default(self, ast):
-        print("")
-        print("______")
         return ast
 
 
 def parser(code, locals=None, globals=None, interactive=False):
-
     try :
         if (interactive) :
             completer = LarkCompleter(COMPILED_GRAMMAR)
             res = completer.complete(code.strip())
-            print(res)
             return res.token_options
-            # return 0
         else :
             jp = COMPILED_GRAMMAR.parse(code.strip())
             return DatalogTransformer().transform(jp)
     except UnexpectedToken as e :
         raise UnexpectedTokenError from e
-

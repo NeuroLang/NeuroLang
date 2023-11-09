@@ -20,7 +20,8 @@ CATEGORIES = [
     'Reserved words',
     'Boleans',
     'Expression symbols',
-    'Python string'
+    'Python string',
+    'Strings'
 ]
 
 
@@ -29,10 +30,10 @@ TERMINALS_TO_CATEGORIES = {
     'AND_SYMBOL' : CATEGORIES[0],
     'ANS' : CATEGORIES[7],
     'AT' : CATEGORIES[0],
-    'CMD_IDENTIFIER' : CATEGORIES[4],
+    'CMD_IDENTIFIER' : CATEGORIES[11],
     'COLON' : CATEGORIES[0],
     'COMMA' : CATEGORIES[0],
-    'COMPARISON_OPERATOR' : CATEGORIES[3],  # TO DO : test the type of the collection and
+    'COMPARISON_OPERATOR' : CATEGORIES[3],
     'CONDITION_OP' : CATEGORIES[3],
     'CONJUNCTION_SYMBOL' : CATEGORIES[0],
     'DOT' : CATEGORIES[9],
@@ -43,7 +44,7 @@ TERMINALS_TO_CATEGORIES = {
     'EXISTS_WORD' : CATEGORIES[7],
     'FALSE' : CATEGORIES[8],
     'FLOAT' : CATEGORIES[1],
-    'IDENTIFIER_REGEXP' : CATEGORIES[6],
+    'IDENTIFIER_REGEXP' : CATEGORIES[11],
     'IMPLICATION' : CATEGORIES[9],
     'INT' : CATEGORIES[1],
     'LAMBDA' : CATEGORIES[5],
@@ -53,7 +54,7 @@ TERMINALS_TO_CATEGORIES = {
     'PLUS': CATEGORIES[3],
     'POW' : CATEGORIES[3],
     'PROBA_OP' : CATEGORIES[9],
-    'PYTHON_STRING' : CATEGORIES[10],
+    'PYTHON_STRING' : CATEGORIES[11],
     'RIGHT_IMPLICATION' : CATEGORIES[9],
     'RPAR' : CATEGORIES[0],
     'SEMICOLON' : CATEGORIES[0],
@@ -62,7 +63,7 @@ TERMINALS_TO_CATEGORIES = {
     'STATEMENT_OP' : CATEGORIES[9],
     'SUCH_THAT' : CATEGORIES[7],
     'SUCH_THAT_WORD' : CATEGORIES[7],
-    'TEXT' : CATEGORIES[2],
+    'TEXT' : CATEGORIES[11],
     'TILDE' : CATEGORIES[3],
     'TRUE': CATEGORIES[8]
 }
@@ -105,10 +106,6 @@ class LarkCompleter:
         return CompleteResult(e.pos_in_stream, prefix, interactive.accepts())
 
     def compute_options_no_error(self, interactive: InteractiveParser, text: str) -> CompleteResult:
-        print("")
-        print("___in compute_options_no_error()___")
-        # # print("accepts :", accepts)
-        # # print("type(accepts) :", type(accepts))
         # accepts = {}
         # for f in interactive.accepts():
         #     term_def = next(t for t in self.parser.terminals if t.name == f)
@@ -116,14 +113,9 @@ class LarkCompleter:
         #     # print(str(term_def.pattern).replace("'", ""))
         #     accepts[term_def.name] = str(term_def.pattern).replace("'", "")
 
-
-
-
-
         toks = {}
         for i in CATEGORIES:
-            toks[i] = []
-
+            toks[i] = set()
 
         accepts = []
         a = list(interactive.accepts())
@@ -133,37 +125,40 @@ class LarkCompleter:
             # a.remove(e) #data.discard(value) if you don't care if the item exists.
             t = self.parser.get_terminal(e)
             n = str(t.name)
-            # print("n :", n)
             pat = str(t.pattern).replace("'", "")
             # toks[TERMINALS_TO_CATEGORIES[n]].append(pat)
             # toks['numbers'].append('integer')
 
             accepts.append(n + ' : ' + pat)
 
-            if (n == 'FLOAT'):
-                pat = 'float'
-            elif (n == 'INT'):
-                pat = 'integer'
+            if (n == 'CMD_IDENTIFIER'):
+                pat = '<command identifier>'
+            elif (n == 'FLOAT'):
+                pat = '<float>'
             elif (n == 'IDENTIFIER_REGEXP'):
-                pat = pat.replace('\\\\+', '\\+').replace('\\\\-', '\\-').replace('\\\\/', '\\/').replace('\\\\.', '\\.')
+                # pat = pat.replace('\\\\+', '\\+').replace('\\\\-', '\\-').replace('\\\\/', '\\/').replace('\\\\.', '\\.')
+                pat = '<identifier regular expression>'
+            elif (n == 'INT'):
+                pat = '<integer>'
+            elif (n == 'PYTHON_STRING'):
+                pat = '<quoted string>'
+            elif (n == 'TEXT'):
+                pat = '<text>'
             else:
                 pat = pat.replace('\\\\+', '+').replace('\\\\-', '-')
+
             # if ((n != 'FLOAT') & (n != 'DOUBLE_QUOTE')):
             pat = pat.replace('\\\\b', '\\b').replace('\\\\', '')
-            # print("pat :", pat)
-            # print("TERMINALS_TO_CATEGORIES[n] :", TERMINALS_TO_CATEGORIES[n])
             if ('|' in pat):
                 pat = pat.replace('(?:', '').replace(')', '').split('|')
                 for i in pat:
-                    toks[TERMINALS_TO_CATEGORIES[n]].append(i)
+                    toks[TERMINALS_TO_CATEGORIES[n]].add(i)
             else:
-                toks[TERMINALS_TO_CATEGORIES[n]].append(pat)
-            # print("toks[TERMINALS_TO_CATEGORIES[n]] :", toks[TERMINALS_TO_CATEGORIES[n]])
-        print("")
-        for i in toks:
-            print(i, ":", str(toks[i]))
+                toks[TERMINALS_TO_CATEGORIES[n]].add(pat)
 
-        # print(accepts)
-        # print("type(accepts) :", type(accepts))
-        print("")
+        # Clean toks : remove the keys with empty list
+        tmp_toks = {k: v for k, v in toks.items() if v}
+        toks.clear()
+        toks.update(tmp_toks)
+
         return CompleteResult(len(text), "", toks)
