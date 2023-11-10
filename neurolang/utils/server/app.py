@@ -60,10 +60,7 @@ class Application(tornado.web.Application):
     """
 
     def __init__(self, nqm: NeurolangQueryManager):
-        # print("")
-        # print("____Application - __init__()____")
         self.nqm = nqm
-        # print("nqm engines :", self.nqm.engines)
         uuid_pattern = (
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
         )
@@ -141,27 +138,11 @@ class StaticFileOrDefaultHandler(tornado.web.StaticFileHandler):
     by nginx in production.
     """
     def validate_absolute_path(self, root: str, absolute_path: str) -> Optional[str]:
-        # print("")
-        # print("____StaticFileOrDefaultHandler - start validate_absolute_path()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         try:
-            # print("")
-            # print("nqm engines :", self.application.nqm.engines)
-            # print("")
-            # print("____StaticFileOrDefaultHandler - end validate_absolute_path()____")
             return super().validate_absolute_path(root, absolute_path)
         except tornado.web.HTTPError as e:
             if e.status_code == 404:
-                # print("")
-                # print("nqm engines :", self.application.nqm.engines)
-                # print("")
-                # print("____StaticFileOrDefaultHandler - end validate_absolute_path()____")
                 return os.path.join(static_path, "index.html")
-            # print("")
-            # print("nqm engines :", self.application.nqm.engines)
-            # print("")
-            # print("____StaticFileOrDefaultHandler - end validate_absolute_path()____")
             raise e
 
 
@@ -171,10 +152,6 @@ class MainHandler(tornado.web.RequestHandler):
     """
 
     def get(self):
-        # print("")
-        # print("____MainHandler - start get()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         self.render("index.html")
 
 
@@ -185,10 +162,6 @@ class EmptyHandler(tornado.web.RequestHandler):
     """
 
     def get(self):
-        # print("")
-        # print("____EmptyHandler - start get()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         return self.write({"id": str(uuid4())})
 
 
@@ -198,16 +171,8 @@ class CancelHandler(tornado.web.RequestHandler):
     """
 
     def delete(self, uuid: str):
-        # print("")
-        # print("____CancelHandler - start delete()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         LOG.debug("Canceling the request with uuid %s.", uuid)
         result = self.application.nqm.cancel(uuid)
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("")
-        # print("____CancelHandler - end delete()____")
         return self.write_json_reponse({"cancelled": result})
 
 
@@ -224,24 +189,12 @@ class JSONRequestHandler(tornado.web.RequestHandler):
     """
 
     def set_default_headers(self):
-        # print("")
-        # print("____JSONRequestHandler - start set_default_headers()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         self.set_header("Access-Control-Allow-Origin", "*")
         self.set_header("Access-Control-Allow-Headers", "x-requested-with")
         self.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
         self.set_header("Content-Type", "application/json")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("")
-        # print("____JSONRequestHandler - end set_default_headers()____")
 
     def write_json_reponse(self, data=None, status: str = "ok"):
-        # print("")
-        # print("___write_json_reponse()___")
-        # print("data :")
-        # print(data)
         return self.write(query_results_to_json(data, status))
 
 
@@ -271,10 +224,6 @@ class StatusHandler(JSONRequestHandler):
         tornado.web.HTTPError
             raises 404 if query id does not exist.
         """
-        # print("")
-        # print("____StatusHandler - start get()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         LOG.debug("Accessing status for request %s.", uuid)
         try:
             future = self.application.nqm.get_result(uuid)
@@ -287,10 +236,6 @@ class StatusHandler(JSONRequestHandler):
         length = int(self.get_argument("length", 50))
         sort = int(self.get_argument("sort", -1))
         asc = bool(int(self.get_argument("asc", 1)))
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("")
-        # print("____StatusHandler - end get()____")
         return self.write_json_reponse(
             QueryResults(uuid, future, symbol, start, length, sort, asc)
         )
@@ -325,10 +270,6 @@ class SymbolsHandler(JSONRequestHandler):
         tornado.web.HTTPError
             raises 404 if engine id does not exist
         """
-        print("")
-        print("____SymbolsHandler - start get()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         LOG.debug("Accessing symbols for engine %s.", engine)
         try:
             symbols = self.application.nqm.get_symbols(engine)
@@ -338,28 +279,12 @@ class SymbolsHandler(JSONRequestHandler):
             raise tornado.web.HTTPError(
                 status_code=404, log_message="engine not found"
             )
-        print("")
-        print("symbols :", symbols)
         uuid = f"ENGINE_SYMBOLS_{engine}"
         symbol = self.get_argument("symbol", None)
-        print("")
-        print("symbol :", symbol)
         start = int(self.get_argument("start", 0))
-        print("")
-        print("start :", start)
         length = int(self.get_argument("length", 50))
-        print("")
-        print("length :", length)
         sort = int(self.get_argument("sort", -1))
-        print("")
-        print("sort :", sort)
         asc = bool(int(self.get_argument("asc", 1)))
-        print("")
-        print("asc :", asc)
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("")
-        # print("____SymbolsHandler - end get()____")
         return self.write_json_reponse(
             QueryResults(uuid, symbols, symbol, start, length, sort, asc)
         )
@@ -374,8 +299,6 @@ class QuerySocketHandler(tornado.websocket.WebSocketHandler):
         """
         Allow cross-origin websockets.
         """
-        # print("")
-        # print("____QuerySocketHandler - check_origin()____")
         return True
 
     async def on_message(self, message):
@@ -390,10 +313,6 @@ class QuerySocketHandler(tornado.websocket.WebSocketHandler):
         message : str
             a serialized JSON representation of an object containing a query.
         """
-        # print("")
-        # print("____QuerySocketHandler - start on_message()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         parsed = tornado.escape.json_decode(message)
         query = parsed["query"]
         engine = parsed.get("engine", "neurosynth")
@@ -404,10 +323,6 @@ class QuerySocketHandler(tornado.websocket.WebSocketHandler):
         tornado.ioloop.IOLoop.current().add_future(
             future, self.send_query_update
         )
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("")
-        # print("____QuerySocketHandler - end on_message()____")
         self.send_query_update(future)
 
     def send_query_update(self, future: Future, status: str = "ok"):
@@ -421,14 +336,6 @@ class QuerySocketHandler(tornado.websocket.WebSocketHandler):
         status : str, optional
             the status of the query, by default "ok"
         """
-        # print("")
-        # print("____QuerySocketHandler - start send_query_update()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("")
-        # print("____QuerySocketHandler - end send_query_update()____")
         self.write_message(
             query_results_to_json(QueryResults(self.uuid, future), status)
         )
@@ -440,19 +347,11 @@ class QueryHandler(JSONRequestHandler):
     """
 
     async def post(self):
-        # print("")
-        # print("____QueryHandler - start post()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         query = self.get_argument("query")
         engine = self.get_argument("engine", "neurosynth")
         uuid = str(uuid4())
         LOG.debug("Submitting query with uuid %s.", uuid)
         self.application.nqm.submit_query(uuid, query, engine)
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("")
-        # print("____QueryHandler - end post()____")
         return self.write_json_reponse({"query": query, "uuid": uuid})
 
 
@@ -462,25 +361,13 @@ class QueryAutocompletionHandler(JSONRequestHandler):
     """
 
     async def post(self):
-        print("")
-        print("___QueryAutocompletionHandler.get()___")
         text = self.get_argument("text", '')
-        # print("")
-        # print("text :")
-        # print(text)
         # parsed = tornado.escape.json_decode(message)
-        # print("")
-        # print("parsed json_decode :", parsed)
         engine = self.get_argument("engine", "default")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("engine :", engine)
         self.uuid = str(uuid4())
         LOG.debug("Submitting query autocompletion with uuid %s.", self.uuid)
         f = self.application.nqm.submit_query_autocompletion(self.uuid, text, engine)
         fres = f.result()
-        print("f res:", fres)
-        print("type f res :", type(fres))
         # convert sets to lists, otherwise not convertable to a json
         for i in fres:
             fres[i] = list(fres[i])
@@ -497,16 +384,8 @@ class NiftiiImageHandler(JSONRequestHandler):
     """
 
     def get(self):
-        # print("")
-        # print("____NiftiiImageHandler - start get()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         engine = self.get_argument("engine", "neurosynth")
         atlas = self.application.nqm.get_atlas(engine)
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("")
-        # print("____NiftiiImageHandler - end get()____")
         return self.write_json_reponse({"image": base64_encode_nifti(atlas)})
 
 
@@ -516,18 +395,10 @@ class DownloadsHandler(tornado.web.RequestHandler):
     """
 
     def set_default_headers(self):
-        # print("")
-        # print("____DownloadsHandler - start set_default_headers()____")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
         self.set_header("Access-Control-Allow-Origin", "*")
         self.set_header("Access-Control-Allow-Headers", "x-requested-with")
         self.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
         self.set_header("Content-Type", "application/octet-stream")
-        # print("")
-        # print("nqm engines :", self.application.nqm.engines)
-        # print("")
-        # print("____DownloadsHandler - end set_default_headers()____")
 
     def save_image_to_gzip(
         self, df: pd.DataFrame, col: str, idx: str
