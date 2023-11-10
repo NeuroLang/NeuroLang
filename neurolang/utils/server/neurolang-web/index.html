@@ -90,14 +90,29 @@
   </div>
 
   <!-- Facets container -->
-  <div id="facetsContainer">
-    <div id="leftFacet">
-      <!-- Items will be dynamically populated -->
+  <div class="ui container nl-symbols-viewer-container">
+    <div class="nl-symbols-container" id="facetsContainer">
+      <div class="ui raised segments">
+        <div class="ui label segment nl-symbols-header">
+          <span class="text">Autocompletion suggestions</span>
+        </div>
+        <div class="ui segment code-mirror-container facetsInnerContainer">
+          <div class="facet" id="leftFacetContainer">
+            <label for="leftFacet">Categories</label>
+            <select id="leftFacet" size="5">
+              <!-- Items will be dynamically populated -->
+            </select>
+          </div>
+          <div class="facet" id="rightFacetContainer">
+            <label for="rightFacet">Values</label>
+            <select id="rightFacet" size="5">
+              <!-- Items will be dynamically populated -->
+            </select>
+          </div>
+          <button type="button" class="ui button" id="okButton">OK</button>
+        </div>
+      </div>
     </div>
-    <div id="rightFacet">
-      <!-- Items will be dynamically populated -->
-    </div>
-    <button type="button" class="ui button" id="okButton">OK</button>
   </div>
 
   <!-- Symbols container -->
