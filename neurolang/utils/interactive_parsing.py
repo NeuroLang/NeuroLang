@@ -106,59 +106,54 @@ class LarkCompleter:
         return CompleteResult(e.pos_in_stream, prefix, interactive.accepts())
 
     def compute_options_no_error(self, interactive: InteractiveParser, text: str) -> CompleteResult:
-        # accepts = {}
-        # for f in interactive.accepts():
-        #     term_def = next(t for t in self.parser.terminals if t.name == f)
-        #     # print(term_def.name)
-        #     # print(str(term_def.pattern).replace("'", ""))
-        #     accepts[term_def.name] = str(term_def.pattern).replace("'", "")
 
-        toks = {}
-        for i in CATEGORIES:
-            toks[i] = set()
+        # Initialise the final accepted tokens dictionary
+        accepted_tokens = {}
+        for category in CATEGORIES:
+            accepted_tokens[category] = set()
 
-        accepts = []
-        a = list(interactive.accepts())
-        if '$END' in a:
-            a.remove('$END')
-        for e in a:
-            # a.remove(e) #data.discard(value) if you don't care if the item exists.
-            t = self.parser.get_terminal(e)
-            n = str(t.name)
-            pat = str(t.pattern).replace("'", "")
-            # toks[TERMINALS_TO_CATEGORIES[n]].append(pat)
-            # toks['numbers'].append('integer')
+        # Get the accepted tokens given by the parser
+        parser_accepted_tokens = list(interactive.accepts())
 
-            accepts.append(n + ' : ' + pat)
+        # Remove the end of line accepted token
+        if '$END' in parser_accepted_tokens:
+            parser_accepted_tokens.remove('$END')
 
-            if (n == 'CMD_IDENTIFIER'):
-                pat = '<command identifier>'
-            elif (n == 'FLOAT'):
-                pat = '<float>'
-            elif (n == 'IDENTIFIER_REGEXP'):
-                # pat = pat.replace('\\\\+', '\\+').replace('\\\\-', '\\-').replace('\\\\/', '\\/').replace('\\\\.', '\\.')
-                pat = '<identifier regular expression>'
-            elif (n == 'INT'):
-                pat = '<integer>'
-            elif (n == 'PYTHON_STRING'):
-                pat = '<quoted string>'
-            elif (n == 'TEXT'):
-                pat = '<text>'
+        # Process accepted tokens
+        for token in parser_accepted_tokens:
+
+            # Get terminal information
+            terminal = self.parser.get_terminal(token)
+            t_name     = str(terminal.name)
+            t_pattern  = str(terminal.pattern).replace("'", "")
+
+            if (t_name == 'CMD_IDENTIFIER'):
+                t_pattern = '<command identifier>'
+                accepted_tokens['commands'] = set()
+            elif (t_name == 'FLOAT'):
+                t_pattern = '<float>'
+            elif (t_name == 'IDENTIFIER_REGEXP'):
+                t_pattern = '<identifier regular expression>'
+                accepted_tokens['functions'] = set()
+                accepted_tokens['base symbols'] = set()
+                accepted_tokens['query symbols'] = set()
+            elif (t_name == 'INT'):
+                t_pattern = '<integer>'
+            elif (t_name == 'PYTHON_STRING'):
+                t_pattern = '<quoted string>'
+            elif (t_name == 'TEXT'):
+                t_pattern = '<text>'
             else:
-                pat = pat.replace('\\\\+', '+').replace('\\\\-', '-')
+                t_pattern = t_pattern.replace('\\\\+', '+').replace('\\\\-', '-')
 
-            # if ((n != 'FLOAT') & (n != 'DOUBLE_QUOTE')):
-            pat = pat.replace('\\\\b', '\\b').replace('\\\\', '')
-            if ('|' in pat):
-                pat = pat.replace('(?:', '').replace(')', '').split('|')
-                for i in pat:
-                    toks[TERMINALS_TO_CATEGORIES[n]].add(i)
+            t_pattern = t_pattern.replace('\\\\b', '\\b').replace('\\\\', '')
+
+            # Add the processed accepted token to the final dictionary
+            if ('|' in t_pattern):
+                t_pattern = t_pattern.replace('(?:', '').replace(')', '').split('|')
+                for pattern in t_pattern:
+                    accepted_tokens[TERMINALS_TO_CATEGORIES[t_name]].add(pattern)
             else:
-                toks[TERMINALS_TO_CATEGORIES[n]].add(pat)
+                accepted_tokens[TERMINALS_TO_CATEGORIES[t_name]].add(t_pattern)
 
-        # Clean toks : remove the keys with empty list
-        tmp_toks = {k: v for k, v in toks.items() if v}
-        toks.clear()
-        toks.update(tmp_toks)
-
-        return CompleteResult(len(text), "", toks)
+        return CompleteResult(len(text), "", accepted_tokens)
