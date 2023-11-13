@@ -261,7 +261,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             )
 
     def compute_datalog_program_for_autocompletion(
-            self, code: str
+            self, code: str, autocompletion_code
     ) -> Dict:
         """
         Computes a Datalog program in classical syntax.
@@ -271,6 +271,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ----------
         code : string
             Datalog program.
+        autocompletion_code : str
+            Datalog program for autocompletion.
 
         Examples
         --------
@@ -283,13 +285,47 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         >>> with nl.environment as e:
         ...     q = nl.compute_datalog_program_for_autocompletion(prog)
         >>> q
-        ... {'TILDE', 'LAMBDA', 'AT', 'EXISTS', 'CMD_IDENTIFIER', '__ANON_3', 'LPAR', 'TRUE', 'IDENTIFIER_REGEXP', 'FALSE'}
+        ... {
+        ...     'Signs': {'(', '∃', '@'},
+        ...     'Numbers': set(),
+        ...     'Text': set(),
+        ...     'Operators': {'¬', '~'},
+        ...     'Cmd_identifier': set(),
+        ...     'Functions': {'lambda'},
+        ...     'Identifier_regexp': set(),
+        ...     'Reserved words': {'exists', 'EXISTS'},
+        ...     'Boleans': {'False', '⊤', '⊥', 'True'},
+        ...     'Expression symbols': set(),
+        ...     'Python string': set(),
+        ...     'Strings': {'<identifier regular expression>', '<command identifier>'},
+        ...     'functions': set(),
+        ...     'base symbols': set(),
+        ...     'query symbols': set(),
+        ...     'commands': set()
+        ... }
         """
-        # print("")
-        # res = self.datalog_parser(code, interactive=True)
-        # print(res)
-        # print(type(res))
-        return self.datalog_parser(code, interactive=True)
+        # All the following code before return is mandatory to retrieve
+        # the query symbols without actually running the query
+        intermediate_representation = self.datalog_parser(code)
+        queries = [
+            rule
+            for rule in intermediate_representation.formulas
+            if isinstance(rule, ir.Query)
+        ]
+        if len(queries) == 1:
+            self.frontend_translator.walk(queries[0])
+            program = logic.Union(
+                [
+                    rule
+                    for rule in intermediate_representation.formulas
+                    if not isinstance(rule, ir.Query)
+                ]
+            )
+            self.program_ir.walk(program)
+        else:
+            self.program_ir.walk(intermediate_representation)
+        res = self.datalog_parser(autocompletion_code, interactive=True)
+        return res
 
     def query(
         self, *args
