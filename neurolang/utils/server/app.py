@@ -368,18 +368,12 @@ class QueryAutocompletionHandler(JSONRequestHandler):
         line_pos  = int(self.get_argument("line", ''))
         start_pos = int(self.get_argument("startpos", ''))
         end_pos   = int(self.get_argument("endpos", ''))
+
         text_autocompletion = text[start_pos:end_pos]
-
         ltext = text.splitlines()
-
         if line_pos < len(ltext):
             ltext.pop(line_pos)
-        print("")
-        print("ltext without autocompletion query :")
-
-        
         text = '\n'.join(ltext)
-        print(ltext)
 
         self.uuid = str(uuid4())
         LOG.debug("Submitting query autocompletion with uuid %s.", self.uuid)
