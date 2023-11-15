@@ -361,6 +361,8 @@ class QueryAutocompletionHandler(JSONRequestHandler):
     """
 
     async def post(self):
+        print("")
+        print("____in QueryAutocompletionHandler.post()____")
         text      =     self.get_argument("text", '')
         engine    =     self.get_argument("engine", "default")
         line_pos  = int(self.get_argument("line", ''))
@@ -372,8 +374,12 @@ class QueryAutocompletionHandler(JSONRequestHandler):
 
         if line_pos < len(ltext):
             ltext.pop(line_pos)
+        print("")
+        print("ltext without autocompletion query :")
 
+        
         text = '\n'.join(ltext)
+        print(ltext)
 
         self.uuid = str(uuid4())
         LOG.debug("Submitting query autocompletion with uuid %s.", self.uuid)
