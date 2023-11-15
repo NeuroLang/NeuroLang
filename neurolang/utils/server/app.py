@@ -361,12 +361,23 @@ class QueryAutocompletionHandler(JSONRequestHandler):
     """
 
     async def post(self):
-        text = self.get_argument("text", '')
-        # parsed = tornado.escape.json_decode(message)
-        engine = self.get_argument("engine", "default")
+        text      =     self.get_argument("text", '')
+        engine    =     self.get_argument("engine", "default")
+        line_pos  = int(self.get_argument("line", ''))
+        start_pos = int(self.get_argument("startpos", ''))
+        end_pos   = int(self.get_argument("endpos", ''))
+        text_autocompletion = text[start_pos:end_pos]
+
+        ltext = text.splitlines()
+
+        if line_pos < len(ltext):
+            ltext.pop(line_pos)
+
+        text = '\n'.join(ltext)
+
         self.uuid = str(uuid4())
         LOG.debug("Submitting query autocompletion with uuid %s.", self.uuid)
-        f = self.application.nqm.submit_query_autocompletion(self.uuid, text, engine)
+        f = self.application.nqm.submit_query_autocompletion(self.uuid, text, text_autocompletion, engine)
         fres = f.result()
         # convert sets to lists, otherwise not convertable to a json
         for i in fres:
