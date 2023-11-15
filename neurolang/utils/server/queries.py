@@ -156,8 +156,6 @@ class NeurolangQueryManager:
         """
         LOG.debug("[Thread - %s] - Executing query...", get_ident())
         LOG.debug("[Thread - %s] - Query :\n%s", get_ident(), query)
-        # print("engine type :", engine_type)
-        # print("self.engines keys :", self.engines.keys())
         engine_set = self.engines[engine_type]
         with engine_set.engine() as engine:
             LOG.debug(
@@ -196,7 +194,7 @@ class NeurolangQueryManager:
                 )
 
     def _compute_query_autocompletion(
-            self, query: str, engine_type: str
+            self, query: str, autocompletion_query: str, engine_type: str
     ) -> Dict:
         """
         Function executed on a ThreadPoolExecutor worker to compute a query
@@ -205,7 +203,9 @@ class NeurolangQueryManager:
         Parameters
         ----------
         query : str
-            the query to execute
+            the query to retrieve the query symbols
+        autocompletion_query : str
+            the query portion for autocompletion
         engine_type : str
             the type of engine on which to execute the query
 
@@ -214,13 +214,9 @@ class NeurolangQueryManager:
         Dict
             the result of the query autocompletion
         """
-        # print("")
-        # print("___NeurolangQueryManager - _compute_query_autocompletion()___")
         LOG.debug("[Thread - %s] - Computing query auto-completion...", get_ident())
         LOG.debug("[Thread - %s] - Query :\n%s", get_ident(), query)
-        # print("")
-        # print("engine type :", engine_type)
-        # print("self.engines keys :", self.engines.keys())
+        # Raise a KeyError if engines are not yet available
         engine_set = self.engines[engine_type]
         with engine_set.engine() as engine:
             LOG.debug(
@@ -230,7 +226,34 @@ class NeurolangQueryManager:
             try:
                 with engine.scope:
                     LOG.debug("[Thread - %s] - Solving query...", get_ident())
-                    res = engine.compute_datalog_program_for_autocompletion(query)
+
+                    res = engine.compute_datalog_program_for_autocompletion(query, autocompletion_query)
+
+                    if 'functions' in res:
+                        for name in engine.symbols:
+                            if not name.startswith("_"):
+                                symbol = engine.symbols[name]
+                                if is_leq_informative(symbol.type, Callable):
+                                    if (name[0].isupper()) or (name.startswith('fresh')):
+                                        res['query symbols'].add(name)
+                                    else:
+                                        res['functions'].add(name)
+                                elif is_leq_informative(symbol.type, AbstractSet):
+                                    res['base symbols'].add(name)
+
+                        res['base symbols']  = sorted(list(res['base symbols']))
+                        res['query symbols'] = sorted(list(res['query symbols']))
+                        res['functions']     = sorted(list(res['functions']))
+
+                    if 'commands' in res:
+                        rescomm = _get_commands(engine)
+                        res['commands'] = list(rescomm)
+
+                    # Clean toks : remove the keys with empty list
+                    tmp_toks = {k: v for k, v in res.items() if v}
+                    res.clear()
+                    res.update(tmp_toks)
+
                     return res
             except Exception as e:
                 LOG.debug(
@@ -271,7 +294,7 @@ class NeurolangQueryManager:
         self.results_cache[uuid] = future_res
         return future_res
 
-    def submit_query_autocompletion(self, uuid: str, query: str, engine_type: str) -> Future:
+    def submit_query_autocompletion(self, uuid: str, query: str, autocompletion_query: str, engine_type: str) -> Future:
         """
         Submit a query autocompletion to one of the available engines / workers.
 
@@ -280,6 +303,8 @@ class NeurolangQueryManager:
         uuid : str
             the uuid for the query.
         query : str
+            the whole datalog query.
+        autocompletion_query : str
             the datalog query to autocomplete.
         engine_type : str
             the type of engine to use for autocompleting the query.
@@ -294,7 +319,7 @@ class NeurolangQueryManager:
             uuid, engine_type
         )
         future_res = self.executor.submit(
-            self._compute_query_autocompletion, query, engine_type
+            self._compute_query_autocompletion, query, autocompletion_query, engine_type
         )
         self.results_cache[uuid] = future_res
         return future_res
