@@ -321,7 +321,16 @@ export class QueryController {
     const selectedKey = leftFacet.value
 
     // Synchronize with dropdown if the selected key in the left facet is one of the specified values
-    if (['commands', 'functions', 'base symbols', 'query symbols'].includes(selectedKey)) {
+//    if (['commands', 'functions', 'base symbols', 'query symbols'].includes(selectedKey)) {
+//  	    // this.sc.dropdown is a jQuery object wrapping the dropdown element
+//  	    this.sc.dropdown.dropdown('set selected', selectedValue);
+//    }
+
+    const dropdownItems = []
+    this.sc.dropdown.find('.menu .item').each(function() {
+        dropdownItems.push($(this).data('value'));
+    });
+    if (dropdownItems.includes(selectedValue)) {
   	    // this.sc.dropdown is a jQuery object wrapping the dropdown element
   	    this.sc.dropdown.dropdown('set selected', selectedValue);
     }
