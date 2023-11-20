@@ -3,7 +3,7 @@ from operator import add, eq, lt, mul, pow, sub, truediv
 import pytest
 
 
-from ....logic import ExistentialPredicate
+from neurolang.logic import ExistentialPredicate
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....expressions import (
@@ -59,22 +59,16 @@ def test_rules():
     x = Symbol('x')
     y = Symbol('y')
     z = Symbol('z')
-    print("_________________________________")
-    print("A(x):-B(x, y), C(3, z)")
     res = parser('A(x):-B(x, y), C(3, z)')
     assert res == Union((
         Implication(A(x), Conjunction((B(x, y), C(Constant(3), z)))),
     ))
 
-    print("_________________________________")
-    print("A(x):-~B(x)")
     res = parser('A(x):-~B(x)')
     assert res == Union((
         Implication(A(x), Conjunction((Negation(B(x)),))),
     ))
 
-    print("_________________________________")
-    print("A(x):-B(x, ...)")
     res = parser('A(x):-B(x, ...)')
     fresh_arg = res.formulas[0].antecedent.formulas[0].args[1]
     assert isinstance(fresh_arg, Symbol)
@@ -82,8 +76,6 @@ def test_rules():
         Implication(A(x), Conjunction((B(x, fresh_arg),))),
     ))
 
-    print("_________________________________")
-    print("A(x):-B(x, y), C(3, z), (z == 4)")
     res = parser('A(x):-B(x, y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
@@ -94,8 +86,6 @@ def test_rules():
         ),
     ))
 
-    print("_________________________________")
-    print("A(x):-B(x + 5 * 2, y), C(3, z), (z == 4)")
     res = parser('A(x):-B(x + 5 * 2, y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
@@ -112,8 +102,6 @@ def test_rules():
         ),
     ))
 
-    print("_________________________________")
-    print("A(x):-B(x / 2, y), C(3, z), (z == 4)")
     res = parser('A(x):-B(x / 2, y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
@@ -128,8 +116,6 @@ def test_rules():
         ),
     ))
 
-    print("_________________________________")
-    print("A(x):-B(f(x), y), C(3, z), (z == 4)")
     res = parser('A(x):-B(f(x), y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
@@ -141,8 +127,6 @@ def test_rules():
         ),
     ))
 
-    print("_________________________________")
-    print('A(x):-B(x + (-5), "a")')
     res = parser('A(x):-B(x + (-5), "a")')
     assert res == Union((
         Implication(
@@ -156,8 +140,6 @@ def test_rules():
         ),
     ))
 
-    print("_________________________________")
-    print("A(x):-B(x - 5 * 2, @y ** -2)")
     res = parser('A(x):-B(x - 5 * 2, @y ** -2)')
     assert res == Union((
         Implication(
@@ -238,7 +220,7 @@ def test_probabilistic_fact():
     d = Symbol("d")
     x = Symbol("x")
     B = Symbol("B")
-    res = parser("B(x) :: exp(-d / 5.0) :- A(x, d) & (d < 0.8)")
+    res = parser("B(x) :: exp(-d / 5.0) :- A(x, d) , (d < 0.8)")
     expected = Union(
         (
             Implication(
@@ -349,6 +331,7 @@ def test_existential():
     #     raise UnexpectedTokenError from e
     with pytest.raises(UnexpectedTokenError):
         res = parser("C(x) :- B(x), exists(s1; )")
+
 
 def test_query():
     ans = Symbol("ans")

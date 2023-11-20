@@ -1,14 +1,10 @@
-from __future__ import annotations
-
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
-from lark import Lark, Transformer, UnexpectedCharacters
-from lark.exceptions import UnexpectedToken
-from lark.parsers.lalr_interactive_parser import InteractiveParser
+from lark import Lark, Transformer
+from lark.exceptions import UnexpectedToken, UnexpectedCharacters, LarkError
 
-from dataclasses import dataclass
+from neurolang.logic import ExistentialPredicate
 
-from ...logic import ExistentialPredicate
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
 from ...expressions import (
@@ -26,8 +22,9 @@ from ...probabilistic.expressions import (
     Condition,
     ProbabilisticFact
 )
-from ...exceptions import UnexpectedTokenError
+from ...exceptions import UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException
 from ...utils.interactive_parsing import LarkCompleter
+
 GRAMMAR = u"""
 start: expressions
 expressions : (expression)+
@@ -131,7 +128,7 @@ POW : "**"
 fact : constant_predicate
 constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
-//COMMA : ","
+
 ?literal : number | text
 
 ext_identifier : "@" identifier
@@ -290,14 +287,14 @@ class DatalogTransformer(Transformer):
             if PROB in arguments:
                 ix_prob = arguments.index(PROB)
                 arguments_not_prob = (
-                        arguments[:ix_prob] +
-                        arguments[ix_prob + 1:]
+                    arguments[:ix_prob] +
+                    arguments[ix_prob + 1:]
                 )
                 prob_arg = PROB(*arguments_not_prob)
                 arguments = (
-                        arguments[:ix_prob] +
-                        [prob_arg] +
-                        arguments[ix_prob + 1:]
+                    arguments[:ix_prob] +
+                    [prob_arg] +
+                    arguments[ix_prob + 1:]
                 )
 
             ast = ast[0](*arguments)
@@ -345,7 +342,7 @@ class DatalogTransformer(Transformer):
     def cmd_args(self, ast):
         args = ()
         kwargs = ()
-        for a in ast :
+        for a in ast:
             if isinstance(a, tuple):
                 kwargs = kwargs + (a,)
             else:
@@ -545,13 +542,18 @@ class DatalogTransformer(Transformer):
 
 
 def parser(code, locals=None, globals=None, interactive=False):
-    try :
-        if (interactive) :
+
+    try:
+        if (interactive):
             completer = LarkCompleter(COMPILED_GRAMMAR)
             res = completer.complete(code.strip())
             return res.token_options
-        else :
+        else:
             jp = COMPILED_GRAMMAR.parse(code.strip())
             return DatalogTransformer().transform(jp)
-    except UnexpectedToken as e :
-        raise UnexpectedTokenError from e
+    except UnexpectedToken as e:
+        raise UnexpectedTokenError(str(e), line=e.line - 1, column=e.column - 1) from e
+    except UnexpectedCharacters as e:
+        raise UnexpectedCharactersError(str(e), line=e.line - 1, column=e.column - 1) from e
+    except LarkError as e:
+        raise NeuroLangException from e
