@@ -23,6 +23,7 @@ from ...probabilistic.expressions import (
     ProbabilisticFact
 )
 from ...exceptions import UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException
+from ...utils.interactive_parsing import LarkCompleter
 
 GRAMMAR = u"""
 start: expressions
@@ -540,11 +541,16 @@ class DatalogTransformer(Transformer):
         return ast
 
 
-def parser(code, locals=None, globals=None):
+def parser(code, locals=None, globals=None, interactive=False):
 
     try:
-        jp = COMPILED_GRAMMAR.parse(code.strip())
-        return DatalogTransformer().transform(jp)
+        if (interactive):
+            completer = LarkCompleter(COMPILED_GRAMMAR)
+            res = completer.complete(code.strip())
+            return res.token_options
+        else:
+            jp = COMPILED_GRAMMAR.parse(code.strip())
+            return DatalogTransformer().transform(jp)
     except UnexpectedToken as e:
         raise UnexpectedTokenError(str(e), line=e.line - 1, column=e.column - 1) from e
     except UnexpectedCharacters as e:
