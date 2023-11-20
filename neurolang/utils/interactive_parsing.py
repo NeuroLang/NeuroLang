@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
-
-from lark import Lark, Transformer, UnexpectedCharacters
-from lark.exceptions import UnexpectedToken
-from lark.parsers.lalr_interactive_parser import InteractiveParser
-
 from dataclasses import dataclass
+from lark import UnexpectedCharacters
 
 
 # Code based on https://github.com/MegaIng/lark-autocomplete/blob/master/lark_autocomplete.py
@@ -27,7 +22,7 @@ CATEGORIES = [
     'Strings'
 ]
 
-# Dictionary for the correspondance between the NeuroLang grammar rules and the frontend categories.
+# Dictionary for the correspondence between the NeuroLang grammar rules and the frontend categories.
 TERMINALS_TO_CATEGORIES = {
     'AMPERSAND': CATEGORIES[0],
     'AND_SYMBOL': CATEGORIES[0],
