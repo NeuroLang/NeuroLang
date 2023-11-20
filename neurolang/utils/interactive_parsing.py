@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from lark import UnexpectedCharacters
-
+from lark import Lark, UnexpectedCharacters
+from lark.parsers.lalr_interactive_parser import InteractiveParser
 
 # Code based on https://github.com/MegaIng/lark-autocomplete/blob/master/lark_autocomplete.py
 
