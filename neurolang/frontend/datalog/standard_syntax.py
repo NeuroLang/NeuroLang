@@ -1,7 +1,6 @@
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
-from lark import Lark
-from lark import Transformer
+from lark import Lark, Transformer
 from lark.exceptions import UnexpectedToken, UnexpectedCharacters, LarkError
 
 from neurolang.logic import ExistentialPredicate
@@ -38,14 +37,15 @@ expressions : (expression)+
             | statement_function
             | command
 
-probabilistic_rule : head "::" arithmetic_operation IMPLICATION (condition | body)
+probabilistic_rule : head PROBA_OP arithmetic_operation IMPLICATION (condition | body)
 
 rule : (head | query) IMPLICATION (condition | body)
 IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}"
 
-query : "ans(" [ arguments ] ")"
+query : "ans" "(" [ arguments ] ")"
 
-condition : composite_predicate "//" composite_predicate
+condition : composite_predicate CONDITION_OP composite_predicate
+CONDITION_OP : "//"
 ?composite_predicate : "(" conjunction ")"
                         | predicate
 
@@ -53,19 +53,19 @@ constraint : body RIGHT_IMPLICATION head
 RIGHT_IMPLICATION : "-:" | "\N{RIGHTWARDS ARROW}"
 
 existential_predicate : exists "(" existential_body ")"
-?existential_body : arguments SUCH_THAT predicate ( "," predicate )*
-                  | arguments SUCH_THAT predicate ( "&" predicate )*
-
-SUCH_THAT : "st" | ";"
+?existential_body : arguments (";" | SUCH_THAT_WORD) predicate ( "," predicate )*
+SUCH_THAT_WORD : "st"
 
 ?head : head_predicate
 head_predicate : identifier "(" [ arguments ] ")"
 
 ?body : conjunction
-conjunction : predicate ("," predicate)*
-            | predicate ("&" predicate)*
+//conjunction : predicate ("," predicate)*
+conjunction : predicate (("," | "&" | AND_SYMBOL) predicate)*
+AND_SYMBOL : "\N{LOGICAL AND}"
 
-negated_predicate : ("~" | "\u00AC" ) predicate
+negated_predicate : ("~" | NEG_UNICODE ) predicate
+NEG_UNICODE : "\u00AC"
 predicate : id_application
           | negated_predicate
           | existential_predicate
@@ -77,10 +77,12 @@ id_application : int_ext_identifier "(" [ arguments ] ")"
 comparison : argument COMPARISON_OPERATOR argument
 COMPARISON_OPERATOR : "==" | "<" | "<=" | ">=" | ">" | "!="
 
-statement : identifier ":=" arithmetic_operation
-statement_function : identifier "(" [ arguments ] ")" ":=" argument
+statement : identifier STATEMENT_OP arithmetic_operation
+statement_function : identifier "(" [ arguments ] ")" STATEMENT_OP argument
+STATEMENT_OP : ":="
 
-probabilistic_fact : ( arithmetic_operation | int_ext_identifier ) "::" constant_predicate
+probabilistic_fact : ( arithmetic_operation | int_ext_identifier ) PROBA_OP constant_predicate
+PROBA_OP : "::"
 
 command : "." cmd_identifier "(" [ cmd_args ] ")"
 cmd_args : cmd_arg ("," cmd_arg)*
@@ -92,8 +94,9 @@ pos_item : arithmetic_operation | python_string
 
 python_string : PYTHON_STRING
 PYTHON_STRING : DOUBLE_QUOTE NO_DBL_QUOTE_STR DOUBLE_QUOTE
-              | SINGLE_QUOTE NO_DBL_QUOTE_STR SINGLE_QUOTE
+              | SINGLE_QUOTE NO_SING_QUOTE_STR SINGLE_QUOTE
 NO_DBL_QUOTE_STR : /[^"]*/
+NO_SING_QUOTE_STR : /[^']*/
 
 ?function_application : "(" lambda_expression ")" "(" [ arguments ] ")" -> lambda_application
                      | id_application
@@ -117,7 +120,8 @@ term : factor          -> sing_term
      | term "*" factor -> mul_term
      | term "/" factor -> div_term
 factor : exponent             -> sing_factor
-       | factor "**" exponent -> pow_factor
+       | factor POW exponent -> pow_factor
+POW : "**"
 ?exponent : literal | function_application | signed_int_ext_identifier | "(" argument ")"
 
 fact : constant_predicate
@@ -133,8 +137,9 @@ IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
 cmd_identifier : CMD_IDENTIFIER
 CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
 
-exists : EXISTS
-EXISTS : "exists" | "\u2203" | "EXISTS"
+exists : EXISTS_WORD | EXISTS_SYMBOL
+EXISTS_WORD : "exists" | "EXISTS"
+EXISTS_SYMBOL : "\u2203"
 
 text : TEXT
 TEXT : DOUBLE_QUOTE /[a-zA-Z0-9 ]*/ DOUBLE_QUOTE
@@ -162,6 +167,7 @@ WHITESPACE : /[\t ]+/
 %ignore WHITESPACE
 %ignore NEWLINE
 """
+
 
 OPERATOR = {
     "+": add,
@@ -209,12 +215,10 @@ class DatalogTransformer(Transformer):
             ast = ast[0]
         return Union(ast)
 
-    #     return 0
-
     def probabilistic_rule(self, ast):
         head = ast[0]
-        probability = ast[1]
-        body = ast[3]
+        probability = ast[2]
+        body = ast[4]
         return Implication(
             ProbabilisticFact(probability, head),
             body,
@@ -229,7 +233,7 @@ class DatalogTransformer(Transformer):
 
     def condition(self, ast):
         conditioned = ast[0]
-        condition = ast[1]
+        condition = ast[2]
         return Condition(conditioned, condition)
 
     def constraint(self, ast):
@@ -282,14 +286,14 @@ class DatalogTransformer(Transformer):
             if PROB in arguments:
                 ix_prob = arguments.index(PROB)
                 arguments_not_prob = (
-                        arguments[:ix_prob] +
-                        arguments[ix_prob + 1:]
+                    arguments[:ix_prob] +
+                    arguments[ix_prob + 1:]
                 )
                 prob_arg = PROB(*arguments_not_prob)
                 arguments = (
-                        arguments[:ix_prob] +
-                        [prob_arg] +
-                        arguments[ix_prob + 1:]
+                    arguments[:ix_prob] +
+                    [prob_arg] +
+                    arguments[ix_prob + 1:]
                 )
 
             ast = ast[0](*arguments)
@@ -310,17 +314,17 @@ class DatalogTransformer(Transformer):
             return Symbol("ans")()
 
     def statement(self, ast):
-        return Statement(ast[0], ast[1])
+        return Statement(ast[0], ast[2])
 
     def statement_function(self, ast):
         return Statement(
             ast[0],
-            Lambda(ast[1], ast[2])
+            Lambda(ast[1], ast[3])
         )
 
     def probabilistic_fact(self, ast):
         return Implication(
-            ProbabilisticFact(ast[0], ast[1]),
+            ProbabilisticFact(ast[0], ast[2]),
             Constant(True),
         )
 
@@ -337,7 +341,7 @@ class DatalogTransformer(Transformer):
     def cmd_args(self, ast):
         args = ()
         kwargs = ()
-        for a in ast :
+        for a in ast:
             if isinstance(a, tuple):
                 kwargs = kwargs + (a,)
             else:
@@ -481,7 +485,7 @@ class DatalogTransformer(Transformer):
             else:
                 return 0
         else:
-            return Constant(pow)(ast[0], ast[1])
+            return Constant(pow)(ast[0], ast[2])
 
     def sing_factor(self, ast):
         if len(ast) == 1:

@@ -332,6 +332,7 @@ def test_existential():
     with pytest.raises(UnexpectedTokenError):
         res = parser("C(x) :- B(x), exists(s1; )")
 
+
 def test_query():
     ans = Symbol("ans")
     B = Symbol("B")
