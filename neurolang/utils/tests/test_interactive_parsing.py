@@ -68,11 +68,10 @@ def test_interactive_facts():
                 'Operators': {'¬', '-', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'ans', 'exists'}, 'Boleans': {'⊤', 'True', '⊥', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    input = '''
+    res = parser('''
     `http://uri#test-fact`("x")
     A("x", 3
-    '''
-    res = parser(input, interactive=True)
+    ''', interactive=True)
     expected = {'Signs': {',', ')'}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
