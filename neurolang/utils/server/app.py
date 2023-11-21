@@ -5,7 +5,6 @@ import os
 import os.path
 import sys
 from concurrent.futures import Future
-from concurrent.futures import as_completed
 from io import BytesIO
 from pathlib import Path
 from typing import Optional

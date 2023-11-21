@@ -33,15 +33,15 @@ export class QueryController {
       ]
     })
 
-    this.editor.on("keydown", (cm, event) => {
-      console.log(`keydown detected ${event.key}`);
-      if (event.shiftKey && event.key == 'Tab') {
+    this.editor.on('keydown', (cm, event) => {
+      console.log(`keydown detected ${event.key}`)
+      if (event.shiftKey && event.key === 'Tab') {
         // Prevent the default behaviour of the tab key
-        event.preventDefault();
-        //this._requestAutocomplete(contentToCursor);
-        this._requestAutocomplete();
+        event.preventDefault()
+        // this._requestAutocomplete(contentToCursor);
+        this._requestAutocomplete()
       }
-    });
+    })
 
     /// Query Button & Alert box
     this.runQueryBtn = $('#runQueryBtn')
@@ -58,16 +58,15 @@ export class QueryController {
 
     /// Atach the change event listener to the right facet here to make sure we avoid duplicates.
     /// Otherwise the event lister would have to be removed before its creation.
-    document.getElementById("rightFacet").addEventListener('change', (event) => {
-        this._handleRightFacetClick(event);
+    document.getElementById('rightFacet').addEventListener('change', (event) => {
+      this._handleRightFacetClick(event)
     });
 
     /// Autocompletion Manager
-    //this.ac = new AutocompletionController()
+    // this.ac = new AutocompletionController()
 
     /// Results Manager
     this.sc = new SymbolsController()
-
   }
 
   /**
@@ -213,60 +212,60 @@ export class QueryController {
     this.editor.getAllMarks().forEach((elt) => elt.clear())
   }
 
-  _requestAutocomplete() {
-    console.log("Requesting autocomplete for:");
-    //console.log(content);
+  _requestAutocomplete () {
+    console.log('Requesting autocomplete for:')
+    // console.log(content);
     // get the entire text from the CodeMirror instance
-    const allText = this.editor.getValue();
+    const allText = this.editor.getValue()
 
     // get the cursor's current position
-    const cursorPos = this.editor.getCursor();
+    const cursorPos = this.editor.getCursor()
 
     // get the line number where the cursor is
-    const lineNumber = cursorPos.line;
+    const lineNumber = cursorPos.line
 
     // get the position in the whole text of the first character of that line
-    const lineStartPos = this.editor.indexFromPos({line: lineNumber, ch: 0});
+    const lineStartPos = this.editor.indexFromPos({ line: lineNumber, ch: 0 })
 
     // get the position in the whole text of the cursor
-    const cursorIndex = this.editor.indexFromPos(cursorPos);
+    const cursorIndex = this.editor.indexFromPos(cursorPos)
 
-    $.post(API_ROUTE.autocompletion, {text: allText, engine: this.engine, line: lineNumber, startpos: lineStartPos, endpos: cursorIndex}, data => {
-        var facets = JSON.parse(data.tokens)
-        this._displayFacets(facets);    // Display the facets based on the tokens
+    $.post(API_ROUTE.autocompletion, { text: allText, engine: this.engine, line: lineNumber, startpos: lineStartPos, endpos: cursorIndex }, data => {
+      const facets = JSON.parse(data.tokens)
+      // Display the facets based on the tokens
+      this._displayFacets(facets)
     });
   }
 
-  _displayFacets(facets_obj) {
-    const leftFacet = document.getElementById("leftFacet");
-    const rightFacet = document.getElementById("rightFacet");
-    const facetsContainer = document.getElementById("facetsContainer");
-//    const okButton = document.getElementById("okButton");
-    const myDropdown = this.sc.dropdown;
+  _displayFacets (facetsObject) {
+    const leftFacet = document.getElementById('leftFacet')
+    const rightFacet = document.getElementById('rightFacet')
+    const facetsContainer = document.getElementById('facetsContainer')
+    // const okButton = document.getElementById("okButton");
 
     // Clear previous facet items
-    leftFacet.innerHTML = "";
-    rightFacet.innerHTML = "";
+    leftFacet.innerHTML = ''
+    rightFacet.innerHTML = ''
 
     // Add 'All' option to the left facet
-    let deselectOption = document.createElement("option")
-    deselectOption.textContent = "All"
+    const deselectOption = document.createElement('option')
+    deselectOption.textContent = 'All'
     leftFacet.appendChild(deselectOption)
 
-    // Add facets_obj keys to left facet
-    for (let key of Object.keys(facets_obj)) {
-        let option = document.createElement("option")
-        option.textContent = key;
-        leftFacet.appendChild(option);
+    // Add facetsObject keys to left facet
+    for (const key of Object.keys(facetsObject)) {
+      let option = document.createElement("option")
+      option.textContent = key;
+      leftFacet.appendChild(option);
     }
 
     // Make sure to remove any previous event listener to avoid duplicates
     if (this._currentLeftFacetHandler) {
-  	    leftFacet.removeEventListener('change', this._currentLeftFacetHandler);
+  	  leftFacet.removeEventListener('change', this._currentLeftFacetHandler);
 	}
 
-    // Create a new handler function that has access to facets_obj
-	this._currentLeftFacetHandler = (event) => this._handleLeftFacetClick(event, facets_obj);
+    // Create a new handler function that has access to facetsObject
+	this._currentLeftFacetHandler = (event) => this._handleLeftFacetClick(event, facetsObject);
 
 	// Attach the new event listener
 	leftFacet.addEventListener("change", this._currentLeftFacetHandler);
@@ -275,12 +274,12 @@ export class QueryController {
     facetsContainer.style.display = 'flex';         // overrides the 'display: none;' from the CSS.
 
     // This will always run, whether there are tokens or not
-    this.editor.on("cursorActivity", () => {
+    this.editor.on('cursorActivity', () => {
         facetsContainer.style.display = 'none';     // set the facets container back to be hidden
     });
   }
 
-  _handleLeftFacetClick(event, facets_obj) {
+  _handleLeftFacetClick(event, facetsObject) {
     const leftFacet = document.getElementById("leftFacet");
     const rightFacet = document.getElementById("rightFacet");
     const facetsContainer = document.getElementById("facetsContainer");
@@ -294,16 +293,16 @@ export class QueryController {
     }
 
     if (selectedKey === "All") {
-        for (let key of Object.keys(facets_obj)) {
-            for (let value of facets_obj[key]) {
+        for (let key of Object.keys(facetsObject)) {
+            for (let value of facetsObject[key]) {
                 let option = document.createElement("option")
                 option.value = value;
                 option.textContent = value;
                 rightFacet.appendChild(option);
             }
         }
-    } else if (facets_obj[selectedKey]) {
-        for (let value of facets_obj[selectedKey]) {
+    } else if (facetsObject[selectedKey]) {
+        for (let value of facetsObject[selectedKey]) {
             const option = document.createElement("option")
             option.value = value;
             option.textContent = value;
@@ -321,10 +320,10 @@ export class QueryController {
     const selectedKey = leftFacet.value
 
     // Synchronize with dropdown if the selected key in the left facet is one of the specified values
-//    if (['commands', 'functions', 'base symbols', 'query symbols'].includes(selectedKey)) {
-//  	    // this.sc.dropdown is a jQuery object wrapping the dropdown element
-//  	    this.sc.dropdown.dropdown('set selected', selectedValue);
-//    }
+    // if (['commands', 'functions', 'base symbols', 'query symbols'].includes(selectedKey)) {
+    //   // this.sc.dropdown is a jQuery object wrapping the dropdown element
+    //   this.sc.dropdown.dropdown('set selected', selectedValue);
+    // }
 
     const dropdownItems = []
     this.sc.dropdown.find('.menu .item').each(function() {

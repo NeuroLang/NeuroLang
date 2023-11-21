@@ -128,17 +128,20 @@ def test_nqm_computes_autocompletion(conf):
     # submit one task
     id1 = uuid4()
 
-    input = '''
-    A(4, 5)
-    A(5, 6)
-    A(6, 5)
-    five := 5
-    B(x,y) :- A(x, y)
-    B(x,y) :- 
-    '''
-    res = nqm.submit_query_autocompletion(id1, input, conf.key)
+    res = nqm.submit_query_autocompletion(
+        id1,
+        '''
+        A(4, 5)
+        A(5, 6)
+        A(6, 5)
+        five := 5
+        B(x,y) :- A(x, y)
+        B(x,y) :- 
+        ''',
+        conf.key
+    )
 
     assert isinstance(res, Future)
 
     # cancel the task
-    cancelled = nqm.cancel(id1)
+    nqm.cancel(id1)
