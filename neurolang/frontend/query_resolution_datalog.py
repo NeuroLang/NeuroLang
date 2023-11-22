@@ -317,7 +317,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.program_ir.walk(program)
         else:
             self.program_ir.walk(intermediate_representation)
-        res = self.datalog_parser(autocompletion_code, interactive=True)
+        res = self.datalog_parser(autocompletion_code, True)
         return res
 
     def query(
