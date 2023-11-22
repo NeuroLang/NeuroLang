@@ -13,3 +13,44 @@ body {
 .main.menu .item .github.icon {
   font-size: 1.5em;
 }
+
+#facetsContainer {
+    display: none;              /* container initially hidden */
+    flex-direction: row;        /* children lay out in a row */
+    gap: 10px;                  /* space between the children */
+    align-items: center;        /* vertically align the children in the center */
+}
+
+/* to give a specific width to the facets */
+#leftFacet, #rightFacet {
+    width: 150px;               /* width */
+    height: 120px;               /* adjust based on content or set a fixed height if needed */
+    overflow-y: auto;           /* add a vertical scrollbar if the content overflows the box */
+    margin-right: 10px;         /* add some space between the list boxes */
+}
+
+/*
+#okButton {
+    /* display: none;
+    padding: 5px 15px;          /* padding
+    align-self: center;         /* vertically center the OK button
+	margin-left: auto;          /* push the OK button to the right
+}
+*/
+
+#facetsContainer label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.facetsInnerContainer {
+    display: flex;
+    justify-content: space-between;     /* distribute space between the flex items */
+}
+
+#leftFacetContainer, #rightFacetContainer {
+	flex: 1;                    /* allow the facets to grow and take up the available space */
+	margin-right: 10px;         /* add some spacing between the facets */
+}
+
