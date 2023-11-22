@@ -1,234 +1,226 @@
 import pytest
 
-from ..interactive_parsing import LarkCompleter
 from ...expressions import Symbol
 from ...exceptions import UnexpectedTokenError
-from ...frontend.datalog.standard_syntax import COMPILED_GRAMMAR
+from ...frontend.datalog.standard_syntax import parser
 
 
 def test_interactive_empty_input():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-    res = completer.complete('').token_options
+    res = parser('', interactive=True)
     expected = {'Signs': {'(', '@', '∃'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'-', '~', '¬'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'ans', 'exists'}, 'Boleans': {'⊥', '⊤', 'True', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
 
 def test_interactive_facts():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('A').token_options
+    res = parser('A', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(), 'Operators': {'/', '+', '*', '-', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {':=', '::'}, 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(').token_options
+    res = parser('A(', interactive=True)
     expected = {'Signs': {'...', '@', ')', '('}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A()').token_options
+    res = parser('A()', interactive=True)
     expected = {'Signs': {'@', '(', '∃'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'¬', '-', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'⊤', 'True', '⊥', 'False'}, 'Expression symbols': {'←', '.', ':=', ':-', '::'}, 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(3').token_options
+    res = parser('A(3', interactive=True)
     expected = {'Signs': {',', ')'}, 'Numbers': set(), 'Text': set(), 'Operators': {'/', '+', '*', '-', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(3)').token_options
+    res = parser('A(3)', interactive=True)
     expected = {'Signs': {'@', '(', '∃'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'¬', '-', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'ans', 'exists'}, 'Boleans': {'⊤', 'True', '⊥', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A("x"').token_options
+    res = parser('A("x"', interactive=True)
     expected = {'Signs': {',', ')'}, 'Numbers': set(), 'Text': set(), 'Operators': {'/', '+', '*', '-', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A("x")').token_options
+    res = parser('A("x")', interactive=True)
     expected = {'Signs': {'@', '(', '∃'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'¬', '-', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'ans', 'exists'}, 'Boleans': {'⊤', 'True', '⊥', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A("x",').token_options
+    res = parser('A("x",', interactive=True)
     expected = {'Signs': {'@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>'}}
     assert res == expected
 
-    res = completer.complete("A('x', 3").token_options
+    res = parser("A('x', 3", interactive=True)
     expected = {'Signs': {',', ')'}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete("A('x', 3,").token_options
+    res = parser("A('x', 3,", interactive=True)
     expected = {'Signs': {'@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>'}}
     assert res == expected
 
-    res = completer.complete("A('x', 3)").token_options
+    res = parser("A('x', 3)", interactive=True)
     expected = {'Signs': {'@', '(', '∃'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'¬', '-', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'ans', 'exists'}, 'Boleans': {'⊤', 'True', '⊥', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('''
+    res = parser('''
     `http://uri#test-fact`("x")
     A("x", 3
-    ''').token_options
+    ''', interactive=True)
     expected = {'Signs': {',', ')'}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
 
 def test_interactive_rules():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('A(x').token_options
+    res = parser('A(x', interactive=True)
     expected = {'Signs': {')', ',', '('}, 'Numbers': set(), 'Text': set(), 'Operators': {'-', '+', '/', '*', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x)').token_options
+    res = parser('A(x)', interactive=True)
     expected = {'Signs': set(), 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {'::', ':-', ':=', '←'}, 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-').token_options
+    res = parser('A(x):-', interactive=True)
     expected = {'Signs': {'∃', '(', '@'}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B').token_options
+    res = parser('A(x):-B', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(').token_options
+    res = parser('A(x):-B(', interactive=True)
     expected = {'Signs': {')', '...', '(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B()').token_options
+    res = parser('A(x):-B()', interactive=True)
     expected = {'Signs': {',', '∧', '(', '∃', '&', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'//', '-', '¬', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x').token_options
+    res = parser('A(x):-B(x', interactive=True)
     expected = {'Signs': {')', ',', '('}, 'Numbers': set(), 'Text': set(), 'Operators': {'-', '+', '/', '*', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x,').token_options
+    res = parser('A(x):-B(x,', interactive=True)
     expected = {'Signs': {'...', '(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x, y').token_options
+    res = parser('A(x):-B(x, y', interactive=True)
     expected = {'Signs': {')', ',', '('}, 'Numbers': set(), 'Text': set(), 'Operators': {'-', '+', '/', '*', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x, y)').token_options
+    res = parser('A(x):-B(x, y)', interactive=True)
     expected = {'Signs': {',', '∧', '(', '∃', '&', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'//', '-', '¬', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x, y),').token_options
+    res = parser('A(x):-B(x, y),', interactive=True)
     expected = {'Signs': {'∃', '(', '@'}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x, y), C(3, z)').token_options
+    res = parser('A(x):-B(x, y), C(3, z)', interactive=True)
     expected = {'Signs': {',', '∧', '(', '∃', '&', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'-', '¬', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-~').token_options
+    res = parser('A(x):-~', interactive=True)
     expected = {'Signs': {'∃', '(', '@'}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-~B(x)').token_options
+    res = parser('A(x):-~B(x)', interactive=True)
     expected = {'Signs': {',', '∧', '(', '∃', '&', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'//', '-', '¬', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-~B(x),').token_options
+    res = parser('A(x):-~B(x),', interactive=True)
     expected = {'Signs': {'∃', '(', '@'}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x, ...)').token_options
+    res = parser('A(x):-B(x, ...)', interactive=True)
     expected = {'Signs': {',', '∧', '(', '∃', '&', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'//', '-', '¬', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x, y), C(3, z), (').token_options
+    res = parser('A(x):-B(x, y), C(3, z), (', interactive=True)
     expected = {'Signs': {'...', '(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x, y), C(3, z), (z').token_options
+    res = parser('A(x):-B(x, y), C(3, z), (z', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(),
                 'Operators': {'-', '==', '<=', '+', '!=', '>=', '>', '<', '/', '*', '**'}, 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x, y), C(3, z), (z ==').token_options
+    res = parser('A(x):-B(x, y), C(3, z), (z ==', interactive=True)
     expected = {'Signs': {'...', '(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x + 5 *').token_options
+    res = parser('A(x):-B(x + 5 *', interactive=True)
     expected = {'Signs': {'(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x / 2').token_options
+    res = parser('A(x):-B(x / 2', interactive=True)
     expected = {'Signs': {')', ','}, 'Numbers': set(), 'Text': set(), 'Operators': {'-', '+', '/', '*', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(f(x').token_options
+    res = parser('A(x):-B(f(x', interactive=True)
     expected = {'Signs': {')', ',', '('}, 'Numbers': set(), 'Text': set(), 'Operators': {'-', '+', '/', '*', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x + (-5),').token_options
+    res = parser('A(x):-B(x + (-5),', interactive=True)
     expected = {'Signs': {'...', '(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x + (-5), "a"').token_options
+    res = parser('A(x):-B(x + (-5), "a"', interactive=True)
     expected = {'Signs': {')', ','}, 'Numbers': set(), 'Text': set(), 'Operators': {'-', '+', '/', '*', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x):-B(x - 5 * 2, @').token_options
+    res = parser('A(x):-B(x - 5 * 2, @', interactive=True)
     expected = {'Signs': set(), 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
 
 def test_interactive_aggregation():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('A(x, f(').token_options
+    res = parser('A(x, f(', interactive=True)
     expected = {'Signs': {'...', '@', ')', '('}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('A(x, f(y').token_options
+    res = parser('A(x, f(y', interactive=True)
     expected = {'Signs': {',', ')', '('}, 'Numbers': set(), 'Text': set(), 'Operators': {'-', '*', '/', '**', '+'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x, f(y)').token_options
+    res = parser('A(x, f(y)', interactive=True)
     expected = {'Signs': {',', ')'}, 'Numbers': set(), 'Text': set(), 'Operators': {'-', '*', '/', '**', '+'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('A(x, f(y))').token_options
+    res = parser('A(x, f(y))', interactive=True)
     expected = {'Signs': set(), 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {'←', ':=', ':-', '::'}, 'Python string': set(), 'Strings': set()}
     assert res == expected
@@ -241,431 +233,405 @@ def test_interactive_uri():
     regional_part = Symbol(
         name='http://sig.biostr.washington.edu/fma3.0#regional_part_of'
     )
-    completer = LarkCompleter(COMPILED_GRAMMAR)
 
-    res = completer.complete(f'`{str(label.name)}`').token_options
+    res = parser(f'`{str(label.name)}`', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(), 'Operators': {'/', '+', '*', '-', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {'::', ':='}, 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete(f'`{str(label.name)}`(x)').token_options
+    res = parser(f'`{str(label.name)}`(x)', interactive=True)
     expected = {'Signs': set(), 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {'::', '←', ':=', ':-'}, 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete(f'`{str(label.name)}`(x):-').token_options
+    res = parser(f'`{str(label.name)}`(x):-', interactive=True)
     expected = {'Signs': {'(', '@', '∃'}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'False', 'True', '⊤', '⊥'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete(f'`{str(label.name)}`(x):-`{str(regional_part.name)}`').token_options
+    res = parser(f'`{str(label.name)}`(x):-`{str(regional_part.name)}`', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete(f'`{str(label.name)}`(x):-`{str(regional_part.name)}`(x, y)').token_options
+    res = parser(f'`{str(label.name)}`(x):-`{str(regional_part.name)}`(x, y)', interactive=True)
     expected = {'Signs': {'(', '&', ',', '@', '∧', '∃'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'//', '¬', '~', '-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'ans', 'EXISTS', 'exists'}, 'Boleans': {'False', 'True', '⊤', '⊥'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
 
 def test_interactive_probabilistic_fact():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('p::').token_options
+    res = parser('p::', interactive=True)
     expected = {'Signs': set(), 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('p::A').token_options
+    res = parser('p::A', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('p::A(').token_options
+    res = parser('p::A(', interactive=True)
     expected = {'Signs': {')', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>'}}
     assert res == expected
 
-    res = completer.complete('p::A(3').token_options
+    res = parser('p::A(3', interactive=True)
     expected = {'Signs': {')', ','}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('p::A(3)').token_options
+    res = parser('p::A(3)', interactive=True)
     expected = {'Signs': {'(', '@', '∃'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'~', '-', '¬'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'ans', 'exists'}, 'Boleans': {'⊥', '⊤', 'True', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('0.8::A("a b",').token_options
+    res = parser('0.8::A("a b",', interactive=True)
     expected = {'Signs': {'@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>'}}
     assert res == expected
 
-    res = completer.complete('0.8::A("a b", 3').token_options
+    res = parser('0.8::A("a b", 3', interactive=True)
     expected = {'Signs': {')', ','}, 'Numbers': set(), 'Text': set(), 'Operators': set(),
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('0.8::A("a b", 3)').token_options
+    res = parser('0.8::A("a b", 3)', interactive=True)
     expected = {'Signs': {'(', '@', '∃'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'~', '-', '¬'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'ans', 'exists'}, 'Boleans': {'⊥', '⊤', 'True', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('B(x) :: exp(-d / 5.0)').token_options
+    res = parser('B(x) :: exp(-d / 5.0)', interactive=True)
     expected = {'Signs': set(), 'Numbers': set(), 'Text': set(), 'Operators': {'-', '/', '*', '+', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {':-', '←'}, 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('B(x) :: exp(-d / 5.0) :-').token_options
+    res = parser('B(x) :: exp(-d / 5.0) :-', interactive=True)
     expected = {'Signs': {'(', '@', '∃'}, 'Numbers': set(), 'Text': set(), 'Operators': {'~', '¬'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'⊥', '⊤', 'True', 'False'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('B(x) :: exp(-d / 5.0) :- A(x, d)').token_options
+    res = parser('B(x) :: exp(-d / 5.0) :- A(x, d)', interactive=True)
     expected = {'Signs': {'@', '&', '(', '∃', '∧', ','}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'//', '~', '-', '¬'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'ans', 'exists'}, 'Boleans': {'⊥', '⊤', 'True', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete(
-        'B(x) :: exp(-d / 5.0) :- A(x, d) &').token_options
+    res = parser('B(x) :: exp(-d / 5.0) :- A(x, d) &', interactive=True)
     expected = {'Signs': {'(', '@', '∃'}, 'Numbers': set(), 'Text': set(), 'Operators': {'~', '¬'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'⊥', '⊤', 'True', 'False'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete(
-        'B(x) :: exp(-d / 5.0) :- A(x, d) & (d < 0.8)').token_options
+    res = parser('B(x) :: exp(-d / 5.0) :- A(x, d) & (d < 0.8)',
+                 interactive=True)
     expected = {'Signs': {'@', '&', '(', '∃', '∧', ','}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'~', '-', '¬'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'ans', 'exists'}, 'Boleans': {'⊥', '⊤', 'True', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
 
 def test_interactive_condition():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('C(x) :- A(x) //').token_options
+    res = parser('C(x) :- A(x) //', interactive=True)
     expected = {'Signs': {'(', '∃', '@'}, 'Numbers': set(), 'Text': set(), 'Operators': {'~', '¬'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊤', '⊥', 'True', 'False'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- A(x) // B(x)').token_options
+    res = parser('C(x) :- A(x) // B(x)', interactive=True)
     expected = {'Signs': {'(', '∃', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'~', '¬', '-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊤', '⊥', 'True', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- A(x) // (A(x),').token_options
+    res = parser('C(x) :- A(x) // (A(x),', interactive=True)
     expected = {'Signs': {'(', '∃', '@'}, 'Numbers': set(), 'Text': set(), 'Operators': {'~', '¬'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊤', '⊥', 'True', 'False'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- A(x) // (A(x), B(x))').token_options
+    res = parser('C(x) :- A(x) // (A(x), B(x))', interactive=True)
     expected = {'Signs': {'(', '∃', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'~', '¬', '-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊤', '⊥', 'True', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- (A(x), B(x)) // B(x)').token_options
+    res = parser('C(x) :- (A(x), B(x)) // B(x)', interactive=True)
     expected = {'Signs': {'(', '∃', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'~', '¬', '-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'ans', 'EXISTS'}, 'Boleans': {'⊤', '⊥', 'True', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
 
 def test_interactive_existential():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('C(x) :- B(x), exists').token_options
+    res = parser('C(x) :- B(x), exists', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- B(x), exists(').token_options
+    res = parser('C(x) :- B(x), exists(', interactive=True)
     expected = {'Signs': {'(', '...', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- B(x), exists(s1').token_options
+    res = parser('C(x) :- B(x), exists(s1', interactive=True)
     expected = {'Signs': {'(', ',', ';'}, 'Numbers': set(), 'Text': set(), 'Operators': {'**', '+', '*', '/', '-'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': {'st'}, 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- B(x), exists(s1;').token_options
+    res = parser('C(x) :- B(x), exists(s1;', interactive=True)
     expected = {'Signs': {'(', '@', '∃'}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'False', 'True', '⊥', '⊤'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- B(x), exists(s1; A(s1))').token_options
+    res = parser('C(x) :- B(x), exists(s1; A(s1))', interactive=True)
     expected = {'Signs': {',', '@', '&', '∧', '∃', '('}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'¬', '~', '-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'ans', 'exists', 'EXISTS'}, 'Boleans': {'False', 'True', '⊥', '⊤'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- B(x), ∃').token_options
+    res = parser('C(x) :- B(x), ∃', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- B(x), ∃(').token_options
+    res = parser('C(x) :- B(x), ∃(', interactive=True)
     expected = {'Signs': {'(', '...', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- B(x), ∃(s1').token_options
+    res = parser('C(x) :- B(x), ∃(s1', interactive=True)
     expected = {'Signs': {'(', ',', ';'}, 'Numbers': set(), 'Text': set(), 'Operators': {'**', '+', '*', '/', '-'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': {'st'}, 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- B(x), ∃(s1 st').token_options
+    res = parser('C(x) :- B(x), ∃(s1 st', interactive=True)
     expected = {'Signs': {'(', '@', '∃'}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'False', 'True', '⊥', '⊤'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('C(x) :- B(x), ∃(s1 st A(s1))').token_options
+    res = parser('C(x) :- B(x), ∃(s1 st A(s1))', interactive=True)
     expected = {'Signs': {',', '@', '&', '∧', '∃', '('}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'¬', '~', '-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'ans', 'exists', 'EXISTS'}, 'Boleans': {'False', 'True', '⊥', '⊤'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete(
-        'C(x) :- B(x), exists(s1, s2; A(s1),').token_options
+    res = parser('C(x) :- B(x), exists(s1, s2; A(s1),', interactive=True)
     expected = {'Signs': {'(', '@', '∃'}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'False', 'True', '⊥', '⊤'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete(
-        'C(x) :- B(x), exists(s1, s2; A(s1), A(s2))').token_options
+    res = parser('C(x) :- B(x), exists(s1, s2; A(s1), A(s2))',
+                 interactive=True)
     expected = {'Signs': {',', '@', '&', '∧', '∃', '('}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'¬', '~', '-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'ans', 'exists', 'EXISTS'}, 'Boleans': {'False', 'True', '⊥', '⊤'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
     with pytest.raises(UnexpectedTokenError):
-        completer.complete('C(x) :- B(x), exists(s1; )').token_options
+        res = parser('C(x) :- B(x), exists(s1; )', interactive=True)
 
 
 def test_interactive_query():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('ans(').token_options
+    res = parser('ans(', interactive=True)
     expected = {'Signs': {'...', ')', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'-'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('ans(x)').token_options
+    res = parser('ans(x)', interactive=True)
     expected = {'Signs': set(), 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {':-', '←'}, 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('ans(x) :-').token_options
+    res = parser('ans(x) :-', interactive=True)
     expected = {'Signs': {'∃', '(', '@'}, 'Numbers': set(), 'Text': set(), 'Operators': {'~', '¬'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊥', 'False', 'True', '⊤'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('ans(x) :- B(x, y), C(3, y)').token_options
+    res = parser('ans(x) :- B(x, y), C(3, y)', interactive=True)
     expected = {'Signs': {'∧', '@', '∃', ',', '(', '&'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'~', '-', '¬'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'⊥', 'False', 'True', '⊤'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
 
 def test_interactive_prob_implicit():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('B(x, PROB').token_options
+    res = parser('B(x, PROB', interactive=True)
     expected = {'Signs': {'(', ')', ','}, 'Numbers': set(), 'Text': set(), 'Operators': {'+', '-', '*', '**', '/'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('B(x, PROB,').token_options
+    res = parser('B(x, PROB,', interactive=True)
     expected = {'Signs': {'(', '@', '...'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('B(x, PROB, y)').token_options
+    res = parser('B(x, PROB, y)', interactive=True)
     expected = {'Signs': set(), 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {'←', ':-', ':=', '::'}, 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('B(x, PROB, y) :- C(x, y)').token_options
+    res = parser('B(x, PROB, y) :- C(x, y)', interactive=True)
     expected = {'Signs': {'@', '(', '∃', '&', ',', '∧'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'-', '~', '¬', '//'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'exists', 'ans'}, 'Boleans': {'True', '⊥', '⊤', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
 
 def test_interactive_prob_explicit():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('B(x, PROB').token_options
+    res = parser('B(x, PROB', interactive=True)
     expected = {'Signs': {',', '(', ')'}, 'Numbers': set(), 'Text': set(), 'Operators': {'+', '*', '-', '/', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('B(x, PROB(').token_options
+    res = parser('B(x, PROB(', interactive=True)
     expected = {'Signs': {'(', '...', ')', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('B(x, PROB(x,').token_options
+    res = parser('B(x, PROB(x,', interactive=True)
     expected = {'Signs': {'(', '...', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('B(x, PROB(x, y)').token_options
+    res = parser('B(x, PROB(x, y)', interactive=True)
     expected = {'Signs': {',', ')'}, 'Numbers': set(), 'Text': set(), 'Operators': {'+', '*', '-', '/', '**'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('B(x, PROB(x, y),').token_options
+    res = parser('B(x, PROB(x, y),', interactive=True)
     expected = {'Signs': {'(', '...', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
 
-    res = completer.complete('B(x, PROB(x, y), y)').token_options
+    res = parser('B(x, PROB(x, y), y)', interactive=True)
     expected = {'Signs': set(), 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {'::', ':=', ':-', '←'}, 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('B(x, PROB(x, y), y) :- C(x, y)').token_options
+    res = parser('B(x, PROB(x, y), y) :- C(x, y)', interactive=True)
     expected = {'Signs': {'&', '∃', '@', ',', '∧', '('}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'~', '-', '¬', '//'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'exists', 'ans'}, 'Boleans': {'⊥', 'True', '⊤', 'False'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<command identifier>', '<identifier regular expression>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
 
 def test_interactive_lambda_definition():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('c').token_options
+    res = parser('c', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(), 'Operators': {'**', '+', '-', '/', '*'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {':=', '::'}, 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('c :=').token_options
+    res = parser('c :=', interactive=True)
     expected = {'Signs': {'@', '('}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('c := lambda').token_options
+    res = parser('c := lambda', interactive=True)
     expected = {'Signs': {'...', '(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('c := lambda x').token_options
+    res = parser('c := lambda x', interactive=True)
     expected = {'Signs': {',', '(', ':'}, 'Numbers': set(), 'Text': set(), 'Operators': {'**', '+', '-', '/', '*'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('c := lambda x:').token_options
+    res = parser('c := lambda x:', interactive=True)
     expected = {'Signs': {'...', '(', '@'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('c := lambda x: x + 1').token_options
+    res = parser('c := lambda x: x + 1', interactive=True)
     expected = {'Signs': {'@', '(', '∃'}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'**', '~', '+', '¬', '-', '/', '*'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'ans', 'exists'}, 'Boleans': {'⊤', 'False', '⊥', 'True'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>', '<text>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
 
 def test_interactive_lambda_definition_statement():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('c(x, y) := x +').token_options
+    res = parser('c(x, y) := x +', interactive=True)
     expected = {'Signs': {'@', '('}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('c(x, y) := x + y').token_options
+    res = parser('c(x, y) := x + y', interactive=True)
     expected = {'Signs': {'∃', '@', '('}, 'Numbers': {'<integer>', '<float>'}, 'Text': set(),
                 'Operators': {'**', '+', '¬', '-', '~', '/', '*'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'ans', 'exists', 'EXISTS'}, 'Boleans': {'False', '⊥', '⊤', 'True'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<identifier regular expression>', '<text>', '<command identifier>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
 
 def test_interactive_lambda_application():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('c := (lambda').token_options
+    res = parser('c := (lambda', interactive=True)
     expected = {'Signs': {'...', '@', '('}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('c := (lambda x').token_options
+    res = parser('c := (lambda x', interactive=True)
     expected = {'Signs': {',', '(', ':'}, 'Numbers': set(), 'Text': set(), 'Operators': {'-', '*', '**', '/', '+'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('c := (lambda x:').token_options
+    res = parser('c := (lambda x:', interactive=True)
     expected = {'Signs': {'...', '@', '('}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('c := (lambda x: x').token_options
+    res = parser('c := (lambda x: x', interactive=True)
     expected = {'Signs': {'(', ')'}, 'Numbers': set(), 'Text': set(), 'Operators': {'-', '*', '**', '/', '+'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('c := (lambda x: x + 1)').token_options
+    res = parser('c := (lambda x: x + 1)', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('c := (lambda x: x + 1)(2)').token_options
+    res = parser('c := (lambda x: x + 1)(2)', interactive=True)
     expected = {'Signs': {'∃', '@', '('}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'~', '-', '*', '**', '/', '¬', '+'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'exists', 'ans'}, 'Boleans': {'True', 'False', '⊤', '⊥'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<command identifier>', '<identifier regular expression>', '<text>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
 
 def test_interactive_command_syntax():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('.').token_options
+    res = parser('.', interactive=True)
     expected = {'Signs': set(), 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<command identifier>'}, 'commands': set()}
     assert res == expected
 
-    res = completer.complete('.load_csv').token_options
+    res = parser('.load_csv', interactive=True)
     expected = {'Signs': {'('}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('.load_csv(').token_options
+    res = parser('.load_csv(', interactive=True)
     expected = {'Signs': {')', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>', '<quoted string>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('.load_csv()').token_options
+    res = parser('.load_csv()', interactive=True)
     expected = {'Signs': {'∃', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'-', '¬', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'True', 'False', '⊥', '⊤'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('.load_csv(A,').token_options
+    res = parser('.load_csv(A,', interactive=True)
     expected = {'Signs': {'(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>', '<quoted string>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete(
-        '.load_csv(A, "http://myweb/file.csv", B)').token_options
+    res = parser('.load_csv(A, "http://myweb/file.csv", B)', interactive=True)
     expected = {'Signs': {'∃', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(),
                 'Operators': {'-', '¬', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS', 'ans'}, 'Boleans': {'True', 'False', '⊥', '⊤'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('.load_csv(sep').token_options
+    res = parser('.load_csv(sep', interactive=True)
     expected = {'Signs': {',', ')', '(', '='}, 'Numbers': set(), 'Text': set(), 'Operators': {'*', '**', '/', '+', '-'},
                 'Cmd_identifier': set(), 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('.load_csv(sep=').token_options
+    res = parser('.load_csv(sep=', interactive=True)
     expected = {'Signs': {'(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(), 'Operators': {'-'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>', '<quoted string>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
-    res = completer.complete('.load_csv(sep=","').token_options
+    res = parser('.load_csv(sep=","', interactive=True)
     expected = {'Signs': {',', ')'}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': set(), 'Python string': set(), 'Strings': set()}
     assert res == expected
 
-    res = completer.complete('.load_csv(sep=",")').token_options
+    res = parser('.load_csv(sep=",")', interactive=True)
     expected = {'Signs': {'∃', '(', '@'}, 'Numbers': {'<float>', '<integer>'}, 'Text': set(), 'Operators': {'-', '¬', '~'}, 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'exists', 'EXISTS', 'ans'},
                 'Boleans': {'True', 'False', '⊥', '⊤'}, 'Expression symbols': {'.'}, 'Python string': set(), 'Strings': {'<text>', '<identifier regular expression>', '<command identifier>'}, 'functions': set(), 'base symbols': set(), 'query symbols': set(), 'commands': set()}
     assert res == expected
 
 
 def test_interactive_constraint():
-    completer = LarkCompleter(COMPILED_GRAMMAR)
-
-    res = completer.complete('(x == y)').token_options
+    res = parser("(x == y)", interactive=True)
     expected = {'Signs': {',', '&', '∧'}, 'Numbers': set(), 'Text': set(), 'Operators': set(), 'Cmd_identifier': set(),
                 'Functions': set(), 'Identifier_regexp': set(), 'Reserved words': set(), 'Boleans': set(), 'Expression symbols': {'→', '-:'}, 'Python string': set(), 'Strings': set()}
     assert res == expected
