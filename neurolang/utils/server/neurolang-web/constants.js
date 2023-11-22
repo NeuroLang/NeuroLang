@@ -27,6 +27,7 @@ switch (VITE_MODE) {
 export const API_ROUTE = {
   statement: BASE_API_URL + '/v1/statement',
   statementsocket: 'ws://' + BASE_API_HOST + '/v1/statementsocket',
+  autocompletion: BASE_API_URL + '/v1/autocompletion',
   status: BASE_API_URL + '/v1/status',
   atlas: BASE_API_URL + '/v1/atlas',
   engines: BASE_API_URL + '/v1/engines',
