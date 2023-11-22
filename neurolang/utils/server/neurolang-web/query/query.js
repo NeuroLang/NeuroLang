@@ -32,7 +32,7 @@ export class QueryController {
       if (event.shiftKey && event.key === 'Tab') {
         // Prevent the default behaviour of the tab key
         event.preventDefault()
-        // this._requestAutocomplete(contentToCursor);
+        // this._requestAutocomplete(contentToCursor)
         this._requestAutocomplete()
       }
     })
@@ -54,7 +54,7 @@ export class QueryController {
     /// Otherwise the event lister would have to be removed before its creation.
     document.getElementById('rightFacet').addEventListener('change', (event) => {
       this._handleRightFacetClick(event)
-    });
+    })
 
     /// Autocompletion Manager
     // this.ac = new AutocompletionController()
@@ -230,7 +230,7 @@ export class QueryController {
       const facets = JSON.parse(data.tokens)
       // Display the facets based on the tokens
       this._displayFacets(facets)
-    });
+    })
   }
 
   /**
@@ -253,7 +253,7 @@ export class QueryController {
 
     // Add facetsObject keys to left facet
     for (const key of Object.keys(facetsObject)) {
-      let option = document.createElement('option')
+      const option = document.createElement('option')
       option.textContent = key
       leftFacet.appendChild(option)
     }
@@ -264,18 +264,20 @@ export class QueryController {
     }
 
     // Create a new handler function that has access to facetsObject
-	this._currentLeftFacetHandler = (event) => this._handleLeftFacetClick(event, facetsObject)
+    this._currentLeftFacetHandler = (event) => this._handleLeftFacetClick(event, facetsObject)
 
     // Attach the new event listener
-	leftFacet.addEventListener('change', this._currentLeftFacetHandler);
+    leftFacet.addEventListener('change', this._currentLeftFacetHandler)
 
     // Display the facets container
-    facetsContainer.style.display = 'flex'          // overrides the 'display: none;' from the CSS.
+    // overrides the 'display: none;' from the CSS.
+    facetsContainer.style.display = 'flex'
 
     // This will always run, whether there are tokens or not
     this.editor.on('cursorActivity', () => {
-        facetsContainer.style.display = 'none'      // set the facets container back to be hidden
-    });
+      // set the facets container back to be hidden
+      facetsContainer.style.display = 'none'
+    })
   }
 
   /**
@@ -283,23 +285,21 @@ export class QueryController {
  * @param {Event} event the event object associated with the click in the left facet
  * @param {Object} facetsObject the categories to be displayed in the facets and their values
  */
-  _handleLeftFacetClick(event, facetsObject) {
-    const leftFacet = document.getElementById('leftFacet')
+  _handleLeftFacetClick (event, facetsObject) {
     const rightFacet = document.getElementById('rightFacet')
-    const facetsContainer = document.getElementById('facetsContainer')
 
     // Retrieve the selected option
     const selectedKey = event.target.value
 
     // Clear previous options
     while (rightFacet.firstChild) {
-      rightFacet.removeChild(rightFacet.firstChild);
+      rightFacet.removeChild(rightFacet.firstChild)
     }
 
-    if (selectedKey === "All") {
-      for (let key of Object.keys(facetsObject)) {
-        for (let value of facetsObject[key]) {
-          let option = document.createElement("option")
+    if (selectedKey === 'All') {
+      for (const key of Object.keys(facetsObject)) {
+        for (const value of facetsObject[key]) {
+          const option = document.createElement('option')
           option.value = value
           option.textContent = value
           rightFacet.appendChild(option)
@@ -307,60 +307,60 @@ export class QueryController {
       }
     } else if (facetsObject[selectedKey]) {
       for (const value of facetsObject[selectedKey]) {
-        const option = document.createElement("option")
-        option.value = value;
-        option.textContent = value;
-        rightFacet.appendChild(option);
+        const option = document.createElement('option')
+        option.value = value
+        option.textContent = value
+        rightFacet.appendChild(option)
       }
     }
 
-    this.editor.focus();
+    this.editor.focus()
   }
 
   /**
  * Handles the click event for the right facet.
  * @param {Event} event the event object associated with the click in the right facet
  */
-  _handleRightFacetClick(event) {
-    const rightFacet = document.getElementById("rightFacet")
-    const selectedValue = rightFacet.value;
-    const leftFacet = document.getElementById("leftFacet")
-    const selectedKey = leftFacet.value
+  _handleRightFacetClick (event) {
+    const rightFacet = document.getElementById('rightFacet')
+    const selectedValue = rightFacet.value
+    const leftFacet = document.getElementById('leftFacet')
 
     const dropdownItems = []
-    this.sc.dropdown.find('.menu .item').each(function() {
-        dropdownItems.push($(this).data('value'));
-    });
+    this.sc.dropdown.find('.menu .item').each(function () {
+      dropdownItems.push($(this).data('value'))
+    })
     if (dropdownItems.includes(selectedValue)) {
-  	    // this.sc.dropdown is a jQuery object wrapping the dropdown element
-  	    this.sc.dropdown.dropdown('set selected', selectedValue);
+      // this.sc.dropdown is a jQuery object wrapping the dropdown element
+      this.sc.dropdown.dropdown('set selected', selectedValue)
     }
 
-    if (selectedValue && selectedValue !== "All") {
-        // get the cursor position in the CodeMirror editor
-        const cursorPos = this.editor.getCursor()
+    if (selectedValue && selectedValue !== 'All') {
+      // get the cursor position in the CodeMirror editor
+      const cursorPos = this.editor.getCursor()
 
-        // insert the selected value at the current cursor position
-        this.editor.replaceRange(selectedValue, cursorPos)
+      // insert the selected value at the current cursor position
+      this.editor.replaceRange(selectedValue, cursorPos)
 
-        // calculate the end position based on the length of the inserted value
-        const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+      // calculate the end position based on the length of the inserted value
+      const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
 
-        // check if the selected value starts with '<' and ends with '>'
-        if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
-            // select the text that was just inserted
-            this.editor.setSelection(cursorPos, endPos)
-        } else {
-            // Move cursor to end of inserted value
-            this.editor.setCursor(endPos);
-        }
+      // check if the selected value starts with '<' and ends with '>'
+      if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
+        // select the text that was just inserted
+        this.editor.setSelection(cursorPos, endPos)
+      } else {
+        // Move cursor to end of inserted value
+        this.editor.setCursor(endPos)
+      }
     }
 
     // Hide the facets and 'ok' button as they are no longer needed
-    const facetsContainer = document.getElementById("facetsContainer");
-    facetsContainer.style.display = 'none';     // set the facets container back to be hidden
+    const facetsContainer = document.getElementById('facetsContainer')
+    // set the facets container back to be hidden
+    facetsContainer.style.display = 'none'
 
     // Refocus the CodeMirror editor to keep the cursor visible in the textarea
-    this.editor.focus();
+    this.editor.focus()
   }
 }
