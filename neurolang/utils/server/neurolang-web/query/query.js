@@ -253,28 +253,28 @@ export class QueryController {
 
     // Add facetsObject keys to left facet
     for (const key of Object.keys(facetsObject)) {
-      let option = document.createElement("option")
-      option.textContent = key;
-      leftFacet.appendChild(option);
+      let option = document.createElement('option')
+      option.textContent = key
+      leftFacet.appendChild(option)
     }
 
     // Make sure to remove any previous event listener to avoid duplicates
     if (this._currentLeftFacetHandler) {
-  	  leftFacet.removeEventListener('change', this._currentLeftFacetHandler);
-	}
+      leftFacet.removeEventListener('change', this._currentLeftFacetHandler)
+    }
 
     // Create a new handler function that has access to facetsObject
-	this._currentLeftFacetHandler = (event) => this._handleLeftFacetClick(event, facetsObject);
+	this._currentLeftFacetHandler = (event) => this._handleLeftFacetClick(event, facetsObject)
 
-	// Attach the new event listener
-	leftFacet.addEventListener("change", this._currentLeftFacetHandler);
+    // Attach the new event listener
+	leftFacet.addEventListener('change', this._currentLeftFacetHandler);
 
     // Display the facets container
-    facetsContainer.style.display = 'flex';         // overrides the 'display: none;' from the CSS.
+    facetsContainer.style.display = 'flex'          // overrides the 'display: none;' from the CSS.
 
     // This will always run, whether there are tokens or not
     this.editor.on('cursorActivity', () => {
-        facetsContainer.style.display = 'none';     // set the facets container back to be hidden
+        facetsContainer.style.display = 'none'      // set the facets container back to be hidden
     });
   }
 
@@ -284,34 +284,34 @@ export class QueryController {
  * @param {Object} facetsObject the categories to be displayed in the facets and their values
  */
   _handleLeftFacetClick(event, facetsObject) {
-    const leftFacet = document.getElementById("leftFacet");
-    const rightFacet = document.getElementById("rightFacet");
-    const facetsContainer = document.getElementById("facetsContainer");
+    const leftFacet = document.getElementById('leftFacet')
+    const rightFacet = document.getElementById('rightFacet')
+    const facetsContainer = document.getElementById('facetsContainer')
 
     // Retrieve the selected option
-    const selectedKey = event.target.value;
+    const selectedKey = event.target.value
 
     // Clear previous options
     while (rightFacet.firstChild) {
-        rightFacet.removeChild(rightFacet.firstChild);
+      rightFacet.removeChild(rightFacet.firstChild);
     }
 
     if (selectedKey === "All") {
-        for (let key of Object.keys(facetsObject)) {
-            for (let value of facetsObject[key]) {
-                let option = document.createElement("option")
-                option.value = value;
-                option.textContent = value;
-                rightFacet.appendChild(option);
-            }
+      for (let key of Object.keys(facetsObject)) {
+        for (let value of facetsObject[key]) {
+          let option = document.createElement("option")
+          option.value = value
+          option.textContent = value
+          rightFacet.appendChild(option)
         }
+      }
     } else if (facetsObject[selectedKey]) {
-        for (let value of facetsObject[selectedKey]) {
-            const option = document.createElement("option")
-            option.value = value;
-            option.textContent = value;
-            rightFacet.appendChild(option);
-        }
+      for (const value of facetsObject[selectedKey]) {
+        const option = document.createElement("option")
+        option.value = value;
+        option.textContent = value;
+        rightFacet.appendChild(option);
+      }
     }
 
     this.editor.focus();
