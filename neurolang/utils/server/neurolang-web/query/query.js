@@ -324,7 +324,6 @@ export class QueryController {
   _handleRightFacetClick (event) {
     const rightFacet = document.getElementById('rightFacet')
     const selectedValue = rightFacet.value
-    const leftFacet = document.getElementById('leftFacet')
 
     const dropdownItems = []
     this.sc.dropdown.find('.menu .item').each(function () {
