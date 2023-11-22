@@ -1,8 +1,11 @@
-from __future__ import annotations
+# from __future__ import annotations
 
 from dataclasses import dataclass
-from lark import Lark, UnexpectedCharacters
+from lark import Lark
+from lark.exceptions import UnexpectedCharacters, UnexpectedToken
 from lark.parsers.lalr_interactive_parser import InteractiveParser
+
+from ..exceptions import UnexpectedTokenError
 
 # Code based on https://github.com/MegaIng/lark-autocomplete/blob/master/lark_autocomplete.py
 
@@ -71,7 +74,7 @@ TERMINALS_TO_CATEGORIES = {
 class CompleteResult:
     pos: int
     prefix: str
-    token_options: set[str]
+    token_options: set
 
     def to_dictionary(self):
         return {
@@ -100,6 +103,8 @@ class LarkCompleter:
                 break
             except UnexpectedCharacters as e:
                 return self.compute_options_unexpected_char(interactive, text, e)
+            except UnexpectedToken as e:
+                raise UnexpectedTokenError(str(e), line=e.line - 1, column=e.column - 1) from e
             interactive.feed_token(token)
         return self.compute_options_no_error(interactive, text)
 
