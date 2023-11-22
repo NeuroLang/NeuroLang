@@ -377,7 +377,7 @@ class QueryAutocompletionHandler(JSONRequestHandler):
         f = self.application.nqm.submit_query_autocompletion(
             self.uuid, text, text_autocompletion, engine)
         fres = f.result()
-        # convert sets to lists, otherwise not convertable to a json
+        # convert sets to lists, otherwise not convertible to a json
         for i in fres:
             fres[i] = list(fres[i])
         fjson = json.dumps(fres)
