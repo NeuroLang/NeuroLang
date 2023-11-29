@@ -1,23 +1,24 @@
 import logging
-from concurrent.futures import Future, ThreadPoolExecutor
+import nibabel
 import types
-from neurolang.commands import CommandsMixin
-from neurolang.expressions import Command
-from neurolang.frontend.query_resolution_expressions import Symbol
-from neurolang.type_system import get_args, is_leq_informative
+
+from collections import OrderedDict
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from threading import RLock, get_ident
 from typing import AbstractSet, Callable, Dict, Union
-from collections import OrderedDict
 
-import nibabel
-from neurolang.utils.relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraFrozenSet,
-)
 from .engines import (
     NeurolangEngineConfiguration,
     NeurolangEngineSet,
 )
+from ..relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+)
+from ...commands import CommandsMixin
+from ...expressions import Command
+from ...frontend.query_resolution_expressions import Symbol
+from ...type_system import get_args, is_leq_informative
 
 
 LOG = logging.getLogger(__name__)
@@ -109,8 +110,9 @@ class NeurolangQueryManager:
         for config, nb in options.items():
             LOG.debug("Starting creation of %d %s engines...", nb, config.key)
             for _ in range(nb):
-                future = self.executor.submit(create_wrapper, config)
-                future.add_done_callback(self._engine_created)
+                futures = [self.executor.submit(create_wrapper, config)]
+                for future in as_completed(futures):
+                    future.add_done_callback(self._engine_created)
 
     def _engine_created(self, future: Future) -> None:
         """
