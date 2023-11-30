@@ -1,0 +1,20 @@
+{
+	"expression":	{
+						"values":	[
+										"rule"
+						]
+	},
+	"rule": 		{
+						"values":	[
+										"<identifier> ( <arguments> ) :- <condition>",
+										"<identifier> ( <arguments> ) :- <body>",
+										"<query> :- <condition>",
+										"<query> :- <body>"
+						]
+	},
+	"head":			{
+						"values":	[
+										"<identifier> ( <arguments> )"
+						]
+	}
+}
