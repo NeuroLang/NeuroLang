@@ -5,7 +5,15 @@ import { API_ROUTE } from '../constants'
  * Class to manage query submission.
  */
 export class AutocompletionController {
+
+  /// HTML related properties
+  facetsContainerElement = document.getElementById('facetsContainer')
+  leftFacetElement = null
+  _currentLeftFacetHandler = null
+  rightFacetElement = null
+
   constructor (editor, sc, engine) {
+
     this.editor = editor
     this.sc = sc
     this.engine = engine
@@ -14,6 +22,8 @@ export class AutocompletionController {
       if (event.shiftKey && event.key === 'Tab') {
         // Prevent the default behaviour of the tab key
         event.preventDefault()
+        this._cleanFacets()
+
         // this._requestAutocomplete(contentToCursor)
         this._requestAutocomplete()
       }
@@ -21,9 +31,41 @@ export class AutocompletionController {
 
     /// Attach the change event listener to the right facet here to make sure we avoid duplicates.
     /// Otherwise the event lister would have to be removed before its creation.
-    document.getElementById('rightFacet').addEventListener('change', (event) => {
+    this.rightFacetElement = document.getElementById('rightFacet')
+    this.rightFacetElement.addEventListener('change', (event) => {
       this._handleRightFacetClick(event)
     })
+  }
+
+  _cleanFacets () {
+
+    if (this.rightFacetElement) {
+      // Clear previous facet items
+      this.rightFacetElement.innerHTML = ''
+    }
+
+    if (this.leftFacetElement) {
+      // Clear previous left facet items
+      this.leftFacetElement.innerHTML = ''
+
+      // Make sure to remove any previous event listener to avoid duplicates
+      if (this._currentLeftFacetHandler) {
+        this.leftFacetElement.removeEventListener('change', this._currentLeftFacetHandler)
+        this._currentLeftFacetHandler = null
+      }
+
+    }
+  }
+
+  _initialiseFacets (facetsObject) {
+    this.leftFacetElement = document.getElementById('leftFacet')
+//    this.rightFacetElement = document.getElementById('rightFacet')
+
+    // Create a new handler function that has access to facetsObject
+    this._currentLeftFacetHandler = (event) => this._handleLeftFacetClick(event, facetsObject)
+
+    // Attach the new event listener
+    this.leftFacetElement.addEventListener('change', this._currentLeftFacetHandler)
   }
 
   /**
@@ -48,6 +90,9 @@ export class AutocompletionController {
 
     $.post(API_ROUTE.autocompletion, { text: allText, engine: this.engine, line: lineNumber, startpos: lineStartPos, endpos: cursorIndex }, data => {
       const facets = JSON.parse(data.tokens)
+
+      this._initialiseFacets(facets)
+
       // Display the facets based on the tokens
       this._displayFacets(facets)
     })
@@ -58,45 +103,27 @@ export class AutocompletionController {
  * @param {Object} facetsObject the categories to be displayed in the facets and their values
  */
   _displayFacets (facetsObject) {
-    const leftFacet = document.getElementById('leftFacet')
-    const rightFacet = document.getElementById('rightFacet')
-    const facetsContainer = document.getElementById('facetsContainer')
-
-    // Clear previous facet items
-    leftFacet.innerHTML = ''
-    rightFacet.innerHTML = ''
 
     // Add 'All' option to the left facet
     const deselectOption = document.createElement('option')
     deselectOption.textContent = 'All'
-    leftFacet.appendChild(deselectOption)
+    this.leftFacetElement.appendChild(deselectOption)
 
     // Add facetsObject keys to left facet
     for (const key of Object.keys(facetsObject)) {
       const option = document.createElement('option')
       option.textContent = key
-      leftFacet.appendChild(option)
+      this.leftFacetElement.appendChild(option)
     }
-
-    // Make sure to remove any previous event listener to avoid duplicates
-    if (this._currentLeftFacetHandler) {
-      leftFacet.removeEventListener('change', this._currentLeftFacetHandler)
-    }
-
-    // Create a new handler function that has access to facetsObject
-    this._currentLeftFacetHandler = (event) => this._handleLeftFacetClick(event, facetsObject)
-
-    // Attach the new event listener
-    leftFacet.addEventListener('change', this._currentLeftFacetHandler)
 
     // Display the facets container
     // overrides the 'display: none;' from the CSS.
-    facetsContainer.style.display = 'flex'
+    this.facetsContainerElement.style.display = 'flex'
 
     // This will always run, whether there are tokens or not
     this.editor.on('cursorActivity', () => {
       // set the facets container back to be hidden
-      facetsContainer.style.display = 'none'
+      this.facetsContainerElement.style.display = 'none'
     })
   }
 
@@ -106,14 +133,13 @@ export class AutocompletionController {
  * @param {Object} facetsObject the categories to be displayed in the facets and their values
  */
   _handleLeftFacetClick (event, facetsObject) {
-    const rightFacet = document.getElementById('rightFacet')
 
     // Retrieve the selected option
     const selectedKey = event.target.value
 
     // Clear previous options
-    while (rightFacet.firstChild) {
-      rightFacet.removeChild(rightFacet.firstChild)
+    while (this.rightFacetElement.firstChild) {
+      this.rightFacetElement.removeChild(this.rightFacetElement.firstChild)
     }
 
     if (selectedKey === 'All') {
@@ -122,7 +148,7 @@ export class AutocompletionController {
           const option = document.createElement('option')
           option.value = value
           option.textContent = value
-          rightFacet.appendChild(option)
+          this.rightFacetElement.appendChild(option)
         }
       }
     } else if (facetsObject[selectedKey]) {
@@ -130,7 +156,7 @@ export class AutocompletionController {
         const option = document.createElement('option')
         option.value = value
         option.textContent = value
-        rightFacet.appendChild(option)
+        this.rightFacetElement.appendChild(option)
       }
     }
 
@@ -142,8 +168,7 @@ export class AutocompletionController {
  * @param {Event} event the event object associated with the click in the right facet
  */
   _handleRightFacetClick (event) {
-    const rightFacet = document.getElementById('rightFacet')
-    const selectedValue = rightFacet.value
+    const selectedValue = this.rightFacetElement.value
 
     const dropdownItems = []
     this.sc.dropdown.find('.menu .item').each(function () {
@@ -175,9 +200,8 @@ export class AutocompletionController {
     }
 
     // Hide the facets and 'ok' button as they are no longer needed
-    const facetsContainer = document.getElementById('facetsContainer')
     // set the facets container back to be hidden
-    facetsContainer.style.display = 'none'
+    this.facetsContainerElement.style.display = 'none'
 
     // Refocus the CodeMirror editor to keep the cursor visible in the textarea
     this.editor.focus()
