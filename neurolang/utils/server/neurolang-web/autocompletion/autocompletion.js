@@ -10,8 +10,13 @@ export class AutocompletionController {
   /// HTML related properties
   facetsContainerElement = document.getElementById('facetsContainer')
   leftFacetElement = null
+  leftFacetLabelElement = null
+  leftFacetContainerElement = null
   _currentLeftFacetHandler = null
   rightFacetElement = null
+  rightFacetLabelElement = null
+  rightFacetContainerElement = null
+  _currentRightFacetHandler = null
 
   constructor (editor, sc, engine) {
 
@@ -24,6 +29,8 @@ export class AutocompletionController {
         // Prevent the default behaviour of the tab key
         event.preventDefault()
         this._cleanFacets()
+//        this._createFacets()
+//        this._createFacetsContainers()
 
         // this._requestAutocomplete(contentToCursor)
         this._requestAutocomplete()
@@ -32,41 +39,181 @@ export class AutocompletionController {
 
     /// Attach the change event listener to the right facet here to make sure we avoid duplicates.
     /// Otherwise the event lister would have to be removed before its creation.
-    this.rightFacetElement = document.getElementById('rightFacet')
-    this.rightFacetElement.addEventListener('change', (event) => {
-      this._handleRightFacetClick(event)
-    })
+//    this.rightFacetElement = document.getElementById('rightFacet')
+//    this.rightFacetElement.addEventListener('change', (event) => {
+//      this._handleRightFacetClick(event)
+//    })
   }
 
   _cleanFacets () {
+    this._clearFacetsContent()
+    this._removeFacetsEventListeners()
+    this._removeFacetsContainers()
 
-    if (this.rightFacetElement) {
+//    if (this.rightFacetElement) {
       // Clear previous facet items
-      this.rightFacetElement.innerHTML = ''
-    }
+//      this.rightFacetElement.innerHTML = ''
+//    }
 
+//    if (this.leftFacetElement) {
+      // Clear previous left facet items
+//      this.leftFacetElement.innerHTML = ''
+      // Make sure to remove any previous event listener to avoid duplicates
+//      if (this._currentLeftFacetHandler) {
+//        this._currentLeftFacetHandler = this.leftFacetElement.removeEventListener('change', this._currentLeftFacetHandler)
+//      }
+      // Remove the left facet container if it already exists
+//      this.leftFacetElement = this.leftFacetElement.remove()
+//    }
+
+
+  }
+
+  _clearFacetsContent () {
+    if (this.leftFacetLabelElement) {
+      // Clear previous left facet label content
+      this.leftFacetLabelElement.textContent = ''
+    }
     if (this.leftFacetElement) {
       // Clear previous left facet items
       this.leftFacetElement.innerHTML = ''
+    }
 
-      // Make sure to remove any previous event listener to avoid duplicates
-      if (this._currentLeftFacetHandler) {
-        this.leftFacetElement.removeEventListener('change', this._currentLeftFacetHandler)
-        this._currentLeftFacetHandler = null
-      }
-
+    if (this.rightFacetLabelElement) {
+      // Clear previous left facet label content
+      this.rightFacetLabelElement.textContent = ''
+    }
+    if (this.rightFacetElement) {
+      // Clear previous left facet items
+      this.rightFacetElement.innerHTML = ''
     }
   }
 
-  _initialiseFacets (facetsObject) {
+  _removeFacetsEventListeners () {
+    if (this.leftFacetElement) {
+      // Make sure to remove any previous event listener to avoid duplicates
+      if (this._currentLeftFacetHandler) {
+        this._currentLeftFacetHandler = this.leftFacetElement.removeEventListener('change', this._currentLeftFacetHandler)
+      }
+    }
+
+    if (this.rightFacetElement) {
+      // Make sure to remove any previous event listener to avoid duplicates
+      if (this._currentRightFacetHandler) {
+        this._currentRightFacetHandler = this.rightFacetElement.removeEventListener('change', this._currentRightFacetHandler)
+      }
+    }
+  }
+
+  _removeFacetsContainers () {
+
+    // Left facet container
+
+    // Remove the left facet container if it already exists
+    if (this.leftFacetLabelElement) {
+      this.leftFacetLabelElement = this.leftFacetLabelElement.remove()
+    }
+    if (this.leftFacetElement) {
+      this.leftFacetElement = this.leftFacetElement.remove()
+    }
+    if (this.leftFacetContainerElement) {
+      this.leftFacetContainerElement = this.leftFacetContainerElement.remove()
+    }
+
+    // Right facet container
+
+    // Remove the right facet container if it already exists
+    if (this.rightFacetLabelElement) {
+      this.rightFacetLabelElement = this.rightFacetLabelElement.remove()
+    }
+    if (this.rightFacetElement) {
+      this.rightFacetElement = this.rightFacetElement.remove()
+    }
+    if (this.rightFacetContainerElement) {
+      this.rightFacetContainerElement = this.rightFacetContainerElement.remove()
+    }
+  }
+
+  _createFacets (facetsObject) {
+    this._createFacetsContainers()
+    this._addFacetsEventListeners(facetsObject)
+  }
+
+  _createFacetsContainers () {
+    // Retrieve the div element by class
+    var containerDiv = document.querySelector('.ui.segment.code-mirror-container.facetsInnerContainer');
+
+    // Create the first 'facet' div
+    var leftFacetDiv = document.createElement('div');
+    leftFacetDiv.className = 'facet';
+    leftFacetDiv.id = 'leftFacetContainer';
+
+    // Create label for the first select
+    var leftLabel = document.createElement('label');
+    leftLabel.id = 'leftLabel';
+    leftLabel.htmlFor = 'leftFacet';
+    leftLabel.textContent = 'Categories';
+
+    // Create the first select
+    var leftSelect = document.createElement('select');
+    leftSelect.id = 'leftFacet';
+    leftSelect.size = '5';
+
+    // Append the label and select to the first 'facet' div
+    leftFacetDiv.appendChild(leftLabel);
+    leftFacetDiv.appendChild(leftSelect);
+
+    // Append the first 'facet' div to the container
+    containerDiv.appendChild(leftFacetDiv);
+
+    // Define class element
     this.leftFacetElement = document.getElementById('leftFacet')
-//    this.rightFacetElement = document.getElementById('rightFacet')
+    this.leftFacetLabelElement = document.getElementById('leftLabel')
+    this.leftFacetContainerElement = document.getElementById('leftFacetContainer')
+
+    // Repeat the process for the second 'facet'
+    var rightFacetDiv = document.createElement('div');
+    rightFacetDiv.className = 'facet';
+    rightFacetDiv.id = 'rightFacetContainer';
+
+    var rightLabel = document.createElement('label');
+    rightLabel.id = 'rightLabel';
+    rightLabel.htmlFor = 'rightFacet';
+    rightLabel.textContent = 'Values';
+
+    var rightSelect = document.createElement('select');
+    rightSelect.id = 'rightFacet';
+    rightSelect.size = '5';
+
+    rightFacetDiv.appendChild(rightLabel);
+    rightFacetDiv.appendChild(rightSelect);
+
+    containerDiv.appendChild(rightFacetDiv);
+
+    // Define class element
+    this.rightFacetElement = document.getElementById('rightFacet')
+    this.rightFacetLabelElement = document.getElementById('rightLabel')
+    this.rightFacetContainerElement = document.getElementById('rightFacetContainer')
+  }
+
+  _addFacetsEventListeners (facetsObject) {
+
+    // Left facet
 
     // Create a new handler function that has access to facetsObject
     this._currentLeftFacetHandler = (event) => this._handleLeftFacetClick(event, facetsObject)
 
     // Attach the new event listener
     this.leftFacetElement.addEventListener('change', this._currentLeftFacetHandler)
+
+    // Right facet
+
+    // Create a new handler function that has access to facetsObject
+    this._currentRightFacetHandler = (event) => this._handleRightFacetClick(event)
+
+    // Attach the new event listener
+    this.rightFacetElement.addEventListener('change', this._currentRightFacetHandler)
+
   }
 
   /**
@@ -91,8 +238,7 @@ export class AutocompletionController {
 
     $.post(API_ROUTE.autocompletion, { text: allText, engine: this.engine, line: lineNumber, startpos: lineStartPos, endpos: cursorIndex }, data => {
       const facets = JSON.parse(data.tokens)
-
-      this._initialiseFacets(facets)
+      this._createFacets (facets)
 
       // Display the facets based on the tokens
       this._displayFacets(facets)
