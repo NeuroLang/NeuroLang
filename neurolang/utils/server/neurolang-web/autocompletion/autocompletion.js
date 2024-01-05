@@ -319,7 +319,7 @@ export class AutocompletionController {
         const curcursorpos = cursorPos.ch
         console.log("Current line cursor position :", curcursorpos)
 
-        let word = this._getWordAtPosition(line, curcursorpos);
+        let word = this._getWordAtPosition(curline, curcursorpos);
         console.log(word); // Outputs the word at the given position
 
         if (word && this._checkWordFormat(word)) {
