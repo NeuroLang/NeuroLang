@@ -17,6 +17,10 @@ export class AutocompletionController {
   rightFacetLabelElement = null
   rightFacetContainerElement = null
   _currentRightFacetHandler = null
+  patternFacetElement = null
+  patternFacetLabelElement = null
+  patternFacetContainerElement = null
+  _currentPatternFacetHandler = null
 
   constructor (editor, sc, engine) {
 
@@ -87,6 +91,15 @@ export class AutocompletionController {
       // Clear previous left facet items
       this.rightFacetElement.innerHTML = ''
     }
+
+    if (this.patternFacetLabelElement) {
+      // Clear previous left facet label content
+      this.patternFacetLabelElement.textContent = ''
+    }
+    if (this.patternFacetElement) {
+      // Clear previous left facet items
+      this.patternFacetElement.innerHTML = ''
+    }
   }
 
   _removeFacetsEventListeners () {
@@ -101,6 +114,13 @@ export class AutocompletionController {
       // Make sure to remove any previous event listener to avoid duplicates
       if (this._currentRightFacetHandler) {
         this._currentRightFacetHandler = this.rightFacetElement.removeEventListener('change', this._currentRightFacetHandler)
+      }
+    }
+
+    if (this.patternFacetElement) {
+      // Make sure to remove any previous event listener to avoid duplicates
+      if (this._currentPatternFacetHandler) {
+        this._currentPatternFacetHandler = this.patternFacetElement.removeEventListener('change', this._currentPatternFacetHandler)
       }
     }
   }
@@ -131,6 +151,19 @@ export class AutocompletionController {
     }
     if (this.rightFacetContainerElement) {
       this.rightFacetContainerElement = this.rightFacetContainerElement.remove()
+    }
+
+    // Pattern facet container
+
+    // Remove the right facet container if it already exists
+    if (this.patternFacetLabelElement) {
+      this.patternFacetLabelElement = this.patternFacetLabelElement.remove()
+    }
+    if (this.patternFacetElement) {
+      this.patternFacetElement = this.patternFacetElement.remove()
+    }
+    if (this.patternFacetContainerElement) {
+      this.patternFacetContainerElement = this.patternFacetContainerElement.remove()
     }
   }
 
@@ -216,6 +249,26 @@ export class AutocompletionController {
 
   }
 
+  _getWordAtPosition (line, position) {
+    // Regular expression to match a word (sequence of non-space, non-parenthesis characters)
+    const wordRegex = /[^\s()]+/g;
+
+    let match;
+    while ((match = wordRegex.exec(line)) !== null) {
+        // Check if the position is within the bounds of the current word
+        if (match.index <= position && wordRegex.lastIndex > position) {
+            return match[0];
+        }
+    }
+
+    // Return null if no word is found at the position
+    return null;
+  }
+
+  _checkWordFormat (word) {
+    return word.startsWith('<') && word.endsWith('>');
+  }
+
   /**
  * Send the input string to the autocompletion endpoint through the
  * autocompletion route and gets the result back.
@@ -236,13 +289,156 @@ export class AutocompletionController {
     // get the position in the whole text of the cursor
     const cursorIndex = this.editor.indexFromPos(cursorPos)
 
-    $.post(API_ROUTE.autocompletion, { text: allText, engine: this.engine, line: lineNumber, startpos: lineStartPos, endpos: cursorIndex }, data => {
-      const facets = JSON.parse(data.tokens)
-      this._createFacets (facets)
+    const postData = {
+      curCursor: cursorPos
+    }
 
-      // Display the facets based on the tokens
-      this._displayFacets(facets)
+    $.post(API_ROUTE.autocompletion, { text: allText, engine: this.engine, line: lineNumber, startpos: lineStartPos, endpos: cursorIndex, postData }, data => {
+      
+      console.log(`Tokens received : ${data.tokens}`)
+      console.log(`Tokens received type : ${Object.prototype.toString(data.tokens)}`)
+      const facets = JSON.parse(data.tokens)
+      const curline = postData.curCursor.line
+      const curLineContent = this.editor.getLine(cursorPos.line)
+      console.log(`Current line number : ${curline}`)
+      console.log(`Current line content : ${curLineContent}`)
+
+      console.log("facets :", facets)
+      console.log(`facets type : ${Object.prototype.toString(facets)}`)
+      let rules = facets.rules
+      console.log("Rules :", rules)
+
+      if (!curLineContent.trim()) {
+        console.log(`Empty line`)
+        const rule = facets.rules.rule.values
+        console.log("Rule :", rule)
+        this._createPatternsContainer()
+        this._addPatternsFacetEventListeners()
+        this._displayPatternsFacet(rule)
+      } else {
+        const curcursorpos = cursorPos.ch
+        console.log("Current line cursor position :", curcursorpos)
+
+        let word = this._getWordAtPosition(line, curcursorpos);
+        console.log(word); // Outputs the word at the given position
+
+        if (word && this._checkWordFormat(word)) {
+          console.log(this._checkWordFormat(word)); // Outputs true if the word starts with '<' and ends with '>'
+        } else {
+          this._createFacets (facets)
+
+          // Display the facets based on the tokens
+          this._displayFacets(facets)
+        }
+      }
     })
+  }
+
+  _displayPatternsFacet(ruleObject) {
+    // Add 'All' option to the left facet
+//    const deselectOption = document.createElement('option')
+//    deselectOption.textContent = 'All'
+//    this.leftFacetElement.appendChild(deselectOption)
+
+    // Add facetsObject keys to left facet
+    for (let item of ruleObject) {
+      const option = document.createElement('option')
+      option.textContent = item
+      this.patternFacetElement.appendChild(option)
+    }
+
+    // Display the facets container
+    // overrides the 'display: none;' from the CSS.
+    this.facetsContainerElement.style.display = 'flex'
+
+    // This will always run, whether there are tokens or not
+    this.editor.on('cursorActivity', () => {
+      // set the facets container back to be hidden
+      this.facetsContainerElement.style.display = 'none'
+    })
+  }
+
+  _createPatternsContainer () {
+    // Retrieve the div element by class
+    var containerDiv = document.querySelector('.ui.segment.code-mirror-container.facetsInnerContainer');
+
+    // Create the first 'facet' div
+    var patternFacetDiv = document.createElement('div');
+    patternFacetDiv.className = 'facet';
+    patternFacetDiv.id = 'patternFacetContainer';
+
+    // Create label for the first select
+    var patternLabel = document.createElement('label');
+    patternLabel.id = 'patternLabel';
+    patternLabel.htmlFor = 'patternFacet';
+    patternLabel.textContent = 'Patterns';
+
+    // Create the first select
+    var patternSelect = document.createElement('select');
+    patternSelect.id = 'patternFacet';
+    patternSelect.size = '5';
+
+    // Append the label and select to the first 'facet' div
+    patternFacetDiv.appendChild(patternLabel);
+    patternFacetDiv.appendChild(patternSelect);
+
+    // Append the first 'facet' div to the container
+    containerDiv.appendChild(patternFacetDiv);
+
+    // Define class element
+    this.patternFacetElement = document.getElementById('patternFacet')
+    this.patternFacetLabelElement = document.getElementById('patternLabel')
+    this.patternFacetContainerElement = document.getElementById('patternFacetContainer')
+  }
+
+  _addPatternsFacetEventListeners() {
+    // Right facet
+
+    // Create a new handler function that has access to facetsObject
+    this._currentPatternFacetHandler = (event) => this._handlePatternFacetClick(event)
+
+    // Attach the new event listener
+    this.patternFacetElement.addEventListener('change', this._currentPatternFacetHandler)
+  }
+
+  _handlePatternFacetClick () {
+    const selectedValue = this.patternFacetElement.value
+
+//    const dropdownItems = []
+//    this.sc.dropdown.find('.menu .item').each(function () {
+//      dropdownItems.push($(this).data('value'))
+//    })
+//    if (dropdownItems.includes(selectedValue)) {
+//      // this.sc.dropdown is a jQuery object wrapping the dropdown element
+//      this.sc.dropdown.dropdown('set selected', selectedValue)
+//    }
+
+    if (selectedValue && selectedValue !== 'All') {
+      // get the cursor position in the CodeMirror editor
+      const cursorPos = this.editor.getCursor()
+
+      // insert the selected value at the current cursor position
+      this.editor.replaceRange(selectedValue, cursorPos)
+
+      // calculate the end position based on the length of the inserted value
+      const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+
+      // check if the selected value starts with '<' and ends with '>'
+//      if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
+        // select the text that was just inserted
+//        this.editor.setSelection(cursorPos, endPos)
+//      } else {
+        // Move cursor to end of inserted value
+//        this.editor.setCursor(endPos)
+//      }
+    }
+
+    // Hide the facets and 'ok' button as they are no longer needed
+    // set the facets container back to be hidden
+    this.facetsContainerElement.style.display = 'none'
+
+    // Refocus the CodeMirror editor to keep the cursor visible in the textarea
+    this.editor.focus()
   }
 
   /**

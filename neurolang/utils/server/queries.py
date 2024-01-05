@@ -18,6 +18,7 @@ from ..relational_algebra_set import (
 from ...commands import CommandsMixin
 from ...expressions import Command
 from ...frontend.query_resolution_expressions import Symbol
+from ...frontend.datalog.standard_syntax import parse_rules
 from ...type_system import get_args, is_leq_informative
 
 
@@ -253,11 +254,13 @@ class NeurolangQueryManager:
                         rescomm = _get_commands(engine)
                         res['commands'] = list(rescomm)
 
+                    res['rules'] = parse_rules()
+
                     # Clean toks : remove the keys with empty list
                     tmp_toks = {k: v for k, v in res.items() if v}
                     res.clear()
                     res.update(tmp_toks)
-
+                    
                     return res
             except Exception as e:
                 LOG.debug(

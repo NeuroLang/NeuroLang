@@ -20,6 +20,7 @@ import tornado.websocket
 import yaml
 from tornado.options import define, options
 
+from ...frontend.datalog.standard_syntax import parse_rules
 from ...regions import ExplicitVBR, ExplicitVBROverlay
 from .engines import DestrieuxEngineConf, NeurosynthEngineConf
 from .queries import NeurolangQueryManager
@@ -380,6 +381,8 @@ class QueryAutocompletionHandler(JSONRequestHandler):
         # convert sets to lists, otherwise not convertible to a json
         for i in fres:
             fres[i] = list(fres[i])
+        # Add rules properties
+        fres['rules'] = parse_rules()
         fjson = json.dumps(fres)
         self.write(json.dumps({"tokens": fjson}))
 
