@@ -216,6 +216,7 @@ class NeurolangQueryManager:
         Dict
             the result of the query autocompletion
         """
+
         LOG.debug(
             "[Thread - %s] - Computing query auto-completion...", get_ident())
         LOG.debug("[Thread - %s] - Query :\n%s", get_ident(), query)
@@ -233,34 +234,68 @@ class NeurolangQueryManager:
                     res = engine.compute_datalog_program_for_autocompletion(
                         query, autocompletion_query)
 
-                    if 'functions' in res:
-                        for name in engine.symbols:
-                            if not name.startswith("_"):
-                                symbol = engine.symbols[name]
-                                if is_leq_informative(symbol.type, Callable):
-                                    if (name[0].isupper()) or (name.startswith('fresh')):
-                                        res['query symbols'].add(name)
-                                    else:
-                                        res['functions'].add(name)
-                                elif is_leq_informative(symbol.type, AbstractSet):
-                                    res['base symbols'].add(name)
+                    # convert sets to lists, otherwise not convertible to a json
+                    for i in res:
+                        res[i] = list(res[i])
 
-                        res['base symbols'] = sorted(list(res['base symbols']))
-                        res['query symbols'] = sorted(
+                    # get rules patterns from json file
+                    rules = parse_rules()
+
+                    self._get_engine_symbols(engine_type)
+
+                    available_identifiers = []
+                    predefined_functions = []
+
+                    for name in engine.symbols:
+                        if not name.startswith("_"):
+                            symbol = engine.symbols[name]
+                            if is_leq_informative(symbol.type, Callable):
+                                if (name[0].isupper()) or (name.startswith('fresh')):
+                                    available_identifiers.append(name)
+                                    if 'functions' in res:
+                                        res['query symbols'].append(name)
+                                else:
+                                    predefined_functions.append(name + " (<optional_arguments>)")
+                                    if 'functions' in res:
+                                        res['functions'].append(name)
+                            elif is_leq_informative(symbol.type, AbstractSet):
+                                available_identifiers.append(name)
+                                if 'functions' in res:
+                                    res['base symbols'].append(name)
+                        if 'base symbols' in res:
+                            res['base symbols'] = sorted(list(res['base symbols']))
+                        if 'query symbols' in res:
+                            res['query symbols'] = sorted(
                             list(res['query symbols']))
-                        res['functions'] = sorted(list(res['functions']))
+                        if 'functions' in res:
+                            res['functions'] = sorted(list(res['functions']))
 
-                    if 'commands' in res:
-                        rescomm = _get_commands(engine)
-                        res['commands'] = list(rescomm)
+                    if available_identifiers:
+                        available_identifiers = sorted(list(available_identifiers))
+                        rules["identifier"]["values"].append({"available_identifiers": available_identifiers})
+                    if predefined_functions:
+                        predefined_functions = sorted(list(predefined_functions))
+                        rules["function"]["values"].append({"predefined_functions": predefined_functions})
 
-                    res['rules'] = parse_rules()
+                    # rescomm = list(_get_commands(engine))
+                    # for c in rescomm:
+                    #     rules["command"]["values"].append("." + c + " (<command_arguments>)")
+                    # rules["command"]["values"] = sorted(list(rules["command"]["values"]))
+                    # if 'commands' in res:
+                    #     res['commands'] = rescomm
+
+
 
                     # Clean toks : remove the keys with empty list
                     tmp_toks = {k: v for k, v in res.items() if v}
                     res.clear()
                     res.update(tmp_toks)
-                    
+
+                    res['rules'] = rules
+
+                    for r in res:
+                        print(r, ":", res[r])
+
                     return res
             except Exception as e:
                 LOG.debug(
@@ -437,6 +472,9 @@ class NeurolangQueryManager:
             "[Thread - %s] - Fetching symbols for %s engine...",
             get_ident(), engine_type
         )
+        print("")
+        print("____in _get_engine_symbols()____")
+
         engine_set = self.engines[engine_type]
         with engine_set.engine() as engine:
             try:

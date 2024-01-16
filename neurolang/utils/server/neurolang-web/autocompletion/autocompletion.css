@@ -15,7 +15,7 @@
 }
 */
 
-#leftFacetContainer, #rightFacetContainer {
+#leftFacetContainer, #rightFacetContainer, #inputFacetContainer {
 	flex: 1;                    /* allow the facets to grow and take up the available space */
 	margin-right: 10px;         /* add some spacing between the facets */
 }

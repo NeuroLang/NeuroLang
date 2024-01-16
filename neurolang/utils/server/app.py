@@ -361,28 +361,13 @@ class QueryAutocompletionHandler(JSONRequestHandler):
     """
 
     async def post(self):
-        text = self.get_argument("text", '')
+        text = self.get_argument("notCursorLines", '')
         engine = self.get_argument("engine", "default")
-        line_pos = int(self.get_argument("line", ''))
-        start_pos = int(self.get_argument("startpos", ''))
-        end_pos = int(self.get_argument("endpos", ''))
-
-        text_autocompletion = text[start_pos:end_pos]
-        ltext = text.splitlines()
-        if line_pos < len(ltext):
-            ltext.pop(line_pos)
-        text = '\n'.join(ltext)
-
+        text_autocompletion = self.get_argument("cursorLine", '')
         self.uuid = str(uuid4())
         LOG.debug("Submitting query autocompletion with uuid %s.", self.uuid)
-        f = self.application.nqm.submit_query_autocompletion(
-            self.uuid, text, text_autocompletion, engine)
+        f = self.application.nqm.submit_query_autocompletion(self.uuid, text, text_autocompletion, engine)
         fres = f.result()
-        # convert sets to lists, otherwise not convertible to a json
-        for i in fres:
-            fres[i] = list(fres[i])
-        # Add rules properties
-        fres['rules'] = parse_rules()
         fjson = json.dumps(fres)
         self.write(json.dumps({"tokens": fjson}))
 

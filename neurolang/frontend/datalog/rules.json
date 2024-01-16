@@ -1,20 +1,152 @@
 {
-	"expression":	{
-						"values":	[
-										"rule"
+	"argument": 	{
+						"values": 	[
+										"<arithmetic_operation>",
+										"<function>",
+										"<number>",
+										"<signed_identifier>",
+										"<signed_lambda_expression>",
+										"\"<text>\"",
+										"'<text>'",
+										"( <argument> )",
+										"..."
 						]
 	},
-	"rule": 		{
+	"arguments":	{
+						"unit":		"<argument>",
+						"params": 	"number",
+						"sep": 		","
+	},
+	"arithmetic_operation": 	{
 						"values":	[
-										"<identifier> ( <arguments> ) :- <condition>",
-										"<identifier> ( <arguments> ) :- <body>",
-										"<query> :- <condition>",
-										"<query> :- <body>"
+										"<operand> + <operand>",
+										"<operand> - <operand>",
+										"<operand> * <operand>",
+										"<operand> / <operand>",
+										"<operand> ** <operand>"
+						]
+	},
+	"cmd_identifier":	{
+						"value":	"/\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/"
+	},
+	"composite_predicate":	{
+						"values":	[
+										"( <conjunction> )",
+                        				"<predicate>"
+						]
+	},
+	"comparison":	{
+						"values":	[
+										"<argument> == <argument>",
+										"<argument> < <argument>",
+										"<argument> <= <argument>",
+										"<argument> > <argument>",
+										"<argument> >= <argument>",
+										"<argument> != <argument>"
+						]
+	},
+	"conjunction": 		{
+						"unit": 	"<predicate>",
+						"sep": 		"&",
+						"params": 	"number"
+	},
+	"expression":	{
+						"values":	[
+										"<rule>"
+						]
+	},
+	"function": 	{
+						"values": 	[
+										"(<lambda_expression>) (<optional_arguments>)",
+										"<identifier> (<optional_arguments>)",
+										"@<identifier> (<optional_arguments>)",
+										"<lambda_expression> (<optional_arguments>)"
 						]
 	},
 	"head":			{
 						"values":	[
-										"<identifier> ( <arguments> )"
+										"<identifier> ( <optional_arguments> )"
+						]
+	},
+	"identifier":	{
+						"values":	[
+										"<cmd_identifier>",
+										"<identifier_regexp>"
+						]
+	},
+	"identifier_regexp":	{
+						"value":	"` /[0-9a-zA-Z\\/#%\\._:-]+/ `"
+	},
+	"operand": 	{
+						"values": 	[
+										"<number>",
+										"\"<text>\"",
+										"'<text>'",
+										"<arithmetic_operation>",
+										"...",
+										"( <argument> )"
+						]
+	},
+	"operator": 	{
+						"values": 	[
+										"+",
+										"-",
+										"*",
+										"/",
+										"**"
+						]
+	},
+	"optional_arguments": {
+						"unit":		"<argument>",
+						"params": 	"number",
+						"sep": 		",",
+						"min": 		0
+	},
+	"predicate":	{
+						"values":	[
+										"<identifier> ( <optional_arguments> )",
+										"@<identifier> ( <optional_arguments> )",
+										"lambda <arguments> : <argument> ( <optional_arguments> )",
+										"~ <predicate>",
+										"exists ( <arguments>; <predicates> )",
+										{"comparison":	[
+															"( <argument> == <argument> )",
+															"( <argument> < <argument> )",
+															"( <argument> <= <argument> )",
+															"( <argument> > <argument> )",
+															"( <argument> >= <argument> )",
+															"( <argument> != <argument> )"
+														]
+										},
+										"True",
+										"False"
+						]
+	},
+	"predicates": 	{
+						"unit":		"<predicate>",
+						"params": 	"number",
+						"sep": 		","
+	},
+	"rule": 		{
+						"values":	[
+										"<identifier> ( <arguments> ) :- <composite_predicate> // <composite_predicate>",
+										"<identifier> ( <arguments> ) :- <conjunction>",
+										"ans ( <optional_arguments> ) :- <composite_predicate> // <composite_predicate>",
+										"ans ( <optional_arguments> ) :- <conjunction>"
+						]
+	},
+	"signed_identifier": 	{
+						"values": 	[
+										"<identifier>",
+										"@<identifier>",
+										"- <identifier>",
+										"- @<identifier>"
+						]
+	},
+	"signed_lambda_expression": 	{
+						"values": 	[
+										"<lambda_expression>",
+										"- <lambda_expression>"
 						]
 	}
 }

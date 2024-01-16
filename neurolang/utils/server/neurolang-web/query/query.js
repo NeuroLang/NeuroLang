@@ -54,6 +54,7 @@ export class QueryController {
    */
   setRouteEngine (engine, query) {
     this.engine = engine
+    this.ac.updateEngine(engine)
     this.editor.setValue(query)
     this._clearAlert()
     this.sc.hide()
