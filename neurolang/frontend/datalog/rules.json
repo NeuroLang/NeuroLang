@@ -1,7 +1,90 @@
 {
+	"command":	{
+						"values":	[
+										".<cmd_identifier> (<command_arguments>)"
+						]
+	},
+	"constraint": 	{
+						"values": 	[
+										"<conjunction> -: <identifier> ( <arguments> )"
+						]
+	},
 	"expression":	{
 						"values":	[
-										"<rule>"
+										{"rule":	[
+														"<identifier> ( <arguments> ) :- <composite_predicate> // <composite_predicate>",
+														"<identifier> ( <arguments> ) :- <conjunction>",
+														"ans ( <optional_arguments> ) :- <composite_predicate> // <composite_predicate>",
+														"ans ( <optional_arguments> ) :- <conjunction>"
+													]
+										},
+										{"constraint": [
+														"<conjunction> -: <identifier> ( <arguments> )"
+													]
+										},
+										{"fact": [
+														"<identifier> ()",
+														"<identifier> (<fact_arguments>)"
+													]
+										},
+										{"probabilistic_rule": [
+														"<head> :: <arithmetic_operation> :- <composite_predicate> // <composite_predicate>",
+														"<head> :: <arithmetic_operation> :- <conjunction>"
+													]
+										},
+										{"probabilistic_fact": [
+														"( <arithmetic_operation> ) :: <constant_predicate>",
+														"( <int_ext_identifier> ) :: <constant_predicate>"
+													]
+										},
+										{"statement": [
+														"<identifier> := <arithmetic_operation>"
+													]
+										},
+										{"statement_function": [
+														"<identifier> ( <optional_arguments> ) := <argument>"
+													]
+										},
+										{"command": [
+														".<cmd_identifier> (<command_arguments>)"
+													]
+										}
+						]
+	},
+	"fact":			{
+						"values":	[
+										"<identifier> ()",
+										"<identifier> (<fact_arguments>)"
+						]
+	},
+	"probabilistic_fact":	{
+						"values": 	[
+										"( <arithmetic_operation> ) :: <constant_predicate>",
+										"( <int_ext_identifier> ) :: <constant_predicate>"
+						]
+	},
+	"probabilistic_rule":	{
+						"values": 	[
+										"<head> :: <arithmetic_operation> :- <composite_predicate> // <composite_predicate>",
+										"<head> :: <arithmetic_operation> :- <conjunction>"
+						]
+	},
+	"rule": 		{
+						"values":	[
+										"<identifier> ( <arguments> ) :- <composite_predicate> // <composite_predicate>",
+										"<identifier> ( <arguments> ) :- <conjunction>",
+										"ans ( <optional_arguments> ) :- <composite_predicate> // <composite_predicate>",
+										"ans ( <optional_arguments> ) :- <conjunction>"
+						]
+	},
+	"statement": 	{
+						"values": 	[
+										"<identifier> := <arithmetic_operation>"
+						]
+	},
+	"statement_function": 	{
+						"values": 	[
+										"<identifier> ( <optional_arguments> ) := <argument>"
 						]
 	}
 }
