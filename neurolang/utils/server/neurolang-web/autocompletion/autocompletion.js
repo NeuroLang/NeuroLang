@@ -1,5 +1,5 @@
 import './autocompletion.css'
-import { SymbolsController } from '../symbols/symbols'
+//import { SymbolsController } from '../symbols/symbols'
 import { API_ROUTE } from '../constants'
 
 /**
