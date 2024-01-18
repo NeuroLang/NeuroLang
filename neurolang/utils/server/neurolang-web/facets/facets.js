@@ -7,8 +7,10 @@ import './facets.css'
  */
 export class FacetsController {
 
-  constructor (editor) {
+  constructor (editor, sc) {
     this.editor = editor
+    this.sc = sc
+
     /// HTML related properties
     this.facetsContainerElement = document.getElementById('facetsContainer')
     this.leftFacetElement = null
@@ -278,6 +280,15 @@ export class FacetsController {
 
   _handlePatternFacetClick (inPattern = false) {
     const selectedValue = this.patternFacetElement.value
+
+    const dropdownItems = []
+    this.sc.dropdown.find('.menu .item').each(function () {
+      dropdownItems.push($(this).data('value'))
+    })
+    if (dropdownItems.includes(selectedValue)) {
+      // this.sc.dropdown is a jQuery object wrapping the dropdown element
+      this.sc.dropdown.dropdown('set selected', selectedValue)
+    }
 
     // get the cursor position in the CodeMirror editor
     var cursorPos = this.editor.getCursor()
