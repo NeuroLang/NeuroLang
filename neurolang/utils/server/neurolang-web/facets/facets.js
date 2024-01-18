@@ -1,4 +1,4 @@
-//import './autocompletion.css'
+import './facets.css'
 //import { SymbolsController } from '../symbols/symbols'
 //import { API_ROUTE } from '../constants'
 
