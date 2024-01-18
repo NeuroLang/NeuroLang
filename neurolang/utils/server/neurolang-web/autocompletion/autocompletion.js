@@ -1,4 +1,3 @@
-import './autocompletion.css'
 import { FacetsController } from '../facets/facets'
 import { API_ROUTE } from '../constants'
 
