@@ -21,7 +21,9 @@
 						]
 	},
 	"cmd_identifier":	{
-						"value":	"/\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/"
+						"values":	[
+										"/\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/"
+						]
 	},
 	"cmd_arg":	{
 						"values":	[
@@ -144,12 +146,12 @@
 						"params": 	"number",
 						"sep": 		","
 	},
-	"function": 	{
+	"function_identifier": 	{
 						"values": 	[
-										"(<lambda_expression>) (<optional_arguments>)",
-										"<identifier> (<optional_arguments>)",
-										"@<identifier> (<optional_arguments>)",
-										"<lambda_expression> (<optional_arguments>)"
+										"<identifier>",
+										"@<identifier>",
+										"<lambda_expression>",
+										"(<lambda_expression>)"
 						]
 	},
 	"head":			{
@@ -168,6 +170,8 @@
 	},
 	"other_argument": 	{
 						"values": 	[
+										"<function_identifier> (<optional_arguments>)",
+										"( <argument> )",
 										{"number":		[
 															"<integer>",
 															"<float>"
@@ -178,13 +182,6 @@
 															"'<text>'"
 														]
 										},
-										{"function":	[
-															"<identifier> (<optional_arguments>)",
-															"@<identifier> (<optional_arguments>)",
-															"<lambda_expression> (<optional_arguments>)",
-															"(<lambda_expression>) (<optional_arguments>)"
-														]
-										},
 										{"signed_identifier":	[
 																	"<identifier>",
 																	"@<identifier>",
@@ -193,8 +190,7 @@
 																	"- @<identifier>",
 																	"- <lambda_expression>"
 																]
-										},
-										"( <argument> )"
+										}
 						]
 	},
 	"operator": 	{

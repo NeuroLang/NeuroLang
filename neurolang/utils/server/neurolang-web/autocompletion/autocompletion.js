@@ -10,7 +10,7 @@ export class AutocompletionController {
     this.editor = editor
     this.sc = sc
     this.engine = engine
-    this.fc = new FacetsController(this.editor)
+    this.fc = new FacetsController(this.editor, this.sc)
 
     this.editor.on('keydown', (cm, event) => {
       if (event.shiftKey && event.key === 'Tab') {

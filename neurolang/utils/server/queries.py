@@ -243,17 +243,23 @@ class NeurolangQueryManager:
 
                     self._get_engine_symbols(engine_type)
 
+                    available_identifiers = []
+                    predefined_functions = []
+
                     for name in engine.symbols:
                         if not name.startswith("_"):
                             symbol = engine.symbols[name]
                             if is_leq_informative(symbol.type, Callable):
                                 if (name[0].isupper()) or (name.startswith('fresh')):
+                                    available_identifiers.append(name)
                                     if 'functions' in res:
                                         res['query symbols'].append(name)
                                 else:
+                                    predefined_functions.append(name)
                                     if 'functions' in res:
                                         res['functions'].append(name)
                             elif is_leq_informative(symbol.type, AbstractSet):
+                                available_identifiers.append(name)
                                 if 'functions' in res:
                                     res['base symbols'].append(name)
                         if 'base symbols' in res:
@@ -265,16 +271,25 @@ class NeurolangQueryManager:
                         if 'functions' in res:
                             res['functions'] = sorted(list(res['functions']))
 
-                    # rescomm = list(_get_commands(engine))
-                    # for c in rescomm:
-                    #     rules["command"]["values"].append("." + c + " (<command_arguments>)")
-                    # rules["command"]["values"] = sorted(list(rules["command"]["values"]))
-                    # if 'commands' in res:
-                    #     res['commands'] = rescomm
+                    if available_identifiers:
+                        available_identifiers = sorted(
+                            list(available_identifiers))
+                        rules["identifier"]["values"].append(
+                            {"available_identifiers": available_identifiers})
+                    if predefined_functions:
+                        predefined_functions = sorted(
+                            list(predefined_functions))
+                        rules["function_identifier"]["values"].append(
+                            {"predefined_functions": predefined_functions})
 
+                    available_commands = list(_get_commands(engine))
+                    if available_commands:
+                        available_commands = sorted(
+                            list(available_commands))
+                        rules["cmd_identifier"]["values"].append(
+                            {"available_commands": available_commands})
                     if 'commands' in res:
-                        rescomm = _get_commands(engine)
-                        res['commands'] = list(rescomm)
+                        res['commands'] = available_commands
 
                     # Clean toks : remove the keys with empty list
                     tmp_toks = {k: v for k, v in res.items() if v}
