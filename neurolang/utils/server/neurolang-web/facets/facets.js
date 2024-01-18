@@ -468,4 +468,100 @@ export class FacetsController {
     // Refocus the CodeMirror editor to keep the cursor visible in the textarea
     this.editor.focus()
   }
+
+  addInputFacetEventListeners(patternUnit, patternSep, inPattern = false) {
+    // Create a new handler function that has access to facetsObject
+    this._currentInputFacetHandler = (event) => this._handleInputFacetClick(event, patternUnit, patternSep, inPattern)
+
+    // Attach the new event listener
+    this.inputFacetButtonElement.addEventListener('click', this._currentInputFacetHandler)
+  }
+
+  _handleInputFacetClick (event, patternUnit, patternSep, inPattern = false) {
+    // Get the value from the input
+    const inputValue = parseInt(this.inputFacetElement.value, 10)
+    const valuesToWrite = (new Array(inputValue).fill(patternUnit)).join(' '+patternSep+' ')
+
+    // Check if inputValue is not empty
+    if (inputValue) {
+      if (this.editor.getSelection().length) {
+//        var selectedRange = this.editor.getSelection()
+        this.editor.replaceSelection(valuesToWrite)
+      } else {
+        // get the cursor position in the CodeMirror editor
+        const cursorPos = this.editor.getCursor()
+
+        // insert the selected value at the current cursor position
+        this.editor.replaceRange(valuesToWrite, cursorPos)
+
+        // calculate the end position based on the length of the inserted value
+        const endPos = { line: cursorPos.line, ch: cursorPos.ch + valuesToWrite.length }
+
+        // Move cursor to end of inserted value
+        this.editor.setCursor(endPos)
+      }
+
+      // check if the selected value starts with '<' and ends with '>'
+//      if (selectedValue == "<identifier_regexp>") {
+//        cursorPos = this.editor.getCursor()
+//
+//        endPos = { line: cursorPos.line, ch: cursorPos.ch }
+//        cursorPos.ch = cursorPos.ch - selectedValue.length
+//        // select the text that was just inserted
+//        this.editor.setSelection(cursorPos, endPos)
+//      }
+    }
+  }
+
+  createInputContainer (labelText) {
+    // Retrieve the div element by class
+    var containerDiv = document.querySelector('.ui.segment.code-mirror-container.facetsInnerContainer');
+
+    // Create the input 'facet' div
+    var inputFacetDiv = document.createElement('div');
+    inputFacetDiv.className = 'facet';
+    inputFacetDiv.id = 'inputFacetContainer';
+
+    // Create label for the input
+    var inputLabel = document.createElement('label');
+    inputLabel.id = 'inputLabel';
+    inputLabel.htmlFor = 'inputFacet';
+    inputLabel.textContent = labelText;
+
+    // Create the input
+    var inputInput = document.createElement('input');
+    inputInput.id = 'inputFacet';
+    inputInput.type = 'text';
+
+    // Create the Ok button
+    var okButton = document.createElement('button')
+    okButton.id = 'inputOkButton'
+    okButton.textContent = 'OK'
+
+    // Append the label and select to the first 'facet' div
+    inputFacetDiv.appendChild(inputLabel);
+    inputFacetDiv.appendChild(inputInput);
+    inputFacetDiv.appendChild(okButton);
+
+    // Append the first 'facet' div to the container
+    containerDiv.appendChild(inputFacetDiv);
+
+    // Define class element
+    this.inputFacetElement = document.getElementById('inputFacet')
+    this.inputFacetLabelElement = document.getElementById('inputLabel')
+    this.inputFacetButtonElement = document.getElementById('inputOkButton')
+    this.inputFacetContainerElement = document.getElementById('inputFacetContainer')
+  }
+
+  displayInputFacet () {
+    // Display the facets container
+    // overrides the 'display: none;' from the CSS.
+    this.facetsContainerElement.style.display = 'flex'
+
+    // This will always run, whether there are tokens or not
+    this.editor.on('cursorActivity', () => {
+      // set the facets container back to be hidden
+      this.facetsContainerElement.style.display = 'none'
+    })
+  }
 }
