@@ -2,6 +2,7 @@
 	"argument": 	{
 						"values": 	[
 										"<arithmetic_operation>",
+										"<other_argument>",
 										"..."
 						]
 	},
@@ -12,7 +13,6 @@
 	},
 	"arithmetic_operation": 	{
 						"values":	[
-										"<operand>",
 										"<operand> + <operand>",
 										"<operand> - <operand>",
 										"<operand> * <operand>",
@@ -166,7 +166,7 @@
 	"identifier_regexp":	{
 						"value":	"` /[0-9a-zA-Z\\/#%\\._:-]+/ `"
 	},
-	"operand": 	{
+	"other_argument": 	{
 						"values": 	[
 										{"number":		[
 															"<integer>",
