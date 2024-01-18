@@ -546,6 +546,13 @@ export class FacetsController {
     // Append the first 'facet' div to the container
     containerDiv.appendChild(inputFacetDiv);
 
+    // Apply ok button styles
+    okButton = document.getElementById('inputOkButton')
+//    okButton.style.display = 'none'
+    okButton.style.padding = '5px 15px'
+    okButton.style.alignSelf = 'center'
+    okButton.style.marginLeft = '10px'
+
     // Define class element
     this.inputFacetElement = document.getElementById('inputFacet')
     this.inputFacetLabelElement = document.getElementById('inputLabel')
