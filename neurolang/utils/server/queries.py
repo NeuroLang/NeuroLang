@@ -274,20 +274,34 @@ class NeurolangQueryManager:
                     if available_identifiers:
                         available_identifiers = sorted(
                             list(available_identifiers))
-                        rules["identifier"]["values"].append(
-                            {"available_identifiers": available_identifiers})
+                        rules["identifier"]["values"].append("<available_identifiers>")
+                        rules["available_identifiers"] = {
+                            "values": available_identifiers,
+                            "params": "expandable"
+                        }
                     if predefined_functions:
                         predefined_functions = sorted(
                             list(predefined_functions))
-                        rules["function_identifier"]["values"].append(
-                            {"predefined_functions": predefined_functions})
+                        # rules["function_identifier"]["values"].append("<predefined_functions>")
+                        # rules["predefined_functions"] = {
+                        #     "values": predefined_functions,
+                        #     "params": "expandable"
+                        # }
+                        rules["function"]["values"].append("<predefined_functions> (<arguments>)")
+                        rules["predefined_functions"] = {
+                            "values": predefined_functions,
+                            "params": "expandable"
+                        }
 
                     available_commands = list(_get_commands(engine))
                     if available_commands:
                         available_commands = sorted(
                             list(available_commands))
-                        rules["cmd_identifier"]["values"].append(
-                            {"available_commands": available_commands})
+                        rules["cmd_identifier"]["values"].append("<available_commands>")
+                        rules["available_commands"] = {
+                            "values": available_commands,
+                            "params": "expandable"
+                        }
                     if 'commands' in res:
                         res['commands'] = available_commands
 

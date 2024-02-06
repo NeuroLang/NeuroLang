@@ -103,14 +103,24 @@ export class AutocompletionController {
       const allText = this.editor.getValue()
       let facets = JSON.parse(data.tokens)
       let rules = facets.rules
+      this.fc.updatePatterns(rules)
 
       // Empty line
       if (!cursorLineContent.trim()) {
-        const rule = rules.rule
+        console.log(" ")
+        console.log("******************")
+        console.log("*** Empty line ***")
+        console.log("******************")
         const expression = rules.expression
-        this.fc.createPatternsContainer()
-        this.fc.addPatternsFacetEventListeners()
-        this.fc.displayPatternsFacet(expression.values)
+
+        console.log("")
+        console.log("*** Call this.fc.createFacets (rules, 'expression', 'patterns') ")
+        console.log("before call :")
+        console.log("var1 = rules :", rules)
+        console.log("var2 = 'expression'")
+        console.log("var3 = 'patterns'")
+        this.fc.createFacets (rules, 'expression', 'patterns')
+//        this.fc.displayPatternsFacet(expression.values)
 
       // Not empty line
       } else {
@@ -132,21 +142,39 @@ export class AutocompletionController {
 
               // Several possible patterns lines
               } else {
-                this.fc.createPatternsContainer()
-                this.fc.addPatternsFacetEventListeners(true)
-                this.fc.displayPatternsFacet(rules[patternContent].values)
+                console.log(" ")
+                console.log("***************************************")
+                console.log("*** Several possible patterns lines ***")
+                console.log("***************************************")
+                console.log("")
+                console.log("*** Call this.fc.createFacets (rules, 'expression', 'patterns') ")
+                console.log("before call :")
+                console.log("var1 = rules :", rules)
+                console.log("var2 :", patternContent)
+                console.log("var3 : 'patterns'")
+                console.log("var4 : true")
+                this.fc.createFacets(rules, patternContent, 'patterns', true)
               }
 
             // Pattern does not have value
             } else if (rules[patternContent].hasOwnProperty("params") && rules[patternContent].hasOwnProperty("unit")) {
               if (rules[patternContent].params == "number") {
-                this.fc.createInputContainer('Number of ' + rules[patternContent].unit.slice(1, -1) + 's :')
-                this.fc.addInputFacetEventListeners(rules[patternContent].unit, rules[patternContent].sep, true)
-                this.fc.displayInputFacet()
+                console.log(" ")
+                console.log("********************")
+                console.log("*** Input number ***")
+                console.log("********************")
+                console.log("")
+                console.log("*** Call this.fc.createFacets (rules, 'expression', 'patterns') ")
+                console.log("before call :")
+                console.log("var1 = rules :", rules)
+                console.log("var2 = patternContent :", patternContent)
+                console.log("var3 : 'number'")
+                console.log("var4 : true")
+                console.log("var5 = rules[patternContent] :", rules[patternContent])
+                this.fc.createFacets(rules, patternContent, 'number', true, rules[patternContent])
               }
             }
           }
-
         } else {
           delete facets.rules
           const k = Object.keys(facets)[0]
@@ -155,9 +183,26 @@ export class AutocompletionController {
             this._writeValueInTextEditor(facets[k][0])
           // Several accepted tokens
           } else {
+//            console.log(" ")
+//            console.log("*** Several possible accepted tokens ***")
+//            console.log(" ")
+//            console.log("facets :", facets)
+
+            console.log(" ")
+            console.log("*****************************")
+            console.log("*** Categories and values ***")
+            console.log("*****************************")
+            console.log("")
+            console.log("*** Call this.fc.createFacets (rules, 'expression', 'patterns') ")
+            console.log("before call :")
+            console.log("facets :", facets)
+//            console.log("var2 = patternContent :", patternContent)
+//            console.log("var3 : 'number'")
+//            console.log("var4 : true")
+//            console.log("var5 = rules[patternContent] :", rules[patternContent])
             this.fc.createFacets (facets)
             // Display the facets based on the tokens
-            this.fc.displayFacets(facets)
+//            this.fc.displayFacets(facets)
           }
         }
       }
