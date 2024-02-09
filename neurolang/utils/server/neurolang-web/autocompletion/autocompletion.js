@@ -39,8 +39,7 @@ export class AutocompletionController {
         const l = endIndex - startIndex + 1
 
         if (pos >= startIndex && pos <= endIndex) {
-          return {content: match, start: startIndex, end: endIndex
-          }
+          return { content: match, start: startIndex, end: endIndex }
         }
 
         line = line.substring(0, startIndex) + ' '.repeat(l) + line.substring(startIndex + l)
@@ -123,11 +122,11 @@ export class AutocompletionController {
           const patternContent = pattern.content.slice(1, -1)
 
           // Pattern is in rule properties
-          if (rules.hasOwnProperty(patternContent)) {
+          if (rules.hasOwn(patternContent)) {
             // Pattern has a value
-            if (rules[patternContent].hasOwnProperty("values")) {
+            if (rules[patternContent].hasOwn('values')) {
               // Only one possible value/pattern
-              if (rules[patternContent]["values"].length == 1) {
+              if (rules[patternContent]['values'].length === 1) {
                 this._writeValueInTextEditor(rules[patternContent].values[0])
               // Several possible patterns lines
               } else {
@@ -146,7 +145,7 @@ export class AutocompletionController {
               }
 
             // Pattern does not have value
-            } else if (rules[patternContent].hasOwnProperty('params') && rules[patternContent].hasOwnProperty('unit')) {
+            } else if (rules[patternContent].hasOwn('params') && rules[patternContent].hasOwn('unit')) {
               if (rules[patternContent].params == 'number') {
                 console.log(' ')
                 console.log('********************')
@@ -175,27 +174,26 @@ export class AutocompletionController {
           //          delete facets.rules
           const k = Object.keys(facets)[0]
           // Only one accepted next token
-          if ((Object.keys(facets).length == 1) && (facets[k].length == 1)) {
+          if ((Object.keys(facets).length == 1) && (facets[k].length === 1)) {
             this._writeValueInTextEditor(facets[k][0])
           // Several accepted tokens
           } else {
-//            console.log(" ")
-//            console.log("*** Several possible accepted tokens ***")
-//            console.log(" ")
-//            console.log("facets :", facets)
+            //            console.log(" ")
+            //            console.log("*** Several possible accepted tokens ***")
+            //            console.log(" ")
+            //            console.log("facets :", facets)
 
-
-            console.log(" ")
-            console.log("*** Call this.fc.createFacets (rules, 'expression', 'patterns') ")
-            console.log("before call :")
-            console.log("facets :", facets)
-//            console.log("var2 = patternContent :", patternContent)
-//            console.log("var3 : 'number'")
-//            console.log("var4 : true")
-//            console.log("var5 = rules[patternContent] :", rules[patternContent])
+            console.log(' ')
+            console.log('*** Call this.fc.createFacets (rules, \'expression\', \'patterns\') ')
+            console.log('before call :')
+            console.log('facets :', facets)
+            //            console.log("var2 = patternContent :", patternContent)
+            //            console.log("var3 : 'number'")
+            //            console.log("var4 : true")
+            //            console.log("var5 = rules[patternContent] :", rules[patternContent])
             this.fc.createFacets(facets)
             // Display the facets based on the tokens
-//            this.fc.displayFacets(facets)
+            //            this.fc.displayFacets(facets)
           }
         }
       }
@@ -205,7 +203,7 @@ export class AutocompletionController {
   _writeValueInTextEditor (val) {
 
     if (this.editor.getSelection().length) {
-//      var selectedRange = this.editor.getSelection()
+      //      var selectedRange = this.editor.getSelection()
       this.editor.replaceSelection(val)
     } else {
 

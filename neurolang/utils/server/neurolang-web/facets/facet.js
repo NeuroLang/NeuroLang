@@ -564,16 +564,16 @@ export class NumberInput extends Input {
           this.editor,
           this.facetsContainerElement,
           this.parentContainerElement,
-          this.element.id + "_select_container_" + (step+1))
+          this.element.id + '_select_container_' + (step + 1))
 
         patternFacetNew.addLabel(
-          this.element.id + "_select_label_" + (step+1),
+          this.element.id + '_select_label_' + (step + 1),
           unitKey + ' ' + (step+1) + ' options :',
-          this.element.id + "_select_element_" + (step+1))
+          this.element.id + '_select_element_' + (step + 1))
 
         patternFacetNew.addElement(
           'regexpvalues',
-          this.element.id + "_select_element_" + (step+1),
+          this.element.id + '_select_element_' + (step + 1),
           this.allData,
           this.key)
         patternFacetNew.element.updatePosition(step)
@@ -590,20 +590,20 @@ export class NumberInput extends Input {
         this.facets.push(patternFacetNew)
       }
 
-      console.log("Button :")
-      console.log("  Container :")
-      console.log("    id :", (this.element.id + "_button_container"))
+      console.log('Button :')
+      console.log('  Container :')
+      console.log('    id :', (this.element.id + '_button_container'))
       let buttonNew = new Facet(
         this.editor,
         this.facetsContainerElement,
         this.parentContainerElement,
-        this.element.id + "_button_container")
+        this.element.id + '_button_container')
 
-      console.log("  Element :")
-      console.log("    type : 'aggregateButton'")
-      console.log("    id :", buttonId)
-      console.log("    this.allData :", this.allData)
-      console.log("    this.key :", this.key)
+      console.log('  Element :')
+      console.log('    type : \'aggregateButton\'')
+      console.log('    id :', buttonId)
+      console.log('    this.allData :', this.allData)
+      console.log('    this.key :', this.key)
       buttonNew.addElement(
         'aggregateButton',
         buttonId,
@@ -618,7 +618,7 @@ export class NumberInput extends Input {
       if (!(this.element.value).length) {
         this._clearAlert()
       } else {
-        this._setAlert("The current value is of incorrect type.", "Type of value error", "The entered value must be an integer !!!")
+        this._setAlert('The current value is of incorrect type.', 'Type of value error', 'The entered value must be an integer !!!')
       }
     }
 
@@ -686,52 +686,52 @@ export class RegexpInput extends Input {
       const num = parseInt(this.element.value, 10)
       valueMatches = !isNaN(num)
     } else {
-      console.log("entered value :", this.element.value)
-      valueMatches = regexp.test('/'+this.element.value+'/')
-      console.log("test result :", valueMatches)
+      console.log('entered value :', this.element.value)
+      valueMatches = regexp.test('/' + this.element.value + '/')
+      console.log('test result :', valueMatches)
     }
     //    if (int_regexp.test(this.element.value) || !(this.element.value).length) {
     //      this._clearAlert()
-    if (regexp.test('/'+this.element.value+'/')) {
+    if (regexp.test('/' + this.element.value + '/')) {
       //      console.log("match ok")
       this._clearAlert()
       regexpVal.val = this.element.value
       if ('quotes' in regexpObj) {
-        const regexpQuotes = regexpObj["quotes"]
+        const regexpQuotes = regexpObj['quotes']
         regexpVal.val = regexpQuotes + this.element.value + regexpQuotes
       }
       button.disabled = false
     } else {
-      console.log("this.element.value :", this.element.value)
-      console.log("(this.element.value).length :", (this.element.value).length)
-      console.log("this.element.value == '' :", this.element.value == '')
-      console.log("this.element.value === '' :", this.element.value === '')
+      console.log('this.element.value :', this.element.value)
+      console.log('(this.element.value).length :', (this.element.value).length)
+      console.log('this.element.value == \'\' :', this.element.value == '')
+      console.log('this.element.value === \'\' :', this.element.value === '')
       if (this.element.value == '') {
-        console.log("clearing alert...")
+        console.log('clearing alert...')
         this._clearAlert()
-        console.log("clearing alert...")
+        console.log('clearing alert...')
       } else {
         //      console.log("match not ok")
         //      this.qMsg.text("Unvalid string.")
         //      this.queryAlert.show()
-        let helpMess = "The entered value must match the following regular expression :" + regexpStr
-        console.log("regexpVal.key :", regexpVal.key)
-        console.log("regexpVal.key == 'float' :", regexpVal.key == 'float')
-        console.log("regexpVal.key === 'float' :", regexpVal.key === 'float')
-        console.log("regexpVal.key == 'integer' :", regexpVal.key == 'integer')
-        console.log("regexpVal.key === 'integer' :", regexpVal.key === 'integer')
+        let helpMess = 'The entered value must match the following regular expression :' + regexpStr
+        console.log('regexpVal.key :', regexpVal.key)
+        console.log('regexpVal.key == \'float\' :', regexpVal.key == 'float')
+        console.log('regexpVal.key === \'float\' :', regexpVal.key === 'float')
+        console.log('regexpVal.key == \'integer\' :', regexpVal.key == 'integer')
+        console.log('regexpVal.key === \'integer\' :', regexpVal.key === 'integer')
         if (regexpVal.key == 'float') {
-          console.log("float ok")
+          console.log('float ok')
           helpMess = 'The entered value must be a float number.'
           console.log(helpMess)
         } else if (regexpVal.key == 'integer') {
-        console.log("integer ok")
+        console.log('integer ok')
           helpMess = 'The entered value must be an integer.'
           console.log(helpMess)
         }
-        console.log("out of if")
+        console.log('out of if')
         console.log(helpMess)
-        this._setAlert("The current value has an incorrect format.", "Matching error", helpMess)
+        this._setAlert('The current value has an incorrect format.', 'Matching error', helpMess)
       }
       button.disabled = true
     }
@@ -776,9 +776,9 @@ class Select extends Element {
     this.element = this._createElement(this.elementContainer, elementId)
     this.allData = data
     this.data = this.allData.key
-    console.log(" ")
-    console.log("this.data 1 :", this.allData.key)
-    console.log("this.data 2 :", this.allData[key])
+    console.log(' ')
+    console.log('this.data 1 :', this.allData.key)
+    console.log('this.data 2 :', this.allData[key])
     this.key = key
     this.changeHandler = null
     //    console.log(" ")
@@ -788,9 +788,9 @@ class Select extends Element {
   }
 
   _selectInSymbolsTable (value) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ Select._selectInSymbolsTable()___")
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ Select._selectInSymbolsTable()___')
     //    console.log("this.sc :", this.sc)
     const dropdownItems = []
     this.scdropdown.find('.menu .item').each(function () {
@@ -903,8 +903,6 @@ class Select extends Element {
     if (this.facets.length) {
       for (let f of this.facets) {
         if (f) {
-          console.log(" ")
-          console.log("f :", f)
           f = f.remove()
         }
       }
@@ -924,10 +922,10 @@ export class CategoriesSelect extends Select {
 
   //  addChangeEventListeners (editor, valuesSelect) {
   addChangeEventListeners (editor, refData) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ CategoriesSelect.addChangeEventListeners()___")
-    console.log("refData :", refData)
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ CategoriesSelect.addChangeEventListeners()___')
+    console.log('refData :', refData)
     this.changeHandler = (event) => this._handleClick(event, editor, refData)
 
     // Attach the new event listener
@@ -935,12 +933,12 @@ export class CategoriesSelect extends Select {
   }
 
   _setValuesFacet (dataObject, refData) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ CategoriesSelect._setValuesFacet()___")
-    console.log("this.allData :", this.allData)
-    console.log("dataObject :", dataObject)
-    console.log("refData :", refData)
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ CategoriesSelect._setValuesFacet()___')
+    console.log('this.allData :', this.allData)
+    console.log('dataObject :', dataObject)
+    console.log('refData :', refData)
     let newFacet = new Facet(
         this.editor,
         this.facetsContainerElement,
@@ -966,11 +964,11 @@ export class CategoriesSelect extends Select {
   */
   //  _handleClick (event, editor, valuesSelect) {
   _handleClick (event, editor, refData) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ CategoriesSelect._handleClick()___")
-    console.log("this.allData :", this.allData)
-    console.log("refData :", refData)
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ CategoriesSelect._handleClick()___')
+    console.log('this.allData :', this.allData)
+    console.log('refData :', refData)
 
     // Retrieve the selected option
     const selectedKey = event.target.value
@@ -992,7 +990,7 @@ export class CategoriesSelect extends Select {
       let valuesToDisplay = null
 
       if (selectedKey === 'All') {
-        console.log("selectedKey === 'All'")
+        console.log('selectedKey === \'All\'')
         let values = []
         const data_select = this.allData
         for (const key of Object.keys(data_select)) {
@@ -1000,12 +998,12 @@ export class CategoriesSelect extends Select {
             values.push(value)
           }
         }
-        console.log("*** Before call this._setValuesFacet()")
-        console.log("values :", values)
-        console.log("refData :", refData)
+        console.log('*** Before call this._setValuesFacet()')
+        console.log('values :', values)
+        console.log('refData :', refData)
         this.valuesFacet = this._setValuesFacet(values, refData)
       } else if (this.allData[selectedKey]) {
-        console.log("this.allData[selectedKey] true")
+        console.log('this.allData[selectedKey] true')
         //        console.log(" ")
         //        console.log("-- not All --")
         //        console.log("selectedKey :", selectedKey)
@@ -1018,9 +1016,9 @@ export class CategoriesSelect extends Select {
         //      // valuesSelect.element.appendChild(option)
         //      // this.valuesFacet.element.element.appendChild(option)
         //    }
-        console.log("*** Before call this._setValuesFacet()")
-        console.log("this.allData[selectedKey] :", this.allData[selectedKey])
-        console.log("refData :", refData)
+        console.log('*** Before call this._setValuesFacet()')
+        console.log('this.allData[selectedKey] :', this.allData[selectedKey])
+        console.log('refData :', refData)
         //        this.valuesFacet = this._setValuesFacet(this.allData[selectedKey], refData)
         this.valuesFacet = this._setValuesFacet(selectedKey, refData)
       }
@@ -1033,10 +1031,10 @@ export class CategoriesSelect extends Select {
   * @param {Object} facetsObject the categories to be displayed in the facets and their values
   */
   fill (facetsObject) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ CategoriesSelect.fill()___")
-    console.log("facetsObject :", facetsObject)
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ CategoriesSelect.fill()___')
+    console.log('facetsObject :', facetsObject)
 
     // Add 'All' option to the left facet
     const deselectOption = document.createElement('option')
@@ -1095,14 +1093,14 @@ export class RegexpSelect extends Select {
   * @param {Event} event the event object associated with the click in the right facet
   */
   _handleClick (event, editor, facetsContainerElement, tab) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ RegexpSelect._handleClick()___")
-    console.log("tab avant :", tab)
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ RegexpSelect._handleClick()___')
+    console.log('tab avant :', tab)
     //    console.log("patternSep :", patternSep)
     //    console.log("inPattern :", inPattern)
-    console.log("this.allData :", this.allData)
-    console.log("this.key :", this.key)
+    console.log('this.allData :', this.allData)
+    console.log('this.key :', this.key)
     //    console.log("this.sc :", this.sc)
     const selectedValue = this.element.value
 
@@ -1110,7 +1108,7 @@ export class RegexpSelect extends Select {
     this._selectInSymbolsTable (selectedValue)
 
     tab[this.position] = selectedValue
-    console.log("tab apres :", tab)
+    console.log('tab apres :', tab)
 
     let button = document.getElementById(this.buttonId)
     if (tab.every(value => Boolean(value))) {
@@ -1161,20 +1159,20 @@ export class RegexpSelect extends Select {
   * @param {Object} ruleObject the categories to be displayed in the facets and their values
   */
   fill (keyToFillSelect) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ PatternsSelect.fill()___")
-    console.log("keyToFillSelect :", keyToFillSelect)
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ PatternsSelect.fill()___')
+    console.log('keyToFillSelect :', keyToFillSelect)
     const keyData = this.allData[keyToFillSelect]
-    console.log("keyData :", keyData)
+    console.log('keyData :', keyData)
 
     // Add ruleObject keys to left facet
     for (let item of keyData.values) {
-      console.log(" ")
-      console.log("item :", item)
+      console.log(' ')
+      console.log('item :', item)
       const curKey = item.slice(1, -1)
-      console.log("curKey :", curKey)
-        if ((curKey in this.allData) && ("params" in this.allData[curKey]) && (this.allData[curKey]["params"] == "expandable")) {
+      console.log('curKey :', curKey)
+        if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
           let optgroup = document.createElement('optgroup')
           optgroup.label = curKey
           for (let i of this.allData[curKey].values) {
@@ -1224,10 +1222,10 @@ export class ValuesSelect extends Select {
     this.element.addEventListener('change', this.changeHandler)
   }
 
-   /**
- * Handles the click event for the right facet.
- * @param {Event} event the event object associated with the click in the right facet
- */
+  /**
+  * Handles the click event for the right facet.
+  * @param {Event} event the event object associated with the click in the right facet
+  */
   _handleClick (editor, facetsContainerElement, refData, inPattern) {
     console.log(' ')
     console.log('________________________________')
