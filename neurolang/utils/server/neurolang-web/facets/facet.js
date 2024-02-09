@@ -18,25 +18,25 @@ export class Facet {
     this.container = new Container(this.parentContainerElement, this.containerId)
     this.label = null
     this.element = null
-//    console.log(" ")
-//    console.log("________________________________")
-//    console.log("___ Facet.constructor()___")
-//    console.log("this.editor :", this.editor)
-//    console.log("this.facetsContainerElement :", this.facetsContainerElement)
-//    console.log("this.parentContainerElement :", this.parentContainerElement)
-//    console.log("this.containerId :", this.containerId)
+    //    console.log(" ")
+    //    console.log("________________________________")
+    //    console.log("___ Facet.constructor()___")
+    //    console.log("this.editor :", this.editor)
+    //    console.log("this.facetsContainerElement :", this.facetsContainerElement)
+    //    console.log("this.parentContainerElement :", this.parentContainerElement)
+    //    console.log("this.containerId :", this.containerId)
   }
 
   addLabel (labelId, labelText, facetId) {
     this.label = null
     if (labelId) {
       this.label = new Label(this.container.element, labelId, labelText, facetId)
-//      console.log(" ")
-//      console.log("________________________________")
-//      console.log("___ Facet.addLabel()___")
-//      console.log("labelId :", labelId)
-//      console.log("labelText :", labelText)
-//      console.log("facetId :", facetId)
+      //      console.log(" ")
+      //      console.log("________________________________")
+      //      console.log("___ Facet.addLabel()___")
+      //      console.log("labelId :", labelId)
+      //      console.log("labelText :", labelText)
+      //      console.log("facetId :", facetId)
     }
   }
 
@@ -50,21 +50,21 @@ export class Facet {
     console.log("key :", key)
     this.element = null
 
-    if (elementType == 'categories') {
+    if (elementType === 'categories') {
       this.element = new CategoriesSelect(this.editor, this.facetsContainerElement, this.parentContainerElement, this.container.element, elementId, data, key)
-    } else if (elementType == 'values') {
+    } else if (elementType === 'values') {
       this.element = new ValuesSelect(this.editor, this.facetsContainerElement, this.parentContainerElement, this.container.element, elementId, data, key)
-    } else if (elementType == 'regexpvalues') {
+    } else if (elementType === 'regexpvalues') {
       this.element = new RegexpSelect(this.editor, this.facetsContainerElement, this.parentContainerElement, this.container.element, elementId, data, key)
-    } else if (elementType == 'patterns') {
+    } else if (elementType === 'patterns') {
       this.element = new PatternsSelect(this.editor, this.facetsContainerElement, this.parentContainerElement, this.container.element, elementId, data, key)
-    } else if (elementType == 'number') {
+    } else if (elementType === 'number') {
       this.element = new NumberInput(this.editor, this.facetsContainerElement, this.parentContainerElement, this.container.element, elementId, data, key)
-    } else if (elementType == 'regexp') {
+    } else if (elementType === 'regexp') {
       this.element = new RegexpInput(this.editor, this.facetsContainerElement, this.parentContainerElement, this.container.element, elementId, data, key)
-    } else if (elementType == 'aggregateButton') {
+    } else if (elementType === 'aggregateButton') {
       this.element = new AggregateButton(this.editor, this.facetsContainerElement, this.parentContainerElement, this.container.element, elementId, data, key)
-    } else if (elementType == 'valueButton') {
+    } else if (elementType === 'valueButton') {
       this.element = new ValueButton(this.editor, this.facetsContainerElement, this.parentContainerElement, this.container.element, elementId, data, key = false)
     }
   }

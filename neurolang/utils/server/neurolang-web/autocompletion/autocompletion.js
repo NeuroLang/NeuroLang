@@ -1,5 +1,5 @@
 import { FacetsController } from '../facets/facets'
-import { API_ROUTE } from '../constants'
+//import { API_ROUTE } from '../constants'
 
 /**
  * Class to manage query autocompletion.
@@ -43,7 +43,7 @@ export class AutocompletionController {
           return {
             content: match,
             start: startIndex,
-            end:endIndex
+            end: endIndex
           }
         }
 
@@ -95,12 +95,11 @@ export class AutocompletionController {
     }
 
     // separate the text to get the symbols and the text for autocompletion
-    let cursorline = lines.splice(cursorLineNumber, 1)
+    const cursorline = lines.splice(cursorLineNumber, 1)
 
     $.post(API_ROUTE.autocompletion, { text: allText, engine: this.engine, line: cursorLineNumber, startpos: lineStartPos, endpos: cursorIndex, notCursorLines: lines.join('\n'), cursorLine: cursorline[0] }, data => {
 
       // get the entire text from the CodeMirror instance
-      const allText = this.editor.getValue()
       let facets = JSON.parse(data.tokens)
       let rules = facets.rules
       this.fc.updatePatterns(rules)
@@ -111,7 +110,6 @@ export class AutocompletionController {
         console.log("******************")
         console.log("*** Empty line ***")
         console.log("******************")
-        const expression = rules.expression
 
         console.log("")
         console.log("*** Call this.fc.createFacets (rules, 'expression', 'patterns') ")
@@ -119,7 +117,7 @@ export class AutocompletionController {
         console.log("var1 = rules :", rules)
         console.log("var2 = 'expression'")
         console.log("var3 = 'patterns'")
-        this.fc.createFacets (rules, 'expression', 'patterns')
+        this.fc.createFacets(rules, 'expression', 'patterns')
 //        this.fc.displayPatternsFacet(expression.values)
 
       // Not empty line
@@ -132,14 +130,11 @@ export class AutocompletionController {
 
           // Pattern is in rule properties
           if (rules.hasOwnProperty(patternContent)) {
-
             // Pattern has a value
             if (rules[patternContent].hasOwnProperty("values")) {
-
               // Only one possible value/pattern
               if (rules[patternContent]["values"].length == 1) {
                 this._writeValueInTextEditor(rules[patternContent].values[0])
-
               // Several possible patterns lines
               } else {
                 console.log(" ")
