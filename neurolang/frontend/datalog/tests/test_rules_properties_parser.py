@@ -6,10 +6,24 @@ from ..standard_syntax import parse_rules
 def test_rules_properties_parsing():
     res = parse_rules()
     expected = {
-        "expression": {
-            "values": [
-                "<rule>"
-            ]
-        }
-    }
+        'argument': {'values': ['<arithmetic_operation>', '...']},
+        'arguments': {'unit': '<argument>', 'params': 'number', 'sep': ','},
+        'arithmetic_operation': {'values': ['<operand>', '<operand> + <operand>', '<operand> - <operand>', '<operand> * <operand>', '<operand> / <operand>', '<operand> ** <operand>'], 'params': 'expandable'}, 'cmd_arg': {'values': ['<arithmetic_operation>', '<string>', '<identifier> = <arithmetic_operation>', '<identifier> = <string>', '<identifier> = <string>']}, 'command_identifier': {'values': ['<cmd_identifier>']}, 'cmd_identifier': {'regexp': '/\\b(?!\\bexists\\b)(?!\\b∃\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/', 'quotes': ''}, 'command': {'values': ['.<command_identifier> (<command_arguments>)'], 'params': 'expandable'}, 'command_arguments': {'unit': '<cmd_arg>', 'sep': ',', 'params': 'number', 'min': 1}, 'composite_predicate': {'values': ['( <conjunction> )', '<predicate>']}, 'comparison': {'values': ['<argument> == <argument>', '<argument> < <argument>', '<argument> <= <argument>', '<argument> > <argument>', '<argument> >= <argument>', '<argument> != <argument>'], 'params': 'number'}, 'condition': {'values': ['<composite_predicate> // <composite_predicate>']}, 'conjunction': {'unit': '<predicate>', 'sep': '&', 'params': 'number'}, 'constraint': {'values': ['<conjunction> -: <identifier> ( <arguments> )'], 'params': 'expandable'}, 'double_quote_string': {'regexp': '/[^"]*/', 'quotes': '"'}, 'double_quote_text': {'regexp': '/[a-zA-Z0-9 ]*/', 'quotes': '"'}, 'existential_body': {'values': ['<arguments>; <predicates>']}, 'existential_predicate': {'values': ['exists ( <arguments>; <predicates> )']}, 'expression': {'values': ['<rule>', '<constraint>', '<fact>', '<probabilistic_rule>', '<probabilistic_fact>', '<statement>', '<statement_function>', '<command>']}, 'fact': {'values': ['<identifier> ()', '<identifier> (<fact_arguments>)'], 'params': 'expandable'}, 'fact_argument': {'values': ['<text>', '<number>', '@<identifier>']}, 'fact_arguments': {'unit': '<fact_argument>', 'params': 'number', 'sep': ','}, 'float': {'regexp': '/([0-9]+(e|E)[\\+|-][0-9]+)|(([0-9]+\\.([0-9]+)?|\\.[0-9]+)((e|E)[\\+|-][0-9]+)?)/', 'quotes': ''}, 'function_identifier': {'values': ['<identifier>', '@<identifier>', '<lambda_expression>', '(<lambda_expression>)']}, 'head': {'values': ['<identifier> ()', '<identifier> ( <arguments> )']}, 'identifier': {'values': ['<command_identifier>', '<identifier_regexp>']}, 'identifier_regexp': {'regexp': '/[0-9a-zA-Z\\/#%\\._:-]+/', 'quotes': '`'}, 'integer': {'regexp': '/[0-9]+/', 'quotes': ''}, 'number': {'values': ['<integer>', '<float>'], 'params': 'expandable'},
+        'function': {'values': ['<function_identifier> ()', '<function_identifier> (<arguments>)'], 'params': 'expandable'},
+        'operand': {'values': ['<function>', '( <argument> )', '<number>', '<text>', '<signed_identifier>']}, 'optional_arguments': {'unit': '<argument>', 'params': 'number', 'sep': ',', 'min': 0},
+        'predicate': {'values': ['<identifier> ()', '<identifier> ( <arguments> )', '@<identifier> ()', '@<identifier> ( <arguments> )', 'lambda <arguments> : <argument> ()', 'lambda <arguments> : <argument> ( <arguments> )', '~ <predicate>', 'exists ( <arguments>; <predicates> )', '<comparison>', 'True', 'False']},
+        'predicates': {'unit': '<predicate>', 'params': 'number', 'sep': ','},
+        'probabilistic_fact': {'values': ['( <arithmetic_operation> ) :: <constant_predicate>', '( <int_ext_identifier> ) :: <constant_predicate>'], 'params': 'expandable'},
+        'probabilistic_rule': {'values': ['<identifier> () :: <arithmetic_operation> :- <composite_predicate> // <composite_predicate>', '<identifier> ( <arguments> ) :: <arithmetic_operation> :- <composite_predicate> // <composite_predicate>', '<identifier> () :: <arithmetic_operation> :- <conjunction>', '<identifier> ( <arguments> ) :: <arithmetic_operation> :- <conjunction>'], 'params': 'expandable'},
+        'query': {'values': ['ans ()', 'ans ( <arguments> )']},
+        'rule': {'values': ['<identifier> ( <arguments> ) :- <composite_predicate> // <composite_predicate>', '<identifier> ( <arguments> ) :- <conjunction>', 'ans () :- <composite_predicate> // <composite_predicate>', 'ans () :- <conjunction>', 'ans ( <arguments> ) :- <composite_predicate> // <composite_predicate>', 'ans ( <arguments> ) :- <conjunction>'], 'params': 'expandable'},
+        'signed_identifier': {'values': ['<identifier>', '@<identifier>', '<lambda_expression>', '- <identifier>', '- @<identifier>', '- <lambda_expression>'], 'params': 'expandable'},
+        'signed_lambda_expression': {'values': ['<lambda_expression>', '- <lambda_expression>']},
+        'signed_int_ext_identifier': {'values': ['<int_ext_identifier>', '- <int_ext_identifier>']},
+        'single_quote_string': {'regexp': "/[^']*/", 'quotes': "'"},
+        'single_quote_text': {'regexp': '/[a-zA-Z0-9 ]*/', 'quotes': "'"},
+        'statement': {'values': ['<identifier> := <arithmetic_operation>'], 'params': 'expandable'},
+        'statement_function': {'values': ['<identifier> () := <argument>', '<identifier> ( <arguments> ) := <argument>'], 'params': 'expandable'},
+        'string': {'values': ['<double_quote_string>', '<single_quote_string>'], 'params': 'expandable'},
+        'text': {'values': ['<double_quote_text>', '<single_quote_text>'], 'params': 'expandable'}}
     assert res == expected
