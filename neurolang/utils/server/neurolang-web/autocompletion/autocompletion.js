@@ -176,7 +176,14 @@ export class AutocompletionController {
             }
           }
         } else {
-          delete facets.rules
+          console.log(" ")
+          console.log("*****************************")
+          console.log("*** Categories and values ***")
+          console.log("*****************************")
+          console.log("facets :", facets)
+          console.log("facets.rules :", facets.rules)
+          console.log("facets['rules'] :", facets['rules'])
+//          delete facets.rules
           const k = Object.keys(facets)[0]
           // Only one accepted next token
           if ((Object.keys(facets).length == 1) && (facets[k].length == 1)) {
@@ -188,11 +195,8 @@ export class AutocompletionController {
 //            console.log(" ")
 //            console.log("facets :", facets)
 
+
             console.log(" ")
-            console.log("*****************************")
-            console.log("*** Categories and values ***")
-            console.log("*****************************")
-            console.log("")
             console.log("*** Call this.fc.createFacets (rules, 'expression', 'patterns') ")
             console.log("before call :")
             console.log("facets :", facets)

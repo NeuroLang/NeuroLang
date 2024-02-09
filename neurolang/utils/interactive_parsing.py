@@ -121,7 +121,7 @@ class LarkCompleter:
         # Initialise the final accepted tokens dictionary
         accepted_tokens = {}
         for category in CATEGORIES:
-            accepted_tokens[category] = set()
+            accepted_tokens[category] = {"values" : set()}
 
         # Get the accepted tokens given by the parser
         parser_accepted_tokens = list(interactive.accepts())
@@ -139,19 +139,20 @@ class LarkCompleter:
             t_pattern = str(terminal.pattern).replace("'", "")
 
             if (t_name == 'CMD_IDENTIFIER'):
-                t_pattern = '<command identifier>'
-                accepted_tokens['commands'] = set()
+                t_pattern = '<cmd_identifier>'
+                accepted_tokens['commands'] = {"values" : set()}
             elif (t_name == 'FLOAT'):
                 t_pattern = '<float>'
             elif (t_name == 'IDENTIFIER_REGEXP'):
-                t_pattern = '<identifier regular expression>'
-                accepted_tokens['functions'] = set()
-                accepted_tokens['base symbols'] = set()
-                accepted_tokens['query symbols'] = set()
+                # t_pattern = '<identifier regular expression>'
+                t_pattern = '<identifier_regexp>'
+                accepted_tokens['functions'] = {"values" : set()}
+                accepted_tokens['base symbols'] = {"values" : set()}
+                accepted_tokens['query symbols'] = {"values" : set()}
             elif (t_name == 'INT'):
                 t_pattern = '<integer>'
             elif (t_name == 'PYTHON_STRING'):
-                t_pattern = '<quoted string>'
+                t_pattern = '<string>'
             elif (t_name == 'TEXT'):
                 t_pattern = '<text>'
             else:
@@ -165,9 +166,9 @@ class LarkCompleter:
                 t_pattern = t_pattern.replace(
                     '(?:', '').replace(')', '').split('|')
                 for pattern in t_pattern:
-                    accepted_tokens[TERMINALS_TO_CATEGORIES[t_name]].add(
+                    accepted_tokens[TERMINALS_TO_CATEGORIES[t_name]]["values"].add(
                         pattern)
             else:
-                accepted_tokens[TERMINALS_TO_CATEGORIES[t_name]].add(t_pattern)
+                accepted_tokens[TERMINALS_TO_CATEGORIES[t_name]]["values"].add(t_pattern)
 
         return CompleteResult(len(text), "", accepted_tokens)

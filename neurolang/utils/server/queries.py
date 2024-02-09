@@ -234,9 +234,25 @@ class NeurolangQueryManager:
                     res = engine.compute_datalog_program_for_autocompletion(
                         query, autocompletion_query)
 
+                    print("")
+                    print("res before list conversion :")
+                    for r in res:
+                        print(r, ":", res[r])
+
+                    print("")
+                    print("Conversion :")
                     # convert sets to lists, otherwise not convertible to a json
                     for i in res:
-                        res[i] = list(res[i])
+                        # res["values"][i] = list(res["values"][i])
+                        print("i :", i)
+                        print("res[i] :", res[i])
+                        print("res[i][\"values\"] :", res[i]["values"])
+                        res[i]["values"] = list(res[i]["values"])
+
+                    print("")
+                    print("res after list conversion :")
+                    for r in res:
+                        print(r, ":", res[r])
 
                     # get rules patterns from json file
                     rules = parse_rules()
@@ -253,23 +269,23 @@ class NeurolangQueryManager:
                                 if (name[0].isupper()) or (name.startswith('fresh')):
                                     available_identifiers.append(name)
                                     if 'functions' in res:
-                                        res['query symbols'].append(name)
+                                        res['query symbols']["values"].append(name)
                                 else:
                                     predefined_functions.append(name)
                                     if 'functions' in res:
-                                        res['functions'].append(name)
+                                        res['functions']["values"].append(name)
                             elif is_leq_informative(symbol.type, AbstractSet):
                                 available_identifiers.append(name)
                                 if 'functions' in res:
-                                    res['base symbols'].append(name)
+                                    res['base symbols']["values"].append(name)
                         if 'base symbols' in res:
-                            res['base symbols'] = sorted(
-                                list(res['base symbols']))
+                            res['base symbols']["values"] = sorted(
+                                list(res['base symbols']["values"]))
                         if 'query symbols' in res:
-                            res['query symbols'] = sorted(
-                                list(res['query symbols']))
+                            res['query symbols']["values"] = sorted(
+                                list(res['query symbols']["values"]))
                         if 'functions' in res:
-                            res['functions'] = sorted(list(res['functions']))
+                            res['functions']["values"] = sorted(list(res['functions']["values"]))
 
                     if available_identifiers:
                         available_identifiers = sorted(
@@ -297,20 +313,25 @@ class NeurolangQueryManager:
                     if available_commands:
                         available_commands = sorted(
                             list(available_commands))
-                        rules["cmd_identifier"]["values"].append("<available_commands>")
+                        rules["command_identifier"]["values"].append("<available_commands>")
                         rules["available_commands"] = {
                             "values": available_commands,
                             "params": "expandable"
                         }
                     if 'commands' in res:
-                        res['commands'] = available_commands
+                        res['commands']["values"] = available_commands
 
                     # Clean toks : remove the keys with empty list
-                    tmp_toks = {k: v for k, v in res.items() if v}
+                    tmp_toks = {k: v for k, v in res.items() if v["values"]}
                     res.clear()
                     res.update(tmp_toks)
 
                     res['rules'] = rules
+
+                    print("")
+                    print("res end :")
+                    for r in res:
+                        print(r, ":", res[r])
 
                     return res
             except Exception as e:

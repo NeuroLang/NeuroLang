@@ -30,18 +30,18 @@
 							"<identifier> = <string>"
 						]
 	},
-	"cmd_identifier":	{
+	"command_identifier":	{
 			"values":	[
-							"<cmd_new_identifier>"
+							"<cmd_identifier>"
 						]
 	},
-	"cmd_new_identifier":	{
+	"cmd_identifier":	{
 			"regexp":	"/\\b(?!\\bexists\\b)(?!\\b\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/",
 			"quotes": 	""
 	},
 	"command":	{
 			"values":	[
-							".<cmd_identifier> (<command_arguments>)"
+							".<command_identifier> (<command_arguments>)"
 						],
 			"params": 	"expandable"
 	},
@@ -153,7 +153,7 @@
 	},
 	"identifier":	{
 			"values":	[
-							"<cmd_identifier>",
+							"<command_identifier>",
 							"<identifier_regexp>"
 						]
 	},

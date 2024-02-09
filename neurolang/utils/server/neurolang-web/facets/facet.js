@@ -933,18 +933,24 @@ export class CategoriesSelect extends Select {
   }
 
 //  addChangeEventListeners (editor, valuesSelect) {
-  addChangeEventListeners (editor) {
-//    console.log(" ")
-//    console.log("___in CategoriesSelect.addChangeEventListeners()___")
-    // Create a new handler function that has access to facetsObject
-//    this.changeHandler = (event) => this._handleClick(event, editor, valuesSelect)
-    this.changeHandler = (event) => this._handleClick(event, editor)
+  addChangeEventListeners (editor, refData) {
+    console.log(" ")
+    console.log("________________________________")
+    console.log("___ CategoriesSelect.addChangeEventListeners()___")
+    console.log("refData :", refData)
+    this.changeHandler = (event) => this._handleClick(event, editor, refData)
 
     // Attach the new event listener
     this.element.addEventListener('change', this.changeHandler)
   }
 
-  _setValuesFacet (dataObject) {
+  _setValuesFacet (dataObject, refData) {
+    console.log(" ")
+    console.log("________________________________")
+    console.log("___ CategoriesSelect._setValuesFacet()___")
+    console.log("this.allData :", this.allData)
+    console.log("dataObject :", dataObject)
+    console.log("refData :", refData)
     let newFacet = new Facet(
         this.editor,
         this.facetsContainerElement,
@@ -955,8 +961,10 @@ export class CategoriesSelect extends Select {
 //      console.log("this.element.id :", this.element.id)
 //      console.log("newFacet.element.element.id :", newFacet.element.element.id)
       newFacet.addLabel(this.element.id + 'rightFacetLabel', 'Values', 'rightFacet')
-      newFacet.addElement('values', 'rightFacet', dataObject)
-      newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
+//      newFacet.addElement('values', 'rightFacet', this.allData[selectedKey])
+      newFacet.addElement('patterns', 'rightFacet', this.allData)
+//      newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
+      newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement, refData)
       newFacet.element.fill(dataObject, 'values')
       newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
       return newFacet
@@ -967,11 +975,16 @@ export class CategoriesSelect extends Select {
   * @param {Event} event the event object associated with the click in the left facet
   */
 //  _handleClick (event, editor, valuesSelect) {
-  _handleClick (event, editor) {
-//    console.log(" ")
-//    console.log("___in CategoriesSelect._handleClick()___")
+  _handleClick (event, editor, refData) {
+    console.log(" ")
+    console.log("________________________________")
+    console.log("___ CategoriesSelect._handleClick()___")
+    console.log("this.allData :", this.allData)
+    console.log("refData :", refData)
+
     // Retrieve the selected option
     const selectedKey = event.target.value
+    console.log("selectedKey :", selectedKey)
 
     // Clear previous options
 //    while (valuesSelect.element.firstChild) {
@@ -986,28 +999,23 @@ export class CategoriesSelect extends Select {
     }
 
     if (selectedKey) {
-
-
+      let valuesToDisplay = null
 
       if (selectedKey === 'All') {
-//        console.log(" ")
-//        console.log("-- All --")
-//        console.log("this.data :", this.data)
+        console.log("selectedKey === 'All'")
         let values = []
-        const data_select = this.allData[key].values
+        const data_select = this.allData
         for (const key of Object.keys(data_select)) {
           for (const value of data_select[key]) {
-    //        const option = document.createElement('option')
-    //        option.value = value
-    //        option.textContent = value
-    //        // this.rightFacet.element.appendChild(option)
-    //        // valuesSelect.element.appendChild(option)
-    //        // this.valuesFacet.element.element.appendChild(option)
             values.push(value)
           }
         }
-        this.valuesFacet = this._setValuesFacet(values)
+        console.log("*** Before call this._setValuesFacet()")
+        console.log("values :", values)
+        console.log("refData :", refData)
+        this.valuesFacet = this._setValuesFacet(values, refData)
       } else if (this.allData[selectedKey]) {
+          console.log("this.allData[selectedKey] true")
 //        console.log(" ")
 //        console.log("-- not All --")
 //        console.log("selectedKey :", selectedKey)
@@ -1020,7 +1028,11 @@ export class CategoriesSelect extends Select {
     //      // valuesSelect.element.appendChild(option)
     //      // this.valuesFacet.element.element.appendChild(option)
     //    }
-        this.valuesFacet = this._setValuesFacet(this.allData[selectedKey])
+        console.log("*** Before call this._setValuesFacet()")
+        console.log("this.allData[selectedKey] :", this.allData[selectedKey])
+        console.log("refData :", refData)
+//        this.valuesFacet = this._setValuesFacet(this.allData[selectedKey], refData)
+        this.valuesFacet = this._setValuesFacet(selectedKey, refData)
       }
     }
     editor.focus()
@@ -1033,6 +1045,10 @@ export class CategoriesSelect extends Select {
   fill (facetsObject) {
 //    console.log(" ")
 //    console.log("___in CategoriesSelect.fill()___")
+    console.log(" ")
+    console.log("________________________________")
+    console.log("___ CategoriesSelect.fill()___")
+    console.log("facetsObject :", facetsObject)
 
 //    console.log(" ")
 //    console.log("data :", facetsObject)
@@ -1215,12 +1231,11 @@ export class ValuesSelect extends Select {
 
   constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc) {
     super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc)
-//    this.generatorFacetId = generatorFacetId
   }
 
-  addChangeEventListeners (editor, facetsContainerElement) {
+  addChangeEventListeners (editor, facetsContainerElement, refData, inPattern = false) {
     // Create a new handler function that has access to facetsObject
-    this.changeHandler = (event) => this._handleClick(event, editor, facetsContainerElement)
+    this.changeHandler = (event) => this._handleClick(editor, facetsContainerElement, refData, inPattern)
 
     // Attach the new event listener
     this.element.addEventListener('change', this.changeHandler)
@@ -1230,38 +1245,117 @@ export class ValuesSelect extends Select {
  * Handles the click event for the right facet.
  * @param {Event} event the event object associated with the click in the right facet
  */
-  _handleClick (event, editor, facetsContainerElement) {
+  _handleClick (editor, facetsContainerElement, refData, inPattern) {
+    console.log(" ")
+    console.log("________________________________")
+    console.log("___ ValuesSelect._handleClick()___")
+    console.log("this.allData :", this.allData)
+    console.log("refData :", refData)
+    console.log("inPattern :", inPattern)
+
+//    this._removeFacets()
+
+    // get selected value
     const selectedValue = this.element.value
+    console.log("selectedValue :", selectedValue)
 
     // put the value as selected in the symbols table as well
     this._selectInSymbolsTable (selectedValue)
 
+    // get the cursor position in the CodeMirror editor
+    var cursorPos = editor.getCursor()
+
+    // calculate the end position based on the length of the inserted value
+    var endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+
     if (selectedValue && selectedValue !== 'All') {
-      // get the cursor position in the CodeMirror editor
-      const cursorPos = editor.getCursor()
 
-      // insert the selected value at the current cursor position
-      editor.replaceRange(selectedValue, cursorPos)
+      const selectedValueToKey = selectedValue.slice(1, -1)
 
-      // calculate the end position based on the length of the inserted value
-      const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+      // check if the selected value is a key in data and has a key "regexp"
+      if (refData.hasOwnProperty(selectedValueToKey) && refData[selectedValueToKey].hasOwnProperty("regexp")) {
+        console.log(" ")
+        console.log("selectedValueToKey in refdata")
+        const regexpObj = refData[selectedValueToKey]
+        console.log("regexpObj :", regexpObj)
+        let regexpVal = {key: selectedValueToKey, val:''}
+        let newInput = new Facet(
+          this.editor,
+          this.facetsContainerElement,
+          this.parentContainerElement,
+          this.element.id + '_input_container')
+        newInput.addLabel(this.element.id + '_input_label', 'Enter the value :', this.element.id + '_input')
+        newInput.addElement('regexp', this.element.id + '_input', this.allData, selectedValueToKey)
+//        newInput.element.addChangeEventListeners(this.editor, regexpObj, regexpVal)
+        newInput.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
-      // check if the selected value starts with '<' and ends with '>'
-      if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
-        // select the text that was just inserted
-        editor.setSelection(cursorPos, endPos)
+        let buttonNew = new Facet(
+          this.editor,
+          this.facetsContainerElement,
+          this.parentContainerElement,
+          this.element.id + '_button_container')
+        buttonNew.addElement('valueButton', this.element.id + '_button', this.allData)
+        buttonNew.element.addClickEventListeners(this.editor, this.facetsContainerElement, regexpVal, inPattern)
+        buttonNew.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
+
+//        console.log("button id :", buttonNew.element.element.id)
+        newInput.element.updateButtonId(buttonNew.element.element.id)
+
+        this.facets.push(newInput, buttonNew)
+//        this.facets.push(newInput)
+
+        for (let item of this.facets) {
+          console.log("elt : ", item.element)
+          console.log("elt type : ", item.element.element.nodeName)
+        }
+
+         editor.focus()
       } else {
-        // Move cursor to end of inserted value
-        editor.setCursor(endPos)
+
+// Previous version
+//      // get the cursor position in the CodeMirror editor
+////      const cursorPos = editor.getCursor()
+//
+//      // insert the selected value at the current cursor position
+//      editor.replaceRange(selectedValue, cursorPos)
+//
+//      // calculate the end position based on the length of the inserted value
+////      const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+//
+//      // check if the selected value starts with '<' and ends with '>'
+//      if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
+//        // select the text that was just inserted
+//        editor.setSelection(cursorPos, endPos)
+//      } else {
+//        // Move cursor to end of inserted value
+//        editor.setCursor(endPos)
+//      }
+
+        if (inPattern) {
+          var selectedRange = editor.getSelection()
+          editor.replaceSelection(selectedValue)
+        } else {
+          // get the cursor position in the CodeMirror editor
+          // const cursorPos = editor.getCursor()
+
+          // insert the selected value at the current cursor position
+          editor.replaceRange(selectedValue, cursorPos)
+
+          // calculate the end position based on the length of the inserted value
+          // const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+
+          // Move cursor to end of inserted value
+          editor.setCursor(endPos)
+        }
       }
     }
 
     // Hide the facets and 'ok' button as they are no longer needed
     // set the facets container back to be hidden
-    facetsContainerElement.style.display = 'none'
+//    facetsContainerElement.style.display = 'none'
 
     // Refocus the CodeMirror editor to keep the cursor visible in the textarea
-    editor.focus()
+//    editor.focus()
   }
 
    /**
@@ -1282,6 +1376,44 @@ export class ValuesSelect extends Select {
       this.element.appendChild(option)
     }
   }
+
+  fill (keyToFillSelect) {
+    console.log(" ")
+    console.log("________________________________")
+    console.log("___ PatternsSelect.fill()___")
+    console.log("keyToFillSelect :", keyToFillSelect)
+    const keyData = this.allData[keyToFillSelect]
+    console.log("keyData :", keyData)
+
+    // Add ruleObject keys to left facet
+    for (let item of keyData.values) {
+      console.log(" ")
+      console.log("item :", item)
+      const curKey = item.slice(1, -1)
+      console.log("curKey :", curKey)
+      if ((curKey in this.allData) && ("params" in this.allData[curKey]) && (this.allData[curKey]["params"] == "expandable")) {
+        let optgroup = document.createElement('optgroup')
+        optgroup.label = curKey
+        for (let i of this.allData[curKey].values) {
+          const option = document.createElement('option')
+          option.textContent = i
+          optgroup.appendChild(option)
+        }
+        this.element.appendChild(optgroup)
+      } else {
+        const option = document.createElement('option')
+        option.textContent = item
+        this.element.appendChild(option)
+      }
+    }
+  }
+
+  remove () {
+    this._removeFacets()
+    this._removeChangeEventListener ()
+    this._removeElement()
+    return null
+  }
 }
 
 /**
@@ -1291,25 +1423,11 @@ export class PatternsSelect extends Select {
 
   constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc) {
     super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc)
-//    console.log(" ")
-//    console.log("________________________________")
-//    console.log("___ PatternsSelect.constructor()___")
-//    console.log("this.editor :", this.editor)
-//    console.log("this.facetsContainerElement :", this.facetsContainerElement)
-//    console.log("this.parentContainerElement :", this.parentContainerElement)
-//    console.log("this.elementContainer :", this.elementContainer)
-//    console.log("this.elementId :", this.elementId)
-//    console.log("this.allData :", this.allData)
-//    console.log("this.data :", this.data)
-//    console.log("this.key :", this.key)
-    this.buttonFacet = []
-    this.valuesFacet = null
-    this.facets = []
   }
 
-  addChangeEventListeners(editor, facetsContainerElement, allDataObject, inPattern = false) {
+  addChangeEventListeners(editor, facetsContainerElement, refData, inPattern = false) {
     // Create a new handler function that has access to facetsObject
-    this.changeHandler = (event) => this._handleClick(editor, facetsContainerElement, allDataObject, inPattern)
+    this.changeHandler = (event) => this._handleClick(editor, facetsContainerElement, refData, inPattern)
 
     // Attach the new event listener
     this.element.addEventListener('change', this.changeHandler)
@@ -1320,7 +1438,6 @@ export class PatternsSelect extends Select {
  * @param {Event} event the event object associated with the click in the right facet
  */
   _handleClick (editor, facetsContainerElement, allDataObject, inPattern) {
-
     console.log(" ")
     console.log("________________________________")
     console.log("___ PatternsSelect._handleClick()___")
@@ -1342,19 +1459,11 @@ export class PatternsSelect extends Select {
     // calculate the end position based on the length of the inserted value
     var endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
 
-//    console.log("this.data :", this.data)
-//    console.log("allDataObject :", allDataObject)
-
     if (selectedValue) {
 
       const selectedValueToKey = selectedValue.slice(1, -1)
 
-      // check if the selected value starts with '<' and ends with '>'
-      const valuesToSelect = ["<identifier_regexp>", "<cmd_identifier>"]
-
-      console.log("key1 : ", this.key)
-      console.log("key2 : ", selectedValueToKey)
-
+      // check if the selected value is a key in data and has a key "regexp"
       if (allDataObject.hasOwnProperty(selectedValueToKey) && allDataObject[selectedValueToKey].hasOwnProperty("regexp")) {
         const regexpObj = allDataObject[selectedValueToKey]
         console.log("regexpObj :", regexpObj)
@@ -1392,22 +1501,23 @@ export class PatternsSelect extends Select {
          editor.focus()
       } else {
 
-      if (inPattern) {
-        var selectedRange = editor.getSelection()
-        editor.replaceSelection(selectedValue)
-      } else {
-        // get the cursor position in the CodeMirror editor
-        // const cursorPos = editor.getCursor()
+        if (inPattern) {
+          var selectedRange = editor.getSelection()
+          editor.replaceSelection(selectedValue)
+        } else {
+          // get the cursor position in the CodeMirror editor
+          // const cursorPos = editor.getCursor()
 
-        // insert the selected value at the current cursor position
-        editor.replaceRange(selectedValue, cursorPos)
+          // insert the selected value at the current cursor position
+          editor.replaceRange(selectedValue, cursorPos)
 
-        // calculate the end position based on the length of the inserted value
-        // const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+          // calculate the end position based on the length of the inserted value
+          // const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
 
-        // Move cursor to end of inserted value
-        editor.setCursor(endPos)
-      }
+          // Move cursor to end of inserted value
+          editor.setCursor(endPos)
+        }
+        //    this.hide()
       }
 
 //      cursorPos = editor.getCursor()
@@ -1422,8 +1532,6 @@ export class PatternsSelect extends Select {
 
 //      }
     }
-
-//    this.hide()
   }
 
    /**
@@ -1444,15 +1552,15 @@ export class PatternsSelect extends Select {
       console.log("item :", item)
       const curKey = item.slice(1, -1)
       console.log("curKey :", curKey)
-        if ((curKey in this.allData) && ("params" in this.allData[curKey]) && (this.allData[curKey]["params"] == "expandable")) {
-          let optgroup = document.createElement('optgroup')
-          optgroup.label = curKey
-          for (let i of this.allData[curKey].values) {
-            const option = document.createElement('option')
-            option.textContent = i
-            optgroup.appendChild(option)
-          }
-          this.element.appendChild(optgroup)
+      if ((curKey in this.allData) && ("params" in this.allData[curKey]) && (this.allData[curKey]["params"] == "expandable")) {
+        let optgroup = document.createElement('optgroup')
+        optgroup.label = curKey
+        for (let i of this.allData[curKey].values) {
+          const option = document.createElement('option')
+          option.textContent = i
+          optgroup.appendChild(option)
+        }
+        this.element.appendChild(optgroup)
       } else {
         const option = document.createElement('option')
         option.textContent = item
@@ -1462,9 +1570,6 @@ export class PatternsSelect extends Select {
   }
 
   remove () {
-    if (this.valuesFacet) {
-      this.valuesFacet.remove()
-    }
     this._removeFacets()
     this._removeChangeEventListener ()
     this._removeElement()
