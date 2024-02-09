@@ -20,7 +20,6 @@ import tornado.websocket
 import yaml
 from tornado.options import define, options
 
-from ...frontend.datalog.standard_syntax import parse_rules
 from ...regions import ExplicitVBR, ExplicitVBROverlay
 from .engines import DestrieuxEngineConf, NeurosynthEngineConf
 from .queries import NeurolangQueryManager

@@ -154,31 +154,31 @@ export class AutocompletionController {
             // Pattern does not have value
             } else if (rules[patternContent].hasOwnProperty('params') && rules[patternContent].hasOwnProperty('unit')) {
               if (rules[patternContent].params == 'number') {
-                console.log(" ")
+                console.log(' ')
                 console.log('********************')
-                console.log("*** Input number ***")
-                console.log("********************")
-                console.log("")
-                console.log("*** Call this.fc.createFacets (rules, 'expression', 'patterns') ")
-                console.log("before call :")
-                console.log("var1 = rules :", rules)
-                console.log("var2 = patternContent :", patternContent)
-                console.log("var3 : 'number'")
-                console.log("var4 : true")
-                console.log("var5 = rules[patternContent] :", rules[patternContent])
+                console.log('*** Input number ***')
+                console.log('********************')
+                console.log(' ')
+                console.log('*** Call this.fc.createFacets (rules, \'expression\', \'patterns\') ')
+                console.log('before call :')
+                console.log('var1 = rules :', rules)
+                console.log('var2 = patternContent :', patternContent)
+                console.log('var3 : \'number\'')
+                console.log('var4 : true')
+                console.log('var5 = rules[patternContent] :', rules[patternContent])
                 this.fc.createFacets(rules, patternContent, 'number', true, rules[patternContent])
               }
             }
           }
         } else {
-          console.log(" ")
-          console.log("*****************************")
-          console.log("*** Categories and values ***")
-          console.log("*****************************")
-          console.log("facets :", facets)
-          console.log("facets.rules :", facets.rules)
+          console.log(' ')
+          console.log('*****************************')
+          console.log('*** Categories and values ***')
+          console.log('*****************************')
+          console.log('facets :', facets)
+          console.log('facets.rules :', facets.rules)
           console.log("facets['rules'] :", facets['rules'])
-//          delete facets.rules
+          //          delete facets.rules
           const k = Object.keys(facets)[0]
           // Only one accepted next token
           if ((Object.keys(facets).length == 1) && (facets[k].length == 1)) {

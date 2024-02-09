@@ -58,7 +58,7 @@ export class FacetsController {
     console.log("dataObject['rules'] :", dataObject['rules'])
 
     // Categories facet
-    if (type == 'categories') {
+    if (type === 'categories') {
       // Create
       let leftFacetNew = new Facet(
         this.editor,
@@ -83,7 +83,7 @@ export class FacetsController {
     }
 
     // Patterns facet
-    else if (type == 'patterns') {
+    else if (type === 'patterns') {
       // Create
       let patternFacetNew = new Facet(
         this.editor,
@@ -101,9 +101,9 @@ export class FacetsController {
     }
 
     // Input facet
-    else if (type == 'number') {
+    else if (type === 'number') {
       // Create
-      let inputFacetNew = new Facet(
+      const inputFacetNew = new Facet(
         this.editor,
         this.facetsContainerElement,
         this.containerDiv,

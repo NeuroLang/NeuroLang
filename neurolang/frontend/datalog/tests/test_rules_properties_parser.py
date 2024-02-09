@@ -1,5 +1,3 @@
-import pytest
-
 from ..standard_syntax import parse_rules
 
 
