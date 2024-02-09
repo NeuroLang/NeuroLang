@@ -5,7 +5,6 @@ import { API_ROUTE } from '../constants'
  * Class to manage query autocompletion.
  */
 export class AutocompletionController {
-
   constructor (editor, sc, engine) {
     this.editor = editor
     this.sc = sc
@@ -26,7 +25,7 @@ export class AutocompletionController {
     this.engine = engine
   }
 
-   /**
+  /**
   * Test if, in line line, pos is in a pattern
   */
   _isCursorInPattern (line, pos) {
@@ -85,11 +84,10 @@ export class AutocompletionController {
       // in the cursor line, replace the original line by the substring
 
       // The substring contains a pattern or the cursor position is in a pattern
-      if (  /<[A-Za-z_]+>/.test(subline) || this._isCursorInPattern (lines[cursorLineNumber], cursorLinePosition)) {
+      if (/<[A-Za-z_]+>/.test(subline) || this._isCursorInPattern(lines[cursorLineNumber], cursorLinePosition)) {
         lines[cursorLineNumber] = ''
-      }
-      // The substring doesn't contain a pattern -> for the cursor line, keep only the substring for autocompletion
-      else if (lines[cursorLineNumber].trim()) {
+      } else if (lines[cursorLineNumber].trim()) {
+        // The substring doesn't contain a pattern -> for the cursor line, keep only the substring for autocompletion
         lines[cursorLineNumber] = subline
       }
     }
@@ -98,25 +96,24 @@ export class AutocompletionController {
     const cursorline = lines.splice(cursorLineNumber, 1)
 
     $.post(API_ROUTE.autocompletion, { text: allText, engine: this.engine, line: cursorLineNumber, startpos: lineStartPos, endpos: cursorIndex, notCursorLines: lines.join('\n'), cursorLine: cursorline[0] }, data => {
-
       // get the entire text from the CodeMirror instance
-      let facets = JSON.parse(data.tokens)
+      const facets = JSON.parse(data.tokens)
       const rules = facets.rules
       this.fc.updatePatterns(rules)
 
       // Empty line
       if (!cursorLineContent.trim()) {
-        console.log(" ")
-        console.log("******************")
+        console.log(' ')
+        console.log('******************')
         console.log('*** Empty line ***')
-        console.log("******************")
+        console.log('******************')
 
-        console.log("")
-        console.log("*** Call this.fc.createFacets (rules, 'expression', 'patterns') ")
-        console.log("before call :")
-        console.log("var1 = rules :", rules)
-        console.log("var2 = 'expression'")
-        console.log("var3 = 'patterns'")
+        console.log(' ')
+        console.log('*** Call this.fc.createFacets (rules, \'expression\', \'patterns\') ')
+        console.log('before call :')
+        console.log('var1 = rules :', rules)
+        console.log('var2 = \'expression\'')
+        console.log('var3 = \'patterns\'')
         this.fc.createFacets(rules, 'expression', 'patterns')
         // this.fc.displayPatternsFacet(expression.values)
 
@@ -137,16 +134,16 @@ export class AutocompletionController {
                 this._writeValueInTextEditor(rules[patternContent].values[0])
               // Several possible patterns lines
               } else {
-                console.log(" ")
-                console.log("***************************************")
-                console.log("*** Several possible patterns lines ***")
-                console.log("***************************************")
-                console.log("")
-                console.log("*** Call this.fc.createFacets (rules, 'expression', 'patterns') ")
-                console.log("before call :")
-                console.log("var1 = rules :", rules)
-                console.log("var2 :", patternContent)
-                console.log("var3 : 'patterns'")
+                console.log(' ')
+                console.log('***************************************')
+                console.log('*** Several possible patterns lines ***')
+                console.log('***************************************')
+                console.log(' ')
+                console.log('*** Call this.fc.createFacets (rules, \'expression\', \'patterns\') ')
+                console.log('before call :')
+                console.log('var1 = rules :', rules)
+                console.log('var2 :', patternContent)
+                console.log('var3 : \'patterns\'')
                 console.log('var4 : true')
                 this.fc.createFacets(rules, patternContent, 'patterns', true)
               }
