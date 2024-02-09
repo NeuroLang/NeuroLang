@@ -2,8 +2,7 @@
  * Class to manage facets.
  */
 export class Facet {
-
-   /**
+  /**
   * Handles the click event for the right facet.
   * @param {editor} the editor linked to the textarea
   * @param {facetsContainer} the container in which are all the facets
@@ -43,11 +42,11 @@ export class Facet {
   addElement (elementType, elementId, data, key = false) {
     console.log(' ')
     console.log('________________________________')
-    console.log("___ Facet.addElement()___")
-    console.log("elementType :", elementType)
+    console.log('___ Facet.addElement()___')
+    console.log('elementType :', elementType)
     console.log('elementId :', elementId)
     console.log('data :', data)
-    console.log("key :", key)
+    console.log('key :', key)
     this.element = null
 
     if (elementType === 'categories') {
@@ -84,16 +83,16 @@ export class Facet {
 }
 
 class Label {
-  constructor (labelContainerElement, labelId, labelText, labelForElementId ) {
+  constructor (labelContainerElement, labelId, labelText, labelForElementId) {
     // Create label for the facet
-    this.element = document.createElement('label');
+    this.element = document.createElement('label')
     this.element.id = labelId
     this.element.htmlFor = labelForElementId
     this.element.textContent = labelText
     // Append the label and facet to the first 'facet' div
     labelContainerElement.appendChild(this.element)
     // Apply select styles
-    //let element = document.getElementById(this.element.id)
+    // let element = document.getElementById(this.element.id)
     // element.style.padding = '5px 15px'
     // element.style.alignSelf = 'center'
     this.element.style.marginLeft = '5px'
@@ -112,7 +111,6 @@ class Label {
 }
 
 class Container {
-
   constructor (parentContainerElement, containerId) {
     // Create the facet container div
     this.element = document.createElement('div')
@@ -138,15 +136,15 @@ class Element {
     this.qMsg = this.queryAlert.find('.nl-query-message')
     this.resultsContainer = $('#symbolsContainer')
     this.scdropdown = this.resultsContainer.find('.nl-symbols-dropdown')
- }
+  }
 
- /**
- * Set a message in the message box below the query box.
- * @param {string} style the style class for the message (info, error, success, warning)
- * @param {*} content the content for the message
- * @param {*} header the header for the message
- */
-//  _setAlert (style, content, header, help) {
+  /**
+  * Set a message in the message box below the query box.
+  * @param {string} style the style class for the message (info, error, success, warning)
+  * @param {*} content the content for the message
+  * @param {*} header the header for the message
+  */
+  //  _setAlert (style, content, header, help) {
   _setAlert (content, header, help) {
     const qHeader = this.queryAlert.find('.nl-query-header')
     if (typeof header !== 'undefined') {
@@ -184,14 +182,13 @@ class Element {
     // overrides the 'display: none;' from the CSS.
     facetsContainerElement.style.display = 'flex'
 
-    console.log("mess :", mess)
-    console.log("mess type :",typeof mess)
-    console.log("alert :", alert)
-    console.log("alert type :",typeof alert)
+    console.log('mess :', mess)
+    console.log('mess type :',typeof mess)
+    console.log('alert :', alert)
+    console.log('alert type :',typeof alert)
 
     // This will always run, whether there are tokens or not
     editor.on('cursorActivity', () => {
-
       if (mess) {
         mess.empty()
       }
@@ -210,7 +207,6 @@ class Element {
 }
 
 class Button extends Element {
-
   constructor (editor, facetsContainerElement, parentContainerElement, containerDiv, elementId, data, key) {
     super()
     this.editor = editor
@@ -220,9 +216,9 @@ class Button extends Element {
     this.allData = data
     this.key = key
     this.clickHandler = null
-//    this.queryAlert = $('#queryAlert')
-//    this.qMsg = this.queryAlert.find('.nl-query-message')
-//    this.generatorFacetId = generatorFacetId
+    //    this.queryAlert = $('#queryAlert')
+    //    this.qMsg = this.queryAlert.find('.nl-query-message')
+    //    this.generatorFacetId = generatorFacetId
   }
 
   hide () {
@@ -237,7 +233,6 @@ class Button extends Element {
   }
 
   _createElement (containerDiv, elementId) {
-
     // Create the button
     let element = document.createElement('button')
     element.id = elementId
@@ -259,7 +254,6 @@ class Button extends Element {
   }
 
   _removeElement () {
-
     // Clear Button
     this.element.innerHTML = ''
     this.element.textContent = ''
@@ -270,7 +264,6 @@ class Button extends Element {
 }
 
 class AggregateButton extends Button {
-
   constructor (editor, facetsContainerElement, parentContainerElement, containerDiv, elementId, data, key) {
     super(editor, facetsContainerElement, parentContainerElement, containerDiv, elementId, data, key)
     this.selectFacets = []
@@ -286,13 +279,13 @@ class AggregateButton extends Button {
   }
 
   _handleClick (editor, facetsContainerElement, patternUnit, patternSep, inPattern = false) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ AggregateButton._handleClick()___")
-    console.log("patternUnit :", patternUnit)
-    console.log("patternSep :", patternSep)
-    console.log("inPattern :", inPattern)
-    console.log("this.allData :", this.allData)
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ AggregateButton._handleClick()___')
+    console.log('patternUnit :', patternUnit)
+    console.log('patternSep :', patternSep)
+    console.log('inPattern :', inPattern)
+    console.log('this.allData :', this.allData)
     console.log('this.key :', this.key)
 
     // Get the value from the input
@@ -331,10 +324,10 @@ class AggregateButton extends Button {
 
     // Hide the facets and 'ok' button as they are no longer needed
     // set the facets container back to be hidden
-//    facetsContainerElement.style.display = 'none'
+    //    facetsContainerElement.style.display = 'none'
 
     // Refocus the CodeMirror editor to keep the cursor visible in the textarea
-//    editor.focus()
+    //    editor.focus()
   }
 
   remove () {
@@ -435,22 +428,22 @@ class Input extends Element {
     this.facetsContainerElement = facetsContainerElement
     this.parentContainerElement = parentContainerElement
     this.elementContainer = elementContainer
-    console.log("________________________________")
-    console.log("___ Input.constructor()___")
-    console.log("this.editor :", this.editor)
-    console.log("this.facetsContainerElement :", this.facetsContainerElement)
-    console.log("this.parentContainerElement :", this.parentContainerElement)
-    console.log("this.elementContainer :", this.elementContainer)
-    console.log("elementId :", elementId)
+    console.log('________________________________')
+    console.log('___ Input.constructor()___')
+    console.log('this.editor :', this.editor)
+    console.log('this.facetsContainerElement :', this.facetsContainerElement)
+    console.log('this.parentContainerElement :', this.parentContainerElement)
+    console.log('this.elementContainer :', this.elementContainer)
+    console.log('elementId :', elementId)
     this.allData = data
     this.key = key
-    console.log("this.allData :", this.allData)
-    console.log("this.key :", this.key)
+    console.log('this.allData :', this.allData)
+    console.log('this.key :', this.key)
     this.element = this._createElement(this.elementContainer, elementId)
     this.facets = []
     this.buttonId = null
-    console.log(" ")
-    console.log("this.element :", this.element)
+    console.log(' ')
+    console.log('this.element :', this.element)
   }
 
   _createElement (containerDiv, elementId) {
@@ -661,10 +654,10 @@ export class RegexpInput extends Input {
   }
 
   addChangeEventListeners (editor, regexpObj, regexpVal) {
-//    console.log(" ")
-//    console.log("___in InputRegExp.addChangeEventListeners()___")
+    //    console.log(" ")
+    //    console.log("___in InputRegExp.addChangeEventListeners()___")
     // Create a new handler function that has access to facetsObject
-//    this.changeHandler = (event) => this._handleClick(event, editor, valuesSelect)
+    //    this.changeHandler = (event) => this._handleClick(event, editor, valuesSelect)
     this.changeHandler = (event) => this._handleChange(event, editor, regexpObj, regexpVal)
 
     // Attach the new event listener
@@ -672,17 +665,17 @@ export class RegexpInput extends Input {
   }
 
   _handleChange (event, editor, regexpObj, regexpVal) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ RegexpInput._handleChange()___")
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ RegexpInput._handleChange()___')
 
-    console.log(" ")
-    const regexpStr = regexpObj["regexp"]
-    console.log("regexpStr :", regexpStr)
-    console.log("regexpVal :", regexpVal)
-    console.log("this.buttonId :", this.buttonId)
-    console.log("input value : *" +this.element.value + "*")
-//    console.log("this.element.value :", this.element.value)
+    console.log(' ')
+    const regexpStr = regexpObj['regexp']
+    console.log('regexpStr :', regexpStr)
+    console.log('regexpVal :', regexpVal)
+    console.log('this.buttonId :', this.buttonId)
+    console.log('input value : *' + this.element.value + '*')
+    //    console.log("this.element.value :", this.element.value)
     const regexp = new RegExp(regexpStr)
     let button = document.getElementById(this.buttonId)
 
@@ -698,10 +691,10 @@ export class RegexpInput extends Input {
       valueMatches = regexp.test('/'+this.element.value+'/')
       console.log("test result :", valueMatches)
     }
-//    if (int_regexp.test(this.element.value) || !(this.element.value).length) {
-//      this._clearAlert()
+    //    if (int_regexp.test(this.element.value) || !(this.element.value).length) {
+    //      this._clearAlert()
     if (regexp.test('/'+this.element.value+'/')) {
-//      console.log("match ok")
+      //      console.log("match ok")
       this._clearAlert()
       regexpVal.val = this.element.value
       if ('quotes' in regexpObj) {
@@ -719,9 +712,9 @@ export class RegexpInput extends Input {
         this._clearAlert()
         console.log("clearing alert...")
       } else {
-//      console.log("match not ok")
-//      this.qMsg.text("Unvalid string.")
-//      this.queryAlert.show()
+        //      console.log("match not ok")
+        //      this.qMsg.text("Unvalid string.")
+        //      this.queryAlert.show()
         let helpMess = "The entered value must match the following regular expression :" + regexpStr
         console.log("regexpVal.key :", regexpVal.key)
         console.log("regexpVal.key == 'float' :", regexpVal.key == 'float')
@@ -743,9 +736,9 @@ export class RegexpInput extends Input {
       }
       button.disabled = true
     }
-//    console.log("button.disabled apres :", button.disabled)
+    //    console.log("button.disabled apres :", button.disabled)
 
-//    editor.focus()
+    //    editor.focus()
   }
 
   remove () {
@@ -758,10 +751,10 @@ export class RegexpInput extends Input {
   _removeChangeEventListener () {
     if (this.element) {
       if (this.changeHandler) {
-//        console.log("this.leftFacetNew :")
+        //        console.log("this.leftFacetNew :")
         this.changeHandler = this.element.removeEventListener('input', this.changeHandler)
-//        console.log("this.changeHandler :", this.changeHandler)
-//        console.log("this.element :", this.element)
+        //        console.log("this.changeHandler :", this.changeHandler)
+        //        console.log("this.element :", this.element)
       }
     }
   }
@@ -773,10 +766,10 @@ export class RegexpInput extends Input {
 class Select extends Element {
   constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc = false) {
     super()
-//    console.log(" ")
-//    console.log("___in Select constructor()___")
-//    console.log("in Select constructor")
-//    this.sc = sc
+    //    console.log(" ")
+    //    console.log("___in Select constructor()___")
+    //    console.log("in Select constructor")
+    //    this.sc = sc
     this.editor = editor
     this.facetsContainerElement = facetsContainerElement
     this.parentContainerElement = parentContainerElement
@@ -789,17 +782,17 @@ class Select extends Element {
     console.log("this.data 2 :", this.allData[key])
     this.key = key
     this.changeHandler = null
-//    console.log(" ")
-//    console.log("this.data :", this.data)
+    //    console.log(" ")
+    //    console.log("this.data :", this.data)
     this.facets = []
-//    console.log("Select constructor ok :")
+    //    console.log("Select constructor ok :")
   }
 
   _selectInSymbolsTable (value) {
     console.log(" ")
     console.log("________________________________")
     console.log("___ Select._selectInSymbolsTable()___")
-//    console.log("this.sc :", this.sc)
+    //    console.log("this.sc :", this.sc)
     const dropdownItems = []
     this.scdropdown.find('.menu .item').each(function () {
       dropdownItems.push($(this).data('value'))
@@ -813,45 +806,45 @@ class Select extends Element {
   _createElement (elementContainer, elementId) {
     // Create the facet
     let element = document.createElement('select')
-//    console.log("Select element :", element)
+    //    console.log("Select element :", element)
     element.id = elementId
-//    console.log("Select id :", element.id)
+    //    console.log("Select id :", element.id)
     element.size = '5'
-//    console.log("Select size :", element.size)
+    //    console.log("Select size :", element.size)
     elementContainer.appendChild(element)
 
     // Apply select styles
     element = document.getElementById(element.id)
-//    element.style.padding = '5px 15px'
-//    element.style.alignSelf = 'center'
+    //    element.style.padding = '5px 15px'
+    //    element.style.alignSelf = 'center'
     element.style.marginLeft = '5px'
     element.style.marginRight = '5px'
 
     return element
   }
 
-//  show (editor, facetsContainerElement, mess, alert) {
-//    // Display the facets container
-//    // overrides the 'display: none;' from the CSS.
-//    facetsContainerElement.style.display = 'flex'
-//
-//    console.log("mess :", mess)
-//    console.log("mess type :",typeof mess)
-//    console.log("alert :", alert)
-//    console.log("alert type :",typeof alert)
-//
-//    // This will always run, whether there are tokens or not
-//    editor.on('cursorActivity', () => {
-//      if (mess) {
-//        mess.empty()
-//      }
-//      if (alert) {
-//        alert.hide()
-//      }
-//      // set the facets container back to be hidden
-//      facetsContainerElement.style.display = 'none'
-//    })
-//  }
+  //  show (editor, facetsContainerElement, mess, alert) {
+  //    // Display the facets container
+  //    // overrides the 'display: none;' from the CSS.
+  //    facetsContainerElement.style.display = 'flex'
+  //
+  //    console.log("mess :", mess)
+  //    console.log("mess type :",typeof mess)
+  //    console.log("alert :", alert)
+  //    console.log("alert type :",typeof alert)
+  //
+  //    // This will always run, whether there are tokens or not
+  //    editor.on('cursorActivity', () => {
+  //      if (mess) {
+  //        mess.empty()
+  //      }
+  //      if (alert) {
+  //        alert.hide()
+  //      }
+  //      // set the facets container back to be hidden
+  //      facetsContainerElement.style.display = 'none'
+  //    })
+  //  }
 
   hide () {
     this._setAlert()
@@ -863,12 +856,12 @@ class Select extends Element {
     this.editor.focus()
   }
 
-//  remove () {
-//    this._removeFacets()
-//    this._removeChangeEventListener ()
-//    this._removeElement()
-//    return null
-//  }
+  //  remove () {
+  //    this._removeFacets()
+  //    this._removeChangeEventListener ()
+  //    this._removeElement()
+  //    return null
+  //  }
 
   _removeChangeEventListener () {
     if (this.element) {
@@ -883,8 +876,8 @@ class Select extends Element {
     // Clear element
     this.element.innerHTML = ''
     this.element.id = ''
-//    this.element = document.createElement(this.elementType)
-//    console.log("this.element before :", this.element)
+    //    this.element = document.createElement(this.elementType)
+    //    console.log("this.element before :", this.element)
     // Append the label and facet to the first 'facet' div
     this.element = this.element.remove()
   }
@@ -895,16 +888,16 @@ class Select extends Element {
         this.facetsContainerElement,
         this.parentContainerElement,
         'rightFacetContainer')
-//      console.log(" ")
-//      console.log("newFacet :", newFacet)
-//      console.log("this.element.id :", this.element.id)
-//      console.log("newFacet.element.element.id :", newFacet.element.element.id)
-      newFacet.addLabel(this.element.id + 'rightFacetLabel', 'Values', 'rightFacet')
-      newFacet.addElement('values', 'rightFacet', dataObject)
-      newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
-      newFacet.element.fill(dataObject, 'values')
-      newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
-      return newFacet
+    //      console.log(" ")
+    //      console.log("newFacet :", newFacet)
+    //      console.log("this.element.id :", this.element.id)
+    //      console.log("newFacet.element.element.id :", newFacet.element.element.id)
+    newFacet.addLabel(this.element.id + 'rightFacetLabel', 'Values', 'rightFacet')
+    newFacet.addElement('values', 'rightFacet', dataObject)
+    newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
+    newFacet.element.fill(dataObject, 'values')
+    newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
+    return newFacet
   }
 
   _removeFacets () {
@@ -930,7 +923,7 @@ export class CategoriesSelect extends Select {
     this.valuesFacet = null
   }
 
-//  addChangeEventListeners (editor, valuesSelect) {
+  //  addChangeEventListeners (editor, valuesSelect) {
   addChangeEventListeners (editor, refData) {
     console.log(" ")
     console.log("________________________________")
@@ -954,25 +947,25 @@ export class CategoriesSelect extends Select {
         this.facetsContainerElement,
         this.parentContainerElement,
         'rightFacetContainer')
-//      console.log(" ")
-//      console.log("newFacet :", newFacet)
-//      console.log("this.element.id :", this.element.id)
-//      console.log("newFacet.element.element.id :", newFacet.element.element.id)
-      newFacet.addLabel(this.element.id + 'rightFacetLabel', 'Values', 'rightFacet')
-//      newFacet.addElement('values', 'rightFacet', this.allData[selectedKey])
-      newFacet.addElement('patterns', 'rightFacet', this.allData)
-//      newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
-      newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement, refData)
-      newFacet.element.fill(dataObject, 'values')
-      newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
-      return newFacet
+    //      console.log(" ")
+    //      console.log("newFacet :", newFacet)
+    //      console.log("this.element.id :", this.element.id)
+    //      console.log("newFacet.element.element.id :", newFacet.element.element.id)
+    newFacet.addLabel(this.element.id + 'rightFacetLabel', 'Values', 'rightFacet')
+    //      newFacet.addElement('values', 'rightFacet', this.allData[selectedKey])
+    newFacet.addElement('patterns', 'rightFacet', this.allData)
+    //      newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
+    newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement, refData)
+    newFacet.element.fill(dataObject, 'values')
+    newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
+    return newFacet
   }
 
-   /**
+  /**
   * Handles the click event for the left facet.
   * @param {Event} event the event object associated with the click in the left facet
   */
-//  _handleClick (event, editor, valuesSelect) {
+  //  _handleClick (event, editor, valuesSelect) {
   _handleClick (event, editor, refData) {
     console.log(" ")
     console.log("________________________________")
@@ -985,12 +978,12 @@ export class CategoriesSelect extends Select {
     console.log("selectedKey :", selectedKey)
 
     // Clear previous options
-//    while (valuesSelect.element.firstChild) {
-//      valuesSelect.element.removeChild(valuesSelect.element.firstChild)
-//    }
-//    while (this.rightFacet.element.firstChild) {
-//      this.rightFacet.element.removeChild(this.rightFacet.element.firstChild)
-//    }
+    //    while (valuesSelect.element.firstChild) {
+    //      valuesSelect.element.removeChild(valuesSelect.element.firstChild)
+    //    }
+    //    while (this.rightFacet.element.firstChild) {
+    //      this.rightFacet.element.removeChild(this.rightFacet.element.firstChild)
+    //    }
 
     if (this.valuesFacet) {
       this.valuesFacet = this.valuesFacet.remove()
@@ -1013,23 +1006,23 @@ export class CategoriesSelect extends Select {
         console.log("refData :", refData)
         this.valuesFacet = this._setValuesFacet(values, refData)
       } else if (this.allData[selectedKey]) {
-          console.log("this.allData[selectedKey] true")
-//        console.log(" ")
-//        console.log("-- not All --")
-//        console.log("selectedKey :", selectedKey)
-//        console.log("this.data[selectedKey] :", this.data[selectedKey])
-    //    for (const value of this.data[selectedKey]) {
-    //      const option = document.createElement('option')
-    //      option.value = value
-    //      option.textContent = value
-    //      // this.rightFacet.element.appendChild(option)
-    //      // valuesSelect.element.appendChild(option)
-    //      // this.valuesFacet.element.element.appendChild(option)
-    //    }
+        console.log("this.allData[selectedKey] true")
+        //        console.log(" ")
+        //        console.log("-- not All --")
+        //        console.log("selectedKey :", selectedKey)
+        //        console.log("this.data[selectedKey] :", this.data[selectedKey])
+        //    for (const value of this.data[selectedKey]) {
+        //      const option = document.createElement('option')
+        //      option.value = value
+        //      option.textContent = value
+        //      // this.rightFacet.element.appendChild(option)
+        //      // valuesSelect.element.appendChild(option)
+        //      // this.valuesFacet.element.element.appendChild(option)
+        //    }
         console.log("*** Before call this._setValuesFacet()")
         console.log("this.allData[selectedKey] :", this.allData[selectedKey])
         console.log("refData :", refData)
-//        this.valuesFacet = this._setValuesFacet(this.allData[selectedKey], refData)
+        //        this.valuesFacet = this._setValuesFacet(this.allData[selectedKey], refData)
         this.valuesFacet = this._setValuesFacet(selectedKey, refData)
       }
     }
@@ -1041,15 +1034,10 @@ export class CategoriesSelect extends Select {
   * @param {Object} facetsObject the categories to be displayed in the facets and their values
   */
   fill (facetsObject) {
-//    console.log(" ")
-//    console.log("___in CategoriesSelect.fill()___")
     console.log(" ")
     console.log("________________________________")
     console.log("___ CategoriesSelect.fill()___")
     console.log("facetsObject :", facetsObject)
-
-//    console.log(" ")
-//    console.log("data :", facetsObject)
 
     // Add 'All' option to the left facet
     const deselectOption = document.createElement('option')
@@ -1082,7 +1070,7 @@ export class RegexpSelect extends Select {
 
   constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc) {
     super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc)
-//    this.generatorFacetId = generatorFacetId
+    //    this.generatorFacetId = generatorFacetId
     this.position = -1
     this.buttonId = null
   }
@@ -1096,8 +1084,6 @@ export class RegexpSelect extends Select {
   }
 
   addChangeEventListeners (editor, facetsContainerElement, tab) {
-//    console.log(" ")
-//    console.log("tab :", tab)
     // Create a new handler function that has access to facetsObject
     this.changeHandler = (event) => this._handleClick(event, editor, facetsContainerElement, tab)
 
@@ -1105,20 +1091,20 @@ export class RegexpSelect extends Select {
     this.element.addEventListener('change', this.changeHandler)
   }
 
-   /**
- * Handles the click event for the right facet.
- * @param {Event} event the event object associated with the click in the right facet
- */
+  /**
+  * Handles the click event for the right facet.
+  * @param {Event} event the event object associated with the click in the right facet
+  */
   _handleClick (event, editor, facetsContainerElement, tab) {
     console.log(" ")
     console.log("________________________________")
     console.log("___ RegexpSelect._handleClick()___")
     console.log("tab avant :", tab)
-//    console.log("patternSep :", patternSep)
-//    console.log("inPattern :", inPattern)
+    //    console.log("patternSep :", patternSep)
+    //    console.log("inPattern :", inPattern)
     console.log("this.allData :", this.allData)
     console.log("this.key :", this.key)
-//    console.log("this.sc :", this.sc)
+    //    console.log("this.sc :", this.sc)
     const selectedValue = this.element.value
 
     // put the value as selected in the symbols table as well
@@ -1134,44 +1120,44 @@ export class RegexpSelect extends Select {
       button.disabled = true
     }
 
-//    const dropdownItems = []
-//    this.sc.dropdown.find('.menu .item').each(function () {
-//      dropdownItems.push($(this).data('value'))
-//    })
-//    if (dropdownItems.includes(selectedValue)) {
-      // this.sc.dropdown is a jQuery object wrapping the dropdown element
-//      this.sc.dropdown.dropdown('set selected', selectedValue)
-//    }
+    //    const dropdownItems = []
+    //    this.sc.dropdown.find('.menu .item').each(function () {
+    //      dropdownItems.push($(this).data('value'))
+    //    })
+    //    if (dropdownItems.includes(selectedValue)) {
+    // this.sc.dropdown is a jQuery object wrapping the dropdown element
+    //      this.sc.dropdown.dropdown('set selected', selectedValue)
+    //    }
 
-//    if (selectedValue && selectedValue !== 'All') {
-      // get the cursor position in the CodeMirror editor
-//      const cursorPos = editor.getCursor()
+    //    if (selectedValue && selectedValue !== 'All') {
+    // get the cursor position in the CodeMirror editor
+    //      const cursorPos = editor.getCursor()
 
-      // insert the selected value at the current cursor position
-//      editor.replaceRange(selectedValue, cursorPos)
+    // insert the selected value at the current cursor position
+    //      editor.replaceRange(selectedValue, cursorPos)
 
-      // calculate the end position based on the length of the inserted value
-//      const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+    // calculate the end position based on the length of the inserted value
+    //      const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
 
-      // check if the selected value starts with '<' and ends with '>'
-//      if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
+    // check if the selected value starts with '<' and ends with '>'
+    //      if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
         // select the text that was just inserted
-//        editor.setSelection(cursorPos, endPos)
-//      } else {
+    //        editor.setSelection(cursorPos, endPos)
+    //      } else {
         // Move cursor to end of inserted value
-//        editor.setCursor(endPos)
-//      }
-//    }
+    //        editor.setCursor(endPos)
+    //      }
+    //    }
 
     // Hide the facets and 'ok' button as they are no longer needed
     // set the facets container back to be hidden
-//    facetsContainerElement.style.display = 'none'
+    //    facetsContainerElement.style.display = 'none'
 
     // Refocus the CodeMirror editor to keep the cursor visible in the textarea
     editor.focus()
   }
 
-   /**
+  /**
   * Displays the facets.
   * @param {Object} ruleObject the categories to be displayed in the facets and their values
   */
@@ -1211,11 +1197,11 @@ export class RegexpSelect extends Select {
       this.valuesFacet.remove()
     }
     this._removeFacets()
-//    console.log(" ")
-//    console.log("this.buttonFacet :", this.buttonFacet)
-//    if (this.buttonFacet) {
-//      this.buttonFacet.element.remove()
-//    }
+    //    console.log(" ")
+    //    console.log("this.buttonFacet :", this.buttonFacet)
+    //    if (this.buttonFacet) {
+    //      this.buttonFacet.element.remove()
+    //    }
     this._removeChangeEventListener ()
     this._removeElement()
     return null
@@ -1251,7 +1237,7 @@ export class ValuesSelect extends Select {
     console.log("refData :", refData)
     console.log("inPattern :", inPattern)
 
-//    this._removeFacets()
+    //    this._removeFacets()
 
     // get selected value
     const selectedValue = this.element.value
@@ -1284,7 +1270,7 @@ export class ValuesSelect extends Select {
           this.element.id + '_input_container')
         newInput.addLabel(this.element.id + '_input_label', 'Enter the value :', this.element.id + '_input')
         newInput.addElement('regexp', this.element.id + '_input', this.allData, selectedValueToKey)
-//        newInput.element.addChangeEventListeners(this.editor, regexpObj, regexpVal)
+        //        newInput.element.addChangeEventListeners(this.editor, regexpObj, regexpVal)
         newInput.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
         let buttonNew = new Facet(
@@ -1296,11 +1282,11 @@ export class ValuesSelect extends Select {
         buttonNew.element.addClickEventListeners(this.editor, this.facetsContainerElement, regexpVal, inPattern)
         buttonNew.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
-//        console.log("button id :", buttonNew.element.element.id)
+        //        console.log("button id :", buttonNew.element.element.id)
         newInput.element.updateButtonId(buttonNew.element.element.id)
 
         this.facets.push(newInput, buttonNew)
-//        this.facets.push(newInput)
+        //        this.facets.push(newInput)
 
         for (let item of this.facets) {
           console.log("elt : ", item.element)
@@ -1310,24 +1296,24 @@ export class ValuesSelect extends Select {
          editor.focus()
       } else {
 
-// Previous version
-//      // get the cursor position in the CodeMirror editor
-////      const cursorPos = editor.getCursor()
-//
-//      // insert the selected value at the current cursor position
-//      editor.replaceRange(selectedValue, cursorPos)
-//
-//      // calculate the end position based on the length of the inserted value
-////      const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
-//
-//      // check if the selected value starts with '<' and ends with '>'
-//      if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
-//        // select the text that was just inserted
-//        editor.setSelection(cursorPos, endPos)
-//      } else {
-//        // Move cursor to end of inserted value
-//        editor.setCursor(endPos)
-//      }
+        // Previous version
+        //      // get the cursor position in the CodeMirror editor
+        ////      const cursorPos = editor.getCursor()
+        //
+        //      // insert the selected value at the current cursor position
+        //      editor.replaceRange(selectedValue, cursorPos)
+        //
+        //      // calculate the end position based on the length of the inserted value
+        ////      const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+        //
+        //      // check if the selected value starts with '<' and ends with '>'
+        //      if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
+        //        // select the text that was just inserted
+        //        editor.setSelection(cursorPos, endPos)
+        //      } else {
+        //        // Move cursor to end of inserted value
+        //        editor.setCursor(endPos)
+        //      }
 
         if (inPattern) {
           var selectedRange = editor.getSelection()
@@ -1350,23 +1336,17 @@ export class ValuesSelect extends Select {
 
     // Hide the facets and 'ok' button as they are no longer needed
     // set the facets container back to be hidden
-//    facetsContainerElement.style.display = 'none'
+    //    facetsContainerElement.style.display = 'none'
 
     // Refocus the CodeMirror editor to keep the cursor visible in the textarea
-//    editor.focus()
+    //    editor.focus()
   }
 
-   /**
+  /**
   * Displays the facets.
   * @param {Object} facetsObject the categories to be displayed in the facets and their values
   */
   fill (facetsObject) {
-//    console.log(" ")
-//    console.log("___in ValuesSelect.fill()___")
-
-//    console.log(" ")
-//    console.log("data :", facetsObject)
-
     // Add facetsObject keys to left facet
     for (let item of facetsObject) {
       const option = document.createElement('option')
@@ -1431,10 +1411,10 @@ export class PatternsSelect extends Select {
     this.element.addEventListener('change', this.changeHandler)
   }
 
-   /**
- * Handles the click event for the right facet.
- * @param {Event} event the event object associated with the click in the right facet
- */
+  /**
+  * Handles the click event for the right facet.
+  * @param {Event} event the event object associated with the click in the right facet
+  */
   _handleClick (editor, facetsContainerElement, allDataObject, inPattern) {
     console.log(" ")
     console.log("________________________________")
@@ -1446,7 +1426,7 @@ export class PatternsSelect extends Select {
 
     // get selected value
     let selectedValue = this.element.value
-//    console.log("selectedValue :", selectedValue)
+    //    console.log("selectedValue :", selectedValue)
 
     // put the value as selected in the symbols table as well
     this._selectInSymbolsTable (selectedValue)
@@ -1481,7 +1461,7 @@ export class PatternsSelect extends Select {
           this.facetsContainerElement,
           this.parentContainerElement,
           this.element.id + '_button_container')
-//        buttonNew.addLabel(null, '', this.element.id + '_buttonFacet')
+        //        buttonNew.addLabel(null, '', this.element.id + '_buttonFacet')
         buttonNew.addElement('valueButton', this.element.id + '_button', this.allData)
         buttonNew.element.addClickEventListeners(this.editor, this.facetsContainerElement, regexpVal, inPattern)
         buttonNew.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
@@ -1518,21 +1498,21 @@ export class PatternsSelect extends Select {
         //    this.hide()
       }
 
-//      cursorPos = editor.getCursor()
-//      endPos = { line: cursorPos.line, ch: cursorPos.ch }
-//      cursorPos.ch = cursorPos.ch - selectedValue.length
+      //      cursorPos = editor.getCursor()
+      //      endPos = { line: cursorPos.line, ch: cursorPos.ch }
+      //      cursorPos.ch = cursorPos.ch - selectedValue.length
       // select the text that was just inserted
-//      editor.setSelection(cursorPos, endPos)
+      //      editor.setSelection(cursorPos, endPos)
 
-//      else {
+      //      else {
         // Move cursor to end of inserted value
-//        this.editor.setCursor(endPos)
+      //        this.editor.setCursor(endPos)
 
-//      }
+      //      }
     }
   }
 
-   /**
+  /**
   * Displays the facets.
   * @param {Object} ruleObject the categories to be displayed in the facets and their values
   */

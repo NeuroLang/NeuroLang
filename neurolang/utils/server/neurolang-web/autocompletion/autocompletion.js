@@ -33,16 +33,13 @@ export class AutocompletionController {
     const matches = line.match(pattern)
 
     if (matches) {
-      for (let match of matches) {
+      for (const match of matches) {
         const startIndex = line.indexOf(match)
         const endIndex = startIndex + match.length - 1
-        let l = endIndex - startIndex + 1
+        const l = endIndex - startIndex + 1
 
         if (pos >= startIndex && pos <= endIndex) {
-          return {
-            content: match,
-            start: startIndex,
-            end: endIndex
+          return {content: match, start: startIndex, end: endIndex
           }
         }
 
@@ -76,7 +73,7 @@ export class AutocompletionController {
     const cursorIndex = this.editor.indexFromPos(cursorPos)
 
     // Split the text into lines
-    let lines = allText.split('\n')
+    const lines = allText.split('\n')
 
     if (cursorLineNumber >= 0 && cursorLineNumber < lines.length) {
       // in the cursor line, get the substring from the line start to the cursor
@@ -122,7 +119,7 @@ export class AutocompletionController {
         const pattern = this._isCursorInPattern(cursorLineContent, cursorLinePosition)
 
         if (pattern) {
-          this.editor.setSelection({ line: cursorLineNumber, ch: pattern.start }, { line: cursorLineNumber, ch: pattern.end+1 })
+          this.editor.setSelection({ line: cursorLineNumber, ch: pattern.start }, { line: cursorLineNumber, ch: pattern.end + 1 })
           const patternContent = pattern.content.slice(1, -1)
 
           // Pattern is in rule properties

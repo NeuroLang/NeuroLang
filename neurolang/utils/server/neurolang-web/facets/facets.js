@@ -74,12 +74,12 @@ export class FacetsController {
       console.log('dataObject :', dataObject)
       console.log('this.patterns :', this.patterns)
       console.log('dataObject.rules :', dataObject.rules)
-      console.log('dataObject[\'rules\'] :', dataObject['rules'])
+      //      console.log('dataObject[\'rules\'] :', dataObject['rules'])
       leftFacetNew.element.fill(dataObject, true)
       leftFacetNew.element.show(this.editor, this.facetsContainerElement)
       // Add to facets
       this.facets.push(leftFacetNew)
-    } else if (type === 'patterns') {  // Patterns facet
+    } else if (type === 'patterns') { // Patterns facet
       // Create
       const patternFacetNew = new Facet(
         this.editor,
@@ -94,10 +94,7 @@ export class FacetsController {
       patternFacetNew.element.show(this.editor, this.facetsContainerElement)
       // Add to facets
       this.facets.push(patternFacetNew)
-    }
-
-    // Input facet
-    else if (type === 'number') {
+    } else if (type === 'number') { // Input facet
       // Create
       const inputFacetNew = new Facet(
         this.editor,
