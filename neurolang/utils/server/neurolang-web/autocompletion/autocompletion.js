@@ -122,9 +122,9 @@ export class AutocompletionController {
           const patternContent = pattern.content.slice(1, -1)
 
           // Pattern is in rule properties
-          if (rules.hasOwn(patternContent)) {
+          if (rules.hasOwnProperty(patternContent)) {
             // Pattern has a value
-            if (rules[patternContent].hasOwn('values')) {
+            if (rules[patternContent].hasOwnProperty('values')) {
               // Only one possible value/pattern
               if (rules[patternContent]['values'].length === 1) {
                 this._writeValueInTextEditor(rules[patternContent].values[0])
@@ -145,7 +145,7 @@ export class AutocompletionController {
               }
 
             // Pattern does not have value
-            } else if (rules[patternContent].hasOwn('params') && rules[patternContent].hasOwn('unit')) {
+            } else if (rules[patternContent].hasOwnProperty('params') && rules[patternContent].hasOwnProperty('unit')) {
               if (rules[patternContent].params == 'number') {
                 console.log(' ')
                 console.log('********************')

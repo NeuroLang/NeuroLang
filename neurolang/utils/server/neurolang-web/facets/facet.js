@@ -593,7 +593,7 @@ export class NumberInput extends Input {
       console.log('Button :')
       console.log('  Container :')
       console.log('    id :', (this.element.id + '_button_container'))
-      let buttonNew = new Facet(
+      const buttonNew = new Facet(
         this.editor,
         this.facetsContainerElement,
         this.parentContainerElement,
@@ -644,7 +644,7 @@ export class NumberInput extends Input {
 
 export class RegexpInput extends Input {
   constructor (editor, facetsContainerElement, parentContainerElement, containerDiv, elementId, data, key) {
-    super (editor, facetsContainerElement, parentContainerElement, containerDiv, elementId, data, key)
+    super(editor, facetsContainerElement, parentContainerElement, containerDiv, elementId, data, key)
     this.changeHandler = null
     this.facets = []
     this.buttonId = null
@@ -669,20 +669,21 @@ export class RegexpInput extends Input {
     console.log('___ RegexpInput._handleChange()___')
 
     console.log(' ')
-    const regexpStr = regexpObj['regexp']
+//    const regexpStr = regexpObj['regexp']
+    const regexpStr = regexpObj.regexp
     console.log('regexpStr :', regexpStr)
     console.log('regexpVal :', regexpVal)
     console.log('this.buttonId :', this.buttonId)
     console.log('input value : *' + this.element.value + '*')
     //    console.log("this.element.value :", this.element.value)
     const regexp = new RegExp(regexpStr)
-    let button = document.getElementById(this.buttonId)
+    const button = document.getElementById(this.buttonId)
 
     let valueMatches = false
 
-    if (regexpStr == 'float') {
+    if (regexpStr === 'float') {
       valueMatches = /^-?\d+(\.\d+)?$/.test(this.element.value) && (this.element.value).includes('.')
-    } else if (regexpStr == 'float') {
+    } else if (regexpStr === 'float') {
       const num = parseInt(this.element.value, 10)
       valueMatches = !isNaN(num)
     } else {
@@ -697,7 +698,8 @@ export class RegexpInput extends Input {
       this._clearAlert()
       regexpVal.val = this.element.value
       if ('quotes' in regexpObj) {
-        const regexpQuotes = regexpObj['quotes']
+//        const regexpQuotes = regexpObj['quotes']
+        const regexpQuotes = regexpObj.quotes
         regexpVal.val = regexpQuotes + this.element.value + regexpQuotes
       }
       button.disabled = false
@@ -706,7 +708,7 @@ export class RegexpInput extends Input {
       console.log('(this.element.value).length :', (this.element.value).length)
       console.log('this.element.value == \'\' :', this.element.value == '')
       console.log('this.element.value === \'\' :', this.element.value === '')
-      if (this.element.value == '') {
+      if (this.element.value === '') {
         console.log('clearing alert...')
         this._clearAlert()
         console.log('clearing alert...')
@@ -716,15 +718,15 @@ export class RegexpInput extends Input {
         //      this.queryAlert.show()
         let helpMess = 'The entered value must match the following regular expression :' + regexpStr
         console.log('regexpVal.key :', regexpVal.key)
-        console.log('regexpVal.key == \'float\' :', regexpVal.key == 'float')
+//        console.log('regexpVal.key == \'float\' :', regexpVal.key == 'float')
         console.log('regexpVal.key === \'float\' :', regexpVal.key === 'float')
-        console.log('regexpVal.key == \'integer\' :', regexpVal.key == 'integer')
+//        console.log('regexpVal.key == \'integer\' :', regexpVal.key == 'integer')
         console.log('regexpVal.key === \'integer\' :', regexpVal.key === 'integer')
-        if (regexpVal.key == 'float') {
+        if (regexpVal.key === 'float') {
           console.log('float ok')
           helpMess = 'The entered value must be a float number.'
           console.log(helpMess)
-        } else if (regexpVal.key == 'integer') {
+        } else if (regexpVal.key === 'integer') {
         console.log('integer ok')
           helpMess = 'The entered value must be an integer.'
           console.log(helpMess)
@@ -883,10 +885,10 @@ class Select extends Element {
 
   _setValuesFacet (dataObject) {
     let newFacet = new Facet(
-        this.editor,
-        this.facetsContainerElement,
-        this.parentContainerElement,
-        'rightFacetContainer')
+      this.editor,
+      this.facetsContainerElement,
+      this.parentContainerElement,
+      'rightFacetContainer')
     //      console.log(" ")
     //      console.log("newFacet :", newFacet)
     //      console.log("this.element.id :", this.element.id)
@@ -972,7 +974,7 @@ export class CategoriesSelect extends Select {
 
     // Retrieve the selected option
     const selectedKey = event.target.value
-    console.log("selectedKey :", selectedKey)
+    console.log('selectedKey :', selectedKey)
 
     // Clear previous options
     //    while (valuesSelect.element.firstChild) {
@@ -987,7 +989,7 @@ export class CategoriesSelect extends Select {
     }
 
     if (selectedKey) {
-      let valuesToDisplay = null
+      //      let valuesToDisplay = null
 
       if (selectedKey === 'All') {
         console.log('selectedKey === \'All\'')
