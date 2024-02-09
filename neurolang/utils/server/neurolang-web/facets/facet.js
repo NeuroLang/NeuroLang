@@ -41,12 +41,12 @@ export class Facet {
   }
 
   addElement (elementType, elementId, data, key = false) {
-    console.log(" ")
-    console.log("________________________________")
+    console.log(' ')
+    console.log('________________________________')
     console.log("___ Facet.addElement()___")
     console.log("elementType :", elementType)
-    console.log("elementId :", elementId)
-    console.log("data :", data)
+    console.log('elementId :', elementId)
+    console.log('data :', data)
     console.log("key :", key)
     this.element = null
 
@@ -84,7 +84,6 @@ export class Facet {
 }
 
 class Label {
-
   constructor (labelContainerElement, labelId, labelText, labelForElementId ) {
     // Create label for the facet
     this.element = document.createElement('label');
@@ -93,7 +92,6 @@ class Label {
     this.element.textContent = labelText
     // Append the label and facet to the first 'facet' div
     labelContainerElement.appendChild(this.element)
-
     // Apply select styles
     //let element = document.getElementById(this.element.id)
     // element.style.padding = '5px 15px'
@@ -181,7 +179,7 @@ class Element {
     this.editor.getAllMarks().forEach((elt) => elt.clear())
   }
 
- show (editor, facetsContainerElement, mess, alert) {
+  show (editor, facetsContainerElement, mess, alert) {
     // Display the facets container
     // overrides the 'display: none;' from the CSS.
     facetsContainerElement.style.display = 'flex'
@@ -295,7 +293,7 @@ class AggregateButton extends Button {
     console.log("patternSep :", patternSep)
     console.log("inPattern :", inPattern)
     console.log("this.allData :", this.allData)
-    console.log("this.key :", this.key)
+    console.log('this.key :', this.key)
 
     // Get the value from the input
     const valueToWrite = patternUnit.join(' ' + patternSep + ' ')
@@ -319,14 +317,14 @@ class AggregateButton extends Button {
       }
 
       // check if the selected value starts with '<' and ends with '>'
-//      if (selectedValue == "<identifier_regexp>") {
-//        cursorPos = editor.getCursor()
-//
-//        endPos = { line: cursorPos.line, ch: cursorPos.ch }
-//        cursorPos.ch = cursorPos.ch - selectedValue.length
-//        // select the text that was just inserted
-//        editor.setSelection(cursorPos, endPos)
-//      }
+      //      if (selectedValue == "<identifier_regexp>") {
+      //        cursorPos = editor.getCursor()
+      //
+      //        endPos = { line: cursorPos.line, ch: cursorPos.ch }
+      //        cursorPos.ch = cursorPos.ch - selectedValue.length
+      //        // select the text that was just inserted
+      //        editor.setSelection(cursorPos, endPos)
+      //      }
     }
 
     this.hide()

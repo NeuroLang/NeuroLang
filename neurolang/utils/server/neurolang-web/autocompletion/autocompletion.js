@@ -101,14 +101,14 @@ export class AutocompletionController {
 
       // get the entire text from the CodeMirror instance
       let facets = JSON.parse(data.tokens)
-      let rules = facets.rules
+      const rules = facets.rules
       this.fc.updatePatterns(rules)
 
       // Empty line
       if (!cursorLineContent.trim()) {
         console.log(" ")
         console.log("******************")
-        console.log("*** Empty line ***")
+        console.log('*** Empty line ***')
         console.log("******************")
 
         console.log("")
@@ -118,14 +118,14 @@ export class AutocompletionController {
         console.log("var2 = 'expression'")
         console.log("var3 = 'patterns'")
         this.fc.createFacets(rules, 'expression', 'patterns')
-//        this.fc.displayPatternsFacet(expression.values)
+        // this.fc.displayPatternsFacet(expression.values)
 
       // Not empty line
       } else {
         const pattern = this._isCursorInPattern(cursorLineContent, cursorLinePosition)
 
         if (pattern) {
-          this.editor.setSelection({line: cursorLineNumber, ch: pattern.start}, {line: cursorLineNumber, ch: pattern.end+1})
+          this.editor.setSelection({ line: cursorLineNumber, ch: pattern.start }, { line: cursorLineNumber, ch: pattern.end+1 })
           const patternContent = pattern.content.slice(1, -1)
 
           // Pattern is in rule properties
@@ -147,15 +147,15 @@ export class AutocompletionController {
                 console.log("var1 = rules :", rules)
                 console.log("var2 :", patternContent)
                 console.log("var3 : 'patterns'")
-                console.log("var4 : true")
+                console.log('var4 : true')
                 this.fc.createFacets(rules, patternContent, 'patterns', true)
               }
 
             // Pattern does not have value
-            } else if (rules[patternContent].hasOwnProperty("params") && rules[patternContent].hasOwnProperty("unit")) {
-              if (rules[patternContent].params == "number") {
+            } else if (rules[patternContent].hasOwnProperty('params') && rules[patternContent].hasOwnProperty('unit')) {
+              if (rules[patternContent].params == 'number') {
                 console.log(" ")
-                console.log("********************")
+                console.log('********************')
                 console.log("*** Input number ***")
                 console.log("********************")
                 console.log("")
@@ -199,7 +199,7 @@ export class AutocompletionController {
 //            console.log("var3 : 'number'")
 //            console.log("var4 : true")
 //            console.log("var5 = rules[patternContent] :", rules[patternContent])
-            this.fc.createFacets (facets)
+            this.fc.createFacets(facets)
             // Display the facets based on the tokens
 //            this.fc.displayFacets(facets)
           }
@@ -211,7 +211,7 @@ export class AutocompletionController {
   _writeValueInTextEditor (val) {
 
     if (this.editor.getSelection().length) {
-      var selectedRange = this.editor.getSelection()
+//      var selectedRange = this.editor.getSelection()
       this.editor.replaceSelection(val)
     } else {
 

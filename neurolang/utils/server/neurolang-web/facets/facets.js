@@ -1,8 +1,8 @@
 import './facets.css'
-import { CategoriesSelect } from './facet'
+//import { CategoriesSelect } from './facet'
 import { Facet } from './facet'
-import { PatternsSelect } from './facet'
-import { ValuesSelect } from './facet'
+//import { PatternsSelect } from './facet'
+//import { ValuesSelect } from './facet'
 
 /**
  * Class to manage the facets.
@@ -37,8 +37,6 @@ export class FacetsController {
     if (this.facets.length) {
       for (let f of this.facets) {
         if (f) {
-//          console.log(" ")
-//          console.log("f :", f)
           f = f.remove()
         }
       }
@@ -51,9 +49,9 @@ export class FacetsController {
   }
 
   createFacets (dataObject, key = false, type = 'categories', inPattern = false, value = false) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ FacetsController.createFacets()___")
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ FacetsController.createFacets()___')
     console.log("dataObject :", dataObject)
     console.log("this.patterns :", this.patterns)
     console.log("dataObject.rules :", dataObject.rules)
