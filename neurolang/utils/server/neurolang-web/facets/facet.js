@@ -1247,9 +1247,9 @@ export class ValuesSelect extends Select {
       const selectedValueToKey = selectedValue.slice(1, -1)
 
       // check if the selected value is a key in data and has a key "regexp"
-//      if (refData.hasOwnProperty(selectedValueToKey) && refData[selectedValueToKey].hasOwnProperty('regexp')) {
+      //      if (refData.hasOwnProperty(selectedValueToKey) && refData[selectedValueToKey].hasOwnProperty('regexp')) {
       if (Object.hasOwn(refData, selectedValueToKey) && Object.hasOwn(refData[selectedValueToKey], 'regexp')) {
-//        Object.hasOwn(refData[selectedValueToKey], 'regexp')
+        //        Object.hasOwn(refData[selectedValueToKey], 'regexp')
         console.log(' ')
         console.log('selectedValueToKey in refdata')
         const regexpObj = refData[selectedValueToKey]
