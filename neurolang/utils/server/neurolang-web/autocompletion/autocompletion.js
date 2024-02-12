@@ -177,7 +177,7 @@ export class AutocompletionController {
           //          delete facets.rules
           const k = Object.keys(facets)[0]
           // Only one accepted next token
-          if ((Object.keys(facets).length == 1) && (facets[k].length === 1)) {
+          if ((Object.keys(facets).length === 1) && (facets[k].length === 1)) {
             this._writeValueInTextEditor(facets[k][0])
           // Several accepted tokens
           } else {
@@ -204,12 +204,10 @@ export class AutocompletionController {
   }
 
   _writeValueInTextEditor (val) {
-
     if (this.editor.getSelection().length) {
       //      var selectedRange = this.editor.getSelection()
       this.editor.replaceSelection(val)
     } else {
-
       // get the cursor position in the CodeMirror editor
       const cursorPos = this.editor.getCursor()
 
