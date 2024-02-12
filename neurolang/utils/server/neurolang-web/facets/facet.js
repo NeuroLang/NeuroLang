@@ -875,23 +875,23 @@ class Select extends Element {
     this.element = this.element.remove()
   }
 
-  _setValuesFacet (dataObject) {
-    const newFacet = new Facet(
-      this.editor,
-      this.facetsContainerElement,
-      this.parentContainerElement,
-      'rightFacetContainer')
-    //      console.log(" ")
-    //      console.log("newFacet :", newFacet)
-    //      console.log("this.element.id :", this.element.id)
-    //      console.log("newFacet.element.element.id :", newFacet.element.element.id)
-    newFacet.addLabel(this.element.id + 'rightFacetLabel', 'Values', 'rightFacet')
-    newFacet.addElement('values', 'rightFacet', dataObject)
-    newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
-    newFacet.element.fill(dataObject, 'values')
-    newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
-    return newFacet
-  }
+  //  _setValuesFacet (dataObject) {
+  //    const newFacet = new Facet(
+  //      this.editor,
+  //      this.facetsContainerElement,
+  //      this.parentContainerElement,
+  //      'rightFacetContainer')
+  //    //      console.log(" ")
+  //    //      console.log("newFacet :", newFacet)
+  //    //      console.log("this.element.id :", this.element.id)
+  //    //      console.log("newFacet.element.element.id :", newFacet.element.element.id)
+  //    newFacet.addLabel(this.element.id + 'rightFacetLabel', 'Values', 'rightFacet')
+  //    newFacet.addElement('values', 'rightFacet', dataObject)
+  //    newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
+  //    newFacet.element.fill(dataObject, 'values')
+  //    newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
+  //    return newFacet
+  //  }
 
   _removeFacets () {
     if (this.facets.length) {
@@ -947,7 +947,8 @@ export class CategoriesSelect extends Select {
     newFacet.addElement('patterns', 'rightFacet', this.allData)
     //      newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
     newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement, refData)
-    newFacet.element.fill(dataObject, 'values')
+//    newFacet.element.fill(dataObject, 'values')
+    newFacet.element.fill(dataObject)
     newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
     return newFacet
   }
