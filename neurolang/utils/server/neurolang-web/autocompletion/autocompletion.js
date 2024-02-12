@@ -128,10 +128,10 @@ export class AutocompletionController {
             //            if (rules[patternContent].hasOwnProperty('values')) {
             if (Object.hasOwn(rules[patternContent], 'values')) {
               // Only one possible value/pattern
-//              if (rules[patternContent]['values'].length === 1) {
-                if (rules[patternContent].values.length === 1) {
+              //              if (rules[patternContent]['values'].length === 1) {
+              if (rules[patternContent].values.length === 1) {
                 this._writeValueInTextEditor(rules[patternContent].values[0])
-              // Several possible patterns lines
+                // Several possible patterns lines
               } else {
                 console.log(' ')
                 console.log('***************************************')
