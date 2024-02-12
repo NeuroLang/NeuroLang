@@ -402,7 +402,7 @@ class ValueButton extends Button {
   }
 
   remove () {
-    this._removeClickEventListener ()
+    this._removeClickEventListener()
     this._removeElement()
     return null
   }
@@ -466,7 +466,6 @@ class Input extends Element {
   }
 
   _removeElement () {
-
     // Clear element
     this.element.id = ''
     this.element.innerHTML = ''
@@ -576,7 +575,7 @@ export class NumberInput extends Input {
         patternFacetNew.element.addChangeEventListeners(this.editor, this.facetsContainerElement, selectedValues)
 
         // Display
-        console.log(" ")
+        console.log(' ')
         patternFacetNew.element.fill(unitKey)
         patternFacetNew.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
@@ -700,7 +699,7 @@ export class RegexpInput extends Input {
     } else {
       console.log('this.element.value :', this.element.value)
       console.log('(this.element.value).length :', (this.element.value).length)
-      console.log('this.element.value == \'\' :', this.element.value == '')
+//      console.log('this.element.value == \'\' :', this.element.value == '')
       console.log('this.element.value === \'\' :', this.element.value === '')
       if (this.element.value === '') {
         console.log('clearing alert...')
@@ -988,9 +987,9 @@ export class CategoriesSelect extends Select {
       if (selectedKey === 'All') {
         console.log('selectedKey === \'All\'')
         let values = []
-        const data_select = this.allData
-        for (const key of Object.keys(data_select)) {
-          for (const value of data_select[key]) {
+        const dataSelect = this.allData
+        for (const key of Object.keys(dataSelect)) {
+          for (const value of dataSelect[key]) {
             values.push(value)
           }
         }
@@ -1168,7 +1167,7 @@ export class RegexpSelect extends Select {
       const curKey = item.slice(1, -1)
       console.log('curKey :', curKey)
       //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
-//      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
+      //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
       if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
         let optgroup = document.createElement('optgroup')
         optgroup.label = curKey
@@ -1246,16 +1245,15 @@ export class ValuesSelect extends Select {
     var endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
 
     if (selectedValue && selectedValue !== 'All') {
-
       const selectedValueToKey = selectedValue.slice(1, -1)
 
       // check if the selected value is a key in data and has a key "regexp"
-      if (refData.hasOwnProperty(selectedValueToKey) && refData[selectedValueToKey].hasOwnProperty("regexp")) {
+      if (refData.hasOwnProperty(selectedValueToKey) && refData[selectedValueToKey].hasOwnProperty('regexp')) {
         console.log(' ')
         console.log('selectedValueToKey in refdata')
         const regexpObj = refData[selectedValueToKey]
         console.log('regexpObj :', regexpObj)
-        let regexpVal = {key: selectedValueToKey, val:''}
+        let regexpVal = { key: selectedValueToKey, val:'' }
         let newInput = new Facet(
           this.editor,
           this.facetsContainerElement,
@@ -1286,18 +1284,17 @@ export class ValuesSelect extends Select {
           console.log('elt type : ', item.element.element.nodeName)
         }
 
-         editor.focus()
+        editor.focus()
       } else {
-
         // Previous version
         //      // get the cursor position in the CodeMirror editor
-        ////      const cursorPos = editor.getCursor()
+        // //      const cursorPos = editor.getCursor()
         //
         //      // insert the selected value at the current cursor position
         //      editor.replaceRange(selectedValue, cursorPos)
         //
         //      // calculate the end position based on the length of the inserted value
-        ////      const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+        // //      const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
         //
         //      // check if the selected value starts with '<' and ends with '>'
         //      if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
@@ -1309,7 +1306,7 @@ export class ValuesSelect extends Select {
         //      }
 
         if (inPattern) {
-          var selectedRange = editor.getSelection()
+//          var selectedRange = editor.getSelection()
           editor.replaceSelection(selectedValue)
         } else {
           // get the cursor position in the CodeMirror editor
@@ -1363,7 +1360,8 @@ export class ValuesSelect extends Select {
       const curKey = item.slice(1, -1)
       console.log('curKey :', curKey)
       //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
-      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
+//      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
+      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
         let optgroup = document.createElement('optgroup')
         optgroup.label = curKey
         for (let i of this.allData[curKey].values) {
@@ -1382,7 +1380,7 @@ export class ValuesSelect extends Select {
 
   remove () {
     this._removeFacets()
-    this._removeChangeEventListener ()
+    this._removeChangeEventListener()
     this._removeElement()
     return null
   }
@@ -1392,12 +1390,11 @@ export class ValuesSelect extends Select {
  * Class to manage patterns select element.
  */
 export class PatternsSelect extends Select {
-
   constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc) {
     super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc)
   }
 
-  addChangeEventListeners(editor, facetsContainerElement, refData, inPattern = false) {
+  addChangeEventListeners (editor, facetsContainerElement, refData, inPattern = false) {
     // Create a new handler function that has access to facetsObject
     this.changeHandler = (event) => this._handleClick(editor, facetsContainerElement, refData, inPattern)
 
@@ -1423,7 +1420,7 @@ export class PatternsSelect extends Select {
     //    console.log("selectedValue :", selectedValue)
 
     // put the value as selected in the symbols table as well
-    this._selectInSymbolsTable (selectedValue)
+    this._selectInSymbolsTable(selectedValue)
 
     // get the cursor position in the CodeMirror editor
     var cursorPos = editor.getCursor()
@@ -1432,11 +1429,10 @@ export class PatternsSelect extends Select {
     var endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
 
     if (selectedValue) {
-
       const selectedValueToKey = selectedValue.slice(1, -1)
 
       // check if the selected value is a key in data and has a key "regexp"
-      if (allDataObject.hasOwnProperty(selectedValueToKey) && allDataObject[selectedValueToKey].hasOwnProperty("regexp")) {
+      if (allDataObject.hasOwnProperty(selectedValueToKey) && allDataObject[selectedValueToKey].hasOwnProperty('regexp')) {
         const regexpObj = allDataObject[selectedValueToKey]
         console.log('regexpObj :', regexpObj)
         let regexpVal = {key: selectedValueToKey, val:''}
@@ -1466,8 +1462,8 @@ export class PatternsSelect extends Select {
         this.facets.push(newInput, buttonNew)
 
         for (let item of this.facets) {
-          console.log("elt : ", item.element)
-          console.log("elt type : ", item.element.element.nodeName)
+          console.log('elt : ', item.element)
+          console.log('elt type : ', item.element.element.nodeName)
         }
 
          editor.focus()

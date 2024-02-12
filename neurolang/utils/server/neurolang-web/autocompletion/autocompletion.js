@@ -128,7 +128,8 @@ export class AutocompletionController {
             //            if (rules[patternContent].hasOwnProperty('values')) {
             if (Object.hasOwn(rules[patternContent], 'values')) {
               // Only one possible value/pattern
-              if (rules[patternContent]['values'].length === 1) {
+//              if (rules[patternContent]['values'].length === 1) {
+                if (rules[patternContent].values.length === 1) {
                 this._writeValueInTextEditor(rules[patternContent].values[0])
               // Several possible patterns lines
               } else {
@@ -149,7 +150,7 @@ export class AutocompletionController {
             // Pattern does not have value
             //            } else if (rules[patternContent].hasOwnProperty('params') && rules[patternContent].hasOwnProperty('unit')) {
             } else if (Object.hasOwn(rules[patternContent], 'params') && Object.hasOwn(rules[patternContent], 'unit')) {
-              if (rules[patternContent].params == 'number') {
+              if (rules[patternContent].params === 'number') {
                 console.log(' ')
                 console.log('********************')
                 console.log('*** Input number ***')
@@ -173,13 +174,13 @@ export class AutocompletionController {
           console.log('*****************************')
           console.log('facets :', facets)
           console.log('facets.rules :', facets.rules)
-          console.log("facets['rules'] :", facets['rules'])
+          //          console.log("facets['rules'] :", facets['rules'])
           //          delete facets.rules
           const k = Object.keys(facets)[0]
           // Only one accepted next token
           if ((Object.keys(facets).length === 1) && (facets[k].length === 1)) {
             this._writeValueInTextEditor(facets[k][0])
-          // Several accepted tokens
+            // Several accepted tokens
           } else {
             //            console.log(" ")
             //            console.log("*** Several possible accepted tokens ***")
