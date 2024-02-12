@@ -1359,9 +1359,9 @@ export class ValuesSelect extends Select {
       const curKey = item.slice(1, -1)
       console.log('curKey :', curKey)
       //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
-       //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
+      //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
       if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
-        let optgroup = document.createElement('optgroup')
+        const optgroup = document.createElement('optgroup')
         optgroup.label = curKey
         for (const i of this.allData[curKey].values) {
           const option = document.createElement('option')
@@ -1422,10 +1422,10 @@ export class PatternsSelect extends Select {
     this._selectInSymbolsTable(selectedValue)
 
     // get the cursor position in the CodeMirror editor
-    var cursorPos = editor.getCursor()
+    const cursorPos = editor.getCursor()
 
     // calculate the end position based on the length of the inserted value
-    var endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
+    const endPos = { line: cursorPos.line, ch: cursorPos.ch + selectedValue.length }
 
     if (selectedValue) {
       const selectedValueToKey = selectedValue.slice(1, -1)
@@ -1434,8 +1434,8 @@ export class PatternsSelect extends Select {
       if (allDataObject.hasOwnProperty(selectedValueToKey) && allDataObject[selectedValueToKey].hasOwnProperty('regexp')) {
         const regexpObj = allDataObject[selectedValueToKey]
         console.log('regexpObj :', regexpObj)
-        let regexpVal = { key: selectedValueToKey, val:'' }
-        let newInput = new Facet(
+        const regexpVal = { key: selectedValueToKey, val: '' }
+        const newInput = new Facet(
           this.editor,
           this.facetsContainerElement,
           this.parentContainerElement,
@@ -1460,7 +1460,7 @@ export class PatternsSelect extends Select {
 
         this.facets.push(newInput, buttonNew)
 
-        for (let item of this.facets) {
+        for (const item of this.facets) {
           console.log('elt : ', item.element)
           console.log('elt type : ', item.element.element.nodeName)
         }
@@ -1468,7 +1468,7 @@ export class PatternsSelect extends Select {
         editor.focus()
       } else {
         if (inPattern) {
-//          var selectedRange = editor.getSelection()
+          //          var selectedRange = editor.getSelection()
           editor.replaceSelection(selectedValue)
         } else {
           // get the cursor position in the CodeMirror editor
@@ -1523,7 +1523,7 @@ export class PatternsSelect extends Select {
       if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
         let optgroup = document.createElement('optgroup')
         optgroup.label = curKey
-        for (let i of this.allData[curKey].values) {
+        for (const i of this.allData[curKey].values) {
           const option = document.createElement('option')
           option.textContent = i
           optgroup.appendChild(option)
