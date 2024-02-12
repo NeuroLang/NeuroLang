@@ -1056,7 +1056,7 @@ export class CategoriesSelect extends Select {
     if (this.valuesFacet) {
       this.valuesFacet.remove()
     }
-    this._removeChangeEventListener ()
+    this._removeChangeEventListener()
     this._removeElement()
     return null
   }
@@ -1066,7 +1066,6 @@ export class CategoriesSelect extends Select {
  * Class to manage values select element.
  */
 export class RegexpSelect extends Select {
-
   constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc) {
     super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc)
     //    this.generatorFacetId = generatorFacetId
@@ -1107,12 +1106,12 @@ export class RegexpSelect extends Select {
     const selectedValue = this.element.value
 
     // put the value as selected in the symbols table as well
-    this._selectInSymbolsTable (selectedValue)
+    this._selectInSymbolsTable(selectedValue)
 
     tab[this.position] = selectedValue
     console.log('tab apres :', tab)
 
-    let button = document.getElementById(this.buttonId)
+    const button = document.getElementById(this.buttonId)
     if (tab.every(value => Boolean(value))) {
       button.disabled = false
     } else {
@@ -1140,10 +1139,10 @@ export class RegexpSelect extends Select {
 
     // check if the selected value starts with '<' and ends with '>'
     //      if (selectedValue.startsWith('<') && selectedValue.endsWith('>')) {
-        // select the text that was just inserted
+    //    // select the text that was just inserted
     //        editor.setSelection(cursorPos, endPos)
     //      } else {
-        // Move cursor to end of inserted value
+    //    // Move cursor to end of inserted value
     //        editor.setCursor(endPos)
     //      }
     //    }
@@ -1169,12 +1168,12 @@ export class RegexpSelect extends Select {
     console.log('keyData :', keyData)
 
     // Add ruleObject keys to left facet
-    for (let item of keyData.values) {
+    for (const item of keyData.values) {
       console.log(' ')
       console.log('item :', item)
       const curKey = item.slice(1, -1)
       console.log('curKey :', curKey)
-//      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
+      //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
       if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
         let optgroup = document.createElement('optgroup')
         optgroup.label = curKey
@@ -1369,7 +1368,8 @@ export class ValuesSelect extends Select {
       console.log('item :', item)
       const curKey = item.slice(1, -1)
       console.log('curKey :', curKey)
-      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
+//      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
+      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
         let optgroup = document.createElement('optgroup')
         optgroup.label = curKey
         for (let i of this.allData[curKey].values) {
@@ -1416,11 +1416,11 @@ export class PatternsSelect extends Select {
   * @param {Event} event the event object associated with the click in the right facet
   */
   _handleClick (editor, facetsContainerElement, allDataObject, inPattern) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ PatternsSelect._handleClick()___")
-    console.log("allDataObject :", allDataObject)
-    console.log("this.allData :", this.allData)
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ PatternsSelect._handleClick()___')
+    console.log('allDataObject :', allDataObject)
+    console.log('this.allData :', this.allData)
 
     this._removeFacets()
 
@@ -1444,7 +1444,7 @@ export class PatternsSelect extends Select {
       // check if the selected value is a key in data and has a key "regexp"
       if (allDataObject.hasOwnProperty(selectedValueToKey) && allDataObject[selectedValueToKey].hasOwnProperty("regexp")) {
         const regexpObj = allDataObject[selectedValueToKey]
-        console.log("regexpObj :", regexpObj)
+        console.log('regexpObj :', regexpObj)
         let regexpVal = {key: selectedValueToKey, val:''}
         let newInput = new Facet(
           this.editor,
@@ -1456,7 +1456,7 @@ export class PatternsSelect extends Select {
         newInput.element.addChangeEventListeners(this.editor, regexpObj, regexpVal)
         newInput.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
-        let buttonNew = new Facet(
+        const buttonNew = new Facet(
           this.editor,
           this.facetsContainerElement,
           this.parentContainerElement,
@@ -1466,7 +1466,7 @@ export class PatternsSelect extends Select {
         buttonNew.element.addClickEventListeners(this.editor, this.facetsContainerElement, regexpVal, inPattern)
         buttonNew.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
-        console.log("button id :", buttonNew.element.element.id)
+        console.log('button id :', buttonNew.element.element.id)
         newInput.element.updateButtonId(buttonNew.element.element.id)
 
         this.facets.push(newInput, buttonNew)
