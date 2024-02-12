@@ -1519,9 +1519,9 @@ export class PatternsSelect extends Select {
       const curKey = item.slice(1, -1)
       console.log('curKey :', curKey)
       //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
-//      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
+      //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
       if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
-        let optgroup = document.createElement('optgroup')
+        const optgroup = document.createElement('optgroup')
         optgroup.label = curKey
         for (const i of this.allData[curKey].values) {
           const option = document.createElement('option')
