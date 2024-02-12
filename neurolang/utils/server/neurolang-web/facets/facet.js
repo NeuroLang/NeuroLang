@@ -1174,15 +1174,16 @@ export class RegexpSelect extends Select {
       console.log('item :', item)
       const curKey = item.slice(1, -1)
       console.log('curKey :', curKey)
-        if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
-          let optgroup = document.createElement('optgroup')
-          optgroup.label = curKey
-          for (let i of this.allData[curKey].values) {
-            const option = document.createElement('option')
-            option.textContent = i
-            optgroup.appendChild(option)
-          }
-          this.element.appendChild(optgroup)
+//      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
+      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
+        let optgroup = document.createElement('optgroup')
+        optgroup.label = curKey
+        for (let i of this.allData[curKey].values) {
+          const option = document.createElement('option')
+          option.textContent = i
+          optgroup.appendChild(option)
+        }
+        this.element.appendChild(optgroup)
       } else {
         const option = document.createElement('option')
         option.textContent = item
@@ -1272,7 +1273,7 @@ export class ValuesSelect extends Select {
         //        newInput.element.addChangeEventListeners(this.editor, regexpObj, regexpVal)
         newInput.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
-        let buttonNew = new Facet(
+        const buttonNew = new Facet(
           this.editor,
           this.facetsContainerElement,
           this.parentContainerElement,
@@ -1516,20 +1517,20 @@ export class PatternsSelect extends Select {
   * @param {Object} ruleObject the categories to be displayed in the facets and their values
   */
   fill (keyToFillSelect) {
-    console.log(" ")
-    console.log("________________________________")
-    console.log("___ PatternsSelect.fill()___")
-    console.log("keyToFillSelect :", keyToFillSelect)
+    console.log(' ')
+    console.log('________________________________')
+    console.log('___ PatternsSelect.fill()___')
+    console.log('keyToFillSelect :', keyToFillSelect)
     const keyData = this.allData[keyToFillSelect]
-    console.log("keyData :", keyData)
+    console.log('keyData :', keyData)
 
     // Add ruleObject keys to left facet
     for (let item of keyData.values) {
-      console.log(" ")
-      console.log("item :", item)
+      console.log(' ')
+      console.log('item :', item)
       const curKey = item.slice(1, -1)
-      console.log("curKey :", curKey)
-      if ((curKey in this.allData) && ("params" in this.allData[curKey]) && (this.allData[curKey]["params"] == "expandable")) {
+      console.log('curKey :', curKey)
+      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
         let optgroup = document.createElement('optgroup')
         optgroup.label = curKey
         for (let i of this.allData[curKey].values) {
