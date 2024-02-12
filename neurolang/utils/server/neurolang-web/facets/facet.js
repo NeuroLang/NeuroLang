@@ -1,3 +1,5 @@
+import $ from '../jquery-bundler'
+
 /**
  * Class to manage facets.
  */
