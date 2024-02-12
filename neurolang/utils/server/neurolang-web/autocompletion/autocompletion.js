@@ -1,5 +1,5 @@
 import { FacetsController } from '../facets/facets'
-import { API_ROUTE } from '../constants'
+import API_ROUTE from '../constants'
 
 /**
  * Class to manage query autocompletion.
@@ -31,6 +31,11 @@ export class AutocompletionController {
   _isCursorInPattern (line, pos) {
     const pattern = /<[a-zA-Z_]+>/g
     const matches = line.match(pattern)
+    let resMatch = {
+      content: null,
+      start: null,
+      end: null
+    }
 
     if (matches) {
       for (const match of matches) {
@@ -39,7 +44,11 @@ export class AutocompletionController {
         const l = endIndex - startIndex + 1
 
         if (pos >= startIndex && pos <= endIndex) {
-          return { content: match, start: startIndex, end: endIndex }
+          resMatch.content = match
+          resMatch.start = startIndex,
+          resMatch.end = endIndex
+          //          return { content: match, start: startIndex, end: endIndex }
+          return resMatch
         }
 
         line = line.substring(0, startIndex) + ' '.repeat(l) + line.substring(startIndex + l)
