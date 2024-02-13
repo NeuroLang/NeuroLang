@@ -188,12 +188,6 @@
 							"<signed_identifier>"
 						]
 	},
-	"optional_arguments": {
-			"unit":		"<argument>",
-			"params": 	"number",
-			"sep": 		",",
-			"min": 		0
-	},
 	"predicate":	{
 			"values":	[
 							"<identifier> ()",

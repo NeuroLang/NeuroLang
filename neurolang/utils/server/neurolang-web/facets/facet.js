@@ -950,7 +950,7 @@ export class CategoriesSelect extends Select {
     //      newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
     newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement, refData)
 //    newFacet.element.fill(dataObject, 'values')
-    newFacet.element.fill(dataObject)
+    newFacet.element.fill(dataObject, refData)
     newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
     return newFacet
   }
@@ -1511,13 +1511,18 @@ export class PatternsSelect extends Select {
   * Displays the facets.
   * @param {Object} ruleObject the categories to be displayed in the facets and their values
   */
-  fill (keyToFillSelect) {
+  fill (keyToFillSelect, refData = false) {
     console.log(' ')
     console.log('________________________________')
     console.log('___ PatternsSelect.fill()___')
     console.log('keyToFillSelect :', keyToFillSelect)
+    console.log("this.allData :", this.allData)
     const keyData = this.allData[keyToFillSelect]
     console.log('keyData :', keyData)
+
+    if (!refData) {
+      refData = this.allData
+    }
 
     // Add ruleObject keys to left facet
     for (const item of keyData.values) {
@@ -1527,10 +1532,11 @@ export class PatternsSelect extends Select {
       console.log('curKey :', curKey)
       //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey]['params'] == 'expandable')) {
       //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params == 'expandable')) {
-      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
+      //      if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
+      if ((curKey in refData) && ('params' in refData[curKey]) && (refData[curKey].params === 'expandable')) {
         const optgroup = document.createElement('optgroup')
         optgroup.label = curKey
-        for (const i of this.allData[curKey].values) {
+        for (const i of refData[curKey].values) {
           const option = document.createElement('option')
           option.textContent = i
           optgroup.appendChild(option)
