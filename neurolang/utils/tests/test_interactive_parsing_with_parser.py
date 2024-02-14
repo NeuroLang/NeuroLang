@@ -634,7 +634,6 @@ def test_interactive_command_syntax():
 
 def test_interactive_constraint():
     res = parser('(x == y)', interactive=True)
-    print(res)
     expected = {'Signs': {'values': {'∧', '&', ','}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
                 'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {'→', '-:'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
