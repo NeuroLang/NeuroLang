@@ -521,6 +521,34 @@ def test_neurolang_dl_datalog_code_statement():
     }
 
 
+def test_neurolang_dl_datalog_code_statement_autocompletion():
+    neurolang = frontend.NeurolangDL()
+    res = neurolang.compute_datalog_program_for_autocompletion(
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    five := 5
+    B(x,y) :- A(x, y)
+    B(x,y) :- B(x, z),A(z, y)
+    C(x) :- B(x, y), (y == five)
+    D("x")
+    """,
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    five := 5
+    B(x,y) :- A(x, y)
+    B(x,y) :- 
+    """
+    )
+    print(res)
+    expected = {'Signs': {'(', '∃', '@'}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
+                'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'False', 'True', '⊤', '⊥'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
+    assert res == expected
+
+
 def test_neurolang_dl_datalog_code_lambda_def():
     neurolang = frontend.NeurolangDL()
     neurolang.execute_datalog_program(
