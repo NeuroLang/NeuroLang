@@ -543,7 +543,6 @@ def test_neurolang_dl_datalog_code_statement_autocompletion():
     B(x,y) :- 
     """
     )
-    print(res)
     expected = {'Signs': {'(', '∃', '@'}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
                 'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(), 'Reserved words': {'EXISTS', 'exists'}, 'Boleans': {'False', 'True', '⊤', '⊥'}, 'Expression symbols': set(), 'Python string': set(), 'Strings': {'<identifier regular expression>', '<command identifier>'}, 'commands': set(), 'functions': set(), 'base symbols': set(), 'query symbols': set()}
     assert res == expected
