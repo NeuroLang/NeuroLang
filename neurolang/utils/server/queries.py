@@ -278,14 +278,14 @@ class NeurolangQueryManager:
                                 available_identifiers.append(name)
                                 if 'functions' in res:
                                     res['base symbols']["values"].append(name)
-                        if 'base symbols' in res:
-                            res['base symbols']["values"] = sorted(
-                                list(res['base symbols']["values"]))
-                        if 'query symbols' in res:
-                            res['query symbols']["values"] = sorted(
-                                list(res['query symbols']["values"]))
-                        if 'functions' in res:
-                            res['functions']["values"] = sorted(list(res['functions']["values"]))
+                    if 'base symbols' in res:
+                        res['base symbols']["values"] = sorted(
+                            list(res['base symbols']["values"]))
+                    if 'query symbols' in res:
+                        res['query symbols']["values"] = sorted(
+                            list(res['query symbols']["values"]))
+                    if 'functions' in res:
+                        res['functions']["values"] = sorted(list(res['functions']["values"]))
 
                     if available_identifiers:
                         available_identifiers = sorted(
