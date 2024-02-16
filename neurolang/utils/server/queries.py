@@ -17,8 +17,9 @@ from ..relational_algebra_set import (
 )
 from ...commands import CommandsMixin
 from ...expressions import Command
-from ...frontend.query_resolution_expressions import Symbol
 from ...frontend.datalog.standard_syntax import parse_rules
+from ...frontend.probabilistic_frontend import NeurolangPDL
+from ...frontend.query_resolution_expressions import Symbol
 from ...type_system import get_args, is_leq_informative
 
 
@@ -234,92 +235,104 @@ class NeurolangQueryManager:
                     res = engine.compute_datalog_program_for_autocompletion(
                         query, autocompletion_query)
 
-                    print("")
-                    print("res before list conversion :")
-                    for r in res:
-                        print(r, ":", res[r])
+                    # print("")
+                    # print("res before list conversion :")
+                    # for r in res:
+                    #     print(r, ":", res[r])
 
-                    print("")
-                    print("Conversion :")
+                    # print("")
+                    # print("Conversion :")
                     # convert sets to lists, otherwise not convertible to a json
                     for i in res:
                         # res["values"][i] = list(res["values"][i])
-                        print("i :", i)
-                        print("res[i] :", res[i])
-                        print("res[i][\"values\"] :", res[i]["values"])
+                        # print("i :", i)
+                        # print("res[i] :", res[i])
+                        # print("res[i][\"values\"] :", res[i]["values"])
                         res[i]["values"] = list(res[i]["values"])
 
-                    print("")
-                    print("res after list conversion :")
-                    for r in res:
-                        print(r, ":", res[r])
+                    # print("")
+                    # print("res after list conversion :")
+                    # for r in res:
+                    #     print(r, ":", res[r])
 
                     # get rules patterns from json file
                     rules = parse_rules()
 
-                    self._get_engine_symbols(engine_type)
+                    print("")
+                    print("++++")
+                    print("engine :", engine)
+                    print("")
+                    print("Engine symbols type 1 :", type(engine.symbols))
+                    print("Engine symbols 1 :", engine.symbols)
 
-                    available_identifiers = []
-                    predefined_functions = []
+                    available_symbols = self._get_engine_symbols_for_autocompletion(engine)
+                    print("")
+                    print("**************")
+                    print(available_symbols)
+                    print("**************")
 
-                    for name in engine.symbols:
-                        if not name.startswith("_"):
-                            symbol = engine.symbols[name]
-                            if is_leq_informative(symbol.type, Callable):
-                                if (name[0].isupper()) or (name.startswith('fresh')):
-                                    available_identifiers.append(name)
-                                    if 'functions' in res:
-                                        res['query symbols']["values"].append(name)
-                                else:
-                                    predefined_functions.append(name)
-                                    if 'functions' in res:
-                                        res['functions']["values"].append(name)
-                            elif is_leq_informative(symbol.type, AbstractSet):
-                                available_identifiers.append(name)
-                                if 'functions' in res:
-                                    res['base symbols']["values"].append(name)
+                    print("")
+                    print("Engine type 2 :", type(engine))
+                    print("Engine 2 :", engine)
+                    print("**************")
+
+                    print("")
+                    print("Out get symbols :")
+                    for i in available_symbols:
+                        print(i, ":", available_symbols[i])
+
+                    # available_identifiers = []
+                    # predefined_functions = []
+
+                    # for name in engine.symbols:
+                    #     if not name.startswith("_"):
+                    #         # print("name 2 :", name)
+                    #         symbol = engine.symbols[name]
+                    #         if is_leq_informative(symbol.type, Callable):
+                    #             if (name[0].isupper()) or (name.startswith('fresh')):
+                    #                 if 'functions' in res:
+                    #                     res['query symbols']["values"].append(name)
+                    #             else:
+                    #                 # predefined_functions.append(name)
+                    #                 if 'functions' in res:
+                    #                     res['functions']["values"].append(name)
+                    #         elif is_leq_informative(symbol.type, AbstractSet):
+                    #             if 'functions' in res:
+                    #                 res['base symbols']["values"].append(name)
+
                     if 'base symbols' in res:
-                        res['base symbols']["values"] = sorted(
-                            list(res['base symbols']["values"]))
+                        res['base symbols']["values"] = available_symbols["base_symbols"]
+                        print("res['base symbols']['values'] :", res['base symbols']["values"])
                     if 'query symbols' in res:
-                        res['query symbols']["values"] = sorted(
-                            list(res['query symbols']["values"]))
+                        res['query symbols']["values"] = available_symbols["query_symbols"]
+                        print("res['query symbols']['values'] :", res['query symbols']["values"])
                     if 'functions' in res:
-                        res['functions']["values"] = sorted(list(res['functions']["values"]))
+                        res['functions']["values"] = available_symbols["functions"]
+                        print("res['functions']['values'] :", res['functions']["values"])
+                    if 'commands' in res:
+                        res['commands']["values"] = available_symbols["commands"]
 
-                    if available_identifiers:
-                        available_identifiers = sorted(
-                            list(available_identifiers))
+                    if available_symbols["available_identifiers"]:
                         rules["identifier"]["values"].append("<available_identifiers>")
                         rules["available_identifiers"] = {
-                            "values": available_identifiers,
+                            "values": available_symbols["available_identifiers"],
                             "params": "expandable"
                         }
-                    if predefined_functions:
-                        predefined_functions = sorted(
-                            list(predefined_functions))
-                        # rules["function_identifier"]["values"].append("<predefined_functions>")
-                        # rules["predefined_functions"] = {
-                        #     "values": predefined_functions,
-                        #     "params": "expandable"
-                        # }
+                    if available_symbols["predefined_functions"]:
                         rules["function"]["values"].append("<predefined_functions> (<arguments>)")
                         rules["predefined_functions"] = {
-                            "values": predefined_functions,
+                            "values": available_symbols["predefined_functions"],
                             "params": "expandable"
                         }
 
-                    available_commands = list(_get_commands(engine))
-                    if available_commands:
-                        available_commands = sorted(
-                            list(available_commands))
+                    if available_symbols["commands"]:
+                        # available_commands = sorted(
+                        #     list(available_commands))
                         rules["command_identifier"]["values"].append("<available_commands>")
                         rules["available_commands"] = {
-                            "values": available_commands,
+                            "values": available_symbols["commands"],
                             "params": "expandable"
                         }
-                    if 'commands' in res:
-                        res['commands']["values"] = available_commands
 
                     # Clean toks : remove the keys with empty list
                     tmp_toks = {k: v for k, v in res.items() if v["values"]}
@@ -328,10 +341,21 @@ class NeurolangQueryManager:
 
                     res['rules'] = rules
 
-                    print("")
-                    print("res end :")
-                    for r in res:
-                        print(r, ":", res[r])
+                    # print("")
+                    # print("res end :")
+                    # for r in res:
+                    #     print(r, ":", res[r])
+
+
+                    if 'functions' in res:
+                        print("")
+                        print("res functions :", res["functions"])
+                    if 'base symbols' in res:
+                        print("")
+                        print("res base symbols :", res["base symbols"])
+                    if 'query symbols' in res:
+                        print("")
+                        print("res query symbols :", res["query symbols"])
 
                     return res
             except Exception as e:
@@ -487,6 +511,54 @@ class NeurolangQueryManager:
         )
         self.results_cache[key] = future_res
         return future_res
+
+
+    def _get_engine_symbols_for_autocompletion(
+        self, engine: NeurolangPDL
+    ) -> Dict[str, list]:
+        """
+        Function executed on a ThreadPoolExecutor worker to get the available symbols
+        on a neurolang engine.
+
+        Parameters
+        ----------
+        engine_type : str
+            the type of engine for which to get the symbols
+
+        Returns
+        -------
+        Dict[str, Union[NamedRelationalAlgebraFrozenSet, Symbol]]
+            the result of the query execution
+        """
+        symbols = {
+            "query_symbols" : [],
+            "functions" : [],
+            "base_symbols" : [],
+            "commands" : [],
+            "available_identifiers" : [],
+            "predefined_functions" : []
+        }
+        for name in engine.symbols:
+            if not name.startswith("_"):
+                # print("name 1 :", name)
+                symbol = engine.symbols[name]
+                if is_leq_informative(symbol.type, Callable):
+                    if (name[0].isupper()) or (name.startswith('fresh')):
+                        symbols["available_identifiers"].append(name)
+                        symbols["query_symbols"].append(name)
+                    else:
+                        symbols["predefined_functions"].append(name)
+                        symbols["functions"].append(name)
+                elif is_leq_informative(symbol.type, AbstractSet):
+                    symbols["available_identifiers"].append(name)
+                    symbols["base_symbols"].append(name)
+        symbols["commands"] = list(_get_commands(engine))
+
+        for symbol in symbols:
+            symbols[symbol] = sorted(symbols[symbol])
+
+        return symbols
+
 
     def _get_engine_symbols(
         self, engine_type: str
