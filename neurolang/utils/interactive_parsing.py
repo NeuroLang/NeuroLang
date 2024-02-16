@@ -1,5 +1,3 @@
-# from __future__ import annotations
-
 from dataclasses import dataclass
 from lark import Lark
 from lark.exceptions import UnexpectedCharacters, UnexpectedToken
@@ -9,7 +7,7 @@ from ..exceptions import UnexpectedTokenError
 
 # Code based on https://github.com/MegaIng/lark-autocomplete/blob/master/lark_autocomplete.py
 
-# List of the different categories to by displayed in the frontend.
+# List of the different categories to displayed in the frontend.
 CATEGORIES = [
     'Signs',
     'Numbers',
@@ -121,7 +119,7 @@ class LarkCompleter:
         # Initialise the final accepted tokens dictionary
         accepted_tokens = {}
         for category in CATEGORIES:
-            accepted_tokens[category] = {"values" : set()}
+            accepted_tokens[category] = {"values": set()}
 
         # Get the accepted tokens given by the parser
         parser_accepted_tokens = list(interactive.accepts())
@@ -140,15 +138,15 @@ class LarkCompleter:
 
             if (t_name == 'CMD_IDENTIFIER'):
                 t_pattern = '<cmd_identifier>'
-                accepted_tokens['commands'] = {"values" : set()}
+                accepted_tokens['commands'] = {"values": set()}
             elif (t_name == 'FLOAT'):
                 t_pattern = '<float>'
             elif (t_name == 'IDENTIFIER_REGEXP'):
                 # t_pattern = '<identifier regular expression>'
                 t_pattern = '<identifier_regexp>'
-                accepted_tokens['functions'] = {"values" : set()}
-                accepted_tokens['base symbols'] = {"values" : set()}
-                accepted_tokens['query symbols'] = {"values" : set()}
+                accepted_tokens['functions'] = {"values": set()}
+                accepted_tokens['base symbols'] = {"values": set()}
+                accepted_tokens['query symbols'] = {"values": set()}
             elif (t_name == 'INT'):
                 t_pattern = '<integer>'
             elif (t_name == 'PYTHON_STRING'):
@@ -169,6 +167,7 @@ class LarkCompleter:
                     accepted_tokens[TERMINALS_TO_CATEGORIES[t_name]]["values"].add(
                         pattern)
             else:
-                accepted_tokens[TERMINALS_TO_CATEGORIES[t_name]]["values"].add(t_pattern)
+                accepted_tokens[TERMINALS_TO_CATEGORIES[t_name]
+                                ]["values"].add(t_pattern)
 
         return CompleteResult(len(text), "", accepted_tokens)
