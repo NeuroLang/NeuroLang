@@ -5,7 +5,7 @@ import $ from '../jquery-bundler'
 /**
  * Class to manage query autocompletion.
  */
-export class AutocompletionController {
+export default class AutocompletionController {
   constructor (editor, sc, engine) {
     this.editor = editor
     this.sc = sc
