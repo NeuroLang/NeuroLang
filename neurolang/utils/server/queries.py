@@ -243,7 +243,8 @@ class NeurolangQueryManager:
                     rules = parse_rules()
 
                     # get available symbols for autocompletion
-                    available_symbols = self._get_engine_symbols_for_autocompletion(engine)
+                    available_symbols = self._get_engine_symbols_for_autocompletion(
+                        engine)
 
                     # incorporate symbols in res dictionary
                     if 'base symbols' in res:
@@ -257,19 +258,22 @@ class NeurolangQueryManager:
 
                     # incorporate symbols in rules dictionary
                     if available_symbols["available_identifiers"]:
-                        rules["identifier"]["values"].append("<available_identifiers>")
+                        rules["identifier"]["values"].append(
+                            "<available_identifiers>")
                         rules["available_identifiers"] = {
                             "values": available_symbols["available_identifiers"],
                             "params": "expandable"
                         }
                     if available_symbols["predefined_functions"]:
-                        rules["function"]["values"].append("<predefined_functions> (<arguments>)")
+                        rules["function"]["values"].append(
+                            "<predefined_functions> (<arguments>)")
                         rules["predefined_functions"] = {
                             "values": available_symbols["predefined_functions"],
                             "params": "expandable"
                         }
                     if available_symbols["commands"]:
-                        rules["command_identifier"]["values"].append("<available_commands>")
+                        rules["command_identifier"]["values"].append(
+                            "<available_commands>")
                         rules["available_commands"] = {
                             "values": available_symbols["commands"],
                             "params": "expandable"
@@ -437,7 +441,6 @@ class NeurolangQueryManager:
         self.results_cache[key] = future_res
         return future_res
 
-
     def _get_engine_symbols_for_autocompletion(
         self, engine: NeurolangPDL
     ) -> Dict[str, list]:
@@ -456,12 +459,12 @@ class NeurolangQueryManager:
             the result of the query execution
         """
         symbols = {
-            "query_symbols" : [],
-            "functions" : [],
-            "base_symbols" : [],
-            "commands" : [],
-            "available_identifiers" : [],
-            "predefined_functions" : []
+            "query_symbols": [],
+            "functions": [],
+            "base_symbols": [],
+            "commands": [],
+            "available_identifiers": [],
+            "predefined_functions": []
         }
         for name in engine.symbols:
             if not name.startswith("_"):
@@ -480,9 +483,7 @@ class NeurolangQueryManager:
 
         for symbol in symbols:
             symbols[symbol] = sorted(symbols[symbol])
-
         return symbols
-
 
     def _get_engine_symbols(
         self, engine_type: str
