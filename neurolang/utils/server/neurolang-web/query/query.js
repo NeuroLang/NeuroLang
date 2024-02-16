@@ -5,9 +5,9 @@ import './datalog'
 import CodeMirror from 'codemirror'
 import './query.css'
 import $ from '../jquery-bundler'
-import { AutocompletionController } from '../autocompletion/autocompletion'
-import { SymbolsController } from '../symbols/symbols'
 import { API_ROUTE } from '../constants'
+import { SymbolsController } from '../symbols/symbols'
+import { AutocompletionController } from '../autocompletion/autocompletion'
 
 /**
  * Class to manage query submission.
