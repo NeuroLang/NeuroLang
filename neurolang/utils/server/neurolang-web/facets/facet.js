@@ -345,9 +345,9 @@ class AggregateButton extends Button {
 }
 
 class ValueButton extends Button {
-  constructor (editor, facetsContainerElement, parentContainerElement, containerDiv, facetId, data, key) {
-    super(editor, facetsContainerElement, parentContainerElement, containerDiv, facetId, data, key)
-  }
+//  constructor (editor, facetsContainerElement, parentContainerElement, containerDiv, facetId, data, key) {
+//    super(editor, facetsContainerElement, parentContainerElement, containerDiv, facetId, data, key)
+//  }
 
   addClickEventListeners (editor, facetsContainerElement, valueToWrite, inPattern = false) {
     // Create a new handler function that has access to facetsObject
@@ -949,7 +949,7 @@ export class CategoriesSelect extends Select {
     newFacet.addElement('patterns', 'rightFacet', this.allData)
     //      newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
     newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement, refData)
-//    newFacet.element.fill(dataObject, 'values')
+    //    newFacet.element.fill(dataObject, 'values')
     newFacet.element.fill(dataObject, refData)
     newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
     return newFacet
@@ -1207,9 +1207,9 @@ export class RegexpSelect extends Select {
  * Class to manage values select element.
  */
 export class ValuesSelect extends Select {
-  constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc) {
-    super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc)
-  }
+//  constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc) {
+//    super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc)
+//  }
 
   addChangeEventListeners (editor, facetsContainerElement, refData, inPattern = false) {
     // Create a new handler function that has access to facetsObject
@@ -1516,7 +1516,7 @@ export class PatternsSelect extends Select {
     console.log('________________________________')
     console.log('___ PatternsSelect.fill()___')
     console.log('keyToFillSelect :', keyToFillSelect)
-    console.log("this.allData :", this.allData)
+    console.log('this.allData :', this.allData)
     const keyData = this.allData[keyToFillSelect]
     console.log('keyData :', keyData)
 
