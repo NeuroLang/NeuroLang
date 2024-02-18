@@ -1,6 +1,6 @@
 import './viewer.css'
 import $ from '../jquery-bundler'
-import { API_ROUTE } from '../constants'
+import API_ROUTE from '../constants'
 import Plotly from 'plotly.js-dist-min'
 import { lab, rgb } from 'd3-color'
 import * as d3chromatic from 'd3-scale-chromatic'

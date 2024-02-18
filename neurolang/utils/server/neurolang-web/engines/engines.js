@@ -1,4 +1,4 @@
-import { API_ROUTE } from '../constants'
+import API_ROUTE from '../constants'
 import $ from '../jquery-bundler'
 import './engines.css'
 import showdown from 'showdown'

@@ -5,7 +5,7 @@ import './datalog'
 import CodeMirror from 'codemirror'
 import './query.css'
 import $ from '../jquery-bundler'
-import { API_ROUTE } from '../constants'
+import API_ROUTE from '../constants'
 import { SymbolsController } from '../symbols/symbols'
 import AutocompletionController from '../autocompletion/autocompletion'
 

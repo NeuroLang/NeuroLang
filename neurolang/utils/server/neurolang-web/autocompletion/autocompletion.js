@@ -1,5 +1,5 @@
 import { FacetsController } from '../facets/facets'
-import { API_ROUTE } from '../constants'
+import API_ROUTE from '../constants'
 import $ from '../jquery-bundler'
 
 /**
@@ -206,8 +206,6 @@ export default class AutocompletionController {
             //            console.log("var4 : true")
             //            console.log("var5 = rules[patternContent] :", rules[patternContent])
             this.fc.createFacets(facets)
-            // Display the facets based on the tokens
-            //            this.fc.displayFacets(facets)
           }
         }
       }
@@ -216,7 +214,6 @@ export default class AutocompletionController {
 
   _writeValueInTextEditor (val) {
     if (this.editor.getSelection().length) {
-      //      var selectedRange = this.editor.getSelection()
       this.editor.replaceSelection(val)
     } else {
       // get the cursor position in the CodeMirror editor
