@@ -1394,9 +1394,9 @@ export class ValuesSelect extends Select {
  * Class to manage patterns select element.
  */
 export class PatternsSelect extends Select {
-  constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc) {
-    super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc)
-  }
+//  constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc) {
+//    super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key, sc)
+//  }
 
   addChangeEventListeners (editor, facetsContainerElement, refData, inPattern = false) {
     // Create a new handler function that has access to facetsObject
