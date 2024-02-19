@@ -105,6 +105,7 @@ export default class AutocompletionController {
       // get the entire text from the CodeMirror instance
       const facets = JSON.parse(data.tokens)
       const rules = facets.rules
+      const nextTokens = facets.next_tokens
       this.fc.updatePatterns(rules)
 
       // Empty line
@@ -201,11 +202,13 @@ export default class AutocompletionController {
             console.log('*** Call this.fc.createFacets (rules, \'expression\', \'patterns\') ')
             console.log('before call :')
             console.log('facets :', facets)
+            console.log('next tokens :', nextTokens)
             //            console.log("var2 = patternContent :", patternContent)
             //            console.log("var3 : 'number'")
             //            console.log("var4 : true")
             //            console.log("var5 = rules[patternContent] :", rules[patternContent])
-            this.fc.createFacets(facets)
+//            this.fc.createFacets(facets)
+            this.fc.createFacets(nextTokens)
           }
         }
       }

@@ -88,7 +88,7 @@ export class FacetsController {
         'pattern_container')
       patternFacetNew.addLabel('pattern_label', 'Patterns', 'pattern_select')
       patternFacetNew.addElement('patterns', 'pattern_select', dataObject, key)
-      patternFacetNew.element.addChangeEventListeners(this.editor, this.facetsContainerElement, this.patterns, inPattern)
+      patternFacetNew.element.addChangeEventListeners(this.editor, this.facetsContainerElement, inPattern)
       // Display
       patternFacetNew.element.fill(key)
       patternFacetNew.element.show(this.editor, this.facetsContainerElement)
