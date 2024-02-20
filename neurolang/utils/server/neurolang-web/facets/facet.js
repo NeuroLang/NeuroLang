@@ -120,7 +120,6 @@ class Label {
  * Class to manage a container.
  */
 class Container {
-
   /**
   * Constructor of a facet.
   * @param {parentContainerElement} the parent container of this container
@@ -555,16 +554,16 @@ class RegexpInput extends Input {
     const regexp = new RegExp(regexpStr)
     const button = document.getElementById(this.buttonId)
 
-    let valueMatches = false
+    //    let valueMatches = false
 
-    if (regexpStr === 'float') {
-      valueMatches = /^-?\d+(\.\d+)?$/.test(this.element.value) && (this.element.value).includes('.')
-    } else if (regexpStr === 'float') {
-      const num = parseInt(this.element.value, 10)
-      valueMatches = !isNaN(num)
-    } else {
-      valueMatches = regexp.test('/' + this.element.value + '/')
-    }
+    //    if (regexpStr === 'float') {
+    //      valueMatches = /^-?\d+(\.\d+)?$/.test(this.element.value) && (this.element.value).includes('.')
+    //    } else if (regexpStr === 'float') {
+    //      const num = parseInt(this.element.value, 10)
+    //      valueMatches = !isNaN(num)
+    //    } else {
+    //      valueMatches = regexp.test('/' + this.element.value + '/')
+    //    }
     if (regexp.test('/' + this.element.value + '/')) {
       this._clearAlert()
       regexpVal.val = this.element.value
