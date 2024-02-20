@@ -232,12 +232,16 @@ class NeurolangQueryManager:
                 with engine.scope:
                     LOG.debug("[Thread - %s] - Solving query...", get_ident())
 
-                    res = engine.compute_datalog_program_for_autocompletion(
+                    # resulting dictionary
+                    res = {}
+
+                    next_tokens = engine.compute_datalog_program_for_autocompletion(
                         query, autocompletion_query)
 
                     # convert sets to lists, otherwise not convertible to a json
-                    for i in res:
-                        res[i]["values"] = list(res[i]["values"])
+                    for i in next_tokens:
+                        next_tokens[i]["values"] = list(
+                            next_tokens[i]["values"])
 
                     # get rules patterns from json file
                     rules = parse_rules()
@@ -246,15 +250,15 @@ class NeurolangQueryManager:
                     available_symbols = self._get_engine_symbols_for_autocompletion(
                         engine)
 
-                    # incorporate symbols in res dictionary
-                    if 'base symbols' in res:
-                        res['base symbols']["values"] = available_symbols["base_symbols"]
-                    if 'query symbols' in res:
-                        res['query symbols']["values"] = available_symbols["query_symbols"]
-                    if 'functions' in res:
-                        res['functions']["values"] = available_symbols["functions"]
-                    if 'commands' in res:
-                        res['commands']["values"] = available_symbols["commands"]
+                    # incorporate symbols in next_tokens dictionary
+                    if 'base symbols' in next_tokens:
+                        next_tokens['base symbols']["values"] = available_symbols["base_symbols"]
+                    if 'query symbols' in next_tokens:
+                        next_tokens['query symbols']["values"] = available_symbols["query_symbols"]
+                    if 'functions' in next_tokens:
+                        next_tokens['functions']["values"] = available_symbols["functions"]
+                    if 'commands' in next_tokens:
+                        next_tokens['commands']["values"] = available_symbols["commands"]
 
                     # incorporate symbols in rules dictionary
                     if available_symbols["available_identifiers"]:
@@ -279,11 +283,13 @@ class NeurolangQueryManager:
                             "params": "expandable"
                         }
 
-                    # Clean toks : remove the keys with empty list
-                    tmp_toks = {k: v for k, v in res.items() if v["values"]}
-                    res.clear()
-                    res.update(tmp_toks)
+                    # Clean tokens : remove the keys with empty list
+                    tmp_toks = {k: v for k, v in next_tokens.items()
+                                if v["values"]}
+                    next_tokens.clear()
+                    next_tokens.update(tmp_toks)
 
+                    res['next_tokens'] = next_tokens
                     res['rules'] = rules
 
                     return res
