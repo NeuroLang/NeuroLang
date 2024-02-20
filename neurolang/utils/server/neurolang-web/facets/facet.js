@@ -1,7 +1,7 @@
 import $ from '../jquery-bundler'
 
 /**
- * Class to manage facets.
+ * Class to manage a facet.
  */
 export class Facet {
   /**
@@ -35,10 +35,11 @@ export class Facet {
   }
 
   /**
-  * Adds an element in this facet
-  * @param {labelId} the id of the label is this facet
-  * @param {labelText} the text of the label
-  * @param {facetId} the id of this facet
+  * Adds an element in this facet.
+  * @param {elementType} the type of the element between single quotes. Possible values: categories, regexpvalues, patterns, number, regexp, aggregateButton and valueButton.
+  * @param {elementId} the id of the element
+  * @param {data} the data associated with the element
+  * @param {key} the key name of the data to display. Optional.
   */
   addElement (elementType, elementId, data, key = false) {
     this.element = null
@@ -60,6 +61,9 @@ export class Facet {
     }
   }
 
+  /**
+  * Removes this facet from the parent container.
+  */
   remove () {
     if (this.label) {
       this.label = this.label.remove()
@@ -74,7 +78,18 @@ export class Facet {
   }
 }
 
+/**
+ * Class to manage a label.
+ */
 class Label {
+
+  /**
+  * Constructor of a facet.
+  * @param {labelContainerElement} the parent container of this label
+  * @param {labelId} the id of this label
+  * @param {labelText} the text of this label
+  * @param {labelForElementId} the id of element to which this label is associated to
+  */
   constructor (labelContainerElement, labelId, labelText, labelForElementId) {
     // Create label for the facet
     this.element = document.createElement('label')
@@ -84,13 +99,13 @@ class Label {
     // Append the label and facet to the first 'facet' div
     labelContainerElement.appendChild(this.element)
     // Apply select styles
-    // let element = document.getElementById(this.element.id)
-    // element.style.padding = '5px 15px'
-    // element.style.alignSelf = 'center'
     this.element.style.marginLeft = '5px'
     this.element.style.marginRight = '5px'
   }
 
+  /**
+  * Removes this label from the parent container
+  */
   remove () {
     // Clear label
     this.element.textContent = ''
@@ -102,7 +117,16 @@ class Label {
   }
 }
 
+/**
+ * Class to manage a container.
+ */
 class Container {
+
+  /**
+  * Constructor of a facet.
+  * @param {parentContainerElement} the parent container of this container
+  * @param {containerId} the id of this container
+  */
   constructor (parentContainerElement, containerId) {
     // Create the facet container div
     this.element = document.createElement('div')
@@ -112,6 +136,9 @@ class Container {
     parentContainerElement.appendChild(this.element)
   }
 
+  /**
+  * Removes this container from the parent container
+  */
   remove () {
     // Clear container
     this.element.className = ''
@@ -122,7 +149,13 @@ class Container {
   }
 }
 
+/**
+ * Class to manage an element.
+ */
 class Element {
+  /**
+  * Constructor of an element.
+  */
   constructor () {
     this.queryAlert = $('#queryAlert')
     this.qMsg = this.queryAlert.find('.nl-query-message')
@@ -136,7 +169,6 @@ class Element {
   * @param {*} content the content for the message
   * @param {*} header the header for the message
   */
-  //  _setAlert (style, content, header, help) {
   _setAlert (content, header, help) {
     const qHeader = this.queryAlert.find('.nl-query-header')
     if (typeof header !== 'undefined') {
@@ -173,11 +205,6 @@ class Element {
     // Display the facets container
     // overrides the 'display: none;' from the CSS.
     facetsContainerElement.style.display = 'flex'
-
-    console.log('mess :', mess)
-    console.log('mess type :', typeof mess)
-    console.log('alert :', alert)
-    console.log('alert type :', typeof alert)
 
     // This will always run, whether there are tokens or not
     editor.on('cursorActivity', () => {
@@ -408,7 +435,7 @@ class Input extends Element {
   }
 }
 
-export class NumberInput extends Input {
+class NumberInput extends Input {
   constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key) {
     super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key)
     this.changeHandler = null
@@ -430,13 +457,9 @@ export class NumberInput extends Input {
     if (!isNaN(intValue)) {
       this._clearAlert()
       const selectedValues = new Array(intValue).fill(null)
-      console.log('selectedValues :', selectedValues)
       const buttonId = this.element.id + '_button_element'
       for (let step = 0; step < intValue; step++) {
-        console.log(' ')
-        console.log('  current step :', step)
         const unitKey = this.allData[this.key].unit.slice(1, -1)
-        console.log('  unitKey :', unitKey)
 
         // Create
         const patternFacetNew = new Facet(
@@ -461,7 +484,6 @@ export class NumberInput extends Input {
         patternFacetNew.element.addChangeEventListeners(this.editor, this.facetsContainerElement, selectedValues)
 
         // Display
-        console.log(' ')
         patternFacetNew.element.fill(unitKey)
         patternFacetNew.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
@@ -469,20 +491,12 @@ export class NumberInput extends Input {
         this.facets.push(patternFacetNew)
       }
 
-      console.log('Button :')
-      console.log('  Container :')
-      console.log('    id :', (this.element.id + '_button_container'))
       const buttonNew = new Facet(
         this.editor,
         this.facetsContainerElement,
         this.parentContainerElement,
         this.element.id + '_button_container')
 
-      console.log('  Element :')
-      console.log('    type : \'aggregateButton\'')
-      console.log('    id :', buttonId)
-      console.log('    this.allData :', this.allData)
-      console.log('    this.key :', this.key)
       buttonNew.addElement(
         'aggregateButton',
         buttonId,
@@ -500,8 +514,6 @@ export class NumberInput extends Input {
         this._setAlert('The current value is of incorrect type.', 'Type of value error', 'The entered value must be an integer !!!')
       }
     }
-
-    //    editor.focus()
   }
 
   remove () {
@@ -521,7 +533,7 @@ export class NumberInput extends Input {
   }
 }
 
-export class RegexpInput extends Input {
+class RegexpInput extends Input {
   constructor (editor, facetsContainerElement, parentContainerElement, containerDiv, elementId, data, key) {
     super(editor, facetsContainerElement, parentContainerElement, containerDiv, elementId, data, key)
     this.changeHandler = null
@@ -532,10 +544,7 @@ export class RegexpInput extends Input {
   }
 
   addChangeEventListeners (editor, regexpObj, regexpVal) {
-    //    console.log(" ")
-    //    console.log("___in InputRegExp.addChangeEventListeners()___")
     // Create a new handler function that has access to facetsObject
-    //    this.changeHandler = (event) => this._handleClick(event, editor, valuesSelect)
     this.changeHandler = (event) => this._handleChange(event, editor, regexpObj, regexpVal)
 
     // Attach the new event listener
@@ -543,18 +552,7 @@ export class RegexpInput extends Input {
   }
 
   _handleChange (event, editor, regexpObj, regexpVal) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ RegexpInput._handleChange()___')
-
-    console.log(' ')
-    //    const regexpStr = regexpObj['regexp']
     const regexpStr = regexpObj.regexp
-    console.log('regexpStr :', regexpStr)
-    console.log('regexpVal :', regexpVal)
-    console.log('this.buttonId :', this.buttonId)
-    console.log('input value : *' + this.element.value + '*')
-    //    console.log("this.element.value :", this.element.value)
     const regexp = new RegExp(regexpStr)
     const button = document.getElementById(this.buttonId)
 
@@ -818,7 +816,7 @@ export class CategoriesSelect extends Select {
         console.log('this.allData[selectedKey] :', this.allData[selectedKey])
         console.log('refData :', refData)
 //        this.valuesFacet = this._setValuesFacet(selectedKey)
-        this.facets.pushthis._setValuesFacet(selectedKey)
+        this.facets.push(this._setValuesFacet(selectedKey))
       }
     }
     editor.focus()
