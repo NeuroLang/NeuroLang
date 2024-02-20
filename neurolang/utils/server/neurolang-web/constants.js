@@ -24,7 +24,7 @@ switch (VITE_MODE) {
 }
 
 // The API routes
-const API_ROUTE = {
+export const API_ROUTE = {
   statement: BASE_API_URL + '/v1/statement',
   statementsocket: 'ws://' + BASE_API_HOST + '/v1/statementsocket',
   autocompletion: BASE_API_URL + '/v1/autocompletion',
@@ -35,7 +35,6 @@ const API_ROUTE = {
   downloads: BASE_API_URL + '/v1/download',
   figure: BASE_API_URL + '/v1/figure'
 }
-export default API_ROUTE
 
 // The custom data types which might need special rendering
 export const DATA_TYPES = {

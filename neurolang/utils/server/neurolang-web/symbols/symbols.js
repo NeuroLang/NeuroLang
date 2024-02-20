@@ -1,8 +1,7 @@
 import './symbols.css'
 import $ from '../jquery-bundler'
 import { createMiniColorBar, PapayaViewer } from '../papaya/viewer'
-import API_ROUTE from '../constants'
-import { DATA_TYPES, PUBMED_BASE_URL } from '../constants'
+import { API_ROUTE, DATA_TYPES, PUBMED_BASE_URL } from '../constants'
 
 export class SymbolsController {
   constructor () {
