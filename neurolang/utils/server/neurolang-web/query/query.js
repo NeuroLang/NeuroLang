@@ -5,8 +5,9 @@ import './datalog'
 import CodeMirror from 'codemirror'
 import './query.css'
 import $ from '../jquery-bundler'
-import { SymbolsController } from '../symbols/symbols'
 import { API_ROUTE } from '../constants'
+import { SymbolsController } from '../symbols/symbols'
+import AutocompletionController from '../autocompletion/autocompletion'
 
 /**
  * Class to manage query submission.
@@ -42,6 +43,9 @@ export class QueryController {
 
     /// Results Manager
     this.sc = new SymbolsController()
+
+    /// Autocompletion Manager
+    this.ac = new AutocompletionController(this.editor, this.sc, this.engine)
   }
 
   /**
@@ -50,6 +54,7 @@ export class QueryController {
    */
   setRouteEngine (engine, query) {
     this.engine = engine
+    this.ac.updateEngine(engine)
     this.editor.setValue(query)
     this._clearAlert()
     this.sc.hide()
