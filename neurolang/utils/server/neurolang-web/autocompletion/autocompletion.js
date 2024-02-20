@@ -1,5 +1,5 @@
 import { API_ROUTE } from '../constants'
-import { FacetsController } from '../facets/facets'
+import FacetsController from '../facets/facets'
 import $ from '../jquery-bundler'
 
 /**

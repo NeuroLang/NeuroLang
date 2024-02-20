@@ -7,7 +7,7 @@ import { Facet } from './facet'
 /**
  * Class to manage the facets.
  */
-export class FacetsController {
+export default class FacetsController {
   constructor (editor, sc) {
     this.editor = editor
     this.sc = sc
