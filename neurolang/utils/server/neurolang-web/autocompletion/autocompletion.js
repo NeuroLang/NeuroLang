@@ -110,19 +110,7 @@ export default class AutocompletionController {
 
       // Empty line
       if (!cursorLineContent.trim()) {
-        console.log(' ')
-        console.log('******************')
-        console.log('*** Empty line ***')
-        console.log('******************')
-
-        console.log(' ')
-        console.log('*** Call this.fc.createFacets (rules, \'expression\', \'patterns\') ')
-        console.log('before call :')
-        console.log('var1 = rules :', rules)
-        console.log('var2 = \'expression\'')
-        console.log('var3 = \'patterns\'')
         this.fc.createFacets(rules, 'expression', 'patterns')
-        // this.fc.displayPatternsFacet(expression.values)
 
       // Not empty line
       } else {
@@ -133,81 +121,34 @@ export default class AutocompletionController {
           const patternContent = pattern.content.slice(1, -1)
 
           // Pattern is in rule properties
-          //          if (rules.hasOwnProperty(patternContent)) {
           if (Object.hasOwn(rules, patternContent)) {
             // Pattern has a value
-            //            if (rules[patternContent].hasOwnProperty('values')) {
             if (Object.hasOwn(rules[patternContent], 'values')) {
               // Only one possible value/pattern
-              //              if (rules[patternContent]['values'].length === 1) {
               if (rules[patternContent].values.length === 1) {
                 this._writeValueInTextEditor(rules[patternContent].values[0])
+
                 // Several possible patterns lines
               } else {
-                console.log(' ')
-                console.log('***************************************')
-                console.log('*** Several possible patterns lines ***')
-                console.log('***************************************')
-                console.log(' ')
-                console.log('*** Call this.fc.createFacets (rules, \'expression\', \'patterns\') ')
-                console.log('before call :')
-                console.log('var1 = rules :', rules)
-                console.log('var2 :', patternContent)
-                console.log('var3 : \'patterns\'')
-                console.log('var4 : true')
                 this.fc.createFacets(rules, patternContent, 'patterns', true)
               }
 
             // Pattern does not have value
-            //            } else if (rules[patternContent].hasOwnProperty('params') && rules[patternContent].hasOwnProperty('unit')) {
             } else if (Object.hasOwn(rules[patternContent], 'params') && Object.hasOwn(rules[patternContent], 'unit')) {
               if (rules[patternContent].params === 'number') {
-                console.log(' ')
-                console.log('********************')
-                console.log('*** Input number ***')
-                console.log('********************')
-                console.log(' ')
-                console.log('*** Call this.fc.createFacets (rules, \'expression\', \'patterns\') ')
-                console.log('before call :')
-                console.log('var1 = rules :', rules)
-                console.log('var2 = patternContent :', patternContent)
-                console.log('var3 : \'number\'')
-                console.log('var4 : true')
-                console.log('var5 = rules[patternContent] :', rules[patternContent])
                 this.fc.createFacets(rules, patternContent, 'number', true, rules[patternContent])
               }
             }
           }
         } else {
-          console.log(' ')
-          console.log('*****************************')
-          console.log('*** Categories and values ***')
-          console.log('*****************************')
-          console.log('facets :', facets)
-          console.log('facets.rules :', facets.rules)
-          //          console.log("facets['rules'] :", facets['rules'])
-          //          delete facets.rules
           const k = Object.keys(facets)[0]
+
           // Only one accepted next token
           if ((Object.keys(facets).length === 1) && (facets[k].length === 1)) {
             this._writeValueInTextEditor(facets[k][0])
+
             // Several accepted tokens
           } else {
-            //            console.log(" ")
-            //            console.log("*** Several possible accepted tokens ***")
-            //            console.log(" ")
-            //            console.log("facets :", facets)
-
-            console.log(' ')
-            console.log('*** Call this.fc.createFacets (rules, \'expression\', \'patterns\') ')
-            console.log('before call :')
-            console.log('facets :', facets)
-            console.log('next tokens :', nextTokens)
-            //            console.log("var2 = patternContent :", patternContent)
-            //            console.log("var3 : 'number'")
-            //            console.log("var4 : true")
-            //            console.log("var5 = rules[patternContent] :", rules[patternContent])
-//            this.fc.createFacets(facets)
             this.fc.createFacets(nextTokens)
           }
         }

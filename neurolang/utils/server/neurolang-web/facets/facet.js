@@ -82,7 +82,6 @@ export class Facet {
  * Class to manage a label.
  */
 class Label {
-
   /**
   * Constructor of a facet.
   * @param {labelContainerElement} the parent container of this label
@@ -564,52 +563,26 @@ class RegexpInput extends Input {
       const num = parseInt(this.element.value, 10)
       valueMatches = !isNaN(num)
     } else {
-      console.log('entered value :', this.element.value)
       valueMatches = regexp.test('/' + this.element.value + '/')
-      console.log('test result :', valueMatches)
     }
-    //    if (int_regexp.test(this.element.value) || !(this.element.value).length) {
-    //      this._clearAlert()
     if (regexp.test('/' + this.element.value + '/')) {
-      //      console.log("match ok")
       this._clearAlert()
       regexpVal.val = this.element.value
       if ('quotes' in regexpObj) {
-      //        const regexpQuotes = regexpObj['quotes']
         const regexpQuotes = regexpObj.quotes
         regexpVal.val = regexpQuotes + this.element.value + regexpQuotes
       }
       button.disabled = false
     } else {
-      console.log('this.element.value :', this.element.value)
-      console.log('(this.element.value).length :', (this.element.value).length)
-      //      console.log('this.element.value == \'\' :', this.element.value == '')
-      console.log('this.element.value === \'\' :', this.element.value === '')
       if (this.element.value === '') {
-        console.log('clearing alert...')
         this._clearAlert()
-        console.log('clearing alert...')
       } else {
-        //      console.log("match not ok")
-        //      this.qMsg.text("Unvalid string.")
-        //      this.queryAlert.show()
         let helpMess = 'The entered value must match the following regular expression :' + regexpStr
-        console.log('regexpVal.key :', regexpVal.key)
-        //        console.log('regexpVal.key == \'float\' :', regexpVal.key == 'float')
-        console.log('regexpVal.key === \'float\' :', regexpVal.key === 'float')
-        //        console.log('regexpVal.key == \'integer\' :', regexpVal.key == 'integer')
-        console.log('regexpVal.key === \'integer\' :', regexpVal.key === 'integer')
         if (regexpVal.key === 'float') {
-          console.log('float ok')
           helpMess = 'The entered value must be a float number.'
-          console.log(helpMess)
         } else if (regexpVal.key === 'integer') {
-          console.log('integer ok')
           helpMess = 'The entered value must be an integer.'
-          console.log(helpMess)
         }
-        console.log('out of if')
-        console.log(helpMess)
         this._setAlert('The current value has an incorrect format.', 'Matching error', helpMess)
       }
       button.disabled = true
@@ -645,19 +618,12 @@ class Select extends Element {
     this.element = this._createElement(this.elementContainer, elementId)
     this.allData = data
     this.data = this.allData.key
-    console.log(' ')
-    console.log('this.data 1 :', this.allData.key)
-    console.log('this.data 2 :', this.allData[key])
     this.key = key
     this.changeHandler = null
     this.facets = []
   }
 
   _selectInSymbolsTable (value) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ Select._selectInSymbolsTable()___')
-    //    console.log("this.sc :", this.sc)
     const dropdownItems = []
     this.scdropdown.find('.menu .item').each(function () {
       dropdownItems.push($(this).data('value'))
@@ -671,20 +637,13 @@ class Select extends Element {
   _createElement (elementContainer, elementId) {
     // Create the facet
     let element = document.createElement('select')
-    //    console.log("Select element :", element)
     element.id = elementId
-    //    console.log("Select id :", element.id)
     element.size = '5'
-    //    console.log("Select size :", element.size)
     elementContainer.appendChild(element)
-
     // Apply select styles
     element = document.getElementById(element.id)
-    //    element.style.padding = '5px 15px'
-    //    element.style.alignSelf = 'center'
     element.style.marginLeft = '5px'
     element.style.marginRight = '5px'
-
     return element
   }
 
@@ -735,10 +694,6 @@ export class CategoriesSelect extends Select {
 
   //  addChangeEventListeners (editor, valuesSelect) {
   addChangeEventListeners (editor, refData) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ CategoriesSelect.addChangeEventListeners()___')
-    console.log('refData :', refData)
     this.changeHandler = (event) => this._handleClick(event, editor, refData)
 
     // Attach the new event listener
@@ -746,11 +701,6 @@ export class CategoriesSelect extends Select {
   }
 
   _setValuesFacet (key = false) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ CategoriesSelect._setValuesFacet()___')
-    console.log('this.allData :', this.allData)
-    console.log('key :', key)
     const newFacet = new Facet(
       this.editor,
       this.facetsContainerElement,
@@ -769,53 +719,15 @@ export class CategoriesSelect extends Select {
   * @param {Event} event the event object associated with the click in the left facet
   */
   _handleClick (event, editor, refData) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ CategoriesSelect._handleClick()___')
-    console.log('this.allData :', this.allData)
-    console.log('refData :', refData)
-
     // Retrieve the selected option
     const selectedKey = event.target.value
-    console.log('selectedKey :', selectedKey)
-
-    // Clear previous options
-    //    while (valuesSelect.element.firstChild) {
-    //      valuesSelect.element.removeChild(valuesSelect.element.firstChild)
-    //    }
-    //    while (this.rightFacet.element.firstChild) {
-    //      this.rightFacet.element.removeChild(this.rightFacet.element.firstChild)
-    //    }
-
-//    if (this.valuesFacet) {
-//      this.valuesFacet = this.valuesFacet.remove()
-//    }
     this._removeFacets()
 
     if (selectedKey) {
       if (selectedKey === 'All') {
-        console.log('selectedKey === \'All\'')
-//        const values = []
-        const dataSelect = this.allData
-        console.log(" ")
-        console.log("dataSelect :", dataSelect)
-        for (const key of Object.keys(dataSelect)) {
-          console.log("  key :", key)
-//          for (const value of dataSelect[key].values) {
-//            values.push(value)
-//          }
-        }
-        console.log('*** Before call this._setValuesFacet()')
-//        console.log('values :', values)
-        console.log('refData :', refData)
-//        this.valuesFacet = this._setValuesFacet()
+        //        const dataSelect = this.allData
         this.facets.push(this._setValuesFacet())
       } else if (this.allData[selectedKey]) {
-        console.log('this.allData[selectedKey] true')
-        console.log('*** Before call this._setValuesFacet()')
-        console.log('this.allData[selectedKey] :', this.allData[selectedKey])
-        console.log('refData :', refData)
-//        this.valuesFacet = this._setValuesFacet(selectedKey)
         this.facets.push(this._setValuesFacet(selectedKey))
       }
     }
@@ -827,11 +739,6 @@ export class CategoriesSelect extends Select {
   * @param {Object} facetsObject the categories to be displayed in the facets and their values
   */
   fill (facetsObject) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ CategoriesSelect.fill()___')
-    console.log('facetsObject :', facetsObject)
-
     // Add 'All' option to the left facet
     const deselectOption = document.createElement('option')
     deselectOption.textContent = 'All'
@@ -846,9 +753,6 @@ export class CategoriesSelect extends Select {
   }
 
   remove () {
-//    if (this.valuesFacet) {
-//      this.valuesFacet.remove()
-//    }
     this._removeFacets()
     this._removeChangeEventListener()
     this._removeElement()
@@ -887,19 +791,12 @@ export class RegexpSelect extends Select {
   * @param {Event} event the event object associated with the click in the right facet
   */
   _handleClick (event, editor, facetsContainerElement, tab) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ RegexpSelect._handleClick()___')
-    console.log('tab avant :', tab)
-    console.log('this.allData :', this.allData)
-    console.log('this.key :', this.key)
     const selectedValue = this.element.value
 
     // put the value as selected in the symbols table as well
     this._selectInSymbolsTable(selectedValue)
 
     tab[this.position] = selectedValue
-    console.log('tab apres :', tab)
 
     const button = document.getElementById(this.buttonId)
     if (tab.every(value => Boolean(value))) {
@@ -915,19 +812,11 @@ export class RegexpSelect extends Select {
   * @param {Object} ruleObject the categories to be displayed in the facets and their values
   */
   fill (keyToFillSelect) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ PatternsSelect.fill()___')
-    console.log('keyToFillSelect :', keyToFillSelect)
     const keyData = this.allData[keyToFillSelect]
-    console.log('keyData :', keyData)
 
     // Add ruleObject keys to left facet
     for (const item of keyData.values) {
-      console.log(' ')
-      console.log('item :', item)
       const curKey = item.slice(1, -1)
-      console.log('curKey :', curKey)
       if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
         const optgroup = document.createElement('optgroup')
         optgroup.label = curKey
@@ -946,9 +835,6 @@ export class RegexpSelect extends Select {
   }
 
   remove () {
-//    if (this.valuesFacet) {
-//      this.valuesFacet.remove()
-//    }
     this._removeFacets()
     this._removeChangeEventListener()
     this._removeElement()
@@ -973,16 +859,10 @@ export class PatternsSelect extends Select {
   * @param {Event} event the event object associated with the click in the right facet
   */
   _handleClick (editor, facetsContainerElement, inPattern) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ PatternsSelect._handleClick()___')
-    console.log('this.allData :', this.allData)
-
     this._removeFacets()
 
     // get selected value
     const selectedValue = this.element.value
-    //    console.log("selectedValue :", selectedValue)
 
     // put the value as selected in the symbols table as well
     this._selectInSymbolsTable(selectedValue)
@@ -999,7 +879,6 @@ export class PatternsSelect extends Select {
       // check if the selected value is a key in data and has a key "regexp"
       if (Object.hasOwn(this.allData, selectedValueToKey) && Object.hasOwn(this.allData[selectedValueToKey], 'regexp')) {
         const regexpObj = this.allData[selectedValueToKey]
-        console.log('regexpObj :', regexpObj)
         const regexpVal = { key: selectedValueToKey, val: '' }
         const newInput = new Facet(
           this.editor,
@@ -1021,15 +900,9 @@ export class PatternsSelect extends Select {
         buttonNew.element.addClickEventListeners(this.editor, this.facetsContainerElement, regexpVal, inPattern)
         buttonNew.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
-        console.log('button id :', buttonNew.element.element.id)
         newInput.element.updateButtonId(buttonNew.element.element.id)
 
         this.facets.push(newInput, buttonNew)
-
-        for (const item of this.facets) {
-          console.log('elt : ', item.element)
-          console.log('elt type : ', item.element.element.nodeName)
-        }
 
         editor.focus()
       } else {
@@ -1052,33 +925,21 @@ export class PatternsSelect extends Select {
   * @param {Object} ruleObject the categories to be displayed in the facets and their values
   */
   fill (keyToFillSelect = false) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ PatternsSelect.fill()___')
-    console.log('Param -> keyToFillSelect :', keyToFillSelect)
-    console.log('this.allData :', this.allData)
-
-    let keysToFillSelect = []
+    const keysToFillSelect = []
     if (keyToFillSelect) {
       keysToFillSelect.push(keyToFillSelect)
     } else {
-      console.log("not keyToFillSelect")
-      for (let k in this.allData) {
-        console.log("  .", k)
+      for (const k in this.allData) {
         keysToFillSelect.push(k)
       }
     }
 
-    for (let selectKey of keysToFillSelect) {
+    for (const selectKey of keysToFillSelect) {
       const keyData = this.allData[selectKey]
-      console.log('keyData = this.allData[selectKey] :', keyData)
 
       // Add ruleObject keys to left facet
       for (const item of keyData.values) {
-        console.log(' ')
-        console.log('item :', item)
         const curKey = item.slice(1, -1)
-        console.log('curKey :', curKey)
         if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
           const optgroup = document.createElement('optgroup')
           optgroup.label = curKey
