@@ -48,7 +48,6 @@ export default class AutocompletionController {
           resMatch.content = match
           resMatch.start = startIndex
           resMatch.end = endIndex
-          //          return { content: match, start: startIndex, end: endIndex }
           return resMatch
         }
 
@@ -149,7 +148,7 @@ export default class AutocompletionController {
 
             // Several accepted tokens
           } else {
-            this.fc.createFacets(nextTokens)
+            this.fc.createFacets(facets, 'next_tokens')
           }
         }
       }

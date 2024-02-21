@@ -1,8 +1,5 @@
 import './facets.css'
-// import { CategoriesSelect } from './facet'
 import { Facet } from './facet'
-// import { PatternsSelect } from './facet'
-// import { ValuesSelect } from './facet'
 
 /**
  * Class to manage the facets.
@@ -48,14 +45,6 @@ export default class FacetsController {
   }
 
   createFacets (dataObject, key = false, type = 'categories', inPattern = false, value = false) {
-    console.log(' ')
-    console.log('________________________________')
-    console.log('___ FacetsController.createFacets()___')
-    console.log('dataObject :', dataObject)
-    console.log('this.patterns :', this.patterns)
-    console.log('dataObject.rules :', dataObject.rules)
-    //    console.log('dataObject['rules'] :', dataObject['rules'])
-
     // Categories facet
     if (type === 'categories') {
       // Create
@@ -66,16 +55,11 @@ export default class FacetsController {
         'leftFacetContainer'
       )
       leftFacetNew.addLabel('leftLabel', 'Categories', 'leftFacet')
-      leftFacetNew.addElement('categories', 'leftFacet', dataObject)
+      leftFacetNew.addElement('categories', 'leftFacet', dataObject[key])
       leftFacetNew.element.addChangeEventListeners(this.editor, dataObject.rules)
       // Display
       delete dataObject.rules
-      console.log('After delete :')
-      console.log('dataObject :', dataObject)
-      console.log('this.patterns :', this.patterns)
-      console.log('dataObject.rules :', dataObject.rules)
-      //      console.log('dataObject[\'rules\'] :', dataObject['rules'])
-      leftFacetNew.element.fill(dataObject, true)
+      leftFacetNew.element.fill()
       leftFacetNew.element.show(this.editor, this.facetsContainerElement)
       // Add to facets
       this.facets.push(leftFacetNew)
@@ -88,7 +72,7 @@ export default class FacetsController {
         'pattern_container')
       patternFacetNew.addLabel('pattern_label', 'Patterns', 'pattern_select')
       patternFacetNew.addElement('patterns', 'pattern_select', dataObject, key)
-      patternFacetNew.element.addChangeEventListeners(this.editor, this.facetsContainerElement, inPattern)
+      patternFacetNew.element.addChangeEventListeners(this.editor, this.facetsContainerElement, false, inPattern)
       // Display
       patternFacetNew.element.fill(key)
       patternFacetNew.element.show(this.editor, this.facetsContainerElement)
