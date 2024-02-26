@@ -3,7 +3,7 @@ import $ from '../jquery-bundler'
 /**
  * Class to manage a facet.
  */
-export class Facet {
+export default class Facet {
   /**
   * Constructor of a facet.
   * @param {editor} the editor linked to the textarea
@@ -920,10 +920,10 @@ export class PatternsSelect extends Select {
   * @param {Object} ruleObject the categories to be displayed in the facets and their values
   */
   fill (keyToFillSelect = false, refData = false) {
-    console.log(" ")
-    console.log("___PatternsSelect.fill()___")
-    console.log("Param 1 - keyToFillSelect :", keyToFillSelect)
-    console.log("this.allData : ", this.allData)
+    //    console.log(" ")
+    //    console.log("___PatternsSelect.fill()___")
+    //    console.log("Param 1 - keyToFillSelect :", keyToFillSelect)
+    //    console.log("this.allData : ", this.allData)
     const keysToFillSelect = []
     if (keyToFillSelect) {
       keysToFillSelect.push(keyToFillSelect)
@@ -938,12 +938,12 @@ export class PatternsSelect extends Select {
       patternsData = refData
     }
 
-    console.log("keysToFillSelect :", keysToFillSelect)
+    //    console.log("keysToFillSelect :", keysToFillSelect)
 
     for (const selectKey of keysToFillSelect) {
-      console.log("  selectKey :", selectKey)
+      //      console.log("  selectKey :", selectKey)
       const keyData = this.allData[selectKey]
-      console.log("  keyData :", keyData)
+      //      console.log("  keyData :", keyData)
 
       // Add ruleObject keys to left facet
       for (const item of keyData.values) {
