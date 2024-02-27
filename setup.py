@@ -133,6 +133,9 @@ class InstallCommand(install):
         install.finalize_options(self)
 
     def run(self):
+        import nltk
+        nltk.download("wordnet")
+        nltk.download("omw-1.4")
         if self.dask:
             update_config_file()
         if self.npm_build:
