@@ -191,118 +191,108 @@ def test_rules():
     x = Symbol('x')
     y = Symbol('y')
     z = Symbol('z')
-    # res = parser(
-    #     """
-    #     define as A every Element @x
-    #         whose b is an Element @y and
-    #         such that 3 c an Element @z.
-    #     """,
-    #     type_predicate_symbols={"element"}
-    # )
     res = parser(
         """
-        define as A every Element @x.
+        define as A every Element @x
+            whose b is an Element @y and
+            such that 3 c an Element @z.
         """,
         type_predicate_symbols={"element"}
     )
-    print("")
-    print("res :")
-    print(res)
     expected = Union((
         Implication(A(x), Conjunction((B(x, y), C(Constant(3), z)))),
     ))
     assert weak_logic_eq(res, expected)
-    # assert res == 0
+    
+    res = parser(
+        """
+            define as A every Element @x that is not B.
+        """,
+        type_predicate_symbols={"element"}
+    )
+    expected = Union((
+        Implication(A(x), Negation(B(x))),
+    ))
+    assert weak_logic_eq(res, expected)
 
-#     res = parser(
-#         """
-#             define as A every Element @x that is not B.
-#         """,
-#         type_predicate_symbols={"element"}
-#     )
-#     expected = Union((
-#         Implication(A(x), Negation(B(x))),
-#     ))
-#     assert weak_logic_eq(res, expected)
-#
-#     res = parser(
-#         """
-#         define as A every Element @x
-#         whose b is an Element @y and
-#         such that 3 c an Element @z that is 4 .
-#         """,
-#         type_predicate_symbols={"element"}
-#     )
-#     expected = Union((
-#         Implication(
-#             A(x),
-#             Conjunction((
-#                 B(x, y), C(Constant(3), z), Constant(eq)(z, Constant(4))
-#             ))
-#         ),
-#     ))
-#     assert weak_logic_eq(res, expected)
-#
-#     res = parser(
-#         """
-#         define as A the Element @x
-#             such that f(@x + 5 * 2) is whose b is an Element @y and
-#             such that 3 c an Element @z that is 4 .
-#         """,
-#         type_predicate_symbols={"element"}
-#     )
-#     fresh = Symbol.fresh()
-#     expected = Union((
-#         (Implication(
-#             A(x),
-#             Conjunction((
-#                 B(fresh, y),
-#                 C(Constant(3), z), Constant(eq)(z, Constant(4)),
-#                 EQ(
-#                     fresh,
-#                     FunctionApplication(
-#                         f,
-#                         (
-#                             Constant(add)(
-#                                 x,
-#                                 Constant(mul)(Constant(5), Constant(2))
-#                             ),
-#                         )
-#                     )
-#                 )
-#             )),
-#         ),)
-#     ))
-#
-#     assert weak_logic_eq(res, expected)
-#
-#     res = parser(
-#         """
-#         define as A the Element @x
-#             such that the color of @x is there.
-#         """,
-#         type_predicate_symbols={"element"}
-#     )
-#     color = Symbol("color")
-#     expected = Union((
-#         (Implication(A(x), color(x, fresh))),
-#     ))
-#     assert weak_logic_eq(res, expected)
-#
-#     res = parser(
-#         """
-#         define as A the Element @x
-#             such that there is a color of @x.
-#         """,
-#         type_predicate_symbols={"element"}
-#     )
-#     color = Symbol("color")
-#     expected = Union((
-#         (Implication(A(x), color(x, fresh))),
-#     ))
-#     assert weak_logic_eq(res, expected)
-#
-#
+    res = parser(
+        """
+        define as A every Element @x
+        whose b is an Element @y and
+        such that 3 c an Element @z that is 4 .
+        """,
+        type_predicate_symbols={"element"}
+    )
+    expected = Union((
+        Implication(
+            A(x),
+            Conjunction((
+                B(x, y), C(Constant(3), z), Constant(eq)(z, Constant(4))
+            ))
+        ),
+    ))
+    assert weak_logic_eq(res, expected)
+
+    res = parser(
+        """
+        define as A the Element @x
+            such that f(@x + 5 * 2) is whose b is an Element @y and
+            such that 3 c an Element @z that is 4 .
+        """,
+        type_predicate_symbols={"element"}
+    )
+    fresh = Symbol.fresh()
+    expected = Union((
+        (Implication(
+            A(x),
+            Conjunction((
+                B(fresh, y),
+                C(Constant(3), z), Constant(eq)(z, Constant(4)),
+                EQ(
+                    fresh,
+                    FunctionApplication(
+                        f,
+                        (
+                            Constant(add)(
+                                x,
+                                Constant(mul)(Constant(5), Constant(2))
+                            ),
+                        )
+                    )
+                )
+            )),
+        ),)
+    ))
+
+    assert weak_logic_eq(res, expected)
+
+    res = parser(
+        """
+        define as A the Element @x
+            such that the color of @x is there.
+        """,
+        type_predicate_symbols={"element"}
+    )
+    color = Symbol("color")
+    expected = Union((
+        (Implication(A(x), color(x, fresh))),
+    ))
+    assert weak_logic_eq(res, expected)
+
+    res = parser(
+        """
+        define as A the Element @x
+            such that there is a color of @x.
+        """,
+        type_predicate_symbols={"element"}
+    )
+    color = Symbol("color")
+    expected = Union((
+        (Implication(A(x), color(x, fresh))),
+    ))
+    assert weak_logic_eq(res, expected)
+
+
 # def test_vpdo1_with_cp():
 #     res = parser(
 #         """

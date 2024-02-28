@@ -481,7 +481,7 @@ class Apply_(Definition):
 
     def __repr__(self):
         return (
-            "\N{GREEK SMALL LETTER LAMBDA}.z*"
+            "\N{GREEK SMALL LETTER LAMDA}.z*"
             f"APPLY[{self.k}; {self.d}]"
         )
 

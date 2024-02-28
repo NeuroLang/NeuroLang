@@ -237,10 +237,14 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
             )
 
     @staticmethod
-    def new_set(iterable=None, row_type=None, verify_row_type=False):
+    def new_set(
+        iterable=None, row_type=None,
+        verify_row_type=False, has_duplicates=True
+    ):
         return WrappedRelationalAlgebraSet(
             iterable=iterable, row_type=row_type,
-            verify_row_type=verify_row_type
+            verify_row_type=verify_row_type,
+            has_duplicates=has_duplicates
         )
 
     def intensional_database(self):
@@ -295,13 +299,16 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
         return self.symbol_table.symbols_by_type(Callable)
 
     def add_extensional_predicate_from_tuples(
-        self, symbol, iterable, type_=Unknown
+        self, symbol, iterable, type_=Unknown, has_duplicates=True
     ):
         if type_ is Unknown:
-            new_set = self.new_set(iterable)
+            new_set = self.new_set(iterable, has_duplicates=has_duplicates)
             type_ = new_set.row_type
         else:
-            new_set = self.new_set(iterable=iterable, row_type=type_)
+            new_set = self.new_set(
+                iterable=iterable, row_type=type_,
+                has_duplicates=has_duplicates
+            )
 
         constant = Constant[AbstractSet[type_]](
             new_set,

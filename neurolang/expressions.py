@@ -490,6 +490,12 @@ class Symbol(NonConstant):
         new_symbol.is_fresh = True
         return new_symbol
 
+    def cast(self, type_):
+        new_symbol = Expression.cast(self, type_)
+        if hasattr(new_symbol, "is_fresh"):
+            new_symbol.is_fresh = self.is_fresh
+        return new_symbol
+
 
 class Constant(Expression):
     def __init__(

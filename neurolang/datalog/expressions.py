@@ -20,6 +20,7 @@ __all__ = [
 class Fact(Implication):
     def __init__(self, consequent):
         super().__init__(consequent, Constant(True))
+        print("** Implication Fact")
 
     @property
     def fact(self):

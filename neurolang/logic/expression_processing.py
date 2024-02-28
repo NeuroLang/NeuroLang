@@ -235,9 +235,10 @@ class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
         return self.walk(expression.body) - expression.head._symbols
 
     @add_match(Implication)
-    def extract_variables_s(self, expression):
-        return self.walk(expression.antecedent) - self.walk(
-            expression.consequent
+    def extract_variables_implication(self, expression):
+        return (
+            self.walk(expression.antecedent) |
+            self.walk(expression.consequent)
         )
 
     @add_match(Symbol)
