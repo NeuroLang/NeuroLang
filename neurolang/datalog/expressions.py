@@ -5,6 +5,7 @@ Datalog program.
 
 from typing import Any
 
+from ..config import config
 from ..expression_walker import add_match
 from ..expressions import Constant, ExpressionBlock, FunctionApplication
 from ..logic import (Conjunction, Implication, Negation, UnaryLogicOperator,
@@ -44,7 +45,10 @@ class NullConstant(Constant):
 
 class AggregationApplication(FunctionApplication):
     def __repr__(self):
-        r = u'\u03BB{{<{}>: {}}}'.format(self.functor, self.__type_repr__)
+        if config.expression_type_printing():
+            r = u'\u03BB{{<{}>: {}}}'.format(self.functor, self.__type_repr__)
+        else:
+            r = u'\u03BB{{<{}>}}'.format(self.functor)
         if self.args is ...:
             r += '(...)'
         elif self.args is not None:

@@ -88,14 +88,8 @@ STEMMER = EnglishStemmer()
 
 
 def lemmatize(word, pos):
-    # print("")
-    # print("  ___in lemmatize()___")
-    # print("  word :", word)
-    # print("  pos :", pos)
     try:
-        # print("  in try")
         lemmatized = LEMMATIZER.lemmatize(word, pos)
-        # print("  lemmatized 1 :", lemmatized)
         if (
             lemmatized == word and
             word not in wordnet.all_lemma_names()
@@ -104,9 +98,7 @@ def lemmatize(word, pos):
             if lemmatized == word and " " not in word:
                 warn(f"Word {word} couldn't be lemmatized")
     except Exception as e:
-        # print("  not in try")
         lemmatized = lemmatize(word, pos)
-        # print("  lemmatized 2 :", lemmatized)
     return lemmatized
 
 
@@ -229,7 +221,7 @@ condition : ops _CONDITIONED prep ops -> condition_oo
           | ops _CONDITIONED prep s   -> condition_os
           | s _CONDITIONED s          -> condition_ss
 
-probably : PROBABLY
+// probably : PROBABLY
 
 PROBABLY : _PROBABLY
 
@@ -642,17 +634,16 @@ class SquallTransformer(lark.Transformer):
     def kwd(self, ast):
         return Label(ast[0], ast[1])
 
-    def probably(self, ast):
-        print("")
-        print("___in probably()___")
-        print("ast :", ast)
+    # def probably(self, ast):
+    #     print("")
+    #     print("___in probably()___")
 
     def rule1_body(self, ast):
         print("")
         print("___in rule1_body()___")
-        print("ast :", ast)
+        # print("ast :", ast)
         print("len :", len(ast))
-        print("ast[0] :", ast[0])
+        # print("ast[0] :", ast[0])
         probably, verb1, op = ast
         print("probably :", probably)
         print("verb1 :", verb1)
@@ -734,7 +725,7 @@ class SquallTransformer(lark.Transformer):
     def rule_body1(self, ast):
         print("")
         print("___in rule_body1()___")
-        print("ast :", ast)
+        # print("ast :", ast)
         # print("len :", len(ast))
         # print("ast[0] :", ast[0])
         # print("ast[1] :", ast[1])
@@ -1063,7 +1054,7 @@ class SquallTransformer(lark.Transformer):
     def det_every(self, ast):
         print("")
         print("___in det_every()___")
-        print("ast :", ast)
+        # print("ast :", ast)
         d1 = Symbol[P1].fresh()
         print("d1 :", d1)
         d2 = Symbol[P1].fresh()
@@ -1122,7 +1113,9 @@ class SquallTransformer(lark.Transformer):
         print("ast[0].name :", ast[0].name)
         print("ast[0].name.lower() :", ast[0].name.lower())
         name = lemmatize(ast[0].name.lower(), 'v')
+        print("name :", name)
         res = ast[0].apply(name)
+        print("res :", res)
         return res
 
     def verb2(self, ast):
@@ -1205,10 +1198,10 @@ class SquallTransformer(lark.Transformer):
         res = Lambda((y,), Lambda((z,), npc(z)))
         return res
 
-    def rel(self, ast):
-        print("")
-        print("___in rel()___")
-        print("ast :", ast)
+    # def rel(self, ast):
+    #     print("")
+    #     print("___in rel()___")
+    #     print("ast :", ast)
 
     def rel_vp(self, ast):
         x = Symbol[E].fresh()
