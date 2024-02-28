@@ -133,8 +133,11 @@ class LogicWeakEquivalence(ExpressionWalker):
 
 
 def weak_logic_eq(left, right):
+    print("___in pytest weak_logic_eq___")
     left = LogicSimplifier().walk(left)
+    print("left :", left)
     right = LogicSimplifier().walk(right)
+    print("right :", right)
     return LogicWeakEquivalence().walk(EQ(left, right))
 
 
@@ -208,8 +211,8 @@ def test_rules():
     expected = Union((
         Implication(A(x), Conjunction((B(x, y), C(Constant(3), z)))),
     ))
-    # assert weak_logic_eq(res, expected)
-    assert res == 0
+    assert weak_logic_eq(res, expected)
+    # assert res == 0
 
 #     res = parser(
 #         """
@@ -480,7 +483,7 @@ def test_rules():
 #             Conjunction((
 #                 Symbol("voxel")(x),
 #                 Symbol("activation")(y, x),
-#                 Symbol("region activ")(z, x)
+#                 Symbol("region active")(z, x)
 #             ))
 #         ),
 #         Implication(Symbol("volume")(c), f(z, y, c))

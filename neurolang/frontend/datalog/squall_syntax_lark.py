@@ -88,14 +88,14 @@ STEMMER = EnglishStemmer()
 
 
 def lemmatize(word, pos):
-    print("")
-    print("  ___in lemmatize()___")
-    print("  word :", word)
-    print("  pos :", pos)
+    # print("")
+    # print("  ___in lemmatize()___")
+    # print("  word :", word)
+    # print("  pos :", pos)
     try:
-        print("  in try")
+        # print("  in try")
         lemmatized = LEMMATIZER.lemmatize(word, pos)
-        print("  lemmatized 1 :", lemmatized)
+        # print("  lemmatized 1 :", lemmatized)
         if (
             lemmatized == word and
             word not in wordnet.all_lemma_names()
@@ -104,9 +104,9 @@ def lemmatize(word, pos):
             if lemmatized == word and " " not in word:
                 warn(f"Word {word} couldn't be lemmatized")
     except Exception as e:
-        print("  not in try")
+        # print("  not in try")
         lemmatized = lemmatize(word, pos)
-        print("  lemmatized 2 :", lemmatized)
+        # print("  lemmatized 2 :", lemmatized)
     return lemmatized
 
 
@@ -211,8 +211,8 @@ query : _OBTAIN ops
 _rule_start : _DEFINE _AS
 
 ?rule1 : _rule_start rule1_body
-rule1_body : [ _PROBABLY ] verb1 prep? rule_body1
-           |  _PROBABLY verb1 prep? rule_body1_cond
+rule1_body : [ PROBABLY ] verb1 prep? rule_body1
+           |  PROBABLY verb1 prep? rule_body1_cond
            |  verb1 _WITH _PROBABILITY op rule_body1 -> rule_op_fact
            |  _CHOICE verb1 _WITH _PROBABILITY op rule_body1 -> rule_op_choice
 
@@ -221,8 +221,8 @@ rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
                 | s _CONDITIONED _TO det ng1 -> rule_body1_cond_posterior
 
 ?rulen : _rule_start rulen_body
-?rulen_body : probably? verbn [ prep ] rule_body1 ";" ops -> rule_opn
-            | probably verbn condition -> rule_opnc_per
+?rulen_body : PROBABLY? verbn [ prep ] rule_body1 ";" ops -> rule_opn
+            | PROBABLY verbn condition -> rule_opnc_per
 
 condition : ops _CONDITIONED prep ops -> condition_oo
           | s _CONDITIONED prep ops   -> condition_so
@@ -481,7 +481,7 @@ class Apply_(Definition):
 
     def __repr__(self):
         return (
-            "\N{GREEK SMALL LETTER LAMDA}.z*"
+            "\N{GREEK SMALL LETTER LAMBDA}.z*"
             f"APPLY[{self.k}; {self.d}]"
         )
 
@@ -651,7 +651,13 @@ class SquallTransformer(lark.Transformer):
         print("")
         print("___in rule1_body()___")
         print("ast :", ast)
+        print("len :", len(ast))
+        print("ast[0] :", ast[0])
         probably, verb1, op = ast
+        print("probably :", probably)
+        print("verb1 :", verb1)
+        print("op :", op)
+        print("")
         x = Symbol[E].fresh()
         if probably:
             prob = PROB.cast(Callable[[E], float])
@@ -660,7 +666,10 @@ class SquallTransformer(lark.Transformer):
             verb = verb1(x)
 
         op = TheToUniversal[op.type](op)
-        return op(Lambda((x,), verb))
+        res = op(Lambda((x,), verb))
+        print("res :", res)
+        # return op(Lambda((x,), verb))
+        return res
 
     def rule_op_fact(self, ast):
         verb1, probability, op = ast
@@ -723,8 +732,21 @@ class SquallTransformer(lark.Transformer):
         return TheToUniversal[res.type](res)
 
     def rule_body1(self, ast):
+        print("")
+        print("___in rule_body1()___")
+        print("ast :", ast)
+        # print("len :", len(ast))
+        # print("ast[0] :", ast[0])
+        # print("ast[1] :", ast[1])
+        # print("ast[-1] :", ast[-1])
+        # print("ast[-1:] :", ast[-1:])
+        # print("ast[-2:] :", ast[-2:])
         res = self.np_quantified(ast[-2:])
-        return TheToUniversal[res.type](res)
+        # print("self.np_quantified(ast[-2:]) :", self.np_quantified(ast[-2:]))
+        print("res = TheToUniversal[res.type](res) :", TheToUniversal[res.type](res))
+        res_res = TheToUniversal[res.type](res)
+        # return TheToUniversal[res.type](res)
+        return res_res
 
     def rule_body1_cond_prior(self, ast):
         det, ng1, s = ast[-3:]
@@ -910,6 +932,8 @@ class SquallTransformer(lark.Transformer):
         return res
 
     def ng1_noun(self, ast):
+        print("")
+        print("___in ng1_noun___")
         x = Symbol[E].fresh()
         noun1, app, rel = ast
         prep = None
@@ -921,10 +945,16 @@ class SquallTransformer(lark.Transformer):
             noun1 = Lambda((y,), prep(Lambda((z,), noun1(y, z))))
 
         args = (noun1, app, rel)
-        return Lambda[P1]((x,), Conjunction[S](tuple(
+        # return Lambda[P1]((x,), Conjunction[S](tuple(
+        #     FunctionApplication(a, (x,))
+        #     for a in args if a is not None
+        # )))
+        res = Lambda[P1]((x,), Conjunction[S](tuple(
             FunctionApplication(a, (x,))
             for a in args if a is not None
         )))
+        print("res :", res)
+        return res
 
     def ng1_agg_npc(self, ast):
         noun1, app, ops, npc, dims = ast
@@ -1035,8 +1065,14 @@ class SquallTransformer(lark.Transformer):
         print("___in det_every()___")
         print("ast :", ast)
         d1 = Symbol[P1].fresh()
+        print("d1 :", d1)
         d2 = Symbol[P1].fresh()
+        print("d2 :", d2)
         x = Symbol[E].fresh()
+        print("x :", x)
+        print("d2(x) :", d2(x))
+        print("d1(x) :", d1(x))
+        # print("Implication[S](d1(x)) :", Implication[S](d1(x)))
         res = Lambda[S2](
             (d2,),
             Lambda[S1](
@@ -1069,6 +1105,8 @@ class SquallTransformer(lark.Transformer):
         return ast[0].apply(name)
 
     def noun1(self, ast):
+        print("")
+        print("___in noun1___")
         name = lemmatize(ast[0].name.lower(), 'n')
         return ast[0].apply(name)
 
@@ -1116,6 +1154,8 @@ class SquallTransformer(lark.Transformer):
         return Lambda[P1]((x,), Label(x, ast))
 
     def app_label(self, ast):
+        print("")
+        print("___in app_label___")
         x = Symbol[E].fresh()
         return Lambda[P1]((x,), Label(x, ast[0]))
 
@@ -1286,6 +1326,8 @@ class SquallTransformer(lark.Transformer):
         return comp_dict[comp]
 
     def label(self, ast):
+        print("")
+        print("___in label___")
         ast = tuple(ast)
         if len(ast) == 1:
             ast = ast[0]
@@ -1530,26 +1572,26 @@ def parser(
         COMPILED_GRAMMAR = lark.Lark(GRAMMAR, parser=kwargs["parser"])
     if not complete:
         try:
-            res = parse_to_neurolang_ir(
+            return parse_to_neurolang_ir(
                 code,
                 type_predicate_symbols=type_predicate_symbols, locals=locals,
                 globals=globals, return_tree=return_tree, process=process
             )
-            print("")
-            print("res not complete :")
+            # print("")
+            # print("res not complete :")
             # print(res)
-            return 0
+            # return 0
         except lark.exceptions.VisitError as ex:
             raise ex.orig_exc
         except Exception as ex:
             raise ex from None
     else:
-        # completions = extract_completions(code)
-        # res = list(sorted(completions))
-        print("")
-        print("res complete :")
+        completions = extract_completions(code)
+        return list(sorted(completions))
+        # print("")
+        # print("res complete :")
         # print (res)
-        return 0
+        # return 0
 
 def _callback(collection):
     def callback_(token):
@@ -1673,20 +1715,12 @@ def parse_to_neurolang_ir(
                 locals=locals,
                 globals=globals
             ).transform(tree)
-            # intermediate_representation = SquallTransformer(
-            #     type_predicate_symbols=type_predicate_symbols,
-            #     locals=locals,
-            #     globals=globals
-            # )
-            print("")
-            print("intermediate representation :", intermediate_representation)
-            print("intermediate representation :", dir(intermediate_representation))
-    #     else:
-    #         intermediate_representation = None
-    #
-    #     if return_tree:
-    #         return intermediate_representation, tree
-    #     else:
-    #         return intermediate_representation
+        else:
+            intermediate_representation = None
+
+        if return_tree:
+            return intermediate_representation, tree
+        else:
+            return intermediate_representation
     except NeuroLangException as ex:
         raise ex from None
