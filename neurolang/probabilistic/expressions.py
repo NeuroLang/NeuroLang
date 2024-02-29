@@ -18,7 +18,7 @@ class Condition(ProbabilisticBinaryLogicOperator):
         return f"[{self.conditioned} | {self.conditioning}]"
 
 
-class ProbabilisticPredicate(Definition):
+class ProbabilisticPredicate(FunctionApplication):
     def __init__(self, probability, body):
         self.probability = probability
         self.body = body

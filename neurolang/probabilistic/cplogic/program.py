@@ -333,7 +333,13 @@ class CPLogicMixin(PatternWalker):
         pred_symb = implication.consequent.functor.cast(
             UnionOfConjunctiveQueries
         )
-        if pred_symb in self.symbol_table:
+        stored = self.symbol_table.get(pred_symb)
+        if not (
+            stored is None or (
+                len(stored.formulas) == 1 and
+                stored.formulas[0] == implication
+            )
+        ):
             raise ForbiddenDisjunctionError(
                 "Disjunctive within-language probabilistic queries "
                 "are not allowed"

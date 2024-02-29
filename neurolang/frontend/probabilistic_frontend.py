@@ -6,6 +6,7 @@ Complements QueryBuilderDatalog class with probabilistic capabilities
 2- sove probabilistic queries
 """
 import collections
+from operator import and_
 import typing
 from typing import (
     AbstractSet,
@@ -16,7 +17,7 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type,
+    Type
 )
 from uuid import uuid1
 
@@ -27,44 +28,48 @@ from neurolang.type_system import (
 )
 
 from .. import expressions as ir
+from ..commands import CommandsMixin
 from ..datalog.aggregation import (
     BuiltinAggregationMixin,
     DatalogWithAggregationMixin,
-    TranslateToLogicWithAggregation,
+    TranslateToLogicWithAggregation
 )
+from ..datalog.basic_representation import UnionOfConjunctiveQueries
 from ..datalog.chase import Chase
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
-    EqualitySymbolLeftHandSideNormaliseMixin,
+    EqualitySymbolLeftHandSideNormaliseMixin
 )
 from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
-
 from ..exceptions import (
-    UnsupportedQueryError,
-    UnsupportedSolverError,
     UnsupportedProgramError,
+    UnsupportedQueryError,
+    UnsupportedSolverError
 )
-from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
-from ..logic import Union, Symbol
+from ..expression_walker import (
+    ExpressionBasicEvaluator,
+    TypedSymbolTableMixin,
+)
+from ..logic import Implication, Symbol, Union
 from ..probabilistic import (
     dalvi_suciu_lift,
-    small_dichotomy_theorem_based_solver,
+    small_dichotomy_theorem_based_solver
 )
 from ..probabilistic.cplogic.program import CPLogicMixin
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
-    is_within_language_prob_query,
+    is_within_language_prob_query
 )
 from ..probabilistic.magic_sets_processing import (
-    probabilistic_postprocess_magic_rules,
+    probabilistic_postprocess_magic_rules
 )
 from ..probabilistic.query_resolution import (
     QueryBasedProbFactToDetRule,
-    compute_probabilistic_solution,
+    compute_probabilistic_solution
 )
 from ..probabilistic.stratification import (
     get_list_of_intensional_rules,
@@ -72,21 +77,22 @@ from ..probabilistic.stratification import (
 )
 from ..probabilistic.weighted_model_counting import (
     solve_marg_query as wmc_solve_marg_query,
-)
-from ..probabilistic.weighted_model_counting import (
-    solve_succ_query as wmc_solve_succ_query,
+    solve_succ_query as wmc_solve_succ_query
 )
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraColumnStr,
+    RelationalAlgebraColumnStr
 )
-from ..commands import CommandsMixin
-from ..datalog.basic_representation import UnionOfConjunctiveQueries
+from ..type_system import (
+    get_args,
+    get_origin,
+    replace_type_variable_fix_python36_37
+)
 from . import query_resolution_expressions as fe
 from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
-    TranslateQueryBasedProbabilisticFactMixin,
+    TranslateQueryBasedProbabilisticFactMixin
 )
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
@@ -127,12 +133,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         self,
         chase_class: Type[Chase] = Chase,
         probabilistic_solvers: Tuple[Callable] = (
-            small_dichotomy_theorem_based_solver.solve_succ_query,
+            # small_dichotomy_theorem_based_solver.solve_succ_query,
             dalvi_suciu_lift.solve_succ_query,
             wmc_solve_succ_query,
         ),
         probabilistic_marg_solvers: Tuple[Callable] = (
-            small_dichotomy_theorem_based_solver.solve_marg_query,
+            # small_dichotomy_theorem_based_solver.solve_marg_query,
             dalvi_suciu_lift.solve_marg_query,
             wmc_solve_marg_query,
         ),
@@ -340,10 +346,14 @@ class NeurolangPDL(QueryBuilderDatalog):
             raise UnsupportedQueryError(
                 "Queries on probabilistic predicates are not supported"
             )
-        query = self.program_ir.symbol_table[query_pred_symb].formulas[0]
 
         try:
             with self.scope:
+                if query_pred_symb == ir.Constant(and_):
+                    new_pred_symb = ir.Symbol.fresh()
+                    new_rule = Implication(new_pred_symb(*query_pred_args), predicate.expression)
+                    self.program_ir.walk(new_rule)
+                query = self.program_ir.symbol_table[query_pred_symb].formulas[0]
                 goal, magic_rules = magic_rewrite(
                     query.consequent, self.program_ir
                 )

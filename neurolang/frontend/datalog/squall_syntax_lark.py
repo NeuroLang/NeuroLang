@@ -1063,7 +1063,6 @@ class SquallTransformer(lark.Transformer):
         print("x :", x)
         print("d2(x) :", d2(x))
         print("d1(x) :", d1(x))
-        # print("Implication[S](d1(x)) :", Implication[S](d1(x)))
         res = Lambda[S2](
             (d2,),
             Lambda[S1](

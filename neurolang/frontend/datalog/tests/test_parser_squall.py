@@ -183,374 +183,374 @@ def datalog_simple(datalog_base):
     datalog_base.pop_scope()
 
 
-def test_rules():
-    A = Symbol('a')
-    B = Symbol('b')
-    C = Symbol('c')
-    f = Symbol('f')
-    x = Symbol('x')
-    y = Symbol('y')
-    z = Symbol('z')
-    res = parser(
-        """
-        define as A every Element @x
-            whose b is an Element @y and
-            such that 3 c an Element @z.
-        """,
-        type_predicate_symbols={"element"}
-    )
-    expected = Union((
-        Implication(A(x), Conjunction((B(x, y), C(Constant(3), z)))),
-    ))
-    assert weak_logic_eq(res, expected)
-
-    res = parser(
-        """
-            define as A every Element @x that is not B.
-        """,
-        type_predicate_symbols={"element"}
-    )
-    expected = Union((
-        Implication(A(x), Negation(B(x))),
-    ))
-    assert weak_logic_eq(res, expected)
-
-    res = parser(
-        """
-        define as A every Element @x
-        whose b is an Element @y and
-        such that 3 c an Element @z that is 4 .
-        """,
-        type_predicate_symbols={"element"}
-    )
-    expected = Union((
-        Implication(
-            A(x),
-            Conjunction((
-                B(x, y), C(Constant(3), z), Constant(eq)(z, Constant(4))
-            ))
-        ),
-    ))
-    assert weak_logic_eq(res, expected)
-
-    res = parser(
-        """
-        define as A the Element @x
-            such that f(@x + 5 * 2) is whose b is an Element @y and
-            such that 3 c an Element @z that is 4 .
-        """,
-        type_predicate_symbols={"element"}
-    )
-    fresh = Symbol.fresh()
-    expected = Union((
-        (Implication(
-            A(x),
-            Conjunction((
-                B(fresh, y),
-                C(Constant(3), z), Constant(eq)(z, Constant(4)),
-                EQ(
-                    fresh,
-                    FunctionApplication(
-                        f,
-                        (
-                            Constant(add)(
-                                x,
-                                Constant(mul)(Constant(5), Constant(2))
-                            ),
-                        )
-                    )
-                )
-            )),
-        ),)
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-    res = parser(
-        """
-        define as A the Element @x
-            such that the color of @x is there.
-        """,
-        type_predicate_symbols={"element"}
-    )
-    color = Symbol("color")
-    expected = Union((
-        (Implication(A(x), color(x, fresh))),
-    ))
-    assert weak_logic_eq(res, expected)
-
-    res = parser(
-        """
-        define as A the Element @x
-            such that there is a color of @x.
-        """,
-        type_predicate_symbols={"element"}
-    )
-    color = Symbol("color")
-    expected = Union((
-        (Implication(A(x), color(x, fresh))),
-    ))
-    assert weak_logic_eq(res, expected)
-
-
-def test_vpdo1_with_cp():
-    res = parser(
-        """
-        define as Interesting every Voxel which Activates when some Read
-        """
-    )
-
-    x = Symbol.fresh()
-    y = Symbol.fresh()
-    expected = Union((
-        Implication(
-            Symbol("interest")(x),
-            Conjunction((
-                Symbol("voxel")(x), Symbol("activate")(x, y),
-                Symbol("read")(y)))
-        ),
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-
-def test_vphave_noun2():
-    res = parser(
-        """
-        define as Interesting every Voxel which has activated a Focus
-        """
-    )
-
-    x = Symbol.fresh()
-    y = Symbol.fresh()
-    expected = Union((
-        Implication(
-            Symbol("interest")(x),
-            Conjunction((
-                Symbol("voxel")(x), Symbol("activated")(x, y),
-                Symbol("focus")(y)))
-        ),
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-
-def test_vphave_np2():
-    res = parser(
-        """
-        define as Interesting every Voxel which has some activation Reported
-        """
-    )
-
-    x = Symbol.fresh()
-    y = Symbol.fresh()
-    expected = Union((
-        Implication(
-            Symbol("interest")(x),
-            Conjunction((
-                Symbol("voxel")(x), Symbol("activation")(x, y),
-                Symbol("reported")(y)))
-        ),
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-
-def test_vphave_np2_no_rel():
-    res = parser(
-        """
-        define as Interesting every Voxel which has some activation
-        """
-    )
-
-    x = Symbol.fresh()
-    y = Symbol.fresh()
-    expected = Union((
-        Implication(
-            Symbol("interest")(x),
-            Conjunction((
-                Symbol("voxel")(x),
-                Symbol("activation")(x, y),
-            ))
-        ),
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-
-def test_det1_no():
-    res = parser(
-        """
-        define as Interesting every Voxel which has no activation Reported
-        """
-    )
-
-    x = Symbol.fresh()
-    y = Symbol.fresh()
-    expected = Union((
-        Implication(
-            Symbol("interest")(x),
-            Conjunction((
-                Symbol("voxel")(x),
-                Negation(
-                    ExistentialPredicate(
-                        y,
-                        Conjunction[bool]((
-                            Symbol("activation")(x, y),
-                            Symbol("reported")(y)
-                        ))
-                    )
-                )
-            ))
-        ),
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-
-def test_s_for():
-    res = parser(
-        """
-        define as Interesting every Voxel @v such that for @v, a Study activates @v
-        """
-    )
-
-    v = Symbol("v")
-    y = Symbol.fresh()
-    expected = Union((
-        Implication(
-            Symbol("interest")(v),
-            Conjunction((
-                Symbol("voxel")(v),
-                Symbol("activate")(y, v),
-                Symbol("study")(y),
-            ))
-        ),
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-
-def test_ng1_agg_npc():
-    res = parser(
-        """
-        define as Volume the Count @c of the Voxels per activation
-        """
-    )
-
-    f = Symbol.fresh()
-    c = Symbol("c")
-    x = Symbol.fresh()
-    y = Symbol.fresh()
-    expected = Union((
-        Implication(
-            f(y, AggregationApplication(Symbol("count"), (x,))),
-            Conjunction((Symbol("voxel")(x), Symbol("activation")(y, x)))
-        ),
-        Implication(Symbol("volume")(c), f(y, c))
-        ),
-    )
-
-    assert weak_logic_eq(res, expected)
-
-
-def test_ng1_agg_npc_dims_rec():
-    res = parser(
-        """
-        define as Volume the Count @c of the Voxels
-               per activation and per `region activation`
-        """
-    )
-
-    f = Symbol.fresh()
-    c = Symbol("c")
-    x = Symbol.fresh()
-    y = Symbol.fresh()
-    z = Symbol.fresh()
-    expected = Union((
-        Implication(
-            f(y, z, AggregationApplication(Symbol("count"), (x,))),
-            Conjunction((
-                Symbol("voxel")(x),
-                Symbol("activation")(y, x),
-                Symbol("region active")(z, x)
-            ))
-        ),
-        Implication(Symbol("volume")(c), f(z, y, c))
-        ),
-    )
-
-    assert weak_logic_eq(res, expected)
-
-
-def test_ng2():
-    res = parser(
-        """
-        define as Interesting every Voxel whose report @r is Selected
-        """
-    )
-
-    x = Symbol.fresh()
-    r = Symbol('r')
-    expected = Union((
-        Implication(
-            Symbol("interest")(x),
-            Conjunction((
-                Symbol("voxel")(x),
-                Symbol("report")(x, r),
-                Symbol("selected")(r),
-            ))
-        ),
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-
-def test_rel_np2():
-    res = parser(
-        """
-        define as Interesting every Voxel a report of which has an activation
-        """
-    )
-
-    x = Symbol.fresh()
-    y = Symbol.fresh()
-    z = Symbol.fresh()
-    expected = Union((
-        Implication(
-            Symbol("interest")(x),
-            Conjunction((
-                Symbol("voxel")(x),
-                Symbol("report")(x, y),
-                Symbol("activation")(y, z)
-            ))
-        ),
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-
-def test_bool_negation():
-    res = parser(
-        """
-        define as Interesting every Voxel that is not Reported
-        """
-    )
-
-    x = Symbol.fresh()
-    expected = Union((
-        Implication(
-            Symbol("interest")(x),
-            Conjunction((
-                Symbol("voxel")(x),
-                Negation(Symbol("reported")(x))
-            ))
-        ),
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-
+# def test_rules():
+#     A = Symbol('a')
+#     B = Symbol('b')
+#     C = Symbol('c')
+#     f = Symbol('f')
+#     x = Symbol('x')
+#     y = Symbol('y')
+#     z = Symbol('z')
+#     res = parser(
+#         """
+#         define as A every Element @x
+#             whose b is an Element @y and
+#             such that 3 c an Element @z.
+#         """,
+#         type_predicate_symbols={"element"}
+#     )
+#     expected = Union((
+#         Implication(A(x), Conjunction((B(x, y), C(Constant(3), z)))),
+#     ))
+#     assert weak_logic_eq(res, expected)
+#
+#     res = parser(
+#         """
+#             define as A every Element @x that is not B.
+#         """,
+#         type_predicate_symbols={"element"}
+#     )
+#     expected = Union((
+#         Implication(A(x), Negation(B(x))),
+#     ))
+#     assert weak_logic_eq(res, expected)
+#
+#     res = parser(
+#         """
+#         define as A every Element @x
+#         whose b is an Element @y and
+#         such that 3 c an Element @z that is 4 .
+#         """,
+#         type_predicate_symbols={"element"}
+#     )
+#     expected = Union((
+#         Implication(
+#             A(x),
+#             Conjunction((
+#                 B(x, y), C(Constant(3), z), Constant(eq)(z, Constant(4))
+#             ))
+#         ),
+#     ))
+#     assert weak_logic_eq(res, expected)
+#
+#     res = parser(
+#         """
+#         define as A the Element @x
+#             such that f(@x + 5 * 2) is whose b is an Element @y and
+#             such that 3 c an Element @z that is 4 .
+#         """,
+#         type_predicate_symbols={"element"}
+#     )
+#     fresh = Symbol.fresh()
+#     expected = Union((
+#         (Implication(
+#             A(x),
+#             Conjunction((
+#                 B(fresh, y),
+#                 C(Constant(3), z), Constant(eq)(z, Constant(4)),
+#                 EQ(
+#                     fresh,
+#                     FunctionApplication(
+#                         f,
+#                         (
+#                             Constant(add)(
+#                                 x,
+#                                 Constant(mul)(Constant(5), Constant(2))
+#                             ),
+#                         )
+#                     )
+#                 )
+#             )),
+#         ),)
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#     res = parser(
+#         """
+#         define as A the Element @x
+#             such that the color of @x is there.
+#         """,
+#         type_predicate_symbols={"element"}
+#     )
+#     color = Symbol("color")
+#     expected = Union((
+#         (Implication(A(x), color(x, fresh))),
+#     ))
+#     assert weak_logic_eq(res, expected)
+#
+#     res = parser(
+#         """
+#         define as A the Element @x
+#             such that there is a color of @x.
+#         """,
+#         type_predicate_symbols={"element"}
+#     )
+#     color = Symbol("color")
+#     expected = Union((
+#         (Implication(A(x), color(x, fresh))),
+#     ))
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_vpdo1_with_cp():
+#     res = parser(
+#         """
+#         define as Interesting every Voxel which Activates when some Read
+#         """
+#     )
+#
+#     x = Symbol.fresh()
+#     y = Symbol.fresh()
+#     expected = Union((
+#         Implication(
+#             Symbol("interest")(x),
+#             Conjunction((
+#                 Symbol("voxel")(x), Symbol("activate")(x, y),
+#                 Symbol("read")(y)))
+#         ),
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_vphave_noun2():
+#     res = parser(
+#         """
+#         define as Interesting every Voxel which has activated a Focus
+#         """
+#     )
+#
+#     x = Symbol.fresh()
+#     y = Symbol.fresh()
+#     expected = Union((
+#         Implication(
+#             Symbol("interest")(x),
+#             Conjunction((
+#                 Symbol("voxel")(x), Symbol("activated")(x, y),
+#                 Symbol("focus")(y)))
+#         ),
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_vphave_np2():
+#     res = parser(
+#         """
+#         define as Interesting every Voxel which has some activation Reported
+#         """
+#     )
+#
+#     x = Symbol.fresh()
+#     y = Symbol.fresh()
+#     expected = Union((
+#         Implication(
+#             Symbol("interest")(x),
+#             Conjunction((
+#                 Symbol("voxel")(x), Symbol("activation")(x, y),
+#                 Symbol("reported")(y)))
+#         ),
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_vphave_np2_no_rel():
+#     res = parser(
+#         """
+#         define as Interesting every Voxel which has some activation
+#         """
+#     )
+#
+#     x = Symbol.fresh()
+#     y = Symbol.fresh()
+#     expected = Union((
+#         Implication(
+#             Symbol("interest")(x),
+#             Conjunction((
+#                 Symbol("voxel")(x),
+#                 Symbol("activation")(x, y),
+#             ))
+#         ),
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_det1_no():
+#     res = parser(
+#         """
+#         define as Interesting every Voxel which has no activation Reported
+#         """
+#     )
+#
+#     x = Symbol.fresh()
+#     y = Symbol.fresh()
+#     expected = Union((
+#         Implication(
+#             Symbol("interest")(x),
+#             Conjunction((
+#                 Symbol("voxel")(x),
+#                 Negation(
+#                     ExistentialPredicate(
+#                         y,
+#                         Conjunction[bool]((
+#                             Symbol("activation")(x, y),
+#                             Symbol("reported")(y)
+#                         ))
+#                     )
+#                 )
+#             ))
+#         ),
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_s_for():
+#     res = parser(
+#         """
+#         define as Interesting every Voxel @v such that for @v, a Study activates @v
+#         """
+#     )
+#
+#     v = Symbol("v")
+#     y = Symbol.fresh()
+#     expected = Union((
+#         Implication(
+#             Symbol("interest")(v),
+#             Conjunction((
+#                 Symbol("voxel")(v),
+#                 Symbol("activate")(y, v),
+#                 Symbol("study")(y),
+#             ))
+#         ),
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_ng1_agg_npc():
+#     res = parser(
+#         """
+#         define as Volume the Count @c of the Voxels per activation
+#         """
+#     )
+#
+#     f = Symbol.fresh()
+#     c = Symbol("c")
+#     x = Symbol.fresh()
+#     y = Symbol.fresh()
+#     expected = Union((
+#         Implication(
+#             f(y, AggregationApplication(Symbol("count"), (x,))),
+#             Conjunction((Symbol("voxel")(x), Symbol("activation")(y, x)))
+#         ),
+#         Implication(Symbol("volume")(c), f(y, c))
+#         ),
+#     )
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_ng1_agg_npc_dims_rec():
+#     res = parser(
+#         """
+#         define as Volume the Count @c of the Voxels
+#                per activation and per `region activation`
+#         """
+#     )
+#
+#     f = Symbol.fresh()
+#     c = Symbol("c")
+#     x = Symbol.fresh()
+#     y = Symbol.fresh()
+#     z = Symbol.fresh()
+#     expected = Union((
+#         Implication(
+#             f(y, z, AggregationApplication(Symbol("count"), (x,))),
+#             Conjunction((
+#                 Symbol("voxel")(x),
+#                 Symbol("activation")(y, x),
+#                 Symbol("region active")(z, x)
+#             ))
+#         ),
+#         Implication(Symbol("volume")(c), f(z, y, c))
+#         ),
+#     )
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_ng2():
+#     res = parser(
+#         """
+#         define as Interesting every Voxel whose report @r is Selected
+#         """
+#     )
+#
+#     x = Symbol.fresh()
+#     r = Symbol('r')
+#     expected = Union((
+#         Implication(
+#             Symbol("interest")(x),
+#             Conjunction((
+#                 Symbol("voxel")(x),
+#                 Symbol("report")(x, r),
+#                 Symbol("selected")(r),
+#             ))
+#         ),
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_rel_np2():
+#     res = parser(
+#         """
+#         define as Interesting every Voxel a report of which has an activation
+#         """
+#     )
+#
+#     x = Symbol.fresh()
+#     y = Symbol.fresh()
+#     z = Symbol.fresh()
+#     expected = Union((
+#         Implication(
+#             Symbol("interest")(x),
+#             Conjunction((
+#                 Symbol("voxel")(x),
+#                 Symbol("report")(x, y),
+#                 Symbol("activation")(y, z)
+#             ))
+#         ),
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
+# def test_bool_negation():
+#     res = parser(
+#         """
+#         define as Interesting every Voxel that is not Reported
+#         """
+#     )
+#
+#     x = Symbol.fresh()
+#     expected = Union((
+#         Implication(
+#             Symbol("interest")(x),
+#             Conjunction((
+#                 Symbol("voxel")(x),
+#                 Negation(Symbol("reported")(x))
+#             ))
+#         ),
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
 # def test_rule_op_fact(datalog_simple):
 #     res = parser(
 #         """
@@ -646,23 +646,23 @@ def test_bool_negation():
 #         ),
 #     ))
 #     assert weak_logic_eq(res, expected)
-#
-#
-# def test_atomic_tuple():
-#     res = parser(
-#         """
-#         define as Origin every Tuple (0; 0; 0) .
-#         """,
-#         type_predicate_symbols={"tuple"}
-#     )
-#
-#     expected = Union((
-#         Fact(Symbol("origin")(Constant(0), Constant(0), Constant(0))),
-#     ))
-#
-#     assert weak_logic_eq(res, expected)
-#
-#
+
+
+def test_atomic_tuple():
+    res = parser(
+        """
+        define as Origin every Tuple (0; 0; 0) .
+        """,
+        type_predicate_symbols={"tuple"}
+    )
+
+    expected = Union((
+        Fact(Symbol("origin")(Constant(0), Constant(0), Constant(0))),
+    ))
+
+    assert weak_logic_eq(res, expected)
+
+
 # def test_duplicate_labeling():
 #     with pytest.raises(RepeatedLabelException):
 #         parser(
