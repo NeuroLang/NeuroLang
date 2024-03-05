@@ -31,7 +31,7 @@ from ..relational_algebra import (
     SimplifyExtendedProjectionsWithConstants,
     str2columnstr_constant
 )
-from ..relational_algebra.optimisers import PushUnnamedSelectionsUp
+from ..relational_algebra.optimisers import CommuteJoinsAvoidCrossProducts, PushUnnamedSelectionsUp
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet
@@ -393,6 +393,7 @@ class RAQueryOptimiser(
     SimplifyExtendedProjectionsWithConstants,
     FloatArithmeticSimplifier,
     PushUnnamedSelectionsUp,
+    CommuteJoinsAvoidCrossProducts,
     ExpressionWalker,
 ):
     pass

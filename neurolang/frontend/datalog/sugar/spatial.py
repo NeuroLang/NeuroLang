@@ -18,7 +18,7 @@ from ....logic import Conjunction, Implication
 from ....relational_algebra import RelationalAlgebraSet
 from ....utils import log_performance
 
-EUCLIDEAN = Symbol("EUCLIDEAN")
+EUCLIDEAN = Symbol[typing.Callable[..., float]]("EUCLIDEAN")
 
 LOG = logging.getLogger(__name__)
 
@@ -204,7 +204,8 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         new_pred_symb = Symbol.fresh()
         spatial_bound_solution_pred = new_pred_symb(i1, j1, k1, i2, j2, k2, d)
         self.add_extensional_predicate_from_tuples(
-            new_pred_symb, spatial_bound_solution
+            new_pred_symb, spatial_bound_solution,
+            has_duplicates=False
         )
         spatial_bound_constant = self.symbol_table[new_pred_symb].value
         if hasattr(spatial_bound_constant, "might_have_duplicates"):
@@ -236,8 +237,8 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         max_dist: float,
     ) -> numpy.array:
         with log_performance(LOG, "spatial bound resolution"):
-            first_ckd_tree = scipy.spatial.cKDTree(first_coord_array)
-            second_ckd_tree = scipy.spatial.cKDTree(second_coord_array)
+            first_ckd_tree = scipy.spatial.KDTree(first_coord_array)
+            second_ckd_tree = scipy.spatial.KDTree(second_coord_array)
             dist_mat = first_ckd_tree.sparse_distance_matrix(
                 second_ckd_tree,
                 max_dist,

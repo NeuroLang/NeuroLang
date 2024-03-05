@@ -110,7 +110,7 @@ class DaskRelationalAlgebraBaseSet:
     _init_columns = None
     row_types = None
 
-    def __init__(self, iterable=None, columns=None):
+    def __init__(self, iterable=None, columns=None, has_duplicates=True):
         self._init_columns = columns
         if isinstance(iterable, DaskRelationalAlgebraBaseSet):
             if (
@@ -468,8 +468,11 @@ class DaskRelationalAlgebraBaseSet:
 class RelationalAlgebraFrozenSet(
     DaskRelationalAlgebraBaseSet, abc.RelationalAlgebraFrozenSet
 ):
-    def __init__(self, iterable=None, columns=None):
-        super().__init__(iterable, columns=columns)
+    def __init__(self, iterable=None, columns=None, has_duplicates=True):
+        super().__init__(
+            iterable, columns=columns,
+            has_duplicates=has_duplicates
+        )
 
     def selection(self, select_criteria):
         if self._table is None:
@@ -652,12 +655,12 @@ class RelationalAlgebraFrozenSet(
 class NamedRelationalAlgebraFrozenSet(
     RelationalAlgebraFrozenSet, abc.NamedRelationalAlgebraFrozenSet
 ):
-    def __init__(self, columns=None, iterable=None):
+    def __init__(self, columns=None, iterable=None, has_duplicates=True):
         if isinstance(columns, RelationalAlgebraFrozenSet):
             iterable = columns
             columns = columns.columns
         self._check_for_duplicated_columns(columns)
-        super().__init__(iterable, columns)
+        super().__init__(iterable, columns, has_duplicates=has_duplicates)
 
     @staticmethod
     def _check_for_duplicated_columns(columns):

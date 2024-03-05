@@ -2,11 +2,9 @@ import collections
 from typing import AbstractSet, Iterable
 
 import numpy
-from neurolang.datalog.constraints_representation import RightImplication
-
-from neurolang.relational_algebra import str2columnstr_constant
 
 from ..datalog import WrappedRelationalAlgebraSet
+from ..datalog.constraints_representation import RightImplication
 from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
@@ -19,7 +17,12 @@ from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Implication, Negation, Union
 from ..logic.transformations import GuaranteeConjunction
-from ..relational_algebra import Projection, RelationalAlgebraSolver
+from ..relational_algebra import (
+    Projection,
+    RelationalAlgebraSolver,
+    str2columnstr_constant
+)
+from ..relational_algebra.optimisers import RelationalAlgebraOptimiser
 from ..utils import OrderedSet
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticFact, ProbabilisticQuery
@@ -250,9 +253,9 @@ def construct_within_language_succ_result(provset, rule):
             proj_cols.append(str2columnstr_constant(arg.name))
         elif isinstance(arg, ProbabilisticQuery) and arg.functor == PROB:
             proj_cols.append(provset.provenance_column)
-    return RelationalAlgebraSolver().walk(
-        Projection(provset.relation, proj_cols)
-    )
+    ra_code = Projection(provset.relation, proj_cols)
+    ra_code = RelationalAlgebraOptimiser().walk(ra_code)
+    return RelationalAlgebraSolver().walk(ra_code)
 
 
 def group_preds_by_functor(predicates, filter_set=None):

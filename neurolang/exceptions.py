@@ -133,6 +133,21 @@ class NeuroLangFrontendException(NeuroLangException):
     pass
 
 
+class NeuroLangFailedParseException(NeuroLangFrontendException):
+    def __init__(self, *args, line=None, column=None):
+        super().__init__(*args)
+        self.line = line
+        self.column = column
+
+
+class RepeatedLabelException(NeuroLangFrontendException):
+    """Expression detecting when
+    a label is declared twice in the same
+    code rule.
+    """
+    pass
+
+
 class SymbolNotFoundError(NeuroLangException):
     """
     A symbol is being used in a rule without having been previously
@@ -380,11 +395,24 @@ class NotRankedException(NonLiftableException):
 class NotUnateException(NonLiftableException):
     pass
 
+
 class InvalidCommandExpression(ForbiddenExpressionError):
     """
     Invalid Command statement.
     """
 
+    pass
+
+
+class NeuroLangTranslateToHornClauseException(NeuroLangException):
+    pass
+
+
+class ExpressionIsNotSafeRange(NeuroLangTranslateToHornClauseException):
+    pass
+
+
+class NeuroLangTranslateToHornClauseException(NeuroLangException):
     pass
 
 

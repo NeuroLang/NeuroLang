@@ -1,10 +1,15 @@
+import logging
 from collections import OrderedDict
 from typing import Iterable, Callable, Dict, Union
 from uuid import uuid1
 
 import numpy as np
 import pandas as pd
+
+from ..various import log_performance
 from . import abstract as abc
+
+LOG = logging.getLogger(__name__)
 
 
 NA = pd.NA
@@ -21,7 +26,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     as container for the elements.
     """
 
-    def __init__(self, iterable=None):
+    def __init__(self, iterable=None, has_duplicates=True):
         """
         Create a new RelationalAlgebraFrozenSet.
         A RelationalAlgebraSet is a set of n elements, each element being
@@ -31,6 +36,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         ----------
         iterable : Iterable
             Initial values for the set
+        
+        has_duplicates : bool
+            Indicate wether the iterable has duplicate rows
 
         Examples
         --------
@@ -51,10 +59,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         RelationalAlgebraFrozenSet
         """
         self._container = None
-        self._might_have_duplicates = True
+        self._might_have_duplicates = has_duplicates
         if iterable is not None:
             if isinstance(iterable, RelationalAlgebraFrozenSet):
                 self._container = iterable._container
+                self._might_have_duplicates = iterable._might_have_duplicates
             elif isinstance(iterable, pd.DataFrame):
                 self._container = iterable.copy()
             else:
@@ -152,7 +161,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def _drop_duplicates(container):
         if len(container) == 0 or len(container.columns) == 0:
             return container
-        container = container.drop_duplicates()
+        with log_performance(
+            LOG,
+            "Dropping duplicates from table %s", (str(container.head(1)),)
+        ):
+            container = container.drop_duplicates()
         return container
 
     @property
@@ -210,8 +223,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         new_container.columns = pd.RangeIndex(len(columns))
         output = self._empty_set_same_structure()
         output._container = new_container
-        if (len(columns) == self.arity):
+        if (len(set(columns)) == self.arity):
             output._might_have_duplicates = self._might_have_duplicates
+        else:
+            LOG.info("Generating duplicates projection %s %s", columns, self.arity)
+ 
         return output
 
     def selection(
@@ -368,7 +384,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def _extract_unified_column_types(self, other):
         col_types = dict()
-        for col in self._container.columns.intersection(other._container.columns):
+        for col in self._container.columns.intersection(
+            other._container.columns
+        ):
             s_dtype = self._container[col].dtype
             o_dtype = other._container[col].dtype
             if s_dtype != o_dtype:
@@ -382,6 +400,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         output = self._empty_set_same_structure()
         if len(self) > 0:
             output._container = self._container.copy()
+            output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def __repr__(self):
@@ -498,14 +517,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 class NamedRelationalAlgebraFrozenSet(
     RelationalAlgebraFrozenSet, abc.NamedRelationalAlgebraFrozenSet
 ):
-    def __init__(self, columns, iterable=None):
+    def __init__(self, columns, iterable=None, has_duplicates=True):
         if isinstance(columns, NamedRelationalAlgebraFrozenSet):
             iterable = columns
             columns = columns.columns
         # ensure there is no duplicated column
         self._check_for_duplicated_columns(columns)
         self._columns = tuple(columns)
-        self._might_have_duplicates = True
+        self._might_have_duplicates = has_duplicates
         if iterable is None:
             iterable = []
 
@@ -585,6 +604,8 @@ class NamedRelationalAlgebraFrozenSet(
             columns = self.columns
         output = type(self)(columns)
         output._container = container
+        if might_have_duplicates:
+            LOG.info("Table %s might have duplicates", container.head(1))
         output._might_have_duplicates = might_have_duplicates
         return output
 
@@ -606,9 +627,14 @@ class NamedRelationalAlgebraFrozenSet(
             return type(self)(columns)
         if self.arity == 0:
             return self
+        might_have_duplicates = (
+            (len(set(columns)) < self.arity) or
+            self._might_have_duplicates
+        )
         new_container = self._container[list(columns)]
         return self._light_init_same_structure(
-            new_container, might_have_duplicates=True, columns=columns
+            new_container, might_have_duplicates=might_have_duplicates,
+            columns=columns
         )
 
     def projection_to_unnamed(self, *columns):
@@ -636,11 +662,15 @@ class NamedRelationalAlgebraFrozenSet(
         self._drop_duplicates_if_needed()
         other._drop_duplicates_if_needed()
         col_types = self._extract_unified_column_types(other)
-        new_container = (
-            self._container
-            .astype(col_types)
-            .merge(other._container.astype(col_types))
-        )
+        with log_performance(
+            LOG, "About to natural join 2 tables of %s and %s",
+            (self._container.shape, other._container.shape)
+        ):
+            new_container = (
+                self._container
+                .astype(col_types)
+                .merge(other._container.astype(col_types))
+            )
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=(
@@ -1025,6 +1055,8 @@ class NamedRelationalAlgebraFrozenSet(
             (len(seen_pure_columns) == len(self.columns))
             and not self._might_have_duplicates
         )
+        if might_have_duplicates:
+            LOG.info("Extended projection might have duplicates %s", new_container.head(1))
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=might_have_duplicates,

@@ -13,6 +13,7 @@ from typing import (
     Iterable,
     List,
     Optional,
+    Set,
     Tuple,
     Type,
     Union,
@@ -34,6 +35,7 @@ from ..datalog.expression_processing import (
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.standard_syntax import parser as datalog_parser
+from .datalog.squall_syntax_lark import parser as datalog_parser_nl
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
@@ -77,6 +79,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
         self.datalog_parser = datalog_parser
+        self.datalog_parser_nl = datalog_parser_nl
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -197,7 +200,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return rule
 
     def execute_datalog_program(
-        self, code: str
+        self, code: str, nl: bool
     ) -> Union[None, bool, RelationalAlgebraFrozenSet]:
         """
         Execute a Datalog program in classical syntax.
@@ -226,6 +229,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ... q: typing.AbstractSet[typing.Tuple[int]] = [(2,)]
         """
         intermediate_representation = self.datalog_parser(code)
+        if (nl):
+            intermediate_representation = self.datalog_parser_nl(code)
         queries = [
             rule
             for rule in intermediate_representation.formulas
@@ -258,6 +263,68 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     )
                 )
             )
+
+    def execute_nat_datalog_program(self, code: str) -> None:
+        """Execute a natural language Datalog program in classical syntax
+
+        Parameters
+        ----------
+        code : string
+            Datalog program.
+        """
+        intermediate_representation = self.nat_datalog_parser(code)
+        self.program_ir.walk(intermediate_representation)
+
+    def execute_controlled_english_program(self, code: str, type_symbol_names: Optional[Set[str]]=None) -> None:
+        """Execute a controlled English language Datalog program
+
+        Parameters
+        ----------
+        code : string
+            Controlled English NeuroLang program.
+        """
+        intermediate_representation = self.cet_datalog_parser(code, type_predicate_symbols=type_symbol_names)
+        queries = [
+            rule
+            for rule in intermediate_representation.formulas
+            if isinstance(rule, ir.Query)
+        ]
+        if len(queries) == 0:
+            self.program_ir.walk(intermediate_representation)
+            return
+        elif len(queries) == 1:
+            query = queries[0]
+            rules = [
+                rule
+                for rule in intermediate_representation.formulas
+                if not isinstance(rule, ir.Query)
+            ]
+            if not isinstance(query.body, ir.FunctionApplication):
+                aux_head = ir.Symbol.fresh()
+                new_rule = logic.Implication(aux_head(*query.head.args), query.body)
+                query = query.apply(query.head, new_rule.consequent)
+                rules.append(new_rule)
+            query_fe = self.frontend_translator.walk(query)
+            program = logic.Union(tuple(rules))
+            self.program_ir.walk(program)
+            return self.query(query_fe.head.arguments, query_fe.body)
+        else:
+            raise UnsupportedProgramError(
+                "Only one query, in the form of ans(...) :- R(...) is "
+                "supported. Datalog program has more than one query rule: "
+                "{}".format(
+                    "\n".join(
+                        [
+                            str(self.frontend_translator.walk(q))
+                            for q in queries
+                        ]
+                    )
+                )
+            )
+
+    def completion_for_controlled_english_program(self, code: str) -> List[str]:
+        completions = self.cet_datalog_parser(code, complete=True)
+        return completions
 
     def query(
         self, *args
@@ -488,7 +555,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.symbol_table.clear()
 
     def add_tuple_set(
-        self, iterable: Iterable, type_: Type = Unknown, name: str = None
+        self, iterable: Iterable, type_: Type = Unknown, name: str = None,
+        has_duplicates: bool = True
     ) -> fe.Symbol:
         """
         Creates an AbstractSet fe.Symbol containing the elements specified in
@@ -536,7 +604,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 columns={n: i for i, n in enumerate(iterable.columns)}
             )
         self.program_ir.add_extensional_predicate_from_tuples(
-            symbol, iterable, type_=type_
+            symbol, iterable, type_=type_, has_duplicates=has_duplicates
         )
 
         return fe.Symbol(self, name)

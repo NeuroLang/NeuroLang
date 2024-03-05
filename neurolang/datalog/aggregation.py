@@ -21,7 +21,7 @@ from ..expression_walker import (
     add_match,
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..type_system import get_generic_type
+from ..type_system import Unknown, get_generic_type
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 from . import (
     Implication,
@@ -38,11 +38,13 @@ from .expressions import AggregationApplication, TranslateToLogic
 
 FA2L = FunctionApplicationToPythonLambda()
 
-AGG_MAX = Symbol("max")
-AGG_MEAN = Symbol("mean")
-AGG_COUNT = Symbol("count")
-AGG_SUM = Symbol("sum")
-AGG_STD = Symbol("std")
+MONO_AGGREGATION_TYPE = typing.Callable[[typing.Iterable], Unknown]
+
+AGG_MAX = Symbol[MONO_AGGREGATION_TYPE]("max")
+AGG_MEAN = Symbol[typing.Callable[[typing.Iterable], Unknown]]("mean")
+AGG_COUNT = Symbol[typing.Callable[[typing.Iterable], int]]("count")
+AGG_SUM = Symbol[MONO_AGGREGATION_TYPE]("sum")
+AGG_STD = Symbol[MONO_AGGREGATION_TYPE]("std")
 
 
 def is_builtin_aggregation_functor(functor):
@@ -50,10 +52,10 @@ def is_builtin_aggregation_functor(functor):
 
 
 class BuiltinAggregationMixin:
-    constant_max = Constant(numpy.max)
-    constant_mean = Constant(numpy.mean)
-    constant_sum = Constant(sum)
-    constant_std = Constant(numpy.std)
+    constant_max = Constant[MONO_AGGREGATION_TYPE](numpy.max, verify_type=False)
+    constant_mean = Constant[MONO_AGGREGATION_TYPE](numpy.mean, verify_type=False)
+    constant_sum = Constant[MONO_AGGREGATION_TYPE](sum, verify_type=False)
+    constant_std = Constant[MONO_AGGREGATION_TYPE](numpy.std, verify_type=False)
 
     def function_count(self, *iterables: typing.Iterable) -> int:
         return len(next(iter(iterables)))
