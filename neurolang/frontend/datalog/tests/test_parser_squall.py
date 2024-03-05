@@ -571,27 +571,27 @@ def datalog_simple(datalog_base):
 #     assert weak_logic_eq(res, expected)
 #
 #
-# def test_rule_condition_os():
-#     res = parser(
-#         """
-#         define as probably active for every Voxel Reported
-#         conditioned to Study @s mentions
-#         """,
-#         return_tree=True,
-#         process=False
-#     )
-#     x = Symbol.fresh()
-#
-#     expected = Union((
-#         Implication(
-#             ProbabilisticPredicate(Constant(0.5), Symbol("active")(x)),
-#             Symbol("voxel")(x)
-#         ),
-#     ))
-#
-#     assert weak_logic_eq(res, expected)
-#
-#
+def test_rule_condition_os():
+    res = parser(
+        """
+        define as probably active for every Voxel Reported
+        conditioned to Study @s mentions
+        """,
+        return_tree=True,
+        process=False
+    )
+    x = Symbol.fresh()
+
+    expected = Union((
+        Implication(
+            ProbabilisticPredicate(Constant(0.5), Symbol("active")(x)),
+            Symbol("voxel")(x)
+        ),
+    ))
+
+    assert weak_logic_eq(res, expected)
+
+
 # def test_transitive_rules():
 #     relate = Symbol('relate')
 #     B = Symbol('b')
@@ -646,23 +646,23 @@ def datalog_simple(datalog_base):
 #         ),
 #     ))
 #     assert weak_logic_eq(res, expected)
-
-
-def test_atomic_tuple():
-    res = parser(
-        """
-        define as Origin every Tuple (0; 0; 0) .
-        """,
-        type_predicate_symbols={"tuple"}
-    )
-
-    expected = Union((
-        Fact(Symbol("origin")(Constant(0), Constant(0), Constant(0))),
-    ))
-
-    assert weak_logic_eq(res, expected)
-
-
+#
+#
+# def test_atomic_tuple():
+#     res = parser(
+#         """
+#             define as Origin every Tuple (0; 0; 0).
+#         """,
+#         type_predicate_symbols={"tuple"}
+#     )
+#
+#     expected = Union((
+#         Fact(Symbol("origin")(Constant(0), Constant(0), Constant(0))),
+#     ))
+#
+#     assert weak_logic_eq(res, expected)
+#
+#
 # def test_duplicate_labeling():
 #     with pytest.raises(RepeatedLabelException):
 #         parser(
