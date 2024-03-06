@@ -3,7 +3,7 @@ import $ from '../jquery-bundler'
 /**
  * Class to manage a facet.
  */
-export class Facet {
+export default class Facet {
   /**
   * Constructor of a facet.
   * @param {editor} the editor linked to the textarea

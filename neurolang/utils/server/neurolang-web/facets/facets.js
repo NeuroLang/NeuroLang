@@ -1,5 +1,5 @@
 import './facets.css'
-import { Facet } from './facet'
+import Facet from './facet'
 
 /**
  * Class to manage the facets.
