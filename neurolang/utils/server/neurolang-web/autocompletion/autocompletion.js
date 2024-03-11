@@ -104,7 +104,6 @@ export default class AutocompletionController {
       // get the entire text from the CodeMirror instance
       const facets = JSON.parse(data.tokens)
       const rules = facets.rules
-      const nextTokens = facets.next_tokens
       this.fc.updatePatterns(rules)
 
       // Empty line
@@ -148,7 +147,7 @@ export default class AutocompletionController {
 
             // Several accepted tokens
           } else {
-            this.fc.createFacets(nextTokens)
+            this.fc.createFacets(facets, 'next_tokens')
           }
         }
       }

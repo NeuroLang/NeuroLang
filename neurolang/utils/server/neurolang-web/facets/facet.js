@@ -678,7 +678,7 @@ class Select extends Element {
 export class CategoriesSelect extends Select {
   constructor (editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key) {
     super(editor, facetsContainerElement, parentContainerElement, elementContainer, elementId, data, key)
-    this.valuesFacet = null
+    this.refData = null
   }
 
   //  addChangeEventListeners (editor, valuesSelect) {
@@ -697,8 +697,8 @@ export class CategoriesSelect extends Select {
       'rightFacetContainer')
     newFacet.addLabel(this.element.id + 'rightFacetLabel', 'Values', 'rightFacet')
     newFacet.addElement('patterns', 'rightFacet', this.allData)
-    newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement)
-    newFacet.element.fill(key)
+    newFacet.element.addChangeEventListeners(this.editor, this.facetsContainerElement, this.refData)
+    newFacet.element.fill(key, this.refData)
     newFacet.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
     return newFacet
   }
@@ -711,6 +711,7 @@ export class CategoriesSelect extends Select {
     // Retrieve the selected option
     const selectedKey = event.target.value
     this._removeFacets()
+    this.refData = refData
 
     if (selectedKey) {
       if (selectedKey === 'All') {
@@ -727,14 +728,14 @@ export class CategoriesSelect extends Select {
   * Displays the facets.
   * @param {Object} facetsObject the categories to be displayed in the facets and their values
   */
-  fill (facetsObject) {
+  fill () {
     // Add 'All' option to the left facet
     const deselectOption = document.createElement('option')
     deselectOption.textContent = 'All'
     this.element.appendChild(deselectOption)
 
     // Add facetsObject keys to left facet
-    for (const key of Object.keys(facetsObject)) {
+    for (const key of Object.keys(this.allData)) {
       const option = document.createElement('option')
       option.textContent = key
       this.element.appendChild(option)
@@ -835,9 +836,9 @@ export class RegexpSelect extends Select {
  * Class to manage patterns select element.
  */
 export class PatternsSelect extends Select {
-  addChangeEventListeners (editor, facetsContainerElement, inPattern = false) {
+  addChangeEventListeners (editor, facetsContainerElement, refData = false, inPattern = false) {
     // Create a new handler function that has access to facetsObject
-    this.changeHandler = (event) => this._handleClick(editor, facetsContainerElement, inPattern)
+    this.changeHandler = (event) => this._handleClick(editor, facetsContainerElement, refData, inPattern)
 
     // Attach the new event listener
     this.element.addEventListener('change', this.changeHandler)
@@ -847,7 +848,7 @@ export class PatternsSelect extends Select {
   * Handles the click event for the right facet.
   * @param {Event} event the event object associated with the click in the right facet
   */
-  _handleClick (editor, facetsContainerElement, inPattern) {
+  _handleClick (editor, facetsContainerElement, refData, inPattern) {
     this._removeFacets()
 
     // get selected value
@@ -865,9 +866,14 @@ export class PatternsSelect extends Select {
     if (selectedValue) {
       const selectedValueToKey = selectedValue.slice(1, -1)
 
+      let patternsData = this.allData
+      if (refData) {
+        patternsData = refData
+      }
+
       // check if the selected value is a key in data and has a key "regexp"
-      if (Object.hasOwn(this.allData, selectedValueToKey) && Object.hasOwn(this.allData[selectedValueToKey], 'regexp')) {
-        const regexpObj = this.allData[selectedValueToKey]
+      if (Object.hasOwn(patternsData, selectedValueToKey) && Object.hasOwn(patternsData[selectedValueToKey], 'regexp')) {
+        const regexpObj = patternsData[selectedValueToKey]
         const regexpVal = { key: selectedValueToKey, val: '' }
         const newInput = new Facet(
           this.editor,
@@ -875,7 +881,7 @@ export class PatternsSelect extends Select {
           this.parentContainerElement,
           this.element.id + '_input_container')
         newInput.addLabel(this.element.id + '_input_label', 'Enter the value :', this.element.id + '_input')
-        newInput.addElement('regexp', this.element.id + '_input', this.allData, selectedValueToKey)
+        newInput.addElement('regexp', this.element.id + '_input', patternsData, selectedValueToKey)
         newInput.element.addChangeEventListeners(this.editor, regexpObj, regexpVal)
         newInput.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
@@ -885,7 +891,7 @@ export class PatternsSelect extends Select {
           this.parentContainerElement,
           this.element.id + '_button_container')
         //        buttonNew.addLabel(null, '', this.element.id + '_buttonFacet')
-        buttonNew.addElement('valueButton', this.element.id + '_button', this.allData)
+        buttonNew.addElement('valueButton', this.element.id + '_button', patternsData)
         buttonNew.element.addClickEventListeners(this.editor, this.facetsContainerElement, regexpVal, inPattern)
         buttonNew.element.show(this.editor, this.facetsContainerElement, this.qMsg, this.queryAlert)
 
@@ -913,7 +919,11 @@ export class PatternsSelect extends Select {
   * Displays the facets.
   * @param {Object} ruleObject the categories to be displayed in the facets and their values
   */
-  fill (keyToFillSelect = false) {
+  fill (keyToFillSelect = false, refData = false) {
+    //    console.log(" ")
+    //    console.log("___PatternsSelect.fill()___")
+    //    console.log("Param 1 - keyToFillSelect :", keyToFillSelect)
+    //    console.log("this.allData : ", this.allData)
     const keysToFillSelect = []
     if (keyToFillSelect) {
       keysToFillSelect.push(keyToFillSelect)
@@ -923,16 +933,26 @@ export class PatternsSelect extends Select {
       }
     }
 
+    let patternsData = this.allData
+    if (refData) {
+      patternsData = refData
+    }
+
+    //    console.log("keysToFillSelect :", keysToFillSelect)
+
     for (const selectKey of keysToFillSelect) {
+      //      console.log("  selectKey :", selectKey)
       const keyData = this.allData[selectKey]
+      //      console.log("  keyData :", keyData)
 
       // Add ruleObject keys to left facet
       for (const item of keyData.values) {
         const curKey = item.slice(1, -1)
-        if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
+        //        if ((curKey in this.allData) && ('params' in this.allData[curKey]) && (this.allData[curKey].params === 'expandable')) {
+        if ((curKey in patternsData) && ('params' in patternsData[curKey]) && (patternsData[curKey].params === 'expandable')) {
           const optgroup = document.createElement('optgroup')
           optgroup.label = curKey
-          for (const i of this.allData[curKey].values) {
+          for (const i of patternsData[curKey].values) {
             const option = document.createElement('option')
             option.textContent = i
             optgroup.appendChild(option)
