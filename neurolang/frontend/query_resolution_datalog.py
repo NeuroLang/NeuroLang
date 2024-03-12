@@ -259,6 +259,67 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 )
             )
 
+    def compute_datalog_program_for_autocompletion(
+            self, code: str, autocompletion_code
+    ) -> Dict:
+        """
+        Computes a Datalog program in classical syntax.
+        Returns the next accepted tokens of the program.
+
+        Parameters
+        ----------
+        code : string
+            Datalog program.
+        autocompletion_code : str
+            Datalog program for autocompletion.
+
+        Examples
+        --------
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
+        >>> prog_complete = '''
+        ...        l2(x, y) :- l(x, y), (x == y)
+        ...        ans(x) :- l2(x, y)
+        ...        '''
+        >>> prog = '''
+        ...        l2(x, y) :- l(x, y), (x == y)
+        ...        ans(x) :-
+        ...        '''
+        >>> with nl.environment as e:
+        ...     q = nl.compute_datalog_program_for_autocompletion(prog_complete, prog)
+        >>> q
+        ... {
+        ...     'Signs': {'@', '∃', '('}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
+        ...     'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(),
+        ...     'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊤', '⊥', 'False', 'True'},
+        ...     'Expression symbols': set(), 'Python string': set(),
+        ...     'Strings': {'<identifier regular expression>', '<command identifier>'}, 'commands': set(),
+        ...     'functions': set(), 'base symbols': set(), 'query symbols': set()
+        ... }
+        """
+        # All the following code before return is mandatory to retrieve
+        # the query symbols without actually running the query
+        intermediate_representation = self.datalog_parser(code)
+        queries = [
+            rule
+            for rule in intermediate_representation.formulas
+            if isinstance(rule, ir.Query)
+        ]
+        if len(queries) == 1:
+            self.frontend_translator.walk(queries[0])
+            program = logic.Union(
+                [
+                    rule
+                    for rule in intermediate_representation.formulas
+                    if not isinstance(rule, ir.Query)
+                ]
+            )
+            self.program_ir.walk(program)
+        else:
+            self.program_ir.walk(intermediate_representation)
+        res = self.datalog_parser(autocompletion_code, None, None, True)
+        return res
+
     def query(
         self, *args
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
@@ -408,8 +469,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         try:
             with self.scope:
-                magic_query_expression = self.magic_sets_rewrite_program(query_expression)
-                reachable_rules = reachable_code(magic_query_expression, self.program_ir)
+                magic_query_expression = self.magic_sets_rewrite_program(
+                    query_expression)
+                reachable_rules = reachable_code(
+                    magic_query_expression, self.program_ir)
                 solution = self.chase_class(
                     self.program_ir, rules=reachable_rules
                 ).build_chase_solution()
@@ -429,9 +492,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         if isinstance(head, tuple):
             row_type = solution_set.value.row_type
             solution_set = NamedRelationalAlgebraFrozenSet(
-                    tuple(s.expression.name for s in head),
-                    solution_set.value.unwrap()
-                )
+                tuple(s.expression.name for s in head),
+                solution_set.value.unwrap()
+            )
             solution_set.row_type = row_type
         return solution_set, functor_orig
 
