@@ -18,9 +18,9 @@ import tornado.options
 import tornado.web
 import tornado.websocket
 import yaml
-from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
 from tornado.options import define, options
 
+from ...regions import ExplicitVBR, ExplicitVBROverlay
 from .engines import DestrieuxEngineConf, NeurosynthEngineConf
 from .queries import NeurolangQueryManager
 from .responses import (
@@ -85,6 +85,10 @@ class Application(tornado.web.Application):
                 QueryHandler,
             ),
             (
+                r"/v1/autocompletion",
+                QueryAutocompletionHandler,
+            ),
+            (
                 r"/v1/statementsocket",
                 QuerySocketHandler,
             ),
@@ -132,6 +136,7 @@ class StaticFileOrDefaultHandler(tornado.web.StaticFileHandler):
     This is only useful for dev mode, as static file handling is done
     by nginx in production.
     """
+
     def validate_absolute_path(self, root: str, absolute_path: str) -> Optional[str]:
         try:
             return super().validate_absolute_path(root, absolute_path)
@@ -348,6 +353,24 @@ class QueryHandler(JSONRequestHandler):
         LOG.debug("Submitting query with uuid %s.", uuid)
         self.application.nqm.submit_query(uuid, query, engine)
         return self.write_json_reponse({"query": query, "uuid": uuid})
+
+
+class QueryAutocompletionHandler(JSONRequestHandler):
+    """
+    Main endpoint to submit a query autocompletion using a POST request.
+    """
+
+    async def post(self):
+        text = self.get_argument("notCursorLines", '')
+        engine = self.get_argument("engine", "default")
+        text_autocompletion = self.get_argument("cursorLine", '')
+        self.uuid = str(uuid4())
+        LOG.debug("Submitting query autocompletion with uuid %s.", self.uuid)
+        f = self.application.nqm.submit_query_autocompletion(
+            self.uuid, text, text_autocompletion, engine)
+        fres = f.result()
+        fjson = json.dumps(fres)
+        self.write(json.dumps({"tokens": fjson}))
 
 
 class NiftiiImageHandler(JSONRequestHandler):
