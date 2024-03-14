@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 
 from lark import Lark, Transformer
@@ -26,10 +25,6 @@ from ...probabilistic.expressions import (
     ProbabilisticFact
 )
 from ...utils.interactive_parsing import LarkCompleter
-
-
-logging.basicConfig(level=logging.DEBUG)
-LOG = logging.getLogger(__name__)
 
 
 GRAMMAR = u"""
@@ -567,9 +562,7 @@ def parser(code, locals=None, globals=None, interactive=False):
 
 
 def parse_rules():
-    LOG.debug(f"current working directory : {os.getcwd()}")
     curdir = os.path.dirname(os.path.realpath(__file__))
-    LOG.debug(f"current file directory : {curdir}")
     rules_file = os.path.join(
         curdir,
         "rules.json"
