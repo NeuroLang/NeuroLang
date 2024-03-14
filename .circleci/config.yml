@@ -31,9 +31,15 @@ commands:
             fi
 
       - run:
+          name: Create Virtual Environment with virtualenv
+          command: |
+            rm -rf venv
+            virtualenv venv
+            ls -la venv/bin
+
+      - run:
           name: install dependencies
           command: |
-            python -m venv venv
             . venv/bin/activate
             pip install --upgrade pip
 
@@ -111,7 +117,7 @@ commands:
 jobs:
   py38:
     docker:
-      - image: circleci/python:3.8
+      - image: cimg/python:3.8
     resource_class: large
 
     working_directory: ~/repo
@@ -123,7 +129,7 @@ jobs:
 
   py37dask:
     docker:
-      - image: circleci/python:3.7
+      - image: cimg/python:3.7
 
     working_directory: ~/repo
 
@@ -135,7 +141,7 @@ jobs:
 
   py38dask:
     docker:
-      - image: circleci/python:3.8
+      - image: cimg/python:3.8
 
     working_directory: ~/repo
 
@@ -147,7 +153,7 @@ jobs:
 
   py39:
     docker:
-      - image: circleci/python:3.9
+      - image: cimg/python:3.9
     resource_class: large
 
     working_directory: ~/repo
@@ -159,7 +165,7 @@ jobs:
 
   py310:
     docker:
-      - image: circleci/python:3.10
+      - image: cimg/python:3.10
     resource_class: large
 
 
@@ -173,7 +179,7 @@ jobs:
 
   benchmark:
     docker:
-      - image: circleci/python:3.10
+      - image: cimg/python:3.10
     resource_class: large
 
     working_directory: ~/repo
@@ -208,7 +214,7 @@ jobs:
 
   docs:
     docker:
-      - image: circleci/python:3.10
+      - image: cimg/python:3.10
     resource_class: large
 
     working_directory: ~/repo
@@ -259,7 +265,7 @@ jobs:
 
   deploy_docs:
     docker:
-      - image: circleci/python:3.10
+      - image: cimg/python:3.10
     steps:
       - attach_workspace:
           at: /tmp/build
