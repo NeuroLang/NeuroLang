@@ -13,3 +13,21 @@ body {
 .main.menu .item .github.icon {
   font-size: 1.5em;
 }
+
+#facetsContainer {
+    display: none;              /* container initially hidden */
+    flex-direction: row;        /* children lay out in a row */
+    gap: 10px;                  /* space between the children */
+    align-items: center;        /* vertically align the children in the center */
+}
+
+#facetsContainer label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.facetsInnerContainer {
+    display: flex;
+    justify-content: space-between;     /* distribute space between the flex items */
+}
