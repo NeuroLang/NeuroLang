@@ -1,12 +1,13 @@
-from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
+import json
+import os
 
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedToken, UnexpectedCharacters, LarkError
-
-from neurolang.logic import ExistentialPredicate
+from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
+from ...exceptions import UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException
 from ...expressions import (
     Command,
     Constant,
@@ -17,13 +18,14 @@ from ...expressions import (
     Statement,
     Symbol
 )
+from ...logic import ExistentialPredicate
 from ...probabilistic.expressions import (
     PROB,
     Condition,
     ProbabilisticFact
 )
-from ...exceptions import UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException
 from ...utils.interactive_parsing import LarkCompleter
+
 
 GRAMMAR = u"""
 start: expressions
@@ -557,3 +559,17 @@ def parser(code, locals=None, globals=None, interactive=False):
         raise UnexpectedCharactersError(str(e), line=e.line - 1, column=e.column - 1) from e
     except LarkError as e:
         raise NeuroLangException from e
+
+
+def parse_rules():
+    curdir = os.path.dirname(os.path.realpath(__file__))
+    rules_file = os.path.join(
+        curdir,
+        "rules.json"
+    )
+
+    # Opening JSON file
+    with open(rules_file, 'r') as f:
+        # json.load() returns JSON object as a dictionary
+        rules_dico = json.load(f)
+    return rules_dico

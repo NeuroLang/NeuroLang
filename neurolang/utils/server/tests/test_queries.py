@@ -4,18 +4,20 @@ from unittest.mock import create_autospec
 from uuid import uuid4
 
 import pytest
-from neurolang.frontend.probabilistic_frontend import NeurolangPDL
+
 from ..app import NeurolangQueryManager
 from ..engines import NeurolangEngineConfiguration
 from ....exceptions import UnexpectedTokenError
+from ....frontend.probabilistic_frontend import NeurolangPDL
 
 
 @pytest.fixture
 def conf():
     conf = create_autospec(NeurolangEngineConfiguration)
     conf.key = "mockengine"
-    conf.create.side_effect = lambda : NeurolangPDL()
+    conf.create.side_effect = lambda: NeurolangPDL()
     return conf
+
 
 def test_nqm_creates_engines(conf):
     opts = {conf: 5}
@@ -26,6 +28,7 @@ def test_nqm_creates_engines(conf):
     assert nqm.engines[conf.key].counter == 5
     assert len(nqm.engines[conf.key].engines) == 5
     assert conf.create.call_count == 5
+
 
 def test_nqm_submits_queries(conf):
     opts = {conf: 2}
@@ -41,6 +44,7 @@ def test_nqm_submits_queries(conf):
     # wait for future execution. It should raise the exception
     with pytest.raises(UnexpectedTokenError):
         res.result()
+
 
 def test_nqm_waits_for_engines_to_be_available(conf):
     # create two engines
@@ -62,7 +66,6 @@ def test_nqm_waits_for_engines_to_be_available(conf):
     assert isinstance(res1, Future)
     assert isinstance(res2, Future)
     assert isinstance(res3, Future)
-    
     # wait 1sec for 1st query to complete
     with pytest.raises(TimeoutError):
         res1.result(timeout=1)
@@ -82,6 +85,7 @@ def test_nqm_waits_for_engines_to_be_available(conf):
     assert res1.result() is not None
     assert res2.result() is not None
     assert res3.result() is not None
+
 
 def test_nqm_cancels_queries(conf):
     # create one engine
@@ -113,3 +117,45 @@ def test_nqm_cancels_queries(conf):
     # release engine to finish first task
     nqm.engines[conf.key].sema.release()
     assert res1.result() is not None
+
+
+def test_nqm_computes_autocompletion(conf):
+    # create two engines
+    opts = {conf: 2}
+    nqm = NeurolangQueryManager(opts)
+    time.sleep(.2)
+
+    # acquire the two engines manually to block execution
+    nqm.engines[conf.key].sema.acquire()
+    nqm.engines[conf.key].sema.acquire()
+
+    # submit one task
+    id1 = uuid4()
+
+    res = nqm.submit_query_autocompletion(
+        id1,
+        '''
+        A(4, 5)
+        A(5, 6)
+        A(6, 5)
+        five := 5
+        B(x,y) :- A(x, y)
+        B(x,y) :- B(x, z),A(z, y)
+        C(x) :- B(x, y), (y == five)
+        D("x")
+        ''',
+        '''
+        A(4, 5)
+        A(5, 6)
+        A(6, 5)
+        five := 5
+        B(x,y) :- A(x, y)
+        B(x,y) :- 
+        ''',
+        conf.key
+    )
+
+    assert isinstance(res, Future)
+
+    # cancel the task
+    nqm.cancel(id1)
