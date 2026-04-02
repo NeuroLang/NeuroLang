@@ -54,6 +54,7 @@ dev = [
     "pytest-cov",
     "tornado",
     "pyyaml",
+    "problog"
 ]
 doc = [
     "sphinx>=4.2.0",
