@@ -19,6 +19,12 @@ from neurolang.regions import (
 )
 from nilearn import datasets, image
 
+try:
+    from nilearn.datasets.utils import _fetch_files as _nilearn_fetch_files
+except ImportError:
+    # nilearn >= 0.11: _fetch_files was moved and renamed
+    from nilearn.datasets._utils import fetch_files as _nilearn_fetch_files
+
 
 class NeurolangEngineSet:
     """
@@ -149,7 +155,7 @@ class NeurosynthEngineConf(NeurolangEngineConfiguration):
 
 
 def load_neurosynth_data(data_dir: Path, nl, mni_mask: nib.Nifti1Image):
-    ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
+    ns_database_fn, ns_features_fn = _nilearn_fetch_files(
         data_dir / "neurosynth",
         [
             (

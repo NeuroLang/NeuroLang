@@ -21,6 +21,7 @@ from ..exceptions import NeuroLangException
 
 NEW_TYPING_39 = sys.version_info[:3] >= (3, 9, 0)
 NEW_TYPING_37 = (sys.version_info[:3] >= (3, 7, 0)) and not NEW_TYPING_39
+NEW_TYPING_312 = sys.version_info[:2] >= (3, 12)
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -49,9 +50,14 @@ if not (NEW_TYPING_37 or NEW_TYPING_39):
 
     Unknown = _Unknown(_root=True)
 elif NEW_TYPING_37 or NEW_TYPING_39:
-    from typing import _Final, _Immutable, _GenericAlias
+    from typing import _Final, _GenericAlias
+    if not NEW_TYPING_312:
+        from typing import _Immutable
+        _Unknown_bases = (_Final, _Immutable)
+    else:
+        _Unknown_bases = (_Final,)
 
-    class Unknown(_Final, _Immutable, _root=True):
+    class Unknown(*_Unknown_bases, _root=True):
         """Special type indicating an unknown type.
 
         - Unknown is compatible with every type.
