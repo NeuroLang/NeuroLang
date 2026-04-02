@@ -34,3 +34,16 @@ Available on this machine:
 - The project has a `.claude/worktrees/` directory from a previous Claude session -- ignore this entirely.
 - `examples_old/cmba.json` is a huge trace file -- do not grep through it.
 - The `dask_sql` / dask backend is optional and not actively tested in CI. The sqlalchemy dependency is only used there.
+- `problog` was removed from dev dependencies -- tests in `neurolang/probabilistic/cplogic/` and `neurolang/tests/test_relational_algebra_provenance.py` etc. will fail with ModuleNotFoundError. These are pre-existing failures.
+- `pandas 3.x` changed StringArray behavior; tests in `neurolang/datalog/tests/test_chase.py` and `test_instance.py` fail with "setting an array element with a sequence". These are pre-existing failures from the pandas version upgrade.
+- `numpy 2.x` changed `np.bool` to `np.bool_` and 0d array behavior; some probabilistic tests fail. Pre-existing.
+
+## Python 3.12+ Compatibility Fixes Applied
+
+The following changes were made to support Python 3.12/3.13/3.14:
+
+1. **neurolang/type_system/__init__.py**: Added `NEW_TYPING_312` flag; `typing._Immutable` was removed in Python 3.12 -- conditionally import only for Python < 3.12.
+2. **neurolang/CD_relations.py**: Replaced `from scipy.linalg import kron` with `from numpy import kron` -- `scipy.linalg.kron` was removed in scipy 1.17+.
+3. **neurolang/commands.py** and **neurolang/frontend/neurosynth_utils.py**: Added try/except for `nilearn.datasets.utils._fetch_files` → `nilearn.datasets._utils.fetch_files` (nilearn >= 0.11).
+4. **neurolang/utils/server/engines.py**: Added compatibility import for `_nilearn_fetch_files` replacing `datasets.utils._fetch_files`.
+5. **neurolang/frontend/datalog/standard_syntax.py**: Fixed invalid Python escape sequences `\/` and `\.` in Lark grammar string (were SyntaxWarning in 3.12, would be SyntaxError in 3.14).
