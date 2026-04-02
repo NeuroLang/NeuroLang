@@ -253,7 +253,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
 
 class Expression(metaclass=ExpressionMeta):
     __super_attributes__ = WRAPPER_ASSIGNMENTS + (
-        '__signature__', 'mro', 'type', '_symbols',
+        '__annotations__', '__signature__', 'mro', 'type', '_symbols',
         '__code__', '__defaults__', '__kwdefaults__', '__no_type_check__'
     )
 
@@ -520,6 +520,9 @@ class Constant(Expression):
         for attr in WRAPPER_ASSIGNMENTS:
             if hasattr(value, attr):
                 setattr(self, attr, getattr(value, attr))
+        # Ensure __annotations__ is copied on Python 3.14+ where it's no longer in WRAPPER_ASSIGNMENTS
+        if '__annotations__' not in WRAPPER_ASSIGNMENTS and hasattr(value, '__annotations__'):
+            setattr(self, '__annotations__', getattr(value, '__annotations__'))
 
         if auto_infer_type and self.type is Unknown:
             if hasattr(value, '__annotations__'):
