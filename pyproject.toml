@@ -7,13 +7,12 @@ name = "neurolang"
 dynamic = ["version"]
 description = "NeuroLang: Probabilistic Logic Programming for NeuroScience Research"
 readme = "README.md"
-license = { text = "BSD 3" }
+license = "BSD-3-Clause"
 requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Topic :: Scientific/Engineering",
