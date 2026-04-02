@@ -1,0 +1,29 @@
+{
+  "milestone": "test-fixes",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-FIX-001",
+    "VAL-FIX-002",
+    "VAL-FIX-003",
+    "VAL-FIX-004",
+    "VAL-FIX-005"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "previousRound": null,
+  "notes": {
+    "VAL-FIX-001": "92 passed, 3 skipped — dalvi_suciu, components_transformation, and probabilistic_frontend tests all pass; no numpy nonzero 0d array errors",
+    "VAL-FIX-002": "228 passed, 6 skipped — chase and instance tests all pass; no pandas StringArray assignment errors",
+    "VAL-FIX-003": "22 passed on Python 3.14 — all expression tests pass; full suite on 3.14 shows 984 passed with no FunctionApplication has no len() errors",
+    "VAL-FIX-004": "19 passed, 3 warnings (pre-existing, non-fatal) — both destrieux cardinal direction tests pass with new nilearn API",
+    "VAL-FIX-005": "984 passed, 16 skipped, 1 xpassed on Python 3.12, 3.13, and 3.14 — zero failures on all three versions"
+  }
+}
