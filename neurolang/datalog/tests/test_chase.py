@@ -357,7 +357,7 @@ def test_chase_set_destroy(chase_class):
 def test_chase_set_destroy_tuples(chase_class):
     if not issubclass(chase_class, ChaseNamedRelationalAlgebraMixin):
         skip(
-            msg="Multiple column destroy only implemented for the RA chase"
+            reason="Multiple column destroy only implemented for the RA chase"
         )
 
     consts = [

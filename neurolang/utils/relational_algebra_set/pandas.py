@@ -1159,11 +1159,13 @@ class RelationalAlgebraSet(
 ):
     def add(self, value):
         value = self._normalise_element(value)
-        e_hash = hash(value)
         if self.is_empty():
-            self._container = pd.DataFrame([value], index=[e_hash])
+            self._container = pd.DataFrame([value])
         else:
-            self._container.loc[e_hash] = value
+            new_row = pd.DataFrame([value], columns=self._container.columns)
+            self._container = pd.concat(
+                [self._container, new_row], ignore_index=True
+            )
 
     def discard(self, value):
         if not self.is_empty():
