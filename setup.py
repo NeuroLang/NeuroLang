@@ -1,20 +1,13 @@
 import configparser
-import distutils
+import logging
 import os
-import sys
 import shutil
 import subprocess
-from setuptools import find_packages, setup
+from setuptools import find_packages, setup, Command
 from setuptools.command.install import install
 from setuptools.command.develop import develop
 from setuptools.command.build_py import build_py
 from pathlib import Path
-
-# Workaround for editable install with pip
-# and versioneer
-sys.path.append(os.path.dirname(__file__))
-
-import versioneer
 
 
 def update_config_file():
@@ -137,7 +130,7 @@ class InstallCommand(install):
         install.run(self)
 
 
-class NPMBuildCommand(distutils.cmd.Command):
+class NPMBuildCommand(Command):
     """Run the npm build command"""
 
     description = "run the npm build command for the web server"
@@ -177,14 +170,14 @@ class NPMBuildCommand(distutils.cmd.Command):
         if dist_dir.exists() and not self.force:
             self.announce(
                 f"Build directory already exists for frontend app. Not rebuilding.",
-                level=distutils.log.INFO,
+                level=logging.INFO,
             )
             return
 
         command = [npm_command, "install"]
         self.announce(
             f"Running command: [{web_dir}]$ {' '.join(command)}",
-            level=distutils.log.INFO,
+            level=logging.INFO,
         )
         subprocess.check_call(
             command, cwd="neurolang/utils/server/neurolang-web"
@@ -193,7 +186,7 @@ class NPMBuildCommand(distutils.cmd.Command):
         command = [npm_command, "run", "build", "--", "--mode", "dev"]
         self.announce(
             f"Running command: [{web_dir}]$ {' '.join(command)}",
-            level=distutils.log.INFO,
+            level=logging.INFO,
         )
         subprocess.check_call(
             command, cwd="neurolang/utils/server/neurolang-web"
@@ -210,14 +203,12 @@ class BuildPyCommand(build_py):
         except (OSError, subprocess.CalledProcessError) as e:
             self.announce(
                 f"Skipping build of frontend app because: {e}.",
-                level=distutils.log.WARN,
+                level=logging.WARNING,
             )
         build_py.run(self)
 
 
 if __name__ == "__main__":
-    version = (versioneer.get_version(),)
-    cmdclass = (versioneer.get_cmdclass(),)
     setup(
         use_scm_version=True,
         packages=find_packages(),

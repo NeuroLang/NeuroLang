@@ -1,5 +1,7 @@
 from .neurolang import *
 
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
+from importlib.metadata import version, PackageNotFoundError
+try:
+    __version__ = version('neurolang')
+except PackageNotFoundError:
+    __version__ = 'unknown'

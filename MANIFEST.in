@@ -1,3 +1,1 @@
-include versioneer.py
-include neurolang/_version.py
-include neurolang/_version.pya
+include pyproject.toml
