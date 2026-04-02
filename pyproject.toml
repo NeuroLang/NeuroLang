@@ -1,0 +1,113 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neurolang"
+dynamic = ["version"]
+description = "NeuroLang: Probabilistic Logic Programming for NeuroScience Research"
+readme = "README.md"
+license = { text = "BSD 3" }
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Topic :: Scientific/Engineering",
+]
+keywords = [
+    "logic programming",
+    "probabilistic logic programming",
+    "open world",
+    "ontology",
+    "neuroscience",
+    "neuroimaging",
+    "datalog",
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "nibabel>=5.0.0",
+    "nilearn>=0.10.0",
+    "pandas>=1.5",
+    "pysdd",
+    "lark>=1.1.2",
+    "scikit-learn",
+    "matplotlib",
+    "seaborn",
+    "typing_inspect",
+    "rdflib>=6.0.0",
+    "sqlalchemy>=1.4",
+]
+
+[project.urls]
+Homepage = "https://neurolang.github.io"
+"Bug Tracker" = "https://github.com/neurolang/neurolang/issues"
+"Source Code" = "https://github.com/neurolang/neurolang"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-benchmark",
+    "pytest-cov",
+    "tornado",
+    "pyyaml",
+]
+doc = [
+    "sphinx>=4.2.0",
+    "sphinx_bootstrap_theme",
+    "sphinx-gallery",
+    "numpydoc",
+]
+server = [
+    "tornado",
+    "pyyaml",
+]
+
+[project.scripts]
+neuro-server = "neurolang.utils.server.app:main"
+
+[tool.setuptools.packages.find]
+namespaces = false
+
+[tool.setuptools.package-data]
+neurolang = [
+    "utils/server/neurolang-web/dist/*",
+    "utils/server/neurolang-web/dist/**/*",
+    "frontend/datalog/*.json",
+    "config/config.ini",
+    "utils/server/queries.yaml",
+]
+
+[tool.setuptools-scm]
+write_to = "neurolang/_version_scm.py"
+
+[tool.pytest.ini_options]
+norecursedirs = [".git", "_build", "tmp*", "scratch*", "deprecated*"]
+
+[tool.coverage.run]
+omit = [
+    "*/test_*",
+    "neurolang/deprecated",
+]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+]
+
+[tool.black]
+"line-length" = 79
+
+[tool.isort]
+multi_line_output = 3
+include_trailing_comma = false
+force_grid_wrap = 0
+use_parentheses = true
+line_length = 79
+combine_as_imports = true

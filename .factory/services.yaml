@@ -1,0 +1,6 @@
+commands:
+  install: uv pip install -e ".[dev]"
+  test: uv run pytest neurolang/ -x -q --timeout=120
+  typecheck: echo "no typecheck configured"
+  lint: echo "no lint configured"
+  build: uv build
