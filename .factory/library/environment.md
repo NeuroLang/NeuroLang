@@ -34,7 +34,7 @@ Available on this machine:
 - The project has a `.claude/worktrees/` directory from a previous Claude session -- ignore this entirely.
 - `examples_old/cmba.json` is a huge trace file -- do not grep through it.
 - The `dask_sql` / dask backend is optional and not actively tested in CI. The sqlalchemy dependency is only used there.
-- `problog` was removed from dev dependencies -- tests in `neurolang/probabilistic/cplogic/` and `neurolang/tests/test_relational_algebra_provenance.py` etc. will fail with ModuleNotFoundError. These are pre-existing failures.
+- `problog` is NOT listed in pyproject.toml dependencies (neither core nor dev extras). In the original setup.cfg it was in dev extras but was dropped during migration. Tests in `neurolang/probabilistic/cplogic/` and `neurolang/tests/test_relational_algebra_provenance.py` etc. will fail with ModuleNotFoundError. These are pre-existing failures. Do NOT add problog to core `[project] dependencies` — it should remain absent or go into dev extras only.
 - `pandas 3.x` changed StringArray behavior; tests in `neurolang/datalog/tests/test_chase.py` and `test_instance.py` fail with "setting an array element with a sequence". These are pre-existing failures from the pandas version upgrade.
 - `numpy 2.x` changed `np.bool` to `np.bool_` and 0d array behavior; some probabilistic tests fail. Pre-existing.
 
@@ -47,16 +47,19 @@ The ignored test files above fail to import because problog is not installed (pr
 ### Python 3.12
 - **942 passed**, 46 failed, 10 skipped, 1 xpassed, 2 errors
 - ALL failures are pre-existing (pandas 3.x StringArray, numpy 2.x 0d array, test_regions nilearn API)
+- The 2 errors are pre-existing pytest collection errors (likely from modules that import deprecated APIs)
 
 ### Python 3.13
 - **942 passed**, 46 failed, 10 skipped, 1 xpassed, 2 errors
 - ALL failures identical to Python 3.12 — all pre-existing
+- The 2 errors same as 3.12
 
 ### Python 3.14
 - **884 passed**, 104 failed, 10 skipped, 1 xpassed, 2 errors
 - 46 failures same as 3.12/3.13 (pre-existing pandas/numpy/nilearn)
 - Additional 58 failures: `TypeError: object of type 'FunctionApplication' has no len()` — pre-existing Python 3.14 issue with ordering/comparison of expressions
 - 2 additional: `test_gradual_typing.py` assert failures — pre-existing
+- The 2 errors same as 3.12/3.13
 
 **Key note**: When tests are run with `-x` (stop on first failure), the baseline validator stops at the first problog import error. Use `--ignore` flags above to get meaningful test results.
 
