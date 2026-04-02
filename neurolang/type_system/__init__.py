@@ -203,6 +203,17 @@ def is_type(type_):
     )
 
 
+def _has_type_args(type_):
+    """Check if a type is truly parameterized with concrete args.
+
+    In Python 3.14, bare Union has __args__ as a member_descriptor (not a
+    tuple), whereas parameterized Union[int, float].__args__ is a tuple.
+    This helper returns True only when __args__ is an actual tuple.
+    """
+    args = getattr(type_, '__args__', None)
+    return isinstance(args, tuple)
+
+
 def is_parametrical(type_):
     is_parametrical_generic = any(
         p(type_)
@@ -217,7 +228,7 @@ def is_parametrical(type_):
             )
         elif NEW_TYPING_39:
             return not (
-                hasattr(type_, '__args__') or
+                _has_type_args(type_) or
                 hasattr(type_, '__parameters')
             )
         else:
@@ -243,7 +254,7 @@ def is_parameterized(type_):
             )
         elif NEW_TYPING_39:
             return (
-                hasattr(type_, '__args__') or
+                _has_type_args(type_) or
                 hasattr(type, '__parameters__')
             )
         else:
