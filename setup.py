@@ -1,9 +1,8 @@
 import configparser
 import logging
-import os
 import shutil
 import subprocess
-from setuptools import find_packages, setup, Command
+from setuptools import setup, Command
 from setuptools.command.install import install
 from setuptools.command.develop import develop
 from setuptools.command.build_py import build_py
@@ -208,14 +207,11 @@ class BuildPyCommand(build_py):
         build_py.run(self)
 
 
-if __name__ == "__main__":
-    setup(
-        use_scm_version=True,
-        packages=find_packages(),
-        cmdclass={
-            "install": InstallCommand,
-            "develop": DevelopCommand,
-            "npm_build": NPMBuildCommand,
-            "build_py": BuildPyCommand,
-        },
-    )
+setup(
+    cmdclass={
+        "install": InstallCommand,
+        "develop": DevelopCommand,
+        "npm_build": NPMBuildCommand,
+        "build_py": BuildPyCommand,
+    },
+)

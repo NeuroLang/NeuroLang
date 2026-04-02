@@ -82,8 +82,8 @@ neurolang = [
     "utils/server/queries.yaml",
 ]
 
-[tool.setuptools-scm]
-write_to = "neurolang/_version_scm.py"
+[tool.setuptools_scm]
+version_file = "neurolang/_version_scm.py"
 
 [tool.pytest.ini_options]
 norecursedirs = [".git", "_build", "tmp*", "scratch*", "deprecated*"]
