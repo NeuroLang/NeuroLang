@@ -38,28 +38,23 @@ Available on this machine:
 - `pandas 3.x` changed StringArray behavior; tests in `neurolang/datalog/tests/test_chase.py` and `test_instance.py` fail with "setting an array element with a sequence". These are pre-existing failures from the pandas version upgrade.
 - `numpy 2.x` changed `np.bool` to `np.bool_` and 0d array behavior; some probabilistic tests fail. Pre-existing.
 
-## Full Test Suite Results (compat-verification milestone)
+## Full Test Suite Results (test-fixes milestone - FINAL)
 
 Tested with: `pytest neurolang/ -q --ignore=neurolang/utils/server --ignore=neurolang/probabilistic/cplogic/tests --ignore=neurolang/probabilistic/tests/test_marg_query_resolution.py --ignore=neurolang/probabilistic/tests/test_probabilistic_solvers.py --ignore=neurolang/tests/test_relational_algebra_provenance.py --ignore=neurolang/tests/test_relational_algebra_semiring.py`
 
 The ignored test files above fail to import because problog is not installed (pre-existing).
 
-### Python 3.12
-- **942 passed**, 46 failed, 10 skipped, 1 xpassed, 2 errors
-- ALL failures are pre-existing (pandas 3.x StringArray, numpy 2.x 0d array, test_regions nilearn API)
-- The 2 errors are pre-existing pytest collection errors (likely from modules that import deprecated APIs)
+### Python 3.12 ✓
+- **984 passed**, 0 failed, 16 skipped, 1 xpassed
+- ALL fixes applied: numpy nonzero, pandas StringArray, Python 3.14 annotations, nilearn labels, Union typing
 
-### Python 3.13
-- **942 passed**, 46 failed, 10 skipped, 1 xpassed, 2 errors
-- ALL failures identical to Python 3.12 — all pre-existing
-- The 2 errors same as 3.12
+### Python 3.13 ✓
+- **984 passed**, 0 failed, 16 skipped, 1 xpassed
+- Identical to Python 3.12 results
 
-### Python 3.14
-- **884 passed**, 104 failed, 10 skipped, 1 xpassed, 2 errors
-- 46 failures same as 3.12/3.13 (pre-existing pandas/numpy/nilearn)
-- Additional 58 failures: `TypeError: object of type 'FunctionApplication' has no len()` — pre-existing Python 3.14 issue with ordering/comparison of expressions
-- 2 additional: `test_gradual_typing.py` assert failures — pre-existing
-- The 2 errors same as 3.12/3.13
+### Python 3.14 ✓
+- **984 passed**, 0 failed, 16 skipped, 1 xpassed
+- All previous 104 failures are now fixed
 
 **Key note**: When tests are run with `-x` (stop on first failure), the baseline validator stops at the first problog import error. Use `--ignore` flags above to get meaningful test results.
 
@@ -72,3 +67,8 @@ The following changes were made to support Python 3.12/3.13/3.14:
 3. **neurolang/commands.py** and **neurolang/frontend/neurosynth_utils.py**: Added try/except for `nilearn.datasets.utils._fetch_files` → `nilearn.datasets._utils.fetch_files` (nilearn >= 0.11).
 4. **neurolang/utils/server/engines.py**: Added compatibility import for `_nilearn_fetch_files` replacing `datasets.utils._fetch_files`.
 5. **neurolang/frontend/datalog/standard_syntax.py**: Fixed invalid Python escape sequences `\/` and `\.` in Lark grammar string (were SyntaxWarning in 3.12, would be SyntaxError in 3.14).
+6. **neurolang/expressions.py**: Added `'__annotations__'` to `Expression.__super_attributes__` explicitly; `Constant.__init_callable_formula__` now copies `__annotations__` on Python 3.14+ where `functools.WRAPPER_ASSIGNMENTS` no longer includes it.
+7. **neurolang/utils/relational_algebra_set/pandas.py**: Fixed `RelationalAlgebraSet.add()` to use `pd.concat` instead of `.loc` assignment for pandas 3.x StringArray compatibility.
+8. **neurolang/probabilistic/dalvi_suciu_lift.py**: Added `np.atleast_1d()` in `connected_components()` to fix `ValueError: Calling nonzero on 0d arrays` in numpy 2.x.
+9. **neurolang/tests/test_regions.py**: Updated `destrieux` fixture to handle both old (tuple list) and new (string list) nilearn labels format.
+10. **neurolang/type_system/__init__.py**: Added `_has_type_args()` helper using `isinstance(args, tuple)` check; used in `is_parametrical`/`is_parameterized` for Python 3.14 where bare `Union.__args__` is a `member_descriptor` not a tuple.
