@@ -1,35 +1,62 @@
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import App from '../App'
 
 describe('App', () => {
-  it('renders without crashing', () => {
-    render(<App />)
-    expect(screen.getByText('NeuroLang Sparklis')).toBeInTheDocument()
+  beforeEach(() => {
+    // Mock fetch so EngineSelector doesn't fail
+    // API returns {"status":"ok","data":[...]} format
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ status: 'ok', data: ['neurosynth', 'destrieux'] }),
+      } as Response)
+    )
   })
 
-  it('renders the navbar with title', () => {
-    render(<App />)
-    const navbar = screen.getByRole('banner')
-    expect(navbar).toBeInTheDocument()
-    expect(screen.getByText('NeuroLang Sparklis')).toBeInTheDocument()
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
-  it('renders sidebar with engine section', () => {
+  it('renders without crashing', async () => {
     render(<App />)
-    expect(screen.getByText('Engines')).toBeInTheDocument()
-    expect(screen.getByText('Select an engine to begin')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByText('NeuroLang Sparklis')).toBeInTheDocument()
+    )
   })
 
-  it('renders sidebar with predicates section', () => {
+  it('renders the navbar with title', async () => {
     render(<App />)
-    expect(screen.getByText('Predicates')).toBeInTheDocument()
-    expect(screen.getByText('Engine not selected')).toBeInTheDocument()
+    await waitFor(() => {
+      const navbar = screen.getByRole('banner')
+      expect(navbar).toBeInTheDocument()
+      expect(screen.getByText('NeuroLang Sparklis')).toBeInTheDocument()
+    })
   })
 
-  it('renders main content area with welcome message', () => {
+  it('renders sidebar with engine section', async () => {
     render(<App />)
-    expect(screen.getByRole('main')).toBeInTheDocument()
-    expect(screen.getByText(/Welcome to NeuroLang Sparklis/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Engines')).toBeInTheDocument()
+    })
+  })
+
+  it('renders sidebar with predicates section', async () => {
+    render(<App />)
+    await waitFor(() => {
+      expect(screen.getByText('Predicates')).toBeInTheDocument()
+      expect(screen.getByText('Engine not selected')).toBeInTheDocument()
+    })
+  })
+
+  it('renders main content area with welcome message when no engine selected', async () => {
+    render(<App />)
+    await waitFor(() => {
+      expect(screen.getByRole('main')).toBeInTheDocument()
+      expect(
+        screen.getByText(/Welcome to NeuroLang Sparklis/i)
+      ).toBeInTheDocument()
+    })
   })
 })

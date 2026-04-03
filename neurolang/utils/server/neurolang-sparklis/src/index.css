@@ -72,7 +72,22 @@
   background-color: #ffffff;
   border-right: 1px solid #e0e0e8;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 1rem 0;
+  transition: width 0.2s ease, min-width 0.2s ease;
+  flex-shrink: 0;
+}
+
+.sidebar--open {
+  width: 250px;
+  min-width: 250px;
+}
+
+.sidebar--collapsed {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border-right: none;
 }
 
 .sidebar-section {
@@ -121,4 +136,111 @@
 .content-placeholder p {
   font-size: 1rem;
   color: #6b7280;
+}
+
+/* Content: engine selected */
+.content-engine-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.content-engine-selected h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.content-engine-selected p {
+  font-size: 1rem;
+  color: #6b7280;
+}
+
+/* Sidebar toggle button */
+.sidebar-toggle {
+  background: none;
+  border: none;
+  color: #e8e8f0;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  line-height: 1;
+  transition: background-color 0.2s;
+}
+
+.sidebar-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Engine selector */
+.engine-selector {
+  margin-top: 0.25rem;
+}
+
+.engine-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.engine-item {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #374151;
+  transition: background-color 0.15s, color 0.15s;
+  margin-bottom: 0.125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.engine-item:hover {
+  background-color: #f3f4f6;
+  color: #1a1a2e;
+}
+
+.engine-item--active {
+  background-color: #1a1a2e;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.engine-item--active:hover {
+  background-color: #2d2d4a;
+  color: #ffffff;
+}
+
+.engine-selector-loading,
+.engine-selector-error,
+.engine-selector-empty {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.engine-selector-error {
+  color: #ef4444;
+  font-style: normal;
+}
+
+/* Responsive: narrow viewport collapses sidebar */
+@media (max-width: 768px) {
+  .sidebar--open {
+    width: 200px;
+    min-width: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar--open {
+    width: 0;
+    min-width: 0;
+    padding: 0;
+    border-right: none;
+  }
 }
