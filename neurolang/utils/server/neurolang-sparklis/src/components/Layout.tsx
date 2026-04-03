@@ -1,7 +1,10 @@
 import React, { useState } from 'react'
 import EngineSelector from './EngineSelector'
 import PredicateBrowser from './PredicateBrowser'
+import VisualQueryBuilder from './VisualQueryBuilder'
 import { useEngine } from '../context/useEngine'
+import { useQuery } from '../context/useQuery'
+import { type SchemaSymbol } from './PredicateBrowser'
 
 function MainContent(): React.ReactElement {
   const { selectedEngine } = useEngine()
@@ -17,10 +20,20 @@ function MainContent(): React.ReactElement {
 
   return (
     <div className="content-engine-selected">
-      <h1>Engine: {selectedEngine}</h1>
-      <p>Engine selected. Query builder coming soon.</p>
+      <VisualQueryBuilder />
     </div>
   )
+}
+
+function SidebarPredicateBrowser(): React.ReactElement {
+  const { model, refresh } = useQuery()
+
+  function handleSelect(symbol: SchemaSymbol): void {
+    model.addPredicate(symbol.name, symbol.params)
+    refresh()
+  }
+
+  return <PredicateBrowser onSelect={handleSelect} />
 }
 
 function Layout(): React.ReactElement {
@@ -63,7 +76,7 @@ function Layout(): React.ReactElement {
           </div>
           <div className="sidebar-section">
             <h2 className="sidebar-section-title">Predicates</h2>
-            <PredicateBrowser />
+            <SidebarPredicateBrowser />
           </div>
         </aside>
 
