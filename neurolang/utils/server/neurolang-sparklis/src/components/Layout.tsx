@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import EngineSelector from './EngineSelector'
+import PredicateBrowser from './PredicateBrowser'
 import { useEngine } from '../context/useEngine'
 
 function MainContent(): React.ReactElement {
@@ -62,7 +63,7 @@ function Layout(): React.ReactElement {
           </div>
           <div className="sidebar-section">
             <h2 className="sidebar-section-title">Predicates</h2>
-            <p className="sidebar-placeholder">Engine not selected</p>
+            <PredicateBrowser />
           </div>
         </aside>
 
