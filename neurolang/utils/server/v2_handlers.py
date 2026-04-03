@@ -199,9 +199,11 @@ class V2SchemaHandler(JSONRequestHandler):
         functions = []
         probabilistic = []
 
-        for name, symbol in engine.symbols.items():
+        for name in engine.symbols:
             if name.startswith("_"):
                 continue
+
+            symbol = engine.symbols[name]
 
             if is_leq_informative(symbol.type, Callable):
                 # ---------- function / aggregation symbol ----------
