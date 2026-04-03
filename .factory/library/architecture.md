@@ -43,3 +43,17 @@ The NeuroLang Sparklis GUI is a **hybrid query builder** that combines visual po
 - All v2 endpoints inherit CORS headers from `JSONRequestHandler`
 - The React app in dev mode (port 3100) proxies API calls to the Tornado backend (port 8888)
 - The production build is served as static files from `/sparklis/` by Tornado
+
+## API Response Shape
+
+The `/v2/engines` endpoint returns an **envelope format**, not a plain array:
+```json
+{ "status": "ok", "data": ["neurosynth", "destrieux"] }
+```
+Frontend workers must handle this envelope. See `EngineSelector.tsx` for a defensive pattern that handles both the envelope and plain array cases.
+
+## Backend Quirks
+
+- **`get_atlas(engine_key)` raises `IndexError`** (not `KeyError`) when the engine key is unknown. The underlying `queries.py` implementation does a list comprehension and accesses `config[0]`, so an empty list raises `IndexError`. Use `except (IndexError, KeyError)` when catching 404 cases for atlas-related endpoints.
+- **`NeurolangEngineSet.engine()` yields `None`** (not raising) when timeout is set and the semaphore cannot be acquired. Always check `if engine is None` and return HTTP 503 when acquiring engines directly. Example pattern in `v2_handlers.py V2SchemaHandler.get()`.
+- **`JSONRequestHandler` has two definitions**: One in `neurolang/utils/server/app.py` (for v1 handlers) and one in `neurolang/utils/server/base_handlers.py` (for v2 handlers). New v2 handlers should import from `base_handlers.py`. Do NOT import from `app.py` as this creates a circular import.

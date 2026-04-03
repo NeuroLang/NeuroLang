@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import EngineSelector from './EngineSelector'
-import { useEngine } from '../context/EngineContext'
+import { useEngine } from '../context/useEngine'
 
 function MainContent(): React.ReactElement {
   const { selectedEngine } = useEngine()

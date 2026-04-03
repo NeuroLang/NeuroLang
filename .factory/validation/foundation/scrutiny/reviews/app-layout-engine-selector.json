@@ -1,0 +1,51 @@
+{
+  "featureId": "app-layout-engine-selector",
+  "reviewedAt": "2026-04-03T07:05:00.000Z",
+  "commitId": "26af8188",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The implementation fully covers all requirements from the feature description. Layout, EngineSelector, EngineContext, and App.tsx were correctly created/updated. All five expectedBehavior items are met: navbar + sidebar + main area, engine list from /v2/engines, selection stored in context with highlight, no horizontal scrollbar at 1280px, and responsive collapse at 480px. 15 tests pass, TypeScript is clean. One minor non-blocking issue: the EngineContextValue interface is not exported from EngineContext.tsx (committed state), so external consumers cannot import the type without re-declaring it. Additionally, there are uncommitted working-tree changes that split useEngine into its own file (useEngine.ts) - these are not part of the reviewed commit and do not affect the passing state. Keyboard accessibility for the engine listbox (no onKeyDown on <li role='option'>) was not required by the feature spec but is a future concern.",
+    "issues": [
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/context/EngineContext.tsx",
+        "line": 4,
+        "severity": "non_blocking",
+        "description": "EngineContextValue interface is not exported (committed state). External consumers who need the type for their own component props cannot import it without re-declaring it. The uncommitted refactor (useEngine.ts) partially addresses this, but in a way that duplicates the type definition. Should export EngineContextValue directly from EngineContext.tsx."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/Layout.tsx",
+        "line": 56,
+        "severity": "non_blocking",
+        "description": "The <aside> sets aria-hidden={!sidebarOpen} but EngineSelector inside still mounts and calls fetch(). The engine fetch happens even when sidebar is collapsed on load (because sidebarOpen starts true, this is not a problem in practice). However, if a future feature toggles the sidebar default to closed, the engines will still be fetched (component is mounted). This is the correct behavior but worth noting - the fetch is unconditional on mount."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/EngineSelector.tsx",
+        "line": 75,
+        "severity": "non_blocking",
+        "description": "Engine list items use role='option' within role='listbox' but have no keyboard event handlers (onKeyDown). Per WAI-ARIA, options in a listbox should support arrow key navigation, Enter/Space for selection. The feature spec didn't explicitly require keyboard accessibility beyond what was specified, so this is a future enhancement concern rather than a blocking issue."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/context/EngineContext.tsx",
+        "line": null,
+        "severity": "non_blocking",
+        "description": "Uncommitted working-tree changes exist: useEngine hook was moved to a new file (useEngine.ts), EngineContext.tsx was modified to remove the hook and export the interface, and EngineSelector.tsx/Layout.tsx import paths updated. These changes are NOT part of commit 26af8188 and should be committed (or reverted). Currently they leave the repo in an inconsistent state between HEAD and working tree. Tests and TypeScript still pass with these changes."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The /v2/engines API response uses an envelope format {status: 'ok', data: [...]} rather than a plain array. The worker handled both formats defensively (plain array and envelope), and noted this in skillFeedback.suggestedChanges. This API response envelope pattern should be documented in .factory/library/architecture.md under the API Design section so future frontend workers know what to expect when consuming v2 endpoints.",
+      "evidence": "Worker skillFeedback.suggestedChanges[0]: 'The skill mentions checking the v2/engines API shape, but the actual response wraps data in {status, data} - it would be helpful to note this API response envelope pattern in the library docs for future frontend workers.' EngineSelector.tsx line 30: handles both Array.isArray(data) and data.data cases."
+    },
+    {
+      "area": "conventions",
+      "observation": "The worker split the useEngine hook into a separate useEngine.ts file (uncommitted) after the commit, which is a reasonable convention for React context files (separate context from hook). However, this pattern is not documented in AGENTS.md conventions section, and the uncommitted state means these files diverge from the committed HEAD. If this pattern is intentional (context file exports provider, separate file exports hook), AGENTS.md should document it.",
+      "evidence": "Working tree contains neurolang/utils/server/neurolang-sparklis/src/context/useEngine.ts (untracked), and EngineSelector.tsx/Layout.tsx have uncommitted import path changes pointing to ../context/useEngine instead of ../context/EngineContext."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS. The app-layout-engine-selector feature is fully implemented and meets all requirements. The Layout component has a collapsible 250px sidebar, top navbar with title and links, and a main content area. EngineSelector fetches /v2/engines on mount, renders engine names, highlights the selected one with aria-selected. EngineContext stores selection. 15 tests pass covering all required scenarios. TypeScript is clean. Minor issues: EngineContextValue interface not exported from committed state, no keyboard nav on listbox items (not required by spec), and uncommitted post-commit refactor (useEngine.ts extraction) that should be committed. The API envelope pattern ({status, data}) is defensively handled but should be documented in architecture.md."
+}

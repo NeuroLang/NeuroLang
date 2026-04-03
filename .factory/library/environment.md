@@ -29,10 +29,11 @@ Environment variables, external dependencies, and setup notes.
 - `numpy`, `pandas`: data processing
 - `matplotlib`, `seaborn`: plotting (for agg_kde function)
 
-## Key Dependencies (Frontend - to be installed)
+## Key Dependencies (Frontend - installed in neurolang-sparklis/)
 - `react`, `react-dom`: UI framework
 - `@niivue/niivue`: brain image visualization
 - `@codemirror/view`, `@codemirror/state`, `@codemirror/lang-*`: code editor
 - `vite`: build tool
-- `vitest`, `@testing-library/react`: testing
+- `vitest`, `@testing-library/react`, `@testing-library/user-event`: testing (user-event is already installed)
 - `typescript`: type checking
+- `tailwindcss`: installed as devDependency but **not yet configured** (no `tailwind.config.js` or PostCSS config); current CSS is hand-written BEM-style in `index.css`

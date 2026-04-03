@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState } from 'react'
+import React, { createContext, useState } from 'react'
 
-interface EngineContextValue {
+export interface EngineContextValue {
   selectedEngine: string | null
   setSelectedEngine: (engine: string | null) => void
 }
@@ -19,14 +19,6 @@ export function EngineProvider({
       {children}
     </EngineContext.Provider>
   )
-}
-
-export function useEngine(): EngineContextValue {
-  const ctx = useContext(EngineContext)
-  if (!ctx) {
-    throw new Error('useEngine must be used within an EngineProvider')
-  }
-  return ctx
 }
 
 export default EngineContext
