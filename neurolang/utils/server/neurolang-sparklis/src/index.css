@@ -744,3 +744,88 @@
 .suggestions-chip:active {
   background-color: #bfdbfe;
 }
+
+/* ============================================================
+   Query Split View (Visual Builder + Code Editor)
+   ============================================================ */
+
+.query-split-view {
+  display: flex;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.query-split-panel {
+  flex: 1;
+  min-width: 0; /* allow shrinking */
+}
+
+.query-split-panel--builder {
+  flex: 1 1 50%;
+}
+
+.query-split-panel--editor {
+  flex: 1 1 50%;
+}
+
+/* ============================================================
+   Code Editor Panel
+   ============================================================ */
+
+.code-editor-panel {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e0e0e8;
+  border-radius: 8px;
+  overflow: hidden;
+  height: 100%;
+  min-height: 180px;
+}
+
+.code-editor-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background-color: #f8f9fc;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.code-editor-panel-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+}
+
+.code-editor-panel-hint {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.code-editor-panel-body {
+  flex: 1;
+  overflow: auto;
+  background-color: #f8f9fc;
+}
+
+/* CodeMirror wrapper */
+.code-editor-wrapper {
+  height: 100%;
+  min-height: 120px;
+  display: block;
+}
+
+.code-editor-wrapper .cm-editor {
+  height: 100%;
+  min-height: 120px;
+}
+
+.code-editor-wrapper .cm-scroller {
+  overflow: auto;
+  height: 100%;
+}

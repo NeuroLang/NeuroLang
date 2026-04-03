@@ -5,7 +5,7 @@
  * the component tree.  Using a context avoids deep prop-drilling between the
  * PredicateBrowser (sidebar) and the VisualQueryBuilder (main content).
  */
-import React, { createContext, useCallback, useReducer } from 'react'
+import React, { createContext, useCallback, useReducer, useState } from 'react'
 import {
   QueryModel,
   QueryState,
@@ -33,6 +33,14 @@ export interface QueryContextValue {
   undo: () => void
   /** Convenience: redo and refresh. */
   redo: () => void
+  /**
+   * The raw Datalog text currently shown in the code editor.
+   * Kept in sync: visual builder mutations update this; direct code edits
+   * also update this (handled by the consumer of the context).
+   */
+  datalogText: string
+  /** Update the raw Datalog text (called by the CodeEditor when user types). */
+  setDatalogText: (text: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -62,15 +70,25 @@ export function QueryProvider({
   // The model is created once and shared for the lifetime of this provider.
   const [model] = React.useState<QueryModel>(createModel)
 
-  const refresh = useCallback(() => forceUpdate(), [])
+  // Raw Datalog text for the code editor – kept in sync with the model.
+  const [datalogText, setDatalogText] = useState<string>('')
+
+  const refresh = useCallback(() => {
+    // After each model mutation, re-serialize to Datalog so the code editor
+    // reflects the visual builder's state.
+    setDatalogText(model.toDatalog())
+    forceUpdate()
+  }, [model])
 
   const undo = useCallback(() => {
     model.undo()
+    setDatalogText(model.toDatalog())
     forceUpdate()
   }, [model])
 
   const redo = useCallback(() => {
     model.redo()
+    setDatalogText(model.toDatalog())
     forceUpdate()
   }, [model])
 
@@ -86,6 +104,8 @@ export function QueryProvider({
     refresh,
     undo,
     redo,
+    datalogText,
+    setDatalogText,
   }
 
   return (

@@ -3,6 +3,7 @@ import EngineSelector from './EngineSelector'
 import PredicateBrowser from './PredicateBrowser'
 import VisualQueryBuilder from './VisualQueryBuilder'
 import SuggestionsPanel from './SuggestionsPanel'
+import CodeEditor from './CodeEditor'
 import { useEngine } from '../context/useEngine'
 import { useQuery } from '../context/useQuery'
 import { useSchema } from '../context/useSchema'
@@ -10,7 +11,7 @@ import { type SchemaSymbol } from './PredicateBrowser'
 
 function MainContent(): React.ReactElement {
   const { selectedEngine } = useEngine()
-  const { model, refresh } = useQuery()
+  const { model, refresh, datalogText, setDatalogText } = useQuery()
   const { lookupSymbol } = useSchema()
 
   const handleSuggestionSelect = useCallback(
@@ -30,6 +31,20 @@ function MainContent(): React.ReactElement {
     [model, refresh, lookupSymbol],
   )
 
+  const handleEditorChange = useCallback(
+    (text: string) => {
+      // Update the shared Datalog text when the user types directly
+      setDatalogText(text)
+    },
+    [setDatalogText],
+  )
+
+  const handleSubmit = useCallback(() => {
+    // Placeholder: future query execution feature will handle submission
+    // For now, just log to console to verify the callback fires
+    console.log('Submit query:', datalogText)
+  }, [datalogText])
+
   if (!selectedEngine) {
     return (
       <div className="content-placeholder">
@@ -41,7 +56,27 @@ function MainContent(): React.ReactElement {
 
   return (
     <div className="content-engine-selected">
-      <VisualQueryBuilder />
+      {/* Split view: Visual Query Builder + Code Editor side by side */}
+      <div className="query-split-view">
+        <div className="query-split-panel query-split-panel--builder">
+          <VisualQueryBuilder />
+        </div>
+        <div className="query-split-panel query-split-panel--editor">
+          <div className="code-editor-panel">
+            <div className="code-editor-panel-header">
+              <span className="code-editor-panel-label">Datalog Editor</span>
+              <span className="code-editor-panel-hint">Ctrl+Enter to run</span>
+            </div>
+            <div className="code-editor-panel-body">
+              <CodeEditor
+                value={datalogText}
+                onChange={handleEditorChange}
+                onSubmit={handleSubmit}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
       <SuggestionsPanel onSuggestionSelect={handleSuggestionSelect} />
     </div>
   )

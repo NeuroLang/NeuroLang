@@ -12,8 +12,11 @@
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@codemirror/language": "^6.12.3",
     "@codemirror/state": "^6.4.1",
     "@codemirror/view": "^6.26.3",
+    "@lezer/common": "^1.5.1",
+    "@lezer/highlight": "^1.2.3",
     "@niivue/niivue": "^0.43.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
