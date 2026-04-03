@@ -1002,6 +1002,7 @@ class NamedRelationalAlgebraFrozenSet(
                 iterable=[],
             )
         new_container = self._container.copy()
+        new_container = new_container.infer_objects()
         seen_pure_columns = set()
         for dst_column, operation in eval_expressions.items():
             if isinstance(operation, RelationalAlgebraStringExpression):
