@@ -1,49 +1,42 @@
-# User Testing Guide: NeuroLang Build Migration
+# User Testing
 
-## Overview
+## Validation Surface
 
-This is a pure Python library project. There are NO web services, no database, and no server to start. All testing is done via shell commands.
+**Primary surface:** Browser (React web application)
+- Dev: http://localhost:3100 (Vite dev server, proxies API to :8888)
+- Prod build: http://localhost:8888/sparklis/ (served by Tornado)
 
-## Testing Tool
+**API surface:** HTTP/WebSocket endpoints on http://localhost:8888/v2/
 
-All assertions use `shell` as the testing tool. No browser automation or TUI testing needed.
-
-## No Services Required
-
-This project has no services to start or stop. `services.yaml` only contains build/test commands.
-
-## Test Commands
-
-- Install: `uv pip install -e ".[dev]"`
-- Multi-version test: `uv run --python 3.X pytest neurolang/ -x -q`
-- Build: `uv build`
+**Tool:** `agent-browser` for all browser-based assertions.
 
 ## Validation Concurrency
 
-### Surface: shell
+Machine: ~36GB RAM, 11 CPU cores.
 
-Max concurrent validators: 3 (shell commands are CPU/disk bound, machine has 11 cores and 36GB RAM, but uv installs may share pip cache, so limit to 3 groups)
+### agent-browser surface
+- The React dev server uses ~200MB. Each agent-browser instance ~300MB.
+- Baseline memory usage: ~6GB.
+- Usable headroom: (36 - 6) * 0.7 = ~21GB.
+- 5 instances = ~1.7GB (well within budget).
+- **Max concurrent: 5**
 
-## Environment Notes
+## Testing Setup Requirements
 
-- `uv` is at `/Users/dwasserm/.local/bin/uv`
-- Python 3.12 at `/opt/homebrew/bin/python3.12`
-- Python 3.13 at `/opt/homebrew/bin/python3.13`
-- Python 3.14 at `/opt/homebrew/bin/python3.14`
-- Machine: macOS, 36GB RAM, 11 CPU cores, ~20K free pages (16KB pages = ~320MB free)
-- Pre-existing test failures on master are NOT this mission's responsibility
+### Services to start
+1. Tornado backend on port 8888 (with Neurosynth + Destrieux engines)
+2. React dev server on port 3100 (or use prod build served by Tornado)
 
-## Flow Validator Guidance: shell
+### Engine readiness
+- Engines take 30-60 seconds to initialize on first start
+- Healthcheck: `curl -sf http://localhost:8888/v2/engines` returns non-empty JSON array
+- Schema check: `curl -sf http://localhost:8888/v2/schema/neurosynth` returns symbols
 
-- All assertions are verified by running shell commands in the repo root
-- Assertions don't mutate shared state (they're all read-only checks of the repo)
-- Multiple subagents can run concurrently safely (no shared mutable state for these assertions)
-- Use `/Users/dwasserm/.local/bin/uv` for all uv commands
-- Repo root: `/Users/dwasserm/sources/NeuroLang`
-- No isolation resources needed (read-only shell checks)
+### Data requirements
+- `~/neurolang_data/` must contain downloaded datasets (auto-downloaded on first engine start)
+- No external credentials or accounts needed
 
-## Known Issues / Setup Notes
-
-- `setup.cfg` still contains `[versioneer]` section (not `[metadata]` or `[options]`) — this is acceptable
-- `neurolang/_version.pya` exists (renamed from `_version.py`) — this is expected
-- `MANIFEST.in` only contains `include pyproject.toml` (versioneer refs removed) — expected
+### Known constraints
+- Engine initialization is slow; validation should wait for healthcheck before testing
+- Neurosynth queries with spatial smoothing can take 10+ seconds
+- The `compute_datalog_program_for_autocompletion` API requires a valid program prefix; empty strings cause parser errors
