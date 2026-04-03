@@ -1,0 +1,53 @@
+{
+  "milestone": "query-builder",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 11,
+    "passed": 7,
+    "failed": 4,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-QBUILD-001",
+    "VAL-QBUILD-002",
+    "VAL-QBUILD-003",
+    "VAL-QBUILD-004",
+    "VAL-QBUILD-006",
+    "VAL-QBUILD-009",
+    "VAL-QBUILD-010"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-QBUILD-005",
+      "reason": "Both predicates are visible in the visual builder, but variables are not shared between predicates — auto-generated names are always unique (PeakReported uses v,v1,v2,v3 and TermInStudyTFIDF uses v4,v5,v6). No visual join indication exists."
+    },
+    {
+      "id": "VAL-QBUILD-007",
+      "reason": "Suggestions panel shows chips in the initial empty-query state, but after adding predicates it consistently shows 'No suggestions available.' The suggestions are not context-aware while building a query."
+    },
+    {
+      "id": "VAL-QBUILD-008",
+      "reason": "Clicking a suggestion chip adds the predicate WITHOUT variable names (e.g., PeakReported() with empty parens). This produces broken Datalog. Clicking from the predicate browser correctly adds variables — the bug is specific to the suggestion-chip click handler."
+    },
+    {
+      "id": "VAL-QBUILD-011",
+      "reason": "The variable binding highlighting CSS logic exists but there is no user-facing UI mechanism to create shared variable bindings between predicates. Auto-generated variable names are always unique, so a real user cannot trigger the visualization."
+    }
+  ],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Noted that the Vite dev server on port 3100 only listens on IPv6 (::1); agent-browser should use http://[::1]:3100 or test with IPv4 explicitly",
+      "source": "flow-report (group-c)"
+    }
+  ],
+  "flowReports": [
+    ".factory/validation/query-builder/user-testing/flows/group-a.json",
+    ".factory/validation/query-builder/user-testing/flows/group-b.json",
+    ".factory/validation/query-builder/user-testing/flows/group-c.json"
+  ],
+  "previousRound": null,
+  "testedAt": "2026-04-03"
+}

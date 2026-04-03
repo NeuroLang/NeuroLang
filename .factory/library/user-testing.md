@@ -70,3 +70,17 @@ This section covers isolation rules for browser-based validation subagents.
 - Engine list should appear in the sidebar showing "neurosynth" and "destrieux"
 - Clicking an engine in the sidebar should highlight it and update the main content area
 - The layout should have a top nav bar, sidebar, and main content area
+
+### Known UI behaviors (query-builder milestone)
+- After selecting an engine, the predicate browser shows Relations, Functions, and Probabilistic groups
+- Search/filter in the predicate browser is client-side (no network call)
+- Clicking a predicate from the browser adds it with auto-generated variable names (v, v1, v2, ...)
+- The visual query renders as "Find [vars] where [predicates]" (readable NL form)
+- Undo/Redo buttons are in the visual query builder toolbar
+- Suggestion chips are shown initially (empty query state) but "No suggestions available" after predicates are added (bug: not context-aware)
+- Clicking a suggestion chip adds the predicate WITHOUT variable names (bug: empty parens)
+- Variable binding CSS highlighting exists ('vqb-var-token--shared') but no UI to create shared variables
+
+### IPv6 note (Vite dev server)
+- The Vite dev server on port 3100 may only listen on IPv6 (::1) — use `http://[::1]:3100` if `http://localhost:3100` fails in agent-browser
+- To start the dev server: `cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && PORT=3100 npm run dev`
