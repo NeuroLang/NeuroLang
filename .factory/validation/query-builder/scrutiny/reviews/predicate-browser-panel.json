@@ -1,0 +1,39 @@
+{
+  "featureId": "predicate-browser-panel",
+  "reviewedAt": "2026-04-03T12:00:00.000Z",
+  "commitId": "5fa74956",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The PredicateBrowser component is well-implemented and fully satisfies the feature requirements. It correctly fetches /v2/schema/:engine on engine selection, displays symbols grouped by type (Relations=blue, Functions=green, Probabilistic=orange) in collapsible sections, renders each symbol as 'Name(param1, param2)', provides a case-insensitive substring search, and fires onSelect(symbol) on click and keyboard activation. All states are handled: no-engine, loading, error, empty schema, and filtered-to-empty. 17 comprehensive tests pass. There are two minor non-blocking issues: a potential fetch race condition on rapid engine switching, and a trivial trailing-space in className concatenation.",
+    "issues": [
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/PredicateBrowser.tsx",
+        "line": 120,
+        "severity": "non_blocking",
+        "description": "No AbortController or isMounted guard in the useEffect fetch. If the user switches engines rapidly, a slow response from engine A could arrive after engine B's response is already rendered, overwriting it with stale data. Mitigation: return a cleanup function that aborts the in-flight fetch when selectedEngine changes. Pattern: `const controller = new AbortController(); fetch(url, { signal: controller.signal }); return () => controller.abort();`."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/PredicateBrowser.tsx",
+        "line": 147,
+        "severity": "non_blocking",
+        "description": "The className concatenation `predicate-browser ${className ?? ''}` always appends a trailing space when className is undefined. This is cosmetically harmless but slightly unclean. Prefer: `['predicate-browser', className].filter(Boolean).join(' ')` or a classnames/clsx utility."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The fullstack-worker SKILL.md prescribes a backend-first TDD approach (write backend tests, then implement backend, then frontend tests, then frontend). In this feature the backend was already provided by a prior feature (backend-v2-schema-api), so the worker correctly skipped the backend steps entirely. The skill's procedure does not document this common scenario — it would be clearer to add a note like 'If the backend endpoint is already implemented (precondition satisfied), skip steps 3-4 and proceed directly to frontend tests.'",
+      "evidence": "Transcript skeleton shows worker read v2_handlers.py to confirm the schema API was already present, then jumped straight to writing the frontend. Skill procedure steps 3 and 4 are silently skipped. skillFeedback.followedProcedure is reported as true, but the backend TDD steps were structurally omitted."
+    },
+    {
+      "area": "conventions",
+      "observation": "The worker correctly checked App.test.tsx before replacing the Layout placeholder, noting that the existing App test checks for 'Engine not selected'. Because PredicateBrowser also renders this exact text for the no-engine state, the existing test continued to pass. This is a fragile coupling: App tests that rely on specific placeholder text from child components can silently mask regressions if wording changes. AGENTS.md does not mention this pattern.",
+      "evidence": "Transcript: 'The App test checks for \"Engine not selected\" - this text is now rendered by PredicateBrowser instead of the layout placeholder. That's fine - it still renders the same text.' This is coincidentally OK here but is a maintainability concern."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS. PredicateBrowser fully implements all required feature behaviors: grouped symbols by type with distinct colors, collapsible sections, symbol name+params formatting, search filtering, onSelect callback, and all four state variations. All 17 unit tests are well-structured and cover the full behavior surface. Two non-blocking issues noted: a missing AbortController for rapid engine-switching (stale fetch risk) and a minor className trailing-space. The feature is production-ready for the current milestone scope."
+}
