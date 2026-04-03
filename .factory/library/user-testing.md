@@ -77,9 +77,10 @@ This section covers isolation rules for browser-based validation subagents.
 - Clicking a predicate from the browser adds it with auto-generated variable names (v, v1, v2, ...)
 - The visual query renders as "Find [vars] where [predicates]" (readable NL form)
 - Undo/Redo buttons are in the visual query builder toolbar
-- Suggestion chips are shown initially (empty query state) but "No suggestions available" after predicates are added (bug: not context-aware)
-- Clicking a suggestion chip adds the predicate WITHOUT variable names (bug: empty parens)
-- Variable binding CSS highlighting exists ('vqb-var-token--shared') but no UI to create shared variables
+- Suggestions panel shows context-aware chips after predicates are added (debounced, ~1-2s delay after predicate add)
+- Clicking a suggestion chip adds the predicate WITH proper placeholder variable names
+- Variable binding: clicking a variable token opens inline rename textbox; renaming to match another variable applies 'vqb-var-token--shared' CSS class with blue highlight on all occurrences
+- **Suggestion chips accessibility note**: suggestion chips (class `suggestions-chip`) do not appear in `agent-browser snapshot -i` accessibility tree; use JavaScript eval to click them: `document.querySelector('button.suggestions-chip')?.click()`
 
 ### IPv6 note (Vite dev server)
 - The Vite dev server on port 3100 may only listen on IPv6 (::1) — use `http://[::1]:3100` if `http://localhost:3100` fails in agent-browser
