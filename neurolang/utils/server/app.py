@@ -28,6 +28,7 @@ from .responses import (
     QueryResults,
     base64_encode_nifti,
 )
+from .v2_handlers import V2AtlasHandler, V2EnginesHandler, V2SchemaHandler
 
 define("port", default=8888, help="run on the given port", type=int)
 define(
@@ -100,6 +101,13 @@ class Application(tornado.web.Application):
                 r"/v1/figure/({uuid})".format(uuid=uuid_pattern),
                 MpltFigureHandler,
             ),
+            # ------------------------------------------------------------------
+            # V2 API endpoints (NeuroLang Sparklis GUI)
+            # ------------------------------------------------------------------
+            (r"/v2/engines", V2EnginesHandler),
+            (r"/v2/schema/(.+)", V2SchemaHandler),
+            (r"/v2/atlas/(.+)", V2AtlasHandler),
+            # ------------------------------------------------------------------
             (
                 r"/(.*)",
                 StaticFileOrDefaultHandler,
