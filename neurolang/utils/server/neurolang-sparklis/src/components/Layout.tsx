@@ -1,13 +1,26 @@
-import React, { useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import EngineSelector from './EngineSelector'
 import PredicateBrowser from './PredicateBrowser'
 import VisualQueryBuilder from './VisualQueryBuilder'
+import SuggestionsPanel from './SuggestionsPanel'
 import { useEngine } from '../context/useEngine'
 import { useQuery } from '../context/useQuery'
 import { type SchemaSymbol } from './PredicateBrowser'
 
 function MainContent(): React.ReactElement {
   const { selectedEngine } = useEngine()
+  const { model, refresh } = useQuery()
+
+  const handleSuggestionSelect = useCallback(
+    (suggestion: string) => {
+      // Add the suggestion as a no-param predicate so users can explore it;
+      // more sophisticated wiring (e.g. cursor-based insertion) can be added
+      // in a later feature.
+      model.addPredicate(suggestion, [])
+      refresh()
+    },
+    [model, refresh],
+  )
 
   if (!selectedEngine) {
     return (
@@ -21,6 +34,7 @@ function MainContent(): React.ReactElement {
   return (
     <div className="content-engine-selected">
       <VisualQueryBuilder />
+      <SuggestionsPanel onSuggestionSelect={handleSuggestionSelect} />
     </div>
   )
 }
