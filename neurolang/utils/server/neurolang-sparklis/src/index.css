@@ -510,6 +510,34 @@
   /* Color/border overridden via inline style from the colour palette */
 }
 
+.vqb-var-token--editable {
+  cursor: pointer;
+}
+
+.vqb-var-token--editable:hover {
+  background-color: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+/* Inline variable rename input */
+.vqb-var-input {
+  display: inline-block;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.875rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  border: 1.5px solid #2563eb;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  outline: none;
+  min-width: 2ch;
+}
+
+.vqb-var-input--shared {
+  font-weight: 600;
+  /* Color/border overridden via inline style */
+}
+
 /* Predicate block */
 .vqb-predicate-block {
   display: inline-flex;

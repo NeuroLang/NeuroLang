@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import PredicateBrowser from '../PredicateBrowser'
 import { EngineProvider } from '../../context/EngineContext'
+import { SchemaProvider } from '../../context/SchemaContext'
 import { useEngine } from '../../context/useEngine'
 import React from 'react'
 
@@ -27,7 +28,9 @@ function renderWithContext(
 
   return render(
     <EngineProvider>
-      <EngineSetterWrapper />
+      <SchemaProvider>
+        <EngineSetterWrapper />
+      </SchemaProvider>
     </EngineProvider>,
     { wrapper: undefined },
   )
@@ -78,7 +81,9 @@ describe('PredicateBrowser', () => {
   it('shows engine-not-selected placeholder when no engine is selected', () => {
     render(
       <EngineProvider>
-        <PredicateBrowser />
+        <SchemaProvider>
+          <PredicateBrowser />
+        </SchemaProvider>
       </EngineProvider>,
     )
     expect(screen.getByText('Engine not selected')).toBeInTheDocument()
@@ -122,7 +127,10 @@ describe('PredicateBrowser', () => {
     renderWithContext(<PredicateBrowser />, 'neurosynth')
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/v2/schema/neurosynth')
+      expect(fetch).toHaveBeenCalledWith(
+        '/v2/schema/neurosynth',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      )
     })
   })
 

@@ -519,9 +519,17 @@ class V2SuggestHandler(JSONRequestHandler):
             program, cursor_position
         )
 
+        # When complete_code is empty the engine's parser fails on an
+        # empty string.  Use the partial code as the complete code so
+        # the parse step is skipped internally (it gets the same text
+        # and treats it as fully-defined context).  This works when the
+        # partial code is incomplete (no trailing period) – typical of
+        # the visual builder which strips the "." before sending.
+        effective_complete = complete_code if complete_code.strip() else partial_code
+
         try:
             raw = engine.compute_datalog_program_for_autocompletion(
-                complete_code, partial_code
+                effective_complete, partial_code
             )
         except Exception as exc:
             LOG.debug(
@@ -529,16 +537,9 @@ class V2SuggestHandler(JSONRequestHandler):
                 program,
                 exc,
             )
-            # Return empty suggestions with an error message rather than
-            # propagating a 500.
-            return {
-                "Identifiers": [],
-                "Signs": [],
-                "Operators": [],
-                "Numbers": [],
-                "Text": [],
-                "message": str(exc),
-            }
+            # Fall back to all predicate identifiers so the panel is
+            # never empty for a valid (non-empty) program.
+            return self._fallback_identifiers(engine)
 
         if raw is None:
             return self._fallback_identifiers(engine)

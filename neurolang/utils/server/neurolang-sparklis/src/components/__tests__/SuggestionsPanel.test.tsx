@@ -460,3 +460,58 @@ describe('SuggestionsPanel – debounce', () => {
     await act(async () => {})
   })
 })
+
+// ---------------------------------------------------------------------------
+// Serialization fix: non-empty queries should not send trailing period
+// ---------------------------------------------------------------------------
+
+describe('SuggestionsPanel – program serialization for non-empty queries', () => {
+  it('sends empty string program when query is empty', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      makeSuggestionsResponse({ Identifiers: ['Study'] }),
+    )
+
+    renderWithControls()
+    fireEvent.click(screen.getByTestId('select-engine'))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled()
+    })
+
+    const callArgs = vi.mocked(fetch).mock.calls[0]
+    const body = JSON.parse(callArgs[1]?.body as string)
+    expect(body.program).toBe('')
+  })
+
+  it('strips trailing period from serialized program before sending', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      makeSuggestionsResponse({ Identifiers: ['PeakReported', 'Study'] }),
+    )
+
+    renderWithControls()
+    // Select engine first
+    fireEvent.click(screen.getByTestId('select-engine'))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+
+    vi.mocked(fetch).mockClear()
+    vi.mocked(fetch).mockResolvedValue(
+      makeSuggestionsResponse({ Identifiers: ['PeakReported'] }),
+    )
+
+    // Add a predicate so the query is non-empty
+    fireEvent.click(screen.getByTestId('add-predicate'))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled()
+    })
+
+    const callArgs = vi.mocked(fetch).mock.calls[0]
+    const body = JSON.parse(callArgs[1]?.body as string)
+    // Non-empty query program must NOT end with "."; should end with ","
+    expect(body.program).not.toMatch(/\.$/)
+    // Should end with "," for body-extensible context
+    expect(body.program).toMatch(/,$/)
+    expect(body.program.length).toBeGreaterThan(0)
+  })
+})

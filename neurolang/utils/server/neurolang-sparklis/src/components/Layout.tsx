@@ -5,21 +5,29 @@ import VisualQueryBuilder from './VisualQueryBuilder'
 import SuggestionsPanel from './SuggestionsPanel'
 import { useEngine } from '../context/useEngine'
 import { useQuery } from '../context/useQuery'
+import { useSchema } from '../context/useSchema'
 import { type SchemaSymbol } from './PredicateBrowser'
 
 function MainContent(): React.ReactElement {
   const { selectedEngine } = useEngine()
   const { model, refresh } = useQuery()
+  const { lookupSymbol } = useSchema()
 
   const handleSuggestionSelect = useCallback(
     (suggestion: string) => {
-      // Add the suggestion as a no-param predicate so users can explore it;
-      // more sophisticated wiring (e.g. cursor-based insertion) can be added
-      // in a later feature.
-      model.addPredicate(suggestion, [])
+      // If the suggestion matches a known predicate name, look it up in the
+      // schema and add it with proper placeholder variables (same as the
+      // predicate browser click handler).  Otherwise fall back to adding it
+      // with an empty parameter list.
+      const symbol = lookupSymbol(suggestion)
+      if (symbol) {
+        model.addPredicate(symbol.name, symbol.params)
+      } else {
+        model.addPredicate(suggestion, [])
+      }
       refresh()
     },
-    [model, refresh],
+    [model, refresh, lookupSymbol],
   )
 
   if (!selectedEngine) {

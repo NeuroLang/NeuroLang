@@ -1,27 +1,13 @@
-import React, { useEffect, useState } from 'react'
-import { useEngine } from '../context/useEngine'
+import React, { useState } from 'react'
+import { useSchema } from '../context/useSchema'
+import { type SchemaSymbol } from '../context/SchemaContext'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface SchemaSymbol {
-  name: string
-  type: 'relation' | 'function' | 'probabilistic'
-  params: string[]
-  docstring?: string | null
-}
-
-interface SchemaData {
-  relations: SchemaSymbol[]
-  functions: SchemaSymbol[]
-  probabilistic: SchemaSymbol[]
-}
-
-interface SchemaResponse {
-  status: string
-  data: SchemaData
-}
+// Re-export SchemaSymbol so existing imports from this module still work.
+export type { SchemaSymbol } from '../context/SchemaContext'
 
 export interface PredicateBrowserProps {
   /** Called when the user clicks a symbol item. */
@@ -110,46 +96,10 @@ function PredicateBrowser({
   onSelect,
   className,
 }: PredicateBrowserProps): React.ReactElement {
-  const { selectedEngine } = useEngine()
-  const [schema, setSchema] = useState<SchemaData | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { schema, loading, error } = useSchema()
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    if (!selectedEngine) {
-      setSchema(null)
-      setLoading(false)
-      setError(null)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    setSchema(null)
-
-    fetch(`/v2/schema/${encodeURIComponent(selectedEngine)}`)
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(
-            `Failed to fetch schema for ${selectedEngine}: ${res.status}`,
-          )
-        }
-        return res.json() as Promise<SchemaResponse>
-      })
-      .then((body) => {
-        setSchema(body.data)
-        setLoading(false)
-      })
-      .catch((err: unknown) => {
-        const message =
-          err instanceof Error ? err.message : 'Unknown error fetching schema'
-        setError(message)
-        setLoading(false)
-      })
-  }, [selectedEngine])
-
-  if (!selectedEngine) {
+  if (!schema && !loading && !error) {
     return (
       <div className={`predicate-browser ${className ?? ''}`}>
         <p className="predicate-browser-placeholder">Engine not selected</p>

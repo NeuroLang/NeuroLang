@@ -7,8 +7,12 @@
  * display.  Variables that are shared across predicates are highlighted with
  * matching colours.  Each predicate block has a remove button.  Undo / redo
  * buttons allow stepping through query history.
+ *
+ * Clicking a variable token opens an inline text input to rename it.
+ * Renaming a variable to match an existing variable in another predicate
+ * creates a join (highlighted with the same color).
  */
-import React from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { useQuery } from '../context/useQuery'
 import {
   serializeToDatalog,
@@ -23,9 +27,18 @@ import {
 interface VariableTokenProps {
   varName: string
   color?: string
+  onRename?: (oldName: string, newName: string) => void
 }
 
-function VariableToken({ varName, color }: VariableTokenProps): React.ReactElement {
+function VariableToken({
+  varName,
+  color,
+  onRename,
+}: VariableTokenProps): React.ReactElement {
+  const [editing, setEditing] = useState(false)
+  const [inputValue, setInputValue] = useState(varName)
+  const inputRef = useRef<HTMLInputElement>(null)
+
   const style: React.CSSProperties = color
     ? {
         color,
@@ -34,11 +47,56 @@ function VariableToken({ varName, color }: VariableTokenProps): React.ReactEleme
       }
     : {}
 
+  function handleClick(): void {
+    if (!onRename) return
+    setInputValue(varName)
+    setEditing(true)
+    // Focus happens via useEffect / autoFocus
+  }
+
+  function commitRename(): void {
+    setEditing(false)
+    const trimmed = inputValue.trim()
+    if (trimmed && trimmed !== varName) {
+      onRename?.(varName, trimmed)
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'Enter') {
+      commitRename()
+    } else if (e.key === 'Escape') {
+      setEditing(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        className={`vqb-var-input${color ? ' vqb-var-input--shared' : ''}`}
+        style={style}
+        value={inputValue}
+        autoFocus
+        aria-label={`Rename variable ${varName}`}
+        onChange={(e) => setInputValue(e.target.value)}
+        onBlur={commitRename}
+        onKeyDown={handleKeyDown}
+        size={Math.max(inputValue.length, 1)}
+      />
+    )
+  }
+
   return (
     <span
-      className={`vqb-var-token${color ? ' vqb-var-token--shared' : ''}`}
+      className={`vqb-var-token${color ? ' vqb-var-token--shared' : ''}${onRename ? ' vqb-var-token--editable' : ''}`}
       style={style}
-      title={`Variable: ${varName}`}
+      title={onRename ? `Click to rename variable "${varName}"` : `Variable: ${varName}`}
+      onClick={handleClick}
+      role={onRename ? 'button' : undefined}
+      tabIndex={onRename ? 0 : undefined}
+      onKeyDown={onRename ? (e) => { if (e.key === 'Enter' || e.key === ' ') handleClick() } : undefined}
+      aria-label={onRename ? `Variable ${varName}, click to rename` : undefined}
     >
       {varName}
     </span>
@@ -53,12 +111,14 @@ interface PredicateBlockProps {
   instance: PredicateInstance
   sharedVarColors: Map<string, string>
   onRemove: (id: string) => void
+  onRenameVar: (oldName: string, newName: string) => void
 }
 
 function PredicateBlock({
   instance,
   sharedVarColors,
   onRemove,
+  onRenameVar,
 }: PredicateBlockProps): React.ReactElement {
   return (
     <span className="vqb-predicate-block">
@@ -70,6 +130,7 @@ function PredicateBlock({
           <VariableToken
             varName={param.varName}
             color={sharedVarColors.get(param.varName)}
+            onRename={onRenameVar}
           />
         </React.Fragment>
       ))}
@@ -107,6 +168,14 @@ function VisualQueryBuilder({
     model.removePredicate(id)
     refresh()
   }
+
+  const handleRenameVar = useCallback(
+    (oldName: string, newName: string): void => {
+      model.renameVariable(oldName, newName)
+      refresh()
+    },
+    [model, refresh],
+  )
 
   return (
     <div className={`vqb-container${className ? ` ${className}` : ''}`}>
@@ -150,7 +219,11 @@ function VisualQueryBuilder({
               return headVars.map((v, i) => (
                 <React.Fragment key={v}>
                   {i > 0 && <span className="vqb-comma">, </span>}
-                  <VariableToken varName={v} color={sharedVarColors.get(v)} />
+                  <VariableToken
+                    varName={v}
+                    color={sharedVarColors.get(v)}
+                    onRename={handleRenameVar}
+                  />
                 </React.Fragment>
               ))
             })()}
@@ -162,6 +235,7 @@ function VisualQueryBuilder({
                   instance={pred}
                   sharedVarColors={sharedVarColors}
                   onRemove={handleRemove}
+                  onRenameVar={handleRenameVar}
                 />
               </React.Fragment>
             ))}

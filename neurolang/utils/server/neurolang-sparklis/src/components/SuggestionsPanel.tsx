@@ -243,7 +243,17 @@ function SuggestionsPanel({
       return
     }
 
-    const program = serializeToDatalog(state)
+    // Serialize the current query.  For a non-empty query, strip the
+    // trailing "." and append "," so that the autocompletion engine
+    // sees the cursor positioned after a body predicate (i.e. ready to
+    // add the next one).  This causes the engine to suggest valid body
+    // predicates rather than returning empty results.
+    const rawProgram = serializeToDatalog(state)
+    let program = rawProgram
+    if (program.endsWith('.')) {
+      // Strip trailing period and add comma to signal "body extendable"
+      program = program.slice(0, -1) + ','
+    }
 
     // Clear any pending debounce timer.
     if (timerRef.current !== null) {

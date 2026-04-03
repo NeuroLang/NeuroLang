@@ -2,10 +2,11 @@
  * VisualQueryBuilder.test.tsx
  *
  * Tests for the VisualQueryBuilder component.
- * Covers: rendering, undo/redo buttons, remove predicate, variable coloring.
+ * Covers: rendering, undo/redo buttons, remove predicate, variable coloring,
+ *         variable renaming (inline edit).
  */
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { QueryProvider } from '../../context/QueryContext'
 import { useQuery } from '../../context/useQuery'
@@ -243,7 +244,7 @@ describe('VisualQueryBuilder – undo/redo', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Variable colouring
+// Variable coloring
 // ---------------------------------------------------------------------------
 
 describe('VisualQueryBuilder – variable coloring', () => {
@@ -264,5 +265,110 @@ describe('VisualQueryBuilder – variable coloring', () => {
     // Single predicate → no shared vars
     const sharedTokens = document.querySelectorAll('.vqb-var-token--shared')
     expect(sharedTokens.length).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Variable renaming (inline edit)
+// ---------------------------------------------------------------------------
+
+describe('VisualQueryBuilder – variable renaming', () => {
+  it('variable tokens have vqb-var-token--editable class', () => {
+    renderWithAdder('Study', ['study'])
+    fireEvent.click(screen.getByTestId('add-btn'))
+
+    const tokens = document.querySelectorAll('.vqb-var-token--editable')
+    expect(tokens.length).toBeGreaterThan(0)
+  })
+
+  it('clicking a variable token shows an input for renaming', () => {
+    renderWithAdder('Study', ['study'])
+    fireEvent.click(screen.getByTestId('add-btn'))
+
+    // Find a variable token and click it
+    const token = document.querySelector('.vqb-var-token--editable')
+    expect(token).not.toBeNull()
+    fireEvent.click(token!)
+
+    // An input should now appear
+    const input = document.querySelector('.vqb-var-input')
+    expect(input).not.toBeNull()
+  })
+
+  it('pressing Enter commits the rename', async () => {
+    renderWithAdder('Study', ['study'])
+    fireEvent.click(screen.getByTestId('add-btn'))
+
+    const token = document.querySelector('.vqb-var-token--editable') as Element
+    const originalName = token.textContent ?? ''
+    fireEvent.click(token)
+
+    const input = document.querySelector('.vqb-var-input') as HTMLInputElement
+    // Clear and type a new name
+    fireEvent.change(input, { target: { value: 'renamed' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    // Token should now show the new name (may appear multiple times in head + body)
+    await waitFor(() => {
+      const renamedTokens = screen.getAllByText('renamed')
+      expect(renamedTokens.length).toBeGreaterThan(0)
+    })
+    // Old name (if unique) should no longer appear as a variable token
+    const oldTokens = document.querySelectorAll('.vqb-var-token--editable')
+    const names = Array.from(oldTokens).map((t) => t.textContent)
+    expect(names).not.toContain(originalName)
+  })
+
+  it('pressing Escape cancels the rename without changing the variable', () => {
+    renderWithAdder('Study', ['study'])
+    fireEvent.click(screen.getByTestId('add-btn'))
+
+    const token = document.querySelector('.vqb-var-token--editable') as Element
+    const originalName = token.textContent ?? ''
+    fireEvent.click(token)
+
+    const input = document.querySelector('.vqb-var-input') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'cancelled_rename' } })
+    fireEvent.keyDown(input, { key: 'Escape' })
+
+    // Variable name should not have changed
+    expect(screen.queryByText('cancelled_rename')).not.toBeInTheDocument()
+    // Original name still present (may appear multiple times in head + body)
+    const originalTokens = screen.getAllByText(originalName)
+    expect(originalTokens.length).toBeGreaterThan(0)
+  })
+
+  it('renaming a variable creates a join when renamed to match another variable', async () => {
+    renderTwoPredicates()
+    fireEvent.click(screen.getByTestId('add-peak'))
+    fireEvent.click(screen.getByTestId('add-study'))
+
+    // Initially there are already shared tokens (added with forceJoin)
+    const sharedBefore = document.querySelectorAll('.vqb-var-token--shared')
+    const countBefore = sharedBefore.length
+
+    // Find a non-shared token and rename it to match a shared variable name
+    const tokens = Array.from(
+      document.querySelectorAll('.vqb-var-token--editable'),
+    )
+    const nonSharedToken = tokens.find(
+      (t) => !t.classList.contains('vqb-var-token--shared'),
+    )
+
+    if (nonSharedToken) {
+      // Get the name of an existing shared variable
+      const sharedToken = document.querySelector('.vqb-var-token--shared')
+      const sharedName = sharedToken?.textContent ?? 's'
+
+      fireEvent.click(nonSharedToken)
+      const input = document.querySelector('.vqb-var-input') as HTMLInputElement
+      fireEvent.change(input, { target: { value: sharedName } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      await waitFor(() => {
+        const sharedAfter = document.querySelectorAll('.vqb-var-token--shared')
+        expect(sharedAfter.length).toBeGreaterThan(countBefore)
+      })
+    }
   })
 })
