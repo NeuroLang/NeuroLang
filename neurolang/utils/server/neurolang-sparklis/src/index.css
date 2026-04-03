@@ -449,6 +449,22 @@
   cursor: not-allowed;
 }
 
+/* Desynchronized state indicator */
+.vqb-desync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b45309;
+  background-color: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 4px;
+  cursor: help;
+  white-space: nowrap;
+}
+
 /* Sentence area */
 .vqb-sentence {
   min-height: 2.5rem;

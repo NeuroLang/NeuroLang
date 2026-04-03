@@ -177,6 +177,91 @@ export function serializeToDatalog(state: QueryState): string {
 }
 
 /**
+ * Parse a Datalog text string back into a QueryState.
+ *
+ * Only supports the format produced by `serializeToDatalog`:
+ *   ans(v1, v2, ...) :- Pred1(a, b), Pred2(c, d).
+ *
+ * Returns `null` if:
+ *   - The text is empty or whitespace-only
+ *   - The text does not match the expected format
+ *   - The text uses unsupported syntax (no rule, missing neck ":-", etc.)
+ *
+ * This parser is intentionally simple – it handles the canonical serialized
+ * format produced by the visual query builder.  It is NOT a full Datalog
+ * parser.  For anything beyond simple conjunctive queries, it will return
+ * `null` (desync).
+ */
+export function parseDatalog(text: string): QueryState | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+
+  // Match: <anything>(<head vars>) :- <body>.
+  // We only need to parse the body.
+  const ruleMatch = trimmed.match(/^[^(]+\(([^)]*)\)\s*:-\s*(.+)\.\s*$/)
+  if (!ruleMatch) return null
+
+  const bodyStr = ruleMatch[2].trim()
+  if (!bodyStr) return null
+
+  // Split the body on top-level commas (between predicates, not inside parens)
+  const predicateStrings: string[] = []
+  let depth = 0
+  let current = ''
+  for (let i = 0; i < bodyStr.length; i++) {
+    const ch = bodyStr[i]
+    if (ch === '(') {
+      depth++
+      current += ch
+    } else if (ch === ')') {
+      depth--
+      current += ch
+    } else if (ch === ',' && depth === 0) {
+      predicateStrings.push(current.trim())
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  if (current.trim()) predicateStrings.push(current.trim())
+
+  // Parse each predicate: Name(arg1, arg2, ...)
+  const predicates: PredicateInstance[] = []
+  let maxVarSuffix = 0
+
+  for (const predStr of predicateStrings) {
+    const predMatch = predStr.match(/^([A-Za-z_][A-Za-z0-9_]*)\(([^)]*)\)$/)
+    if (!predMatch) return null
+
+    const name = predMatch[1]
+    const argsStr = predMatch[2].trim()
+    const args = argsStr.length > 0 ? argsStr.split(',').map((a) => a.trim()) : []
+
+    // Validate each arg is a valid variable name (simple identifier)
+    for (const arg of args) {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(arg)) return null
+    }
+
+    const params: PredicateParam[] = args.map((varName, position) => {
+      // Track highest numeric suffix for varCounter
+      const numSuffix = parseInt(varName.replace(/^[a-zA-Z_]+/, ''), 10)
+      if (!isNaN(numSuffix)) {
+        maxVarSuffix = Math.max(maxVarSuffix, numSuffix)
+      }
+      return {
+        position,
+        schemaName: varName, // Use varName as schemaName since we don't have schema info
+        varName,
+      }
+    })
+
+    predicates.push({ id: nextId(), name, params })
+  }
+
+  return { predicates, varCounter: maxVarSuffix }
+}
+
+/**
  * Produce a human-readable sentence from the query state.
  *
  * Example:

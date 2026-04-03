@@ -158,7 +158,7 @@ export interface VisualQueryBuilderProps {
 function VisualQueryBuilder({
   className,
 }: VisualQueryBuilderProps): React.ReactElement {
-  const { state, sharedVarColors, canUndo, canRedo, undo, redo, model, refresh } =
+  const { state, sharedVarColors, canUndo, canRedo, undo, redo, model, refresh, isSynced } =
     useQuery()
 
   const { predicates } = state
@@ -183,6 +183,16 @@ function VisualQueryBuilder({
       <div className="vqb-toolbar">
         <span className="vqb-toolbar-label">Visual Query Builder</span>
         <div className="vqb-toolbar-actions">
+          {!isSynced && (
+            <span
+              className="vqb-desync-indicator"
+              title="The code editor contains text that could not be parsed into a visual query. Edit the Datalog code to a valid query or use the visual builder to rebuild."
+              aria-label="Out of sync with code editor"
+              data-testid="desync-indicator"
+            >
+              ⚠ Out of sync
+            </span>
+          )}
           <button
             className="vqb-btn vqb-btn--undo"
             onClick={undo}
