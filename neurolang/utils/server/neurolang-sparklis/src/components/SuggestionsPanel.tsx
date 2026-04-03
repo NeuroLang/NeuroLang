@@ -71,12 +71,17 @@ const CATEGORY_ORDER = [
 /**
  * Sort category entries using CATEGORY_ORDER.
  * Unknown categories are placed after the known ones, in their original order.
+ * Only array values are included (non-array fields like "message" are skipped).
  */
 function sortedCategories(
   data: Record<string, string[]>,
 ): Array<[string, string[]]> {
-  const entries = Object.entries(data).filter(([, vals]) => vals.length > 0)
-  const known = CATEGORY_ORDER.filter((cat) => data[cat]?.length)
+  // Only process entries whose values are actually arrays
+  const entries = Object.entries(data).filter(
+    ([, vals]) => Array.isArray(vals) && vals.length > 0,
+  )
+  const entryKeys = new Set(entries.map(([cat]) => cat))
+  const known = CATEGORY_ORDER.filter((cat) => entryKeys.has(cat))
   const unknown = entries
     .map(([cat]) => cat)
     .filter((cat) => !CATEGORY_ORDER.includes(cat))
