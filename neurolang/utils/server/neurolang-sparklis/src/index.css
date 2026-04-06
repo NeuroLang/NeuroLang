@@ -845,3 +845,157 @@
   overflow: auto;
   height: 100%;
 }
+
+/* ============================================================
+   Execution Controls (Run Query Button + Error Display)
+   ============================================================ */
+
+.execution-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+/* Run Query Controls wrapper */
+.run-query-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Base run query button */
+.run-query-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+.run-query-btn--run {
+  background-color: #1d4ed8;
+  color: #ffffff;
+}
+
+.run-query-btn--run:hover:not(:disabled) {
+  background-color: #1e40af;
+}
+
+.run-query-btn--run:active:not(:disabled) {
+  background-color: #1e3a8a;
+}
+
+.run-query-btn--disabled,
+.run-query-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.run-query-btn--running {
+  background-color: #6b7280;
+  color: #ffffff;
+  cursor: default;
+}
+
+.run-query-btn--cancel {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.run-query-btn--cancel:hover {
+  background-color: #dc2626;
+}
+
+.run-query-btn--cancel:active {
+  background-color: #b91c1c;
+}
+
+/* Loading spinner */
+.run-query-spinner {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   Error Display
+   ============================================================ */
+
+.error-display {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  border: 1px solid;
+}
+
+.error-display--error {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #7f1d1d;
+}
+
+.error-display--cancelled {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.error-display-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.error-display-icon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.error-display-name {
+  font-weight: 700;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.error-display-message {
+  margin-left: 1.4rem;
+  line-height: 1.45;
+}
+
+.error-display-doc {
+  margin-left: 1.4rem;
+  font-style: italic;
+  color: #9f1239;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.error-display-location {
+  margin-left: 1.4rem;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.75rem;
+  color: #b91c1c;
+  font-weight: 600;
+}

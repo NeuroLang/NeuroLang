@@ -16,8 +16,8 @@ services:
     depends_on: []
 
   react-dev:
-    start: cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && PORT=3100 npm run dev &
+    start: cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm run dev -- --host 0.0.0.0 --port 3100 &
     stop: lsof -ti :3100 | xargs kill 2>/dev/null || true
-    healthcheck: curl -sf http://localhost:3100
+    healthcheck: curl -sf http://localhost:3100 || curl -sf http://[::1]:3100
     port: 3100
     depends_on: []

@@ -4,15 +4,22 @@ import PredicateBrowser from './PredicateBrowser'
 import VisualQueryBuilder from './VisualQueryBuilder'
 import SuggestionsPanel from './SuggestionsPanel'
 import CodeEditor from './CodeEditor'
+import RunQueryButton from './RunQueryButton'
+import ErrorDisplay from './ErrorDisplay'
 import { useEngine } from '../context/useEngine'
 import { useQuery } from '../context/useQuery'
 import { useSchema } from '../context/useSchema'
+import { useExecution } from '../context/useExecution'
 import { type SchemaSymbol } from './PredicateBrowser'
 
 function MainContent(): React.ReactElement {
   const { selectedEngine } = useEngine()
   const { model, refresh, datalogText, setDatalogText } = useQuery()
   const { lookupSymbol } = useSchema()
+  const { submitQuery, executionStatus } = useExecution()
+
+  // Track the error line for highlighting in the CodeEditor
+  const [errorLine, setErrorLine] = useState<number | null>(null)
 
   const handleSuggestionSelect = useCallback(
     (suggestion: string) => {
@@ -35,15 +42,29 @@ function MainContent(): React.ReactElement {
     (text: string) => {
       // Update the shared Datalog text when the user types directly
       setDatalogText(text)
+      // Clear error highlight when user edits
+      setErrorLine(null)
     },
     [setDatalogText],
   )
 
   const handleSubmit = useCallback(() => {
-    // Placeholder: future query execution feature will handle submission
-    // For now, just log to console to verify the callback fires
-    console.log('Submit query:', datalogText)
-  }, [datalogText])
+    if (!selectedEngine || !datalogText.trim()) return
+    setErrorLine(null)
+    submitQuery(datalogText, selectedEngine)
+  }, [datalogText, selectedEngine, submitQuery])
+
+  const handleHighlightError = useCallback((line: number) => {
+    setErrorLine(line)
+  }, [])
+
+  // Clear error line when a new run starts
+  const isRunning = executionStatus === 'running'
+  React.useEffect(() => {
+    if (isRunning) {
+      setErrorLine(null)
+    }
+  }, [isRunning])
 
   if (!selectedEngine) {
     return (
@@ -72,11 +93,19 @@ function MainContent(): React.ReactElement {
                 value={datalogText}
                 onChange={handleEditorChange}
                 onSubmit={handleSubmit}
+                errorLine={errorLine}
               />
             </div>
           </div>
         </div>
       </div>
+
+      {/* Run Query Button and Error/Cancel Display */}
+      <div className="execution-controls">
+        <RunQueryButton />
+        <ErrorDisplay onHighlightError={handleHighlightError} />
+      </div>
+
       <SuggestionsPanel onSuggestionSelect={handleSuggestionSelect} />
     </div>
   )

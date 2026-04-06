@@ -9,11 +9,52 @@
  *   - Controlled: value syncs with a shared query state via QueryContext
  *   - Editable: user can type Datalog directly
  *   - Ctrl+Enter / Cmd+Enter fires the onSubmit callback
+ *   - Error line highlighting: highlights the error line when errorLine is set
  */
 import React, { useEffect, useRef, useCallback } from 'react'
 import { EditorState } from '@codemirror/state'
-import { EditorView, keymap } from '@codemirror/view'
+import { EditorView, keymap, Decoration, DecorationSet } from '@codemirror/view'
+import { StateEffect, StateField } from '@codemirror/state'
 import { datalogLanguage } from './datalogLanguage'
+
+// ---------------------------------------------------------------------------
+// Error highlight state effect & field
+// ---------------------------------------------------------------------------
+
+/** Effect to set (or clear) the error highlight on a specific line. */
+const setErrorLineEffect = StateEffect.define<number | null>()
+
+/** State field that holds the error line decorations. */
+const errorLineField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none
+  },
+  update(decorations, tr) {
+    // Map existing decorations through document changes
+    decorations = decorations.map(tr.changes)
+
+    for (const effect of tr.effects) {
+      if (effect.is(setErrorLineEffect)) {
+        const lineNum = effect.value
+        if (lineNum === null) {
+          decorations = Decoration.none
+        } else {
+          try {
+            const line = tr.state.doc.line(lineNum)
+            const decoration = Decoration.line({
+              class: 'cm-error-line',
+            })
+            decorations = Decoration.set([decoration.range(line.from)])
+          } catch {
+            decorations = Decoration.none
+          }
+        }
+      }
+    }
+    return decorations
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
 
 // ---------------------------------------------------------------------------
 // Props
@@ -30,6 +71,11 @@ export interface CodeEditorProps {
   className?: string
   /** Whether the editor is read-only. Defaults to false. */
   readOnly?: boolean
+  /**
+   * 1-based line number to highlight as an error.
+   * Set to null/undefined to clear the highlight.
+   */
+  errorLine?: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +90,9 @@ function buildExtensions(
   return [
     // Datalog syntax highlighting
     ...datalogLanguage(),
+
+    // Error line highlight field
+    errorLineField,
 
     // Default key bindings (history, etc.) – but we add our own submit binding first
     keymap.of([
@@ -97,6 +146,12 @@ function buildExtensions(
       '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
         backgroundColor: '#dbeafe',
       },
+      // Error line highlight
+      '.cm-error-line': {
+        backgroundColor: '#fee2e2',
+        borderLeft: '3px solid #ef4444',
+        paddingLeft: '0.5rem',
+      },
     }),
   ]
 }
@@ -111,6 +166,7 @@ function CodeEditor({
   onSubmit,
   className,
   readOnly = false,
+  errorLine,
 }: CodeEditorProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -186,6 +242,19 @@ function CodeEditor({
       effects: [],
     })
   }, [readOnly])
+
+  // ---------------------------------------------------------------------------
+  // Sync errorLine into the editor decorations
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+
+    view.dispatch({
+      effects: setErrorLineEffect.of(errorLine ?? null),
+    })
+  }, [errorLine])
 
   // ---------------------------------------------------------------------------
   // Keyboard shortcut handler on the container div (fallback for non-CM events)

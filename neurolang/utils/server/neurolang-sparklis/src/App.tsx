@@ -2,6 +2,7 @@ import React from 'react'
 import { EngineProvider } from './context/EngineContext'
 import { QueryProvider } from './context/QueryContext'
 import { SchemaProvider } from './context/SchemaContext'
+import { ExecutionProvider } from './context/ExecutionContext'
 import Layout from './components/Layout'
 
 function App(): React.ReactElement {
@@ -9,7 +10,9 @@ function App(): React.ReactElement {
     <EngineProvider>
       <SchemaProvider>
         <QueryProvider>
-          <Layout />
+          <ExecutionProvider>
+            <Layout />
+          </ExecutionProvider>
         </QueryProvider>
       </SchemaProvider>
     </EngineProvider>
