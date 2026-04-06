@@ -1,0 +1,56 @@
+{
+  "featureId": "bidirectional-sync",
+  "reviewedAt": "2026-04-07T00:00:00.000Z",
+  "commitId": "ab79a329",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The implementation correctly fulfills all four required behaviors: (1) builder-to-editor sync via `refresh()` calling `model.toDatalog()` and setting `datalogText`; (2) editor-to-builder sync via debounced `parseDatalog()` calling `model.reset(parsed)` on success; (3) desync indicator via `isSynced` state set to `false` when parsing fails; (4) 500ms debounce constant `PARSE_DEBOUNCE_MS`. The anti-loop guard using `isBuilderUpdate` ref is correct — it is set synchronously to `true`, text updated, then immediately reset to `false`, before `setDatalogText` could be re-invoked from the builder path. All four expected behaviors from the feature spec are satisfied. 25 tests pass.",
+    "issues": [
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/__tests__/BidirectionalSync.test.tsx",
+        "line": 90,
+        "severity": "non_blocking",
+        "description": "The `beforeEach` block calls `vi.useFakeTimers()` but there is no corresponding `afterEach(() => vi.useRealTimers())`. While Vitest isolates fake timers between test files, the absence of explicit cleanup is a pattern risk. If tests within this file leave timers in a partial state, subsequent tests in the same file could be affected. Recommend adding `afterEach(() => { vi.useRealTimers(); vi.clearAllTimers() })` for robustness."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/models/QueryModel.ts",
+        "line": 253,
+        "severity": "non_blocking",
+        "description": "`parseDatalog()` sets `schemaName: varName` (uses the variable name as the schema name, since schema info is unavailable during parsing). This is documented with a comment. The downstream effect is that if a user edits the code editor to trigger editor→builder sync, then adds more predicates visually, the auto-variable-naming for new predicates will use the parsed variable names (e.g., 's') as schema names instead of the original schema parameter names (e.g., 'study'). In practice the generated variable names look identical (genVarName('s', 0) → 's' vs genVarName('study', 0) → 's'), but the semantic meaning of `schemaName` is lost after a round-trip through the code editor. This is a known trade-off documented in the code comment and is acceptable for the current scope."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/models/QueryModel.ts",
+        "line": 229,
+        "severity": "non_blocking",
+        "description": "`parseDatalog()` computes `varCounter` as the maximum numeric suffix of variable names found in the body (e.g., for 'ans(v, v1) :- P(v, v1).', varCounter = 1). Variables without numeric suffixes (e.g., 'x', 's') contribute 0. After `model.reset(parsed)`, the `varCounter` may be under-counted relative to the original model's counter before editing. In practice this is harmless because `addPredicate()` correctly checks for name collisions via `existingVars` and increments suffixes until a free name is found — so variable name uniqueness is preserved. But it means `varCounter` no longer provides a reliable monotonic counter after a parse-reset cycle, which violates the documented invariant ('Monotonically increasing across adds – never resets even on removal'). Low severity since the collision-avoidance loop in `addPredicate` compensates."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/__tests__/BidirectionalSync.test.tsx",
+        "line": null,
+        "severity": "non_blocking",
+        "description": "There is no test covering the `ExampleQueries` + bidirectional sync interaction. When loading an example query, `ExampleQueries.handleLoadExample` calls `model.reset()` → `refresh()` → `setDatalogText(query)`. The `refresh()` call sets `isBuilderUpdate.current = true` then `false` synchronously, so the subsequent `setDatalogText(query)` correctly schedules a debounced parse (since `isBuilderUpdate.current` is `false` at that point). This path works correctly but is untested. A test verifying that loading an example query: (1) clears the visual builder, (2) populates the code editor with the example text, and (3) after debounce, updates the visual builder with the parsed predicates, would provide better regression coverage."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The AGENTS.md and architecture.md document the `isBuilderUpdate` ref pattern for preventing infinite loops, but do not capture the broader bidirectional sync architecture as a shared pattern. Future workers implementing sync between other editor/builder pairs may need to rediscover this pattern. Consider documenting the `isBuilderUpdate ref + debounce` idiom in architecture.md as the canonical approach for editor↔builder synchronization.",
+      "evidence": "QueryContext.tsx:112 — isBuilderUpdate ref; QueryContext.tsx:174,184,193 — all three builder mutation paths (refresh, undo, redo) set/reset the ref synchronously around the text update."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The `parseDatalog()` function is intentionally a limited regex-based parser supporting only the canonical format produced by `serializeToDatalog()`. It returns null for any Datalog that deviates from `ans(vars) :- pred1(args), pred2(args).` (e.g., no support for constants, negation, arithmetic, or alternative head names). This design decision is not documented in architecture.md. Future workers extending the visual builder or adding new Datalog constructs should know that the parser will desync for any non-canonical syntax — this is by design, not a bug.",
+      "evidence": "QueryModel.ts:183-192 — JSDoc for parseDatalog explicitly states 'This parser is intentionally simple — it handles the canonical serialized format produced by the visual query builder. It is NOT a full Datalog parser. For anything beyond simple conjunctive queries, it will return null (desync).'"
+    },
+    {
+      "area": "skills",
+      "observation": "The frontend-worker skill requires manual verification using `agent-browser`, but the worker's handoff records interactiveChecks as manually observed results (not via agent-browser). The worker stated `followedProcedure: true` with no deviations. The handoff describes three manual checks with specific observations, suggesting direct browser testing was done rather than agent-browser automation. The skill should clarify whether agent-browser is required or optional when the developer can observe behavior directly.",
+      "evidence": "Handoff verification.interactiveChecks shows 3 checks with specific observed outcomes (page reload, waiting 700ms, appending text) consistent with direct manual testing rather than agent-browser scripted actions. Skill SKILL.md step 6 says 'Invoke when the feature produces visible UI changes'."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "The bidirectional sync feature is fully implemented and meets all requirements. Builder-to-editor sync, editor-to-builder sync, 500ms debounce, and the desync indicator with 'data-testid=desync-indicator' are all present and tested. The anti-infinite-loop guard (isBuilderUpdate ref) is correctly implemented. 25 tests pass covering all feature behaviors. Minor non-blocking issues: (1) missing afterEach timer cleanup in tests, (2) schemaName semantic drift after parse-reset cycle, (3) varCounter invariant technically violated after parse-reset (compensated by addPredicate's collision-avoidance), (4) no test for ExampleQueries+bidirectional sync interaction. None of these issues affect correctness of the feature as specified. Status: PASS."
+}

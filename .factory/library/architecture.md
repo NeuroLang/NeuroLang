@@ -52,8 +52,74 @@ The `/v2/engines` endpoint returns an **envelope format**, not a plain array:
 ```
 Frontend workers must handle this envelope. See `EngineSelector.tsx` for a defensive pattern that handles both the envelope and plain array cases.
 
+## WebSocket Protocol (/v1/statementsocket)
+
+The query execution WebSocket uses the following message shapes:
+
+**Outgoing (frontend → backend):**
+```json
+{"query": "ans(x) :- PeakReported(x, y, z, s).", "engine": "neurosynth"}
+```
+
+**Incoming (backend → frontend):**
+```json
+{
+  "status": "running" | "done" | "cancelled",
+  "data": {
+    "uuid": "...",
+    "running": true | false,
+    "done": true | false,
+    "cancelled": true | false,
+    "errorName": "SyntaxError | ...",
+    "message": "...",
+    "errorDoc": "...",
+    "line_info": {"line": 1, "column": 5},
+    "results": { "symbol_name": {"columns": [...], "values": [[...]], "size": N} }
+  }
+}
+```
+
+See `responses.py:QueryResults` for the server side and `ExecutionContext.tsx:ExecutionMessage` for the TypeScript interface.
+
+**Note:** `line_info` is only present when the error is a `ParserError` with position info. The field is absent (not null) when unavailable.
+
+**Note:** `responses.py:set_error_details` has a latent `UnboundLocalError` for exotic `ParserError` subclasses that have none of the three expected position-info attributes (`tokenizer`, `buf`, `line`/`column`). Standard `ParserError` instances are safe.
+
+## Bidirectional Sync Architecture (QueryContext)
+
+The `QueryContext` (`src/context/QueryContext.tsx`) manages a synchronized state between the visual query builder and the code editor using:
+
+- **`isBuilderUpdate` ref**: A `useRef<boolean>` set to `true` synchronously just before any builder-initiated text update, then reset to `false` immediately after. The debounced `setDatalogText` handler checks `if (!isBuilderUpdate.current)` to suppress re-parsing on builder-originated changes — preventing infinite loops.
+- **`PARSE_DEBOUNCE_MS = 500`**: Code-editor changes are debounced 500ms before attempting `parseDatalog()`. On success, `model.reset(parsed)` updates the visual builder. On failure, `isSynced = false` shows a desync indicator.
+- **Undo/redo paths**: `undo()` and `redo()` also set/reset `isBuilderUpdate` to prevent the resulting `setDatalogText` call from scheduling a parse.
+
+**The pattern must be applied consistently**: Any code path that programmatically sets `datalogText` must wrap it with `isBuilderUpdate.current = true / false` to prevent the debounced parse from `model.reset()`-ing state.
+
+## CodeMirror 6 Patterns
+
+- **Detecting programmatic vs. user edits**: The `EditorView.updateListener` should check `if (update.docChanged && !isExternalUpdate.current)` to avoid firing `onChange` for programmatic updates. The ref `isExternalUpdate` must be passed into `buildExtensions()` closure so it is accessible from inside the listener. Do NOT rely on setting a ref before `view.dispatch()` and reading it after — the listener fires synchronously during dispatch, so the ref must be in scope before the listener is created.
+  - Alternatively, check `update.transactions.some(tr => tr.annotation(Transaction.userEvent) !== undefined)` to distinguish user transactions from programmatic ones (programmatic dispatches have no `userEvent` annotation).
+- **Dynamic `readOnly`**: `EditorState.readOnly.of(value)` is immutable once set in the extensions array. To support dynamic changes, wrap it in a `Compartment` and reconfigure it in a `useEffect([readOnly])`. See [CodeMirror docs on Compartments](https://codemirror.net/docs/ref/#state.Compartment).
+- **Agent-browser limitation**: The CodeMirror 6 editor renders as a `div[contenteditable]` with class `cm-content`. Standard `agent-browser` `fill` or `keyboard-type` commands do not reliably set CodeMirror content because CodeMirror intercepts DOM mutations. For validation, prefer building queries via the predicate browser (which calls the QueryModel API) rather than typing in the CodeMirror editor directly.
+
+## parseDatalog() — Intentionally Limited Parser
+
+`QueryModel.parseDatalog()` (in `QueryModel.ts`) is a **regex-based parser supporting only the canonical format** produced by `serializeToDatalog()`:
+```
+ans(v, v1, v2) :- Pred1(v, v1), Pred2(v1, v2).
+```
+It returns `null` (desync) for:
+- Constants or literals in arguments
+- Negation (`~`)
+- Arithmetic or comparison operators
+- Alternative head names (only `ans` is expected)
+- Any syntax that deviates from the simple conjunctive query form
+
+This is by design. The visual builder only represents simple conjunctive queries — complex Datalog is write-only in the code editor, and will desync the visual builder. This is expected and not a bug.
+
 ## Backend Quirks
 
+- **Backend parser rejects trailing period**: The NeuroLang Datalog parser expects queries **without** a trailing period (`.`). For example, `ans(x) :- PeakReported(x, y, z, s)` is valid, but `ans(x) :- PeakReported(x, y, z, s).` raises `UnexpectedTokenError`. The visual query builder's `serializeToDatalog()` appends a period — the `submitQuery` function in `ExecutionContext.tsx` must strip it before sending. Any worker submitting queries to the backend must be aware of this constraint.
 - **`get_atlas(engine_key)` raises `IndexError`** (not `KeyError`) when the engine key is unknown. The underlying `queries.py` implementation does a list comprehension and accesses `config[0]`, so an empty list raises `IndexError`. Use `except (IndexError, KeyError)` when catching 404 cases for atlas-related endpoints.
 - **`NeurolangEngineSet.engine()` yields `None`** (not raising) when timeout is set and the semaphore cannot be acquired. Always check `if engine is None` and return HTTP 503 when acquiring engines directly. Example pattern in `v2_handlers.py V2SchemaHandler.get()`.
 - **`JSONRequestHandler` has two definitions**: One in `neurolang/utils/server/app.py` (for v1 handlers) and one in `neurolang/utils/server/base_handlers.py` (for v2 handlers). New v2 handlers should import from `base_handlers.py`. Do NOT import from `app.py` as this creates a circular import.
