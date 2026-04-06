@@ -6,13 +6,18 @@ Provides:
     - V2SchemaHandler   : GET /v2/schema/:engine
     - V2AtlasHandler    : GET /v2/atlas/:engine
     - V2SuggestHandler  : POST /v2/suggest/:engine
+    - V2ExamplesHandler : GET /v2/examples/:engine
 """
 import inspect
 import json
 import logging
+import os
+import sys
+from pathlib import Path
 from typing import AbstractSet, Callable
 
 import tornado.web
+import yaml
 
 from .base_handlers import JSONRequestHandler
 from .responses import base64_encode_nifti
@@ -545,3 +550,95 @@ class V2SuggestHandler(JSONRequestHandler):
             return self._fallback_identifiers(engine)
 
         return self._serialise_suggestions(raw)
+
+
+# ---------------------------------------------------------------------------
+# Helpers for loading queries.yaml
+# ---------------------------------------------------------------------------
+
+def _load_queries_yaml() -> dict:
+    """Load and return the contents of queries.yaml as a dict.
+
+    Searches for ``queries.yaml`` in the same locations as the v1
+    ``EnginesHandler``: the ``sys.prefix/queries/`` directory first, then
+    the directory containing this module.
+
+    Returns
+    -------
+    dict
+        Parsed YAML content, or an empty dict if the file is not found.
+    """
+    search_dirs = [
+        os.path.join(sys.prefix, "queries"),
+        str(Path(__file__).resolve().parent),
+    ]
+    for directory in search_dirs:
+        candidate = os.path.join(directory, "queries.yaml")
+        if os.path.isfile(candidate):
+            LOG.debug("V2ExamplesHandler: loading queries from %s", candidate)
+            with open(candidate, "r") as fh:
+                return yaml.safe_load(fh) or {}
+    LOG.warning("V2ExamplesHandler: queries.yaml not found in %s", search_dirs)
+    return {}
+
+
+class V2ExamplesHandler(JSONRequestHandler):
+    """
+    Return example queries for a given engine.
+
+    GET /v2/examples/:engine
+
+    Response shape
+    --------------
+    {
+        "status": "ok",
+        "data": [
+            {
+                "id": "neuro1",
+                "title": "...",
+                "shortTitle": "...",
+                "query": "...",
+                "description": "..."
+            },
+            ...
+        ]
+    }
+
+    Returns an empty list when the engine has no examples defined.
+    Raises ``tornado.web.HTTPError`` 404 for unknown engine names.
+    """
+
+    def get(self, engine_key: str) -> None:
+        """Return example queries for *engine_key*.
+
+        Parameters
+        ----------
+        engine_key : str
+            Identifier of the engine (e.g. ``'neurosynth'``).
+
+        Raises
+        ------
+        tornado.web.HTTPError
+            404 when *engine_key* is not registered in the query manager.
+        """
+        LOG.debug(
+            "V2ExamplesHandler: requesting examples for '%s'.", engine_key
+        )
+        nqm = self.application.nqm
+        # Validate that the engine exists in the registered configs.
+        known_keys = {
+            config.key for config in nqm.configs.keys()
+        }
+        if engine_key not in known_keys:
+            raise tornado.web.HTTPError(
+                status_code=404,
+                log_message=f"Engine '{engine_key}' not found.",
+            )
+
+        queries = _load_queries_yaml()
+        examples = queries.get(engine_key, [])
+        # Ensure the value is a list (guard against malformed YAML).
+        if not isinstance(examples, list):
+            examples = []
+
+        self.write_json_reponse(examples)

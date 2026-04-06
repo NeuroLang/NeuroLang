@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react'
 import EngineSelector from './EngineSelector'
+import ExampleQueries from './ExampleQueries'
 import PredicateBrowser from './PredicateBrowser'
 import VisualQueryBuilder from './VisualQueryBuilder'
 import SuggestionsPanel from './SuggestionsPanel'
@@ -167,6 +168,9 @@ function Layout(): React.ReactElement {
           <div className="sidebar-section">
             <h2 className="sidebar-section-title">Predicates</h2>
             <SidebarPredicateBrowser />
+          </div>
+          <div className="sidebar-section">
+            <ExampleQueries />
           </div>
         </aside>
 
