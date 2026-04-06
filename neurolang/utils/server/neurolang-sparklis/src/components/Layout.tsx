@@ -6,6 +6,7 @@ import SuggestionsPanel from './SuggestionsPanel'
 import CodeEditor from './CodeEditor'
 import RunQueryButton from './RunQueryButton'
 import ErrorDisplay from './ErrorDisplay'
+import ResultsPanel from './ResultsPanel'
 import { useEngine } from '../context/useEngine'
 import { useQuery } from '../context/useQuery'
 import { useSchema } from '../context/useSchema'
@@ -107,6 +108,9 @@ function MainContent(): React.ReactElement {
       </div>
 
       <SuggestionsPanel onSuggestionSelect={handleSuggestionSelect} />
+
+      {/* Results Panel: shows after a successful query */}
+      <ResultsPanel />
     </div>
   )
 }
