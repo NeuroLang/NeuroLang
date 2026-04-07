@@ -100,3 +100,9 @@ This section covers isolation rules for browser-based validation subagents.
 ### IPv6 note (Vite dev server)
 - The Vite dev server on port 3100 may only listen on IPv6 (::1) — use `http://[::1]:3100` if `http://localhost:3100` fails in agent-browser
 - To start the dev server: `cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && PORT=3100 npm run dev`
+
+### Vite dev server WebSocket proxy issue with large payloads
+- The Vite dev server's WebSocket proxy causes Playwright (agent-browser) to navigate to `about:blank` when the backend sends large WebSocket responses (VBR brain region data ~435MB).
+- **Workaround**: Build the production sparklis app (`cd neurolang/utils/server/neurolang-sparklis && npm run build`) and serve it via a node.js proxy on a different port (e.g., 3150). The production build served directly avoids the proxy issue.
+- **Alternative**: Use text-only queries that do not return VBR/NIfTI data to avoid the large payload issue.
+- This issue may affect brain visualization tests (VAL-BRAIN-*) as well.

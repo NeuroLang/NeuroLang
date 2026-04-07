@@ -1,0 +1,81 @@
+{
+  "groupId": "exec-pagination-rerun",
+  "milestone": "execution",
+  "testedAt": "2026-04-07T19:30:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3150",
+    "apiBase": "http://localhost:8888",
+    "note": "Used production build served via node.js proxy on port 3150 instead of Vite dev server on port 3100. The Vite dev server's WebSocket proxy causes Playwright to navigate to about:blank when the backend sends large WebSocket responses (VBR brain region data). The node.js proxy on 3150 forwards WS upgrades correctly.",
+    "browserSession": "0200bbc953bf__pagination"
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-EXEC-008",
+      "title": "Paginate results",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Navigate to http://localhost:3150 (production sparklis build with WS proxy)",
+          "expected": "NeuroLang Sparklis app loads",
+          "observed": "App loaded successfully with title 'NeuroLang Sparklis'"
+        },
+        {
+          "action": "Select 'destrieux' engine from the engine selector",
+          "expected": "Destrieux engine loads with predicates visible in sidebar",
+          "observed": "Destrieux engine loaded, predicates visible (Relations: 1, Functions: 31)"
+        },
+        {
+          "action": "Set query text to 'LeftName(s):- destrieux(s, r) & startswith(\"L\", s)' via React context setDatalogText",
+          "expected": "Query appears in CodeMirror editor, Run Query button becomes enabled",
+          "observed": "Query set in editor, Run Query button enabled"
+        },
+        {
+          "action": "Click Run Query button",
+          "expected": "Query executes and returns results with pagination (>50 rows)",
+          "observed": "Query executed successfully, returned 74 LeftName rows (text-only)"
+        },
+        {
+          "action": "Verify pagination controls on page 1",
+          "expected": "Pagination controls visible: Previous (disabled), Page 1 of 2, Next (enabled)",
+          "observed": "Pagination controls visible: '← Prev' (disabled), 'Page 1 of 2', 'Next →' (enabled). 50 rows displayed."
+        },
+        {
+          "action": "Click 'Next page' button",
+          "expected": "Page 2 loads with different rows",
+          "observed": "Page 2 loaded: 'Page 2 of 2', Previous (enabled), Next (disabled), 24 rows displayed starting from 'L S collat transv post'"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/pagination-rerun/VAL-EXEC-008-initial-load.png",
+          "execution/pagination-rerun/VAL-EXEC-008-destrieux-selected.png",
+          "execution/pagination-rerun/VAL-EXEC-008-ready-to-run.png",
+          "execution/pagination-rerun/VAL-EXEC-008-page-1.png",
+          "execution/pagination-rerun/VAL-EXEC-008-page-1-scrolled.png",
+          "execution/pagination-rerun/VAL-EXEC-008-page-2.png"
+        ],
+        "consoleErrors": "none",
+        "network": "WebSocket ws://localhost:8888/v1/statementsocket -> 101 Switching Protocols. Query returned 74 rows (LeftName symbol). Backend sends all rows with length=10000 parameter."
+      },
+      "details": "Pagination verified working: 74 rows split into Page 1 (50 rows) and Page 2 (24 rows). The pagination fix in fix-pagination-controls commit correctly passes length=10000 to send all rows to the frontend for client-side pagination. The 'Page 1 of 2' indicator and Next/Previous navigation buttons are fully functional. Previous button correctly disabled on page 1, Next button correctly disabled on page 2.",
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The Vite dev server on port 3100 causes Playwright (agent-browser) to navigate to about:blank whenever the backend sends a large WebSocket response (brain region VBR data ~435MB). This is a Playwright + Vite dev server proxy interaction issue. The original task guidance suggests using 'LeftRegion(s, r)' query which includes VBR column r, making the response too large for Playwright to handle without crashing the page context.",
+      "resolved": true,
+      "resolution": "Built the production sparklis app (npm run build) and served it via a custom node.js proxy server on port 3150 that correctly forwards WebSocket upgrades to the Tornado backend on port 8888. Also used a text-only query 'LeftName(s):- destrieux(s, r) & startswith(\"L\", s)' that returns 74 string rows without VBR data, avoiding the large payload issue.",
+      "affectedAssertions": ["VAL-EXEC-008"]
+    },
+    {
+      "description": "The CodeMirror editor content could not be set via standard keyboard input or setDatalogText (not exposed on window). Required accessing React fiber tree to find QueryContext.setDatalogText and call it directly.",
+      "resolved": true,
+      "resolution": "Used JavaScript to walk the React fiber tree from document.getElementById('root') to find the ExecutionContext's memoizedProps.value.setDatalogText function and called it directly.",
+      "affectedAssertions": ["VAL-EXEC-008"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 1 assertion: VAL-EXEC-008 PASSED. Pagination controls work correctly for result sets with >50 rows. Query returning 74 rows shows 'Page 1 of 2' with 50 rows, and 'Page 2 of 2' with 24 rows. Navigation between pages works correctly."
+}
