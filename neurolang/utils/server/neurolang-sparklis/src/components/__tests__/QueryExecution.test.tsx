@@ -1008,3 +1008,142 @@ describe('ExecutionContext – WebSocket error', () => {
     expect(captured!.queryError!.errorName).toBe('WebSocketError')
   })
 })
+
+// ---------------------------------------------------------------------------
+// ExecutionContext: cancel race condition guard
+// ---------------------------------------------------------------------------
+
+describe('ExecutionContext – cancel race condition guard (isCancellingRef)', () => {
+  it('onerror after cancelQuery() does NOT overwrite cancelled status with error', () => {
+    /**
+     * Regression test for the cancel race condition:
+     * cancelQuery() calls ws.close() which may asynchronously fire onerror
+     * in some browsers. Without the isCancellingRef guard, the onerror handler
+     * would overwrite executionStatus from 'cancelled' to 'error'.
+     */
+    let captured: ExecutionContextValue | null = null
+
+    render(
+      <TestProviders>
+        <ExecutionStateReader onRender={(v) => { captured = v }} />
+      </TestProviders>,
+    )
+
+    act(() => {
+      captured!.submitQuery('ans(x) :- Study(x).', 'neurosynth')
+    })
+
+    const ws = MockWebSocket.lastInstance!
+    act(() => { ws.triggerOpen() })
+
+    // Cancel the query (this sets isCancellingRef.current = true)
+    act(() => {
+      captured!.cancelQuery()
+    })
+
+    // Simulate onerror firing after cancel (race condition scenario)
+    act(() => {
+      ws.triggerError()
+    })
+
+    // Status should remain 'cancelled', not 'error'
+    expect(captured!.executionStatus).toBe('cancelled')
+    expect(captured!.queryError).toBeNull()
+  })
+
+  it('onerror after cancelQuery() does NOT set queryError', () => {
+    let captured: ExecutionContextValue | null = null
+
+    render(
+      <TestProviders>
+        <ExecutionStateReader onRender={(v) => { captured = v }} />
+      </TestProviders>,
+    )
+
+    act(() => {
+      captured!.submitQuery('ans(x) :- Study(x).', 'neurosynth')
+    })
+
+    const ws = MockWebSocket.lastInstance!
+    act(() => { ws.triggerOpen() })
+
+    act(() => {
+      captured!.cancelQuery()
+    })
+
+    act(() => {
+      ws.triggerError()
+    })
+
+    expect(captured!.queryError).toBeNull()
+  })
+
+  it('onerror without prior cancel DOES set error status (non-cancel errors still work)', () => {
+    /**
+     * Verify that the isCancellingRef guard does not suppress genuine
+     * WebSocket errors that occur outside of a cancellation flow.
+     */
+    let captured: ExecutionContextValue | null = null
+
+    render(
+      <TestProviders>
+        <ExecutionStateReader onRender={(v) => { captured = v }} />
+      </TestProviders>,
+    )
+
+    act(() => {
+      captured!.submitQuery('ans(x) :- Study(x).', 'neurosynth')
+    })
+
+    const ws = MockWebSocket.lastInstance!
+    act(() => { ws.triggerOpen() })
+
+    // Trigger error WITHOUT cancelling first
+    act(() => {
+      ws.triggerError()
+    })
+
+    expect(captured!.executionStatus).toBe('error')
+    expect(captured!.queryError).not.toBeNull()
+    expect(captured!.queryError!.errorName).toBe('WebSocketError')
+  })
+
+  it('after cancelQuery(), new submitQuery() clears isCancellingRef so errors are reported', () => {
+    /**
+     * After cancelling, isCancellingRef is reset to false by submitQuery().
+     * This ensures a subsequent query's genuine errors are not suppressed.
+     */
+    let captured: ExecutionContextValue | null = null
+
+    render(
+      <TestProviders>
+        <ExecutionStateReader onRender={(v) => { captured = v }} />
+      </TestProviders>,
+    )
+
+    // First query: submit then cancel
+    act(() => {
+      captured!.submitQuery('ans(x) :- Study(x).', 'neurosynth')
+    })
+    act(() => {
+      captured!.cancelQuery()
+    })
+    expect(captured!.executionStatus).toBe('cancelled')
+
+    // Second query: submit (should reset isCancellingRef)
+    act(() => {
+      captured!.submitQuery('ans(x) :- Study(x).', 'neurosynth')
+    })
+    const ws2 = MockWebSocket.lastInstance!
+    act(() => { ws2.triggerOpen() })
+
+    // Genuine error on the new query should be reported
+    act(() => {
+      ws2.triggerError()
+    })
+
+    expect(captured!.executionStatus).toBe('error')
+    expect(captured!.queryError).not.toBeNull()
+    expect(captured!.queryError!.errorName).toBe('WebSocketError')
+  })
+})

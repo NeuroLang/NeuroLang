@@ -348,7 +348,9 @@ class QuerySocketHandler(tornado.websocket.WebSocketHandler):
             the status of the query, by default "ok"
         """
         self.write_message(
-            query_results_to_json(QueryResults(self.uuid, future), status)
+            query_results_to_json(
+                QueryResults(self.uuid, future, get_values=True), status
+            )
         )
 
 

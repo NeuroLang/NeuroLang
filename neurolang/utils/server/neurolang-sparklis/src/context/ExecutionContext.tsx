@@ -124,11 +124,21 @@ export function ExecutionProvider({
   const wsRef = useRef<WebSocket | null>(null)
   /** UUID of the currently running query (for cancellation). */
   const currentUuidRef = useRef<string | null>(null)
+  /**
+   * Guards against the onerror handler overwriting 'cancelled' with 'error'.
+   * ws.close() in cancelQuery() asynchronously fires onerror in some browsers,
+   * so we set this ref to true before closing to suppress that transition.
+   */
+  const isCancellingRef = useRef<boolean>(false)
 
   // ---------------------------------------------------------------------------
   // cancelQuery – close the WebSocket and send a cancel HTTP request
   // ---------------------------------------------------------------------------
   const cancelQuery = useCallback(() => {
+    // Set cancelling flag BEFORE closing the socket so onerror cannot
+    // overwrite the 'cancelled' status with 'error'.
+    isCancellingRef.current = true
+
     // Close the WebSocket (server will clean up).
     if (wsRef.current) {
       wsRef.current.close()
@@ -155,6 +165,7 @@ export function ExecutionProvider({
       wsRef.current = null
     }
     currentUuidRef.current = null
+    isCancellingRef.current = false
     setExecutionStatus('idle')
     setQueryError(null)
     setQueryResults(null)
@@ -178,6 +189,7 @@ export function ExecutionProvider({
       setQueryResults(null)
       setQueryUuid(null)
       currentUuidRef.current = null
+      isCancellingRef.current = false
 
       const wsUrl = getWebSocketUrl()
       let ws: WebSocket
@@ -260,6 +272,11 @@ export function ExecutionProvider({
       }
 
       ws.onerror = () => {
+        // If we are in the middle of cancelling, ignore the error — ws.close()
+        // can fire onerror asynchronously in some browsers.
+        if (isCancellingRef.current) {
+          return
+        }
         wsRef.current = null
         setExecutionStatus('error')
         setQueryError({

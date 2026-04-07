@@ -196,3 +196,118 @@ def test_figure_handler_gets_figure(test_case, nqm, future, figures):
     )
     assert response.code == 200
     nqm.get_result.assert_called_with(str(uuid))
+
+
+# ---------------------------------------------------------------------------
+# QuerySocketHandler tests
+# ---------------------------------------------------------------------------
+
+
+class QuerySocketTornadoTestCase(tornado.testing.AsyncHTTPTestCase):
+    """
+    Tornado test case with WebSocket support for QuerySocketHandler tests.
+    """
+
+    def __init__(self, nqm) -> None:
+        super().__init__()
+        self.nqm = nqm
+
+    def get_app(self):
+        return Application(self.nqm)
+
+    def runTest(self):
+        pass
+
+    @tornado.testing.gen_test(timeout=10)
+    async def test_query_socket_sends_values(self):
+        """
+        QuerySocketHandler.send_query_update() must pass get_values=True to
+        QueryResults so the WebSocket response includes the 'values' field.
+        """
+        data = [
+            (5, "dog"),
+            (10, "cat"),
+        ]
+        from typing import Tuple
+
+        ans = NamedRelationalAlgebraFrozenSet(("a", "b"), data)
+        ans.row_type = Tuple[float, str]
+        result = {"ans": ans}
+
+        future = create_autospec(Future)
+        future.cancelled.return_value = False
+        future.done.return_value = True
+        future.running.return_value = False
+        future.exception.return_value = None
+        future.result.return_value = result
+        self.nqm.submit_query.return_value = future
+
+        url = self.get_url("/v1/statementsocket").replace(
+            "http://", "ws://"
+        )
+        conn = await tornado.websocket.websocket_connect(url)
+
+        # Send a query message
+        await conn.write_message(
+            json.dumps(
+                {"query": "ans(x) :- Study(x).", "engine": "neurosynth"}
+            )
+        )
+
+        # Read up to 2 messages (initial + completion callback)
+        messages = []
+        for _ in range(2):
+            msg = await conn.read_message()
+            if msg is None:
+                break
+            messages.append(json.loads(msg))
+
+        conn.close()
+
+        # At least one message should be present
+        assert len(messages) >= 1
+
+        # Find the done message
+        done_messages = [
+            m for m in messages
+            if m.get("data", {}).get("done") is True
+        ]
+        assert len(done_messages) >= 1, (
+            f"Expected at least one 'done' message, got: {messages}"
+        )
+
+        done_data = done_messages[-1]["data"]
+        assert "results" in done_data, (
+            f"'results' key missing from done message data: {done_data}"
+        )
+        assert "ans" in done_data["results"], (
+            f"'ans' symbol missing from results: {done_data['results']}"
+        )
+        symbol_data = done_data["results"]["ans"]
+        assert "values" in symbol_data, (
+            f"'values' field missing from symbol data "
+            f"(get_values=True not passed): {symbol_data}"
+        )
+        assert isinstance(symbol_data["values"], list), (
+            f"'values' should be a list, got: {type(symbol_data['values'])}"
+        )
+        assert len(symbol_data["values"]) == 2, (
+            f"Expected 2 rows, got: {len(symbol_data['values'])}"
+        )
+
+
+@pytest.fixture
+def ws_test_case(nqm):
+    tc = QuerySocketTornadoTestCase(nqm)
+    tc.setUp()
+    yield tc
+    tc.tearDown()
+
+
+def test_query_socket_handler_sends_values(ws_test_case):
+    """
+    Verify that the WebSocket response includes 'values' rows when a query
+    completes successfully. This confirms get_values=True is passed to
+    QueryResults in QuerySocketHandler.send_query_update().
+    """
+    ws_test_case.test_query_socket_sends_values()
