@@ -79,8 +79,8 @@ This section covers isolation rules for browser-based validation subagents.
 - After a query with no matching rows completes, `No results found` message appears in element with class `no-results-message`
 - Example queries panel is in the sidebar showing examples from `/v2/examples/:engine`; clicking an example title loads it into the code editor
 - Keyboard shortcut `Cmd+Enter` (Mac) / `Ctrl+Enter` submits the query when the code editor is focused
-- **KNOWN BUG (execution milestone round 1)**: Results table never renders because the backend WS response omits `values` field. `QuerySocketHandler.send_query_update()` in app.py calls `QueryResults(uuid, future)` without `get_values=True`. Fix pending.
-- **KNOWN BUG (execution milestone round 1)**: Cancel query shows WebSocketError instead of "Query cancelled." Root cause: `ws.onerror` fires after `ws.close()` in cancel and lacks cancellation guard. Fix pending.
+- **FIXED (execution milestone round 2)**: Cancel query now correctly shows "⊘ Query cancelled." instead of "WebSocketError". The `isCancellingRef` guard was added to `ExecutionContext.tsx` in commit f1fe82ab.
+- **KNOWN BUG (execution milestone round 2)**: Results table never renders despite `get_values=True` fix (f1fe82ab). Root cause: `responses.py` line 85 uses integer label access `image_row[1]` on a pandas Series whose index is string-typed after `reset_index()`. Fix: change `vbr = image_row[1]` to `vbr = image_row.iloc[1]`. This blocks ALL queries that produce VBR/ExplicitVBR columns (e.g., all Destrieux queries). Affects VAL-EXEC-005 through 009.
 - **CodeMirror editor content**: Cannot use standard `Control+A` + `fill` pattern to replace editor content. Use either React context `setDatalogText()` or click example query buttons to set query content.
 
 ### Known UI behaviors (query-builder milestone)

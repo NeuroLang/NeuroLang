@@ -1,69 +1,57 @@
 {
   "milestone": "execution",
-  "round": 1,
+  "round": 2,
   "status": "fail",
   "assertionsSummary": {
-    "total": 14,
-    "passed": 8,
-    "failed": 6,
+    "total": 6,
+    "passed": 1,
+    "failed": 5,
     "blocked": 0
   },
   "passedAssertions": [
-    "VAL-EXEC-001",
-    "VAL-EXEC-002",
-    "VAL-EXEC-003",
-    "VAL-EXEC-004",
-    "VAL-EXEC-010",
-    "VAL-EXEC-012",
-    "VAL-EXEC-013",
-    "VAL-POLISH-004"
+    "VAL-EXEC-011"
   ],
   "failedAssertions": [
     {
       "id": "VAL-EXEC-005",
-      "reason": "Backend WebSocket handler (QuerySocketHandler.send_query_update in app.py) calls QueryResults(uuid, future) without get_values=True. The 'values' field is never included in the WS response. ResultsPanel.tsx requires 'values' in result objects to render the table ('values' in (val as object) filter on line ~295). Results always show 'No results found' despite backend executing queries correctly (74-148 rows confirmed by direct WS test). Fix: pass get_values=True in QuerySocketHandler, or update ResultsPanel to not require 'values' for filter check."
+      "reason": "Results table never renders. get_values=True fix (f1fe82ab) is correctly deployed in app.py. However, responses.py line 85 crashes with KeyError: 1 in serializeVBR — uses integer label access image_row[1] on a pandas Series whose index is string-typed after reset_index(). Fix: change image_row[1] to image_row.iloc[1] in responses.py. This blocks ALL queries that produce VBR/ExplicitVBR columns (all Destrieux queries). Verified: 5/5 query executions fail with this error in backend logs."
     },
     {
       "id": "VAL-EXEC-006",
-      "reason": "Blocked by same root cause as VAL-EXEC-005: results table never renders, so symbol selector cannot appear."
+      "reason": "Blocked by same serializeVBR KeyError as VAL-EXEC-005. Results table never renders, so symbol selector cannot appear."
     },
     {
       "id": "VAL-EXEC-007",
-      "reason": "Blocked by same root cause as VAL-EXEC-005: results table never renders, so column sort cannot be tested."
+      "reason": "Blocked by same serializeVBR KeyError as VAL-EXEC-005. Results table never renders, so column sort cannot be tested."
     },
     {
       "id": "VAL-EXEC-008",
-      "reason": "Blocked by same root cause as VAL-EXEC-005: results table never renders, so pagination cannot be tested."
+      "reason": "Blocked by same serializeVBR KeyError as VAL-EXEC-005. Results table never renders, so pagination cannot be tested."
     },
     {
       "id": "VAL-EXEC-009",
-      "reason": "Blocked by same root cause as VAL-EXEC-005: results table never renders, so CSV download button is never shown."
-    },
-    {
-      "id": "VAL-EXEC-011",
-      "reason": "Cancel button is visible during running state (pass), but clicking Cancel shows 'WebSocketError' instead of 'Query cancelled.' Root cause: cancelQuery() calls ws.close() which triggers ws.onerror asynchronously. ws.onerror lacks a cancellation guard and overwrites executionStatus from 'cancelled' to 'error'. Fix: add isCancellingRef flag in QueryContext.tsx and check it in ws.onerror to skip the error transition when cancelling."
+      "reason": "Blocked by same serializeVBR KeyError as VAL-EXEC-005. Results table never renders, so CSV download button is never shown."
     }
   ],
   "blockedAssertions": [],
-  "appliedUpdates": [],
-  "previousRound": null,
-  "flowReports": [
-    ".factory/validation/execution/user-testing/flows/exec-group1.json",
-    ".factory/validation/execution/user-testing/flows/exec-group2.json",
-    ".factory/validation/execution/user-testing/flows/exec-group3.json"
-  ],
   "rootCauses": [
     {
-      "id": "RC-001",
-      "description": "Backend/frontend 'values' field mismatch in WebSocket query results. QuerySocketHandler.send_query_update() in app.py calls QueryResults(self.uuid, future) without get_values=True. responses.py QueryResults only includes 'values' when get_values=True. ResultsPanel.tsx filters results using \"'values' in (val as object)\" — this always fails, resultsMap is null, and 'No results found' is always shown.",
+      "id": "RC-003",
+      "description": "responses.py serializeVBR function (line 85) uses integer label access image_row[1] on a pandas Series. After reset_index(), the Series index contains string column names (e.g., ['index', 's'] for a relation with column 's'). Integer label access [1] raises KeyError since the index is not integer-based. This crash occurs inside send_query_update callback for every query that produces VBR columns, preventing any WebSocket completion message from being sent to the frontend.",
       "affectedAssertions": ["VAL-EXEC-005", "VAL-EXEC-006", "VAL-EXEC-007", "VAL-EXEC-008", "VAL-EXEC-009"],
-      "suggestedFix": "In app.py QuerySocketHandler.send_query_update(), change QueryResults(self.uuid, future) to QueryResults(self.uuid, future, get_values=True). Alternatively, update ResultsPanel.tsx to check for 'columns' instead of 'values' as the existence check, and only require 'values' when rendering rows."
-    },
-    {
-      "id": "RC-002",
-      "description": "Cancel query race condition: cancelQuery() calls ws.close() which triggers ws.onerror asynchronously. ws.onerror lacks a cancellation guard and overwrites executionStatus from 'cancelled' to 'error', showing a WebSocket error message instead of 'Query cancelled.'",
-      "affectedAssertions": ["VAL-EXEC-011"],
-      "suggestedFix": "In QueryContext.tsx (or wherever ws event handlers are defined), add an isCancellingRef = useRef(false) flag. Set it to true in cancelQuery() before calling ws.close(). In ws.onerror, check if (isCancellingRef.current) return; to skip the error transition during cancellation."
+      "suggestedFix": "In responses.py, change line 85 from 'vbr = image_row[1]' to 'vbr = image_row.iloc[1]' to use positional (iloc) instead of label-based access."
     }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Updated Known UI behaviors for execution milestone: marked VAL-EXEC-011 cancel bug as fixed, documented new serializeVBR KeyError blocker for results table assertions.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/execution/user-testing/synthesis-round1.json",
+  "flowReports": [
+    ".factory/validation/execution/user-testing/flows/exec-group-results.json",
+    ".factory/validation/execution/user-testing/flows/exec-group-cancel.json"
   ]
 }

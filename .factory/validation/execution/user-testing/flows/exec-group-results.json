@@ -1,0 +1,170 @@
+{
+  "groupId": "exec-group-results",
+  "milestone": "execution",
+  "testedAt": "2026-04-07T17:45:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3100",
+    "apiBase": "http://localhost:8888",
+    "browserSession": "4097e1d24418__u1",
+    "credentials": "none"
+  },
+  "toolsUsed": ["agent-browser", "curl"],
+  "assertions": [
+    {
+      "id": "VAL-EXEC-005",
+      "title": "Tabular results displayed",
+      "status": "fail",
+      "summary": "Results table never appears after query execution. The backend query executes successfully (LeftName query solved in ~16ms), but send_query_update callback crashes with KeyError: 1 in serializeVBR (responses.py:85). This exception prevents any WebSocket message from being sent back to the frontend. The UI stays in 'Running...' state indefinitely with no results table displayed. The fix (commit f1fe82ab, adding get_values=True) is in place but exposed a pre-existing bug: serializeVBR uses image_row[1] (integer label access) on a pandas Series whose index is string-typed (e.g. ['index', 's'] after reset_index()), causing KeyError: 1. This affects ALL destrieux queries since all symbols have VBR columns. Tested with 'Union of atlas regions' example (full query) and simplified query 'LeftName(s) :- destrieux(s, _) & startswith(\"L\", s)' — both fail.",
+      "steps": [
+        {
+          "action": "Navigate to http://localhost:3100",
+          "expected": "App loads",
+          "observed": "App loaded successfully"
+        },
+        {
+          "action": "Select 'destrieux' engine",
+          "expected": "Engine selected, predicate browser populated",
+          "observed": "Engine selected, predicates and examples visible"
+        },
+        {
+          "action": "Load 'Union of atlas regions' example via Load button",
+          "expected": "Code editor populated with example query",
+          "observed": "Code editor populated with full query including LeftRegion, AnteriorOfCentralSulcus, SuperiorOfTemporalGyrus, RegionUnion"
+        },
+        {
+          "action": "Modify query via CodeMirror dispatch to remove RegionUnion symbol",
+          "expected": "Simplified query without VBR aggregate",
+          "observed": "Set to 'LeftName(s) :- destrieux(s, _) & startswith(\"L\", s)' using CodeMirror internal dispatch"
+        },
+        {
+          "action": "Click Run Query button",
+          "expected": "Query executes and results table appears with columns and rows",
+          "observed": "Query submitted (WebSocket opened), UI shows 'Running...' indefinitely. Backend logs show: query solved in 16ms, then send_query_update callback throws KeyError: 1 in serializeVBR. No WebSocket message sent. Frontend never receives results."
+        },
+        {
+          "action": "Wait for results or timeout",
+          "expected": "Results table with column 's' and at least one row",
+          "observed": "No results table appeared. Manual cancellation shows 'Query cancelled.' but no result data"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/group-results/VAL-EXEC-005-running-stuck.png",
+          "execution/group-results/VAL-EXEC-005-query-cancelled.png"
+        ],
+        "consoleErrors": "500 Internal Server Error (from backend crash), 404 Not Found (from earlier engine name corruption incident)",
+        "backendLogs": "KeyError: 1 in responses.py:85 serializeVBR — image_row[1] fails when Series index is string-typed (['index', 's']) after reset_index(). Occurs in every send_query_update call (5/5 runs failed). Bug: should use image_row.iloc[1] for positional access."
+      },
+      "issues": "Backend serializeVBR crashes with KeyError: 1. The get_values=True fix (f1fe82ab) is deployed but the underlying serializeVBR function uses label-based access image_row[1] instead of positional image_row.iloc[1], causing failure when the VBR column has a string name rather than integer name 1."
+    },
+    {
+      "id": "VAL-EXEC-006",
+      "title": "Symbol selector for results",
+      "status": "fail",
+      "summary": "Cannot test — results table never appears (blocked by VAL-EXEC-005 failure). No symbol selector dropdown is rendered because the backend never sends results to the frontend. The same serializeVBR crash prevents any query from completing.",
+      "steps": [
+        {
+          "action": "Run query with multiple result symbols",
+          "expected": "Results table appears with symbol selector dropdown",
+          "observed": "No results table appeared due to backend serializeVBR crash (KeyError: 1)"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/group-results/VAL-EXEC-005-running-stuck.png"
+        ],
+        "consoleErrors": "500 Internal Server Error from backend",
+        "network": "WebSocket opened for /v1/statementsocket, no completion message received"
+      },
+      "issues": "Blocked by same serializeVBR bug as VAL-EXEC-005. Symbol selector cannot be tested until results table is working."
+    },
+    {
+      "id": "VAL-EXEC-007",
+      "title": "Sort results by column",
+      "status": "fail",
+      "summary": "Cannot test — results table never appears (blocked by VAL-EXEC-005 failure). No column headers are rendered to click for sorting.",
+      "steps": [
+        {
+          "action": "Run query and wait for results table",
+          "expected": "Results table with clickable column headers",
+          "observed": "No results table appeared due to backend serializeVBR crash"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/group-results/VAL-EXEC-005-running-stuck.png"
+        ],
+        "consoleErrors": "500 Internal Server Error from backend"
+      },
+      "issues": "Blocked by same serializeVBR bug as VAL-EXEC-005."
+    },
+    {
+      "id": "VAL-EXEC-008",
+      "title": "Paginate results",
+      "status": "fail",
+      "summary": "Cannot test — results table never appears (blocked by VAL-EXEC-005 failure). No pagination controls are rendered.",
+      "steps": [
+        {
+          "action": "Run query expected to return >50 rows (LeftRegion or LeftName queries)",
+          "expected": "Pagination controls appear (next/previous page)",
+          "observed": "No results table appeared due to backend serializeVBR crash"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/group-results/VAL-EXEC-005-running-stuck.png"
+        ],
+        "consoleErrors": "500 Internal Server Error from backend"
+      },
+      "issues": "Blocked by same serializeVBR bug as VAL-EXEC-005."
+    },
+    {
+      "id": "VAL-EXEC-009",
+      "title": "Download results as CSV",
+      "status": "fail",
+      "summary": "Cannot test — results table never appears (blocked by VAL-EXEC-005 failure). No Download CSV button is rendered.",
+      "steps": [
+        {
+          "action": "Run query and look for Download CSV button",
+          "expected": "Download CSV button visible and functional",
+          "observed": "No results table appeared, no Download CSV button rendered"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/group-results/VAL-EXEC-005-running-stuck.png"
+        ],
+        "consoleErrors": "500 Internal Server Error from backend"
+      },
+      "issues": "Blocked by same serializeVBR bug as VAL-EXEC-005."
+    }
+  ],
+  "frictions": [
+    {
+      "description": "CodeMirror 6 editor content cannot be replaced using standard agent-browser fill command. Had to use CodeMirror internal API: document.querySelector('[data-language=datalog]').cmTile.view.dispatch({changes: {from:0, to:docLen, insert:newQuery}}) to programmatically set editor content.",
+      "resolved": true,
+      "resolution": "Used CodeMirror EditorView.dispatch() via JavaScript eval",
+      "affectedAssertions": ["VAL-EXEC-005"]
+    },
+    {
+      "description": "Accidental React state mutation: earlier JS approach (finding state dispatch via fiber) modified the selectedEngine state instead of datalogText, causing the app to think the query text was the engine name. This caused 404 errors and broke the app state temporarily.",
+      "resolved": true,
+      "resolution": "Reloaded the page (open http://localhost:3100) to reset state, then used correct CodeMirror dispatch approach",
+      "affectedAssertions": ["VAL-EXEC-005"]
+    },
+    {
+      "description": "The 'Union of atlas regions' query was expected to run fast (<100ms per task strategy), but the query including anterior_of spatial function takes much longer. The simpler LeftName query also fails due to serializeVBR crash.",
+      "resolved": false,
+      "resolution": "The fix is blocked by the serializeVBR bug regardless of query complexity",
+      "affectedAssertions": ["VAL-EXEC-005", "VAL-EXEC-006", "VAL-EXEC-007", "VAL-EXEC-008", "VAL-EXEC-009"]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Backend serializeVBR crash: responses.py line 85 uses image_row[1] (integer label access) on a pandas Series whose index is string-typed after reset_index(). When a DataFrame column has a non-integer name (e.g. 's' or 'r'), reset_index() creates columns ['index', 's'] — accessing [1] (integer) raises KeyError. The fix in commit f1fe82ab correctly adds get_values=True to QueryResults, but serializeVBR needs to use image_row.iloc[1] for positional access. This blocks ALL destrieux query results (and likely any query with VBR/ExplicitVBR columns). Verified: 5/5 query executions fail with this error in /tmp/tornado-backend.log.",
+      "affectedAssertions": ["VAL-EXEC-005", "VAL-EXEC-006", "VAL-EXEC-007", "VAL-EXEC-008", "VAL-EXEC-009"],
+      "quickFixAttempted": "Identified root cause (image_row[1] vs image_row.iloc[1]). Did not fix as this subagent's role is testing only. The fix requires changing line 85 of responses.py from 'vbr = image_row[1]' to 'vbr = image_row.iloc[1]'."
+    }
+  ],
+  "summary": "Tested 5 assertions (VAL-EXEC-005 through VAL-EXEC-009): all FAIL. The get_values=True fix from commit f1fe82ab is correctly deployed in app.py, but it exposes a pre-existing crash in serializeVBR (responses.py:85) that uses integer label access image_row[1] on a string-keyed Series after reset_index(). This causes KeyError: 1 in every send_query_update callback, preventing any results from being sent to the frontend via WebSocket. The UI stays in 'Running...' state indefinitely. All 5 assertions depend on the results table appearing, so all fail due to this single backend bug."
+}
