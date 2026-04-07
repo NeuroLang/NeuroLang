@@ -45,6 +45,7 @@ Features that are purely frontend: React components, pages, styling, client-side
      - Component renders correctly
      - Interactions work (clicks, typing, navigation)
      - Edge cases handled (empty state, loading, errors)
+   - **CodeMirror 6 tip:** CM6 editors (class `cm-content`, contenteditable) do NOT respond reliably to agent-browser `fill` or keyboard-type commands. To set query content during manual verification, use the predicate browser or example queries panel. To read editor content, use JavaScript eval: `document.querySelector(".cm-content")?.textContent`.
    - Record observations in the handoff.
    - Stop all processes you started.
 
