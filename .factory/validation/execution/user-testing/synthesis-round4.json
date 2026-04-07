@@ -1,0 +1,27 @@
+{
+  "milestone": "execution",
+  "round": 4,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-EXEC-008"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added note about Vite dev server WebSocket proxy issue with large payloads (VBR data ~435MB causes Playwright to navigate to about:blank). Documented workaround: use production build served via node.js proxy or use text-only queries.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/execution/user-testing/synthesis-round3.json",
+  "flowReports": [
+    ".factory/validation/execution/user-testing/flows/exec-pagination-rerun.json"
+  ]
+}

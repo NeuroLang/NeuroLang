@@ -13,6 +13,6 @@
   "blockedAssertions": [],
   "note": "No assertions to test: prior synthesis (round 4) had 0 failed/blocked. All fix features have empty fulfills. All execution milestone assertions are already 'passed' in validation-state.json. No new testing required.",
   "appliedUpdates": [],
-  "previousRound": ".factory/validation/execution/user-testing/synthesis-round4.json",
+  "previousRound": ".factory/validation/execution/user-testing/synthesis.json",
   "flowReports": []
 }
