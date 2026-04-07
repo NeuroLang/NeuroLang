@@ -181,7 +181,12 @@ function BrainViewer(props: BrainViewerProps): React.ReactElement {
         // class that does not require a GL context.
         try {
           const { NVImage } = await import('@niivue/niivue')
-          const volume = NVImage.loadFromBase64({ base64, name: selectedEngine })
+          // Use a .nii extension in the name so Niivue correctly identifies
+          // the format as NIfTI rather than DICOM.
+          const volume = NVImage.loadFromBase64({
+            base64,
+            name: `${selectedEngine}.nii`,
+          })
 
           // Only add the volume if Niivue is initialized (has a GL context).
           if (niivueRef.current) {

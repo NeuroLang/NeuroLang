@@ -203,6 +203,23 @@ describe('BrainViewer', () => {
     })
   })
 
+  it('calls NVImage.loadFromBase64 with a .nii name so Niivue identifies it as NIfTI', async () => {
+    vi.mocked(fetch).mockResolvedValue(makeAtlasResponse())
+
+    render(
+      <EngineProvider>
+        <EngineSelectHelper engineName="neurosynth" />
+        <BrainViewer />
+      </EngineProvider>,
+    )
+
+    await waitFor(() => {
+      expect(MockNVImage.loadFromBase64).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'neurosynth.nii' }),
+      )
+    })
+  })
+
   it('shows loading state while fetching atlas', async () => {
     // Never resolves – keeps the loading state visible.
     vi.mocked(fetch).mockReturnValue(new Promise(() => {}))
