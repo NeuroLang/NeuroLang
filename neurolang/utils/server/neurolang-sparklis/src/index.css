@@ -1387,3 +1387,130 @@
   min-width: 80px;
   text-align: center;
 }
+
+/* ==========================================================================
+   Results + Brain Viewer bottom split layout
+   ========================================================================== */
+
+/*
+ * Bottom section: side-by-side results table (left) and brain viewer (right).
+ * The results column takes up 55% and the brain viewer 45% of the available
+ * width. On narrower viewports they stack vertically.
+ */
+.results-and-viewer {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-top: 0.5rem;
+}
+
+.results-column {
+  flex: 0 0 55%;
+  min-width: 0;
+}
+
+.brain-viewer-column {
+  flex: 0 0 calc(45% - 1rem);
+  min-width: 0;
+}
+
+/* Stack vertically on narrower screens */
+@media (max-width: 900px) {
+  .results-and-viewer {
+    flex-direction: column;
+  }
+
+  .results-column,
+  .brain-viewer-column {
+    flex: none;
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
+   BrainViewer component
+   ========================================================================== */
+
+.brain-viewer {
+  background-color: #ffffff;
+  border: 1px solid #e0e0e8;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.brain-viewer-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background-color: #f8f9fc;
+  border-bottom: 1px solid #e0e0e8;
+  min-height: 2.5rem;
+}
+
+.brain-viewer-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.brain-viewer-loading {
+  font-size: 0.8125rem;
+  color: #6366f1;
+  font-style: italic;
+}
+
+.brain-viewer-error {
+  font-size: 0.8125rem;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+/* Canvas container: maintain a fixed aspect ratio so the three
+   orthogonal views have enough space. */
+.brain-viewer-canvas-container {
+  background-color: #1a1a2e;
+  position: relative;
+  width: 100%;
+  /* 3:2 aspect ratio for the multiplanar Niivue view */
+  padding-bottom: 66.67%;
+  overflow: hidden;
+}
+
+.brain-viewer-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* MNI coordinate display bar */
+.brain-viewer-coords {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 1rem;
+  background-color: #f8f9fc;
+  border-top: 1px solid #e0e0e8;
+  font-size: 0.8125rem;
+  color: #374151;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.brain-viewer-coords-label {
+  font-weight: 600;
+  color: #6366f1;
+  font-family: inherit;
+}
+
+.brain-viewer-coord {
+  white-space: nowrap;
+  color: #1f2937;
+}

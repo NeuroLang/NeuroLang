@@ -8,6 +8,7 @@ import CodeEditor from './CodeEditor'
 import RunQueryButton from './RunQueryButton'
 import ErrorDisplay from './ErrorDisplay'
 import ResultsPanel from './ResultsPanel'
+import BrainViewer from './BrainViewer'
 import { useEngine } from '../context/useEngine'
 import { useQuery } from '../context/useQuery'
 import { useSchema } from '../context/useSchema'
@@ -110,8 +111,15 @@ function MainContent(): React.ReactElement {
 
       <SuggestionsPanel onSuggestionSelect={handleSuggestionSelect} />
 
-      {/* Results Panel: shows after a successful query */}
-      <ResultsPanel />
+      {/* Bottom section: Results table (left) + Brain Viewer (right) */}
+      <div className="results-and-viewer">
+        <div className="results-column">
+          <ResultsPanel />
+        </div>
+        <div className="brain-viewer-column">
+          <BrainViewer />
+        </div>
+      </div>
     </div>
   )
 }
