@@ -1,0 +1,69 @@
+{
+  "milestone": "execution",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 14,
+    "passed": 8,
+    "failed": 6,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-EXEC-001",
+    "VAL-EXEC-002",
+    "VAL-EXEC-003",
+    "VAL-EXEC-004",
+    "VAL-EXEC-010",
+    "VAL-EXEC-012",
+    "VAL-EXEC-013",
+    "VAL-POLISH-004"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-EXEC-005",
+      "reason": "Backend WebSocket handler (QuerySocketHandler.send_query_update in app.py) calls QueryResults(uuid, future) without get_values=True. The 'values' field is never included in the WS response. ResultsPanel.tsx requires 'values' in result objects to render the table ('values' in (val as object) filter on line ~295). Results always show 'No results found' despite backend executing queries correctly (74-148 rows confirmed by direct WS test). Fix: pass get_values=True in QuerySocketHandler, or update ResultsPanel to not require 'values' for filter check."
+    },
+    {
+      "id": "VAL-EXEC-006",
+      "reason": "Blocked by same root cause as VAL-EXEC-005: results table never renders, so symbol selector cannot appear."
+    },
+    {
+      "id": "VAL-EXEC-007",
+      "reason": "Blocked by same root cause as VAL-EXEC-005: results table never renders, so column sort cannot be tested."
+    },
+    {
+      "id": "VAL-EXEC-008",
+      "reason": "Blocked by same root cause as VAL-EXEC-005: results table never renders, so pagination cannot be tested."
+    },
+    {
+      "id": "VAL-EXEC-009",
+      "reason": "Blocked by same root cause as VAL-EXEC-005: results table never renders, so CSV download button is never shown."
+    },
+    {
+      "id": "VAL-EXEC-011",
+      "reason": "Cancel button is visible during running state (pass), but clicking Cancel shows 'WebSocketError' instead of 'Query cancelled.' Root cause: cancelQuery() calls ws.close() which triggers ws.onerror asynchronously. ws.onerror lacks a cancellation guard and overwrites executionStatus from 'cancelled' to 'error'. Fix: add isCancellingRef flag in QueryContext.tsx and check it in ws.onerror to skip the error transition when cancelling."
+    }
+  ],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "previousRound": null,
+  "flowReports": [
+    ".factory/validation/execution/user-testing/flows/exec-group1.json",
+    ".factory/validation/execution/user-testing/flows/exec-group2.json",
+    ".factory/validation/execution/user-testing/flows/exec-group3.json"
+  ],
+  "rootCauses": [
+    {
+      "id": "RC-001",
+      "description": "Backend/frontend 'values' field mismatch in WebSocket query results. QuerySocketHandler.send_query_update() in app.py calls QueryResults(self.uuid, future) without get_values=True. responses.py QueryResults only includes 'values' when get_values=True. ResultsPanel.tsx filters results using \"'values' in (val as object)\" — this always fails, resultsMap is null, and 'No results found' is always shown.",
+      "affectedAssertions": ["VAL-EXEC-005", "VAL-EXEC-006", "VAL-EXEC-007", "VAL-EXEC-008", "VAL-EXEC-009"],
+      "suggestedFix": "In app.py QuerySocketHandler.send_query_update(), change QueryResults(self.uuid, future) to QueryResults(self.uuid, future, get_values=True). Alternatively, update ResultsPanel.tsx to check for 'columns' instead of 'values' as the existence check, and only require 'values' when rendering rows."
+    },
+    {
+      "id": "RC-002",
+      "description": "Cancel query race condition: cancelQuery() calls ws.close() which triggers ws.onerror asynchronously. ws.onerror lacks a cancellation guard and overwrites executionStatus from 'cancelled' to 'error', showing a WebSocket error message instead of 'Query cancelled.'",
+      "affectedAssertions": ["VAL-EXEC-011"],
+      "suggestedFix": "In QueryContext.tsx (or wherever ws event handlers are defined), add an isCancellingRef = useRef(false) flag. Set it to true in cancelQuery() before calling ws.close(). In ws.onerror, check if (isCancellingRef.current) return; to skip the error transition during cancellation."
+    }
+  ]
+}

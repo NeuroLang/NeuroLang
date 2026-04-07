@@ -71,6 +71,18 @@ This section covers isolation rules for browser-based validation subagents.
 - Clicking an engine in the sidebar should highlight it and update the main content area
 - The layout should have a top nav bar, sidebar, and main content area
 
+### Known UI behaviors (execution milestone)
+- CodeMirror 6 editor has `data-language='datalog'` and shows syntax highlighting (teal for identifiers/predicates, blue for operators like `:-`, gray for punctuation)
+- Visual builder and code editor are bidirectionally synced; clicking a predicate in the browser updates both simultaneously
+- The Run Query button shows `◌ Running...` with a red `✗ Cancel` button visible during query execution
+- Destrieux queries execute very fast (<100ms) — to capture loading state, use JavaScript WebSocket interception with artificial delay
+- After a query with no matching rows completes, `No results found` message appears in element with class `no-results-message`
+- Example queries panel is in the sidebar showing examples from `/v2/examples/:engine`; clicking an example title loads it into the code editor
+- Keyboard shortcut `Cmd+Enter` (Mac) / `Ctrl+Enter` submits the query when the code editor is focused
+- **KNOWN BUG (execution milestone round 1)**: Results table never renders because the backend WS response omits `values` field. `QuerySocketHandler.send_query_update()` in app.py calls `QueryResults(uuid, future)` without `get_values=True`. Fix pending.
+- **KNOWN BUG (execution milestone round 1)**: Cancel query shows WebSocketError instead of "Query cancelled." Root cause: `ws.onerror` fires after `ws.close()` in cancel and lacks cancellation guard. Fix pending.
+- **CodeMirror editor content**: Cannot use standard `Control+A` + `fill` pattern to replace editor content. Use either React context `setDatalogText()` or click example query buttons to set query content.
+
 ### Known UI behaviors (query-builder milestone)
 - After selecting an engine, the predicate browser shows Relations, Functions, and Probabilistic groups
 - Search/filter in the predicate browser is client-side (no network call)

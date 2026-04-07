@@ -1,0 +1,178 @@
+{
+  "groupId": "exec-group3",
+  "testedAt": "2026-04-07T00:00:00.000Z",
+  "isolation": {
+    "appUrl": "http://localhost:3100",
+    "apiBase": "http://localhost:8888",
+    "browserSession": "afca57b3c6b9__u3",
+    "engine": "destrieux (primary), neurosynth (for cancel test)"
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-EXEC-011",
+      "title": "Cancel running query",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Navigate to http://localhost:3100 and select neurosynth engine",
+          "expected": "App loads with neurosynth engine",
+          "observed": "App loaded, neurosynth engine selected"
+        },
+        {
+          "action": "Load CBMA Spatial Prior example query into the editor",
+          "expected": "Example query appears in code editor",
+          "observed": "Query loaded: 'VoxelReported (x, y, z, study) :- PeakReported...'"
+        },
+        {
+          "action": "Click Run Query button",
+          "expected": "Query starts running",
+          "observed": "Query started running, 'Running...' button and 'Cancel running query' button appeared"
+        },
+        {
+          "action": "Take screenshot showing Cancel button visible",
+          "expected": "Screenshot shows Cancel button",
+          "observed": "Cancel button visible in UI alongside 'Running...' button"
+        },
+        {
+          "action": "Click Cancel button",
+          "expected": "Query stops and 'Query cancelled.' message is shown",
+          "observed": "WebSocket onerror fires after ws.close(), showing 'WebSocketError: A WebSocket error occurred. The backend may be unavailable.' instead of 'Query cancelled.' message"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/exec-group3/VAL-EXEC-011-cancel-button-visible.png",
+          "execution/exec-group3/VAL-EXEC-011-cancelled-message-2.png"
+        ],
+        "consoleErrors": "none (no page errors)",
+        "network": "WebSocket ws://localhost:3100/v1/statementsocket - closed before connection established (cancel race condition)"
+      },
+      "issues": "FAIL: Cancel button IS visible during running state (pass), but clicking Cancel shows 'WebSocketError' instead of 'Query cancelled.' The root cause: cancelQuery() calls ws.close() which triggers ws.onerror asynchronously. The onerror handler lacks a guard and overwrites executionStatus from 'cancelled' to 'error'. The ws.onclose handler HAS a guard (checks wsRef.current === ws), but ws.onerror does NOT. Fix: add a cancellation flag (e.g., isCancellingRef) and check it in ws.onerror to skip the error transition."
+    },
+    {
+      "id": "VAL-EXEC-012",
+      "title": "Example queries panel",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Select destrieux engine",
+          "expected": "Engine selected and examples panel visible",
+          "observed": "Destrieux engine selected, Examples panel shown in sidebar with 'Union of atlas regions' and 'Sulcal identification'"
+        },
+        {
+          "action": "Check example queries panel is visible",
+          "expected": "Examples section with predefined queries visible",
+          "observed": "Examples panel rendered with 'Collapse examples panel' toggle and two example items"
+        },
+        {
+          "action": "Click 'Union of atlas regions' example title button",
+          "expected": "Example query loads into code editor",
+          "observed": "CodeMirror editor now contains: 'LeftRegion(s, r):- destrieux(s, r) & startswith(\"L\", s)...' (full query loaded)"
+        },
+        {
+          "action": "Verify query is loaded from /v2/examples/destrieux API",
+          "expected": "Query text matches API response",
+          "observed": "Query matches API response for 'destrieux1' example (Union of Destrieux atlas regions)"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/exec-group3/VAL-EXEC-012-examples-panel.png",
+          "execution/exec-group3/VAL-EXEC-012-example-loaded-in-editor.png"
+        ],
+        "consoleErrors": "none",
+        "network": "GET /v2/examples/destrieux -> 200 (verified via curl)"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-EXEC-013",
+      "title": "Empty results display",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Select destrieux engine and type query that returns no results",
+          "expected": "Query accepted",
+          "observed": "Typed: 'NoRegion(s) :- destrieux(s, r) & startswith(\"ZZZ\", s)'"
+        },
+        {
+          "action": "Click Run Query",
+          "expected": "Query executes",
+          "observed": "Query ran successfully"
+        },
+        {
+          "action": "Check results panel",
+          "expected": "'No results' message shown instead of empty/broken table",
+          "observed": "'No results found' message shown in results panel (.no-results-message element)"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/exec-group3/VAL-EXEC-013-no-results-message.png"
+        ],
+        "consoleErrors": "none",
+        "network": "WebSocket query completed"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-POLISH-004",
+      "title": "Keyboard shortcut to run query",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Ensure destrieux engine selected, query in editor",
+          "expected": "Editor has query text",
+          "observed": "Editor contains 'NoRegion(s) :- destrieux(s, r) & startswith(\"ZZZ\", s)'"
+        },
+        {
+          "action": "Click on code editor to focus it",
+          "expected": "Editor focused",
+          "observed": "Editor focused (cm-content element focused)"
+        },
+        {
+          "action": "Press Meta+Enter (Cmd+Enter on Mac)",
+          "expected": "Query submits same as clicking Run Query",
+          "observed": "Query submitted via keyboard shortcut - WebSocket connection opened, query executed, 'No results found' shown"
+        },
+        {
+          "action": "Verify in code",
+          "expected": "CodeMirror 'Mod-Enter' keymap binding exists",
+          "observed": "Confirmed in CodeEditor.tsx: keymap.of([{ key: 'Mod-Enter', run: () => { onSubmitRef.current?.() ... } }]) - CM6's 'Mod' maps to Cmd on Mac"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/exec-group3/VAL-POLISH-004-editor-focused.png",
+          "execution/exec-group3/VAL-POLISH-004-query-submitted-via-shortcut.png"
+        ],
+        "consoleErrors": "none",
+        "network": "WebSocket connection created and query submitted"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Cancel button test required using MutationObserver JS injection because the query completes too quickly to manually click Cancel with agent-browser timing",
+      "resolved": true,
+      "resolution": "Used MutationObserver to click cancel immediately when the button appeared in the DOM",
+      "affectedAssertions": ["VAL-EXEC-011"]
+    },
+    {
+      "description": "The 'No results found' panel is rendered off-screen and requires JavaScript scrollIntoView to capture in a screenshot",
+      "resolved": true,
+      "resolution": "Used JS eval with scrollIntoView to bring the results panel into viewport",
+      "affectedAssertions": ["VAL-EXEC-013"]
+    },
+    {
+      "description": "CodeMirror 6 editor does not expose its EditorView via DOM properties; keyboard type and click methods used instead of direct CM API",
+      "resolved": true,
+      "resolution": "Used agent-browser click + keyboard type to set editor content",
+      "affectedAssertions": ["VAL-EXEC-011", "VAL-EXEC-013", "VAL-POLISH-004"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 4 assertions: 3 passed (VAL-EXEC-012, VAL-EXEC-013, VAL-POLISH-004), 1 failed (VAL-EXEC-011: Cancel button is visible but clicking it shows 'WebSocketError' instead of 'Query cancelled.' due to a race condition where ws.onerror fires after ws.close() and overwrites the 'cancelled' execution status)"
+}
