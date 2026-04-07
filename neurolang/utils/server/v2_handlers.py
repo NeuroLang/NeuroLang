@@ -642,3 +642,63 @@ class V2ExamplesHandler(JSONRequestHandler):
             examples = []
 
         self.write_json_reponse(examples)
+
+
+class V2SquallHandler(JSONRequestHandler):
+    """
+    Parse and execute SQUALL (controlled English) programs.
+
+    POST /v2/squall/:engine
+
+    Request body (JSON)::
+
+        {
+            "program": "<SQUALL program text>"
+        }
+
+    Response (JSON)::
+
+        {
+            "status": "ok",
+            "data": {
+                "parsed": "<string repr of parsed logical form>",
+                "result": <query result if applicable>
+            }
+        }
+    """
+
+    def post(self, engine_key: str) -> None:
+        from ...frontend.datalog.squall_syntax_lark import parser as squall_parser
+
+        nqm = self.application.nqm
+        known_keys = {config.key for config in nqm.configs.keys()}
+        if engine_key not in known_keys:
+            raise tornado.web.HTTPError(
+                status_code=404,
+                log_message=f"Engine '{engine_key}' not found.",
+            )
+
+        try:
+            body = tornado.escape.json_decode(self.request.body)
+        except Exception:
+            raise tornado.web.HTTPError(
+                status_code=400, log_message="Invalid JSON body."
+            )
+
+        program = body.get("program", "")
+        if not program.strip():
+            raise tornado.web.HTTPError(
+                status_code=400, log_message="Empty program."
+            )
+
+        try:
+            parsed = squall_parser(program)
+        except Exception as exc:
+            self.write_json_reponse(
+                {"error": str(exc)}, status="error"
+            )
+            return
+
+        self.write_json_reponse({
+            "parsed": repr(parsed),
+        })

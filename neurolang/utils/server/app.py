@@ -33,6 +33,7 @@ from .v2_handlers import (
     V2EnginesHandler,
     V2ExamplesHandler,
     V2SchemaHandler,
+    V2SquallHandler,
     V2SuggestHandler,
 )
 
@@ -115,6 +116,7 @@ class Application(tornado.web.Application):
             (r"/v2/atlas/(.+)", V2AtlasHandler),
             (r"/v2/suggest/(.+)", V2SuggestHandler),
             (r"/v2/examples/(.+)", V2ExamplesHandler),
+            (r"/v2/squall/(.+)", V2SquallHandler),
             # ------------------------------------------------------------------
             (
                 r"/(.*)",

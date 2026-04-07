@@ -1,0 +1,318 @@
+
+?start: ["squall"] squall
+
+squall : ( rule )* rule
+       | sentence
+
+_SEPARATOR : "."
+
+?rule  : rule_op _SEPARATOR
+       | rulen _SEPARATOR
+       | query _SEPARATOR
+       | rule_op
+       | rulen
+       | COMMENT
+       | command _SEPARATOR
+
+command : "#" identifier "(" (term ("," term)* )* ")"
+
+query : _OBTAIN ops
+
+sentence : s
+
+_rule_start : _DEFINE _AS
+
+rule_op : _rule_start [ PROBABLY ] verb1 rule_body1 
+        | _rule_start PROBABLY verb1 rule_body1_cond 
+        | _rule_start verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
+
+?rulen : _rule_start verbn rule_body1 _BREAK? ops -> rule_opnn
+       | _rule_start PROBABLY verbn rule_body1 _CONDITIONED? _BREAK? ops -> rule_opnn_per
+
+rule_body1 : prep? det ng1
+rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
+                | s _CONDITIONED _TO det ng1 -> rule_body1_cond_posterior
+
+rule_body2_cond : det ng1 _CONDITIONED _TO det ng1
+
+PROBABLY : _PROBABLY
+_BREAK : "," | ";"
+
+?s : bool{s_b}
+?s_b : np [ "," ]  vp          -> s_np_vp
+      | _FOR np ","  s  -> s_for
+      | _THERE be np   -> s_be
+
+_CONSEQUENCE : /define[s]{0,1}/
+
+?np : expr{np_b}    -> expr_np
+?np_b : det ng1     -> np_quantified
+      | np2 _OF np -> np_np2
+
+det : det1  -> det_some
+    | EVERY -> det_every
+    | THE   -> det_the
+
+EVERY : _EVERY | _ALL
+THE : _THE
+
+det1 : SOME -> det1_some
+     | AN   -> det1_some
+     | NO   -> det1_no
+
+SOME : _SOME
+AN : _A
+   | _AN
+NO : _NO
+
+np2 : det ng2
+
+ng1 : noun1 [ app ] [ rel ] -> ng1_noun
+    | noun1 [ app ] ( _OF | _FROM ) npc{_THE}  [ dims ]   -> ng1_agg_npc
+    // | noun1 [ app ] ng1 [ dims ]           -> ng1_agg_ng1
+ng2 : noun2 [ app ]
+
+
+
+app : _IN number"D" -> app_dimension
+    | label          -> app_label
+
+dims : dim                    -> dims_base
+     | dim _CONJUNCTION dims  -> dims_rec
+
+dim : _PER ng2      -> dim_ng2
+    | _PER npc{THE} -> dim_npc
+
+?rel : bool{rel_b}
+     | _DASH bool{rel_b} _DASH
+
+_DASH : "--"
+
+rel_b : (_THAT | _WHICH | _WHERE | _WHO ) vp                -> rel_vp
+      | (_THAT | _WHICH | _WHERE | _WHOM ) np verbn [ ops ] -> rel_vpn
+      | np2 _OF _WHICH vp                                   -> rel_np2
+      | _WHOSE ng2 vp                                       -> rel_ng2
+      | _SUCH _THAT s                                       -> rel_s
+      | comparison (_THAN | _TO) op                         -> rel_comp
+      | adj1 [ cp ]                                         -> rel_adj1
+//      | adjn opn                                            -> rel_adjn
+
+
+!comparison : _GREATER [ _EQUAL ]
+            | _LOWER   [ _EQUAL ]
+            | [ _NOT ] _EQUAL
+
+
+term : label
+     | literal
+
+?vp : bool{vp_b}
+?vp_b : vpdo
+      | aux{be} vpbe      -> vp_aux
+      | aux{have} vphave  -> vp_aux
+      | aux{do} vpdo      -> vp_aux
+
+vpdo : verb1 [ cp ]         -> vpdo_v1
+     | verbn opn -> vpdo_vn
+
+vpbe : "there"       -> vpbe_there
+     | rel           -> vpbe_rel
+     | npc{a_an_the} -> vpbe_npc
+     | npc_p{in}     -> vpbe_npc
+
+a_an_the : _A
+         | _AN
+         | _THE
+
+in : _IN
+
+vphave : noun2 op -> vphave_noun2
+       | np2 [ rel ] -> vphave_np2
+
+aux{verb} : verb                     -> aux_id
+          | (verb _NOT | verb"n't")  -> aux_not
+
+npc{det_} : term        -> npc_term
+          | det_ ng1 -> npc_det
+
+npc_p{prep_} : prep_ ng1 -> npc_det
+
+?be : ( _IS | _ARE | _WAS | _WERE )
+?have: ( _HAS | _HAD | _HAVE )
+?do: ( _DOES | _DO | _DID )
+
+adj1 : intransitive
+adjn : transitive_multiple
+
+noun1 : intransitive
+noun2 : transitive
+
+verb1 : intransitive
+verbn : transitive_multiple
+
+intransitive : upper_identifier
+             | identifier
+transitive : identifier
+           | "~" identifier -> transitive_inv
+transitive_multiple : identifier
+                    | "~" identifier -> transitive_multiple_inv
+
+op : prep? np             -> op_np
+   | _DASH prep? np _DASH -> op_np
+
+?opn : ops
+     | _DASH ops _DASH
+
+ops : op                              -> ops_base
+    | ops _BREAK? prep op             -> ops_rec
+    | ops _BREAK? _DASH prep op _DASH -> ops_rec
+
+pp : prep np -> pp_np
+
+!prep : _BY
+      | _FOR
+      | _FROM
+      | _OF
+      | _THEN
+      | _TO
+      | _WHEN
+      | _WHERE
+      | _WITH
+
+?cp : opn
+
+label : _LABEL_MARKER label_identifier
+      | ANONYMOUS_LABEL
+      | "(" _LABEL_MARKER label_identifier (";" _LABEL_MARKER label_identifier )* ")"
+
+_LABEL_MARKER : "?"
+              | "@"
+
+ANONYMOUS_LABEL : "_"
+
+upper_identifier : UPPER_NAME
+                 | UPPER_NAME_QUOTED
+
+identifier : LOWER_NAME
+           | LOWER_NAME_QUOTED
+
+label_identifier : CNAME
+
+?literal : "'"string"'"
+         | number
+         | "^"NAME      -> external_literal
+
+string : STRING
+number : SIGNED_INT
+       | SIGNED_FLOAT
+
+
+?bool{x} : bool_disjunction{x}
+bool_disjunction{x} : bool_conjunction{x}
+                    | bool_disjunction{x} _DISJUNCTION bool_conjunction{x}
+bool_conjunction{x} : bool_atom{x}
+                    | bool_conjunction{x} _CONJUNCTION bool_atom{x}
+bool_atom{x} : _NEGATION bool_atom{x} -> bool_negation
+         | "(" bool{x} ")"
+         | x
+
+_CONJUNCTION : "&" | "," | "\N{LOGICAL AND}" | _AND
+_DISJUNCTION : "|" | "\N{LOGICAL OR}" | _OR
+_IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}" | _IF
+_NEGATION : _NOT | "\N{Not Sign}"
+
+?expr{x} : expr_sum{x}
+expr_sum{x} : ( expr_sum{x} SUM )? expr_mul{x}
+expr_mul{x} : ( expr_mul{x} MUL )? expr_pow{x}
+expr_pow{x} : expr_exponent{x} (pow expr_exponential{x})?
+?expr_exponent{x} : expr_atom{x}
+?expr_exponential{x} : expr_atom{x}
+expr_atom{x} : "(" expr{x} ")"                             -> expr_atom_par
+             | "(" expr{x} (";" expr{x})+ ")"              -> expr_atom_tuple
+             | identifier"(" (expr{x} ("," expr{x})*)? ")" -> expr_atom_fun
+             | term                                        -> expr_atom_term
+             | x
+
+SUM : "+" 
+    | "-"
+
+MUL : "*"
+    | "/"
+
+?pow : "**"
+
+_A : "a"
+_ALL : "all"
+_AN : "an"
+_AND : "and"
+_ARE : "are"
+_AS : "as"
+_BY : "by"
+_CONDITIONED : "conditioned"
+_DEFINE : "define"
+_DEFINES : "defines"
+_DO : "do"
+_DOES : "does"
+_DID : "did"
+_EVERY : "every"
+_EQUAL : "equal"
+_FROM : "from"
+_FOR : "for"
+_GREATER : "greater"
+_GIVEN : "given"
+_OBTAIN : "obtain"
+_HAS : "has"
+_HASN_T : "hasn't"
+_HAVE : "have"
+_HAD : "had"
+_IF : "if"
+_IN : "in"
+_IS : "is"
+_ISN_T : "isn't"
+_LOWER : "lower"
+_NO : "no"
+_NOT : "not"
+_OF : "of"
+_OR : "or"
+_PER : "per"
+_PROBABILITY : "probability"
+_PROBABLY : "probably"
+_SOME : "some"
+_SUCH : "such"
+_THAN : "than"
+_THAT : "that"
+_THE : "the"
+_THEN : "then"
+_THERE : "there"
+_TO : "to"
+_WAS : "was"
+_WERE : "were"
+_WHEN : "when"
+_WHERE : "where"
+_WHICH : "which"
+_WITH : "with"
+_WHO : "who"
+_WHOM : "whom"
+_WHOSE : "whose"
+
+
+LOWER_NAME : /(?!(\b(a|all|an|and|are|as|by|conditioned|define|defines|do|does|did|every|equal|from|for|greater|given|obtain|has|hasn't|have|had|if|in|is|isn't|lower|no|not|of|or|per|probability|probably|some|such|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
+UPPER_NAME : /(?!(\b(a|all|an|and|are|as|by|conditioned|define|defines|do|does|did|every|equal|from|for|greater|given|obtain|has|hasn't|have|had|if|in|is|isn't|lower|no|not|of|or|per|probability|probably|some|such|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
+NAME : /(?!(\b(a|all|an|and|are|as|by|conditioned|define|defines|do|does|did|every|equal|from|for|greater|given|obtain|has|hasn't|have|had|if|in|is|isn't|lower|no|not|of|or|per|probability|probably|some|such|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-zA-Z_]\w*/
+UPPER_NAME_QUOTED : /`[A-Z][^`]*`/
+LOWER_NAME_QUOTED : /`[a-z][^`]*`/
+STRING : /[^']+/
+COMMENT : /\%\%[^\n]*/ NEWLINE
+
+%import common._STRING_ESC_INNER
+%import common.SIGNED_INT
+%import common.SIGNED_FLOAT
+%import common.CNAME
+%import common.WS
+%import common.WS_INLINE
+%import common.NEWLINE
+%ignore WS
+%ignore WS_INLINE
+%ignore NEWLINE  // comment out to avoid crash
+%ignore COMMENT
+
