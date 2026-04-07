@@ -1,0 +1,138 @@
+{
+  "groupId": "brain-atlas",
+  "testedAt": "2026-04-08T00:00:00.000Z",
+  "isolation": {
+    "appUrl": "http://localhost:3150",
+    "apiBase": "http://localhost:8888",
+    "session": "74f1b0649dac__u1",
+    "notes": "Production build via vite preview on port 3150; no credentials required"
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-BRAIN-001",
+      "title": "Niivue viewer renders atlas",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Navigate to http://localhost:3150",
+          "expected": "App loads with engine list",
+          "observed": "App loaded, sidebar shows neurosynth and destrieux engines"
+        },
+        {
+          "action": "Click 'destrieux' in the engine list",
+          "expected": "destrieux engine selected, UI updates",
+          "observed": "destrieux selected (highlighted), predicate browser loaded with Relations and Functions"
+        },
+        {
+          "action": "Wait up to 10 seconds for atlas to load (atlas is ~22MB base64 NIfTI)",
+          "expected": "brain-viewer-loading disappears, brain-viewer-canvas present",
+          "observed": "After ~3s: brain-viewer-loading=null, brain-viewer-canvas present (402x268 WebGL canvas), no brain-viewer-error"
+        },
+        {
+          "action": "Set viewport to 1440x900 to reveal brain viewer (it renders below the fold at 1024x768)",
+          "expected": "Brain viewer visible showing 3 orthogonal slice views",
+          "observed": "Brain viewer visible with 3 orthogonal brain slices (axial, sagittal, coronal) rendered via WebGL; MNI coordinate display shows 'MNI: x = 0.0 y = 0.0 z = 0.0'"
+        },
+        {
+          "action": "Check for error indicator and console errors",
+          "expected": "No brain-viewer-error element, no console errors",
+          "observed": "brain-viewer-error absent; console errors: none"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-atlas/VAL-BRAIN-001-app-loaded.png",
+          "brain-viz/brain-atlas/VAL-BRAIN-001-wider-viewport.png",
+          "brain-viz/brain-atlas/VAL-BRAIN-001-atlas-full-view.png"
+        ],
+        "consoleErrors": "none",
+        "network": "GET /v2/atlas/destrieux (proxied through localhost:3150) — atlas loaded successfully (canvas dimensions 402x268 confirm WebGL render completed)"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-BRAIN-006",
+      "title": "Coordinate display",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "After atlas loads, verify brain-viewer-coords element is present with initial values",
+          "expected": "brain-viewer-coords present, initial coords x=0.0 y=0.0 z=0.0",
+          "observed": "brain-viewer-coords found; x=0.0, y=0.0, z=0.0 initially"
+        },
+        {
+          "action": "Click on the Niivue canvas at position (1050, 640) — off-center in the axial slice region",
+          "expected": "Crosshair moves; coordinate display updates to non-zero values",
+          "observed": "Coordinates updated to x=77.8, y=14.1, z=22.0 — confirming Niivue crosshair callback is wired to the display"
+        },
+        {
+          "action": "Take screenshot showing coordinate display with updated values",
+          "expected": "Screenshot shows MNI coordinate display with non-zero values",
+          "observed": "Screenshot shows 'MNI: x = 77.8 y = 14.1 z = 22.0' in the coordinate display below the canvas; crosshair visibly moved in the axial slice"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-atlas/VAL-BRAIN-006-coordinate-display.png"
+        ],
+        "consoleErrors": "none",
+        "network": "No network calls required for coordinate updates (Niivue uses WebGL callbacks)"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-BRAIN-007",
+      "title": "No brain results graceful state",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "With destrieux engine selected and atlas loaded, set code editor to text-only query: LeftSulcus(name_) :- destrieux(name_, region) & startswith(\"L S\", name_)",
+          "expected": "Query text appears in editor (returns str-only results, no VBR/VBROverlay data)",
+          "observed": "Query set via CodeMirror cmTile.view dispatch; editor shows query text with syntax highlighting"
+        },
+        {
+          "action": "Click 'Run Query' button",
+          "expected": "Query executes and returns results; brain viewer remains unchanged",
+          "observed": "Query completed; results show 'LeftSulcus' symbol with 31 rows, all name_ (str) type — no VBR columns in results"
+        },
+        {
+          "action": "Verify brain viewer shows base atlas without overlays and no error",
+          "expected": "brain-viewer-error absent; brain-viewer-canvas present; no overlays added",
+          "observed": "brain-viewer-error=null; brain-viewer-canvas present; no overlay-manager present; atlas still renders 3 orthogonal slices normally"
+        },
+        {
+          "action": "Check console errors",
+          "expected": "No console errors",
+          "observed": "No console errors"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-atlas/VAL-BRAIN-007-editor-view.png",
+          "brain-viz/brain-atlas/VAL-BRAIN-007-after-query.png",
+          "brain-viz/brain-atlas/VAL-BRAIN-007-atlas-only-no-error.png"
+        ],
+        "consoleErrors": "none",
+        "network": "WebSocket query executed; results returned with str column type only (no VBR/VBROverlay columns)"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Brain viewer is positioned below the fold at default viewport width (1024x768 default agent-browser viewport). The viewer is at y~721 but viewport height is 720. Required setting viewport to 1440x900 to see it without scrolling.",
+      "resolved": true,
+      "resolution": "Used agent-browser set viewport 1440 900 to reveal the brain viewer panel",
+      "affectedAssertions": ["VAL-BRAIN-001", "VAL-BRAIN-006", "VAL-BRAIN-007"]
+    },
+    {
+      "description": "CodeMirror 6 editor does not expose __cmView on the .cm-editor element (as suggested in the flow validator guidance). The view object is accessible via contentDiv.cmTile.view instead.",
+      "resolved": true,
+      "resolution": "Used document.querySelector('.cm-content').cmTile.view to dispatch editor changes",
+      "affectedAssertions": ["VAL-BRAIN-007"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 3 assertions: all 3 passed. VAL-BRAIN-001: Niivue atlas renders correctly with 3 orthogonal slice views (axial, sagittal, coronal) after selecting destrieux engine. VAL-BRAIN-006: MNI coordinate display updates from (0,0,0) to (77.8, 14.1, 22.0) after clicking canvas. VAL-BRAIN-007: Text-only query returns 31 str rows with no VBR data; brain viewer remains at base atlas with no error or crash."
+}

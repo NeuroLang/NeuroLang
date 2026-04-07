@@ -1,0 +1,162 @@
+{
+  "groupId": "brain-overlays",
+  "testedAt": "2026-04-08T00:00:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3150",
+    "apiBase": "http://localhost:8888",
+    "session": "74f1b0649dac__u2",
+    "engine": "destrieux",
+    "query": "LeftRegion(s, region) :- destrieux(s, region) & startswith(\"L S\", s)"
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-BRAIN-002",
+      "title": "Click VBR result to overlay",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Navigate to http://localhost:3150",
+          "expected": "App loads successfully",
+          "observed": "App loaded, NeuroLang Sparklis title shown"
+        },
+        {
+          "action": "Select 'destrieux' engine",
+          "expected": "Destrieux engine selected, atlas loads in BrainViewer",
+          "observed": "Destrieux selected, BrainViewer shows 3-slice MNI atlas"
+        },
+        {
+          "action": "Set query: LeftRegion(s, region) :- destrieux(s, region) & startswith(\"L S\", s)",
+          "expected": "Query visible in CodeMirror editor",
+          "observed": "Query set via React fiber state dispatch (CodeMirror API)"
+        },
+        {
+          "action": "Click Run Query",
+          "expected": "Results table shows 31 rows with VBR badge column and 'View in brain' buttons",
+          "observed": "Results table shows 31 rows with VBR badge column, BUT 'View in brain' button (🧠) is ABSENT. Action column cells are empty."
+        },
+        {
+          "action": "Inspect DataTable component",
+          "expected": "Button condition evaluates true for VBR rows",
+          "observed": "BUG: DataTable button condition checks `typeof C === 'string'` where C is the VBR column value. The API now returns VBR values as objects {min, max, q95, image, hash, center, idx} instead of raw base64 strings. The check fails, so no button is rendered."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-overlays/VAL-BRAIN-002-destrieux-selected.png",
+          "brain-viz/brain-overlays/VAL-BRAIN-002-results-with-vbr.png",
+          "brain-viz/brain-overlays/VAL-BRAIN-002-fail-no-view-in-brain-btn.png"
+        ],
+        "consoleErrors": "none",
+        "network": "WebSocket query returns ExplicitVBR data as objects with {min, max, q95, image, hash, center, idx}. row_type: [\"<class 'str'>\", \"<class 'neurolang.regions.ExplicitVBR'>\"]"
+      },
+      "issues": "BUG: The DataTable component (function Tk) checks `typeof S === 'string' && S.length > 0` to determine whether to show the 'View in brain' button. The VBR column value is now an object {min, max, q95, image, hash, center, idx} (image field is a base64 string of length ~2.9M). The typeof check fails, so the button is never rendered. Fix: change the condition to `(typeof S === 'string' && S.length > 0) || (typeof S === 'object' && S !== null && typeof S.image === 'string' && S.image.length > 0)` and update the addOverlay call to use `S.image` or `S` depending on the actual type."
+    },
+    {
+      "id": "VAL-BRAIN-003",
+      "title": "Probability overlay with color bar",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Attempt to find ExplicitVBROverlay data via agg_create_region_overlay query",
+          "expected": "Results table shows VBROverlay cells with View in brain buttons",
+          "observed": "Cannot test via standard flow because VAL-BRAIN-002 'View in brain' button is not rendered (see VAL-BRAIN-002 bug)"
+        },
+        {
+          "action": "Manually inject probabilistic overlay via React context addOverlay({isProbabilistic: true, colormap: 'hot', ...})",
+          "expected": "Color bar appears in overlay manager for probabilistic overlay; colored overlay renders in Niivue canvas",
+          "observed": "Color bar DOES appear in overlay manager (data-testid='color-bar' and 'color-bar-gradient' present, showing gradient from 0 to 1). HOWEVER the Niivue canvas does NOT show the colored overlay due to a secondary bug: BrainViewer tries setOverlayList (doesn't exist in Niivue 0.43.7), then falls back to addOverlay loop (also doesn't exist), with all TypeErrors silently swallowed."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-overlays/VAL-BRAIN-003-probability-overlay-with-colorbar.png"
+        ],
+        "consoleErrors": "niivue-warn: 100% of voxels are zero: ignoring zeros for cal_max (from NVImage.loadFromBase64 on the VBR data). No 'Failed to sync overlays' warning because addOverlay exceptions are silently swallowed in individual try/catch blocks.",
+        "network": "No network requests for overlay loading - base64 data passed directly to Niivue"
+      },
+      "issues": "TWO BUGS: (1) Cannot trigger overlay via UI (see VAL-BRAIN-002). (2) Even when overlay is injected directly via context, Niivue canvas does not display it. BrainViewer code tries `r.current.setOverlayList(b)` (not in Niivue 0.43.7), then falls back to `r.current.addOverlay(A)` per overlay (also not in Niivue 0.43.7). Both methods throw TypeError caught silently. The correct Niivue 0.43.7 API for adding overlays is `nv.addVolume(nvImage)`. PARTIAL PASS: The color bar UI element in the OverlayManager sidebar correctly appears with probability scale (0-1) and hot colormap gradient when isProbabilistic=true."
+    },
+    {
+      "id": "VAL-BRAIN-004",
+      "title": "Add multiple overlays",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Manually add two overlays via React context addOverlay (bypassing broken 'View in brain' button)",
+          "expected": "Overlay manager shows 2 items; both overlays visible in Niivue canvas",
+          "observed": "Overlay manager correctly shows 'Overlays (2)' with both overlay names and remove buttons. Niivue canvas does NOT show either overlay (same Niivue API bug as VAL-BRAIN-003)."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-overlays/VAL-BRAIN-004-multiple-overlays.png"
+        ],
+        "consoleErrors": "none (overlay sync errors silently swallowed)",
+        "network": "N/A"
+      },
+      "issues": "Cannot test via standard user flow because 'View in brain' button is not rendered (VAL-BRAIN-002 bug). Even when overlays are manually added via context, they do not appear in the Niivue canvas. PARTIAL PASS: The OverlayManager UI correctly tracks and displays multiple overlays with the 'Overlays (N)' header updating correctly."
+    },
+    {
+      "id": "VAL-BRAIN-005",
+      "title": "Remove overlay",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "With 2 overlays in overlay manager, click ✕ remove button (data-testid='overlay-remove-btn') on first overlay",
+          "expected": "First overlay removed; overlay manager shows 'Overlays (1)' with only second overlay",
+          "observed": "Remove button click works: 'Overlays (2)' becomes 'Overlays (1)', only second overlay remains. PASS for UI state management."
+        },
+        {
+          "action": "Remove the second and final overlay via remove button",
+          "expected": "Overlay manager disappears (no overlays); brain viewer shows base atlas only",
+          "observed": "Overlay manager disappears entirely when last overlay is removed. Brain viewer continues showing base atlas. PASS for UI state management."
+        },
+        {
+          "action": "Verify brain canvas response to overlay removal",
+          "expected": "Colored overlays disappear from brain canvas",
+          "observed": "N/A - overlays were never displayed in canvas due to Niivue API bug, so no change visible in canvas"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-overlays/VAL-BRAIN-005-overlay-management.png",
+          "brain-viz/brain-overlays/VAL-BRAIN-005-after-overlay-removed.png",
+          "brain-viz/brain-overlays/VAL-BRAIN-005-overlay-management-final.png",
+          "brain-viz/brain-overlays/VAL-BRAIN-005-after-last-overlay-removed.png"
+        ],
+        "consoleErrors": "none",
+        "network": "N/A"
+      },
+      "issues": "PARTIAL FAIL: The OverlayManager remove button (data-testid='overlay-remove-btn') and 'Clear all' button (data-testid='overlay-clear-all-btn') both work correctly for UI state management. Overlay count updates, items are removed from the list, and the manager disappears when empty. However: (1) Overlays cannot be added via normal user interaction (see VAL-BRAIN-002 bug - no 'View in brain' button), so the full user flow cannot be completed. (2) Since Niivue overlays never loaded, there is nothing to remove from the canvas (secondary issue). The remove/clear UI mechanics are correctly implemented."
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The 'View in brain' button is completely absent from the results table because DataTable checks `typeof C === 'string'` but VBR data is now returned as an object {min, max, q95, image, hash, center, idx}. This is a critical regression that blocks all overlay-related user flows.",
+      "resolved": false,
+      "resolution": "Not fixed - this is a code bug to be reported",
+      "affectedAssertions": ["VAL-BRAIN-002", "VAL-BRAIN-003", "VAL-BRAIN-004", "VAL-BRAIN-005"]
+    },
+    {
+      "description": "BrainViewer uses Niivue methods setOverlayList and addOverlay that do not exist in Niivue 0.43.7. The correct API is addVolume(nvImage). Exceptions are silently swallowed, so no user-visible error appears.",
+      "resolved": false,
+      "resolution": "Not fixed - this is a code bug to be reported",
+      "affectedAssertions": ["VAL-BRAIN-002", "VAL-BRAIN-003", "VAL-BRAIN-004"]
+    },
+    {
+      "description": "CodeMirror editor content cannot be set via standard fill/keyboard input in agent-browser. The editor content had to be set via React fiber state dispatch. This required deep exploration of the React fiber tree to find the right state queue.",
+      "resolved": true,
+      "resolution": "Used React fiber state dispatch: found component 'qv' in fiber tree, navigated to si:2 (string state), called queue.dispatch(newQuery)",
+      "affectedAssertions": ["VAL-BRAIN-002", "VAL-BRAIN-003", "VAL-BRAIN-004", "VAL-BRAIN-005"]
+    },
+    {
+      "description": "The 'View in brain' button test required bypassing via direct React context API calls (overlayCtx.addOverlay) to test overlay manager UI for VAL-BRAIN-003, 004, 005.",
+      "resolved": true,
+      "resolution": "Found overlay context provider in React fiber tree at depth 11, used addOverlay/clearOverlays functions directly",
+      "affectedAssertions": ["VAL-BRAIN-003", "VAL-BRAIN-004", "VAL-BRAIN-005"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 4 assertions: 0 passed, 4 failed. Two critical bugs found: (1) DataTable 'View in brain' button never appears because VBR column values are objects {min,max,q95,image,...} but the button condition checks `typeof value === 'string'`; (2) BrainViewer overlay sync uses Niivue methods (setOverlayList, addOverlay) that don't exist in Niivue 0.43.7, so overlays never appear in the canvas. Partial functionality confirmed: the OverlayManager UI correctly tracks overlay state (add/remove/count), color bar renders for isProbabilistic overlays, and remove buttons work. But the full end-to-end flow (click row → see colored overlay in brain viewer) is completely broken due to bugs 1 and 2."
+}

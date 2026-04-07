@@ -103,6 +103,36 @@ This section covers isolation rules for browser-based validation subagents.
 
 ### Vite dev server WebSocket proxy issue with large payloads
 - The Vite dev server's WebSocket proxy causes Playwright (agent-browser) to navigate to `about:blank` when the backend sends large WebSocket responses (VBR brain region data ~435MB).
-- **Workaround**: Build the production sparklis app (`cd neurolang/utils/server/neurolang-sparklis && npm run build`) and serve it via a node.js proxy on a different port (e.g., 3150). The production build served directly avoids the proxy issue.
+- **Workaround**: Build the production sparklis app (`cd neurolang/utils/server/neurolang-sparklis && npm run build`) and serve it via `npx vite preview --port 3150 --host 0.0.0.0` which also proxies API calls. The production build served this way avoids the proxy crash.
 - **Alternative**: Use text-only queries that do not return VBR/NIfTI data to avoid the large payload issue.
-- This issue may affect brain visualization tests (VAL-BRAIN-*) as well.
+- This issue DOES affect brain visualization tests (VAL-BRAIN-002 through VAL-BRAIN-005) as they need VBR query results.
+
+### Brain visualization tests (brain-viz milestone)
+- **Use port 3150 (vite preview of prod build) for ALL brain-viz tests** — not port 3100 (dev server), which will crash with VBR payloads.
+- The prod build is pre-built in `neurolang/utils/server/neurolang-sparklis/dist/`.
+- Start vite preview: `cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npx vite preview --port 3150 --host 0.0.0.0 &`
+- Verify: `curl -sf http://localhost:3150` returns HTML, `curl -sf http://localhost:3150/v2/engines` returns engine list.
+
+### VBR queries for brain-viz testing
+- For ExplicitVBR (non-probabilistic regions): use `LeftRegion(s, agg_create_region(r)) :- destrieux(s, r) & startswith("L S", s)` on Destrieux engine
+- For ExplicitVBROverlay (probabilistic): use `LeftSulcusOverlay(s, agg_create_region_overlay(0, 0, 0, p)) :- destrieux(s, r) & startswith("L S", s) & (p == 1.0)` — but NOTE: simple overlay queries may return no results; the Neurosynth CBMA query produces ExplicitVBROverlay but takes minutes.
+- **Recommended VBR query** (fast, returns VBR data): `LeftRegion(s, region) :- destrieux(s, region) & startswith("L S", s)` — this returns 'destrieux_region' type in row_type.
+- Check column types in results: `row_type` array in the SymbolData indicates 'ExplicitVBR' or 'ExplicitVBROverlay' which shows "View in brain" buttons.
+- The BrainViewer canvas has `data-testid="brain-viewer-canvas"` and the container has `data-testid="brain-viewer"`.
+- The OverlayManager appears only when overlays > 0, with `data-testid="overlay-manager"`.
+- Each overlay item has `data-testid="overlay-item"` and remove button has `data-testid="overlay-remove-btn"`.
+- Color bar has `data-testid="color-bar"` and `data-testid="color-bar-gradient"`.
+- MNI coordinate display has `data-testid="brain-viewer-coords"` with individual `data-testid="brain-viewer-coord-x"` etc.
+- The "View in brain" button in DataTable: `aria-label="View in brain"`, located in rows where VBR columns exist.
+- Niivue renders inside a `<canvas>` element; the 3-slice view is configured with `sliceType: 3` (MULTIPLANAR).
+- Note: Niivue canvas rendering is WebGL-based — take screenshot evidence, don't rely on DOM inspection for the rendered atlas.
+
+### Known UI behaviors (brain-viz milestone)
+- Brain viewer is positioned below the fold at default 1024x768 viewport — use 1440x900 viewport for brain-viz tests
+- BrainViewer canvas: `data-testid="brain-viewer-canvas"`, container: `data-testid="brain-viewer"`, loading: `data-testid="brain-viewer-loading"`, error: `data-testid="brain-viewer-error"`
+- MNI coordinates: `data-testid="brain-viewer-coords"`, individual axes: `data-testid="brain-viewer-coord-x/y/z"`, initial values are x=0.0, y=0.0, z=0.0
+- Clicking the canvas moves the crosshair and updates the coordinate display via Niivue onLocationChange callback
+- OverlayManager only renders when overlays > 0: `data-testid="overlay-manager"`, items: `data-testid="overlay-item"`, remove: `data-testid="overlay-remove-btn"`, clear all: `data-testid="overlay-clear-all-btn"`
+- Color bar: `data-testid="color-bar"`, gradient: `data-testid="color-bar-gradient"` — appears only for isProbabilistic=true overlays
+- **KNOWN BUG (brain-viz round 1)**: DataTable 'View in brain' button never appears because condition checks `typeof value === 'string'` but VBR data is returned as object `{min, max, q95, image, hash, center, idx}`. The button condition needs to be updated to handle object format. Blocks VAL-BRAIN-002, 003, 004, 005.
+- **KNOWN BUG (brain-viz round 1)**: BrainViewer uses Niivue methods `setOverlayList` and `addOverlay` that don't exist in Niivue 0.43.7. Correct API: `nv.addVolume(nvImage)`. Blocks canvas overlay rendering. Blocks VAL-BRAIN-002, 003, 004.
