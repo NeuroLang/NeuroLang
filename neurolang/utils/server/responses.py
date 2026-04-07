@@ -82,7 +82,7 @@ def serializeVBR(image_row: pd.Series):
         values, and a hash of the image.
     """
     index = image_row["index"]
-    vbr = image_row[1]
+    vbr = image_row.iloc[1]
     if isinstance(vbr, EmptyRegion):
         return "Empty Region"
 
