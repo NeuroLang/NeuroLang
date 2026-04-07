@@ -86,6 +86,7 @@ function buildExtensions(
   onChangeRef: React.MutableRefObject<((v: string) => void) | undefined>,
   onSubmitRef: React.MutableRefObject<(() => void) | undefined>,
   readOnly: boolean,
+  isExternalUpdate: React.MutableRefObject<boolean>,
 ) {
   return [
     // Datalog syntax highlighting
@@ -105,9 +106,12 @@ function buildExtensions(
       },
     ]),
 
-    // Update listener – calls onChange whenever the doc changes
+    // Update listener – calls onChange only for user-initiated doc changes.
+    // External value prop updates set isExternalUpdate.current = true before
+    // dispatching, so we skip calling onChange for those to prevent feedback
+    // loops (which would clear the undo/redo stack via debounced model resets).
     EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
+      if (update.docChanged && !isExternalUpdate.current) {
         onChangeRef.current?.(update.state.doc.toString())
       }
     }),
@@ -190,7 +194,7 @@ function CodeEditor({
 
     const state = EditorState.create({
       doc: value,
-      extensions: buildExtensions(onChangeRef, onSubmitRef, readOnly),
+      extensions: buildExtensions(onChangeRef, onSubmitRef, readOnly, isExternalUpdate),
     })
 
     const view = new EditorView({
