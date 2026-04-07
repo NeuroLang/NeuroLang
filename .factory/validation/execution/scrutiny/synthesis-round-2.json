@@ -1,0 +1,64 @@
+{
+  "milestone": "execution",
+  "round": 2,
+  "status": "pass",
+  "validatorsRun": {
+    "test_frontend": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm test -- --run",
+      "exitCode": 0,
+      "detail": "236 tests passed across 11 test files (3 new tests from fix-codeeditor-external-update)"
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npx tsc --noEmit",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm run lint",
+      "exitCode": 0,
+      "detail": "0 warnings"
+    },
+    "test_backend": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang && .venv/bin/python -m pytest neurolang/utils/server/tests/ -x -v",
+      "exitCode": 0,
+      "detail": "72 passed, 1 warning"
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": [],
+    "note": "Round 2 re-run: only the fix feature (fix-codeeditor-external-update) was reviewed. All 5 original execution features from round 1 are still passing (4 passed in round 1, and the code-editor-panel failure is now resolved by the fix). Cumulative: 6 features reviewed across both rounds, 6 passed."
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add fetch cleanup convention: All `useEffect` hooks that perform `fetch()` calls must use an AbortController and return a cleanup function. This convention is now documented in AGENTS.md but was not present when the execution milestone features were built, and ExampleQueries.tsx was originally found to violate it (per round 1 observation). Note: the fix for ExampleQueries.tsx was scheduled in the misc-fixes-2 milestone feature 'misc-qb-fixes', not addressed in execution milestone.",
+      "evidence": "Round 1 reviews flagged ExampleQueries.tsx as missing AbortController cleanup. The convention was already documented in AGENTS.md per round 1 synthesis, so no new update is needed — confirming the existing convention documentation is sufficient.",
+      "isSystemic": false
+    },
+    {
+      "target": "frontend-worker skill",
+      "suggestion": "Add note: 'When a CodeMirror 6 feature involves programmatic vs. user-driven edit detection (isExternalUpdate pattern), write failing tests FIRST before implementing the guard. The code-editor-panel original implementation missed this and required a full fix feature. The isExternalUpdate pattern is documented in .factory/library/architecture.md under CodeMirror 6 Patterns.'",
+      "evidence": "code-editor-panel original review showed the isExternalUpdate ref was dead code (not in the updateListener closure). fix-codeeditor-external-update review confirmed the fix was correct and TDD was properly applied for the fix. The skill tip would help future workers building CM6 components avoid the same closure capture error.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Dead fallback branch `.cmView` in fix-codeeditor-external-update test (CodeEditor.test.tsx line 295)",
+      "reason": "Non-blocking test quality issue. Only one line of test code, not a correctness bug, not a cross-feature pattern. The test passes correctly via the EditorView.findFromDOM path. Too minor to document as a convention."
+    },
+    {
+      "observation": "Test simulates API dispatch rather than real DOM keystroke events for 'user typing' scenario",
+      "reason": "Acknowledged as a jsdom limitation, not a real gap. The test correctly verifies the isExternalUpdate guard mechanism. Documentation-only issue at most; not actionable as a convention or architecture note."
+    }
+  ],
+  "previousRound": ".factory/validation/execution/scrutiny/synthesis-round-1.json"
+}

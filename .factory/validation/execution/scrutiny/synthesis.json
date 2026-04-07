@@ -1,13 +1,13 @@
 {
   "milestone": "execution",
-  "round": 2,
+  "round": 3,
   "status": "pass",
   "validatorsRun": {
     "test_frontend": {
       "passed": true,
       "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm test -- --run",
       "exitCode": 0,
-      "detail": "236 tests passed across 11 test files (3 new tests from fix-codeeditor-external-update)"
+      "detail": "240 tests passed across 11 test files"
     },
     "typecheck": {
       "passed": true,
@@ -24,41 +24,56 @@
       "passed": true,
       "command": "cd /Users/dwasserm/sources/NeuroLang && .venv/bin/python -m pytest neurolang/utils/server/tests/ -x -v",
       "exitCode": 0,
-      "detail": "72 passed, 1 warning"
+      "detail": "77 passed, 1 warning"
     }
   },
   "reviewsSummary": {
-    "total": 1,
-    "passed": 1,
+    "total": 3,
+    "passed": 3,
     "failed": 0,
     "failedFeatures": [],
-    "note": "Round 2 re-run: only the fix feature (fix-codeeditor-external-update) was reviewed. All 5 original execution features from round 1 are still passing (4 passed in round 1, and the code-editor-panel failure is now resolved by the fix). Cumulative: 6 features reviewed across both rounds, 6 passed."
+    "note": "Round 3 re-run: reviewed 3 new fix features (fix-execution-results-and-cancel, fix-responses-vbr-iloc, fix-pagination-controls) completed after round 2. All passed. Cumulative across all rounds: 9 features reviewed, 9 passed."
   },
   "blockingIssues": [],
-  "appliedUpdates": [],
+  "appliedUpdates": [
+    {
+      "target": "library/architecture.md",
+      "description": "Added 'WebSocket length=10000 and VBR amplification' note to the WebSocket Protocol section: documents why length=10000 is passed to QueryResults in send_query_update() and warns about ~435MB payloads for VBR queries at that limit.",
+      "sourceFeature": "fix-pagination-controls"
+    },
+    {
+      "target": "library/architecture.md",
+      "description": "Added 'Stale Closure Pattern in ExecutionContext.tsx' section documenting the mirror-state-in-ref pattern required for useCallback with empty deps. Includes the correct pattern, pre-existing stale closure in ws.onclose, and cross-references to isCancellingRef and isBuilderUpdate.",
+      "sourceFeature": "fix-execution-results-and-cancel"
+    }
+  ],
   "suggestedGuidanceUpdates": [
     {
-      "target": "AGENTS.md",
-      "suggestion": "Add fetch cleanup convention: All `useEffect` hooks that perform `fetch()` calls must use an AbortController and return a cleanup function. This convention is now documented in AGENTS.md but was not present when the execution milestone features were built, and ExampleQueries.tsx was originally found to violate it (per round 1 observation). Note: the fix for ExampleQueries.tsx was scheduled in the misc-fixes-2 milestone feature 'misc-qb-fixes', not addressed in execution milestone.",
-      "evidence": "Round 1 reviews flagged ExampleQueries.tsx as missing AbortController cleanup. The convention was already documented in AGENTS.md per round 1 synthesis, so no new update is needed — confirming the existing convention documentation is sufficient.",
+      "target": "AGENTS.md or fullstack-worker skill",
+      "suggestion": "Clarify whether agent-browser verification is required for pure bug-fix features. The fullstack-worker skill mandates TDD (RED then GREEN) and agent-browser verification. For bug-fix features where the expected behavior is fully specified and no new UI is introduced, TDD order is less meaningful. Consider adding: 'For bug-fix features (no new UI components), implementation-first then test-verify is acceptable. Agent-browser verification is still required if the fix affects UI rendering; it may be skipped for backend-only or logic fixes.'",
+      "evidence": "fix-execution-results-and-cancel worker reported followedProcedure: true but transcript shows implementation-first order and skipped agent-browser step. fix-pagination-controls worker did use agent-browser correctly. The inconsistency suggests the skill guidance is ambiguous for fix features.",
       "isSystemic": false
     },
     {
-      "target": "frontend-worker skill",
-      "suggestion": "Add note: 'When a CodeMirror 6 feature involves programmatic vs. user-driven edit detection (isExternalUpdate pattern), write failing tests FIRST before implementing the guard. The code-editor-panel original implementation missed this and required a full fix feature. The isExternalUpdate pattern is documented in .factory/library/architecture.md under CodeMirror 6 Patterns.'",
-      "evidence": "code-editor-panel original review showed the isExternalUpdate ref was dead code (not in the updateListener closure). fix-codeeditor-external-update review confirmed the fix was correct and TDD was properly applied for the fix. The skill tip would help future workers building CM6 components avoid the same closure capture error.",
+      "target": "AGENTS.md coding conventions",
+      "suggestion": "Add a note discouraging magic numbers in service-boundary code: 'Define named constants for limits and thresholds used in request handlers, particularly ones with non-obvious rationale. For example, WEBSOCKET_MAX_ROWS = 10000 with a comment explaining client-side pagination depends on receiving all rows.' The QueryResults(length=10000) in app.py is currently undocumented.",
+      "evidence": "Two reviewers (fix-execution-results-and-cancel and fix-pagination-controls) independently flagged the undocumented length=10000 magic number in app.py's send_query_update().",
       "isSystemic": false
     }
   ],
   "rejectedObservations": [
     {
-      "observation": "Dead fallback branch `.cmView` in fix-codeeditor-external-update test (CodeEditor.test.tsx line 295)",
-      "reason": "Non-blocking test quality issue. Only one line of test code, not a correctness bug, not a cross-feature pattern. The test passes correctly via the EditorView.findFromDOM path. Too minor to document as a convention."
+      "observation": "UnboundLocalError in responses.py:set_error_details for exotic ParserError subclasses",
+      "reason": "already-documented — architecture.md already notes this pre-existing issue. No new documentation needed."
     },
     {
-      "observation": "Test simulates API dispatch rather than real DOM keystroke events for 'user typing' scenario",
-      "reason": "Acknowledged as a jsdom limitation, not a real gap. The test correctly verifies the isExternalUpdate guard mechanism. Documentation-only issue at most; not actionable as a convention or architecture note."
+      "observation": "isCancellingRef not reset within cancelQuery() itself (only in resetExecution/submitQuery)",
+      "reason": "non-actionable — reviewer confirmed this is harmless because wsRef is nulled in cancelQuery(), preventing any reuse of the old isCancellingRef state. Not a convention issue, just a style observation."
+    },
+    {
+      "observation": "WebSocket test does not explicitly verify length=10000 parameter",
+      "reason": "non-blocking suggestion from fix-pagination-controls reviewer. Not a systemic issue or missed requirement; the feature passes its specified expected behavior. A follow-up improvement, not a blocking finding."
     }
   ],
-  "previousRound": ".factory/validation/execution/scrutiny/synthesis-round-1.json"
+  "previousRound": ".factory/validation/execution/scrutiny/synthesis-round-2.json"
 }

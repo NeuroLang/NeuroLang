@@ -85,6 +85,8 @@ See `responses.py:QueryResults` for the server side and `ExecutionContext.tsx:Ex
 
 **Note:** `responses.py:set_error_details` has a latent `UnboundLocalError` for exotic `ParserError` subclasses that have none of the three expected position-info attributes (`tokenizer`, `buf`, `line`/`column`). Standard `ParserError` instances are safe.
 
+**Note:** `QuerySocketHandler.send_query_update()` in `app.py` instantiates `QueryResults(self.uuid, future, get_values=True, length=10000)`. The `length=10000` cap means up to 10,000 rows are sent over WebSocket (vs. the default 50). Client-side pagination in `ResultsPanel.tsx` / `DataTable` is computed from `values.length`, so all rows must be sent for pagination controls to appear correctly. **VBR warning**: When a query returns ExplicitVBR/ExplicitVBROverlay columns, each row's NIfTI image is base64-encoded and included inline in the WebSocket message. At `length=10000`, a 148-row Destrieux query can produce ~435MB WebSocket payloads that may crash the Vite dev proxy. For validation with VBR queries, use the production build or reduce `length` for VBR-heavy workloads. See also AGENTS.md "Vite WebSocket proxy limitation".
+
 ## Bidirectional Sync Architecture (QueryContext)
 
 The `QueryContext` (`src/context/QueryContext.tsx`) manages a synchronized state between the visual query builder and the code editor using:
@@ -101,6 +103,23 @@ The `QueryContext` (`src/context/QueryContext.tsx`) manages a synchronized state
   - Alternatively, check `update.transactions.some(tr => tr.annotation(Transaction.userEvent) !== undefined)` to distinguish user transactions from programmatic ones (programmatic dispatches have no `userEvent` annotation).
 - **Dynamic `readOnly`**: `EditorState.readOnly.of(value)` is immutable once set in the extensions array. To support dynamic changes, wrap it in a `Compartment` and reconfigure it in a `useEffect([readOnly])`. See [CodeMirror docs on Compartments](https://codemirror.net/docs/ref/#state.Compartment).
 - **Agent-browser limitation**: The CodeMirror 6 editor renders as a `div[contenteditable]` with class `cm-content`. Standard `agent-browser` `fill` or `keyboard-type` commands do not reliably set CodeMirror content because CodeMirror intercepts DOM mutations. For validation, prefer building queries via the predicate browser (which calls the QueryModel API) rather than typing in the CodeMirror editor directly.
+
+## Stale Closure Pattern in ExecutionContext.tsx
+
+`submitQuery` in `ExecutionContext.tsx` uses `useCallback` with an empty deps array (`[]`). This means any state variable (e.g., `executionStatus`) captured in closures inside `submitQuery` (including WebSocket event handlers like `ws.onclose`, `ws.onerror`) will reflect the **initial render's value** for the lifetime of the component, not the current state.
+
+**The correct pattern** for reading current state inside a `useCallback` with empty deps is to **mirror the state in a `useRef`** and read the ref inside the callback:
+
+```tsx
+const executionStatusRef = useRef(executionStatus);
+useEffect(() => { executionStatusRef.current = executionStatus; }, [executionStatus]);
+// Inside the empty-dep useCallback:
+if (executionStatusRef.current === 'running') { ... }
+```
+
+This is the same principle as `isCancellingRef` in `ExecutionContext.tsx` and `isBuilderUpdate` in `QueryContext.tsx`. Any future worker adding state checks inside `useCallback` with `[]` deps must use this pattern.
+
+**Known pre-existing stale closure:** `ws.onclose` in `submitQuery` checks `executionStatus === 'running'` directly (not via a ref), making the `ConnectionClosed` error path likely unreachable. This is non-blocking because `ws.onerror` handles the same failure scenario correctly.
 
 ## parseDatalog() — Intentionally Limited Parser
 
