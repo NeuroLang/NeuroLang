@@ -1,0 +1,185 @@
+{
+  "groupId": "exec-results-rerun",
+  "milestone": "execution",
+  "testedAt": "2026-04-07T00:00:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3100",
+    "apiBase": "http://localhost:8888",
+    "browserSession": "8c79c9c8dd46__results",
+    "credentials": "none"
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-EXEC-005",
+      "title": "Tabular results displayed",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Navigate to http://localhost:3100",
+          "expected": "App loads successfully",
+          "observed": "App loaded successfully"
+        },
+        {
+          "action": "Select 'destrieux' engine from sidebar",
+          "expected": "Engine selected, predicates and examples load",
+          "observed": "Destrieux engine selected; predicate browser and examples panel loaded"
+        },
+        {
+          "action": "Click 'Sulcal identification' example title button (.example-item-title via JS) to load query",
+          "expected": "Query text loaded into CodeMirror editor",
+          "observed": "Query loaded but contained ~exists() syntax that the parser doesn't support; parse error displayed"
+        },
+        {
+          "action": "Replace query with simpler: LeftSulcus(name_) :- destrieux(name_, region) & startswith(\"L S\", name_)",
+          "expected": "Valid query in editor, Run Query enabled",
+          "observed": "Query text set via keyboard inserttext after Select-All; Run Query button enabled"
+        },
+        {
+          "action": "Click 'Run Query' button",
+          "expected": "Query executes and results panel shows tabular data",
+          "observed": "Results panel appeared with 31 rows; column header 'name_' (type str) visible; data rows include 'L S calcarine', 'L S central', etc."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/exec-results-rerun/VAL-EXEC-005-results-table.png",
+          "execution/exec-results-rerun/results-visible.png"
+        ],
+        "consoleErrors": "none",
+        "network": "WebSocket to ws://localhost:8888/v2/query (inferred from app behavior)"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-EXEC-006",
+      "title": "Symbol selector for results",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Observe results panel after query execution",
+          "expected": "Symbol selector dropdown visible",
+          "observed": "Symbol selector dropdown (select.symbol-selector) visible with 'LeftSulcus' selected; options include 'LeftSulcus' and 'destrieux'"
+        },
+        {
+          "action": "Select 'destrieux' from symbol dropdown via JavaScript",
+          "expected": "Table switches to show destrieux symbol results",
+          "observed": "Table updated to show 148 rows of destrieux data; columns '0 str' and '1 VBR'; different data from LeftSulcus"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/exec-results-rerun/VAL-EXEC-006-symbol-dropdown.png",
+          "execution/exec-results-rerun/VAL-EXEC-006-different-symbol-selected.png"
+        ],
+        "consoleErrors": "none",
+        "network": "No additional network request; results were loaded in initial query response"
+      },
+      "issues": "The symbol dropdown is a native HTML <select> element; could not be triggered via agent-browser native select command, required JavaScript dispatch of 'change' event. This is a friction, not a failure."
+    },
+    {
+      "id": "VAL-EXEC-007",
+      "title": "Sort results by column",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Switch to LeftSulcus symbol (31 rows, single string column)",
+          "expected": "31 rows visible with 'name_' column",
+          "observed": "31 rows with 'name_' str column; initial aria-sort='none'"
+        },
+        {
+          "action": "Click column header 'name_' (via JavaScript .click())",
+          "expected": "Column sorts ascending; aria-sort='ascending'",
+          "observed": "aria-sort changed to 'ascending'; rows start with 'L S calcarine', 'L S central', 'L S cingul Marginalis'"
+        },
+        {
+          "action": "Click column header 'name_' again",
+          "expected": "Column sorts descending; aria-sort='descending'",
+          "observed": "aria-sort changed to 'descending'; rows start with 'L S temporal transverse', 'L S temporal sup', 'L S temporal inf'"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/exec-results-rerun/VAL-EXEC-007-sorted-ascending.png",
+          "execution/exec-results-rerun/VAL-EXEC-007-sorted-descending.png"
+        ],
+        "consoleErrors": "none",
+        "network": "No network request; sort is client-side"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-EXEC-008",
+      "title": "Paginate results",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Switch symbol selector to 'destrieux' (148 rows > 50 threshold)",
+          "expected": "Pagination controls (next/previous) visible below or near table",
+          "observed": "No pagination controls found anywhere in the DOM; table renders exactly 50 rows and stops; no 'Next', 'Previous', page number, or navigation elements present"
+        },
+        {
+          "action": "Inspect DOM for pagination elements",
+          "expected": "Elements matching [class*='pagina'], [class*='pager'], [aria-label*='page/next/prev'] found",
+          "observed": "Zero pagination elements found in entire document; .data-table-container has only .data-table-toolbar and .data-table-scroll children"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/exec-results-rerun/VAL-EXEC-008-no-pagination.png"
+        ],
+        "consoleErrors": "none",
+        "network": "n/a"
+      },
+      "issues": "BUG: When results exceed 50 rows (destrieux symbol has 148 rows), the table silently truncates to 50 rows without pagination controls. The row count label correctly shows '148 rows' but only 50 are rendered in the DOM. No Next/Previous/page controls appear. The pagination feature is missing from the implementation."
+    },
+    {
+      "id": "VAL-EXEC-009",
+      "title": "Download results as CSV",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Observe results panel for Download CSV button",
+          "expected": "Button labeled 'Download CSV' or similar is visible",
+          "observed": "Button 'Download LeftSulcus as CSV' (class: csv-download-btn, aria-label from snapshot) visible in the .data-table-toolbar; labeled '↓ Download CSV'"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "execution/exec-results-rerun/VAL-EXEC-009-download-button.png"
+        ],
+        "consoleErrors": "none",
+        "network": "Button visible and clickable; actual download not verified per task scope"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The 'Sulcal identification' example query contains ~exists() syntax that the NeuroLang parser does not support (UnexpectedTokenError on AMPERSAND inside nested existential). The example is loaded via clicking the title button but fails to run.",
+      "resolved": true,
+      "resolution": "Used a simpler custom query: LeftSulcus(name_) :- destrieux(name_, region) & startswith(\"L S\", name_) — set via Select-All + keyboard inserttext",
+      "affectedAssertions": ["VAL-EXEC-005", "VAL-EXEC-006", "VAL-EXEC-007", "VAL-EXEC-008", "VAL-EXEC-009"]
+    },
+    {
+      "description": "The symbol selector is a native HTML <select> element but could not be changed via agent-browser's native 'select' command (it requires accessibility refs which weren't available in the results panel). Required JavaScript dispatch of a 'change' event.",
+      "resolved": true,
+      "resolution": "Used JavaScript: select.value = 'destrieux'; select.dispatchEvent(new Event('change', { bubbles: true }))",
+      "affectedAssertions": ["VAL-EXEC-006"]
+    },
+    {
+      "description": "Results panel is below the visible viewport on initial page load; requires scroll to see. The snapshot tools do not include results table rows as interactive elements since they are static table cells.",
+      "resolved": true,
+      "resolution": "Used JavaScript scrollIntoView() to bring results panel into view; used JavaScript to inspect table content directly",
+      "affectedAssertions": ["VAL-EXEC-005", "VAL-EXEC-006", "VAL-EXEC-007", "VAL-EXEC-008", "VAL-EXEC-009"]
+    },
+    {
+      "description": "The app uses http://[::1]:3100 (IPv6) as the documented URL, but agent-browser ERR_CONNECTION_REFUSED on IPv6. Used http://localhost:3100 successfully instead.",
+      "resolved": true,
+      "resolution": "Used http://localhost:3100",
+      "affectedAssertions": ["VAL-EXEC-005", "VAL-EXEC-006", "VAL-EXEC-007", "VAL-EXEC-008", "VAL-EXEC-009"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 5 assertions: 4 passed, 1 failed. VAL-EXEC-005 (tabular results): PASS — results table renders with correct column headers and data rows after running a simple destrieux query. VAL-EXEC-006 (symbol selector): PASS — dropdown shows multiple symbols and switching updates the table. VAL-EXEC-007 (sort): PASS — clicking column header cycles through ascending/descending sort with correct aria-sort attribute updates. VAL-EXEC-008 (pagination): FAIL — for the destrieux symbol with 148 rows, table truncates to 50 rows with no pagination controls rendered. VAL-EXEC-009 (download CSV): PASS — '↓ Download CSV' button is visible and clickable in the results toolbar."
+}

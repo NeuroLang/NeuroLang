@@ -1,57 +1,43 @@
 {
   "milestone": "execution",
-  "round": 2,
+  "round": 3,
   "status": "fail",
   "assertionsSummary": {
-    "total": 6,
-    "passed": 1,
-    "failed": 5,
+    "total": 5,
+    "passed": 4,
+    "failed": 1,
     "blocked": 0
   },
   "passedAssertions": [
-    "VAL-EXEC-011"
+    "VAL-EXEC-005",
+    "VAL-EXEC-006",
+    "VAL-EXEC-007",
+    "VAL-EXEC-009"
   ],
   "failedAssertions": [
     {
-      "id": "VAL-EXEC-005",
-      "reason": "Results table never renders. get_values=True fix (f1fe82ab) is correctly deployed in app.py. However, responses.py line 85 crashes with KeyError: 1 in serializeVBR — uses integer label access image_row[1] on a pandas Series whose index is string-typed after reset_index(). Fix: change image_row[1] to image_row.iloc[1] in responses.py. This blocks ALL queries that produce VBR/ExplicitVBR columns (all Destrieux queries). Verified: 5/5 query executions fail with this error in backend logs."
-    },
-    {
-      "id": "VAL-EXEC-006",
-      "reason": "Blocked by same serializeVBR KeyError as VAL-EXEC-005. Results table never renders, so symbol selector cannot appear."
-    },
-    {
-      "id": "VAL-EXEC-007",
-      "reason": "Blocked by same serializeVBR KeyError as VAL-EXEC-005. Results table never renders, so column sort cannot be tested."
-    },
-    {
       "id": "VAL-EXEC-008",
-      "reason": "Blocked by same serializeVBR KeyError as VAL-EXEC-005. Results table never renders, so pagination cannot be tested."
-    },
-    {
-      "id": "VAL-EXEC-009",
-      "reason": "Blocked by same serializeVBR KeyError as VAL-EXEC-005. Results table never renders, so CSV download button is never shown."
+      "reason": "Pagination controls missing from DataTable component. With 148 rows (destrieux symbol), table silently truncates to 50 rows. Row count label correctly shows '148 rows' but no Next/Previous/page controls are rendered anywhere in the DOM. The pagination UI is not implemented."
     }
   ],
   "blockedAssertions": [],
   "rootCauses": [
     {
-      "id": "RC-003",
-      "description": "responses.py serializeVBR function (line 85) uses integer label access image_row[1] on a pandas Series. After reset_index(), the Series index contains string column names (e.g., ['index', 's'] for a relation with column 's'). Integer label access [1] raises KeyError since the index is not integer-based. This crash occurs inside send_query_update callback for every query that produces VBR columns, preventing any WebSocket completion message from being sent to the frontend.",
-      "affectedAssertions": ["VAL-EXEC-005", "VAL-EXEC-006", "VAL-EXEC-007", "VAL-EXEC-008", "VAL-EXEC-009"],
-      "suggestedFix": "In responses.py, change line 85 from 'vbr = image_row[1]' to 'vbr = image_row.iloc[1]' to use positional (iloc) instead of label-based access."
+      "id": "RC-004",
+      "description": "DataTable component in the React frontend does not render pagination controls. When row count exceeds 50 (the page size), only the first 50 rows are rendered and no Next/Previous/page number buttons appear. The row count label correctly reports the total, suggesting the pagination state exists but the UI controls are not rendered.",
+      "affectedAssertions": ["VAL-EXEC-008"],
+      "suggestedFix": "Add pagination controls to the DataTable component UI: render Next/Previous buttons and current page indicator when totalRows > pageSize. Wire up to existing pagination state (currentPage, totalPages) if it exists, otherwise add pagination state."
     }
   ],
   "appliedUpdates": [
     {
       "target": "user-testing.md",
-      "description": "Updated Known UI behaviors for execution milestone: marked VAL-EXEC-011 cancel bug as fixed, documented new serializeVBR KeyError blocker for results table assertions.",
+      "description": "Updated Known UI behaviors for execution milestone: documented serializeVBR fix, new pagination missing bug (VAL-EXEC-008), noted ~exists() parse failure in Sulcal identification example, and symbol selector JS workaround.",
       "source": "flow-report"
     }
   ],
-  "previousRound": ".factory/validation/execution/user-testing/synthesis-round1.json",
+  "previousRound": ".factory/validation/execution/user-testing/synthesis-round2.json",
   "flowReports": [
-    ".factory/validation/execution/user-testing/flows/exec-group-results.json",
-    ".factory/validation/execution/user-testing/flows/exec-group-cancel.json"
+    ".factory/validation/execution/user-testing/flows/exec-results-rerun.json"
   ]
 }

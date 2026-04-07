@@ -80,7 +80,10 @@ This section covers isolation rules for browser-based validation subagents.
 - Example queries panel is in the sidebar showing examples from `/v2/examples/:engine`; clicking an example title loads it into the code editor
 - Keyboard shortcut `Cmd+Enter` (Mac) / `Ctrl+Enter` submits the query when the code editor is focused
 - **FIXED (execution milestone round 2)**: Cancel query now correctly shows "⊘ Query cancelled." instead of "WebSocketError". The `isCancellingRef` guard was added to `ExecutionContext.tsx` in commit f1fe82ab.
-- **KNOWN BUG (execution milestone round 2)**: Results table never renders despite `get_values=True` fix (f1fe82ab). Root cause: `responses.py` line 85 uses integer label access `image_row[1]` on a pandas Series whose index is string-typed after `reset_index()`. Fix: change `vbr = image_row[1]` to `vbr = image_row.iloc[1]`. This blocks ALL queries that produce VBR/ExplicitVBR columns (e.g., all Destrieux queries). Affects VAL-EXEC-005 through 009.
+- **FIXED (execution milestone round 3)**: `responses.py serializeVBR` KeyError was fixed by changing `image_row[1]` to `image_row.iloc[1]` (commit c76b94e9). Results table now renders correctly for VBR-column queries.
+- **KNOWN BUG (execution milestone round 3)**: Pagination controls are missing from DataTable component. When a result set has >50 rows (e.g., destrieux symbol with 148 rows), the table silently truncates to 50 rows without any Next/Previous/page controls. The row count label correctly shows the total count but navigation is missing. Affects VAL-EXEC-008.
+- **NOTE**: The "Sulcal identification" Destrieux example query (`~exists()` syntax) fails to parse with `UnexpectedTokenError on AMPERSAND`. Use a simpler custom query instead: `LeftSulcus(name_) :- destrieux(name_, region) & startswith("L S", name_)`
+- **NOTE**: Symbol selector is a native HTML `<select>` element. In agent-browser, trigger change via JS: `select.value = 'symbol'; select.dispatchEvent(new Event('change', { bubbles: true }))`
 - **CodeMirror editor content**: Cannot use standard `Control+A` + `fill` pattern to replace editor content. Use either React context `setDatalogText()` or click example query buttons to set query content.
 
 ### Known UI behaviors (query-builder milestone)
