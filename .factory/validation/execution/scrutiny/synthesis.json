@@ -1,13 +1,13 @@
 {
   "milestone": "execution",
-  "round": 1,
-  "status": "fail",
+  "round": 2,
+  "status": "pass",
   "validatorsRun": {
     "test_frontend": {
       "passed": true,
       "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm test -- --run",
       "exitCode": 0,
-      "detail": "233 tests passed across 11 test files"
+      "detail": "236 tests passed across 11 test files (3 new tests from fix-codeeditor-external-update)"
     },
     "typecheck": {
       "passed": true,
@@ -28,85 +28,37 @@
     }
   },
   "reviewsSummary": {
-    "total": 5,
-    "passed": 4,
-    "failed": 1,
-    "failedFeatures": ["code-editor-panel"]
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": [],
+    "note": "Round 2 re-run: only the fix feature (fix-codeeditor-external-update) was reviewed. All 5 original execution features from round 1 are still passing (4 passed in round 1, and the code-editor-panel failure is now resolved by the fix). Cumulative: 6 features reviewed across both rounds, 6 passed."
   },
-  "blockingIssues": [
-    {
-      "featureId": "code-editor-panel",
-      "severity": "blocking",
-      "description": "`isExternalUpdate` ref in CodeEditor.tsx is declared and set (lines 182, 222, 230) but NEVER READ inside the EditorView.updateListener. Every external `value` prop update dispatched to the editor triggers `onChange` → `setDatalogText` in QueryContext → 500ms debounced `model.reset(parsed)` which clears the undo/redo stacks. Any click on a predicate in the visual query builder silently destroys undo history 500ms later.",
-      "suggestedFix": "Pass `isExternalUpdate` into `buildExtensions()` as a parameter and gate the updateListener's `onChange` call: `if (update.docChanged && !isExternalUpdate.current) { onChange(update.state.doc.toString()); }`. The pattern is: set `isExternalUpdate.current = true` before `view.dispatch(...)`, then reset to `false` after. Since the listener fires synchronously during dispatch, the ref will be `true` during the listener call.",
-      "file": "neurolang/utils/server/neurolang-sparklis/src/components/CodeEditor.tsx",
-      "line": 109
-    }
-  ],
-  "appliedUpdates": [
-    {
-      "target": "library/architecture.md",
-      "description": "Added WebSocket protocol documentation for /v1/statementsocket (outgoing and incoming message shapes, TypeScript interface location, line_info semantics, and latent UnboundLocalError in responses.py:set_error_details).",
-      "sourceFeature": "query-execution-flow"
-    },
-    {
-      "target": "library/architecture.md",
-      "description": "Added Bidirectional Sync Architecture section documenting the isBuilderUpdate ref pattern, PARSE_DEBOUNCE_MS, and the requirement to use the ref on all programmatic setDatalogText calls.",
-      "sourceFeature": "bidirectional-sync"
-    },
-    {
-      "target": "library/architecture.md",
-      "description": "Added CodeMirror 6 Patterns section: detecting user vs programmatic edits (isExternalUpdate ref must be in closure, or use Transaction.userEvent annotation), dynamic readOnly using Compartment, agent-browser limitation with CM6 contenteditable.",
-      "sourceFeatures": ["code-editor-panel", "results-table-display"]
-    },
-    {
-      "target": "library/architecture.md",
-      "description": "Added parseDatalog() Limited Parser section documenting that the regex parser only supports canonical serializeToDatalog() output and returns null for any complex Datalog (constants, negation, arithmetic, non-ans heads). This is by design.",
-      "sourceFeature": "bidirectional-sync"
-    },
-    {
-      "target": "library/architecture.md",
-      "description": "Added Backend Quirks entry: Backend parser rejects trailing period — NeuroLang parser expects queries WITHOUT trailing '.' but serializeToDatalog() appends one. submitQuery must strip it before sending.",
-      "sourceFeature": "results-table-display"
-    }
-  ],
+  "blockingIssues": [],
+  "appliedUpdates": [],
   "suggestedGuidanceUpdates": [
     {
       "target": "AGENTS.md",
-      "suggestion": "Add a coding convention: All `useEffect` hooks that perform `fetch()` calls must use an AbortController and return a cleanup function that calls `controller.abort()`. Pattern: `const controller = new AbortController(); fetch(url, { signal: controller.signal }); return () => controller.abort()`. See SchemaContext.tsx and SuggestionsPanel.tsx for examples. ExampleQueries.tsx is a current violation.",
-      "evidence": "Three independent reviewers (code-editor-panel scrutiny, example-queries-panel scrutiny) flagged the missing AbortController in ExampleQueries.tsx. SchemaContext.tsx and SuggestionsPanel.tsx both correctly implement this pattern, but it is not documented as a project convention.",
-      "isSystemic": true
+      "suggestion": "Add fetch cleanup convention: All `useEffect` hooks that perform `fetch()` calls must use an AbortController and return a cleanup function. This convention is now documented in AGENTS.md but was not present when the execution milestone features were built, and ExampleQueries.tsx was originally found to violate it (per round 1 observation). Note: the fix for ExampleQueries.tsx was scheduled in the misc-fixes-2 milestone feature 'misc-qb-fixes', not addressed in execution milestone.",
+      "evidence": "Round 1 reviews flagged ExampleQueries.tsx as missing AbortController cleanup. The convention was already documented in AGENTS.md per round 1 synthesis, so no new update is needed — confirming the existing convention documentation is sufficient.",
+      "isSystemic": false
     },
     {
       "target": "frontend-worker skill",
-      "suggestion": "Add a tip to the manual verification step: 'CodeMirror 6 editors (class cm-content, contenteditable) do not respond reliably to agent-browser fill or keyboard-type commands. For UI features involving the code editor, use the predicate browser or example queries panel to set query content, and verify editor content via JavaScript eval: document.querySelector(\".cm-content\")?.textContent'.",
-      "evidence": "The results-table-display worker flagged this in skillFeedback.suggestedChanges. The code-editor-panel reviewer confirmed the pattern. Multiple workers will encounter this when testing any feature that touches the CodeEditor.",
-      "isSystemic": true
-    },
-    {
-      "target": "frontend-worker skill",
-      "suggestion": "Clarify TDD procedure: 'Writing failing tests first is strongly encouraged but the success criterion is that all tests pass at the end, not strict red-green-refactor sequencing. If you write implementation before tests, that is acceptable as long as tests cover all specified behaviors.' The current wording implies strict TDD which the code-editor-panel worker's handoff falsely claimed to have followed.",
-      "evidence": "code-editor-panel review: worker handoff stated followedProcedure: true but transcript shows implementation before tests. The missing onChange-fires-on-typing test may have been caught under strict TDD.",
+      "suggestion": "Add note: 'When a CodeMirror 6 feature involves programmatic vs. user-driven edit detection (isExternalUpdate pattern), write failing tests FIRST before implementing the guard. The code-editor-panel original implementation missed this and required a full fix feature. The isExternalUpdate pattern is documented in .factory/library/architecture.md under CodeMirror 6 Patterns.'",
+      "evidence": "code-editor-panel original review showed the isExternalUpdate ref was dead code (not in the updateListener closure). fix-codeeditor-external-update review confirmed the fix was correct and TDD was properly applied for the fix. The skill tip would help future workers building CM6 components avoid the same closure capture error.",
       "isSystemic": false
     }
   ],
   "rejectedObservations": [
     {
-      "observation": "Single-symbol SymbolSelector hiding (ResultsPanel hides dropdown when only 1 symbol)",
-      "reason": "Minor UX behavior, not a bug, not a cross-feature pattern. Documenting in AGENTS.md would be noise."
+      "observation": "Dead fallback branch `.cmView` in fix-codeeditor-external-update test (CodeEditor.test.tsx line 295)",
+      "reason": "Non-blocking test quality issue. Only one line of test code, not a correctness bug, not a cross-feature pattern. The test passes correctly via the EditorView.findFromDOM path. Too minor to document as a convention."
     },
     {
-      "observation": "ExampleQueries sidebar uses internal collapsible button vs external h2 heading (unlike Engines and Predicates sections)",
-      "reason": "Too specific to this one component's collapsible requirement. Not a systemic convention violation."
-    },
-    {
-      "observation": "Missing afterEach(vi.useRealTimers()) in BidirectionalSync.test.tsx",
-      "reason": "Non-blocking test hygiene issue. Not a cross-feature pattern worth adding to AGENTS.md. Documented in the feature review."
-    },
-    {
-      "observation": "varCounter monotonic invariant technically violated after parseDatalog reset-cycle",
-      "reason": "Compensated by addPredicate collision-avoidance. Not a real bug. Not actionable as a convention."
+      "observation": "Test simulates API dispatch rather than real DOM keystroke events for 'user typing' scenario",
+      "reason": "Acknowledged as a jsdom limitation, not a real gap. The test correctly verifies the isExternalUpdate guard mechanism. Documentation-only issue at most; not actionable as a convention or architecture note."
     }
   ],
-  "previousRound": null
+  "previousRound": ".factory/validation/execution/scrutiny/synthesis-round-1.json"
 }
