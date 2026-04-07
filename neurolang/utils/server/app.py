@@ -349,7 +349,13 @@ class QuerySocketHandler(tornado.websocket.WebSocketHandler):
         """
         self.write_message(
             query_results_to_json(
-                QueryResults(self.uuid, future, get_values=True), status
+                QueryResults(
+                    self.uuid,
+                    future,
+                    get_values=True,
+                    length=10000,
+                ),
+                status,
             )
         )
 
