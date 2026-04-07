@@ -1,0 +1,61 @@
+{
+  "featureId": "brain-overlay-from-results",
+  "reviewedAt": "2026-04-08T00:30:00.000Z",
+  "commitId": "04459996ca48eb75dd2dbb02845926cc0f860c80",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The implementation is thorough and well-structured. All five expected behaviors from the feature spec are implemented: VBR/VBROverlay column detection, 'View in brain' button, overlay addition with Niivue sync, VBROverlay color maps + color bars, and OverlayManager with per-overlay remove. 44 new tests pass, TypeScript is clean, and ESLint is clean. Two non-blocking issues are noted below.",
+    "issues": [
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/ResultsPanel.tsx",
+        "line": 326,
+        "severity": "non_blocking",
+        "description": "globalRowIdx is computed as `page * PAGE_SIZE + rowIdx` over the sorted `pageRows`, not the original unsorted rows. The comment says 'The global (pre-sort) row index is used to compute stable IDs' but this is incorrect — after sorting, the same data row gets a different ID. A user who sorts the table and then clicks 'View in brain' on the same region would add a duplicate overlay with a different ID (bypassing the deduplication check). This could be fixed by tracking original indices through the sort, but since the feature spec does not mandate stable IDs across sort operations and the practical impact is minor (duplicate overlay would use a new color slot), this is non-blocking."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/ResultsPanel.tsx",
+        "line": 252,
+        "severity": "non_blocking",
+        "description": "All VBROverlay overlays always receive 'hot' colormap regardless of how many probabilistic overlays are already active. If a user adds multiple VBROverlay overlays, they are visually indistinguishable in the OverlayManager color swatch (all orange). The feature spec says 'use a color map (e.g., hot/warm)' which is satisfied. However, calling `nextColormap(overlays)` for VBROverlay (same as for VBR) would help distinguish multiple probability overlays. This is a UX polish concern, not a correctness bug."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/BrainViewer.tsx",
+        "line": 260,
+        "severity": "non_blocking",
+        "description": "The overlay reconciliation check compares overlay IDs by join-string (`prevIds === nextIds`). This only detects additions and removals (order changes), but not content changes to an existing overlay (e.g., if an overlay's base64 or colormap is updated in place). However, since overlays are identified by ID and IDs are immutable once added, this is not a real-world concern — overlays can only be added or removed, never mutated in place. Not a bug."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/BrainViewer.tsx",
+        "line": 268,
+        "severity": "non_blocking",
+        "description": "The syncOverlays function uses `await Promise.all(overlays.map(...))` followed by a try/catch around the Niivue API calls, but there is no AbortController integration for cleanup. If the component unmounts while `syncOverlays` is running asynchronously, Niivue calls would still proceed after unmount. In practice this is low-risk (WebGL errors are caught), but it deviates from the project's AbortController pattern documented in AGENTS.md. The atlas fetch useEffect correctly uses AbortController, so this inconsistency should be noted."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "AGENTS.md explicitly states: 'VBR overlay data should be loaded via separate REST endpoints, not from the WebSocket query results.' The implementation reads the base64 NIfTI data directly from the WebSocket result cell in the DataTable, not via any REST endpoint. The feature description itself offered 'from the result data directly' as an option, which created ambiguity, but AGENTS.md is more restrictive. The worker justified this by noting the 435MB payload issue (VBR data is already in the result), but the underlying concern (large WebSocket payloads) is not resolved — it's just not made worse. AGENTS.md guidance and feature description are in conflict on this point.",
+      "evidence": "AGENTS.md line: 'VBR overlay data should be loaded via separate REST endpoints, not from the WebSocket query results.'; Feature description: '(base64-encoded NIfTI from the existing /v1/download endpoint or from the result data directly)'; ResultsPanel.tsx:252 reads `base64: cell` directly from WebSocket result row."
+    },
+    {
+      "area": "conventions",
+      "observation": "The overlay sync useEffect in BrainViewer.tsx does not follow the AbortController cleanup pattern documented in AGENTS.md for async effects. The async `syncOverlays()` function is invoked but not cancellable on unmount. This is inconsistent with the project convention documented in AGENTS.md ('All useEffect hooks that perform fetch() calls MUST use an AbortController'). While syncOverlays does not use fetch(), it performs async work and could run after unmount.",
+      "evidence": "AGENTS.md: 'All useEffect hooks that perform fetch() calls MUST use an AbortController and return a cleanup function'; BrainViewer.tsx lines 232-306: overlay sync useEffect does not return a cleanup function or use AbortController."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The worker noted that `setOverlayList` may or may not exist on the Niivue instance and uses a duck-typed check (`typeof niivueRef.current.setOverlayList === 'function'`). The Niivue API for managing overlays after initial load appears unstable or undocumented — the fallback logic uses `overlaysVox` and `volumes?.slice(1)` which are internal implementation details. This Niivue API pattern/limitation should be documented in architecture.md or a niivue-quirks.md knowledge file so future workers know to use the same duck-typed approach.",
+      "evidence": "BrainViewer.tsx lines 267-299: duck-typed `setOverlayList` check with fallback to internal `overlaysVox`/`volumes` properties."
+    },
+    {
+      "area": "skills",
+      "observation": "The fullstack-worker skill requires manual verification with agent-browser as a required step. The worker explicitly skipped this citing the 435MB VBR payload crash with the Vite dev proxy (documented in AGENTS.md). This justification is valid, but the skill procedure itself should be updated to acknowledge this known limitation and suggest alternatives (e.g., use the production build, or test with a small-VBR proxy). The worker noted this in skillFeedback.suggestedChanges but no skill update was made.",
+      "evidence": "Handoff skillFeedback.suggestedChanges: 'The skill says to do manual verification with agent-browser, but AGENTS.md notes that VBR queries can produce ~435MB payloads that crash the Vite dev proxy. No backend changes were needed for this feature (pure frontend), so manual browser verification would require the production build, which is out of scope for this feature.'"
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS. The feature is fully implemented: VBR/VBROverlay column detection, 'View in brain' buttons, overlay context management (up to 8), BrainViewer sync, OverlayManager with remove/clear-all, ColorBar for probability overlays, and 44 new passing tests. All validators (npm test, tsc, eslint, pytest) pass. Two minor non-blocking issues: (1) overlay IDs are not stable across sort operations (can cause duplicate overlays if user sorts then clicks), and (2) VBROverlay overlays always use 'hot' regardless of count. Neither affects the core feature behavior. One architectural concern is noted: the implementation reads VBR data directly from WebSocket results, which conflicts with AGENTS.md guidance to use separate REST endpoints — however, the feature description itself allowed this approach. The overlay sync effect also lacks the project-standard AbortController cleanup pattern."
+}
