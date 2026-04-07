@@ -13,6 +13,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import React from 'react'
 import BrainViewer, { type NiivueLocationData } from '../BrainViewer'
 import { EngineProvider } from '../../context/EngineContext'
+import { BrainOverlayProvider } from '../../context/BrainOverlayContext'
+import { useBrainOverlay } from '../../context/useBrainOverlay'
 import { useEngine } from '../../context/useEngine'
 
 // ---------------------------------------------------------------------------
@@ -64,6 +66,15 @@ function EngineSelectHelper({ engineName }: { engineName: string }) {
   return null
 }
 
+/** Wrapper that provides both EngineContext and BrainOverlayContext. */
+function AllProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <EngineProvider>
+      <BrainOverlayProvider>{children}</BrainOverlayProvider>
+    </EngineProvider>
+  )
+}
+
 /** Build a successful atlas fetch response. */
 function makeAtlasResponse(base64: string = 'dGVzdA==') {
   return {
@@ -98,9 +109,9 @@ describe('BrainViewer', () => {
 
   it('renders the canvas element', () => {
     render(
-      <EngineProvider>
+      <AllProviders>
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
     expect(screen.getByTestId('brain-viewer-canvas')).toBeInTheDocument()
     expect(screen.getByTestId('brain-viewer')).toBeInTheDocument()
@@ -108,9 +119,9 @@ describe('BrainViewer', () => {
 
   it('renders coordinate display with initial zero values', () => {
     render(
-      <EngineProvider>
+      <AllProviders>
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
     expect(screen.getByTestId('brain-viewer-coords')).toBeInTheDocument()
     expect(screen.getByTestId('brain-viewer-coord-x')).toHaveTextContent(
@@ -126,27 +137,27 @@ describe('BrainViewer', () => {
 
   it('renders the Brain Viewer header title', () => {
     render(
-      <EngineProvider>
+      <AllProviders>
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
     expect(screen.getByText('Brain Viewer')).toBeInTheDocument()
   })
 
   it('shows no error initially', () => {
     render(
-      <EngineProvider>
+      <AllProviders>
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
     expect(screen.queryByTestId('brain-viewer-error')).not.toBeInTheDocument()
   })
 
   it('accepts a custom data-testid', () => {
     render(
-      <EngineProvider>
+      <AllProviders>
         <BrainViewer data-testid="custom-viewer" />
-      </EngineProvider>,
+      </AllProviders>,
     )
     expect(screen.getByTestId('custom-viewer')).toBeInTheDocument()
   })
@@ -157,9 +168,9 @@ describe('BrainViewer', () => {
 
   it('does not fetch atlas when no engine is selected', async () => {
     render(
-      <EngineProvider>
+      <AllProviders>
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50))
@@ -171,10 +182,10 @@ describe('BrainViewer', () => {
     vi.mocked(fetch).mockResolvedValue(makeAtlasResponse())
 
     render(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="neurosynth" />
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     await waitFor(() => {
@@ -190,10 +201,10 @@ describe('BrainViewer', () => {
     vi.mocked(fetch).mockResolvedValue(makeAtlasResponse(testBase64))
 
     render(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="neurosynth" />
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     await waitFor(() => {
@@ -207,10 +218,10 @@ describe('BrainViewer', () => {
     vi.mocked(fetch).mockResolvedValue(makeAtlasResponse())
 
     render(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="neurosynth" />
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     await waitFor(() => {
@@ -225,10 +236,10 @@ describe('BrainViewer', () => {
     vi.mocked(fetch).mockReturnValue(new Promise(() => {}))
 
     render(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="neurosynth" />
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     await waitFor(() => {
@@ -240,10 +251,10 @@ describe('BrainViewer', () => {
     vi.mocked(fetch).mockResolvedValue(makeAtlasResponse())
 
     render(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="neurosynth" />
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     await waitFor(() => {
@@ -261,10 +272,10 @@ describe('BrainViewer', () => {
     } as Response)
 
     render(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="neurosynth" />
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     await waitFor(() => {
@@ -278,10 +289,10 @@ describe('BrainViewer', () => {
     vi.mocked(fetch).mockResolvedValue(makeAtlasResponse())
 
     render(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="neurosynth" />
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     await waitFor(() => {
@@ -297,10 +308,10 @@ describe('BrainViewer', () => {
     vi.mocked(fetch).mockResolvedValue(makeAtlasResponse())
 
     const { rerender } = render(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="neurosynth" />
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     await waitFor(() => {
@@ -318,10 +329,10 @@ describe('BrainViewer', () => {
     } as unknown as ReturnType<typeof MockNVImage.loadFromBase64>)
 
     rerender(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="destrieux" />
         <BrainViewer />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     await waitFor(() => {
@@ -343,14 +354,14 @@ describe('BrainViewer', () => {
     let capturedHandler: ((data: NiivueLocationData) => void) | null = null
 
     render(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="neurosynth" />
         <BrainViewer
           onLocationHandlerReady={(handler) => {
             capturedHandler = handler
           }}
         />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     // Wait for Niivue to be initialized and the handler to be registered.
@@ -394,14 +405,14 @@ describe('BrainViewer', () => {
     let capturedHandler: ((data: NiivueLocationData) => void) | null = null
 
     render(
-      <EngineProvider>
+      <AllProviders>
         <EngineSelectHelper engineName="neurosynth" />
         <BrainViewer
           onLocationHandlerReady={(handler) => {
             capturedHandler = handler
           }}
         />
-      </EngineProvider>,
+      </AllProviders>,
     )
 
     await waitFor(() => {
@@ -423,5 +434,103 @@ describe('BrainViewer', () => {
     expect(screen.getByTestId('brain-viewer-coord-z')).toHaveTextContent(
       'z = -100.5',
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Overlay synchronization (via BrainOverlayContext)
+// ---------------------------------------------------------------------------
+
+/** Helper: renders BrainViewer with a controller that can inject overlays. */
+function renderWithOverlayControl() {
+  let capturedCtx: ReturnType<typeof useBrainOverlay> | null = null
+
+  function OverlayCapture() {
+    capturedCtx = useBrainOverlay()
+    return null
+  }
+
+  vi.mocked(fetch).mockResolvedValue(makeAtlasResponse())
+
+  render(
+    <AllProviders>
+      <OverlayCapture />
+      <EngineSelectHelper engineName="destrieux" />
+      <BrainViewer />
+    </AllProviders>,
+  )
+
+  return { getCtx: () => capturedCtx! }
+}
+
+describe('BrainViewer – overlay sync', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('calls NVImage.loadFromBase64 when an overlay is added to context', async () => {
+    const { getCtx } = renderWithOverlayControl()
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled()
+    })
+
+    act(() => {
+      getCtx().addOverlay({
+        id: 'test:0:0',
+        name: 'Test region',
+        base64: 'dGVzdA==',
+        colormap: 'hot',
+        isProbabilistic: false,
+      })
+    })
+
+    await waitFor(() => {
+      // NVImage.loadFromBase64 called for atlas + overlay
+      expect(MockNVImage.loadFromBase64).toHaveBeenCalledWith(
+        expect.objectContaining({ base64: 'dGVzdA==' }),
+      )
+    })
+  })
+
+  it('does not crash when niivue is not initialized', async () => {
+    // Renders BrainViewer (no WebGL in jsdom so niivueRef stays null)
+    // Adding an overlay should not throw.
+    vi.mocked(fetch).mockResolvedValue(makeAtlasResponse())
+
+    let capturedCtx: ReturnType<typeof useBrainOverlay> | null = null
+
+    function OverlayCapture() {
+      capturedCtx = useBrainOverlay()
+      return null
+    }
+
+    render(
+      <AllProviders>
+        <OverlayCapture />
+        <BrainViewer />
+      </AllProviders>,
+    )
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+
+    expect(() => {
+      act(() => {
+        capturedCtx!.addOverlay({
+          id: 'safe:0:0',
+          name: 'Safe overlay',
+          base64: 'dGVzdA==',
+          colormap: 'blue',
+          isProbabilistic: false,
+        })
+      })
+    }).not.toThrow()
   })
 })

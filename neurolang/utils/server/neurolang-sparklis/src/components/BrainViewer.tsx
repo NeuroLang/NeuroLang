@@ -9,6 +9,13 @@
  * the base64 NIfTI, and loads it as the background volume. When no VBR
  * results exist the atlas is shown without overlays and without errors.
  *
+ * Overlay management:
+ * - Subscribes to BrainOverlayContext via useBrainOverlay().
+ * - When overlays change, reconciles the Niivue overlay list:
+ *   added overlays are decoded via NVImage.loadFromBase64 and added;
+ *   removed overlays are cleared from Niivue (all overlays are reloaded to
+ *   keep the list in sync, since Niivue does not expose a remove-by-id API).
+ *
  * Design notes:
  * - Niivue is imported lazily (dynamic import) to avoid breaking jsdom tests
  *   that do not support WebGL.
@@ -20,6 +27,8 @@
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useEngine } from '../context/useEngine'
+import { useBrainOverlay } from '../context/useBrainOverlay'
+import { type BrainOverlay } from '../context/BrainOverlayContext'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +68,7 @@ export interface BrainViewerProps {
 
 function BrainViewer(props: BrainViewerProps): React.ReactElement {
   const { selectedEngine } = useEngine()
+  const { overlays } = useBrainOverlay()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // Niivue instance stored here after successful initialization.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,6 +76,9 @@ function BrainViewer(props: BrainViewerProps): React.ReactElement {
   const [coords, setCoords] = useState<MNICoords>({ x: 0, y: 0, z: 0 })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Keep a ref to the previous overlay list for change detection.
+  const prevOverlaysRef = useRef<BrainOverlay[]>([])
 
   // Keep onLocationHandlerReady ref stable so it doesn't trigger re-runs.
   const onLocationHandlerReadyRef = useRef(props.onLocationHandlerReady)
@@ -213,6 +226,81 @@ function BrainViewer(props: BrainViewerProps): React.ReactElement {
 
     return () => controller.abort()
   }, [selectedEngine])
+
+  // Reconcile Niivue overlays whenever the overlays list changes.
+  // We reload all overlays (Niivue does not expose a remove-by-id API, so we
+  // clear and re-add) to keep the displayed set in sync with context state.
+  useEffect(() => {
+    const prev = prevOverlaysRef.current
+    prevOverlaysRef.current = overlays
+
+    // No-op if Niivue is not initialized yet.
+    if (!niivueRef.current) return
+
+    // If nothing changed (same ids in same order), skip.
+    const prevIds = prev.map((o) => o.id).join(',')
+    const nextIds = overlays.map((o) => o.id).join(',')
+    if (prevIds === nextIds) return
+
+    async function syncOverlays(): Promise<void> {
+      if (!niivueRef.current) return
+      try {
+        const { NVImage } = await import('@niivue/niivue')
+
+        // Build new Niivue overlay volumes array.
+        const volumes = await Promise.all(
+          overlays.map(async (overlay) => {
+            const vol = NVImage.loadFromBase64({
+              base64: overlay.base64,
+              name: `${overlay.id}.nii`,
+            })
+            // Set the colormap for this overlay.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ;(vol as any).colormap = overlay.colormap
+            return vol
+          }),
+        )
+
+        // Remove all existing overlays and add the new set.
+        // Niivue loadVolumes([]) clears all volumes including the atlas.
+        // Instead we use addOverlay / removeOverlay if available, otherwise
+        // we just clear the non-background volumes via the overlaysVox array.
+        // Since Niivue does not expose a reliable per-overlay remove API, we
+        // use the overlayList setter pattern where available.
+        if (typeof niivueRef.current.setOverlayList === 'function') {
+          niivueRef.current.setOverlayList(volumes)
+        } else {
+          // Fallback: use addOverlay for new overlays and clear via
+          // updateGLVolume / drawScene for removed ones.
+          // First, remove all current overlays.
+          const currentList: unknown[] =
+            niivueRef.current.overlaysVox ??
+            niivueRef.current.volumes?.slice(1) ??
+            []
+          for (const _v of currentList) {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              niivueRef.current.removeOverlay(_v as any)
+            } catch {
+              // ignore
+            }
+          }
+          // Then add the new ones.
+          for (const vol of volumes) {
+            try {
+              niivueRef.current.addOverlay(vol)
+            } catch {
+              // ignore
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[BrainViewer] Failed to sync overlays:', err)
+      }
+    }
+
+    syncOverlays()
+  }, [overlays])
 
   const testId = props['data-testid'] ?? 'brain-viewer'
 

@@ -9,6 +9,7 @@ import RunQueryButton from './RunQueryButton'
 import ErrorDisplay from './ErrorDisplay'
 import ResultsPanel from './ResultsPanel'
 import BrainViewer from './BrainViewer'
+import OverlayManager from './OverlayManager'
 import { useEngine } from '../context/useEngine'
 import { useQuery } from '../context/useQuery'
 import { useSchema } from '../context/useSchema'
@@ -118,6 +119,7 @@ function MainContent(): React.ReactElement {
         </div>
         <div className="brain-viewer-column">
           <BrainViewer />
+          <OverlayManager />
         </div>
       </div>
     </div>

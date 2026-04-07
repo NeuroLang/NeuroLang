@@ -5,12 +5,15 @@
  * query execution. Contains:
  *   - SymbolSelector: dropdown for selecting which result symbol to view
  *   - DataTable: renders rows and columns with sortable columns, pagination
- *     (50 rows/page), column type indicators
+ *     (50 rows/page), column type indicators, "View in brain" for VBR columns
  *   - Empty state: "No results found" message for empty relations
  *   - CSV download button
  */
 import React, { useState, useMemo, useCallback } from 'react'
 import { useExecution } from '../context/useExecution'
+import { useBrainOverlay } from '../context/useBrainOverlay'
+import { nextColormap } from '../utils/overlayUtils'
+import { parseColumnType, isVbrColumnType } from '../utils/columnTypeUtils'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,29 +46,6 @@ interface SortState {
 // ---------------------------------------------------------------------------
 
 const PAGE_SIZE = 50
-
-/**
- * Parse a row_type string like "<class 'float'>" or "<class 'int'>" into
- * a short label: "float", "int", "str", "VBR", "figure", or "?"
- */
-function parseColumnType(rowTypeStr: string): string {
-  if (!rowTypeStr) return '?'
-  const lower = rowTypeStr.toLowerCase()
-  if (lower.includes('explicitvbroverlay')) return 'VBR'
-  if (lower.includes('explicitvbr')) return 'VBR'
-  if (lower.includes('figure')) return 'figure'
-  if (lower.includes('float')) return 'float'
-  if (lower.includes('int')) return 'int'
-  if (lower.includes('str')) return 'str'
-  if (lower.includes('bool')) return 'bool'
-  // Fallback: take the last part after the last dot or single-quote
-  const match = rowTypeStr.match(/'([^']+)'/)
-  if (match) {
-    const parts = match[1].split('.')
-    return parts[parts.length - 1]
-  }
-  return '?'
-}
 
 /**
  * Sort a 2D array of values by the given column index.
@@ -178,6 +158,7 @@ interface DataTableProps {
 function DataTable({ data, symbolName }: DataTableProps): React.ReactElement {
   const [sortState, setSortState] = useState<SortState | null>(null)
   const [page, setPage] = useState(0)
+  const { addOverlay, overlays } = useBrainOverlay()
 
   // Sort the rows if needed
   const sortedValues = useMemo(() => {
@@ -216,6 +197,68 @@ function DataTable({ data, symbolName }: DataTableProps): React.ReactElement {
   // Map each row_type to a short label
   const columnTypes = data.row_type.map(parseColumnType)
 
+  // Indices of VBR/VBROverlay columns (for the "View in brain" action button)
+  const vbrColIndices = useMemo(
+    () =>
+      columnTypes
+        .map((t, i) => (isVbrColumnType(t) ? i : -1))
+        .filter((i) => i !== -1),
+    [columnTypes],
+  )
+
+  const hasVbrColumns = vbrColIndices.length > 0
+
+  /**
+   * Handle "View in brain" click for a given row.
+   *
+   * We look at the first VBR column in that row to get the base64 NIfTI data.
+   * A row that has no non-empty VBR cell is ignored.
+   */
+  const handleViewInBrain = useCallback(
+    (row: unknown[], globalRowIdx: number) => {
+      for (const colIdx of vbrColIndices) {
+        const cell = row[colIdx]
+        if (
+          cell === null ||
+          cell === undefined ||
+          cell === 'Empty Region' ||
+          typeof cell !== 'string' ||
+          cell.length === 0
+        ) {
+          continue
+        }
+        const typeLabel = columnTypes[colIdx]
+        const isProbabilistic = typeLabel === 'VBROverlay'
+
+        // Build a unique overlay id from symbol, row, and column
+        const id = `${symbolName}:${globalRowIdx}:${colIdx}`
+
+        // Display name: prefer the value in a non-VBR column of the same row,
+        // or fall back to "row N".
+        let name = `${symbolName} [${globalRowIdx}]`
+        for (let ci = 0; ci < columnTypes.length; ci++) {
+          if (!isVbrColumnType(columnTypes[ci])) {
+            const cellVal = row[ci]
+            if (cellVal !== null && cellVal !== undefined) {
+              name = `${String(cellVal)} (${data.columns[colIdx]})`
+              break
+            }
+          }
+        }
+
+        addOverlay({
+          id,
+          name,
+          base64: cell,
+          colormap: isProbabilistic ? 'hot' : nextColormap(overlays),
+          isProbabilistic,
+        })
+        return
+      }
+    },
+    [vbrColIndices, columnTypes, symbolName, data.columns, addOverlay, overlays],
+  )
+
   return (
     <div className="data-table-container">
       {/* Table header controls */}
@@ -238,6 +281,12 @@ function DataTable({ data, symbolName }: DataTableProps): React.ReactElement {
         <table className="data-table" data-testid="data-table" role="table">
           <thead>
             <tr>
+              {hasVbrColumns && (
+                <th
+                  className="data-table-th data-table-th--action"
+                  aria-label="Brain viewer actions"
+                />
+              )}
               {data.columns.map((col, i) => {
                 const isSortedCol = sortState?.columnIndex === i
                 const direction = isSortedCol ? sortState!.direction : null
@@ -274,15 +323,48 @@ function DataTable({ data, symbolName }: DataTableProps): React.ReactElement {
             </tr>
           </thead>
           <tbody>
-            {pageRows.map((row, rowIdx) => (
-              <tr key={rowIdx} className="data-table-row">
-                {row.map((cell, cellIdx) => (
-                  <td key={cellIdx} className="data-table-td">
-                    {renderCell(cell, columnTypes[cellIdx])}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {pageRows.map((row, rowIdx) => {
+              // The global (pre-sort) row index is used to compute stable IDs.
+              const globalRowIdx = page * PAGE_SIZE + rowIdx
+              // Determine if any VBR cell in this row is non-empty
+              const hasViewable =
+                hasVbrColumns &&
+                vbrColIndices.some((ci) => {
+                  const cell = row[ci]
+                  return (
+                    cell !== null &&
+                    cell !== undefined &&
+                    cell !== 'Empty Region' &&
+                    typeof cell === 'string' &&
+                    cell.length > 0
+                  )
+                })
+
+              return (
+                <tr key={rowIdx} className="data-table-row">
+                  {hasVbrColumns && (
+                    <td className="data-table-td data-table-td--action">
+                      {hasViewable && (
+                        <button
+                          className="view-in-brain-btn"
+                          onClick={() => handleViewInBrain(row, globalRowIdx)}
+                          aria-label="View in brain"
+                          title="View in brain"
+                          data-testid="view-in-brain-btn"
+                        >
+                          🧠
+                        </button>
+                      )}
+                    </td>
+                  )}
+                  {row.map((cell, cellIdx) => (
+                    <td key={cellIdx} className="data-table-td">
+                      {renderCell(cell, columnTypes[cellIdx])}
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -318,15 +400,23 @@ function DataTable({ data, symbolName }: DataTableProps): React.ReactElement {
 }
 
 /**
- * Render a cell value. VBR cells get a special badge; others are rendered
- * as plain text.
+ * Render a cell value. VBR/VBROverlay cells get a special badge; others are
+ * rendered as plain text.
  */
 function renderCell(cell: unknown, typeLabel: string): React.ReactNode {
-  if (typeLabel === 'VBR') {
+  if (typeLabel === 'VBR' || typeLabel === 'VBROverlay') {
     if (cell === null || cell === undefined || cell === 'Empty Region') {
       return <span className="cell-vbr cell-vbr--empty">Empty Region</span>
     }
-    return <span className="cell-vbr">VBR</span>
+    return (
+      <span
+        className={
+          typeLabel === 'VBROverlay' ? 'cell-vbr cell-vbr--overlay' : 'cell-vbr'
+        }
+      >
+        {typeLabel === 'VBROverlay' ? 'VBROverlay' : 'VBR'}
+      </span>
+    )
   }
   if (typeLabel === 'figure') {
     if (typeof cell === 'string' && cell.length > 0) {

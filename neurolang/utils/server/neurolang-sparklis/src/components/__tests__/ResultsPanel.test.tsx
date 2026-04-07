@@ -6,6 +6,7 @@
  *   2. SymbolSelector: populated from results keys, switching shows correct data
  *   3. DataTable: renders rows/columns, sortable columns, pagination (50/page),
  *      empty state, column type indicators, CSV download
+ *   4. VBR columns: "View in brain" button detection and overlay add behaviour
  */
 import React from 'react'
 import {
@@ -23,7 +24,10 @@ import {
 import { useExecution } from '../../context/useExecution'
 import { EngineProvider } from '../../context/EngineContext'
 import { QueryProvider } from '../../context/QueryContext'
+import { BrainOverlayProvider } from '../../context/BrainOverlayContext'
+import { useBrainOverlay } from '../../context/useBrainOverlay'
 import ResultsPanel from '../ResultsPanel'
+import { parseColumnType, isVbrColumnType } from '../../utils/columnTypeUtils'
 
 // ---------------------------------------------------------------------------
 // Mock WebSocket (same pattern as QueryExecution.test.tsx)
@@ -168,7 +172,9 @@ function TestProviders({ children }: { children: React.ReactNode }): React.React
   return (
     <EngineProvider>
       <QueryProvider>
-        <ExecutionProvider>{children}</ExecutionProvider>
+        <ExecutionProvider>
+          <BrainOverlayProvider>{children}</BrainOverlayProvider>
+        </ExecutionProvider>
       </QueryProvider>
     </EngineProvider>
   )
@@ -669,3 +675,198 @@ describe('CSV Download', () => {
     expect(mockAnchor.download).toMatch(/\.csv$/)
   })
 })
+
+// ---------------------------------------------------------------------------
+// parseColumnType helper
+// ---------------------------------------------------------------------------
+
+describe('parseColumnType helper', () => {
+  it('returns "VBROverlay" for ExplicitVBROverlay row types', () => {
+    expect(parseColumnType("<class 'neurolang.regions.ExplicitVBROverlay'>")).toBe('VBROverlay')
+  })
+
+  it('returns "VBR" for ExplicitVBR row types (non-overlay)', () => {
+    expect(parseColumnType("<class 'neurolang.regions.ExplicitVBR'>")).toBe('VBR')
+  })
+
+  it('returns "float" for float row types', () => {
+    expect(parseColumnType("<class 'float'>")).toBe('float')
+  })
+
+  it('returns "int" for int row types', () => {
+    expect(parseColumnType("<class 'int'>")).toBe('int')
+  })
+
+  it('returns "str" for str row types', () => {
+    expect(parseColumnType("<class 'str'>")).toBe('str')
+  })
+
+  it('returns "?" for empty string', () => {
+    expect(parseColumnType('')).toBe('?')
+  })
+})
+
+describe('isVbrColumnType helper', () => {
+  it('returns true for "VBR"', () => {
+    expect(isVbrColumnType('VBR')).toBe(true)
+  })
+
+  it('returns true for "VBROverlay"', () => {
+    expect(isVbrColumnType('VBROverlay')).toBe(true)
+  })
+
+  it('returns false for "float"', () => {
+    expect(isVbrColumnType('float')).toBe(false)
+  })
+
+  it('returns false for "str"', () => {
+    expect(isVbrColumnType('str')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// VBR columns – "View in brain" button
+// ---------------------------------------------------------------------------
+
+/** A dataset with a VBR column containing base64 data. */
+const VBR_RESULTS = {
+  ans: {
+    columns: ['region', 'vbr_data'],
+    row_type: [
+      "<class 'str'>",
+      "<class 'neurolang.regions.ExplicitVBR'>",
+    ],
+    size: 2,
+    values: [
+      ['left_motor', 'dGVzdGJhc2U2NA=='],  // non-empty base64
+      ['right_motor', 'Empty Region'],       // empty VBR
+    ],
+    probabilistic: false,
+    last_parsed_symbol: true,
+  },
+}
+
+/** A dataset with a VBROverlay column (probability data). */
+const VBR_OVERLAY_RESULTS = {
+  ans: {
+    columns: ['region', 'probability_map'],
+    row_type: [
+      "<class 'str'>",
+      "<class 'neurolang.regions.ExplicitVBROverlay'>",
+    ],
+    size: 1,
+    values: [
+      ['meta_analysis', 'cHJvYmFiaWxpdHlkYXRh'],
+    ],
+    probabilistic: true,
+    last_parsed_symbol: true,
+  },
+}
+
+describe('DataTable – VBR columns', () => {
+  it('shows "View in brain" button for rows with non-empty VBR data', () => {
+    renderWithResults(VBR_RESULTS)
+    // First row has non-empty VBR data
+    const btns = screen.getAllByTestId('view-in-brain-btn')
+    expect(btns.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('does NOT show "View in brain" button for empty VBR rows', () => {
+    renderWithResults(VBR_RESULTS)
+    // Second row is "Empty Region" – should not have a button
+    // There is only 1 non-empty VBR row (first row), so exactly 1 button
+    const btns = screen.getAllByTestId('view-in-brain-btn')
+    expect(btns.length).toBe(1)
+  })
+
+  it('does NOT show "View in brain" button for non-VBR results', () => {
+    renderWithResults({
+      ans: {
+        columns: ['x', 'y'],
+        row_type: ["<class 'float'>", "<class 'str'>"],
+        size: 1,
+        values: [[1.0, 'apple']],
+        probabilistic: false,
+        last_parsed_symbol: true,
+      },
+    })
+    expect(screen.queryByTestId('view-in-brain-btn')).not.toBeInTheDocument()
+  })
+
+  it('clicking "View in brain" adds overlay to BrainOverlayContext', () => {
+    let capturedOverlayCtx: ReturnType<typeof useBrainOverlay> | null = null
+
+    function OverlayCapture() {
+      capturedOverlayCtx = useBrainOverlay()
+      return null
+    }
+
+    let capturedExec: ExecutionContextValue | null = null
+
+    render(
+      <TestProviders>
+        <OverlayCapture />
+        <ExecutionCapture onRender={(v) => { capturedExec = v }} />
+        <ResultsPanel />
+      </TestProviders>,
+    )
+
+    act(() => { capturedExec!.submitQuery('ans(x) :- R(x).', 'destrieux') })
+    const ws = MockWebSocket.lastInstance!
+    act(() => { ws.triggerOpen() })
+    act(() => { ws.triggerMessage(makeDoneMessage(VBR_RESULTS)) })
+
+    expect(capturedOverlayCtx!.overlays).toHaveLength(0)
+
+    const btn = screen.getByTestId('view-in-brain-btn')
+    act(() => { fireEvent.click(btn) })
+
+    expect(capturedOverlayCtx!.overlays).toHaveLength(1)
+    expect(capturedOverlayCtx!.overlays[0].base64).toBe('dGVzdGJhc2U2NA==')
+  })
+
+  it('VBR column header shows "VBR" type indicator', () => {
+    renderWithResults(VBR_RESULTS)
+    const indicators = screen.getAllByTestId('column-type-indicator')
+    const texts = indicators.map((el) => el.textContent ?? '')
+    expect(texts.some((t) => t === 'VBR')).toBe(true)
+  })
+
+  it('VBROverlay column shows "VBROverlay" type indicator', () => {
+    renderWithResults(VBR_OVERLAY_RESULTS)
+    const indicators = screen.getAllByTestId('column-type-indicator')
+    const texts = indicators.map((el) => el.textContent ?? '')
+    expect(texts.some((t) => t === 'VBROverlay')).toBe(true)
+  })
+
+  it('VBROverlay overlay is marked as probabilistic', () => {
+    let capturedOverlayCtx: ReturnType<typeof useBrainOverlay> | null = null
+
+    function OverlayCapture() {
+      capturedOverlayCtx = useBrainOverlay()
+      return null
+    }
+
+    let capturedExec: ExecutionContextValue | null = null
+
+    render(
+      <TestProviders>
+        <OverlayCapture />
+        <ExecutionCapture onRender={(v) => { capturedExec = v }} />
+        <ResultsPanel />
+      </TestProviders>,
+    )
+
+    act(() => { capturedExec!.submitQuery('ans(x) :- R(x).', 'neurosynth') })
+    const ws = MockWebSocket.lastInstance!
+    act(() => { ws.triggerOpen() })
+    act(() => { ws.triggerMessage(makeDoneMessage(VBR_OVERLAY_RESULTS)) })
+
+    const btn = screen.getByTestId('view-in-brain-btn')
+    act(() => { fireEvent.click(btn) })
+
+    expect(capturedOverlayCtx!.overlays[0].isProbabilistic).toBe(true)
+    expect(capturedOverlayCtx!.overlays[0].colormap).toBe('hot')
+  })
+})
+

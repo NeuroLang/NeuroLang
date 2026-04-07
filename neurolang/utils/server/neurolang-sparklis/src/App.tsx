@@ -3,6 +3,7 @@ import { EngineProvider } from './context/EngineContext'
 import { QueryProvider } from './context/QueryContext'
 import { SchemaProvider } from './context/SchemaContext'
 import { ExecutionProvider } from './context/ExecutionContext'
+import { BrainOverlayProvider } from './context/BrainOverlayContext'
 import Layout from './components/Layout'
 
 function App(): React.ReactElement {
@@ -11,7 +12,9 @@ function App(): React.ReactElement {
       <SchemaProvider>
         <QueryProvider>
           <ExecutionProvider>
-            <Layout />
+            <BrainOverlayProvider>
+              <Layout />
+            </BrainOverlayProvider>
           </ExecutionProvider>
         </QueryProvider>
       </SchemaProvider>
