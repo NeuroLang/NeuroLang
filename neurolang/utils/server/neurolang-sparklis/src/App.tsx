@@ -4,7 +4,9 @@ import { QueryProvider } from './context/QueryContext'
 import { SchemaProvider } from './context/SchemaContext'
 import { ExecutionProvider } from './context/ExecutionContext'
 import { BrainOverlayProvider } from './context/BrainOverlayContext'
+import { QueryHistoryProvider } from './context/QueryHistoryContext'
 import Layout from './components/Layout'
+import QueryHistoryRecorder from './components/QueryHistoryRecorder'
 
 function App(): React.ReactElement {
   return (
@@ -13,7 +15,10 @@ function App(): React.ReactElement {
         <QueryProvider>
           <ExecutionProvider>
             <BrainOverlayProvider>
-              <Layout />
+              <QueryHistoryProvider>
+                <QueryHistoryRecorder />
+                <Layout />
+              </QueryHistoryProvider>
             </BrainOverlayProvider>
           </ExecutionProvider>
         </QueryProvider>

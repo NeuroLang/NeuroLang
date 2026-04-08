@@ -10,6 +10,7 @@ import ErrorDisplay from './ErrorDisplay'
 import ResultsPanel from './ResultsPanel'
 import BrainViewer from './BrainViewer'
 import OverlayManager from './OverlayManager'
+import QueryHistory from './QueryHistory'
 import { useEngine } from '../context/useEngine'
 import { useQuery } from '../context/useQuery'
 import { useSchema } from '../context/useSchema'
@@ -181,6 +182,9 @@ function Layout(): React.ReactElement {
           </div>
           <div className="sidebar-section">
             <ExampleQueries />
+          </div>
+          <div className="sidebar-section">
+            <QueryHistory />
           </div>
         </aside>
 

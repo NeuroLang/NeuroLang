@@ -76,6 +76,10 @@ export interface ExecutionContextValue {
   queryResults: Record<string, unknown> | null
   /** UUID of the last submitted query (for result polling/cancellation). */
   queryUuid: string | null
+  /** The last query string that was submitted. */
+  lastQuery: string | null
+  /** The engine used for the last submitted query. */
+  lastEngine: string | null
   /** Submit a query. Opens a new WebSocket connection. */
   submitQuery: (query: string, engine: string) => void
   /** Cancel the currently running query. */
@@ -119,6 +123,9 @@ export function ExecutionProvider({
     unknown
   > | null>(null)
   const [queryUuid, setQueryUuid] = useState<string | null>(null)
+  /** Track the last submitted query + engine for history recording. */
+  const [lastQuery, setLastQuery] = useState<string | null>(null)
+  const [lastEngine, setLastEngine] = useState<string | null>(null)
 
   /** The active WebSocket connection (if any). */
   const wsRef = useRef<WebSocket | null>(null)
@@ -188,6 +195,8 @@ export function ExecutionProvider({
       setQueryError(null)
       setQueryResults(null)
       setQueryUuid(null)
+      setLastQuery(query)
+      setLastEngine(engine)
       currentUuidRef.current = null
       isCancellingRef.current = false
 
@@ -310,6 +319,8 @@ export function ExecutionProvider({
     queryError,
     queryResults,
     queryUuid,
+    lastQuery,
+    lastEngine,
     submitQuery,
     cancelQuery,
     resetExecution,
