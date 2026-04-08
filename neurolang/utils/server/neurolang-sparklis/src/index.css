@@ -890,6 +890,41 @@
 .suggestions-chip:active {
   background-color: #bfdbfe;
 }
+/* Suggestions filter input */
+.suggestions-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.3rem 0.55rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  color: #374151;
+  background: #f9fafb;
+  outline: none;
+}
+.suggestions-filter-input:focus {
+  border-color: #93c5fd;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.3);
+}
+/* Show more button */
+.suggestions-show-more {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border: 1px dashed #93c5fd;
+  border-radius: 4px;
+  background: transparent;
+  color: #3b82f6;
+  font-size: 0.75rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.suggestions-show-more:hover {
+  background-color: #dbeafe;
+  border-color: #3b82f6;
+}
 
 /* ============================================================
    Query Split View (Visual Builder + Code Editor)
