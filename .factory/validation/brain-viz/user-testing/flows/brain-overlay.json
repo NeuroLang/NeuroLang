@@ -1,0 +1,179 @@
+{
+  "groupId": "brain-overlay",
+  "testedAt": "2026-04-08T02:55:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3150",
+    "apiBase": "http://localhost:8888",
+    "viewport": "1440x900",
+    "loginRequired": false,
+    "engine": "destrieux",
+    "session": "49867153b521__brain-overlay"
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-BRAIN-002",
+      "title": "Click VBR result to overlay",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Navigate to http://localhost:3150 with viewport 1440x900",
+          "expected": "App loads",
+          "observed": "App loaded successfully"
+        },
+        {
+          "action": "Select 'destrieux' engine from the engine selector",
+          "expected": "Destrieux engine selected, predicate browser updated",
+          "observed": "Destrieux engine selected, predicates loaded"
+        },
+        {
+          "action": "Type VBR query: LeftRegion(s, region) :- destrieux(s, region) & startswith(\"L S\", s)",
+          "expected": "Query entered in CodeMirror editor, Run Query enabled",
+          "observed": "Query entered, Run Query button enabled"
+        },
+        {
+          "action": "Click Run Query",
+          "expected": "Query executes and returns 31 rows with VBR data",
+          "observed": "31 rows returned in results table with 'View in brain' buttons (brain icon 🧠) visible in each row"
+        },
+        {
+          "action": "Click 'View in brain' button on first row (L S calcarine)",
+          "expected": "Overlay loaded in Niivue viewer, overlay-manager appears",
+          "observed": "data-testid='overlay-manager' appeared with 1 overlay item 'L S calcarine (region)', Niivue canvas shows brain atlas with overlay, no loading or error state"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-overlay/VAL-BRAIN-002-results-with-vbr.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-002-after-view-in-brain.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-002-overlay-loaded.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-002-overlay-in-viewer.png"
+        ],
+        "consoleErrors": "none",
+        "network": "WebSocket /v1/ws with destrieux query; overlay data loaded via REST"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-BRAIN-003",
+      "title": "Probability overlay with color bar",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Attempt 1: Type ExplicitVBROverlay query: LeftSulcusOverlay(s, agg_create_region_overlay(0, 0, 0, p)) :- destrieux(s, r) & startswith(\"L S\", s) & (p == 1.0)",
+          "expected": "Query returns ExplicitVBROverlay data with probability values",
+          "observed": "Error: AggregatedVariableReplacedByConstantError - Variable equalities cannot lead to aggregation variables to be replaced by a constant. Problematic replacements found are S{p: Unknown} / C{1.0: float}"
+        },
+        {
+          "action": "Attempt 2: Type modified query: LeftSulcusOverlay(agg_create_region_overlay(s, r, 0.5)) :- destrieux(s, r) & startswith(\"L S\", s)",
+          "expected": "Query returns ExplicitVBROverlay data",
+          "observed": "TypeError: init_frontend.<locals>.agg_create_region_overlay() missing 1 required positional argument: 'p'. The function signature requires (x, y, z, p) with MNI coordinates, not Destrieux region names"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-overlay/VAL-BRAIN-003-overlay-query-results.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-003-attempt2.png"
+        ],
+        "consoleErrors": "none",
+        "network": "N/A - query returned errors"
+      },
+      "issues": "Blocked: The Destrieux engine does not provide MNI coordinate data (x, y, z) in a form that agg_create_region_overlay can accept. The function agg_create_region_overlay(x, y, z, p) requires MNI coordinates + probability values (as from Neurosynth CBMA). The Neurosynth CBMA query that produces ExplicitVBROverlay results (e.g., ActivationGivenTerm) takes several minutes to compute and was not attempted within the 2-minute budget. The color bar functionality (data-testid='color-bar') could not be verified."
+    },
+    {
+      "id": "VAL-BRAIN-004",
+      "title": "Add multiple overlays",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "With LeftRegion query results showing 31 rows with VBR data, click first 'View in brain' button (L S calcarine)",
+          "expected": "Overlay-manager appears with 1 overlay",
+          "observed": "overlay-manager appeared with 1 overlay: 'L S calcarine (region)'"
+        },
+        {
+          "action": "Click second 'View in brain' button (L S central)",
+          "expected": "Overlay-manager shows 2 overlays simultaneously",
+          "observed": "overlay-manager updated to OVERLAYS (2) with both 'L S calcarine (region)' and 'L S central (region)' listed with distinct colors (orange and blue)"
+        },
+        {
+          "action": "Verify brain viewer canvas",
+          "expected": "Both overlays visible in Niivue viewer simultaneously",
+          "observed": "Niivue canvas shows colored regions corresponding to both overlays, blue region visible in coronal view"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-overlay/VAL-BRAIN-004-multiple-overlays.png"
+        ],
+        "consoleErrors": "none",
+        "network": "Two separate REST calls to load overlay volumes"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-BRAIN-005",
+      "title": "Remove overlay",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "With 2 overlays loaded (L S calcarine, L S central), verify overlay-manager is visible with remove buttons",
+          "expected": "Overlay manager shows 2 items with remove buttons (aria-label 'Remove overlay ...') and 'Clear all' button",
+          "observed": "overlay-manager present with 2 overlay items, each with remove button (data-testid='overlay-remove-btn'), 'Clear all' button (data-testid='overlay-clear-all-btn') also present"
+        },
+        {
+          "action": "Click 'Remove overlay L S calcarine (region)' button",
+          "expected": "L S calcarine overlay removed, overlay count drops to 1",
+          "observed": "overlay-manager updated to OVERLAYS (1), only 'L S central (region)' remains"
+        },
+        {
+          "action": "Verify brain viewer",
+          "expected": "Only L S central overlay visible in canvas",
+          "observed": "Brain viewer canvas shows remaining overlay, overlay count confirmed at 1"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-overlay/VAL-BRAIN-005-overlay-management.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-005-after-overlay-removed.png"
+        ],
+        "consoleErrors": "none",
+        "network": "N/A - removal is client-side"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The 'Union of atlas regions' example query (which loads by clicking the example title) triggers a large VBR payload over WebSocket that crashes the page to about:blank even on the Vite preview server (port 3150). The simpler single-rule LeftRegion query does not have this issue.",
+      "resolved": true,
+      "resolution": "Used the simpler custom query LeftRegion(s, region) :- destrieux(s, region) & startswith(\"L S\", s) instead of the example query",
+      "affectedAssertions": ["VAL-BRAIN-002", "VAL-BRAIN-004", "VAL-BRAIN-005"]
+    },
+    {
+      "description": "The first query attempt used a trailing period (ending with 's).') which caused a parser error: UnexpectedTokenError at line 1, column 69. Destrieux queries should NOT have a trailing period.",
+      "resolved": true,
+      "resolution": "Removed the trailing period from the query",
+      "affectedAssertions": ["VAL-BRAIN-002"]
+    },
+    {
+      "description": "CodeMirror editor content cannot be set via standard form inputs or keyboard shortcuts (Ctrl+A + fill doesn't work). Must use keyboard type after clicking editor and pressing Meta+A.",
+      "resolved": true,
+      "resolution": "Used agent-browser click @editor, press Meta+a, then keyboard type to replace content",
+      "affectedAssertions": ["VAL-BRAIN-002", "VAL-BRAIN-003", "VAL-BRAIN-004", "VAL-BRAIN-005"]
+    },
+    {
+      "description": "The results table is below the viewport when the page first loads, requiring scrollIntoView JavaScript to see it.",
+      "resolved": true,
+      "resolution": "Used JavaScript scrollIntoView to bring the results panel into view",
+      "affectedAssertions": ["VAL-BRAIN-002"]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "ExplicitVBROverlay data (for VAL-BRAIN-003) cannot be generated from Destrieux engine alone. The agg_create_region_overlay(x, y, z, p) function requires MNI coordinate columns (x, y, z) and probability values (p), which are not available in the Destrieux atlas data. The only viable route to ExplicitVBROverlay is the Neurosynth CBMA query (e.g., ActivationGivenTerm with PROB), which takes several minutes to compute.",
+      "affectedAssertions": ["VAL-BRAIN-003"],
+      "quickFixAttempted": "Tried 2 query formulations with Destrieux - both returned type errors. Did not attempt Neurosynth CBMA query due to multi-minute computation time."
+    }
+  ],
+  "summary": "Tested 4 assertions: VAL-BRAIN-002 pass (VBR click-to-overlay works, overlay-manager appears with overlay item), VAL-BRAIN-004 pass (two overlays visible simultaneously in viewer), VAL-BRAIN-005 pass (individual overlay removal works), VAL-BRAIN-003 blocked (ExplicitVBROverlay not achievable from Destrieux engine within time budget; Neurosynth CBMA queries that produce probability data take minutes to run)"
+}

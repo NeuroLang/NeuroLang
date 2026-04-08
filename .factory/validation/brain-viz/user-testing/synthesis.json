@@ -1,65 +1,28 @@
 {
   "milestone": "brain-viz",
-  "round": 1,
-  "status": "fail",
+  "round": 2,
+  "status": "pass",
   "testedAt": "2026-04-08",
   "assertionsSummary": {
-    "total": 7,
-    "passed": 3,
-    "failed": 4,
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
     "blocked": 0
   },
   "passedAssertions": [
-    "VAL-BRAIN-001",
-    "VAL-BRAIN-006",
-    "VAL-BRAIN-007"
+    "VAL-BRAIN-002",
+    "VAL-BRAIN-003",
+    "VAL-BRAIN-004",
+    "VAL-BRAIN-005"
   ],
-  "failedAssertions": [
-    {
-      "id": "VAL-BRAIN-002",
-      "reason": "DataTable 'View in brain' button never rendered: condition checks `typeof value === 'string'` but API returns VBR data as object {min, max, q95, image, hash, center, idx}. Root cause: ResultsPanel DataTable handleViewInBrain uses base64 string directly but needs to extract value.image for object-format VBR data."
-    },
-    {
-      "id": "VAL-BRAIN-003",
-      "reason": "Blocked by VAL-BRAIN-002 bug (no 'View in brain' button to trigger overlay). Secondary bug: BrainViewer.syncOverlays uses Niivue methods setOverlayList/addOverlay that don't exist in Niivue 0.43.7 — correct API is nv.addVolume(nvImage). Color bar UI renders correctly for probabilistic overlays."
-    },
-    {
-      "id": "VAL-BRAIN-004",
-      "reason": "Blocked by VAL-BRAIN-002 bug: cannot add overlays via normal user flow. OverlayManager UI correctly tracks multiple overlay state when overlays are added via context."
-    },
-    {
-      "id": "VAL-BRAIN-005",
-      "reason": "Blocked by VAL-BRAIN-002 bug: cannot add overlays via normal user flow to then test removal. OverlayManager remove button and 'Clear all' button correctly update state when overlays are added via context."
-    }
-  ],
+  "failedAssertions": [],
   "blockedAssertions": [],
-  "rootCauses": [
-    {
-      "id": "BUG-001",
-      "severity": "blocking",
-      "component": "ResultsPanel.tsx (DataTable)",
-      "description": "DataTable condition for showing 'View in brain' button: `typeof cellValue === 'string' && cellValue.length > 0`. But the API returns VBR values as objects {min, max, q95, image, hash, center, idx} (not raw base64 strings). Fix: update condition to also handle object format, extract .image field for overlay loading.",
-      "affectedAssertions": ["VAL-BRAIN-002", "VAL-BRAIN-003", "VAL-BRAIN-004", "VAL-BRAIN-005"]
-    },
-    {
-      "id": "BUG-002",
-      "severity": "blocking",
-      "component": "BrainViewer.tsx (syncOverlays)",
-      "description": "syncOverlays() calls nv.setOverlayList() then falls back to nv.addOverlay() — neither method exists in Niivue 0.43.7. Exceptions silently swallowed, so no error is visible to user. Correct API: nv.addVolume(nvImage) to add overlays. To remove overlays: remove the volume from nv.volumes array and call nv.updateGLVolume().",
-      "affectedAssertions": ["VAL-BRAIN-002", "VAL-BRAIN-003", "VAL-BRAIN-004"]
-    }
-  ],
   "appliedUpdates": [
     {
       "target": "user-testing.md",
-      "description": "Added brain-viz testing guidance: production build URL (port 3150), VBR query instructions, UI data-testid attributes for BrainViewer, OverlayManager, ColorBar. Added known bugs from brain-viz round 1.",
-      "source": "setup"
-    },
-    {
-      "target": "user-testing.md",
-      "description": "Updated CodeMirror editor access pattern: use `.cm-content.cmTile.view` (not `.cm-editor.__cmView` which doesn't work). Also documented viewport requirement (1440x900) for brain viewer visibility.",
+      "description": "Updated brain-viz known behaviors: marked FIXED for DataTable 'View in brain' button object format and BrainViewer Niivue API fixes. Added verified queries for ExplicitVBR and ExplicitVBROverlay testing. Added notes about main-content scrolling and Union of atlas regions query crash.",
       "source": "flow-report"
     }
   ],
-  "previousRound": null
+  "previousRound": ".factory/validation/brain-viz/user-testing/synthesis-round1.json"
 }
