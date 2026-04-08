@@ -30,7 +30,7 @@ function EngineListSkeleton(): React.ReactElement {
 function EngineSelector({
   className,
 }: EngineSelectorProps): React.ReactElement {
-  const { selectedEngine, setSelectedEngine } = useEngine()
+  const { selectedEngine, switchEngine } = useEngine()
   const { setConnected, setDisconnected } = useConnection()
   const [engines, setEngines] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -147,7 +147,7 @@ function EngineSelector({
             role="option"
             aria-selected={selectedEngine === engine}
             className={`engine-item ${selectedEngine === engine ? 'engine-item--active' : ''}`}
-            onClick={() => setSelectedEngine(engine)}
+            onClick={() => switchEngine(engine)}
           >
             {engine}
           </li>

@@ -10,6 +10,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import QueryHistoryRecorder from './components/QueryHistoryRecorder'
 import PermalinkLoader from './components/PermalinkLoader'
+import EngineSwitchHandler from './components/EngineSwitchHandler'
 
 function App(): React.ReactElement {
   return (
@@ -23,6 +24,7 @@ function App(): React.ReactElement {
                   <QueryHistoryProvider>
                     <PermalinkLoader />
                     <QueryHistoryRecorder />
+                    <EngineSwitchHandler />
                     <Layout />
                   </QueryHistoryProvider>
                 </BrainOverlayProvider>

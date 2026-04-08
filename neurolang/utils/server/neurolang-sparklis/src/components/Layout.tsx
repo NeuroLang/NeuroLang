@@ -21,7 +21,7 @@ import { useExecution } from '../context/useExecution'
 import { type SchemaSymbol } from './PredicateBrowser'
 
 function MainContent(): React.ReactElement {
-  const { selectedEngine } = useEngine()
+  const { selectedEngine, isSwitching } = useEngine()
   const { model, refresh, datalogText, setDatalogText } = useQuery()
   const { lookupSymbol } = useSchema()
   const { submitQuery, executionStatus } = useExecution()
@@ -79,6 +79,20 @@ function MainContent(): React.ReactElement {
       <div className="content-placeholder">
         <h1>Welcome to NeuroLang Sparklis</h1>
         <p>Select an engine from the sidebar to get started.</p>
+      </div>
+    )
+  }
+
+  if (isSwitching) {
+    return (
+      <div
+        className="engine-switching-banner"
+        data-testid="engine-switching-banner"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="engine-switching-spinner" aria-hidden="true" />
+        <span>Switching engine…</span>
       </div>
     )
   }

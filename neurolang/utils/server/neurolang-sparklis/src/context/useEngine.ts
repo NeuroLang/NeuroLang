@@ -1,10 +1,5 @@
 import { useContext } from 'react'
-import EngineContext from './EngineContext'
-
-interface EngineContextValue {
-  selectedEngine: string | null
-  setSelectedEngine: (engine: string | null) => void
-}
+import EngineContext, { type EngineContextValue } from './EngineContext'
 
 export function useEngine(): EngineContextValue {
   const ctx = useContext(EngineContext)
