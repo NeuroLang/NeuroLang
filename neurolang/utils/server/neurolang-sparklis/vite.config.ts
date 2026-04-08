@@ -18,6 +18,20 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    port: 3150,
+    proxy: {
+      '/v1': {
+        target: 'http://localhost:8888',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/v2': {
+        target: 'http://localhost:8888',
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',

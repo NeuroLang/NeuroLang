@@ -24,6 +24,8 @@ import { useEngine } from '../../context/useEngine'
 // Mocks are defined inside vi.mock() factory to avoid vitest hoisting issues.
 vi.mock('@niivue/niivue', () => {
   const addVolumeFn = vi.fn()
+  const removeVolumeFn = vi.fn()
+  const setColormapFn = vi.fn()
   const loadVolumesFn = vi.fn().mockResolvedValue(undefined)
   const attachToCanvasFn = vi.fn().mockResolvedValue(undefined)
 
@@ -34,6 +36,9 @@ vi.mock('@niivue/niivue', () => {
       attachToCanvas: attachToCanvasFn,
       loadVolumes: loadVolumesFn,
       addVolume: addVolumeFn,
+      removeVolume: removeVolumeFn,
+      setColormap: setColormapFn,
+      volumes: [],
     }
   })
 
@@ -532,5 +537,75 @@ describe('BrainViewer – overlay sync', () => {
         })
       })
     }).not.toThrow()
+  })
+
+  it('calls nv.addVolume when overlay is added (not addOverlay)', async () => {
+    const { getCtx } = renderWithOverlayControl()
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled()
+    })
+
+    // Get the mock Niivue instance
+    const nvInstance = vi.mocked(MockNiivue).mock.results[0]?.value
+    if (!nvInstance) return // skip if Niivue not initialized in jsdom
+
+    act(() => {
+      getCtx().addOverlay({
+        id: 'test:0:0',
+        name: 'Test region',
+        base64: 'dGVzdA==',
+        colormap: 'hot',
+        isProbabilistic: false,
+      })
+    })
+
+    await waitFor(() => {
+      expect(nvInstance.addVolume).toHaveBeenCalled()
+    })
+  })
+
+  it('calls nv.removeVolume when overlay is removed', async () => {
+    const { getCtx } = renderWithOverlayControl()
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled()
+    })
+
+    const nvInstance = vi.mocked(MockNiivue).mock.results[0]?.value
+    if (!nvInstance) return // skip if Niivue not initialized in jsdom
+
+    // Add an overlay first
+    const mockVol = { id: 'test:0:0', name: 'test:0:0.nii' }
+    vi.mocked(MockNVImage.loadFromBase64).mockReturnValue(
+      mockVol as ReturnType<typeof MockNVImage.loadFromBase64>,
+    )
+    // Simulate that the volume exists in nv.volumes (index 0 = background)
+    nvInstance.volumes = [{ id: 'atlas', name: 'atlas.nii' }, mockVol]
+
+    act(() => {
+      getCtx().addOverlay({
+        id: 'test:0:0',
+        name: 'Test region',
+        base64: 'dGVzdA==',
+        colormap: 'hot',
+        isProbabilistic: false,
+      })
+    })
+
+    await waitFor(() => {
+      expect(MockNVImage.loadFromBase64).toHaveBeenCalledWith(
+        expect.objectContaining({ base64: 'dGVzdA==' }),
+      )
+    })
+
+    // Now remove the overlay
+    act(() => {
+      getCtx().removeOverlay('test:0:0')
+    })
+
+    await waitFor(() => {
+      expect(nvInstance.removeVolume).toHaveBeenCalledWith(mockVol)
+    })
   })
 })

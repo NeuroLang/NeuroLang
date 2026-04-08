@@ -21,3 +21,14 @@ services:
     healthcheck: curl -sf http://localhost:3100 || curl -sf http://[::1]:3100
     port: 3100
     depends_on: []
+
+  react-preview:
+    # Production build preview server. Use this instead of react-dev when testing
+    # brain-viz features (VBR overlays) to avoid Vite dev server WebSocket proxy
+    # crashes caused by large WS payloads (~435MB VBR data).
+    # Must run `build_frontend` command first before starting this service.
+    start: cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm run preview -- --host 0.0.0.0 --port 3150 &
+    stop: lsof -ti :3150 | xargs kill 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:3150 || curl -sf http://[::1]:3150
+    port: 3150
+    depends_on: []

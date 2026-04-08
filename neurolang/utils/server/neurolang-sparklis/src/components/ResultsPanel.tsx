@@ -19,6 +19,20 @@ import { parseColumnType, isVbrColumnType } from '../utils/columnTypeUtils'
 // Types
 // ---------------------------------------------------------------------------
 
+/**
+ * VBR data object returned by the backend's serializeVBR function.
+ * The .image field contains the base64-encoded NIfTI string.
+ */
+export interface VbrDataObject {
+  min: number
+  max: number
+  q95: number
+  image: string
+  hash: string
+  center: number[]
+  idx: number
+}
+
 /** One result symbol's data as returned by the backend. */
 export interface SymbolData {
   columns: string[]
@@ -96,6 +110,48 @@ function symbolDataToCSV(data: SymbolData): string {
       .join(','),
   )
   return [header, ...rows].join('\n')
+}
+
+/**
+ * Check whether a VBR cell value is non-empty and viewable.
+ *
+ * The backend serializes VBR values as either:
+ *   - A plain string (legacy format): the base64-encoded NIfTI data directly
+ *   - An object {min, max, q95, image, hash, center, idx}: the .image field
+ *     contains the base64-encoded NIfTI string
+ *   - The string "Empty Region" (or null/undefined) for empty regions
+ */
+function isViewableVbrCell(cell: unknown): boolean {
+  if (cell === null || cell === undefined) return false
+  if (typeof cell === 'string') {
+    return cell.length > 0 && cell !== 'Empty Region'
+  }
+  if (typeof cell === 'object' && cell !== null) {
+    const obj = cell as VbrDataObject
+    return typeof obj.image === 'string' && obj.image.length > 0
+  }
+  return false
+}
+
+/**
+ * Extract the base64 NIfTI string from a VBR cell value.
+ *
+ * Handles both the string format (direct base64) and the object format
+ * {min, max, q95, image, hash, center, idx} (returns .image field).
+ * Returns null if the cell is not a valid, non-empty VBR value.
+ */
+function extractVbrBase64(cell: unknown): string | null {
+  if (cell === null || cell === undefined) return null
+  if (typeof cell === 'string') {
+    return cell.length > 0 && cell !== 'Empty Region' ? cell : null
+  }
+  if (typeof cell === 'object' && cell !== null) {
+    const obj = cell as VbrDataObject
+    return typeof obj.image === 'string' && obj.image.length > 0
+      ? obj.image
+      : null
+  }
+  return null
 }
 
 /**
@@ -218,13 +274,8 @@ function DataTable({ data, symbolName }: DataTableProps): React.ReactElement {
     (row: unknown[], globalRowIdx: number) => {
       for (const colIdx of vbrColIndices) {
         const cell = row[colIdx]
-        if (
-          cell === null ||
-          cell === undefined ||
-          cell === 'Empty Region' ||
-          typeof cell !== 'string' ||
-          cell.length === 0
-        ) {
+        const base64 = extractVbrBase64(cell)
+        if (base64 === null) {
           continue
         }
         const typeLabel = columnTypes[colIdx]
@@ -249,7 +300,7 @@ function DataTable({ data, symbolName }: DataTableProps): React.ReactElement {
         addOverlay({
           id,
           name,
-          base64: cell,
+          base64,
           colormap: isProbabilistic ? 'hot' : nextColormap(overlays),
           isProbabilistic,
         })
@@ -329,16 +380,7 @@ function DataTable({ data, symbolName }: DataTableProps): React.ReactElement {
               // Determine if any VBR cell in this row is non-empty
               const hasViewable =
                 hasVbrColumns &&
-                vbrColIndices.some((ci) => {
-                  const cell = row[ci]
-                  return (
-                    cell !== null &&
-                    cell !== undefined &&
-                    cell !== 'Empty Region' &&
-                    typeof cell === 'string' &&
-                    cell.length > 0
-                  )
-                })
+                vbrColIndices.some((ci) => isViewableVbrCell(row[ci]))
 
               return (
                 <tr key={rowIdx} className="data-table-row">
@@ -405,9 +447,13 @@ function DataTable({ data, symbolName }: DataTableProps): React.ReactElement {
  */
 function renderCell(cell: unknown, typeLabel: string): React.ReactNode {
   if (typeLabel === 'VBR' || typeLabel === 'VBROverlay') {
+    // Handle both string "Empty Region" and null/undefined, as well as
+    // the object format {min, max, q95, image, ...} where an empty object
+    // would have no .image field.
     if (cell === null || cell === undefined || cell === 'Empty Region') {
       return <span className="cell-vbr cell-vbr--empty">Empty Region</span>
     }
+    // Object format from backend serializeVBR – render as a badge
     return (
       <span
         className={

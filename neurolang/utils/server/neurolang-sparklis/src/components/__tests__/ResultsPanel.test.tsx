@@ -738,8 +738,40 @@ const VBR_RESULTS = {
     ],
     size: 2,
     values: [
-      ['left_motor', 'dGVzdGJhc2U2NA=='],  // non-empty base64
+      ['left_motor', 'dGVzdGJhc2U2NA=='],  // non-empty base64 (string format)
       ['right_motor', 'Empty Region'],       // empty VBR
+    ],
+    probabilistic: false,
+    last_parsed_symbol: true,
+  },
+}
+
+/**
+ * A dataset with a VBR column using the object format returned by the real
+ * backend serializeVBR: {min, max, q95, image, hash, center, idx}
+ */
+const VBR_OBJECT_RESULTS = {
+  ans: {
+    columns: ['region', 'vbr_data'],
+    row_type: [
+      "<class 'str'>",
+      "<class 'neurolang.regions.ExplicitVBR'>",
+    ],
+    size: 2,
+    values: [
+      [
+        'left_motor',
+        {
+          min: 1.0,
+          max: 5.0,
+          q95: 4.5,
+          image: 'dGVzdEltYWdl',  // base64 NIfTI
+          hash: 'abc123',
+          center: [0, 0, 0],
+          idx: 0,
+        },
+      ],
+      ['right_motor', 'Empty Region'],  // empty VBR
     ],
     probabilistic: false,
     last_parsed_symbol: true,
@@ -867,6 +899,68 @@ describe('DataTable – VBR columns', () => {
 
     expect(capturedOverlayCtx!.overlays[0].isProbabilistic).toBe(true)
     expect(capturedOverlayCtx!.overlays[0].colormap).toBe('hot')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// VBR object format (backend serializeVBR returns {min,max,q95,image,...})
+// ---------------------------------------------------------------------------
+
+describe('DataTable – VBR object format', () => {
+  it('shows "View in brain" button for rows with VBR data in object format', () => {
+    renderWithResults(VBR_OBJECT_RESULTS)
+    const btns = screen.getAllByTestId('view-in-brain-btn')
+    expect(btns.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('does NOT show "View in brain" button for empty VBR rows (object format)', () => {
+    renderWithResults(VBR_OBJECT_RESULTS)
+    // Second row is "Empty Region" – should have exactly 1 button (first row)
+    const btns = screen.getAllByTestId('view-in-brain-btn')
+    expect(btns.length).toBe(1)
+  })
+
+  it('clicking "View in brain" on object-format VBR row extracts .image as base64', () => {
+    let capturedOverlayCtx: ReturnType<typeof useBrainOverlay> | null = null
+
+    function OverlayCapture() {
+      capturedOverlayCtx = useBrainOverlay()
+      return null
+    }
+
+    let capturedExec: ExecutionContextValue | null = null
+
+    render(
+      <TestProviders>
+        <OverlayCapture />
+        <ExecutionCapture onRender={(v) => { capturedExec = v }} />
+        <ResultsPanel />
+      </TestProviders>,
+    )
+
+    act(() => { capturedExec!.submitQuery('ans(x) :- R(x).', 'destrieux') })
+    const ws = MockWebSocket.lastInstance!
+    act(() => { ws.triggerOpen() })
+    act(() => { ws.triggerMessage(makeDoneMessage(VBR_OBJECT_RESULTS)) })
+
+    expect(capturedOverlayCtx!.overlays).toHaveLength(0)
+
+    const btn = screen.getByTestId('view-in-brain-btn')
+    act(() => { fireEvent.click(btn) })
+
+    expect(capturedOverlayCtx!.overlays).toHaveLength(1)
+    // The .image field from the object should be extracted as base64
+    expect(capturedOverlayCtx!.overlays[0].base64).toBe('dGVzdEltYWdl')
+  })
+
+  it('renders VBR object cells as "VBR" badge (not raw object)', () => {
+    renderWithResults(VBR_OBJECT_RESULTS)
+    // The cell should render a VBR badge, not a raw object string like [object Object]
+    const table = screen.getByTestId('data-table')
+    expect(table).not.toHaveTextContent('[object Object]')
+    // Should have a VBR badge somewhere in the table
+    const cells = table.querySelectorAll('.cell-vbr')
+    expect(cells.length).toBeGreaterThan(0)
   })
 })
 

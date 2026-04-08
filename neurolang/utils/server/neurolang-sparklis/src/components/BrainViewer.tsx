@@ -228,8 +228,12 @@ function BrainViewer(props: BrainViewerProps): React.ReactElement {
   }, [selectedEngine])
 
   // Reconcile Niivue overlays whenever the overlays list changes.
-  // We reload all overlays (Niivue does not expose a remove-by-id API, so we
-  // clear and re-add) to keep the displayed set in sync with context state.
+  // Strategy:
+  //   1. Remove volumes that are no longer in the overlay list (volumes[1+]).
+  //   2. Add volumes that are new.
+  //   3. Set colormap for each overlay volume.
+  // Niivue 0.43.7 API: nv.addVolume(NVImage), nv.removeVolume(NVImage),
+  // nv.volumes (getter – index 0 is background), nv.setColormap(id, cm).
   useEffect(() => {
     const prev = prevOverlaysRef.current
     prevOverlaysRef.current = overlays
@@ -247,51 +251,51 @@ function BrainViewer(props: BrainViewerProps): React.ReactElement {
       try {
         const { NVImage } = await import('@niivue/niivue')
 
-        // Build new Niivue overlay volumes array.
-        const volumes = await Promise.all(
-          overlays.map(async (overlay) => {
-            const vol = NVImage.loadFromBase64({
-              base64: overlay.base64,
-              name: `${overlay.id}.nii`,
-            })
-            // Set the colormap for this overlay.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(vol as any).colormap = overlay.colormap
-            return vol
-          }),
-        )
+        const nv = niivueRef.current
 
-        // Remove all existing overlays and add the new set.
-        // Niivue loadVolumes([]) clears all volumes including the atlas.
-        // Instead we use addOverlay / removeOverlay if available, otherwise
-        // we just clear the non-background volumes via the overlaysVox array.
-        // Since Niivue does not expose a reliable per-overlay remove API, we
-        // use the overlayList setter pattern where available.
-        if (typeof niivueRef.current.setOverlayList === 'function') {
-          niivueRef.current.setOverlayList(volumes)
-        } else {
-          // Fallback: use addOverlay for new overlays and clear via
-          // updateGLVolume / drawScene for removed ones.
-          // First, remove all current overlays.
-          const currentList: unknown[] =
-            niivueRef.current.overlaysVox ??
-            niivueRef.current.volumes?.slice(1) ??
-            []
-          for (const _v of currentList) {
+        // Build a set of overlay ids we want displayed.
+        const wantedIds = new Set(overlays.map((o) => o.id))
+
+        // Remove volumes that are no longer wanted.
+        // nv.volumes[0] is the background atlas – never remove it.
+        // We iterate in reverse to avoid index shifting issues.
+        const currentVolumes: Array<{ id: string }> = nv.volumes ?? []
+        const overlayVolumes = currentVolumes.slice(1)
+        for (const vol of overlayVolumes) {
+          if (!wantedIds.has(vol.id)) {
             try {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              niivueRef.current.removeOverlay(_v as any)
+              nv.removeVolume(vol as any)
             } catch {
-              // ignore
+              // ignore per-volume removal errors
             }
           }
-          // Then add the new ones.
-          for (const vol of volumes) {
-            try {
-              niivueRef.current.addOverlay(vol)
-            } catch {
-              // ignore
+        }
+
+        // Build a set of ids that are already displayed (after removals).
+        const existingIds = new Set(
+          (nv.volumes ?? []).slice(1).map((v: { id: string }) => v.id),
+        )
+
+        // Add volumes that are not yet displayed.
+        for (const overlay of overlays) {
+          if (existingIds.has(overlay.id)) {
+            // Already present – just ensure the colormap is up-to-date.
+            if (typeof nv.setColormap === 'function') {
+              nv.setColormap(overlay.id, overlay.colormap)
             }
+            continue
+          }
+
+          const vol = NVImage.loadFromBase64({
+            base64: overlay.base64,
+            name: `${overlay.id}.nii`,
+          })
+          nv.addVolume(vol)
+
+          // Set colormap after adding.
+          if (typeof nv.setColormap === 'function') {
+            nv.setColormap(vol.id, overlay.colormap)
           }
         }
       } catch (err) {
