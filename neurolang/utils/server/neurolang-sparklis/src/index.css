@@ -1064,6 +1064,66 @@
 }
 
 /* ============================================================
+   Share Button
+   ============================================================ */
+
+.share-button-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: 1px solid #6b7280;
+  border-radius: 6px;
+  cursor: pointer;
+  background-color: #ffffff;
+  color: #374151;
+  transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+.share-btn:hover:not(:disabled) {
+  background-color: #f3f4f6;
+  border-color: #374151;
+}
+
+.share-btn:active:not(:disabled) {
+  background-color: #e5e7eb;
+}
+
+.share-btn--disabled,
+.share-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.share-btn-copied {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #065f46;
+  background-color: #d1fae5;
+  border: 1px solid #6ee7b7;
+  border-radius: 4px;
+  white-space: nowrap;
+  animation: fadeIn 0.15s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
    Error Display
    ============================================================ */
 

@@ -11,6 +11,7 @@ import ResultsPanel from './ResultsPanel'
 import BrainViewer from './BrainViewer'
 import OverlayManager from './OverlayManager'
 import QueryHistory from './QueryHistory'
+import ShareButton from './ShareButton'
 import { useEngine } from '../context/useEngine'
 import { useQuery } from '../context/useQuery'
 import { useSchema } from '../context/useSchema'
@@ -105,9 +106,10 @@ function MainContent(): React.ReactElement {
         </div>
       </div>
 
-      {/* Run Query Button and Error/Cancel Display */}
+      {/* Run Query Button, Share Button, and Error/Cancel Display */}
       <div className="execution-controls">
         <RunQueryButton />
+        <ShareButton />
         <ErrorDisplay onHighlightError={handleHighlightError} />
       </div>
 

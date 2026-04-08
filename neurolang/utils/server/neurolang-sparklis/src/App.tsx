@@ -7,6 +7,7 @@ import { BrainOverlayProvider } from './context/BrainOverlayContext'
 import { QueryHistoryProvider } from './context/QueryHistoryContext'
 import Layout from './components/Layout'
 import QueryHistoryRecorder from './components/QueryHistoryRecorder'
+import PermalinkLoader from './components/PermalinkLoader'
 
 function App(): React.ReactElement {
   return (
@@ -16,6 +17,7 @@ function App(): React.ReactElement {
           <ExecutionProvider>
             <BrainOverlayProvider>
               <QueryHistoryProvider>
+                <PermalinkLoader />
                 <QueryHistoryRecorder />
                 <Layout />
               </QueryHistoryProvider>
