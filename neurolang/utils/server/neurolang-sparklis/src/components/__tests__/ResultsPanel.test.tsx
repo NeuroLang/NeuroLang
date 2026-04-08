@@ -244,7 +244,7 @@ describe('ResultsPanel – visibility', () => {
     expect(screen.queryByTestId('results-panel')).not.toBeInTheDocument()
   })
 
-  it('does NOT render when execution status is running', () => {
+  it('shows skeleton loading state when execution status is running', () => {
     let captured: ExecutionContextValue | null = null
 
     render(
@@ -258,7 +258,8 @@ describe('ResultsPanel – visibility', () => {
       captured!.submitQuery('ans(x) :- Study(x).', 'neurosynth')
     })
 
-    expect(screen.queryByTestId('results-panel')).not.toBeInTheDocument()
+    expect(screen.getByTestId('results-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('results-table-skeleton')).toBeInTheDocument()
   })
 
   it('renders results-panel after a successful query', () => {

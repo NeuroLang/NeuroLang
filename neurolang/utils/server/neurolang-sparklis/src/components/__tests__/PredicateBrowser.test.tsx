@@ -94,14 +94,14 @@ describe('PredicateBrowser', () => {
   // Loading state
   // -------------------------------------------------------------------------
 
-  it('shows loading state while fetching schema', async () => {
+  it('shows skeleton loading state while fetching schema', async () => {
     // Never resolves so it stays in loading state
     vi.mocked(fetch).mockReturnValue(new Promise(() => {}))
 
     renderWithContext(<PredicateBrowser />, 'neurosynth')
 
     await waitFor(() => {
-      expect(screen.getByText('Loading predicates...')).toBeInTheDocument()
+      expect(screen.getByTestId('predicate-browser-skeleton')).toBeInTheDocument()
     })
   })
 

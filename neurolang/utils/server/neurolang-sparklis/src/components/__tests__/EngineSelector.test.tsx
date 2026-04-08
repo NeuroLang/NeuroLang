@@ -1,12 +1,18 @@
+import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import EngineSelector from '../EngineSelector'
 import { EngineProvider } from '../../context/EngineContext'
+import { ConnectionProvider } from '../../context/ConnectionContext'
 
-// Helper to wrap component with required context
+// Helper to wrap component with required contexts
 function renderWithContext(ui: React.ReactElement) {
-  return render(<EngineProvider>{ui}</EngineProvider>)
+  return render(
+    <ConnectionProvider>
+      <EngineProvider>{ui}</EngineProvider>
+    </ConnectionProvider>
+  )
 }
 
 // API response format: {"status":"ok","data":[...]}
@@ -26,10 +32,10 @@ describe('EngineSelector', () => {
     vi.restoreAllMocks()
   })
 
-  it('shows loading state initially', () => {
+  it('shows skeleton loading state initially', () => {
     vi.mocked(fetch).mockReturnValue(new Promise(() => {})) // never resolves
     renderWithContext(<EngineSelector />)
-    expect(screen.getByText('Loading engines...')).toBeInTheDocument()
+    expect(screen.getByTestId('engine-list-skeleton')).toBeInTheDocument()
   })
 
   it('fetches engines from /v2/engines on mount', async () => {
@@ -127,17 +133,49 @@ describe('EngineSelector', () => {
     expect(destrieuxItem).toHaveAttribute('aria-selected', 'false')
   })
 
-  it('shows error message when fetch fails', async () => {
-    vi.mocked(fetch).mockRejectedValue(new Error('Network error'))
+  it('shows "Cannot connect to server" when fetch fails with TypeError', async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'))
 
     renderWithContext(<EngineSelector />)
 
     await waitFor(() => {
-      expect(screen.getByText('Network error')).toBeInTheDocument()
+      expect(screen.getByTestId('connection-error-message')).toBeInTheDocument()
+      expect(screen.getByText('Cannot connect to server')).toBeInTheDocument()
     })
   })
 
-  it('shows error message when response is not ok', async () => {
+  it('shows retry button on connection error', async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'))
+
+    renderWithContext(<EngineSelector />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('connection-retry-btn')).toBeInTheDocument()
+    })
+  })
+
+  it('retries fetch when retry button is clicked', async () => {
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(makeEnginesResponse(['neurosynth']))
+
+    renderWithContext(<EngineSelector />)
+
+    // Wait for connection error
+    await waitFor(() => {
+      expect(screen.getByTestId('connection-retry-btn')).toBeInTheDocument()
+    })
+
+    // Click retry
+    await userEvent.click(screen.getByTestId('connection-retry-btn'))
+
+    // Should show engine list now
+    await waitFor(() => {
+      expect(screen.getByText('neurosynth')).toBeInTheDocument()
+    })
+  })
+
+  it('shows error message with retry when HTTP response is not ok', async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: false,
       status: 500,
@@ -146,9 +184,14 @@ describe('EngineSelector', () => {
     renderWithContext(<EngineSelector />)
 
     await waitFor(() => {
+      // HTTP 500 is not a TypeError so it shows generic error, not "Cannot connect"
       expect(
         screen.getByText('Failed to fetch engines: 500')
       ).toBeInTheDocument()
+      expect(screen.getByTestId('connection-retry-btn')).toBeInTheDocument()
+      expect(
+        screen.queryByTestId('connection-error-message')
+      ).not.toBeInTheDocument()
     })
   })
 
@@ -176,4 +219,3 @@ describe('EngineSelector', () => {
     })
   })
 })
-

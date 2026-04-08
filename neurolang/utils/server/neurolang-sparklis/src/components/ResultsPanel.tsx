@@ -14,6 +14,7 @@ import { useExecution } from '../context/useExecution'
 import { useBrainOverlay } from '../context/useBrainOverlay'
 import { nextColormap } from '../utils/overlayUtils'
 import { parseColumnType, isVbrColumnType } from '../utils/columnTypeUtils'
+import { ResultsTableSkeleton } from './Skeleton'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -527,7 +528,14 @@ function ResultsPanel(): React.ReactElement | null {
       ? selectedSymbol
       : defaultSymbol
 
-  // Only show when execution is done
+  // Only show when execution is done or running (skeleton)
+  if (executionStatus === 'running') {
+    return (
+      <div className="results-panel" data-testid="results-panel">
+        <ResultsTableSkeleton />
+      </div>
+    )
+  }
   if (executionStatus !== 'done') return null
   if (!resultsMap) {
     // Query succeeded but returned no table data (e.g., all functions)

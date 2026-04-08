@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useSchema } from '../context/useSchema'
 import { type SchemaSymbol } from '../context/SchemaContext'
+import { PredicateBrowserSkeleton } from './Skeleton'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,7 +111,7 @@ function PredicateBrowser({
   if (loading) {
     return (
       <div className={`predicate-browser ${className ?? ''}`}>
-        <p className="predicate-browser-loading">Loading predicates...</p>
+        <PredicateBrowserSkeleton />
       </div>
     )
   }

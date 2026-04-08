@@ -12,6 +12,8 @@ import BrainViewer from './BrainViewer'
 import OverlayManager from './OverlayManager'
 import QueryHistory from './QueryHistory'
 import ShareButton from './ShareButton'
+import ConnectionStatus from './ConnectionStatus'
+import DatalogHelpTooltip from './DatalogHelpTooltip'
 import { useEngine } from '../context/useEngine'
 import { useQuery } from '../context/useQuery'
 import { useSchema } from '../context/useSchema'
@@ -92,7 +94,10 @@ function MainContent(): React.ReactElement {
           <div className="code-editor-panel">
             <div className="code-editor-panel-header">
               <span className="code-editor-panel-label">Datalog Editor</span>
-              <span className="code-editor-panel-hint">Ctrl+Enter to run</span>
+              <div className="code-editor-panel-header-actions">
+                <span className="code-editor-panel-hint">Ctrl+Enter to run</span>
+                <DatalogHelpTooltip />
+              </div>
             </div>
             <div className="code-editor-panel-body">
               <CodeEditor
@@ -158,6 +163,7 @@ function Layout(): React.ReactElement {
           <span className="navbar-title">NeuroLang Sparklis</span>
         </div>
         <nav className="navbar-nav" aria-label="Main navigation">
+          <ConnectionStatus />
           <a href="#" className="nav-link">
             Documentation
           </a>

@@ -1902,3 +1902,355 @@
 .history-item-summary {
   color: #6b7280;
 }
+
+/* =========================================================================
+   Error Boundary
+   ========================================================================= */
+
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  text-align: center;
+  padding: 2rem;
+  background-color: #f0f2f5;
+  gap: 1rem;
+}
+
+.error-boundary-icon {
+  font-size: 3rem;
+}
+
+.error-boundary-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.error-boundary-message {
+  font-size: 1rem;
+  color: #6b7280;
+  max-width: 480px;
+}
+
+.error-boundary-details {
+  font-size: 0.8125rem;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  background-color: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  color: #dc2626;
+  max-width: 600px;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-boundary-reload-btn {
+  padding: 0.625rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  background-color: #1a1a2e;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.error-boundary-reload-btn:hover {
+  background-color: #2d2d4a;
+}
+
+/* =========================================================================
+   Connection error in EngineSelector
+   ========================================================================= */
+
+.connection-error-message {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #dc2626;
+  padding: 0.25rem 0;
+  margin-bottom: 0.25rem;
+}
+
+.connection-error-hint {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+.connection-retry-btn {
+  display: inline-block;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background-color: #1a1a2e;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.connection-retry-btn:hover {
+  background-color: #2d2d4a;
+}
+
+/* =========================================================================
+   ConnectionStatus indicator (navbar)
+   ========================================================================= */
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: #b0b0c0;
+}
+
+.connection-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.connection-status--connected .connection-status-dot {
+  background-color: #22c55e;
+}
+
+.connection-status--disconnected .connection-status-dot {
+  background-color: #ef4444;
+}
+
+.connection-status--unknown .connection-status-dot {
+  background-color: #9ca3af;
+}
+
+.connection-status-label {
+  font-size: 0.75rem;
+}
+
+/* =========================================================================
+   Skeleton loading placeholders
+   ========================================================================= */
+
+@keyframes skeleton-shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.4s infinite linear;
+  border-radius: 4px;
+}
+
+/* Engine list skeleton */
+.engine-selector-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.125rem 0;
+}
+
+.skeleton--engine-item {
+  height: 30px;
+  border-radius: 4px;
+}
+
+/* Predicate browser skeleton */
+.predicate-browser-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.125rem 0;
+}
+
+.skeleton--predicate-search {
+  width: 100%;
+  border-radius: 4px;
+}
+
+.skeleton--predicate-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.skeleton--predicate-group-header {
+  width: 60%;
+  border-radius: 4px;
+}
+
+.skeleton--predicate-item {
+  width: 90%;
+  margin-left: 0.5rem;
+  border-radius: 3px;
+}
+
+/* Results table skeleton */
+.results-table-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.skeleton--table-header-row,
+.skeleton--table-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.skeleton--table-header-cell {
+  flex: 1;
+  border-radius: 4px;
+}
+
+.skeleton--table-cell {
+  flex: 1;
+  border-radius: 3px;
+}
+
+/* =========================================================================
+   Datalog Help Tooltip
+   ========================================================================= */
+
+.datalog-help-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.datalog-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #b0b0c0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  transition: background-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.datalog-help-btn:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* When button is in the code editor panel header (white background) */
+.code-editor-panel-header .datalog-help-btn {
+  background-color: #f3f4f6;
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
+.code-editor-panel-header .datalog-help-btn:hover {
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+.datalog-help-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  min-width: 300px;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  padding: 0;
+  overflow: hidden;
+}
+
+.datalog-help-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 0.875rem;
+  background-color: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.datalog-help-popover-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.datalog-help-popover-close {
+  background: none;
+  border: none;
+  font-size: 1.125rem;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.125rem 0.25rem;
+  border-radius: 3px;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.datalog-help-popover-close:hover {
+  color: #374151;
+  background-color: #e5e7eb;
+}
+
+.datalog-help-list {
+  padding: 0.625rem 0.875rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.datalog-help-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.625rem;
+  align-items: baseline;
+}
+
+.datalog-help-syntax {
+  font-size: 0.8125rem;
+}
+
+.datalog-help-syntax code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.8125rem;
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  color: #1a1a2e;
+  white-space: nowrap;
+}
+
+.datalog-help-meaning {
+  font-size: 0.8125rem;
+  color: #4b5563;
+  margin-left: 0;
+}
+
+/* Code editor panel header: align hint + help button */
+.code-editor-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
