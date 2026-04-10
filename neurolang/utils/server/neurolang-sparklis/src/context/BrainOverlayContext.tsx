@@ -38,6 +38,14 @@ export interface BrainOverlay {
   colormap: OverlayColormap
   /** True if this is a VBROverlay (probability data). */
   isProbabilistic: boolean
+  /** Visibility state of the overlay. */
+  visible: boolean
+  /** Lower threshold for overlay display (0-1 range). */
+  threshold: number
+  /** Minimum value for colorbar scale. */
+  colorbarMin: number
+  /** Maximum value for colorbar scale. */
+  colorbarMax: number
 }
 
 export interface BrainOverlayContextValue {
@@ -52,6 +60,16 @@ export interface BrainOverlayContextValue {
   removeOverlay: (id: string) => void
   /** Remove all overlays. */
   clearOverlays: () => void
+  /** Toggle overlay visibility. */
+  toggleOverlayVisibility: (id: string) => void
+  /** Update overlay threshold. */
+  updateOverlayThreshold: (id: string, threshold: number) => void
+  /** Update overlay colormap. */
+  updateOverlayColormap: (id: string, colormap: OverlayColormap) => void
+  /** Update overlay colorbar limits. */
+  updateOverlayColorbarLimits: (id: string, min: number, max: number) => void
+  /** Download overlay as NIfTI file. */
+  downloadOverlay: (id: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -89,9 +107,61 @@ export function BrainOverlayProvider({
     setOverlays([])
   }, [])
 
+  const toggleOverlayVisibility = useCallback((id: string) => {
+    setOverlays((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, visible: !o.visible } : o)),
+    )
+  }, [])
+
+  const updateOverlayThreshold = useCallback((id: string, threshold: number) => {
+    setOverlays((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, threshold } : o)),
+    )
+  }, [])
+
+  const updateOverlayColormap = useCallback(
+    (id: string, colormap: OverlayColormap) => {
+      setOverlays((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, colormap } : o)),
+      )
+    },
+    [],
+  )
+
+  const updateOverlayColorbarLimits = useCallback(
+    (id: string, min: number, max: number) => {
+      setOverlays((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, colorbarMin: min, colorbarMax: max } : o)),
+      )
+    },
+    [],
+  )
+
+  const downloadOverlay = useCallback((id: string) => {
+    const overlay = overlays.find((o) => o.id === id)
+    if (!overlay) return
+
+    // Convert base64 to blob and trigger download
+    const linkSource = `data:application/octet-stream;base64,${overlay.base64}`
+    const downloadLink = document.createElement('a')
+    downloadLink.href = linkSource
+    downloadLink.download = `${overlay.name.replace(/[^a-z0-9]/gi, '_')}.nii`
+    downloadLink.click()
+  }, [overlays])
+
   return (
     <BrainOverlayContext.Provider
-      value={{ overlays, addOverlay, removeOverlay, clearOverlays }}
+      value={{
+        overlays,
+        addOverlay,
+        removeOverlay,
+        clearOverlays,
+        toggleOverlayVisibility,
+        updateOverlayThreshold,
+        updateOverlayColormap,
+        updateOverlayColorbarLimits,
+        downloadOverlay,
+      }}
     >
       {children}
     </BrainOverlayContext.Provider>

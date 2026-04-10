@@ -136,6 +136,53 @@ It returns `null` (desync) for:
 
 This is by design. The visual builder only represents simple conjunctive queries — complex Datalog is write-only in the code editor, and will desync the visual builder. This is expected and not a bug.
 
+## Query Coordination Architecture (NEW)
+
+The **Query Coordination** feature enables the visual query builder to extract and display predicates from complex datalog code that cannot be fully parsed by `parseDatalog()`.
+
+### Components
+
+1. **Enhanced Parser** (`QueryModel.ts`): New `coordinateFromCode(text)` method that:
+   - Extracts predicate instances using more permissive regex patterns
+   - Ignores unsupported syntax (negation, aggregates, string literals, probabilistic annotations)
+   - Returns partial results with a list of warnings about unparsable content
+   - Preserves variable names and creates shared variable color mappings
+
+2. **Coordination State** (`QueryContext.tsx`): Extended with:
+   - `coordinationStatus`: 'none' | 'full' | 'partial' | 'failed'
+   - `coordinationWarnings`: string[] of issues encountered during coordination
+   - `coordinate()` function to trigger manual coordination
+
+3. **UI Components**:
+   - **Coordinate Button** (in `VisualQueryBuilder.tsx` toolbar): Triggers coordination
+   - **Coordination Status Indicator**: Shows success/partial/warning state
+   - **Warnings Panel**: Displays list of unparsable constructs when partial success
+
+### Data Flow
+
+**Manual Coordination:**
+1. User clicks "Coordinate" button → calls `coordinate()` from QueryContext
+2. `coordinate()` reads current `datalogText`
+3. Calls `model.coordinateFromCode(datalogText)` → returns `{ state, warnings }`
+4. If state extracted: `model.reset(state)` + set coordination status
+5. If warnings exist: display warnings panel
+6. Visual builder updates with extracted predicates
+
+**Automatic Coordination (Example Load):**
+1. User clicks example → `handleLoadExample(query)` executes
+2. `model.reset()` clears builder
+3. `setDatalogText(query)` sets code editor
+4. After debounce, if `parseDatalog()` fails → automatically call `coordinate()`
+5. Shows partial results with warnings for complex examples
+
+### Key Invariants
+
+- Coordination is **opt-in** for manual editing (doesn't auto-parse on every keystroke)
+- Coordination **preserves undo/redo history** like other mutations
+- Visual builder actions **always resync** and override coordination state
+- Coordination **never loses user work** — it's a one-way sync (code → builder)
+- Warnings are **informational only** — don't block showing parseable predicates
+
 ## Backend Quirks
 
 - **Backend parser rejects trailing period**: The NeuroLang Datalog parser expects queries **without** a trailing period (`.`). For example, `ans(x) :- PeakReported(x, y, z, s)` is valid, but `ans(x) :- PeakReported(x, y, z, s).` raises `UnexpectedTokenError`. The visual query builder's `serializeToDatalog()` appends a period — the `submitQuery` function in `ExecutionContext.tsx` must strip it before sending. Any worker submitting queries to the backend must be aware of this constraint.
