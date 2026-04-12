@@ -22,7 +22,6 @@ try:
 except ImportError:
     from contextlib import suppress as nullcontext
 
-# codespell:ignore anc
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -714,7 +713,7 @@ def test_another_recursive_chase(chase_class):
     x = S_('X')
     y = S_('Y')
     z = S_('Z')
-    anc = S_('anc')
+    anc = S_('anc')  # codespell:ignore anc
     par = S_('par')
     q = S_('q')
     a = C_('a')

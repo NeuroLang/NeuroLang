@@ -33,7 +33,6 @@ from ..expression_processing import (
 )
 from ..instance import MapInstance
 
-# codespell:ignore anc
 
 S_ = Symbol
 C_ = Constant
@@ -239,7 +238,7 @@ def test_stratification_with_consequent_in_multiple_rules():
     x = S_('X')
     y = S_('Y')
     z = S_('Z')
-    anc = S_('anc')
+    anc = S_('anc')  # codespell:ignore anc
     par = S_('par')
     q = S_('q')
     M = S_('M')
