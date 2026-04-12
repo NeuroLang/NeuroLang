@@ -2,7 +2,7 @@ from functools import lru_cache
 from itertools import product
 
 import numpy as np
-from scipy.linalg import kron
+from numpy import kron
 
 from .config import config
 from .interval_algebra import (v_before, v_during, v_equals, v_finishes,

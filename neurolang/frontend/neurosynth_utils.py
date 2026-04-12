@@ -3,7 +3,11 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-from nilearn.datasets.utils import _fetch_files
+try:
+    from nilearn.datasets.utils import _fetch_files
+except ImportError:
+    # nilearn >= 0.11: _fetch_files was moved and renamed
+    from nilearn.datasets._utils import fetch_files as _fetch_files
 from scipy import sparse
 
 

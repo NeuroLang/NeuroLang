@@ -4,7 +4,11 @@ from typing import AbstractSet, Dict, Tuple
 import nibabel
 import pandas as pd
 from nibabel.dataobj_images import DataobjImage
-from nilearn.datasets.utils import _fetch_files
+try:
+    from nilearn.datasets.utils import _fetch_files
+except ImportError:
+    # nilearn >= 0.11: _fetch_files was moved and renamed
+    from nilearn.datasets._utils import fetch_files as _fetch_files
 from pandas.errors import ParserError
 
 from .exceptions import InvalidCommandExpression, UnsupportedProgramError

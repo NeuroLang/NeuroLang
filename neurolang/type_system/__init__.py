@@ -21,6 +21,7 @@ from ..exceptions import NeuroLangException
 
 NEW_TYPING_39 = sys.version_info[:3] >= (3, 9, 0)
 NEW_TYPING_37 = (sys.version_info[:3] >= (3, 7, 0)) and not NEW_TYPING_39
+NEW_TYPING_312 = sys.version_info[:2] >= (3, 12)
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -49,9 +50,14 @@ if not (NEW_TYPING_37 or NEW_TYPING_39):
 
     Unknown = _Unknown(_root=True)
 elif NEW_TYPING_37 or NEW_TYPING_39:
-    from typing import _Final, _Immutable, _GenericAlias
+    from typing import _Final, _GenericAlias
+    if not NEW_TYPING_312:
+        from typing import _Immutable
+        _Unknown_bases = (_Final, _Immutable)
+    else:
+        _Unknown_bases = (_Final,)
 
-    class Unknown(_Final, _Immutable, _root=True):
+    class Unknown(*_Unknown_bases, _root=True):
         """Special type indicating an unknown type.
 
         - Unknown is compatible with every type.
@@ -197,6 +203,18 @@ def is_type(type_):
     )
 
 
+def _has_type_args(type_):
+    """
+    Check if a type is truly parameterized with concrete args.
+
+    In Python 3.14, bare Union has __args__ as a member_descriptor (not a
+    tuple), whereas parameterized Union[int, float].__args__ is a tuple.
+    This helper returns True only when __args__ is an actual tuple.
+    """
+    args = getattr(type_, '__args__', None)
+    return isinstance(args, tuple)
+
+
 def is_parametrical(type_):
     is_parametrical_generic = any(
         p(type_)
@@ -211,7 +229,7 @@ def is_parametrical(type_):
             )
         elif NEW_TYPING_39:
             return not (
-                hasattr(type_, '__args__') or
+                _has_type_args(type_) or
                 hasattr(type_, '__parameters')
             )
         else:
@@ -237,7 +255,7 @@ def is_parameterized(type_):
             )
         elif NEW_TYPING_39:
             return (
-                hasattr(type_, '__args__') or
+                _has_type_args(type_) or
                 hasattr(type, '__parameters__')
             )
         else:

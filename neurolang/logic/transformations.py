@@ -277,7 +277,7 @@ class MoveQuantifiersUpFONegE(FactorQuantifiersMixin, FONegELogicExpression):
 
 class DesambiguateQuantifiedVariables(LogicExpressionWalker):
     """
-    Replaces each quantified variale to a fresh one.
+    Replaces each quantified variable to a fresh one.
     """
     @add_match(
         NaryLogicOperator,

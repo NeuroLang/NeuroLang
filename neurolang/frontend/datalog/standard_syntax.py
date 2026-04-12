@@ -136,7 +136,7 @@ constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | e
 ext_identifier : "@" identifier
 identifier : cmd_identifier | identifier_regexp
 identifier_regexp : IDENTIFIER_REGEXP
-IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\/#%\._:-]+/ "`"
+IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\\/#%._:-]+/ "`"
 cmd_identifier : CMD_IDENTIFIER
 CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
 

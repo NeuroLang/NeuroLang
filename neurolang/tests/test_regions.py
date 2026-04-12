@@ -539,7 +539,12 @@ def destrieux():
         data_dir=str(data_dir / "destrieux")
     )
     destrieux_atlas_image = nib.load(destrieux_atlas["maps"])
-    destrieux_labels = dict(destrieux_atlas["labels"])
+    labels = destrieux_atlas["labels"]
+    # Handle both old format (list of tuples) and new format (list of strings)
+    if labels and isinstance(labels[0], str):
+        destrieux_labels = dict(enumerate(labels))
+    else:
+        destrieux_labels = dict(labels)
     destrieux = dict()
     for k, v in destrieux_labels.items():
         if k == 0:
