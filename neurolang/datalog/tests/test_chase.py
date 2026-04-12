@@ -23,7 +23,6 @@ except ImportError:
     from contextlib import suppress as nullcontext
 
 
-
 C_ = expressions.Constant
 S_ = expressions.Symbol
 Imp_ = Implication

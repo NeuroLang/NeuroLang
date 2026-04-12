@@ -77,7 +77,7 @@ def solve_succ_query(query_predicate, cpl_program):
             compactness and make it possible to leverage relational
             algebra operations to solve queries on the graphical model,
             as is detailed in the next step. The links between the
-            random variables of the graphical model anad their CPDs are
+            random variables of the graphical model and their CPDs are
             determined by the structure of the initial program. A view
             of the initial grounded expressions is maintained because it
             is necessary for solving queries.

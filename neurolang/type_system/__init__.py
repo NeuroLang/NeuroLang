@@ -204,7 +204,8 @@ def is_type(type_):
 
 
 def _has_type_args(type_):
-    """Check if a type is truly parameterized with concrete args.
+    """
+    Check if a type is truly parameterized with concrete args.
 
     In Python 3.14, bare Union has __args__ as a member_descriptor (not a
     tuple), whereas parameterized Union[int, float].__args__ is a tuple.

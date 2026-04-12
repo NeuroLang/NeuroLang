@@ -33,6 +33,7 @@ from ..expression_processing import (
 )
 from ..instance import MapInstance
 
+
 S_ = Symbol
 C_ = Constant
 Imp_ = Implication
