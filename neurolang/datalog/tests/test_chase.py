@@ -22,7 +22,7 @@ try:
 except ImportError:
     from contextlib import suppress as nullcontext
 
-
+# codespell:ignore anc
 
 C_ = expressions.Constant
 S_ = expressions.Symbol

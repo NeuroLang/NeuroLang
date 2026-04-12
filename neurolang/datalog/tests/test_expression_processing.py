@@ -33,6 +33,8 @@ from ..expression_processing import (
 )
 from ..instance import MapInstance
 
+# codespell:ignore anc
+
 S_ = Symbol
 C_ = Constant
 Imp_ = Implication
