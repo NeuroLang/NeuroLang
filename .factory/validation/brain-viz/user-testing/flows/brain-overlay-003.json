@@ -1,0 +1,100 @@
+{
+  "groupId": "brain-overlay-003",
+  "testedAt": "2026-04-08T00:00:00.000Z",
+  "isolation": {
+    "appUrl": "http://localhost:3150",
+    "apiBase": "http://localhost:8888",
+    "viewport": "1440x900",
+    "sessionId": "49867153b521__vbr003",
+    "noLoginRequired": true
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-BRAIN-003",
+      "title": "Probability overlay with color bar",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Navigate to http://localhost:3150",
+          "expected": "App loads successfully",
+          "observed": "App loaded, NeuroLang Sparklis title visible with engine selector and predicate browser"
+        },
+        {
+          "action": "Select 'neurosynth' engine from engine list",
+          "expected": "Engine selected, predicates and query editor become available",
+          "observed": "neurosynth selected (highlighted), predicates listed, Run Query button appeared"
+        },
+        {
+          "action": "Click code editor, select all (Meta+A), then type the Neurosynth CBMA query with ActivationGivenTermImage(agg_create_region_overlay(...))",
+          "expected": "Query entered in CodeMirror editor with 5 lines",
+          "observed": "Query entered successfully, Run Query button enabled, Out of sync indicator visible"
+        },
+        {
+          "action": "Click 'Run Query' button",
+          "expected": "Query executes, loading indicator shown, then results appear",
+          "observed": "Query completed immediately (cached/fast); results appeared showing ActivationGivenTermImage symbol selected, 1 row with agg_create_region_overlay and VBROverlay badge"
+        },
+        {
+          "action": "Select 'ActivationGivenTermImage' in symbol dropdown (already selected)",
+          "expected": "VBROverlay row visible with 'View in brain' button",
+          "observed": "ActivationGivenTermImage already selected; 1 row showing agg_create_region_overlay with VBROverlay badge; 'View in brain' button (ref=e68) visible"
+        },
+        {
+          "action": "Click 'View in brain' button",
+          "expected": "Overlay loads in Niivue viewer, color bar appears with probability scale",
+          "observed": "Overlay loaded; OVERLAYS (1) panel shows 'ActivationGivenTermImage [0]' with orange swatch; color bar visible with 0 to 1 probability scale using 'hot' color map (black to white gradient)"
+        },
+        {
+          "action": "Verify color bar DOM elements",
+          "expected": "data-testid='color-bar' and data-testid='color-bar-gradient' present",
+          "observed": "Both elements confirmed via JS eval: colorBar='found', colorBarGradient='found'; color bar text shows '0' and '1' labels; gradient style: linear-gradient hot colormap"
+        },
+        {
+          "action": "Check console errors",
+          "expected": "No errors",
+          "observed": "No errors. Warnings only: WebGL performance (GPU stall ReadPixels - benign), and '98% of voxels are zero: ignoring zeros for cal_max' (expected for sparse CBMA probability map)"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "brain-viz/brain-overlay/VAL-BRAIN-003-initial-load.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-003-neurosynth-selected.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-003-query-entered.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-003-query-running.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-003-after-view-in-brain.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-003-brain-viewer-main-scroll.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-003-probability-overlay-with-colorbar.png",
+          "brain-viz/brain-overlay/VAL-BRAIN-003-overlay-rendered.png"
+        ],
+        "consoleErrors": "none (warnings only: WebGL ReadPixels performance, 98% voxels zero)",
+        "domVerification": {
+          "colorBar": "found (data-testid='color-bar')",
+          "colorBarGradient": "found (data-testid='color-bar-gradient', style: linear-gradient hot colormap)",
+          "brainViewer": "found (data-testid='brain-viewer')",
+          "brainViewerCanvas": "found (data-testid='brain-viewer-canvas', 474x316px)",
+          "overlayManager": "found (data-testid='overlay-manager', shows 'Overlays (1)')",
+          "colorBarLabels": "0 (low) to 1 (high) probability scale",
+          "overlayItem": "ActivationGivenTermImage [0] with orange swatch"
+        }
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The brain viewer and color bar are below the fold and require scrolling the main-content div (not the window) to be visible in screenshots. The main-content has overflowY:auto and the brain panel starts at y=721px, color bar at y=1187px in a 900px viewport.",
+      "resolved": true,
+      "resolution": "Used JS eval to scroll the .main-content div to position 600 to bring color bar into view for screenshots",
+      "affectedAssertions": ["VAL-BRAIN-003"]
+    },
+    {
+      "description": "The Niivue canvas shows the brain atlas (grey slices) but the probability overlay activation is not prominently visible in the canvas at the default crosshair position (0,0,0). This is expected because 98% of voxels are zero (sparse CBMA map for 'emotion' term).",
+      "resolved": true,
+      "resolution": "Confirmed via DOM inspection that the overlay IS loaded (OVERLAYS (1) panel, color bar with 0-1 scale). The visual sparseness is correct behavior for CBMA.",
+      "affectedAssertions": ["VAL-BRAIN-003"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 1 assertion: VAL-BRAIN-003 PASS. Neurosynth CBMA query with ActivationGivenTermImage(agg_create_region_overlay) completed successfully. Clicking 'View in brain' loaded an ExplicitVBROverlay into Niivue with the overlay manager showing 1 overlay and a color bar with 'hot' colormap displaying probability scale from 0 to 1. All required DOM elements confirmed: data-testid='color-bar', data-testid='color-bar-gradient', data-testid='overlay-manager'. No console errors."
+}

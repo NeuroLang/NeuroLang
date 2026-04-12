@@ -1,0 +1,56 @@
+{
+  "featureId": "code-editor-panel",
+  "reviewedAt": "2026-04-07T01:05:00.000Z",
+  "commitId": "b66855306d1caa4cde5963e3efff2bee2cad8978",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The CodeEditor component is implemented and all 5 feature requirements are met at a functional level: CodeMirror 6 with Datalog syntax highlighting is installed and working, the editor sits in a split view, the language extension highlights keywords/predicates/operators/strings/numbers, the editor is controlled and synced with QueryContext, and Ctrl+Enter / Cmd+Enter fires the submit callback. TypeScript compiles clean, lint passes, and 233 tests pass. However, there is a blocking behavioral regression: the `isExternalUpdate` ref in CodeEditor is dead code — it is never checked inside the `EditorView.updateListener`. This means every time an external `value` prop change is dispatched to the CodeMirror view, the `onChange` callback fires, which in turn calls `setDatalogText` in QueryContext. Since `isBuilderUpdate.current` has already been reset to `false` by that point (the context's `refresh()` sets it synchronously before React re-renders), `setDatalogText` schedules a debounced parse. After 500ms, `model.reset(parsed)` clears the undo/redo stacks. Any interaction with the visual query builder (clicking a predicate) will silently destroy undo history 500ms later. This is a regression against the undo/redo feature. Secondary issues: `readOnly` prop changes are not honoured (the useEffect dispatches an empty effects array), and no test verifies `onChange` fires when the user types.",
+    "issues": [
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/CodeEditor.tsx",
+        "line": 182,
+        "severity": "blocking",
+        "description": "`isExternalUpdate` ref is declared and set (lines 182, 222, 230) but is NEVER READ anywhere — in particular, the EditorView.updateListener (line 109) does not check it. As a result, every external value update dispatched to the editor causes the `onChange` callback to fire. In the application, `onChange` is `setDatalogText` from QueryContext. Since `isBuilderUpdate.current` is already `false` by the time React re-renders and the `useEffect([value])` fires, `setDatalogText` schedules a debounced parse. After 500ms, `model.reset(parsed)` is called, which clears the undo/redo stacks (see QueryModel.ts line 485: `this._undoStack = []`, `this._redoStack = []`). Any click on a predicate in the visual query builder destroys undo history after 500ms. The fix is to pass `isExternalUpdate` into `buildExtensions` and gate the `updateListener`'s `onChange` call behind `if (!isExternalUpdate.current)`."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/CodeEditor.tsx",
+        "line": 237,
+        "severity": "non_blocking",
+        "description": "The `readOnly` useEffect (lines 237-244) dispatches an empty `effects: []` to the view when `readOnly` changes, which is a no-op. Because `EditorState.readOnly.of(readOnly)` is passed directly as an extension at mount time (not wrapped in a `Compartment`), the read-only state cannot be changed after initialization. To properly support dynamic `readOnly` changes, a `Compartment` should be used and reconfigured here. Since `readOnly` is not in the feature's `expectedBehavior` and is not used anywhere in the current codebase (Layout.tsx never passes `readOnly`), this is non-blocking for this feature, but the dead-looking useEffect is misleading."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/__tests__/CodeEditor.test.tsx",
+        "line": 196,
+        "severity": "non_blocking",
+        "description": "The `onChange` test group (lines 196-210) only verifies that the component doesn't crash without an `onChange` prop and that CodeMirror mounts. There is no test that simulates the user typing and verifies `onChange` is called with the new content. This is a gap against the feature spec requirement (4): 'The editor is editable and controlled -- its value is synced with a shared query state.' The combination of the `isExternalUpdate` dead-code bug above and the lack of an `onChange`-fires-on-typing test means the feedback loop bug is not caught by the test suite."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/CodeEditor.tsx",
+        "line": 78,
+        "severity": "non_blocking",
+        "description": "`errorLine` prop (line 78) and the associated `setErrorLineEffect`/`errorLineField` state (lines 27-56) are out-of-scope for this feature. The feature description makes no mention of error line highlighting. While this is a harmless addition (prop is optional, defaults to null/undefined, and the functionality is useful for future features), it represents scope expansion within this feature commit."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The CodeEditor uses `isExternalUpdate` ref to attempt preventing onChange feedback loops on external value updates, but the pattern doesn't work with CodeMirror 6's synchronous `EditorView.updateListener`. The correct CM6 pattern for detecting programmatic (non-user) changes is to check `update.transactions.some(tr => tr.annotation(Transaction.userEvent))` — programmatic dispatches don't have a userEvent annotation. Alternatively, pass an `isExternalUpdate` ref into the extensions closure and check it. Future workers building CM6 components should know this pattern.",
+      "evidence": "CodeEditor.tsx lines 109-113 (updateListener never checks isExternalUpdate), lines 182/222/230 (ref set but unused). The bug causes model.reset() to clear undo/redo after every visual builder action (QueryContext.tsx line 148)."
+    },
+    {
+      "area": "knowledge",
+      "observation": "CodeMirror 6 `EditorState.readOnly.of(value)` is immutable once set in the initial extensions — it cannot be changed after mount without using a `Compartment`. Any future worker adding a `readOnly` prop to a CM6-based component must wrap it in a `Compartment` to support dynamic changes. The current implementation has a non-functional `useEffect([readOnly])` that dispatches an empty effects array.",
+      "evidence": "CodeEditor.tsx lines 115-116 (`EditorState.readOnly.of(readOnly)` — no Compartment) and lines 237-244 (the useEffect that should update it but dispatches `effects: []`)."
+    },
+    {
+      "area": "conventions",
+      "observation": "The SKILL.md's 'Write tests first (RED)' TDD procedure was not strictly followed — the transcript shows the worker implementing the component and then writing tests, rather than writing failing tests first. The handoff reports `skillFeedback.followedProcedure: true` which is inaccurate. The skill should clarify that TDD is strongly encouraged but the success criterion is tests passing, not strict red-green-refactor sequencing.",
+      "evidence": "Transcript skeleton shows: (1) install packages, (2) write datalogLanguage.ts, (3) write CodeEditor.tsx, (4) write tests. No 'run tests to confirm they fail' step appears before implementation."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "The CodeEditor component meets all 5 feature requirements at a functional level: CodeMirror 6 editor with Datalog syntax highlighting is working, the split-view layout is implemented, the editor is controlled and synced with QueryContext, and Ctrl/Cmd+Enter fires the submit callback. All 233 tests pass with TypeScript and lint clean. However, there is a blocking bug: the `isExternalUpdate` ref in CodeEditor is never checked inside the `updateListener`, so every external value update triggers `onChange`, which after a 500ms debounce calls `model.reset()` and clears the undo/redo stacks. This silently destroys undo history after every visual query builder interaction, regressing the undo/redo feature. The fix is straightforward: pass `isExternalUpdate` into `buildExtensions` and gate the `updateListener`'s `onChange` call behind it. Status: FAIL due to this undo-stack regression."
+}

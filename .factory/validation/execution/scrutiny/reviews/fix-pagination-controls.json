@@ -1,0 +1,39 @@
+{
+  "featureId": "fix-pagination-controls",
+  "reviewedAt": "2026-04-07T20:30:00.000Z",
+  "commitId": "8c1086be48e6b5dd53acce873326073b1f0990d2",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix correctly identifies and resolves the root cause: `QuerySocketHandler.send_query_update()` was instantiating `QueryResults` without a `length` parameter, defaulting to 50 rows. The React DataTable computed `totalPages = Math.ceil(values.length / PAGE_SIZE)`, so with `values.length` always ≤ 50, `totalPages` was always 1 and `showPagination = totalPages > 1` was always false. Passing `length=10000` to `QueryResults` sends all rows to the frontend which handles pagination client-side. The change is minimal (8 lines), surgical, and correct. The React component, CSS, and tests were already correct. The fix is well-targeted at the true root cause.",
+    "issues": [
+      {
+        "file": "neurolang/utils/server/tests/test_app.py",
+        "line": null,
+        "severity": "non_blocking",
+        "description": "The existing WebSocket test `test_query_socket_sends_values` only verifies that `values` is present and has the correct number of rows for a 2-row dataset. It does NOT verify that the `length=10000` parameter is actually being passed, meaning a regression (reverting to default `length=50`) would not be caught by unit tests alone. A targeted test using a 60+ row fixture and asserting all rows are present in the WebSocket response would close this gap."
+      },
+      {
+        "file": "neurolang/utils/server/responses.py",
+        "line": 290,
+        "severity": "non_blocking",
+        "description": "Pre-existing issue surfaced by this fix: `get_result_item_values()` serializes VBR (ExplicitVBR/ExplicitVBROverlay) columns by calling `serializeVBR()` on every row up to `length` (now 10000). Each VBR serialization encodes a full NIfTI brain image as base64. For a 148-row VBR query, this could produce ~435MB WebSocket payloads, potentially crashing the Vite dev proxy. This is pre-existing and documented in user-testing.md and AGENTS.md, but the `length=10000` fix amplifies it. The worker noted this in `discoveredIssues`. No code change required for this feature; the issue is already known."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The worker discovered that the VBR serialization at `length=10000` can produce very large WebSocket messages that may crash the Vite dev proxy. This was noted in the handoff's `discoveredIssues` and in `user-testing.md`, but it is NOT reflected in `architecture.md`'s WebSocket protocol section or in AGENTS.md's coding conventions. A note in `architecture.md` advising workers to avoid passing `length=10000` when VBR columns are present (or to add a VBR skip flag) would prevent future workers from inadvertently making the problem worse.",
+      "evidence": "handoff.discoveredIssues[0]: 'When running queries with VBR (ExplicitVBR/ExplicitVBROverlay) columns and length=10000, the backend serializes all VBR rows as base64-encoded NIfTI images... This may cause slow responses or Vite proxy buffer issues.' Also AGENTS.md note: 'Vite WebSocket proxy limitation: The Vite dev server proxy can crash (about:blank) when the backend sends very large WebSocket messages (e.g., VBR data ~435MB).'"
+    },
+    {
+      "area": "conventions",
+      "observation": "The `length=10000` value is a magic number with no named constant or documented policy. Future workers modifying `send_query_update()` or `QueryResults` instantiation may not understand why 10000 was chosen and may change it. Adding a comment, or defining a named constant like `WEBSOCKET_MAX_ROWS = 10000` with rationale, would be better self-documenting practice.",
+      "evidence": "neurolang/utils/server/app.py lines 352-358: `QueryResults(self.uuid, future, get_values=True, length=10000)` — no constant, no comment explaining the limit."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS. The fix is correct and well-targeted. Root cause (default `length=50` in WebSocket handler) was accurately diagnosed via systematic investigation. The one-line change (`length=10000`) allows all rows to be sent to the client for client-side pagination. The React component, CSS, and existing pagination tests were already correct. Interactive verification via agent-browser confirmed pagination controls appear with real Destrieux data (74 rows → 'Page 1 of 2'). All 240 frontend and 77 backend tests pass. Two non-blocking issues noted: (1) the WebSocket test does not explicitly verify the length parameter so a regression would be silent; (2) the magic number `10000` is undocumented. The pre-existing VBR serialization amplification issue is a known concern, not introduced by this fix."
+}

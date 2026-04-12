@@ -1,0 +1,82 @@
+{
+  "groupId": "compat-assertions",
+  "testedAt": "2026-04-02T00:00:00Z",
+  "isolation": {
+    "repoRoot": "/Users/dwasserm/sources/NeuroLang",
+    "uvPath": "/Users/dwasserm/.local/bin/uv",
+    "readOnly": true
+  },
+  "toolsUsed": ["shell"],
+  "assertions": [
+    {
+      "id": "VAL-COMPAT-001",
+      "title": "No distutils imports in source code",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "grep -r \"from distutils|import distutils\" /Users/dwasserm/sources/NeuroLang/neurolang/ --include=\"*.py\" | grep -v __pycache__",
+          "expected": "No matches (exit code 1)",
+          "observed": "No matches returned (exit code 1 — grep found nothing)"
+        }
+      ],
+      "evidence": {
+        "command": "grep -r \"from distutils\\|import distutils\" /Users/dwasserm/sources/NeuroLang/neurolang/ --include=\"*.py\" 2>/dev/null | grep -v \"__pycache__\"",
+        "output": "(no output — no matches found)",
+        "exitCode": 1,
+        "consoleErrors": "none"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-COMPAT-002",
+      "title": "typing_inspect usage is compatible on Python 3.12/3.13/3.14",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "uv run --python 3.12 python -c \"from neurolang.type_system import *; print('OK')\"",
+          "expected": "OK (exit code 0)",
+          "observed": "OK (exit code 0)"
+        },
+        {
+          "action": "uv run --python 3.13 python -c \"from neurolang.type_system import *; print('OK')\"",
+          "expected": "OK (exit code 0)",
+          "observed": "OK (exit code 0)"
+        },
+        {
+          "action": "uv run --python 3.14 python -c \"from neurolang.type_system import *; print('OK')\"",
+          "expected": "OK (exit code 0)",
+          "observed": "OK (exit code 0)"
+        }
+      ],
+      "evidence": {
+        "python312": {
+          "command": "cd /Users/dwasserm/sources/NeuroLang && /Users/dwasserm/.local/bin/uv run --python 3.12 python -c \"from neurolang.type_system import *; print('OK')\"",
+          "output": "OK",
+          "exitCode": 0
+        },
+        "python313": {
+          "command": "cd /Users/dwasserm/sources/NeuroLang && /Users/dwasserm/.local/bin/uv run --python 3.13 python -c \"from neurolang.type_system import *; print('OK')\"",
+          "output": "Using CPython 3.13.5 interpreter at: /opt/homebrew/opt/python@3.13/bin/python3.13\nRemoved virtual environment at: .venv\nCreating virtual environment at: .venv\nInstalled 35 packages in 609ms\nOK",
+          "exitCode": 0
+        },
+        "python314": {
+          "command": "cd /Users/dwasserm/sources/NeuroLang && /Users/dwasserm/.local/bin/uv run --python 3.14 python -c \"from neurolang.type_system import *; print('OK')\"",
+          "output": "Using CPython 3.14.2 interpreter at: /opt/homebrew/opt/python@3.14/bin/python3.14\nRemoved virtual environment at: .venv\nCreating virtual environment at: .venv\nInstalled 35 packages in 594ms\nOK",
+          "exitCode": 0
+        },
+        "consoleErrors": "none"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Running uv with --python 3.13 and 3.14 recreates the .venv directory each time (switching interpreters). This left the repo .venv pointing to Python 3.14 after testing. Not disruptive for CI but worth noting for developer workflows.",
+      "resolved": true,
+      "resolution": "Test-only side effect; .venv is transient and not tracked by git.",
+      "affectedAssertions": ["VAL-COMPAT-002"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 2 assertions: both passed. VAL-COMPAT-001: grep found zero distutils imports in neurolang/. VAL-COMPAT-002: `from neurolang.type_system import *` succeeded on Python 3.12, 3.13, and 3.14 with exit code 0."
+}

@@ -1,0 +1,21 @@
+{
+  "featureId": "fix-numpy-nonzero-0d",
+  "reviewedAt": "2026-04-03T00:00:00.000Z",
+  "commitId": "9c838cb5",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix is minimal, correct, and precisely targeted. The single-line change in `connected_components()` at line 645 of `neurolang/probabilistic/dalvi_suciu_lift.py` wraps `adjacency_matrix[idx]` with `np.atleast_1d()` before calling `.nonzero()`. This correctly handles the case where `args_co_occurence_graph()` returns a 1D array `np.ones((1,))` for `Quantifier` expressions: when that 1D array is indexed at `idx=0`, the result is a 0d scalar (`numpy.float64`), and numpy 2.x explicitly raises `ValueError: Calling nonzero on 0d arrays is not allowed`. The fix is also backward-compatible: `np.atleast_1d()` is a no-op on arrays that are already 1D or higher, so 2D adjacency matrices (the normal case for non-Quantifier expressions with multiple formulas) continue to work correctly. Numpy already imports as `np` at the top of the file, so no new imports are needed. All 22 previously-failing tests (across 3 test files) pass after the fix.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The numpy 2.x error message for 0d `.nonzero()` is explicit: `'Use np.atleast_1d(scalar).nonzero() instead'` — numpy itself suggests the fix. This pattern (wrap with `np.atleast_1d()` before `.nonzero()`) could be documented in AGENTS.md or the library notes as a known numpy 2.x compatibility pattern for future reference.",
+      "evidence": "Error text confirmed via direct invocation: 'Calling nonzero on 0d arrays is not allowed. Use np.atleast_1d(scalar).nonzero() instead.' Root cause is indexing a 1D array of shape (1,) with a scalar index, which is legal numpy but yields a 0d scalar."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS. The fix is a clean, minimal, and correct one-line change. The root cause (0d array returned by indexing a 1D array in `connected_components()`) is accurately diagnosed, and `np.atleast_1d()` is the idiomatic numpy fix. The change is backward-compatible with 2D adjacency matrices. All 22 specified verification tests pass. No issues found."
+}

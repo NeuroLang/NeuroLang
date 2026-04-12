@@ -28,6 +28,13 @@ from .responses import (
     QueryResults,
     base64_encode_nifti,
 )
+from .v2_handlers import (
+    V2AtlasHandler,
+    V2EnginesHandler,
+    V2ExamplesHandler,
+    V2SchemaHandler,
+    V2SuggestHandler,
+)
 
 define("port", default=8888, help="run on the given port", type=int)
 define(
@@ -100,6 +107,15 @@ class Application(tornado.web.Application):
                 r"/v1/figure/({uuid})".format(uuid=uuid_pattern),
                 MpltFigureHandler,
             ),
+            # ------------------------------------------------------------------
+            # V2 API endpoints (NeuroLang Sparklis GUI)
+            # ------------------------------------------------------------------
+            (r"/v2/engines", V2EnginesHandler),
+            (r"/v2/schema/(.+)", V2SchemaHandler),
+            (r"/v2/atlas/(.+)", V2AtlasHandler),
+            (r"/v2/suggest/(.+)", V2SuggestHandler),
+            (r"/v2/examples/(.+)", V2ExamplesHandler),
+            # ------------------------------------------------------------------
             (
                 r"/(.*)",
                 StaticFileOrDefaultHandler,
@@ -332,7 +348,15 @@ class QuerySocketHandler(tornado.websocket.WebSocketHandler):
             the status of the query, by default "ok"
         """
         self.write_message(
-            query_results_to_json(QueryResults(self.uuid, future), status)
+            query_results_to_json(
+                QueryResults(
+                    self.uuid,
+                    future,
+                    get_values=True,
+                    length=10000,
+                ),
+                status,
+            )
         )
 
 

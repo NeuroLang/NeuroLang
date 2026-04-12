@@ -1,0 +1,40 @@
+{
+  "featureId": "fix-destrieux-engine-init",
+  "reviewedAt": "2026-04-03T12:15:00.000Z",
+  "commitId": "5bcbcc6b",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix is correct and well-structured. The original bug was that `for label, name in destrieux_atlas['labels']` failed because nilearn >= 0.10 returns labels as a plain list of strings (not (int, bytes) tuples). The fix uses runtime type detection (`isinstance(raw_labels[0], str)`) to dispatch to the correct parsing path. The new-format path uses `enumerate()` to pair each name string with its positional index (which matches the voxel label values in the atlas image). The old-format path adds a `_decode()` helper to properly handle bytes vs. str names. Both Background exclusion and hyphen/underscore replacement are preserved in both paths. Four new tests cover both code paths plus an integration test that calls `DestrieuxEngineConf.create()` against the real dataset. All 43 tests pass. The fix was manually verified via a live server confirming `/v2/schema/destrieux` and `/v2/atlas/destrieux` return successful responses.",
+    "issues": [
+      {
+        "file": "neurolang/utils/server/tests/test_engines.py",
+        "line": 106,
+        "severity": "non_blocking",
+        "description": "The line `_, call_kwargs = nl_mock.add_atlas_set.call_args[0], {}` assigns to `_` and `call_kwargs` but `call_kwargs` is never used afterwards. This is dead code and slightly misleading (suggests keyword args are being verified when they aren't). Non-blocking since it doesn't affect test correctness."
+      },
+      {
+        "file": "neurolang/utils/server/engines.py",
+        "line": 408,
+        "severity": "non_blocking",
+        "description": "The empty-list edge case (`raw_labels = []`) falls into the old-format `else` branch and produces an empty dict without raising an error. This is acceptable behavior (engines with no labels would silently produce an empty atlas), but it is not tested or documented. Very unlikely to occur in practice with nilearn."
+      },
+      {
+        "file": "neurolang/utils/server/engines.py",
+        "line": 408,
+        "severity": "non_blocking",
+        "description": "The feature description mentions a possible 'structured array' format (numpy.ndarray of dtype with named fields) as a potential nilearn format. The fix does not explicitly handle this case. However, a numpy structured array element has type `numpy.void` (not `str`), so it falls through to the old-format path where `for label, name in arr` correctly unpacks each row. This works correctly as verified by analysis, but is not mentioned in the code comment or tested. Adding a comment noting numpy.void falls through to the old-format path, or a dedicated test, would improve robustness documentation."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The worker discovered (by inspecting the real nilearn 0.13.1 atlas data) that the label format changed from list-of-(int, bytes)-tuples to list-of-strings. This nilearn >= 0.10 behavior change is not documented anywhere in .factory/library/. Future workers touching engines.py or nilearn-dependent code would benefit from knowing this. The warning about missing atlas regions (L Medial_wall, R Medial_wall) printed by nilearn is also expected behavior that is not documented.",
+      "evidence": "Transcript: worker ran Python inspection to check `type(labels[0])` and confirmed it is `<class 'str'>` under nilearn 0.13.1. Handoff salientSummary confirms 'nilearn >= 0.10's new label format (list of strings instead of list of int/bytes tuples)'."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "The fix correctly resolves the ValueError by detecting the nilearn label format at runtime and dispatching to the appropriate parsing path. The implementation handles both the current (>= 0.10, list-of-strings) and legacy (list-of-(int, bytes)-tuples) formats. Four new unit and integration tests were added and all 43 tests pass. Manual server verification confirmed /v2/schema/destrieux and /v2/atlas/destrieux return correct responses. Two minor non-blocking issues were found: one dead variable in tests and one undocumented edge case for numpy structured arrays. The nilearn label format change (>= 0.10) is worth documenting in the library knowledge base."
+}

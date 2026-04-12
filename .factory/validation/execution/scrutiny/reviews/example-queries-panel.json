@@ -1,0 +1,39 @@
+{
+  "featureId": "example-queries-panel",
+  "reviewedAt": "2026-04-07T00:00:00.000Z",
+  "commitId": "30577f8d642c7c10c5c9fbfc60043fbb9628e4c8",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The implementation fully satisfies all four feature requirements: (1) a new GET /v2/examples/:engine backend endpoint reads queries.yaml using the same search-path logic as the existing v1 EnginesHandler; (2) the ExampleQueries component renders a collapsible panel below the Predicates section in the sidebar; (3) clicking an example calls model.reset() + refresh() + setDatalogText(query) which correctly loads the query into the CodeEditor and triggers bidirectional sync parsing; (4) a per-example toggle button reveals/hides the description. Backend tests cover HTTP status codes, response shape, required fields, and edge cases. Frontend tests cover loading, error, empty, and populated states, plus user interactions. Two non-blocking issues were found.",
+    "issues": [
+      {
+        "file": "neurolang/utils/server/v2_handlers.py",
+        "line": 579,
+        "severity": "non_blocking",
+        "description": "Missing try/except for yaml.YAMLError in _load_queries_yaml(). The function uses os.path.isfile() to check the file exists and then calls yaml.safe_load() without catching yaml.YAMLError. If queries.yaml is present but has invalid YAML syntax (e.g., due to corruption or manual editing errors), the exception will propagate unhandled to V2ExamplesHandler.get(), causing an HTTP 500 response. All other edge-case guards (file not found, non-list value) are handled; this one path is missing. Mitigation: wrap yaml.safe_load(fh) in a try/except yaml.YAMLError and log + return {} on failure. Note: the backend test test_malformed_yaml_value_returns_empty_list patches _load_queries_yaml directly so it does not exercise this code path."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/components/ExampleQueries.tsx",
+        "line": 86,
+        "severity": "non_blocking",
+        "description": "The useEffect fetch does not use an AbortController for cleanup. Both SchemaContext.tsx (line 80-105) and SuggestionsPanel.tsx (lines 180-192) create an AbortController and return a cleanup that calls controller.abort(). ExampleQueries.tsx lacks this, so if the user rapidly switches engines, a stale response from the first engine could arrive after the second engine's fetch begins and overwrite examples state with data for the wrong engine. In practice, the examples endpoint is fast, so the race window is small, but the pattern is inconsistent with the rest of the codebase."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The ExampleQueries sidebar section in Layout.tsx wraps the component without an external <h2 className=\"sidebar-section-title\"> heading, unlike the Engines and Predicates sections which each have an external heading. The ExampleQueries component renders its own internal collapsible header button with the title 'Examples'. This is functionally intentional (enables the collapsible toggle), but the structural divergence from the existing sidebar section pattern is not documented in AGENTS.md. Future sidebar sections that need collapsibility should know which approach to follow.",
+      "evidence": "Layout.tsx lines 164-173: Engines and Predicates sections use <h2 className=\"sidebar-section-title\"> outside their child components; line 172-174: ExampleQueries section has no such heading. ExampleQueries.tsx line 143: internal header rendered as a <button>."
+    },
+    {
+      "area": "conventions",
+      "observation": "The codebase has an established pattern of using AbortController in useEffect fetch hooks (SchemaContext.tsx, SuggestionsPanel.tsx) to prevent stale responses when effect dependencies change. This pattern is not documented in AGENTS.md. A new worker implementing a fetch in useEffect could miss this, as happened with ExampleQueries.tsx.",
+      "evidence": "SchemaContext.tsx lines 80-105: AbortController used with fetch, cleanup returns controller.abort(). SuggestionsPanel.tsx lines 179-192: same pattern. ExampleQueries.tsx lines 86-128: useEffect fetch with no AbortController and no cleanup return."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "The example-queries-panel feature is complete and correct. Both backend (V2ExamplesHandler + _load_queries_yaml) and frontend (ExampleQueries component) implementations fully satisfy the feature requirements and expected behaviors. 24 tests pass (12 backend + 12 frontend). Two non-blocking issues were identified: (1) missing yaml.YAMLError handling in _load_queries_yaml could cause HTTP 500 if queries.yaml is found but syntactically invalid, and (2) the fetch in ExampleQueries.tsx lacks an AbortController cleanup, inconsistent with SchemaContext.tsx and SuggestionsPanel.tsx. Neither issue affects functionality in the normal case. The feature is ready to pass."
+}

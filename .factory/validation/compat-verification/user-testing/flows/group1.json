@@ -1,0 +1,28 @@
+{
+  "groupId": "group1",
+  "testedAt": "2026-04-02T00:00:00Z",
+  "isolation": {
+    "repoRoot": "/Users/dwasserm/sources/NeuroLang",
+    "uvBinary": "/Users/dwasserm/.local/bin/uv",
+    "python312": "/opt/homebrew/bin/python3.12",
+    "python313": "/opt/homebrew/bin/python3.13",
+    "venvPy312": "/tmp/test-nl-312",
+    "venvPy313": "/tmp/test-nl-313"
+  },
+  "toolsUsed": ["shell"],
+  "assertions": {
+    "VAL-UV-001": {
+      "status": "pass",
+      "evidence": "uv venv /tmp/test-nl-312 --python 3.12 exited 0 (CPython 3.12.9). uv pip install --python /tmp/test-nl-312/bin/python -e '.[dev]' exited 0. Resolved 45 packages, installed 45 packages including neurolang==0.1a20.dev25+gf732588e7.d20260402.",
+      "notes": "pysdd 1.0.6 compiled and installed successfully. All 45 packages installed without errors."
+    },
+    "VAL-UV-002": {
+      "status": "pass",
+      "evidence": "uv venv /tmp/test-nl-313 --python 3.13 exited 0 (CPython 3.13.5). uv pip install --python /tmp/test-nl-313/bin/python -e '.[dev]' exited 0. Resolved 45 packages, installed 45 packages including neurolang==0.1a20.dev25+gf732588e7.d20260402.",
+      "notes": "pysdd 1.0.6 compiled and installed successfully. All 45 packages installed without errors."
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 2 assertions: 2 passed. uv install with [dev] extras succeeded on both Python 3.12.9 and Python 3.13.5, resolving and installing 45 packages each with exit code 0."
+}

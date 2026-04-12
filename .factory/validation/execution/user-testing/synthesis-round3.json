@@ -1,0 +1,43 @@
+{
+  "milestone": "execution",
+  "round": 3,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 5,
+    "passed": 4,
+    "failed": 1,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-EXEC-005",
+    "VAL-EXEC-006",
+    "VAL-EXEC-007",
+    "VAL-EXEC-009"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-EXEC-008",
+      "reason": "Pagination controls missing from DataTable component. With 148 rows (destrieux symbol), table silently truncates to 50 rows. Row count label correctly shows '148 rows' but no Next/Previous/page controls are rendered anywhere in the DOM. The pagination UI is not implemented."
+    }
+  ],
+  "blockedAssertions": [],
+  "rootCauses": [
+    {
+      "id": "RC-004",
+      "description": "DataTable component in the React frontend does not render pagination controls. When row count exceeds 50 (the page size), only the first 50 rows are rendered and no Next/Previous/page number buttons appear. The row count label correctly reports the total, suggesting the pagination state exists but the UI controls are not rendered.",
+      "affectedAssertions": ["VAL-EXEC-008"],
+      "suggestedFix": "Add pagination controls to the DataTable component UI: render Next/Previous buttons and current page indicator when totalRows > pageSize. Wire up to existing pagination state (currentPage, totalPages) if it exists, otherwise add pagination state."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Updated Known UI behaviors for execution milestone: documented serializeVBR fix, new pagination missing bug (VAL-EXEC-008), noted ~exists() parse failure in Sulcal identification example, and symbol selector JS workaround.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/execution/user-testing/synthesis-round2.json",
+  "flowReports": [
+    ".factory/validation/execution/user-testing/flows/exec-results-rerun.json"
+  ]
+}

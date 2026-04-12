@@ -1,0 +1,56 @@
+{
+  "featureId": "react-app-scaffold",
+  "reviewedAt": "2026-04-03T10:00:00.000Z",
+  "commitId": "0830760e",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The scaffold was implemented cleanly and meets all requirements: Vite + React 18 + TypeScript at the correct path, all required dependencies present in package.json, vite.config.ts with port 3100 and /v1+/v2 proxy to localhost:8888, proper tsconfig with strict TypeScript settings, src/main.tsx entry point, src/App.tsx with placeholder layout (navbar showing 'NeuroLang Sparklis', sidebar with Engines and Predicates sections, main content area), 5 smoke tests covering all structural elements, and all npm scripts (dev, build, test, typecheck, lint). Note: the working-tree files for App.tsx, App.test.tsx, components/Layout.tsx, and context/EngineContext.tsx reflect a later commit (26af8188, app-layout-engine-selector). The scaffold commit (0830760e) introduced a simpler, correct App.tsx with no EngineContext dependency, and the scaffold-era test file had no fetch mocking — both appropriate for a scaffold feature.",
+    "issues": [
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/vite.config.ts",
+        "line": 13,
+        "severity": "non_blocking",
+        "description": "The /v1 proxy has `ws: true` but /v2 does not. If future v2 endpoints use WebSockets, this would silently fail. Since the feature description only proxies standard HTTP for /v2, this is fine for now — but the asymmetry is slightly inconsistent."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/index.html",
+        "line": 4,
+        "severity": "non_blocking",
+        "description": "The page references `/vite.svg` as the favicon, which is a placeholder Vite default. This is cosmetic and acceptable for a scaffold, but should be updated when the app gets a proper icon."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/package.json",
+        "line": null,
+        "severity": "non_blocking",
+        "description": "tailwindcss is listed as a devDependency but no tailwind.config.js or PostCSS config is present in the commit. The CSS in index.css uses hand-written class names rather than Tailwind utility classes. Tailwind is effectively unused — it's installed but not configured or consumed. The feature description says 'tailwindcss' should be a dependency, so including it satisfies the requirement, but a future worker will need to properly initialize Tailwind if they want to use it."
+      },
+      {
+        "file": "neurolang/utils/server/neurolang-sparklis/src/App.tsx",
+        "line": 6,
+        "severity": "non_blocking",
+        "description": "The navbar <header> element is missing role=\"banner\" in the scaffold commit's App.tsx. The test for 'renders the navbar with title' queries getByRole('banner'), which relies on the implicit ARIA banner role of <header>. This works because <header> at the top level of a page does implicitly carry the landmark role 'banner' in accessibility semantics, so the test passes correctly without an explicit attribute."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "AGENTS.md says 'CSS: Use a utility-first approach (Tailwind CSS) or CSS modules', but the scaffold uses hand-written semantic class names in a flat index.css (no Tailwind utilities, no CSS modules). Tailwind is installed but unconfigured. The convention should clarify whether plain CSS with BEM-style class names is acceptable, or whether Tailwind must be properly initialized.",
+      "evidence": "neurolang/utils/server/neurolang-sparklis/src/index.css uses .app-container, .navbar, .sidebar-section-title etc. (manual CSS). No tailwind.config.js or postcss.config.js exists in commit 0830760e. AGENTS.md L24: 'CSS: Use a utility-first approach (Tailwind CSS) or CSS modules'."
+    },
+    {
+      "area": "skills",
+      "observation": "The frontend-worker skill says to follow a TDD red-green cycle (step 3: write tests first, confirm they fail; step 4: implement). The transcript skeleton shows the worker created all files (including App.tsx and the test) before running npm install and tests. This is a minor deviation from the specified procedure — tests and implementation were written together, not tests-first. The skill procedure may be aspirational for scaffold tasks where there's nothing to test against yet.",
+      "evidence": "Transcript: Create tool calls for App.tsx, App.test.tsx, and all source files in the same batch before any test run. No evidence of a failing-test run before implementation. skillFeedback.followedProcedure is 'true' but the TDD cycle was not actually followed."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The worker discovered that `@testing-library/user-event` is useful alongside `@testing-library/react` and added it as a devDependency (not in the feature spec). This is a reasonable addition but the library list in environment.md only lists `vitest, @testing-library/react` without `@testing-library/user-event`. Future workers should know this is already installed.",
+      "evidence": "package.json devDependencies includes '@testing-library/user-event': '^14.5.2'. Not mentioned in the feature description or environment.md."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "The react-app-scaffold feature is fully implemented and correct. All required files are present: package.json with the specified dependencies, vite.config.ts with port 3100 and correct proxies, tsconfig.json with strict TypeScript settings, src/main.tsx, src/App.tsx with the placeholder layout showing 'NeuroLang Sparklis' in the navbar, sidebar placeholders, and main content area, plus 5 passing smoke tests. All validators passed (vitest, tsc --noEmit, vite build, eslint). Minor observations: tailwindcss is installed but not configured/used (CSS is hand-written); the TDD procedure in the skill was not strictly followed (tests and implementation written together); and @testing-library/user-event was added as an undocumented bonus dependency."
+}

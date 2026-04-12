@@ -1,0 +1,26 @@
+{
+  "featureId": "modernize-setup-py-remove-distutils",
+  "reviewedAt": "2026-04-02T09:00:00.000Z",
+  "commitId": "79ed18bf",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The implementation fully satisfies the feature requirements and VAL-BUILD-008. setup.py has no distutils or versioneer imports. All four custom command classes are preserved (NPMBuildCommand, DevelopCommand, InstallCommand, BuildPyCommand). The setup() call is minimal, containing only cmdclass. The worker also fixed a latent bug in pyproject.toml ([tool.setuptools-scm] → [tool.setuptools_scm] and write_to → version_file), which was a prerequisite for correct SCM versioning after removing use_scm_version=True from setup().",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "Worker discovered that pyproject.toml had [tool.setuptools-scm] (hyphen) instead of [tool.setuptools_scm] (underscore), and used deprecated write_to instead of version_file (the setuptools-scm 8+ API). This caused version to fall back to 0.0.0. The AGENTS.md and library documentation do not mention this typo/API mismatch. Future workers working with setuptools-scm config should know: the TOML section must use an underscore, and version_file replaces the deprecated write_to key.",
+      "evidence": "pyproject.toml:85 — [tool.setuptools_scm] (corrected by this commit). git show 79ed18bf shows the fix from [tool.setuptools-scm]/write_to to [tool.setuptools_scm]/version_file."
+    },
+    {
+      "area": "skills",
+      "observation": "The migration-worker skill mentions verifying with 'uv run python -c \"import neurolang\"', but this command fails on Python 3.12+ due to pre-existing type_system/__init__.py issues. The skill could clarify that this verification step is expected to fail on Python 3.12+ until the fix-source-code-compat-312-plus feature is complete, and provide an alternative verification step (e.g., checking the version string via importlib.metadata).",
+      "evidence": "Handoff verification: 'uv run python -c \"import neurolang\"' exited with code 1 (pre-existing issue). Worker correctly used 'uv run python -c \"from importlib.metadata import version; print(version(\\\"neurolang\\\"))\"' as the actual successful verification."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "PASS. The feature is correctly implemented. setup.py has no distutils imports (VAL-BUILD-008 satisfied), all four custom command classes are retained, and the setup() call is minimal (cmdclass only). The worker additionally fixed a latent pyproject.toml bug (wrong TOML section name for setuptools-scm and deprecated API key) that would have caused version to fall back to 0.0.0. No blocking issues found."
+}

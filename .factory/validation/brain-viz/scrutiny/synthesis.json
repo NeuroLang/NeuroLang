@@ -1,0 +1,71 @@
+{
+  "milestone": "brain-viz",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm test -- --run",
+      "exitCode": 0,
+      "summary": "300 tests passed (13 test files), including 18 BrainViewer tests and 25 OverlayManager tests"
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npx tsc --noEmit",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm run lint",
+      "exitCode": 0,
+      "summary": "0 warnings, 0 errors"
+    },
+    "test_backend": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang && .venv/bin/python -m pytest neurolang/utils/server/tests/ -x -v",
+      "exitCode": 0,
+      "summary": "77 tests passed, 1 expected warning about missing Destrieux atlas regions"
+    }
+  },
+  "reviewsSummary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [
+    {
+      "target": "library/architecture.md",
+      "description": "Added 'Niivue Integration Quirks' section documenting: (1) sliceType:3 is MULTIPLANAR constant, (2) NVImage.loadFromBase64 requires .nii extension in name field or RangeError is thrown, (3) setOverlayList duck-typed API pattern for overlay management, (4) coordinate update tests are no-ops in jsdom due to WebGL unavailability.",
+      "sourceFeatures": ["niivue-atlas-viewer", "brain-overlay-from-results"]
+    }
+  ],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Clarify the VBR data loading guidance. Current text says 'VBR overlay data should be loaded via separate REST endpoints, not from the WebSocket query results.' However, the brain-overlay-from-results feature description explicitly offered 'from the result data directly' as a valid option, and the implementation reads VBR data directly from WebSocket results. The AGENTS.md guidance should either: (a) be softened to 'prefer' REST endpoints but allow direct data access when the VBR data is already present in the result, or (b) explicitly note that for small VBR payloads (<10 rows), direct access is acceptable. The current guidance creates a false conflict with the feature description.",
+      "evidence": "AGENTS.md states 'VBR overlay data should be loaded via separate REST endpoints', but brain-overlay-from-results feature description says '(base64-encoded NIfTI from the existing /v1/download endpoint or from the result data directly)'. The implementation reads data directly from the WebSocket result (ResultsPanel.tsx:252). The 435MB payload concern documented in AGENTS.md applies to VBR-heavy full table scans, not to single-row overlay clicks.",
+      "isSystemic": false
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Extend the 'Fetch Cleanup Convention' to cover all async effects, not just those using fetch(). The current convention says 'All useEffect hooks that perform fetch() calls MUST use an AbortController'. The overlay sync effect in BrainViewer.tsx performs async work (Promise.all with Niivue API calls) without AbortController cleanup. Update the guidance to: 'All useEffect hooks that perform async work (fetch(), Promises, timers) MUST use a cleanup function. For fetch() specifically, use AbortController. For other async operations, use a mounted flag or similar pattern to guard against state updates after unmount.'",
+      "evidence": "BrainViewer.tsx syncOverlays effect (lines 232-306) performs async Niivue API calls without cleanup. The existing AGENTS.md convention only covers fetch() explicitly, creating ambiguity for non-fetch async effects.",
+      "isSystemic": false
+    },
+    {
+      "target": "skills/fullstack-worker",
+      "suggestion": "Add a note to the fullstack-worker skill procedure acknowledging that manual browser verification with agent-browser may not be feasible when the feature involves VBR query results. The Vite dev proxy crashes (about:blank) on ~435MB WebSocket payloads from VBR queries. When implementing brain visualization features that require VBR data to test, the skill should instruct the worker to: (a) test with non-VBR queries using agent-browser, (b) rely on unit tests for VBR-specific behavior, (c) note the limitation in the handoff.",
+      "evidence": "brain-overlay-from-results worker explicitly noted in skillFeedback: 'The skill says to do manual verification with agent-browser, but AGENTS.md notes that VBR queries can produce ~435MB payloads that crash the Vite dev proxy.' This is a known limitation documented in AGENTS.md but not reflected in the skill procedure.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "V2AtlasHandler uses except (IndexError, KeyError) for 404 handling because get_atlas raises IndexError not KeyError",
+      "reason": "already-documented — this is already in architecture.md Backend Quirks section: 'get_atlas(engine_key) raises IndexError (not KeyError) when the engine key is unknown.'"
+    }
+  ],
+  "previousRound": null
+}

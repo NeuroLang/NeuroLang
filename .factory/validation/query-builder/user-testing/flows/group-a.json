@@ -1,0 +1,108 @@
+{
+  "groupId": "group-a",
+  "testedAt": "2026-04-03T10:45:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3102",
+    "apiBase": "http://localhost:8888",
+    "browserSession": "f867ae0532bc__a",
+    "note": "Dev server started on port 3102 (3100 and 3101 were in use). Neurosynth engine selected for testing."
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-QBUILD-001",
+      "title": "Predicate browser displays symbols",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Navigate to http://localhost:3102",
+          "expected": "App loads with engine list",
+          "observed": "App loaded with neurosynth and destrieux engines in sidebar"
+        },
+        {
+          "action": "Click 'neurosynth' engine in sidebar",
+          "expected": "Predicate browser panel shows symbols grouped by category",
+          "observed": "Predicate browser loaded with Relations (4): PeakReported, Study, TermInStudyTFIDF, Voxel; Functions (32): agg_create_region, etc.; Probabilistic (1): SelectedStudy"
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "query-builder/group-a/VAL-QBUILD-001-after-engine-select.png"
+        ],
+        "consoleErrors": "none",
+        "network": "GET /v2/schema/neurosynth -> 200 (schema loaded successfully)"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QBUILD-002",
+      "title": "Search/filter predicates",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Type 'Peak' in the predicate browser search box",
+          "expected": "Predicate list filters to show only predicates matching 'Peak'",
+          "observed": "Predicate browser updated to show 'Relations 1' containing only 'PeakReported(0, 1, 2, 3)'. All other categories (Functions, Probabilistic) disappeared."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "query-builder/group-a/VAL-QBUILD-002-search-filter-peak.png"
+        ],
+        "consoleErrors": "none",
+        "network": "No additional network calls; filtering is client-side"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QBUILD-003",
+      "title": "Click predicate to add to query",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Click 'PeakReported(0, 1, 2, 3)' button in predicate browser (with 'Peak' search active)",
+          "expected": "PeakReported added to visual query builder as a predicate block with placeholder variables",
+          "observed": "Visual query builder updated to show 'Find v, v1, v2, v3 where PeakReported(v, v1, v2, v3)' with a remove button (x) on the PeakReported block. A 'Remove PeakReported from query' button also appeared."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "query-builder/group-a/VAL-QBUILD-003-predicate-added.png"
+        ],
+        "consoleErrors": "none",
+        "network": "No additional network calls for adding predicates"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-QBUILD-004",
+      "title": "Visual query renders readable form",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Observe the visual query builder after adding PeakReported predicate",
+          "expected": "Visual representation shows a readable, structured rendering (not raw Datalog text) e.g. 'Find x, y, z where PeakReported(x, y, z, s)'",
+          "observed": "Visual query builder shows 'Find v, v1, v2, v3 where PeakReported(v, v1, v2, v3)' with keywords 'Find' and 'where' styled distinctly. The raw Datalog is shown separately below: 'Datalog: ans(v, v1, v2, v3) :- PeakReported(v, v1, v2, v3).' — not as the primary visual representation."
+        }
+      ],
+      "evidence": {
+        "screenshots": [
+          "query-builder/group-a/VAL-QBUILD-004-readable-query.png"
+        ],
+        "consoleErrors": "none",
+        "network": "N/A"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The Vite dev server at http://localhost:3100 was not running. Ports 3100 and 3101 were both in use, so the dev server started on port 3102.",
+      "resolved": true,
+      "resolution": "Manually started the dev server with 'npm run dev' from the neurolang-sparklis directory. Navigated to http://localhost:3102 instead.",
+      "affectedAssertions": ["VAL-QBUILD-001", "VAL-QBUILD-002", "VAL-QBUILD-003", "VAL-QBUILD-004"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 4 assertions: all 4 passed. The predicate browser correctly displays symbols grouped by category after engine selection (VAL-QBUILD-001). Search/filter works correctly for substring matching (VAL-QBUILD-002). Clicking a predicate adds it to the visual query builder with placeholder variables (VAL-QBUILD-003). The visual query builder renders a readable natural-language-like form 'Find ... where ...' (VAL-QBUILD-004)."
+}

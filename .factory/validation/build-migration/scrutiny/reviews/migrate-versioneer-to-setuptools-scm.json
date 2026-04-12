@@ -1,0 +1,33 @@
+{
+  "featureId": "migrate-versioneer-to-setuptools-scm",
+  "reviewedAt": "2026-04-02T12:00:00.000Z",
+  "commitId": "aeeae849",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The versioneer-to-setuptools-scm migration is complete and correct. All primary objectives are satisfied: versioneer.py and neurolang/_version.py are deleted, neurolang/__init__.py now uses importlib.metadata with a proper PackageNotFoundError fallback, MANIFEST.in has been cleaned of versioneer references (now only includes pyproject.toml), .gitattributes versioneer export-subst entries are removed, and pyproject.toml has the correct [tool.setuptools_scm] configuration with version_file pointing to neurolang/_version_scm.py. The version_file is generated at install time and the install verification confirms that `uv pip install -e .` succeeds and a proper version string (0.1a20.dev15+g...) is produced.\n\nOne minor gap was found: setup.cfg still contains a stale [versioneer] section that was not removed. This section is now dead configuration since versioneer itself is gone, but it is harmless (setuptools does not act on it). It is a non-blocking cosmetic issue.",
+    "issues": [
+      {
+        "file": "setup.cfg",
+        "line": 1,
+        "severity": "non_blocking",
+        "description": "The [versioneer] section in setup.cfg was not removed as part of this migration. Since versioneer.py has been deleted and all metadata has moved to pyproject.toml, this stale configuration is dead but harmless. It could cause confusion and should be removed for cleanliness. The previous feature (42ae0cde) stripped all [metadata] and [options] sections from setup.cfg but left the [versioneer] block; the current feature did not address it either."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "architecture.md still describes the old pre-migration state for the __init__.py and versioneer entries. Specifically: 'neurolang/__init__.py - Exports + version via _version.py (versioneer, to be migrated)', 'versioneer.py + neurolang/_version.py - Git-based versioning (v0.18, uses distutils)', and 'MANIFEST.in - Includes versioneer files' are all stale. The migration is now complete; the architecture doc should be updated to reflect setuptools-scm and importlib.metadata.",
+      "evidence": ".factory/library/architecture.md lines 5, 19, 20, 21 still reference versioneer and the old _version.py. The a7972725 library update commit only touched environment.md, not architecture.md."
+    },
+    {
+      "area": "knowledge",
+      "observation": "setup.cfg retains a stale [versioneer] section even after the migration feature. This was not caught because the feature description and AGENTS.md only mentioned MANIFEST.in and .gitattributes as cleanup targets for the versioneer removal. AGENTS.md could explicitly note that setup.cfg's [versioneer] section should also be cleaned up when removing versioneer.",
+      "evidence": "setup.cfg line 1-7 still contains [versioneer] with VCS, style, versionfile_source, versionfile_build, tag_prefix, parentdir_prefix. The grep check 'grep versioneer MANIFEST.in setup.py setup.cfg pyproject.toml .gitattributes' in the worker's verification commands did find 'setup.cfg:[versioneer]' but no fix was applied."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "The feature successfully replaces versioneer with setuptools-scm. All VAL-BUILD-002 assertions are satisfied: versioneer.py is deleted, neurolang/_version.py is deleted, neurolang/__init__.py uses importlib.metadata, MANIFEST.in has no versioneer references, and pyproject.toml has [tool.setuptools_scm] correctly configured. Install and version import work as verified. One non-blocking issue: setup.cfg still has a stale [versioneer] section that was not cleaned up. Architecture documentation in .factory/library/architecture.md still describes the old versioneer-based setup and should be updated. Overall: PASS."
+}

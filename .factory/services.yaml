@@ -1,0 +1,34 @@
+commands:
+  install_backend: cd /Users/dwasserm/sources/NeuroLang && uv sync --extra dev --extra server
+  install_frontend: cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm install
+  test_backend: cd /Users/dwasserm/sources/NeuroLang && .venv/bin/python -m pytest neurolang/utils/server/tests/ -x -v --timeout=120
+  test_frontend: cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm test -- --run
+  typecheck_frontend: cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npx tsc --noEmit
+  lint_frontend: cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm run lint
+  build_frontend: cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm run build
+
+services:
+  tornado-backend:
+    start: cd /Users/dwasserm/sources/NeuroLang && .venv/bin/python -m neurolang.utils.server.app --port=8888 &
+    stop: lsof -ti :8888 | xargs kill 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:8888/v1/engines
+    port: 8888
+    depends_on: []
+
+  react-dev:
+    start: cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm run dev -- --host 0.0.0.0 --port 3100 &
+    stop: lsof -ti :3100 | xargs kill 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:3100 || curl -sf http://[::1]:3100
+    port: 3100
+    depends_on: []
+
+  react-preview:
+    # Production build preview server. Use this instead of react-dev when testing
+    # brain-viz features (VBR overlays) to avoid Vite dev server WebSocket proxy
+    # crashes caused by large WS payloads (~435MB VBR data).
+    # Must run `build_frontend` command first before starting this service.
+    start: cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm run preview -- --host 0.0.0.0 --port 3150 &
+    stop: lsof -ti :3150 | xargs kill 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:3150 || curl -sf http://[::1]:3150
+    port: 3150
+    depends_on: []

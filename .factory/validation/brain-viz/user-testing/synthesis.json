@@ -1,0 +1,28 @@
+{
+  "milestone": "brain-viz",
+  "round": 2,
+  "status": "pass",
+  "testedAt": "2026-04-08",
+  "assertionsSummary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-BRAIN-002",
+    "VAL-BRAIN-003",
+    "VAL-BRAIN-004",
+    "VAL-BRAIN-005"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Updated brain-viz known behaviors: marked FIXED for DataTable 'View in brain' button object format and BrainViewer Niivue API fixes. Added verified queries for ExplicitVBR and ExplicitVBROverlay testing. Added notes about main-content scrolling and Union of atlas regions query crash.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/brain-viz/user-testing/synthesis-round1.json"
+}

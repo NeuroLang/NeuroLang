@@ -1,0 +1,97 @@
+{
+  "groupId": "group-retest",
+  "milestone": "query-builder",
+  "testedAt": "2026-04-03T00:00:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3100",
+    "apiBase": "http://localhost:8888",
+    "browserSession": "858a2dac352a__retest",
+    "noCredentials": true
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": {
+    "VAL-QBUILD-005": {
+      "status": "pass",
+      "title": "Add multiple predicates - shared variable names visually indicate a join",
+      "steps": [
+        { "action": "Navigate to http://localhost:3100", "expected": "App loads", "observed": "App loaded successfully" },
+        { "action": "Select neurosynth engine", "expected": "Predicate browser loads", "observed": "Predicate browser showed Relations, Functions, Probabilistic groups" },
+        { "action": "Click PeakReported to add first predicate", "expected": "PeakReported(v, v1, v2, v3) added to query", "observed": "PeakReported(v, v1, v2, v3) added, variables show as clickable tokens" },
+        { "action": "Click TermInStudyTFIDF to add second predicate", "expected": "Both predicates visible in query", "observed": "TermInStudyTFIDF(v4, v5, v6) added alongside PeakReported" },
+        { "action": "Click variable v3 in PeakReported (4th parameter)", "expected": "Inline text input appears", "observed": "textbox 'Rename variable v3' appeared in place of the token" },
+        { "action": "Type 'v4' and press Enter to rename v3 to v4", "expected": "Variable renamed, joins highlighted", "observed": "v3 renamed to v4; all 3 v4 tokens now have CSS class 'vqb-var-token--shared' with blue background highlight" }
+      ],
+      "evidence": {
+        "screenshots": [
+          "query-builder/group-retest/VAL-QBUILD-005-first-predicate.png",
+          "query-builder/group-retest/VAL-QBUILD-005-both-predicates.png",
+          "query-builder/group-retest/VAL-QBUILD-005-rename-input.png",
+          "query-builder/group-retest/VAL-QBUILD-005-after-rename.png"
+        ],
+        "consoleErrors": "none",
+        "domEvidence": "document.querySelectorAll('.vqb-var-token--shared') returned 3 elements all with text 'v4', confirming visual join indication"
+      },
+      "issues": null
+    },
+    "VAL-QBUILD-007": {
+      "status": "pass",
+      "title": "Context-aware suggestions displayed after predicates added",
+      "steps": [
+        { "action": "Reload page and select neurosynth engine", "expected": "Clean state", "observed": "Clean state restored" },
+        { "action": "Click PeakReported to add predicate", "expected": "Predicate added", "observed": "PeakReported(v, v1, v2, v3) added" },
+        { "action": "Wait 3 seconds for debounced suggestions fetch", "expected": "Suggestions panel shows context-aware chips", "observed": "Suggestions panel shows IDENTIFIERS and BASE SYMBOLS sections with 76 suggestion chips (PeakReported, SelectedStudy, Study, TermInStudyTFIDF, Voxel, functions, etc.)" }
+      ],
+      "evidence": {
+        "screenshots": [
+          "query-builder/group-retest/VAL-QBUILD-007-suggestions-after-predicate.png"
+        ],
+        "consoleErrors": "none",
+        "domEvidence": "No 'No suggestions available' text present; 76 chip elements found via document.querySelectorAll('[class*=chip]')"
+      },
+      "issues": null
+    },
+    "VAL-QBUILD-008": {
+      "status": "pass",
+      "title": "Click suggestion chip adds predicate with proper variable names",
+      "steps": [
+        { "action": "With PeakReported in query and suggestions visible, take before screenshot", "expected": "Suggestions panel visible", "observed": "Suggestions panel visible with chips" },
+        { "action": "Click 'TermInStudyTFIDF' suggestion chip in IDENTIFIERS section", "expected": "TermInStudyTFIDF added with proper variable names", "observed": "TermInStudyTFIDF(v4, v5, v6) added to query - proper placeholder variable names, not empty parentheses" },
+        { "action": "Verify Datalog code", "expected": "ans(v, v1, v2, v3, v4, v5, v6) :- PeakReported(v, v1, v2, v3), TermInStudyTFIDF(v4, v5, v6).", "observed": "Datalog matches expected output with all variables populated" }
+      ],
+      "evidence": {
+        "screenshots": [
+          "query-builder/group-retest/VAL-QBUILD-008-before-click.png",
+          "query-builder/group-retest/VAL-QBUILD-008-after-click.png"
+        ],
+        "consoleErrors": "none",
+        "network": "Suggestion chip click triggered lookupSymbol() and added TermInStudyTFIDF with v4, v5, v6 variables (visible in Datalog: TermInStudyTFIDF(v4, v5, v6))"
+      },
+      "issues": null
+    },
+    "VAL-QBUILD-011": {
+      "status": "pass",
+      "title": "Variable binding visualization - user can create shared variable bindings",
+      "steps": [
+        { "action": "After rename operation in VAL-QBUILD-005 flow, check for shared variable CSS class", "expected": "Shared variable tokens show visual distinction (color/highlight)", "observed": "CSS class 'vqb-var-token--shared' applied to all 3 v4 token occurrences (1 in 'Find' header, 1 in PeakReported, 1 in TermInStudyTFIDF) with blue background highlight" }
+      ],
+      "evidence": {
+        "screenshots": [
+          "query-builder/group-retest/VAL-QBUILD-011-variable-highlight.png"
+        ],
+        "consoleErrors": "none",
+        "domEvidence": "document.querySelectorAll('.vqb-var-token--shared') returned [{text:'v4',class:'vqb-var-token vqb-var-token--shared vqb-var-token--editable'}, {text:'v4',...}, {text:'v4',...}] - 3 shared tokens confirmed"
+      },
+      "issues": null
+    }
+  },
+  "frictions": [
+    {
+      "description": "The suggestion chips use class 'suggestions-chip' but don't appear in agent-browser snapshot -i output because they're not in the accessibility tree as standard interactive elements. Required using JavaScript eval to click them.",
+      "resolved": true,
+      "resolution": "Used agent-browser eval to run JavaScript that found and clicked the button.suggestions-chip element directly.",
+      "affectedAssertions": ["VAL-QBUILD-008"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 4 assertions: all 4 passed. The fix-query-builder-ux commit successfully addressed all tested behaviors: (1) variable rename UI opens inline text input, (2) renaming to a matching variable applies 'vqb-var-token--shared' CSS class for visual join indication, (3) suggestions panel shows context-aware chips after predicates are added (not 'No suggestions available'), and (4) clicking a suggestion chip adds the predicate with proper placeholder variable names."
+}

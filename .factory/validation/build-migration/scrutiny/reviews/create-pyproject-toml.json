@@ -1,0 +1,50 @@
+{
+  "featureId": "create-pyproject-toml",
+  "reviewedAt": "2026-04-02T08:30:00.000Z",
+  "commitId": "42ae0cde",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The pyproject.toml was successfully created with all required sections migrated from setup.cfg. All 13 core dependencies are present with correctly updated constraints (nilearn upper bound removed, lark upper bound removed, sqlalchemy lower bound added). All optional extras (dev, doc, server) are present. The entry point, package-data, and tool config are all correctly populated. Coverage config from .coveragerc and pytest config from pytest.ini are both migrated to pyproject.toml. setup.cfg metadata/options sections are removed. Two non-blocking issues were found.",
+    "issues": [
+      {
+        "file": "pyproject.toml",
+        "line": 80,
+        "severity": "non_blocking",
+        "description": "[tool.setuptools-scm] uses 'write_to = \"neurolang/_version_scm.py\"' which was deprecated in setuptools-scm 8.0 in favor of 'version_file'. Since the build-system requires setuptools-scm>=8.0, this will generate a deprecation warning during builds. The correct key is 'version_file'. Note: This was fixed in a subsequent commit (aeeae849 'Replace versioneer with setuptools-scm for version management')."
+      },
+      {
+        "file": "pytest.ini",
+        "line": 1,
+        "severity": "non_blocking",
+        "description": "pytest.ini was NOT removed when pytest config was migrated to pyproject.toml [tool.pytest.ini_options]. Since pytest.ini has higher priority than pyproject.toml in pytest's configuration lookup order, the pyproject.toml pytest section is effectively ignored at runtime. The content is identical in both files (norecursedirs = .git _build tmp* scratch* deprecated*), so behavior is unchanged, but the migration is incomplete. pytest.ini should have been deleted to make pyproject.toml the single source of truth."
+      },
+      {
+        "file": "pyproject.toml",
+        "line": 51,
+        "severity": "non_blocking",
+        "description": "pytest-timeout is missing from [project.optional-dependencies] dev extras. The services.yaml test command uses '--timeout=120' which requires the pytest-timeout plugin, but it is not listed as a dev dependency. This means developers who install only from pyproject.toml (without pre-existing environment) may get an unknown option error when running the standard test command. This was not in the original setup.cfg either, so it's a pre-existing gap, but this migration was an opportunity to add it."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "The feature description says to migrate pytest config to pyproject.toml but does not explicitly say to delete pytest.ini. AGENTS.md and the feature's expectedBehavior don't mention removing pytest.ini. This ambiguity caused an incomplete migration where pytest.ini was left in place alongside the [tool.pytest.ini_options] section. AGENTS.md should clarify that when migrating a config to pyproject.toml, the original config file should be deleted.",
+      "evidence": "pytest.ini still exists at repo root after commit 42ae0cde; pyproject.toml lines 83-85 have [tool.pytest.ini_options]; pytest.ini has highest config priority in pytest's lookup order"
+    },
+    {
+      "area": "knowledge",
+      "observation": "setuptools-scm 8.0 deprecated 'write_to' in favor of 'version_file' for [tool.setuptools-scm] in pyproject.toml. The architecture.md and environment.md documents don't mention this API change. Workers migrating to setuptools-scm>=8.0 should know to use 'version_file' not 'write_to'. The subsequent commit (aeeae849) already fixed this but the knowledge isn't captured for future workers.",
+      "evidence": "Commit 42ae0cde pyproject.toml line 80: '[tool.setuptools-scm]' with 'write_to = ...' — deprecated in setuptools-scm 8.0; see https://setuptools-scm.readthedocs.io/en/v8.3.0/changelog/"
+    },
+    {
+      "area": "services",
+      "observation": "The services.yaml 'test' command includes '--timeout=120' which requires the pytest-timeout plugin, but pytest-timeout is not listed in pyproject.toml dev dependencies (nor was it in setup.cfg). If a fresh environment is created and 'uv pip install -e \".[dev]\"' is run, the test command in services.yaml will fail with 'unrecognized arguments: --timeout=120'. Either pytest-timeout should be added to dev deps or the --timeout flag should be removed from services.yaml.",
+      "evidence": ".factory/services.yaml test command: 'uv run pytest neurolang/ -x -q --timeout=120'; pyproject.toml [project.optional-dependencies] dev section has no pytest-timeout entry"
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "The create-pyproject-toml feature passes review. All required VAL-BUILD assertions are satisfied: pyproject.toml has complete [build-system], [project], [project.optional-dependencies], [project.scripts], [tool.*] sections (VAL-BUILD-001); all 13 core dependencies are migrated with updated constraints — nilearn upper bound removed, lark upper bound removed, sqlalchemy constraint changed from '<2.0.0' to '>=1.4' (VAL-BUILD-003); neuro-server entry point is present (VAL-BUILD-004); package-data patterns including neurolang-web/dist and frontend/datalog/*.json are included (VAL-BUILD-005); requires-python='>=3.12' is set (VAL-BUILD-006); and [tool.black], [tool.isort], [tool.pytest.ini_options] are all present (VAL-BUILD-007). Two non-blocking issues: (1) [tool.setuptools-scm] uses deprecated 'write_to' instead of 'version_file' — already fixed in commit aeeae849; (2) pytest.ini was not deleted when migrating to pyproject.toml — identical content so no behavioral change. One shared-state gap: pytest-timeout is missing from dev deps but required by the services.yaml test command."
+}

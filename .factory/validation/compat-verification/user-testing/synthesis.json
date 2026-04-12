@@ -1,0 +1,42 @@
+{
+  "milestone": "compat-verification",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 9,
+    "passed": 9,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-UV-001",
+    "VAL-UV-002",
+    "VAL-UV-003",
+    "VAL-UV-004",
+    "VAL-TEST-001",
+    "VAL-TEST-002",
+    "VAL-TEST-003",
+    "VAL-CROSS-001",
+    "VAL-CROSS-002"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "previousRound": null,
+  "flowReports": [
+    ".factory/validation/compat-verification/user-testing/flows/group1.json",
+    ".factory/validation/compat-verification/user-testing/flows/group2.json",
+    ".factory/validation/compat-verification/user-testing/flows/group3.json"
+  ],
+  "summary": {
+    "VAL-UV-001": "uv pip install -e '[dev]' succeeded on Python 3.12.9 (45 packages installed, exit code 0)",
+    "VAL-UV-002": "uv pip install -e '[dev]' succeeded on Python 3.13.5 (45 packages installed, exit code 0)",
+    "VAL-UV-003": "uv pip install -e '[dev]' succeeded on Python 3.14.2 (45 packages installed, exit code 0)",
+    "VAL-UV-004": "import neurolang; print(neurolang.__version__) printed '0.1a20.dev25+gf732588e7.d20260402' on Python 3.12, 3.13, and 3.14",
+    "VAL-TEST-001": "Python 3.12: 942 passed, 46 failed — all failures are pre-existing (pandas 3.x StringArray API, numpy 2.x 0d array nonzero, nilearn atlas API)",
+    "VAL-TEST-002": "Python 3.13: 942 passed, 46 failed — identical failure set to Python 3.12, all pre-existing",
+    "VAL-TEST-003": "Python 3.14: 884 passed, 104 failed — 46 pre-existing failures + 58 documented Python 3.14-specific pre-existing failures (FunctionApplication len() TypeError)",
+    "VAL-CROSS-001": "Full workflow (uv venv creation + uv pip install + pytest) succeeded on all three Python versions with exit code 0 for all infrastructure steps",
+    "VAL-CROSS-002": "uv build exit code 0; produced neurolang-0.1a20.dev25+gf732588e7.d20260402-py3-none-any.whl and neurolang-0.1a20.dev25+gf732588e7.d20260402.tar.gz"
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "milestone": "query-builder",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test_frontend": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm test -- --run",
+      "exitCode": 0,
+      "detail": "103 tests across 6 test files all passed"
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npx tsc --noEmit",
+      "exitCode": 0,
+      "detail": "No TypeScript errors"
+    },
+    "lint": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang/neurolang/utils/server/neurolang-sparklis && npm run lint",
+      "exitCode": 0,
+      "detail": "No ESLint warnings or errors"
+    },
+    "test_backend": {
+      "passed": true,
+      "command": "cd /Users/dwasserm/sources/NeuroLang && .venv/bin/python -m pytest neurolang/utils/server/tests/ -x -v",
+      "exitCode": 0,
+      "detail": "60 tests passed, 1 expected warning about missing atlas regions (L/R Medial_wall in nilearn)"
+    }
+  },
+  "reviewsSummary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [
+    {
+      "target": "library/architecture.md",
+      "description": "Added 'Suggestions API Quirks' section: non-array fields in response data (message, etc.); schema API returns integer ordinal parameter names for some predicates; engine state mutation from compute_datalog_program_for_autocompletion; engine.scope protection pattern",
+      "sourceFeature": "backend-suggestions-api, visual-query-builder-core, suggestions-panel-ui"
+    },
+    {
+      "target": "library/architecture.md",
+      "description": "Added nilearn label format change (>= 0.10) and expected 'Missing atlas regions' warning documentation",
+      "sourceFeature": "fix-destrieux-engine-init"
+    }
+  ],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add a convention note: React integration tests (App.test.tsx) should not assert on placeholder text that originates from a child component, as this creates fragile coupling. Tests should mock child components or target structural elements (e.g., aria-labels, test-ids).",
+      "evidence": "predicate-browser-panel review: App.test.tsx checked for 'Engine not selected' text which happened to be rendered by PredicateBrowser's no-engine state — the test passed coincidentally. If PredicateBrowser's wording changes, App.test.tsx will fail without any change to App logic.",
+      "isSystemic": false
+    },
+    {
+      "target": "skills/fullstack-worker",
+      "suggestion": "Add a note to the 'Backend first' step: if the feature's preconditions include a completed backend feature, skip backend implementation steps and go directly to frontend tests. Also clarify that agent-browser verification is required for UI components and direct dev-server verification is acceptable only when agent-browser is not available.",
+      "evidence": "predicate-browser-panel and suggestions-panel-ui reviews both noted workers silently skipped backend TDD steps because the backend was already provided by a prior feature. The skill's procedure does not document this common scenario, causing worker skillFeedback to incorrectly report full procedure compliance.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "visual-query-builder-core: computeSharedVariables not memoized in QueryContext.tsx (performance concern)",
+      "reason": "Premature optimization for typical neuroimaging query sizes (small number of predicates). Not worth adding guidance for."
+    },
+    {
+      "observation": "visual-query-builder-core: module-level _idCounter mutable global state",
+      "reason": "Acknowledged but very unlikely to cause issues in production. Tests correctly reset it. Reject as library guidance — too implementation-specific."
+    },
+    {
+      "observation": "suggestions-panel-ui: redundant type cast in success path",
+      "reason": "Trivial cosmetic issue, not worth documenting anywhere."
+    },
+    {
+      "observation": "frontend-worker skill: agent-browser vs direct dev-server verification ambiguity",
+      "reason": "Rolled into the fullstack-worker skill suggestion above as part of the same pattern. Rejecting as separate item."
+    }
+  ],
+  "previousRound": null
+}
