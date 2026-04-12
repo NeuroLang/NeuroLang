@@ -14,35 +14,35 @@ jobs:
         python-version: ["3.12", "3.13"]
 
     steps:
-     - name: Checkout code
-       uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-     - name: Set up Python ${{ matrix.python-version }}
-       uses: actions/setup-python@v5
-       with:
-         python-version: ${{ matrix.python-version }}
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
 
-     - name: Install dependencies
-       run: |
-         python -m pip install --upgrade pip
-         python -m pip install pytest pytest-cov pytest-timeout
-         python -m pip install -e .
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install pytest pytest-cov pytest-timeout
+        python -m pip install -e ".[dev]"
 
-     - name: Run tests with pytest
-       run: |
-         python -m pytest neurolang -v --tb=short --timeout=600
-       timeout-minutes: 30
+    - name: Run tests with pytest
+      run: |
+        python -m pytest neurolang -v --tb=short --timeout=600
+      timeout-minutes: 30
 
-     - name: Run tests with coverage
-       run: |
-         python -m pytest neurolang --cov=neurolang --cov-report=xml --cov-report=term --timeout=600
-       timeout-minutes: 30
-       if: matrix.python-version == '3.12'
+    - name: Run tests with coverage
+      run: |
+        python -m pytest neurolang --cov=neurolang --cov-report=xml --cov-report=term --timeout=600
+      timeout-minutes: 30
+      if: matrix.python-version == '3.12'
 
-     - name: Upload coverage to Codecov
-       uses: codecov/codecov-action@v3
-       with:
-         file: ./coverage.xml
-         flags: unittest
-         name: codecov-${{ matrix.python-version }}
-       if: matrix.python-version == '3.12'
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittest
+        name: codecov-${{ matrix.python-version }}
+      if: matrix.python-version == '3.12'
