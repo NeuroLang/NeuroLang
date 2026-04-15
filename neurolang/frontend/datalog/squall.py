@@ -46,8 +46,10 @@ class ResolveInvertedFunctionApplicationMixin(PatternWalker):
     Rewrites ``InvertedFunctionApplication(f, (a, b, …))`` to
     ``f(…, b, a)`` (fully reversed argument tuple) at walk time.
 
-    Must appear before ``ExpressionBasicEvaluator`` in any solver MRO
-    that processes SQUALL output containing ``~`` verbs.
+    Must appear before ``LogicSimplifier`` and ``ExpressionBasicEvaluator``
+    in any walker/solver MRO that processes SQUALL output containing ``~``
+    verbs, to prevent ``LogicSimplifier.walk_function_application`` from
+    silently demoting the node to a plain ``FunctionApplication``.
     """
 
     @add_match(InvertedFunctionApplication)
@@ -152,6 +154,13 @@ class LogicSimplifier(
         body = self.walk(expression.body)
         if body != expression.body:
             return Query(expression.head, body)
+        return expression
+
+    @add_match(InvertedFunctionApplication)
+    def walk_inverted_function_application(self, expression):
+        new_args = tuple(self.walk(a) for a in expression.args)
+        if new_args != expression.args:
+            return InvertedFunctionApplication(expression.functor, new_args)
         return expression
 
     @add_match(FunctionApplication)

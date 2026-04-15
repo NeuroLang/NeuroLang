@@ -595,3 +595,11 @@ def test_inverted_function_application_ir_node():
     inv = InvertedFunctionApplication(f, (s, x))
     result = _Resolver().walk(inv)
     assert result == f(x, s), f"Expected reports(x, s), got {result}"
+
+    # Three-arg full reversal: (a, b, c) → (c, b, a)
+    a = Symbol("a")
+    b = Symbol("b")
+    c = Symbol("c")
+    inv3 = InvertedFunctionApplication(f, (a, b, c))
+    result3 = _Resolver().walk(inv3)
+    assert result3 == f(c, b, a), f"Expected reports(c, b, a), got {result3}"
