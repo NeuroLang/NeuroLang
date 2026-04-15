@@ -50,6 +50,9 @@ sphinx_gallery_conf = {
     "gallery_dirs": "auto_examples",
     "doc_module": ("neurolang",),
     "backreferences_dir": "gen_api",
+    # Do not attempt to execute examples — neurolang requires Python <3.12
+    # and neuroimaging data not present in CI.
+    "plot_gallery": False,
 }
 
 # -- Autosummary / Autodoc ----------------------------------------------------
@@ -58,6 +61,22 @@ autodoc_default_options = {
     "members": True,
     "inherited-members": True,
 }
+
+# neurolang uses private typing internals removed in Python 3.12.
+# Mock the entire package so autodoc/autosummary can still produce stubs.
+autodoc_mock_imports = [
+    "neurolang",
+    "neurolang.frontend",
+    "neurolang.expressions",
+    "neurolang.expression_pattern_matching",
+    "neurolang.expression_walker",
+    "neurolang.exceptions",
+    "neurolang.logic",
+    "neurolang.datalog",
+    "neurolang.probabilistic",
+    "neurolang.relational_algebra",
+    "neurolang.relational_algebra_provenance",
+]
 
 # -- Intersphinx --------------------------------------------------------------
 intersphinx_mapping = {
@@ -94,13 +113,6 @@ html_theme_options = {
     "navigation_with_keys": True,
     "show_toc_level": 2,
     "header_links_before_dropdown": 5,
-    "navbar_links": [
-        {"name": "Install", "url": "install"},
-        {"name": "Tutorial", "url": "tutorial"},
-        {"name": "Concepts", "url": "concepts"},
-        {"name": "Examples", "url": "auto_examples/index"},
-        {"name": "API", "url": "api"},
-    ],
     "secondary_sidebar_items": ["page-toc", "edit-this-page"],
     "footer_start": ["copyright"],
     "footer_end": ["sphinx-version"],
@@ -109,7 +121,7 @@ html_theme_options = {
 # No sidebar on the landing page; standard sidebar everywhere else.
 html_sidebars = {
     "index": [],
-    "**": ["sidebar-nav-bs", "page-toc"],
+    "**": ["sidebar-nav-bs.html", "page-toc.html"],
 }
 
 html_domain_indices = False
