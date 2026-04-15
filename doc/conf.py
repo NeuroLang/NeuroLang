@@ -113,7 +113,7 @@ html_theme_options = {
     "navigation_with_keys": True,
     "show_toc_level": 2,
     "header_links_before_dropdown": 5,
-    "secondary_sidebar_items": ["page-toc", "edit-this-page"],
+    "secondary_sidebar_items": ["edit-this-page"],
     "footer_start": ["copyright"],
     "footer_end": ["sphinx-version"],
 }
