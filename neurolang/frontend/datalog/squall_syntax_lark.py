@@ -1018,6 +1018,8 @@ class SquallTransformer(Transformer):
         name = token.value if hasattr(token, 'value') else token.name
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
+        if name.startswith('~'):
+            name = name[1:]
         return _InverseVerbSymbol(Symbol(name))
 
     def transitive_multiple(self, args):
@@ -1035,6 +1037,8 @@ class SquallTransformer(Transformer):
         name = token.value if hasattr(token, 'value') else token.name
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
+        if name.startswith('~'):
+            name = name[1:]
         return _InverseVerbSymbol(Symbol(name))
 
     def upper_identifier(self, args):

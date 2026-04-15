@@ -610,44 +610,27 @@ def test_squall_transitive_inv_argument_order():
     """~verb in a relative clause produces InvertedFunctionApplication in the IR."""
     from neurolang.frontend.datalog.squall import InvertedFunctionApplication
 
-    # "define as authored every Paper ?p that a Person ~author ?p."
-    # The ~author relative clause: a Person ~author [the paper]
-    # transitive_inv fires → _InverseVerbSymbol(author)
-    # Surface call: author(person_var, paper_var) → InvertedFunctionApplication
+    # Collector walker: records every InvertedFunctionApplication encountered
+    class _Collector(ExpressionWalker):
+        def __init__(self):
+            self.found = []
+
+        @add_match(InvertedFunctionApplication)
+        def collect_inverted(self, expr):
+            self.found.append(expr)
+            return expr
+
     result = parser(
         "define as authored every Paper ?p that a Person ~author ?p."
     )
     assert isinstance(result, Implication), f"Expected Implication, got {type(result)}"
 
-    # Recursive search for InvertedFunctionApplication nodes (with cycle guard)
-    import neurolang.frontend.datalog.squall as sq
-
-    found = []
-    seen = set()
-
-    def _search(obj):
-        oid = id(obj)
-        if oid in seen:
-            return
-        seen.add(oid)
-        if isinstance(obj, sq.InvertedFunctionApplication):
-            found.append(obj)
-        if hasattr(obj, '__dict__'):
-            for v in obj.__dict__.values():
-                if hasattr(v, '__iter__') and not isinstance(v, (str, bytes)):
-                    try:
-                        for item in v:
-                            _search(item)
-                    except TypeError:
-                        pass
-                elif hasattr(v, '__dict__'):
-                    _search(v)
-
-    _search(result)
-    assert found, (
+    collector = _Collector()
+    collector.walk(result)
+    assert collector.found, (
         f"Expected InvertedFunctionApplication in IR, but none found.\n"
         f"Full IR: {repr(result)}"
     )
-    assert any(n.functor == Symbol("author") for n in found), (
-        f"Expected InvertedFunctionApplication with functor 'author', got: {found}"
+    assert any(n.functor == Symbol("author") for n in collector.found), (
+        f"Expected InvertedFunctionApplication with functor 'author', got: {collector.found}"
     )
