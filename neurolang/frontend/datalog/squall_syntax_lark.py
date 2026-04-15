@@ -5,25 +5,95 @@ Translates controlled English sentences into NeuroLang logical expressions
 using a Lark grammar and Transformer. Uses Continuation-Passing Style (CPS)
 for correct quantifier scoping following Montague semantics.
 
-References:
-    S. Ferré, "SQUALL: The expressiveness of SPARQL 1.1 made available
-    as a controlled natural language", Data & Knowledge Engineering, 2014.
+Supported CNL constructs
+------------------------
+Basic sentences::
+
+    squall ?s reports             →  reports(s)
+    squall every study plays      →  ∀x. plays(x) ← study(x)
+    squall a study plays          →  ∃x. study(x) ∧ plays(x)
+
+Relative clauses::
+
+    every study that plays        →  ∀x. study(x) ∧ plays(x)
+    every study that ~reports X   →  ∀x. study(x) ∧ reports(x, X)
+
+Negation-as-failure (Datalog \\+)::
+
+    every study that does not activate   →  ∀x. study(x) ∧ ¬activate(x)
+
+Aggregation::
+
+    define as max_items for every Item ?i ;
+        where every Max of the Quantity where ?i item_count per ?i.
+    →  max_items(i, max({q : item_count(i,q)})) :- item(i)
+
+Probabilistic rules::
+
+    every study probably activates        →  ProbabilisticFact(p̃, activates(?s))
+    every study activates with probability 0.3
+                                          →  ProbabilisticFact(0.3, activates(?s))
+
+Queries::
+
+    obtain every item that activates      →  SquallProgram with Query expression
+
+Known stubs (parsed but not semantically implemented)
+------------------------------------------------------
+- **Conditioned rules** — ``rule_body1_cond`` / ``rule_body1_cond_prior`` /
+  ``rule_body1_cond_posterior``: the conditioning NP is silently discarded;
+  only the sentence ``s`` is returned.
+- **``rule_body2_cond``** — present in the grammar but has no transformer
+  handler; falls through to ``_default`` and returns a raw list.
+- **Inverse transitive prefix ``~``** — ``transitive_inv`` and
+  ``transitive_multiple_inv`` set ``sym._inverse = True`` but nothing reads
+  that flag; argument-order inversion is not applied.
+
+References
+----------
+S. Ferré, "SQUALL: The expressiveness of SPARQL 1.1 made available
+as a controlled natural language", Data & Knowledge Engineering, 2014.
 """
 import os
 
+import numpy as np
 from lark import Lark, Transformer
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.aggregation import AggregationApplication
+from ...datalog.expressions import AggregationApplication as _AggApp
 from ...expressions import (
     Constant,
     FunctionApplication,
     Query,
     Symbol,
 )
-from ...logic import ExistentialPredicate, UniversalPredicate
+from ...logic import Disjunction, ExistentialPredicate, UniversalPredicate
 from ...probabilistic.expressions import ProbabilisticFact
+
+
+class SquallProgram:
+    """
+    Container for a parsed SQUALL program that contains both rule definitions
+    and ``obtain`` queries.
+
+    When a SQUALL program contains only rule definitions (``define as …``),
+    the parser returns a plain ``Union`` or ``Implication`` for backward
+    compatibility.  When ``obtain`` clauses are present, a ``SquallProgram``
+    is returned so the handler can separate rules from queries.
+
+    Attributes
+    ----------
+    rules : list
+        ``Implication`` / ``Fact`` / ``ProbabilisticFact`` objects.
+    queries : list
+        CPS noun-phrase callables, one per ``obtain`` clause.
+    """
+
+    def __init__(self, rules, queries):
+        self.rules = list(rules)
+        self.queries = list(queries)
 
 
 GRAMMAR_PATH = os.path.join(
@@ -51,6 +121,16 @@ COMPARISON_OPS = {
     ("not", "equal"): ne,
 }
 
+# Mapping from aggregation function names (as they appear in SQUALL nouns or
+# the AGG_FUNC grammar terminal) to their corresponding Constant-wrapped
+# callables.  Grammar-valid names: count, sum, max, min, average.
+_AGG_FUNC_MAP = {
+    "count":   Constant(len),
+    "sum":     Constant(sum),
+    "max":     Constant(max),
+    "min":     Constant(min),
+    "average": Constant(np.mean),
+}
 
 class SquallTransformer(Transformer):
     """
@@ -65,7 +145,20 @@ class SquallTransformer(Transformer):
         return args[0]
 
     def squall(self, args):
-        rules = [a for a in args if a is not None]
+        rules = []
+        queries = []
+        for a in args:
+            if a is None:
+                continue
+            if isinstance(a, tuple) and len(a) == 2 and a[0] == '_query':
+                queries.append(a[1])
+            else:
+                rules.append(a)
+
+        if queries:
+            return SquallProgram(rules=rules, queries=queries)
+
+        # Backward compat: no queries → return Union or single rule
         if len(rules) == 1:
             return rules[0]
         return Union(tuple(rules))
@@ -94,18 +187,32 @@ class SquallTransformer(Transformer):
             return Implication(verb(), body_result if isinstance(body_result, Conjunction) else Constant(True))
 
     def rule_op_prob(self, args):
-        verb = args[0]
-        np_prob = args[1]
-        body = args[2]
-        head_pred, consequent_args = verb
-        head = head_pred(*consequent_args) if consequent_args else head_pred
-        prob_val = np_prob(lambda x: x)
-        return Implication(
-            ProbabilisticFact(prob_val, head),
-            body,
-        )
+        # "define as verb with probability np rule_body1"
+        # args: [verb1, np_prob_cps, body_result]
+        items = [a for a in args if a is not None]
+        verb = items[0]
+        np_prob = items[1]
+        body_result = items[2]
+        if isinstance(body_result, tuple) and body_result[0] == '_rule_body':
+            head_args, body_formula = body_result[1]
+        else:
+            head_args, body_formula = [], Constant(True)
+        head = verb(*head_args) if head_args else verb()
+        # Extract probability value from CPS NP
+        if callable(np_prob) and not isinstance(np_prob, (Symbol, Constant)):
+            prob_val = np_prob(lambda x: x)
+        else:
+            prob_val = np_prob
+        return Implication(ProbabilisticFact(prob_val, head), body_formula)
 
     def rule_opnn(self, args):
+        """Build an n-ary Datalog rule from ``define as verbn rule_body1 ops``.
+
+        ``rule_body1`` supplies the primary subject variable(s) and body
+        formula.  ``ops`` is a CPS noun phrase for the object position(s);
+        ``_extract_datalog_body`` is called to append the object variable(s)
+        to ``head_args`` and any restriction predicates to the body.
+        """
         items = [a for a in args if a is not None]
         verb = items[0]  # Symbol for the head predicate
         body_result = items[1]  # from rule_body1: ('_rule_body', (args, formula))
@@ -124,16 +231,9 @@ class SquallTransformer(Transformer):
 
         if ops is not None:
             if callable(ops) and not isinstance(ops, (Symbol, Constant)):
-                # CPS NP from the ops: extract var and restriction
-                ops_var = Symbol.fresh()
-                ops_body = ops(lambda x: x)
-                if isinstance(ops_body, (Symbol, Constant)):
-                    head_args.append(ops_body)
-                else:
-                    # The CPS application gives a formula/quantified expr
-                    # We need to flatten it into Datalog
-                    ops_extracted = _extract_datalog_body(ops, head_args)
-                    all_body_parts.extend(ops_extracted)
+                # CPS NP: collect bound variables into head_args and body
+                # predicates into all_body_parts via _extract_datalog_body.
+                all_body_parts.extend(_extract_datalog_body(ops, head_args))
             elif isinstance(ops, (list, tuple)):
                 head_args.extend(ops)
 
@@ -146,20 +246,28 @@ class SquallTransformer(Transformer):
         return Implication(consequent, full_body)
 
     def rule_opnn_per(self, args):
-        verb = args[0]
-        body = args[1]
-        ops = args[2] if len(args) > 2 else None
-        head_symbol = verb
-        body_formula = body
-        if ops is not None:
-            all_args = ops
-            consequent = head_symbol(*all_args)
+        # "define as probably verbn rule_body1 [conditioned?] [break?] ops"
+        # The VP now carries ProbabilisticFact via vpdo_prob_vn, so this
+        # rule_opnn_per handler collects the result similarly to rule_opnn.
+        items = [a for a in args if a is not None and not (isinstance(a, str) and a.lower() in ('probably', 'conditioned'))]
+        verb = items[0]
+        body_result = items[1] if len(items) > 1 else None
+        ops = items[2] if len(items) > 2 else None
+
+        if isinstance(body_result, tuple) and body_result[0] == '_rule_body':
+            body_args, body_formula = body_result[1]
         else:
-            consequent = head_symbol
-        return Implication(
-            ProbabilisticFact(Constant(True), consequent),
-            body_formula,
-        )
+            body_args, body_formula = [], Constant(True)
+
+        head_args = list(body_args)
+        all_body_parts = [body_formula]
+        if ops is not None and callable(ops) and not isinstance(ops, (Symbol, Constant)):
+            _extract_datalog_body(ops, head_args)
+
+        fresh_prob = Symbol.fresh()
+        consequent = verb(*head_args) if head_args else verb()
+        full_body = Conjunction(tuple(all_body_parts)) if len(all_body_parts) > 1 else all_body_parts[0]
+        return Implication(ProbabilisticFact(fresh_prob, consequent), full_body)
 
     def rule_body1(self, args):
         items = [a for a in args if a is not None]
@@ -264,8 +372,47 @@ class SquallTransformer(Transformer):
         return args[0]
 
     def det_every(self, args):
+        """Return the universal-quantifier CPS determinant function.
+
+        When the ng1 carries ``_agg_info`` (set by ``ng1_agg_npc``), a
+        specialised path builds ``AggregationApplication`` in the head and
+        extracts body predicates from the npc, bypassing the normal
+        ``UniversalPredicate`` construction.
+        """
         def every(ng):
             def apply_d(d):
+                # Special handling for aggregation ng1
+                # (e.g. "every Max of the Quantity where ?i item_count per ?i")
+                agg_info = getattr(ng, '_agg_info', None)
+                if agg_info is not None:
+                    agg_func_const, npc_cps, per_vars = agg_info
+                    # Apply the npc with a capturing continuation to extract
+                    # the witness variable q.  We use a mutable container to
+                    # capture x from inside the closure, while returning
+                    # Constant(True) so no spurious conjuncts appear in the body.
+                    captured = []
+
+                    def capturing_cont(v, _cap=captured):
+                        _cap.append(v)
+                        return Constant(True)
+
+                    npc_formula = npc_cps(capturing_cont)
+                    if captured and isinstance(captured[0], Symbol):
+                        q = captured[0]
+                    elif isinstance(npc_formula, ExistentialPredicate):
+                        q = npc_formula.head
+                    else:
+                        q = Symbol.fresh()
+
+                    # Build AggregationApplication and hand it to the scope
+                    # collector so it ends up in the rule head.
+                    agg_expr = _AggApp(agg_func_const, (q,))
+                    d(agg_expr)  # adds agg_expr to head_args
+
+                    # Return the npc formula so _flatten_to_datalog extracts
+                    # the body predicates (quantity(q), item_count(i, q), …).
+                    return npc_formula
+
                 var_info = getattr(ng, '_var_info', None)
                 if var_info is not None and isinstance(var_info, tuple):
                     syms = var_info
@@ -394,19 +541,94 @@ class SquallTransformer(Transformer):
         return ng
 
     def ng1_agg_npc(self, args):
+        """Handle ``noun1 OF npc [dims]`` aggregation noun groups.
+
+        When ``noun1`` is an aggregation function name (count, sum, max, min,
+        average) **and** an npc is present, the returned ng1 function carries
+        an ``_agg_info = (agg_func_const, npc_cps, per_vars)`` attribute.
+        ``det_every`` inspects this attribute to build an
+        ``AggregationApplication`` head argument rather than a plain variable.
+        """
         noun1 = args[0]
         app = None
-        npc = args[-1]
+        # Last argument before dims is the npc; dims (if present) is tagged
         dims = None
-        for a in args[1:-1]:
-            if a is not None:
-                if isinstance(a, tuple) and a[0] == '_dims':
-                    dims = a[1]
-                else:
-                    app = a
+        npc = None
+        for a in args[1:]:
+            if a is None:
+                continue
+            if isinstance(a, tuple) and a[0] == '_dims':
+                dims = a[1]
+            elif callable(a) and not isinstance(a, (Symbol, Constant)):
+                npc = a
+            elif isinstance(a, (Symbol, Constant)):
+                app = a
+
+        per_vars = []    # groupby variables (from _per dims)
+        agg_specs = []   # (agg_func_constant, npc_cps) pairs (from _agg dims)
         if dims is not None:
-            return lambda x: noun1(x)
-        return lambda x: noun1(x)
+            for d in dims:
+                if isinstance(d, tuple) and d[0] == '_per':
+                    per_vars.append(d[1])
+                elif isinstance(d, tuple) and d[0] == '_agg':
+                    agg_specs.append((d[1], d[2]))
+
+        # Map noun1 name to an aggregation function constant.
+        # e.g. noun1 = Symbol('max') → Constant(max)
+        noun_name = noun1.name.lower() if isinstance(noun1, Symbol) else None
+        agg_func_from_noun = _AGG_FUNC_MAP.get(noun_name) if noun_name else None
+
+        # If the noun is an aggregation function and we have an npc
+        # (pattern: "every Max of the Quantity where ?i item_count per ?i"),
+        # produce a tagged ng1 with _agg_info so det_every can build
+        # AggregationApplication in the head.
+        if agg_func_from_noun is not None and npc is not None:
+            def ng_agg(x):
+                # Fallback: used only if det_every does not intercept _agg_info.
+                # Introduce a fresh aggregation variable and build body from npc.
+                q = Symbol.fresh()
+                body_formula = npc(lambda v: Constant(True))
+                agg_expr = _AggApp(agg_func_from_noun, (q,))
+                return agg_expr
+
+            ng_agg._agg_info = (agg_func_from_noun, npc, list(per_vars))
+            if app is not None:
+                ng_agg._var_info = app
+            return ng_agg
+
+        if agg_specs:
+            agg_func_const, agg_npc = agg_specs[0]
+
+            def ng_agg(x):
+                # x is the result variable (the aggregated dimension)
+                # agg_npc gives the predicate for what is aggregated
+                agg_var = Symbol.fresh()
+                if callable(agg_npc) and not isinstance(
+                    agg_npc, (Symbol, Constant)
+                ):
+                    agg_body = agg_npc(lambda v: v)
+                    if isinstance(agg_body, (Symbol, Constant)):
+                        agg_var = agg_body
+                    # else leave agg_var fresh
+
+                # Build AggregationApplication:
+                # AggregationApplication(func, (agg_var, *per_vars))
+                agg_args = (agg_var,) + tuple(per_vars)
+                return _AggApp(agg_func_const, agg_args)
+
+            if app is not None:
+                ng_agg._var_info = app
+            return ng_agg
+
+        # No aggregation dims: fall back to plain noun1
+        def ng(x):
+            if isinstance(x, tuple):
+                return noun1(*x)
+            return noun1(x)
+
+        if app is not None:
+            ng._var_info = app
+        return ng
 
     def ng2(self, args):
         noun2 = args[0]
@@ -437,10 +659,22 @@ class SquallTransformer(Transformer):
         return ('_rel', rel)
 
     def rel_ng2(self, args):
+        """Handle ``whose NG2 VP`` possessive relative clauses.
+
+        Semantics: given binary noun ``ng2`` and verb phrase ``vp``,
+        produces ``∃y. ng2(x, y) ∧ vp(y)`` — the subject ``x`` possesses
+        a ``y`` related by ``ng2`` that satisfies ``vp``.
+
+        Example: ``every person whose writer plays``
+        →  ``∀x. person(x) → ∃y. writer(x, y) ∧ plays(y)``
+        """
         ng2 = args[0]
         vp = args[1]
         def rel(x):
-            return vp(x)
+            y = Symbol.fresh()
+            ng2_atom = ng2(x, y)
+            vp_atom = vp(y)
+            return ExistentialPredicate(y, Conjunction((ng2_atom, vp_atom)))
         return ('_rel', rel)
 
     def rel_s(self, args):
@@ -483,6 +717,36 @@ class SquallTransformer(Transformer):
         def vp(x):
             return _apply_ops(ops, verb, x)
         return vp
+
+    def vpdo_prob_v1(self, args):
+        # "probably verb1 [cp]" → ProbabilisticFact with fresh prob symbol
+        verb1 = args[0]
+        fresh_prob = Symbol.fresh()
+        return lambda x: ProbabilisticFact(fresh_prob, verb1(x))
+
+    def vpdo_prob_vn(self, args):
+        # "probably verbn opn" → ProbabilisticFact with fresh prob symbol
+        verb = args[0]
+        ops = args[1]
+        fresh_prob = Symbol.fresh()
+        return lambda x: ProbabilisticFact(fresh_prob, _apply_ops(ops, verb, x))
+
+    def vpdo_explicit_prob_v1(self, args):
+        # "verb1 [cp] with probability number"
+        verb1 = args[0]
+        prob_value = args[-1]   # Constant(float)
+        return lambda x: ProbabilisticFact(prob_value, verb1(x))
+
+    def vpdo_explicit_prob_vn(self, args):
+        # "verbn opn with probability number"
+        verb = args[0]
+        prob_value = args[-1]   # Constant(float)
+        ops = args[1] if len(args) > 2 else None
+        if ops is not None:
+            return lambda x: ProbabilisticFact(
+                prob_value, _apply_ops(ops, verb, x)
+            )
+        return lambda x: ProbabilisticFact(prob_value, verb(x))
 
     def vp_aux(self, args):
         aux = args[0]
@@ -586,7 +850,6 @@ class SquallTransformer(Transformer):
     def bool_disjunction(self, args):
         if len(args) == 1:
             return args[0]
-        from ...logic import Disjunction
         formulas = []
         for a in args:
             if isinstance(a, tuple) and a[0] == '_rel':
@@ -806,8 +1069,18 @@ class SquallTransformer(Transformer):
         return FunctionApplication(name, tuple(terms))
 
     def query(self, args):
+        # "obtain ops" — convert the CPS noun phrase into a Query expression.
+        # ops is a CPS callable: (d -> formula) representing the NP.
+        # Apply it to (lambda x: x) to get a quantified formula, then
+        # extract the restriction body and wrap in Query(head_var, body).
         ops = args[0]
-        return ops
+        if not callable(ops) or isinstance(ops, (Symbol, Constant)):
+            # Fallback: wrap raw value
+            x = Symbol.fresh()
+            return ('_query', Query(x, ops if not isinstance(ops, Symbol) else ops(x)))
+
+        formula = ops(lambda x: x)
+        return ('_query', _cps_formula_to_query(formula))
 
     # ---- Dimension / Aggregation ----
 
@@ -835,10 +1108,35 @@ class SquallTransformer(Transformer):
         return ('_dims', [dim, rest])
 
     def dim_ng2(self, args):
-        return args[0]
+        # "per region" → groupby variable from the noun
+        noun2 = args[0]
+        groupby_var = Symbol.fresh()
+        return ('_per', groupby_var)
 
     def dim_npc(self, args):
-        return args[0]
+        # "per the region" / "per ?i" → groupby variable from the NPC
+        npc = args[0]
+        if isinstance(npc, (Symbol, Constant)):
+            return ('_per', npc)
+        if callable(npc) and not isinstance(npc, (Symbol, Constant)):
+            # CPS NP / label: applying with identity extracts the underlying symbol
+            result = npc(lambda x: x)
+            if isinstance(result, (Symbol, Constant)):
+                return ('_per', result)
+        # fallback: fresh variable
+        groupby_var = Symbol.fresh()
+        return ('_per', groupby_var)
+
+    def dim_agg(self, args):
+        # "count of the activations" → ('_agg', Constant(len), npc_cps)
+        agg_func_const = args[0]   # already a Constant from agg_func()
+        npc = args[1]              # CPS NP or Symbol
+        return ('_agg', agg_func_const, npc)
+
+    def agg_func(self, args):
+        token = args[0]
+        name = token.value if hasattr(token, 'value') else str(token)
+        return _AGG_FUNC_MAP.get(name.lower(), Constant(len))
 
     # ---- Probabilistic ----
 
@@ -852,10 +1150,25 @@ class SquallTransformer(Transformer):
 
 
 def _extract_datalog_body(cps_np, head_args):
-    """
-    Extract body predicates from a CPS NP for use in Datalog rules.
-    Also adds bound variables to head_args.
-    Returns a list of body formula parts.
+    """Extract body predicates from a CPS NP for use in Datalog rules.
+
+    Calls ``cps_np`` with a ``collect_scope`` continuation that appends each
+    bound variable to ``head_args`` (side-effect) and returns
+    ``Constant(True)``.  The resulting formula is then passed to
+    ``_flatten_to_datalog`` to harvest body predicates.
+
+    Parameters
+    ----------
+    cps_np:
+        A CPS noun-phrase callable ``(d -> formula)``.
+    head_args:
+        Mutable list; bound variables are appended here as a side-effect.
+
+    Returns
+    -------
+    list
+        Flat list of body predicate expressions (``FunctionApplication``
+        and similar) with no ``Constant(True)`` entries.
     """
     body_parts = []
 
@@ -875,9 +1188,18 @@ def _extract_datalog_body(cps_np, head_args):
 
 
 def _flatten_to_datalog(expr):
-    """
-    Flatten quantified expressions into a list of Datalog body predicates.
-    Strips existential/universal quantifiers and extracts conjuncts.
+    """Flatten quantified expressions into a flat list of Datalog body atoms.
+
+    Strips ``ExistentialPredicate`` and ``UniversalPredicate`` wrappers,
+    unpacks ``Conjunction`` formulas recursively, and extracts both sides of
+    an ``Implication`` (antecedent = restriction body, consequent = scope).
+    ``Constant(True)`` entries are filtered out by the caller.
+
+    Returns
+    -------
+    list
+        Flat list of atomic expressions (``FunctionApplication`` instances
+        and similar) ready to be used as Datalog body literals.
     """
     if isinstance(expr, ExistentialPredicate):
         return _flatten_to_datalog(expr.body)
@@ -903,7 +1225,6 @@ def _flatten_to_datalog(expr):
 
 
 def _apply_to_vars(d, syms):
-    """Apply a continuation d to a tuple of symbols, splatting if d is a Symbol."""
     if isinstance(d, Symbol):
         return d(*syms)
     if callable(d):
@@ -936,6 +1257,47 @@ def _apply_ops(ops, verb, subject):
         return verb(subject, *ops)
     else:
         return verb(subject, ops)
+
+
+def _cps_formula_to_query(formula):
+    """Convert a CPS-produced quantified formula into a Query expression.
+
+    The CPS NP for an "obtain" clause produces a universally or existentially
+    quantified formula.  Extract the bound variable and restriction body so we
+    can build ``Query(head_var, body)``.
+
+    The resulting ``Query`` has its body passed through ``LogicSimplifier`` so
+    that trivial ``Constant(True)`` conjuncts are removed before execution.
+
+    Parameters
+    ----------
+    formula : Expression
+        Result of applying the CPS NP to ``lambda x: x``.
+
+    Returns
+    -------
+    Query
+        A NeuroLang Query expression ready to be walked into an engine.
+    """
+    from .squall import LogicSimplifier
+
+    if isinstance(formula, UniversalPredicate):
+        x = formula.head
+        body = formula.body
+        if isinstance(body, Implication):
+            # Universal: head ← restriction  →  Query(x, restriction)
+            raw = Query(x, body.antecedent)
+        else:
+            raw = Query(x, body)
+    elif isinstance(formula, ExistentialPredicate):
+        x = formula.head
+        raw = Query(x, formula.body)
+    else:
+        # Fallback: the formula IS the body; introduce a fresh variable
+        x = Symbol.fresh()
+        raw = Query(x, formula)
+
+    return LogicSimplifier().walk(raw)
 
 
 def parser(code, locals=None, globals=None):

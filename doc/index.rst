@@ -33,6 +33,7 @@ Contents:
 
    install
    tutorial
+   tutorial_squall
    auto_examples/index
    api
    tutorial_logic_programming

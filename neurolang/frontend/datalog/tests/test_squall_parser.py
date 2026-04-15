@@ -470,7 +470,99 @@ def test_lark_semantics_join(datalog_simple):
     assert solution == expected
 
 
-@pytest.mark.skip(reason="Aggregation semantics (Max, per) not yet implemented")
+def test_squall_obtain_produces_squall_program():
+    """'obtain' clause produces a SquallProgram with a Query expression."""
+    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
+    from neurolang.expressions import Query
+
+    prog = parser("obtain every item that plays.")
+    assert isinstance(prog, SquallProgram)
+    assert len(prog.queries) == 1
+    assert isinstance(prog.queries[0], Query), (
+        f"Expected Query, got {type(prog.queries[0]).__name__}: {repr(prog.queries[0])}"
+    )
+    q = prog.queries[0]
+    assert "item" in repr(q)
+    assert "plays" in repr(q)
+
+
+def test_squall_obtain_executes_against_engine(datalog_simple):
+    """'obtain every Item that has item_count' returns correct results."""
+    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
+    from neurolang.expressions import Query
+    from neurolang.datalog import Implication
+
+    prog = parser("obtain every Item that has an item_count.")
+    assert isinstance(prog, SquallProgram)
+    assert len(prog.queries) == 1
+    q = prog.queries[0]
+    assert isinstance(q, Query)
+
+    # Execute by converting Query(x, body) → head(x) :- body
+    head_sym = Symbol.fresh()
+    datalog_simple.walk(Implication(head_sym(q.head), q.body))
+    chase = Chase(datalog_simple)
+    sol = chase.build_chase_solution()
+    # Items with an item_count: a, b, c (not d)
+    result = sol[head_sym].value
+    assert result == {('a',), ('b',), ('c',)}
+
+
+    """'whose NG2 VP' must include the binary noun predicate in the body.
+
+    'define as published every person whose writer plays' should produce:
+    published(x) :- person(x), ∃y. writer(x, y) ∧ plays(y)
+    i.e. the 'writer' relation must appear in the output.
+    """
+    res = parser("define as published every person whose writer plays.")
+    assert "writer" in repr(res), (
+        f"rel_ng2: binary noun 'writer' missing from output: {repr(res)}"
+    )
+    assert "plays" in repr(res)
+    assert "person" in repr(res)
+
+
+def test_squall_rel_ng2_whose_with_object():
+    """'whose NG2 VP' with transitive VP."""
+    res = parser("define as notable every person whose writer ~creates a book.")
+    assert "writer" in repr(res)
+    assert "creates" in repr(res)
+
+
+def test_squall_aggregation_ir():
+    """'every Max of the Quantity where ?i item_count per ?i' produces
+    Implication with AggregationApplication(max, (q,)) in the consequent
+    and item_count(i, q) in the antecedent."""
+    from neurolang.datalog.aggregation import AggregationApplication as AA
+    code = (
+        "define as max_items for every Item ?i ; "
+        "where every Max of the Quantity where ?i item_count per ?i."
+    )
+    rule = parser(code)
+    assert isinstance(rule, Implication), f"Expected Implication, got {type(rule)}"
+
+    # The consequent must include an AggregationApplication argument
+    consequent = rule.consequent
+    agg_args = [
+        a for a in consequent.args if isinstance(a, AA)
+    ]
+    assert agg_args, (
+        f"Expected AggregationApplication in consequent args, got: {consequent.args}"
+    )
+    agg = agg_args[0]
+    # The functor should be max
+    assert agg.functor == Constant(max), (
+        f"Expected Constant(max) functor, got {agg.functor}"
+    )
+
+    # The antecedent must contain item_count somewhere
+    antecedent_repr = repr(rule.antecedent)
+    assert "item_count" in antecedent_repr, (
+        f"Expected item_count in antecedent, got: {antecedent_repr}"
+    )
+    assert "item" in antecedent_repr
+
+
 def test_lark_semantics_aggregation(datalog_simple):
     code = """
         define as max_items for every Item ?i ;
@@ -480,6 +572,6 @@ def test_lark_semantics_aggregation(datalog_simple):
 
     datalog_simple.walk(logic_code)
     chase = Chase(datalog_simple)
-    solution = chase.build_chase_solution()["max_item"].value
+    solution = chase.build_chase_solution()["max_items"].value
     expected = set([('a', 1), ('b', 2), ('c', 3)])
     assert solution == expected

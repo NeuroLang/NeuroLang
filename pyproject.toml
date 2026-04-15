@@ -40,6 +40,9 @@ dependencies = [
     "typing_inspect",
     "rdflib>=6.0.0",
     "sqlalchemy>=1.4",
+    "pytest>=9.0.3",
+    "tornado>=6.5.5",
+    "pyyaml>=6.0.3",
 ]
 
 [project.urls]
@@ -87,6 +90,7 @@ version_file = "neurolang/_version_scm.py"
 
 [tool.pytest.ini_options]
 norecursedirs = [".git", "_build", "tmp*", "scratch*", "deprecated*"]
+addopts = "--doctest-glob=doc/tutorial_squall.rst"
 
 [tool.coverage.run]
 omit = [
