@@ -1,18 +1,19 @@
 from operator import contains, eq, gt, mul, not_
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Callable, Tuple
 
+import numpy
 import pytest
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Disjunction
+from ...logic import Disjunction, ExistentialPredicate
 from ...relational_algebra import (
     ColumnInt,
     ColumnStr,
     Destroy,
     Difference,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NameColumns,
     NaturalJoin,
     Projection,
@@ -121,13 +122,13 @@ def test_equality_symbols():
     expected_result = ExtendedProjection(
         fb_trans,
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(ColumnStr("x")), Constant(ColumnStr("x"))
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(ColumnStr("y")), Constant(ColumnStr("y"))
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(ColumnStr("x")), Constant(ColumnStr("z"))
             ),
         ),
@@ -141,13 +142,13 @@ def test_equality_symbols():
     expected_result = ExtendedProjection(
         fb_trans,
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(ColumnStr("x")), Constant(ColumnStr("x"))
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(ColumnStr("y")), Constant(ColumnStr("y"))
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant(ColumnStr("x")), Constant(ColumnStr("z"))
             ),
         ),
@@ -227,7 +228,8 @@ def test_selection():
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
         (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
     )
-    assert res == Selection(fa_trans, builtin_condition)
+    expected_builtin_condition = C_(gt)(C_(ColumnStr("x")), C_(3))
+    assert res == Selection(fa_trans, expected_builtin_condition)
 
 
 def test_extended_projection():
@@ -238,19 +240,22 @@ def test_extended_projection():
     fa = R1(x, y)
     builtin_condition = C_(eq)(C_(mul)(x, C_(3)), z)
     exp = Conjunction((fa, builtin_condition))
+    cs_x = C_(ColumnStr("x"))
+    cs_y = C_(ColumnStr("y"))
+    cs_z = C_(ColumnStr("z"))
 
     tr = TranslateToNamedRA()
     res = tr.walk(exp)
     fa_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        (cs_x, cs_y),
     )
     exp_trans = ExtendedProjection(
         fa_trans,
         [
-            ExtendedProjectionListMember(*builtin_condition.args),
-            ExtendedProjectionListMember(x, x),
-            ExtendedProjectionListMember(y, y),
+            FunctionApplicationListMember(C_(mul)(cs_x, C_(3)), cs_z),
+            FunctionApplicationListMember(cs_x, cs_x),
+            FunctionApplicationListMember(cs_y, cs_y),
         ],
     )
     assert res == exp_trans
@@ -268,6 +273,12 @@ def test_extended_projection_2():
     builtin_condition_1 = C_(eq)(C_(mul)(x, C_(3)), z)
     builtin_condition_2 = C_(eq)(C_(mul)(v, C_(2)), w)
     exp = Conjunction((fa, builtin_condition_1, builtin_condition_2))
+    cs_x = C_(ColumnStr("x"))
+    cs_y = C_(ColumnStr("y"))
+    cs_z = C_(ColumnStr("z"))
+    cs_u = C_(ColumnStr("u"))
+    cs_v = C_(ColumnStr("v"))
+    cs_w = C_(ColumnStr("w"))
 
     tr = TranslateToNamedRA()
     res = tr.walk(exp)
@@ -281,22 +292,17 @@ def test_extended_projection_2():
                 C_(ColumnInt(3)),
             ),
         ),
-        (
-            Constant(ColumnStr("x")),
-            Constant(ColumnStr("y")),
-            Constant(ColumnStr("v")),
-            Constant(ColumnStr("u")),
-        ),
+        (cs_x, cs_y, cs_v, cs_u),
     )
     exp_trans = ExtendedProjection(
         fa_trans,
         [
-            ExtendedProjectionListMember(*builtin_condition_1.args),
-            ExtendedProjectionListMember(*builtin_condition_2.args),
-            ExtendedProjectionListMember(x, x),
-            ExtendedProjectionListMember(y, y),
-            ExtendedProjectionListMember(u, u),
-            ExtendedProjectionListMember(v, v),
+            FunctionApplicationListMember(C_(mul)(cs_x, C_(3)), cs_z),
+            FunctionApplicationListMember(C_(mul)(cs_v, C_(2)), cs_w),
+            FunctionApplicationListMember(cs_x, cs_x),
+            FunctionApplicationListMember(cs_y, cs_y),
+            FunctionApplicationListMember(cs_u, cs_u),
+            FunctionApplicationListMember(cs_v, cs_v),
         ],
     )
     assert res == exp_trans
@@ -332,7 +338,8 @@ def test_set_destroy():
     res = tr.walk(exp)
 
     exp_result = Destroy(
-        NameColumns(Projection(r1, (C_(0),)), (C_("x"),)), x, y
+        NameColumns(Projection(r1, (C_(0),)), (C_("x"),)),
+        C_(ColumnStr("x")), C_(ColumnStr("y"))
     )
     assert res == exp_result
 
@@ -348,8 +355,8 @@ def test_set_destroy_multicolumn():
     res = tr.walk(exp)
 
     exp_result = Destroy(
-        NameColumns(Projection(r1, (C_(0),)), (C_("x"),)),
-        x,
+        NameColumns(Projection(r1, (C_(0),)), (C_(ColumnStr("x")),)),
+        C_(ColumnStr("x")),
         C_[Tuple[ColumnStr, ColumnStr]]((ColumnStr("y"), ColumnStr("z"))),
     )
     assert res == exp_result
@@ -365,7 +372,7 @@ def test_set_constant_contains():
 
     exp_result = Selection(
         NameColumns(Projection(r1, (C_(0),)), (C_("x"),)),
-        C_(contains)(x, C_(0)),
+        C_(contains)(C_(ColumnStr("x")), C_(0)),
     )
     assert res == exp_result
 
@@ -442,20 +449,20 @@ def test_border_cases():
         ExtendedProjection(
             NameColumns(Projection(R1, (C_(0),)), (C_("x"),)),
             (
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     C_(ColumnStr("x")),
                     C_(ColumnStr("x")),
                 ),
-                ExtendedProjectionListMember(
+                FunctionApplicationListMember(
                     C_(ColumnStr("x")),
                     C_(ColumnStr("y")),
                 ),
             ),
         ),
         (
-            ExtendedProjectionListMember(C_("x"), C_("x")),
-            ExtendedProjectionListMember(C_("y"), C_("y")),
-            ExtendedProjectionListMember(C_(2) * C_("y"), C_("z")),
+            FunctionApplicationListMember(C_("x"), C_("x")),
+            FunctionApplicationListMember(C_("y"), C_("y")),
+            FunctionApplicationListMember(C_(2) * C_("y"), C_("z")),
         ),
     )
     assert res == expected_res
@@ -514,11 +521,11 @@ def test_extended_projection_variable_equality():
             (C_(ColumnStr("x")),),
         ),
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("x"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("y"),
             ),
@@ -539,11 +546,11 @@ def test_extended_projection_variable_equality_constant():
             (C_(ColumnStr("x")),),
         ),
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("x"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 Constant("a"),
                 str2columnstr_constant("y"),
             ),
@@ -564,15 +571,15 @@ def test_extended_projection_variable_equality_not_named():
             (C_(ColumnStr("x")),),
         ),
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("x"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("y"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("y"),
                 str2columnstr_constant("z"),
             ),
@@ -594,15 +601,15 @@ def test_extended_projection_variable_equality_twice_same_lhs():
             (C_(ColumnStr("x")),),
         ),
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("x"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("y"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("z"),
             ),
@@ -623,15 +630,15 @@ def test_double_equality():
             (C_(ColumnStr("x")),),
         ),
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("x"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("z"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("y"),
             ),
@@ -654,19 +661,19 @@ def test_three_way_equality():
             (C_(ColumnStr("x")),),
         ),
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("x"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("w"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("w"),
                 str2columnstr_constant("y"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("y"),
                 str2columnstr_constant("z"),
             ),
@@ -690,23 +697,23 @@ def test_not_ordered_equalites():
             (C_(ColumnStr("x")),),
         ),
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("x"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("h"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("h"),
                 str2columnstr_constant("w"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("w"),
                 str2columnstr_constant("y"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("y"),
                 str2columnstr_constant("z"),
             ),
@@ -735,15 +742,15 @@ def test_equality_builtin_application():
             ),
         ),
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("x"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("y"),
                 str2columnstr_constant("y"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 f(C_(ColumnStr("x")), C_(ColumnStr("y"))),
                 str2columnstr_constant("z"),
             ),
@@ -773,18 +780,121 @@ def test_equality_nested_builtin_application():
             ),
         ),
         (
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("x"),
                 str2columnstr_constant("x"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 str2columnstr_constant("y"),
                 str2columnstr_constant("y"),
             ),
-            ExtendedProjectionListMember(
+            FunctionApplicationListMember(
                 f(g(C_(ColumnStr("x"))), g(C_(ColumnStr("y")))),
                 str2columnstr_constant("z"),
             ),
         ),
     )
+    assert result == expected
+
+
+def test_arithmetic_extended_projection():
+    x = Symbol("x")
+    z = Symbol("z")
+    P = Symbol("P")
+    conjunction = Conjunction(
+        (P(x), EQ(z, Constant(1) / (Constant(1) + (Constant(3) * x))))
+    )
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NameColumns(
+            Projection(P, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            FunctionApplicationListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            FunctionApplicationListMember(
+                Constant(1)
+                / (Constant(1) + (Constant(3) * C_(ColumnStr("x")))),
+                str2columnstr_constant("z"),
+            ),
+        ),
+    )
+    assert result == expected
+
+
+def test_extended_projection_constant_callable():
+    x = Symbol("x")
+    z = Symbol("z")
+    P = Symbol("P")
+    EXP = Constant[Callable[[float], float]](
+        numpy.exp, verify_type=False, auto_infer_type=False
+    )
+    conjunction = Conjunction((P(x), EQ(z, EXP(x))))
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NameColumns(
+            Projection(P, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            FunctionApplicationListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            FunctionApplicationListMember(
+                EXP(Constant(ColumnStr("x"))),
+                str2columnstr_constant("z"),
+            ),
+        ),
+    )
+    assert result == expected
+
+
+def test_sigmoid():
+    x = Symbol("x")
+    z = Symbol("z")
+    P = Symbol("P")
+    EXP = Constant[Callable[[float], float]](
+        numpy.exp, verify_type=False, auto_infer_type=False
+    )
+    conjunction = Conjunction(
+        (P(x), EQ(z, Constant(1) / (Constant(1) + EXP(-x))))
+    )
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NameColumns(
+            Projection(P, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            FunctionApplicationListMember(
+                Constant(1) / (Constant(1) + EXP(-C_(ColumnStr("x")))),
+                str2columnstr_constant("z"),
+            ),
+            FunctionApplicationListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+        ),
+    )
+    assert result == expected
+
+
+def test_existential():
+    x = Symbol("x")
+    y = Symbol("y")
+    P = Symbol("P")
+
+    conjunction = ExistentialPredicate(x, P(x, y))
+    result = TranslateToNamedRA().walk(conjunction)
+    p_translated = TranslateToNamedRA().walk(P(x, y))
+    expected = Projection(p_translated, (C_(ColumnStr("y")),))
+    assert result == expected
+
+    conjunction = ExistentialPredicate(y, P(x, y))
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = Projection(p_translated, (C_(ColumnStr("x")),))
     assert result == expected

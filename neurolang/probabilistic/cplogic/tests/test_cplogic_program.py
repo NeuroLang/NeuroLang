@@ -21,7 +21,7 @@ from ...exceptions import (
 from ...expressions import (
     PROB,
     Condition,
-    ProbabilisticPredicate,
+    ProbabilisticFact,
     ProbabilisticQuery,
 )
 from ..program import CPLogicMixin, CPLogicProgram
@@ -45,7 +45,7 @@ bernoulli = Symbol("bernoulli")
 
 def test_probfact():
     probfact = Implication(
-        ProbabilisticPredicate(Constant[float](0.2), P(x)),
+        ProbabilisticFact(Constant[float](0.2), P(x)),
         Constant[bool](True),
     )
     assert probfact.consequent.probability == Constant[float](0.2)
@@ -72,7 +72,7 @@ def test_cplogic_program():
     code = Union(
         [
             Implication(
-                ProbabilisticPredicate(Constant[float](0.5), P(x)),
+                ProbabilisticFact(Constant[float](0.5), P(x)),
                 Constant[bool](True),
             ),
             Implication(Q(x), Conjunction((P(x), Z(x)))),
@@ -91,7 +91,7 @@ def test_cplogic_program():
         P: Union(
             [
                 Implication(
-                    ProbabilisticPredicate(Constant[float](0.5), P(x)),
+                    ProbabilisticFact(Constant[float](0.5), P(x)),
                     Constant[bool](True),
                 )
             ]
@@ -115,10 +115,10 @@ def test_negated_predicate_in_antecedent():
         (
             rule_with_negation,
             Implication(
-                ProbabilisticPredicate(Constant[float](0.2), P(a)), TRUE
+                ProbabilisticFact(Constant[float](0.2), P(a)), TRUE
             ),
             Implication(
-                ProbabilisticPredicate(Constant[float](0.7), R(a)), TRUE
+                ProbabilisticFact(Constant[float](0.7), R(a)), TRUE
             ),
         )
     )
@@ -131,11 +131,11 @@ def test_multiple_probfact_same_pred_symb():
     code = Union(
         [
             Implication(
-                ProbabilisticPredicate(Constant[float](0.5), P(a)),
+                ProbabilisticFact(Constant[float](0.5), P(a)),
                 Constant[bool](True),
             ),
             Implication(
-                ProbabilisticPredicate(Constant[float](0.2), P(b)),
+                ProbabilisticFact(Constant[float](0.2), P(b)),
                 Constant[bool](True),
             ),
             Implication(Q(x), Conjunction((P(x), Z(x)))),

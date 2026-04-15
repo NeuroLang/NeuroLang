@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from functools import WRAPPER_ASSIGNMENTS, lru_cache, wraps
 from itertools import chain
 from warnings import warn
+import warnings
 
 from .exceptions import NeuroLangException
 from .type_system import NeuroLangTypeException, Unknown
@@ -16,6 +17,7 @@ from .type_system import get_args as get_type_args
 from .type_system import infer_type as _infer_type
 from .type_system import infer_type_builtins, is_leq_informative, unify_types
 from .typed_symbol_table import TypedSymbolTable
+from .config import config
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
@@ -52,11 +54,13 @@ def sure_is_not_pattern():
     with _lock:
         n = _sure_is_not_pattern.get(thread_id, 0)
         _sure_is_not_pattern[thread_id] = n + 1
-    yield
-    with _lock:
-        _sure_is_not_pattern[thread_id] -= 1
-        if _sure_is_not_pattern[thread_id] == 0:
-            del _sure_is_not_pattern[thread_id]
+    try:
+        yield
+    finally:
+        with _lock:
+            _sure_is_not_pattern[thread_id] -= 1
+            if _sure_is_not_pattern[thread_id] == 0:
+                del _sure_is_not_pattern[thread_id]
 
 
 @contextmanager
@@ -67,9 +71,11 @@ def sure_is_not_pattern_():
 
     with _lock:
         _sure_is_not_pattern[thread_id] = True
-    yield
-    with _lock:
-        del _sure_is_not_pattern[thread_id]
+    try:
+        yield
+    finally:
+        with _lock:
+            del _sure_is_not_pattern[thread_id]
 
 
 def type_validation_value(value, type_):
@@ -247,7 +253,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
 
 class Expression(metaclass=ExpressionMeta):
     __super_attributes__ = WRAPPER_ASSIGNMENTS + (
-        '__signature__', 'mro', 'type', '_symbols',
+        '__annotations__', '__signature__', 'mro', 'type', '_symbols',
         '__code__', '__defaults__', '__kwdefaults__', '__no_type_check__'
     )
 
@@ -354,24 +360,46 @@ class Expression(metaclass=ExpressionMeta):
         if not isinstance(other, type(self)):
             return False
 
-        for child in self.__children__:
-            val = getattr(self, child)
-            val_other = getattr(other, child)
+        return self.unapply() == other.unapply()
 
-            if isinstance(val, (list, tuple)):
-                if (
-                    len(val) != len(val_other) or
-                    not all(v == o for v, o in zip(val, val_other))
-                ):
-                    break
-            elif not val == val_other:
-                break
+    def __repr__(self):
+        name = type(self).__name__
+        if config.expression_type_printing():
+            r = f'{{{name}: {self.__type_repr__}}}'
         else:
-            return True
-        return False
+            r = f'{{{name}}}'
+        args = self.unapply()
+        if len(args) > 0:
+            str_args = (
+                '(' +
+                ', '.join(repr(arg) for arg in args) +
+                ')'
+            )
+            r += str_args
+        return r
 
     def __hash__(self):
-        return hash(tuple(getattr(self, c) for c in self.__children__))
+        return hash(self.unapply())
+
+    def __lt__(self, other):
+        """
+        You shouldn't have to compare Expressions, but need it when
+        using Dask RAS because we use the "first" aggregate function to get
+        a single value for each grouped_by column and this function uses
+        sort (on only one value, but still).
+
+        Returns
+        -------
+        int
+            Always -1
+        """
+        warnings.warn(
+            "You are comparing together Expressions. "
+            "Comparison of Expressions is not implemented properly and you"
+            " should not expect it to work.",
+            SyntaxWarning,
+        )
+        return -1
 
 
 class ExpressionBlock(Expression):
@@ -409,16 +437,38 @@ class Symbol(NonConstant):
         self.is_fresh = False
 
     def __eq__(self, other):
-        return (
-            hash(self) == hash(other) and
-            (isinstance(other, Symbol) or isinstance(other, str))
-         )
+        if hash(self) != hash(other):
+            return False
+
+        if isinstance(other, str):
+            other_str = other
+        elif isinstance(other, Symbol):
+            other_str = other.name
+        else:
+            return False
+
+        return self.name == other_str
 
     def __hash__(self):
         return hash(self.name)
 
     def __repr__(self):
-        return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
+        if config.expression_type_printing():
+            return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
+        else:
+            return f'S{{{self.name}}}'
+
+    def __getstate__(self):
+        # Pickle a tuple instead of a set for _symbols to avoid calling hash
+        # upon deserialization
+        state = self.__dict__.copy()
+        state["_symbols"] = tuple(self._symbols)
+        return state
+
+    def __setstate__(self, state: dict):
+        symbols = state.pop("_symbols")
+        self.__dict__ = state
+        self._symbols = set(symbols)
 
     @staticmethod
     def _fresh_generator():
@@ -470,6 +520,9 @@ class Constant(Expression):
         for attr in WRAPPER_ASSIGNMENTS:
             if hasattr(value, attr):
                 setattr(self, attr, getattr(value, attr))
+        # Ensure __annotations__ is copied on Python 3.14+ where it's no longer in WRAPPER_ASSIGNMENTS
+        if '__annotations__' not in WRAPPER_ASSIGNMENTS and hasattr(value, '__annotations__'):
+            setattr(self, '__annotations__', getattr(value, '__annotations__'))
 
         if auto_infer_type and self.type is Unknown:
             if hasattr(value, '__annotations__'):
@@ -527,10 +580,10 @@ class Constant(Expression):
             warn('Making a comparison with types needed to be inferred')
 
         if isinstance(other, Expression):
-            if isinstance(other, Constant):
-                value_equal = other.value == self.value
-            else:
-                value_equal = hash(other) == hash(self)
+            value_equal = (
+                isinstance(other, Constant) and
+                (other.value == self.value)
+            )
 
             return value_equal and (
                 is_leq_informative(self.type, other.type) or
@@ -539,7 +592,8 @@ class Constant(Expression):
         else:
             return (
                 hash(other) == hash(self) and
-                type_validation_value(other, self.type)
+                type_validation_value(other, self.type) and
+                self.value == other
             )
 
     def __hash__(self):
@@ -556,7 +610,10 @@ class Constant(Expression):
             value_str = self.value.__qualname__
         else:
             value_str = repr(self.value)
-        return 'C{{{}: {}}}'.format(value_str, self.__type_repr__)
+        if config.expression_type_printing():
+            return 'C{{{}: {}}}'.format(value_str, self.__type_repr__)
+        else:
+            return 'C{{{}}}'.format(value_str)
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
@@ -565,6 +622,13 @@ class Constant(Expression):
                 "The value %s does not correspond to the type %s" %
                 (self.value, self.type)
             )
+
+    def __reduce__(self):
+        """
+        Make Constants pickable.
+        See https://docs.python.org/3/library/pickle.html#object.__reduce__
+        """
+        return (Constant, (self.value, ))
 
 
 class Lambda(Definition):
@@ -593,9 +657,14 @@ class Lambda(Definition):
         self._symbols = self.function_expression._symbols - set(self.args)
 
     def __repr__(self):
-        r = u'\u03BB {} -> {}: {}'.format(
-            self.args, self.function_expression, self.__type_repr__
-        )
+        if config.expression_type_printing():
+            r = u'\u03BB {} -> {}: {}'.format(
+                self.args, self.function_expression, self.__type_repr__
+            )
+        else:
+            r = u'\u03BB {} -> {}'.format(
+                self.args, self.function_expression
+            )
         return r
 
 
@@ -625,7 +694,10 @@ class FunctionApplication(Definition):
             if self.functor.type in (Unknown, typing.Any):
                 pass
             elif isinstance(self.functor.type, typing.Callable):
-                self.type = self.functor.type.__args__[-1]
+                if hasattr(self.functor.type, '__args__'):
+                    self.type = self.functor.type.__args__[-1]
+                else:
+                    self.type = Unknown
             else:
                 if not (
                     self.functor.type in (Unknown, typing.Any)
@@ -665,7 +737,7 @@ class FunctionApplication(Definition):
         return self.functor
 
     def __repr__(self):
-        r = u'\u03BB{{{}: {}}}'.format(self.functor, self.__type_repr__)
+        r = u'\u03BB{{{}}}'.format(self.functor)
         if self.args is ...:
             r += '(...)'
         elif self.args is not None:
@@ -696,9 +768,14 @@ class Projection(Definition):
         self.item = item
 
     def __repr__(self):
-        return u"\u03C3{{{}[{}]: {}}}".format(
-            self.collection, self.item, self.__type_repr__
-        )
+        if config.expression_type_printing():
+            return u"\u03C3{{{}[{}]: {}}}".format(
+                self.collection, self.item, self.__type_repr__
+            )
+        else:
+            return u"\u03C3{{{}[{}]}}".format(
+                self.collection, self.item
+            )
 
     def _auto_infer_type(self, collection, item):
         if is_leq_informative(collection.type, typing.Tuple):
@@ -731,9 +808,14 @@ class Statement(Definition):
         return self.rhs
 
     def __repr__(self):
-        return 'Statement{{{}: {} <- {}}}'.format(
-            repr(self.lhs), self.__type_repr__, repr(self.rhs)
-        )
+        if config.expression_type_printing():
+            return 'Statement{{{}: {} <- {}}}'.format(
+                repr(self.lhs), self.__type_repr__, repr(self.rhs)
+            )
+        else:
+            return 'Statement{{{} <- {}}}'.format(
+                repr(self.lhs), repr(self.rhs)
+            )
 
 
 class Query(Definition):
@@ -754,9 +836,31 @@ class Query(Definition):
         else:
             name = repr(self.head)
 
-        return 'Query{{{}: {} <- {}}}'.format(
-            name, self.__type_repr__, self.body
-        )
+        if config.expression_type_printing():
+            return 'Query{{{}: {} <- {}}}'.format(
+                name, self.__type_repr__, self.body
+            )
+        else:
+            return 'Query{{{} <- {}}}'.format(
+                name, self.body
+            )
+
+
+class Command(Definition):
+    def __init__(self, name, args, kwargs):
+        self.name = name
+        self.args = args
+        self.kwargs = kwargs
+
+    def __repr__(self):
+        arg_str = ""
+        if self.args and isinstance(self.args, typing.Iterable):
+            arg_str += ", ".join([repr(a) for a in self.args])
+        if self.kwargs and isinstance(self.kwargs, typing.Iterable):
+            if len(arg_str) > 0:
+                arg_str += ", "
+            arg_str += ", ".join(f"{k}={v}" for k, v in self.kwargs)
+        return "Command{{{}({})}}".format(self.name, arg_str)
 
 
 def infer_type(value, deep=False):
@@ -812,7 +916,10 @@ for operator_name in dir(op):
 
     for c in (Constant, Symbol, FunctionApplication,
               Statement, Query):
-        if not hasattr(c, name):
+        if (
+            not hasattr(c, name) or
+            isinstance(getattr(c, name), types.MethodWrapperType)
+        ):
             setattr(c, name, op_bind(operator))
 
 
@@ -838,26 +945,40 @@ class TypedSymbolTableMixin:
             symbol_table = TypedSymbolTable()
         self.symbol_table = symbol_table
         self.simplify_mode = False
-        self.add_functions_to_symbol_table()
+        self.add_included_constants_and_functions_to_symbol_table()
 
     @property
     def included_functions(self):
-        function_constants = dict()
-        for attribute in dir(self):
-            if attribute.startswith('function_'):
-                c = Constant(getattr(self, attribute))
-                function_constants[attribute[len('function_'):]] = c
-        return function_constants
+        return self._get_included_symbol_definitions_with_prefix("function_")
 
-    def add_functions_to_symbol_table(self):
+    @property
+    def included_constants(self):
+        return self._get_included_symbol_definitions_with_prefix("constant_")
+
+    def add_included_constants_and_functions_to_symbol_table(self) -> None:
+        included = self.included_functions
+        included.update(self.included_constants)
         keyword_symbol_table = TypedSymbolTable()
-        for k, v in self.included_functions.items():
+        for k, v in included.items():
             keyword_symbol_table[Symbol[v.type](k)] = v
         keyword_symbol_table.set_readonly(True)
         top_scope = self.symbol_table
         while top_scope.enclosing_scope is not None:
             top_scope = top_scope.enclosing_scope
         top_scope.enclosing_scope = keyword_symbol_table
+
+    def _get_included_symbol_definitions_with_prefix(
+        self,
+        prefix: str,
+    ) -> typing.Dict[str, Constant]:
+        constants = dict()
+        for attribute in dir(self):
+            if attribute.startswith(prefix):
+                c = getattr(self, attribute)
+                if not isinstance(c, Constant):
+                    c = Constant(c)
+                constants[attribute[len(prefix):]] = c
+        return constants
 
     def push_scope(self):
         self.symbol_table = self.symbol_table.create_scope()

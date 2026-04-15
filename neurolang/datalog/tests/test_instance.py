@@ -35,6 +35,7 @@ def test_frozen_map_instance_contains_facts():
     assert Q in instance
     assert instance[Q].value == elements[Q]
     assert hash(instance) is not None
+    assert not instance.is_empty()
 
 
 def test_map_instance_contains_facts():
@@ -42,14 +43,27 @@ def test_map_instance_contains_facts():
     instance = MapInstance(elements)
     assert Q in instance
     assert instance[Q].value == elements[Q]
+    assert not instance.is_empty()
 
 
 def test_copy():
     elements = {Q: ({(C_(2), ), (C_(3), )})}
     instance = SetInstance(elements)
     instance2 = instance.copy()
-
     assert instance == instance2
+    assert not instance2.is_empty()
+
+
+def test_empty():
+    assert SetInstance({}).is_empty()
+    elements = {Q: ({(C_(2), ), (C_(3), )})}
+    instance = SetInstance(elements)
+    instance2 = instance.copy()
+    instance3 = instance - instance2
+    assert instance3.is_empty()
+
+    instance4 = SetInstance({P: ({(C_(2), ), (C_(3), )})})
+    assert (instance & instance4).is_empty()
 
 
 def test_build_instance_from_instance():

@@ -2,7 +2,6 @@ from typing import AbstractSet
 
 from ...expressions import Constant, Symbol
 from ...relational_algebra import (
-    ColumnStr,
     ConcatenateConstantColumn,
     NamedRelationalAlgebraFrozenSet,
     Projection,
@@ -75,9 +74,9 @@ def build_always_true_provenance_relation(relation, prob_col=None):
 
     """
     if prob_col is None:
-        prob_col = ColumnStr(Symbol.fresh().name)
+        prob_col = str2columnstr_constant(Symbol.fresh().name)
     # remove the probability column if it is already there
-    elif prob_col in relation.value.columns:
+    elif prob_col in relation.columns:
         kept_cols = tuple(
             str2columnstr_constant(col)
             for col in relation.value.columns
@@ -89,7 +88,7 @@ def build_always_true_provenance_relation(relation, prob_col=None):
         1.0, auto_infer_type=False, verify_type=False
     )
     relation = ConcatenateConstantColumn(
-        relation, str2columnstr_constant(prob_col), cst_one_probability
+        relation, prob_col, cst_one_probability
     )
     relation = RelationalAlgebraSolver().walk(relation)
-    return ProvenanceAlgebraSet(relation.value, prob_col)
+    return ProvenanceAlgebraSet(relation, prob_col)

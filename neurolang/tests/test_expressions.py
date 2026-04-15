@@ -2,9 +2,12 @@ import inspect
 import operator as op
 from typing import AbstractSet, Callable, Mapping, Sequence, Tuple
 
+import pickle
 import pytest
 import numpy
 
+
+from ..config import config
 from .. import expressions, logic
 from ..expression_walker import (
     ExpressionBasicEvaluator,
@@ -47,6 +50,19 @@ def test_build_constants():
     assert len(b.value) == 1
     assert C_('a') in b.value
     assert C_(1) in b.value.values()
+
+
+def test_pickle_constants():
+    a = C_('ab')
+    assert pickle.loads(pickle.dumps(a)) == a
+    b = C_(['a'])
+    assert pickle.loads(pickle.dumps(b)) == b
+    c = C_(('a', 1))
+    assert pickle.loads(pickle.dumps(c)) == c
+    d = C_({'a'})
+    assert pickle.loads(pickle.dumps(d)) == d
+    e = C_({'a': 1})
+    assert pickle.loads(pickle.dumps(e)) == e
 
 
 def test_fresh_symbol():
@@ -127,6 +143,19 @@ def test_symbol_application():
     ) == evaluate(
         fvc, a=C_(2), b=C_(3)
     ) == -15
+
+
+def test_or_operations():
+
+    fx = F_(S_('f'), (S_('x'),))
+    gx = F_(S_('b'), (S_('x'),))
+
+    res = fx | gx
+    assert res == F_(C_(op.or_), (fx, gx))
+
+    x = S_('x')
+    y = S_('y')
+    assert (x | y) == F_(C_(op.or_), (x, y))
 
 
 def test_symbol_method_and_operator():
@@ -322,3 +351,16 @@ def test_fresh_symbol_subclass():
 def test_numpy_ufunc_no_qualname_repr():
     exp = C_(numpy.exp)
     repr(exp)
+
+
+def test_type_printing_option():
+    x = S_[int]('x')
+    a = C_[str]('a')
+
+    config.enable_expression_type_printing()
+    assert repr(x) == "S{x: int}"
+    assert repr(a) == "C{'a': str}"
+
+    config.disable_expression_type_printing()
+    assert repr(x) == "S{x}"
+    assert repr(a) == "C{'a'}"

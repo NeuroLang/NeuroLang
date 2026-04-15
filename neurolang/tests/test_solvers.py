@@ -227,7 +227,7 @@ def test_partial_binary_evaluation():
             assert any(e is e1 for e in self.walked)
             # make sure e2 was walked
             assert any(e is e2 for e in self.walked)
-            # get postion of e1 in walk history
+            # get position of e1 in walk history
             e1_idx = next(i for i, e in enumerate(self.walked) if e is e1)
             # get position of e2 in walk history
             e2_idx = next(i for i, e in enumerate(self.walked) if e is e2)

@@ -7,12 +7,13 @@ from ..datalog.expression_processing import (
     dependency_matrix,
     extract_logic_atoms,
     extract_logic_predicates,
-    reachable_code,
 )
+from ..datalog.constraints_representation import reachable_code
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
 from ..logic import TRUE, Implication, Negation, Union
-from .expressions import ProbabilisticPredicate
+from ..datalog.constraints_representation import RightImplication
+from .expressions import ProbabilisticFact
 
 
 def _iter_implication_or_union_of_implications(expression):
@@ -27,8 +28,8 @@ def _iter_implication_or_union_of_implications(expression):
 
 def reachable_code_from_query(query, program):
     """
-    Find the part of the intensional database of the program that is needed to
-    answer a rule-based query Head :- Body such that Head is not necesarrily
+    Find the part of the intentional database of the program that is needed to
+    answer a rule-based query Head :- Body such that Head is not necessarily
     part of the program.
 
     This is useful if the query is formulated as a rule instead of simply a
@@ -36,28 +37,30 @@ def reachable_code_from_query(query, program):
 
     """
     if query is None:
-        return Union(tuple(_get_list_of_intensional_rules(program)))
+        return Union(tuple(get_list_of_intensional_rules(program)))
+
     predicates = [query.consequent] + list(
-        extract_logic_predicates(query.antecedent)
+        extract_logic_atoms(query.antecedent)
     )
     reachable = set()
     for pred in predicates:
         for rule in _iter_implication_or_union_of_implications(
             program.intensional_database().get(pred.functor, None)
         ):
-            reachable |= set(reachable_code(rule, program).formulas)
+            if not isinstance(rule, RightImplication):
+                reachable |= set(reachable_code(rule, program).formulas)
     return Union(tuple(reachable))
 
 
 def stratify_program(query, program):
     """
-    Statically analyse the program to isolate its deterministic strat, its
-    probabilistic strats and its post-probabilistic-query deterministic strat.
+    Statically analyse the program to isolate its deterministic strata, its
+    probabilistic strats and its post-probabilistic-query deterministic strata.
 
     A query can be solved through stratification if the probabilistic and
     deterministic parts are well separated. In case there exists one
     within-language probabilistic query dependency, no probabilistic predicate
-    should appear in the strat that depends on the query.
+    should appear in the strata that depends on the query.
 
     Parameters
     ----------
@@ -126,11 +129,26 @@ def _check_no_negated_prob_idb_predicate(prob_idb):
         )
 
 
-def _get_list_of_intensional_rules(program):
+def get_list_of_intensional_rules(program):
+    '''
+    Given a program, it returns a list of intentional rules.
+
+    Parameters
+    ----------
+    program : CPLogicProgram
+        Program from which we want to obtain the list of intentional rules.
+
+    Returns
+    -------
+    list
+        list of intentional rules
+    '''
+
     idb = [
         rule
         for exp in program.intensional_database().values()
         for rule in _iter_implication_or_union_of_implications(exp)
+        if not isinstance(rule, RightImplication)
     ]
     return idb
 
@@ -142,6 +160,10 @@ def _get_program_deterministic_symbols(program):
         det_symbs |= set(
             formula.consequent.functor
             for formula in program.constraints().formulas
+        )
+
+        det_symbs |= set(
+            rule.functor for rule in program.existential_rules.keys()
         )
     return det_symbs
 
@@ -175,7 +197,7 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
         | grpd_symbs["post_probabilistic"]
     ).issuperset(dep_symbs):
         idb_type = "post_probabilistic"
-    elif not grpd_symbs["probabilistic"].isdisjoint(dep_symbs):
+    elif not (grpd_symbs["probabilistic"] - wlq_symbs).isdisjoint(dep_symbs):
         idb_type = "probabilistic"
     return idb_type
 
@@ -190,7 +212,7 @@ def _check_for_query_based_probfact_dependency_on_prob_relation(
             for atom in extract_logic_atoms(rule.antecedent)
         )
         for rule in prob_idb
-        if isinstance(rule.consequent, ProbabilisticPredicate)
+        if isinstance(rule.consequent, ProbabilisticFact)
         and rule.antecedent != TRUE
     ):
         raise UnsupportedProgramError(
@@ -213,9 +235,11 @@ def _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs):
 
 def _wlq_depends_on_other_wlq(wlq_symb_idx, dep_mat, wlq_symb_idxs):
     stack = [wlq_symb_idx]
+    seen = set()
     while stack:
-        dep_idxs = np.argwhere(dep_mat[stack.pop()].astype(bool)).flatten()
+        dep_idxs = set(np.argwhere(dep_mat[stack.pop()].astype(bool)).flatten())
         if not wlq_symb_idxs.isdisjoint(dep_idxs):
             return True
-        stack += list(dep_idxs)
+        stack += list(dep_idxs - seen)
+        seen.update(dep_idxs)
     return False

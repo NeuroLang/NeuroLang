@@ -2,6 +2,7 @@ import typing
 
 from ...datalog import DatalogProgram
 from ...datalog.basic_representation import UnionOfConjunctiveQueries
+from ...datalog.negation import DatalogProgramNegationMixin
 from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
@@ -21,7 +22,7 @@ from ..expression_processing import (
     is_within_language_prob_query,
     union_contains_probabilistic_facts,
 )
-from ..expressions import Condition, ProbabilisticPredicate
+from ..expressions import Condition, ProbabilisticFact, ProbabilisticChoice, ProbabilisticPredicate
 
 
 class CPLogicMixin(PatternWalker):
@@ -68,24 +69,22 @@ class CPLogicMixin(PatternWalker):
         return {
             pred_symb: union.formulas[0]
             for pred_symb, union in self.intensional_database().items()
-            if len(union.formulas) == 1
+            if not isinstance(union, Constant) and len(union.formulas) == 1
             and is_within_language_prob_query(union.formulas[0])
         }
 
     def probabilistic_facts(self):
         """Return probabilistic facts of the symbol table."""
         return {
-            k: v
-            for k, v in self.symbol_table.items()
-            if k in self.pfact_pred_symbs
+            k: self.symbol_table[k]
+            for k in self.pfact_pred_symbs
         }
 
     def probabilistic_choices(self):
         """Return probabilistic choices of the symbol table."""
         return {
-            k: v
-            for k, v in self.symbol_table.items()
-            if k in self.pchoice_pred_symbs
+            k: self.symbol_table[k]
+            for k in self.pchoice_pred_symbs
         }
 
     def _get_pred_symbs(self, set_symb):
@@ -130,7 +129,8 @@ class CPLogicMixin(PatternWalker):
             symbol, self.pfact_pred_symb_set_symb
         )
         type_, iterable = self.infer_iterable_type(iterable)
-        self._check_iterable_prob_type(type_)
+        if not hasattr(iterable, '__len__') or len(iterable) > 0:
+            self._check_iterable_prob_type(type_)
         constant = Constant[typing.AbstractSet[type_]](
             self.new_set(iterable), auto_infer_type=False, verify_type=False
         )
@@ -173,7 +173,7 @@ class CPLogicMixin(PatternWalker):
             self.new_set(iterable), auto_infer_type=False, verify_type=False
         )
         check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
-        self.symbol_table[symbol] = ra_set
+        self.symbol_table[symbol.cast(typing.AbstractSet[ra_set.value.row_type])] = ra_set
 
     @staticmethod
     def _check_iterable_prob_type(iterable_type):
@@ -211,7 +211,7 @@ class CPLogicMixin(PatternWalker):
             self.symbol_table[set_symb].value | {pred_symb}
         )
 
-    @add_match(Implication(ProbabilisticPredicate, TRUE))
+    @add_match(Implication(ProbabilisticFact, TRUE))
     def probabilistic_fact(self, expression):
         pred_symb = expression.consequent.body.functor
         self._register_prob_pred_symb_set_symb(
@@ -231,7 +231,40 @@ class CPLogicMixin(PatternWalker):
         )
         return expression
 
-    @add_match(Implication(ProbabilisticPredicate, ...))
+    @add_match(Implication(ProbabilisticChoice, ...))
+    def query_based_probabilistic_choice(self, implication):
+        """
+        Construct probabilistic choices from deterministic queries.
+
+        This extends the syntax with rules such as
+
+            Or_x P(x) : f(x) :- Q(x)
+
+        where x is a set of variables, f(x) is an arithmetic expression
+        yielding a probability between [0, 1] that may use built-ins, and where
+        Q(x) is a conjunction of predicates. The sum of f(x) for all x must be
+        lower than 1.
+
+        Only deterministic antecedents are allowed. Declarativity makes it
+        impossible to enforce that at declaration time. Thus, if a query-based
+        probabilistic fact has a dependency on a probabilistic predicate, this
+        will be discovered at query-resolution time, after the program has been
+        fully declared.
+
+        """
+        pred_symb = implication.consequent.body.functor
+        pred_symb = pred_symb.cast(UnionOfConjunctiveQueries)
+        self._register_prob_pred_symb_set_symb(
+            pred_symb, self.pchoice_pred_symb_set_symb
+        )
+        if pred_symb in self.symbol_table:
+            raise ForbiddenDisjunctionError(
+                "Probabilistic choice {} already defined".format(pred_symb)
+            )
+        self.symbol_table[pred_symb] = Union((implication,))
+        return implication
+
+    @add_match(Implication(ProbabilisticFact, ...))
     def query_based_probabilistic_fact(self, implication):
         """
         Construct probabilistic facts from deterministic queries.
@@ -262,6 +295,15 @@ class CPLogicMixin(PatternWalker):
             )
         self.symbol_table[pred_symb] = Union((implication,))
         return implication
+
+    @add_match(Implication(ProbabilisticPredicate, ...))
+    def query_based_probabilistic_predicate(self, implication):
+        """
+            Left for backward compatibility. Should be referred to the
+            ProbabilisticFact case
+
+        """
+        return self.query_based_probabilistic_fact(implication)
 
     @add_match(Implication(..., Condition), is_within_language_prob_query)
     def within_language_marg_query(self, implication):
@@ -307,10 +349,6 @@ class CPLogicMixin(PatternWalker):
             if isinstance(arg, Symbol)
         )
         prob_term = get_within_language_prob_query_prob_term(implication)
-        if not prob_term.args:
-            raise UnsupportedProbabilisticQueryError(
-                "Probabilistic boolean queries are not currently supported"
-            )
         if not all(isinstance(arg, Symbol) for arg in prob_term.args):
             bad_vars = (
                 repr(arg)
@@ -336,10 +374,6 @@ class CPLogicMixin(PatternWalker):
             if isinstance(arg, Symbol)
         )
         prob_term = get_within_language_prob_query_prob_term(implication)
-        if not prob_term.args:
-            raise UnsupportedProbabilisticQueryError(
-                "Probabilistic boolean queries are not currently supported"
-            )
         if not all(isinstance(arg, Symbol) for arg in prob_term.args):
             bad_vars = (
                 repr(arg)
@@ -358,5 +392,8 @@ class CPLogicMixin(PatternWalker):
             )
 
 
-class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):
+class CPLogicProgram(
+    CPLogicMixin, DatalogProgramNegationMixin,
+    DatalogProgram, ExpressionWalker
+):
     pass

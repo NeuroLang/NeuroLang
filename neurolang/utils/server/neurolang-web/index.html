@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/inr_logo_grisbleu.svg" />
+  <link rel="stylesheet" type="text/css" href="/papaya.css?build=1453" />
+  <link rel="stylesheet" type="text/css" href="/node_modules/fomantic-ui-css/semantic.min.css" />
+  <link rel="stylesheet" type="text/css" href="/node_modules/datatables.net-se/css/dataTables.semanticui.min.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neurolang Web Application</title>
+</head>
+
+<body>
+
+  <!-- Top Menu -->
+  <div class="ui borderless large main menu">
+    <div class="ui container">
+      <div class="header item">
+        <img class="logo" src="/inr_logo_grisbleu.svg">
+        Neurolang
+      </div>
+      <a href="https://neurolang.github.io/" class="item">About</a>
+      <div href="#" class="ui dropdown item">
+        Dataset <i class="dropdown icon"></i>
+        <div class="menu nl-dataset-dropdown">
+          <a class="item" href="/neurosynth" data-link>Neurosynth</a>
+          <a class="item" href="/destrieux" data-link>
+            <i class="dropdown icon"></i>
+            Destrieux
+            <div class="menu">
+              <div class="item">Example 1</div>
+              <div class="item">Example 2</div>
+            </div>
+          </a>
+        </div>
+      </div>
+      <a href="https://github.com/NeuroLang/NeuroLang" class="ui right floated item">
+        <i class="github icon"></i>
+      </a>
+    </div>
+  </div>
+
+  <!-- Query input container -->
+  <div id="queryContainer" class="ui grid container">
+    <div class="sixteen wide column">
+      <div class="ui fluid accordion nl-query-info">
+        <div class="title">
+          <i class="dropdown icon"></i>
+          <span class="ui header nl-query-title"></span>
+        </div>
+        <div class="content nl-query-description">
+        </div>
+      </div>
+      <div class="ui raised segments">
+        <div class="ui label segment container nl-query-input-header">
+          <span class="text">Write your query on neurological data</span>
+          <div class="nl-query-download-buttons">
+            <input type="file" id="queryFileInput" style="display:none">
+            <a href="#" class="ui right floated nl-query-upload" data-tooltip="Upload code">
+              <i class="circular upload icon"></i>
+            </a>
+            <a href="#" class="ui right floated nl-query-download" data-tooltip="Download code">
+              <i class="circular download icon"></i>
+            </a>
+          </div>
+        </div>
+        <div class="ui segment code-mirror-container">
+          <textarea class="ui input" id="queryTextArea"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="two wide column">
+      <button type="button" class="ui button" id="runQueryBtn">Run query</button>
+      
+    </div>
+
+    <div class="fourteen wide column">
+      <div class="ui message nl-query-alert" id="queryAlert">
+          <div class="header nl-query-header">
+          </div>
+          <p class="nl-query-message"></p>
+          <pre class="nl-query-help"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Symbols container -->
+  <div class="ui container nl-symbols-viewer-container">
+    <div id="symbolsContainer" class="nl-symbols-container">
+      <div class="ui raised segments">
+        <div class="ui label segment nl-symbols-header">
+          <span class="text">Select a symbol to explore</span>
+          <div class="ui search selection dropdown nl-symbols-dropdown">
+            <input type="hidden" name="symbol">
+            <i class="dropdown icon"></i>
+            <div class="default text">Select Symbol</div>
+            <div class="menu">
+            </div>
+          </div>
+          <i class="circular question icon link nl-symbols-help" data-content="Base symbols are the relations that are preloaded on this dataset. When you execute a query, symbols updated or added by your query will also be displayed here. Probabilistic symbols appear highlighted."></i>
+          <a href="#" class="ui right floated nl-symbols-download">
+            <i class="circular download icon link"></i>
+          </a>
+        </div>
+        <div class="ui  segment">
+          <table class='ui compact striped table nl-symbols-table' id='tabTable' width="100%"></table>
+          <div class="ui message nl-functions-msg">
+            <div class="header nl-functions-header">
+            </div>
+            <p class="nl-functions-message"></p>
+            <pre class="nl-functions-help"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="nlPapayaContainer" class="nl-papaya-container">
+      <div id="nlPapayaParent" class="nl-papaya-parent"></div>
+      <div class="nl-colorbar-container" id="nlColorbarContainer"></div>
+      <div class="ui message warning nl-papaya-alert">
+        <div class="header">You cannot add more than 8 overlays</div>
+        <p>Please unselect an overlay to add a new one</p>
+      </div>
+      
+    </div>
+  </div>
+
+  <div class="ui basic modal nl-server-error-modal">
+    <div class="ui icon header">
+      <i class="heartbeat icon"></i>
+      Oops ! Something's wrong ...
+    </div>
+    <div class="content">
+      <p>We're having issues communicating with the server. Maybe try again in a couple of minutes ?</p>
+    </div>
+    <div class="actions">
+      <div class="ui red basic cancel inverted button">
+        <i class="remove icon"></i>
+        OK
+      </div>
+      <a class="ui basic inverted button" href="https://neurolang.github.io/">
+        Visit Neurolang's website
+      </a>
+    </div>
+  </div>
+
+
+  <!-- papaya is vendored as it is not packaged for npm -->
+  <script type="text/javascript" src="/papaya.js?build=1453"></script>
+  <!-- papaya should load before our main.js script as it defines globals -->
+  <script type="module" src="/main.js"></script>
+</body>
+
+</html>

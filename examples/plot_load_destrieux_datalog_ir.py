@@ -8,6 +8,10 @@ Uploading the Destrieux left sulci into NeuroLang and
 executing some simple queries.
 '''
 
+import warnings
+
+warnings.filterwarnings("ignore")
+
 import nilearn
 import numpy as np
 from matplotlib import pyplot as plt
@@ -36,7 +40,7 @@ Eb_ = expressions.ExpressionBlock
 atlas_destrieux = nilearn.datasets.fetch_atlas_destrieux_2009()
 
 image = nib.load(atlas_destrieux['maps'])
-image_data = image.get_data()
+image_data = image.get_fdata().astype(int)
 
 
 ##################################################
@@ -54,7 +58,7 @@ for label, name in atlas_destrieux['labels']:
             voxels,
             image.affine, image_dim=image.shape
     )
-    region_dict[name.decode('utf8')] = r
+    region_dict[name] = r
 
 plotting.plot_roi(region_dict['L S_temporal_sup'].spatial_image())
 
@@ -98,7 +102,7 @@ class Datalog(
 
 superior_sts_l = S_('region_l_sts')
 r = S_('r')
-name = S_('name')
+name = S_('name_')
 
 r1 = Imp_(
     S_('superior_sts_l')(name, r),

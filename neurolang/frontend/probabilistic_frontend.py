@@ -21,36 +21,55 @@ from typing import (
 from uuid import uuid1
 
 import pandas as pd
+from neurolang.type_system import (
+    get_args,
+    replace_type_variable_fix_python36_37,
+)
 
 from .. import expressions as ir
 from ..datalog.aggregation import (
-    Chase,
+    BuiltinAggregationMixin,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
 )
+from ..datalog.chase import Chase
 from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.exceptions import InvalidMagicSetError
+from ..datalog.expression_processing import (
+    EqualitySymbolLeftHandSideNormaliseMixin,
+)
+from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
-from ..exceptions import UnsupportedQueryError, UnsupportedSolverError
-from ..expression_walker import ExpressionBasicEvaluator
-from ..logic import Union
+
+from ..exceptions import (
+    UnsupportedQueryError,
+    UnsupportedSolverError,
+    UnsupportedProgramError,
+)
+from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
+from ..logic import Union, Symbol
+from ..probabilistic import (
+    dalvi_suciu_lift,
+    small_dichotomy_theorem_based_solver,
+)
 from ..probabilistic.cplogic.program import CPLogicMixin
-from ..probabilistic.dichotomy_theorem_based_solver import (
-    solve_marg_query as lifted_solve_marg_query,
-)
-from ..probabilistic.dichotomy_theorem_based_solver import (
-    solve_succ_query as lifted_solve_succ_query,
-)
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
+)
+from ..probabilistic.magic_sets_processing import (
+    probabilistic_postprocess_magic_rules,
 )
 from ..probabilistic.query_resolution import (
     QueryBasedProbFactToDetRule,
     compute_probabilistic_solution,
 )
-from ..probabilistic.stratification import stratify_program
+from ..probabilistic.stratification import (
+    get_list_of_intensional_rules,
+    stratify_program
+)
 from ..probabilistic.weighted_model_counting import (
     solve_marg_query as wmc_solve_marg_query,
 )
@@ -60,28 +79,38 @@ from ..probabilistic.weighted_model_counting import (
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression,
+    RelationalAlgebraColumnStr,
 )
+from ..commands import CommandsMixin
+from ..datalog.basic_representation import UnionOfConjunctiveQueries
 from . import query_resolution_expressions as fe
-from .datalog.intermediate_sugar import (
+from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
 )
+from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
+from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
 class RegionFrontendCPLogicSolver(
+    EqualitySymbolLeftHandSideNormaliseMixin,
     TranslateProbabilisticQueryMixin,
     TranslateToLogicWithAggregation,
     TranslateQueryBasedProbabilisticFactMixin,
+    TranslateEuclideanDistanceBoundMatrixMixin,
     QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
     RegionSolver,
+    CommandsMixin,
+    NumpyFunctionsMixin,
     CPLogicMixin,
     DatalogWithAggregationMixin,
+    BuiltinAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
+    TypedSymbolTableMixin,
     ExpressionBasicEvaluator,
 ):
     pass
@@ -98,13 +127,16 @@ class NeurolangPDL(QueryBuilderDatalog):
         self,
         chase_class: Type[Chase] = Chase,
         probabilistic_solvers: Tuple[Callable] = (
-            lifted_solve_succ_query,
+            small_dichotomy_theorem_based_solver.solve_succ_query,
+            dalvi_suciu_lift.solve_succ_query,
             wmc_solve_succ_query,
         ),
         probabilistic_marg_solvers: Tuple[Callable] = (
-            lifted_solve_marg_query,
+            small_dichotomy_theorem_based_solver.solve_marg_query,
+            dalvi_suciu_lift.solve_marg_query,
             wmc_solve_marg_query,
         ),
+        check_qbased_pfact_tuple_unicity=False,
     ) -> "NeurolangPDL":
         """
         Query builder with probabilistic capabilities
@@ -139,12 +171,15 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
-        self.ontology_loaded = False
+        self.current_program_rewritten = None
+        self.check_qbased_pfact_tuple_unicity = (
+            check_qbased_pfact_tuple_unicity
+        )
 
     def load_ontology(
         self,
         paths: typing.Union[str, List[str]],
-        load_format: typing.Union[str, List[str]] = "xml",
+        connector_symbol_name=None
     ) -> None:
         """
         Loads and parses ontology stored at the specified paths, and
@@ -154,18 +189,37 @@ class NeurolangPDL(QueryBuilderDatalog):
         ----------
         paths : typing.Union[str, List[str]]
             where the ontology files are stored
-        load_format : typing.Union[str, List[str]], optional
-            storage format, by default "xml"
+        connector_symbol_name : str
+            name to be used in the connector_symbol.
+            if None, the name is randomly generated
+
+        Returns
+        -------
+        Expression
+            the new connector_symbol, to be used in
+            the query program.
         """
-        onto = OntologyParser(paths, load_format)
-        d_pred, u_constraints = onto.parse_ontology()
-        self.program_ir.walk(u_constraints)
-        self.program_ir.add_extensional_predicate_from_tuples(
-            onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
-        )
-        self.program_ir.add_extensional_predicate_from_tuples(
-            onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
-        )
+        if connector_symbol_name is None:
+            self.connector_symbol = self.new_symbol()
+        else:
+            self.connector_symbol = self.new_symbol(name=connector_symbol_name)
+        onto = OntologyParser(paths, connector_symbol=self.connector_symbol.expression)
+        constraints, est_knowledge, entity_rules = onto.parse_ontology()
+        self.program_ir.set_constraints(constraints)
+        for name, expressions in constraints.items():
+            symbol = Symbol(name=name).cast(UnionOfConjunctiveQueries)
+            self.program_ir.symbol_table[symbol] = Union(expressions)
+        for symbol, expressions in est_knowledge.items():
+            iterable = [exp.args for exp in expressions]
+            self.program_ir.add_extensional_predicate_from_tuples(
+                symbol, iterable
+            )
+        self.program_ir.add_existential_rules(onto.existential_rules)
+        for symbol, expressions in entity_rules.items():
+            for e in expressions:
+                self.program_ir.walk(e)
+
+        return self.connector_symbol
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -208,7 +262,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
-        [Internal usage - documentation for developpers]
+        [Internal usage - documentation for developers]
 
         Performs an inferential query: will return as first output
         an AbstractSet with as many elements as solutions
@@ -281,12 +335,33 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         """
         query_pred_symb = predicate.expression.functor
+        query_pred_args = predicate.expression.args
         if is_probabilistic_predicate_symbol(query_pred_symb, self.program_ir):
             raise UnsupportedQueryError(
                 "Queries on probabilistic predicates are not supported"
             )
         query = self.program_ir.symbol_table[query_pred_symb].formulas[0]
-        solution = self._solve(query)
+
+        try:
+            with self.scope:
+                goal, magic_rules = magic_rewrite(
+                    query.consequent, self.program_ir
+                )
+                self.program_ir.walk(magic_rules)
+                magic_query = self.program_ir.symbol_table[goal].formulas[0]
+                (
+                    magic_query,
+                    magic_rules,
+                ) = probabilistic_postprocess_magic_rules(
+                    self.program_ir, magic_query, magic_rules
+                )
+            with self.scope:
+                self.program_ir.walk(magic_rules)
+                solution = self._solve(magic_query)
+                query_pred_symb = magic_query.consequent.functor
+        except (InvalidMagicSetError, UnsupportedProgramError) :
+            solution = self._solve(query)
+
         if not isinstance(head, tuple):
             # assumes head is a predicate e.g. r(x, y)
             head_symbols = tuple(head.expression.args)
@@ -295,7 +370,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             head_symbols = tuple(t.expression for t in head)
             functor_orig = None
         solution = self._restrict_to_query_solution(
-            head_symbols, predicate, solution
+            head_symbols, query_pred_symb, query_pred_args, solution
         )
         if functor_orig is None:
             solution = solution.value
@@ -359,9 +434,34 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     def _solve_deterministic_stratum(self, det_idb):
+        '''Resolution of the deterministic stratum. In case there
+        are entries in the symbol table under the key __constraints__,
+        a rewrite is performed and the resulting program is assigned
+        to the variable `current_program_rewritten` to provide a way
+        to access this information.
+
+        In case connector_symbol has been defined, all rules derived
+        from the ontology parsing are included in the program
+
+        Parameters
+        ----------
+        det_idb : typing.Union
+            union of rules composing the deterministic stratum.
+
+        Returns
+        -------
+        Result obtained after resolution of the deterministic stratum
+        '''
         if "__constraints__" in self.symbol_table:
-            eB = self._rewrite_program_with_ontology(det_idb)
-            det_idb = Union(det_idb.formulas + eB.formulas)
+            det_idb = self._rewrite_program_with_ontology(det_idb)
+            if hasattr(self, 'connector_symbol'):
+                connector_rules = tuple(
+                    [q
+                    for q in get_list_of_intensional_rules(self.program_ir)
+                    if self.connector_symbol.expression in q.antecedent._symbols
+                ])
+                det_idb = Union(det_idb.formulas + connector_rules)
+            self.current_program_rewritten = det_idb
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
         return solution
@@ -380,6 +480,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                     prob_idb,
                     succ_solver,
                     marg_solver,
+                    self.check_qbased_pfact_tuple_unicity,
                 )
             except UnsupportedSolverError:
                 if i == len(self.probabilistic_solvers) - 1:
@@ -420,40 +521,53 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     @staticmethod
-    def _restrict_to_query_solution(head_symbols, predicate, solution):
+    def _restrict_to_query_solution(
+        head_symbols, pred_symb, pred_args, solution
+    ):
         """
-        Based on a solution instance and a query predicate, retrieve the
-        relation whose columns correspond to symbols in the head of the query.
+        Based on a solution instance and a query predicate symbol and args,
+        retrieve the relation whose columns correspond to symbols in the head
+        of the query.
         """
-        pred_symb = predicate.expression.functor
         # return dum when empty solution (reported in GH481)
         if pred_symb not in solution:
             return ir.Constant[AbstractSet](
                 NamedRelationalAlgebraFrozenSet.dum()
             )
         query_solution = solution[pred_symb].value.unwrap()
+        query_row_type = solution[pred_symb].value.row_type
+        constant_selection = {
+            i: c.value for i, c in enumerate(pred_args)
+            if isinstance(c, ir.Constant)
+        }
+        if constant_selection:
+            query_solution = query_solution.selection(constant_selection)
         cols = list(
-            arg.name
-            for arg in predicate.expression.args
-            if isinstance(arg, ir.Symbol)
+            arg.name if isinstance(arg, ir.Symbol)
+            else ir.Symbol.fresh().name
+            for arg in pred_args
         )
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
             *(symb.name for symb in head_symbols)
         )
+        type_args = get_args(query_row_type)
+        proj_row_type = tuple(
+            type_args[cols.index(symb.name)] for symb in head_symbols
+        )
+        query_solution.row_type = replace_type_variable_fix_python36_37(
+            query_row_type, proj_row_type
+        )
         return ir.Constant[AbstractSet](query_solution)
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
-            deterministic_program, self.program_ir.constraints()
+            deterministic_program,
+            self.program_ir.get_constraints()
         )
         rewrite = orw.Xrewrite()
 
-        eB = ()
-        for imp in rewrite:
-            eB += (imp[0],)
-
-        return Union(eB)
+        return Union(rewrite)
 
     def add_probabilistic_facts_from_tuples(
         self,
@@ -467,7 +581,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         In the tuple (p, a, b, ...), p is the float probability
         of tuple (a, b, ...) to be True in any possible world.
 
-        Note that each tuple from the iterable is independant
+        Note that each tuple from the iterable is independent
         from the others, meaning that multiple tuples can be True
         in the same possible world, contrary to a probabilistic choice.
         See example for details.
@@ -604,7 +718,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         Add uniform probabilistic choice over values in the iterable.
 
         Every tuple in the iterable will be assigned the same probability to
-        be True, with all remaning tuples False, in any possible world.
+        be True, with all remaining tuples False, in any possible world.
 
         Note that, contrary to a list of probabilistic facts, this represents
         a choice among possible values for the predicate, meaning that tuples
@@ -655,11 +769,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         columns = tuple(ir.Symbol.fresh().name for _ in range(arity))
         ra_set = NamedRelationalAlgebraFrozenSet(columns, iterable)
         prob_col = ir.Symbol.fresh().name
-        probability = 1 / len(iterable)
+        probability = 1 / len(ra_set)
         projections = collections.OrderedDict()
         projections[prob_col] = probability
         for col in columns:
-            projections[col] = RelationalAlgebraStringExpression(col)
+            projections[col] = RelationalAlgebraColumnStr(col)
         ra_set = ra_set.extended_projection(projections)
-        self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
+        self.program_ir.add_probabilistic_choice_from_tuples(
+            symbol,
+            ra_set.projection_to_unnamed(*projections.keys())
+        )
         return fe.Symbol(self, name)

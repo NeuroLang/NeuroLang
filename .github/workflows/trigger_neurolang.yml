@@ -1,4 +1,4 @@
-name: Trigger test on neurolang
+name: Trigger deploy of neurolang on staging or production servers
 
 on:
   push:
@@ -6,13 +6,25 @@ on:
       - master
 
 jobs:
-  trigger_test_on_neurolang:
+  trigger_deploy_on_server:
     runs-on: ubuntu-latest
     steps:
-      - name: Post request to neurolang
+      - name: Trigger deploy of neurolang on stage server
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TRIGGER_TOKEN }}
         run: |
-          curl \
-          -XPOST -u "token:${{ secrets.CI_TRIGGER_TOKEN }}" \
-          -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/NeuroLang/neurolang_web/dispatches \
-          -d '{"event_type":"NeuroLang"}'
+          echo "Deploying to stage server on branch $GITHUB_REF"
+          curl --request POST 'https://gitlab.inria.fr/api/v4/projects/25219/trigger/pipeline' \
+          --form token=$DEPLOY_TOKEN \
+          --form 'ref="master"' \
+          --form 'variables[RELEASE]="stage"'
+      - name: Trigger deploy of neurolang on production server
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TRIGGER_TOKEN }}
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "Deploying to production server on branch $GITHUB_REF"
+            curl --request POST 'https://gitlab.inria.fr/api/v4/projects/25219/trigger/pipeline' \
+            --form token=$DEPLOY_TOKEN \
+            --form 'ref="master"' \
+            --form 'variables[RELEASE]="production"'

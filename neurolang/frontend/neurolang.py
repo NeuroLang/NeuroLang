@@ -17,7 +17,7 @@ import typing
 from collections import Iterable, Mapping
 from typing import Optional, Union
 
-import tatsu
+import lark
 
 from ..exceptions import NeuroLangException
 from ..expression_walker import (
@@ -28,7 +28,8 @@ from ..expression_walker import (
 from .. import expressions as ir
 from ..logic import ExistentialPredicate
 from .ast import ASTWalker
-from .ast_tatsu import TatsuASTConverter
+from .ast_lark import LarkASTConverter
+
 
 __all__ = [
     "NeuroLangIntermediateRepresentation",
@@ -461,19 +462,19 @@ def parser(code: str, **kwargs):
     code : str
         code written in Datalog, as described by it's EBNF syntax
     **kwargs
-        completed and passed to the tatsu parser
+        completed and passed to the lark parser
 
     Returns
     -------
         AST
         Abstract Syntax Tree resulting from code parsing
     """
-    kwargs["semantics"] = kwargs.get("semantics", TatsuASTConverter())
+    kwargs["semantics"] = kwargs.get("semantics", LarkASTConverter())
     kwargs["parseinfo"] = True
     kwargs["trace"] = kwargs.get("trace", False)
     kwargs["colorize"] = True
 
-    parser_tatsu = tatsu.compile(grammar_EBNF)
-    ast = parser_tatsu.parse(code, **kwargs)
+    parser_lark = lark.Lark(grammar_EBNF, debug=True)
+    ast = parser_lark.parse(code, **kwargs)
 
     return ast

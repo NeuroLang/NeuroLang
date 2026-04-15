@@ -10,9 +10,9 @@ import typing
 from typing import Iterable
 
 import numpy as np
+from scipy import sparse
 
 from ..exceptions import (
-    ForbiddenExpressionError,
     RuleNotFoundError,
     SymbolNotFoundError,
     UnsupportedProgramError,
@@ -29,6 +29,7 @@ from ..expression_walker import (
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import (
+    ExistentialPredicate,
     FALSE,
     TRUE,
     Conjunction,
@@ -39,8 +40,10 @@ from ..logic import (
     Union,
 )
 from ..logic import expression_processing as elp
-from ..logic.transformations import CollapseConjunctions
+from ..logic.transformations import CollapseConjunctions, GuaranteeConjunction, RemoveTrivialOperations
 from ..logic.unification import most_general_unifier
+from ..utils import OrderedSet
+from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
 
 EQ = Constant(operator.eq)
@@ -130,7 +133,7 @@ def is_linear_rule(rule):
 
 
 def all_body_preds_in_set(implication, predicate_set):
-    """Checks wether all predicates in the antecedent
+    """Checks whether all predicates in the antecedent
     are in the functor_set or are the consequent functor.
 
     Parameters
@@ -150,6 +153,28 @@ def all_body_preds_in_set(implication, predicate_set):
     preds = (e.functor for e in extract_logic_atoms(implication.antecedent))
     predicate_set = predicate_set | {implication.consequent.functor}
     return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)
+
+
+def any_body_preds_in_set(implication, predicate_set):
+    """Checks whether any predicates in the antecedent
+    are in the predicate_set.
+
+    Parameters
+    ----------
+    implication :
+        Implication
+    predicate_set :
+        set of functors
+
+    Returns
+    -------
+    bool
+        True is any predicates in the antecedent are
+        in the predicate_set
+
+    """
+    preds = (e.functor for e in extract_logic_atoms(implication.antecedent))
+    return any(e in predicate_set for e in preds)
 
 
 def extract_logic_free_variables(expression):
@@ -227,7 +252,7 @@ def stratify(union, datalog_instance):
     Returns
     -------
         list of lists of `Implications`, boolean
-            Strata and wether it was stratisfiable.
+            Strata and whether it was stratisfiable.
             If it was not, all non-stratified predicates
             will be in the last strata.
 
@@ -274,15 +299,28 @@ def stratify_obtain_facts_stratum(to_process, seen):
 
 
 def stratify_obtain_new_stratum(to_process, seen):
-    stratum = []
+    # 1. add all the rule for which we've seen the body predicates
+    temp_stratum = []
     new_to_process = []
-    new_seen = set()
     for r in to_process:
         if all_body_preds_in_set(r, seen):
-            stratum.append(r)
-            new_seen.add(r.consequent.functor)
+            temp_stratum.append(r)
+
         else:
             new_to_process.append(r)
+
+    # 2. remove all the rules which have body predicates that will be updated
+    # by rules in later strata.
+    will_see_later = {r.consequent.functor for r in new_to_process}
+    stratum = []
+    new_seen = set()
+    for r in temp_stratum:
+        if any_body_preds_in_set(r, will_see_later):
+            new_to_process.insert(0, r)
+        else:
+            stratum.append(r)
+            new_seen.add(r.consequent.functor)
+
     return new_seen, new_to_process, stratum
 
 
@@ -313,9 +351,9 @@ def reachable_code(query, datalog):
         p = to_reach.pop()
         reached.add(p)
         rules = idb[p]
+        if isinstance(rules, Constant):
+            continue
         for rule in rules.formulas:
-            if rule in seen_rules:
-                continue
             seen_rules.add(rule)
             reachable_code.append(rule)
             for predicate in extract_logic_atoms(rule.antecedent):
@@ -326,9 +364,9 @@ def reachable_code(query, datalog):
     return Union(reachable_code[::-1])
 
 
-def dependency_matrix(datalog, rules=None):
-    """Produces the dependecy matrix for a datalog's
-    instance intensional database (IDB).
+def dependency_matrix(datalog, rules=None, instance=None):
+    """Produces the dependency matrix for a datalog's
+    instance intentional database (IDB).
 
     Parameters
     ----------
@@ -337,6 +375,11 @@ def dependency_matrix(datalog, rules=None):
     rules : None or Union of rules
         an optional subset of rules from the datalog
         program's IDB.
+    instance: Instance
+        an optional instance, meant to represent the current
+        DatalogProgram resolution, and whose's symbols won't raise
+        a SymbolNotFoundError if found as a dependency in the given
+        rules.
 
     Returns
     -------
@@ -353,11 +396,11 @@ def dependency_matrix(datalog, rules=None):
     ------
     SymbolNotFoundError
         If there is a predicate in the antecedent of a rule which
-        is not a constant or an extensiona/intensional predicate.
-    """
+        is not a constant or an extensional/intentional predicate.
 
+    """
+    idb = datalog.intensional_database()
     if rules is None:
-        idb = datalog.intensional_database()
         to_reach = []
         for rule_union in idb.values():
             to_reach += rule_union.formulas
@@ -370,7 +413,7 @@ def dependency_matrix(datalog, rules=None):
         idb_symbols = set()
         for rule in to_reach:
             functor = rule.consequent.functor
-            if rule not in datalog.intensional_database()[functor].formulas:
+            if rule not in idb[functor].formulas:
                 raise RuleNotFoundError(
                     f"Rule {rule} not contained in the datalog " "instance."
                 )
@@ -378,13 +421,20 @@ def dependency_matrix(datalog, rules=None):
 
     idb_symbols = tuple(sorted(idb_symbols, key=lambda s: s.name))
     edb = datalog.extensional_database()
+    previous_symbols = set()
+    if instance is not None:
+        previous_symbols = instance.as_map().keys()
     if hasattr(datalog, "constraints"):
         constraint_symbols = set(
             formula.consequent.functor
             for formula in datalog.constraints().formulas
         )
+        existential_symbols = set(
+            rule.functor for rule in datalog.existential_rules.keys()
+        )
     else:
         constraint_symbols = set()
+        existential_symbols = set()
 
     dependency_matrix = np.zeros(
         (len(idb_symbols), len(idb_symbols)), dtype=int
@@ -396,14 +446,21 @@ def dependency_matrix(datalog, rules=None):
         ix_head = idb_symbols.index(head_functor)
         for predicate in extract_logic_atoms(rule.antecedent):
             functor = predicate.functor
-            if functor in edb or functor in constraint_symbols:
+            if (
+                functor in edb or functor in constraint_symbols
+                or functor in existential_symbols
+            ):
                 continue
             elif functor in idb_symbols:
                 ix_functor = idb_symbols.index(functor)
                 dependency_matrix[ix_head, ix_functor] += 1
-            elif isinstance(functor, Symbol) and (
-                functor not in datalog.symbol_table
-                or functor in datalog.intensional_database()
+            elif (
+                isinstance(functor, Symbol)
+                and functor not in previous_symbols
+                and (
+                    functor not in datalog.symbol_table
+                    or functor in datalog.intensional_database()
+                )
             ):
                 raise SymbolNotFoundError(f"Symbol not found {functor.name}")
 
@@ -413,9 +470,10 @@ def dependency_matrix(datalog, rules=None):
 def program_has_loops(program_representation):
     if not isinstance(program_representation, np.ndarray):
         _, program_representation = dependency_matrix(program_representation)
+    program_representation = sparse.csr_matrix(program_representation)
     reachable = program_representation
-    for _ in range(len(program_representation)):
-        if any(np.diag(reachable)):
+    for _ in range(program_representation.shape[0]):
+        if any(reachable.diagonal()):
             return True
         else:
             reachable = np.dot(reachable, program_representation)
@@ -454,23 +512,9 @@ def is_ground_predicate(predicate):
     return all(isinstance(arg, Constant) for arg in predicate.args)
 
 
-def enforce_conjunction(expression):
-    if isinstance(expression, Conjunction):
-        return expression
-    elif isinstance(expression, (FunctionApplication, Negation)):
-        return Conjunction((expression,))
-    raise ForbiddenExpressionError(
-        "Cannot conjunct expression of type {}".format(type(expression))
-    )
-
-
 def enforce_conjunctive_antecedent(implication):
-    return implication.apply(
-        implication.consequent,
-        remove_conjunction_duplicates(
-            enforce_conjunction(implication.antecedent)
-        ),
-    )
+    antecedent = GuaranteeConjunction().walk(implication.antecedent)
+    return implication.apply(implication.consequent, antecedent)
 
 
 def maybe_deconjunct_single_pred(expression):
@@ -520,7 +564,7 @@ class HeadConstantToBodyEquality(PatternWalker):
     )
     def implication_with_constant_term_in_head(self, implication):
         body_formulas = list(
-            enforce_conjunction(implication.antecedent).formulas
+            GuaranteeConjunction().walk(implication.antecedent).formulas
         )
         new_consequent_vars = list()
         for term in implication.consequent.args:
@@ -552,16 +596,16 @@ class HeadRepeatedVariableToBodyEquality(PatternWalker):
 
     @add_match(
         Implication(FunctionApplication, ...),
-        lambda implication: max(
-            collections.Counter(
+        lambda implication: (
+            len(implication.consequent.args) > 0 and
+            max(collections.Counter(
                 (
                     arg
                     for arg in implication.consequent.args
                     if isinstance(arg, Symbol)
                 )
-            ).values()
+            ).values()) > 1
         )
-        > 1,
     )
     def implication_with_repeated_variable_in_head(self, implication):
         seen_args = set()
@@ -610,7 +654,7 @@ def flatten_query(query, program):
     ----------
     query : predicate or conjunction of predicates
         The query for which the conjunction is constructed.
-    program : a program with an intensional database
+    program : a program with an intentional database
         Program with logical rules that will be used to construct the
         conjunction corresponding to the given query.
 
@@ -621,12 +665,13 @@ def flatten_query(query, program):
     """
     if not hasattr(program, "intensional_database"):
         raise UnsupportedProgramError(
-            "Only program with an intensional database are supported"
+            "Only program with an intentional database are supported"
         )
     try:
         res = FlattenQueryInNonRecursiveUCQ(program).walk(query)
-        if isinstance(res, FunctionApplication):
-            res = Conjunction((res,))
+        res = RemoveTrivialOperations().walk(res)
+        if not isinstance(res, Constant):
+            return GuaranteeConjunction().walk(res)
     except RecursionError:
         raise UnsupportedProgramError(
             "Flattening of recursive programs is not supported."
@@ -655,7 +700,7 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         pass
 
     @add_match(
-        FunctionApplication,
+        FunctionApplication(Symbol, ...),
         lambda fa: all(isinstance(arg, (Constant, Symbol)) for arg in fa.args),
     )
     def query_predicate(self, qpred):
@@ -671,6 +716,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
                 exp = self.walk(exp)
             cqs.append(exp)
         return maybe_disjunct(cqs)
+
+    @add_match(FunctionApplication(Constant, ...))
+    def builtin_application(self, fa):
+        return fa
 
     def _unify_cq_antecedent(self, cq, qpred):
         mgu = most_general_unifier(cq.consequent, qpred)
@@ -714,10 +763,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
 
     @add_match(Conjunction)
     def conjunction(self, expression):
-        formulas = list(expression.formulas)
+        formulas = collections.deque(expression.formulas)
         new_formulas = tuple()
         while len(formulas) > 0:
-            formula = formulas.pop()
+            formula = formulas.popleft()
             new_formula = self.walk(formula)
             if isinstance(new_formula, Conjunction):
                 new_formulas += new_formula.formulas
@@ -728,6 +777,18 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         else:
             res = new_formulas[0]
         return res
+
+    @add_match(Negation(FunctionApplication))
+    def negation_function_application(self, expression):
+        formula = expression.formula
+        flattened_formula = self.walk(formula)
+        existential_variables = (
+            extract_logic_free_variables(flattened_formula) -
+            extract_logic_free_variables(formula)
+        )
+        for e_var in existential_variables:
+            flattened_formula = ExistentialPredicate(e_var, flattened_formula)
+        return Negation(flattened_formula)
 
     @add_match(Negation)
     def negation(self, expression):
@@ -745,7 +806,7 @@ def is_rule_with_builtin(rule, known_builtins=None):
 
 def remove_conjunction_duplicates(conjunction):
     return maybe_deconjunct_single_pred(
-        Conjunction(tuple(set(conjunction.formulas)))
+        Conjunction(tuple(OrderedSet(conjunction.formulas)))
     )
 
 
@@ -759,10 +820,12 @@ def is_aggregation_predicate(predicate):
     )
 
 
-def is_variable_equality(formula):
+def is_var_equality_to_var_or_const(formula):
     return (
         isinstance(formula, FunctionApplication)
         and formula.functor == EQ
+        and len(formula.args) == 2
+        and all(isinstance(arg, (Symbol, Constant)) for arg in formula.args)
         and any(isinstance(arg, Symbol) for arg in formula.args)
     )
 
@@ -801,10 +864,14 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         Implication(FunctionApplication(Symbol, ...), ...),
         lambda implication: all(
             isinstance(arg, (Symbol, Constant))
+            or (
+                isinstance(arg, FunctionApplication)
+                and all(isinstance(a, (Symbol, Constant)) for a in arg.args)
+            )
             for arg in implication.consequent.args
         )
         and any(
-            is_variable_equality(formula)
+            is_var_equality_to_var_or_const(formula)
             for formula in extract_logic_predicates(implication.antecedent)
         ),
     )
@@ -816,7 +883,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
             tuple(
                 formula
                 for formula in extract_logic_predicates(implication.antecedent)
-                if not is_variable_equality(formula)
+                if not is_var_equality_to_var_or_const(formula)
             )
         )
         antecedent = replacer.walk(antecedent)
@@ -825,21 +892,11 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         else:
             antecedent = remove_conjunction_duplicates(antecedent)
         consequent = replacer.walk(implication.consequent)
+        self._check_no_agg_var_replaced_by_const(
+            implication.consequent, consequent
+        )
         new_implication = Implication(consequent, antecedent)
         return self.walk(new_implication)
-
-    @add_match(
-        Implication(FunctionApplication(Symbol, ...), ...),
-        lambda implication: is_aggregation_rule(implication)
-        and any(
-            is_variable_equality(formula)
-            for formula in extract_logic_predicates(implication.antecedent)
-        ),
-    )
-    def unsupported_unification_for_aggregation(self, rule_with_aggregation):
-        raise ForbiddenExpressionError(
-            "Unification of rules with aggregation not supported"
-        )
 
     @staticmethod
     def build_substitutions_from_equalities(eq_sets):
@@ -865,8 +922,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         equality_predicates = set(
             predicate
             for predicate in extract_logic_predicates(expression)
-            if predicate.functor == EQ
-            and any(isinstance(arg, Symbol) for arg in predicate.args)
+            if is_var_equality_to_var_or_const(predicate)
         )
         eq_sets = list()
         for equality_predicate in equality_predicates:
@@ -907,6 +963,29 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         if not found_eq_set:
             eq_sets.append({first, second})
 
+    @staticmethod
+    def _check_no_agg_var_replaced_by_const(old_csqt, new_csqt) -> None:
+        for old_arg, new_arg in zip(old_csqt.args, new_csqt.args):
+            if isinstance(old_arg, AggregationApplication) and any(
+                isinstance(a1, Symbol) and isinstance(a2, Constant)
+                for a1, a2 in zip(old_arg.args, new_arg.args)
+            ):
+                problematic_replacements = set(
+                    (a1, a2)
+                    for a1, a2 in zip(old_arg.args, new_arg.args)
+                    if isinstance(a1, Symbol) and isinstance(a2, Constant)
+                )
+                raise AggregatedVariableReplacedByConstantError(
+                    "Variable equalities cannot lead to aggregation variables "
+                    "to be replaced by a constant. Problematic replacements "
+                    "that were found are {}".format(
+                        ", ".join(
+                            f"{a1} / {a2}"
+                            for a1, a2 in problematic_replacements
+                        )
+                    )
+                )
+
 
 class UnifyVariableEqualities(UnifyVariableEqualitiesMixin, ExpressionWalker):
     pass
@@ -925,4 +1004,42 @@ class CollapseConjunctiveAntecedents(CollapseConjunctions):
             implication.apply(
                 implication.consequent, self.walk(implication.antecedent)
             )
+        )
+
+
+def is_to_be_sorted_equality(formula):
+    return (
+        formula.functor == Constant(operator.eq)
+        and isinstance(formula.args[1], Symbol)
+        and not isinstance(formula.args[0], Symbol)
+    )
+
+
+class EqualitySymbolLeftHandSideNormaliseMixin(PatternWalker):
+    @add_match(
+        Implication(FunctionApplication, Conjunction),
+        lambda implication: any(
+            is_to_be_sorted_equality(conjunct)
+            for conjunct in extract_logic_atoms(implication.antecedent)
+        ),
+    )
+    def sort_antecedent_equalities(self, implication):
+        new_conjuncts = tuple(
+            self.reverse_equality(conjunct)
+            if is_to_be_sorted_equality(conjunct)
+            else conjunct
+            for conjunct in implication.antecedent.formulas
+        )
+        new_implication = Implication(
+            implication.consequent, Conjunction(new_conjuncts)
+        )
+        return self.walk(new_implication)
+
+    @staticmethod
+    def reverse_equality(equality):
+        new_type = typing.Callable[
+            [equality.args[1].type, equality.args[0].type], bool
+        ]
+        return Constant[new_type](operator.eq, auto_infer_type=False)(
+            *reversed(equality.args)
         )

@@ -24,7 +24,7 @@ from ..expression_processing import is_probabilistic_fact
 from ..expressions import (
     Grounding,
     ProbabilisticChoiceGrounding,
-    ProbabilisticPredicate,
+    ProbabilisticFact,
 )
 
 
@@ -95,7 +95,7 @@ def build_probabilistic_grounding(pred_symb, relation, grounding_cls):
     args = tuple(Symbol.fresh() for _ in range(relation.value.arity - 1))
     # grounded expression
     expression = Implication(
-        ProbabilisticPredicate(prob_symb, pred_symb(*args)),
+        ProbabilisticFact(prob_symb, pred_symb(*args)),
         Constant[bool](True),
     )
     # build the new relation (TODO: this could be done with a RenameColumns)

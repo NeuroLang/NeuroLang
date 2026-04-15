@@ -1,10 +1,12 @@
+import typing
+
 import pytest
 
 from ...exceptions import ForbiddenDisjunctionError
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication, Union
 from ..cplogic.program import CPLogicProgram
-from ..expressions import ProbabilisticPredicate
+from ..expressions import ProbabilisticFact
 from ..query_resolution import QueryBasedProbFactToDetRule
 
 P = Symbol("P")
@@ -31,7 +33,7 @@ def test_query_based_pfact():
 
     """
     pfact = Implication(
-        ProbabilisticPredicate(p / Constant(2), P(x)),
+        ProbabilisticFact(p / Constant(2), P(x)),
         Q(x, p),
     )
     program = QueryBasedProbFactToDetRuleProgramTest()
@@ -52,7 +54,7 @@ def test_query_based_pfact():
         )
     )
     assert any(
-        isinstance(formula.consequent, ProbabilisticPredicate)
+        isinstance(formula.consequent, ProbabilisticFact)
         and formula.consequent.probability == det_rule.consequent.args[0]
         and formula.antecedent == det_rule.consequent
         and formula.consequent.body == P(x)
@@ -62,10 +64,43 @@ def test_query_based_pfact():
 
 def test_prevent_combination_of_query_based_and_set_based():
     pfact = Implication(
-        ProbabilisticPredicate(p / Constant(2), P(x)),
+        ProbabilisticFact(p / Constant(2), P(x)),
         Q(x, p),
     )
     cpl = QueryBasedProbFactToDetRuleProgramTest()
     cpl.add_probabilistic_facts_from_tuples(P, [(0.2, "a")])
     with pytest.raises(ForbiddenDisjunctionError):
         cpl.walk(pfact)
+
+
+def test_callable_symbol_probability():
+    fun = Symbol[typing.Callable[[float], float]]("fun")
+    cpl = QueryBasedProbFactToDetRuleProgramTest()
+    cpl.symbol_table[fun] = Constant(lambda x: x ** 2)
+    pfact = Implication(
+        ProbabilisticFact(fun(x), P(y)),
+        Q(x, y),
+    )
+    cpl.walk(Union((pfact,)))
+    rules = list()
+    for union in cpl.intensional_database().values():
+        rules += union.formulas
+    det_rule = next(
+        formula
+        for formula in rules
+        if (
+            isinstance(formula.consequent, FunctionApplication)
+            # check _f1_
+            and formula.consequent.functor.is_fresh
+            # check _f2_ first arg in consequent
+            and formula.consequent.args[0].is_fresh
+            and formula.consequent.args[1:] == (y,)
+        )
+    )
+    assert any(
+        isinstance(formula.consequent, ProbabilisticFact)
+        and formula.consequent.probability == det_rule.consequent.args[0]
+        and formula.antecedent == det_rule.consequent
+        and formula.consequent.body == P(y)
+        for formula in rules
+    )

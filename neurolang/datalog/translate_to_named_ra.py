@@ -14,14 +14,15 @@ from ..expression_walker import (
     add_match
 )
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Disjunction
+from ..logic import Conjunction, Disjunction, ExistentialPredicate, Negation
+from ..logic.expression_processing import extract_logic_free_variables
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
     Destroy,
     Difference,
     ExtendedProjection,
-    ExtendedProjectionListMember,
+    FunctionApplicationListMember,
     NameColumns,
     NaturalJoin,
     Projection,
@@ -30,9 +31,9 @@ from ..relational_algebra import (
     Union,
     get_expression_columns
 )
+from ..relational_algebra.relational_algebra import str2columnstr_constant
 from ..type_system import is_leq_informative
 from ..utils import NamedRelationalAlgebraFrozenSet
-from .expressions import Conjunction, Negation
 
 EQ = Constant(eq)
 CONTAINS = Constant(contains)
@@ -275,6 +276,15 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
         return output
 
+    @add_match(ExistentialPredicate)
+    def translate_existential_predicate(self, expression):
+        free_variables = extract_logic_free_variables(expression)
+        body = self.walk(expression.body)
+        return Projection(
+            body,
+            tuple(str2columnstr_constant(fv.name) for fv in free_variables)
+        )
+
     def classify_formulas_obtain_names(self, expression):
         classified_formulas = {
             "pos_formulas": [],
@@ -300,9 +310,9 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                     classified_formulas["named_columns"].update(
                         formula.value.columns
                     )
-                elif isinstance(formula, NameColumns):
+                elif isinstance(formula, RelationalAlgebraOperation):
                     classified_formulas["named_columns"].update(
-                        formula.column_names
+                        formula.columns()
                     )
         return classified_formulas
 
@@ -349,11 +359,11 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @staticmethod
     def obtain_negative_columns(neg_formula):
-        if isinstance(neg_formula, NameColumns):
-            neg_cols = set(neg_formula.column_names)
-        elif isinstance(neg_formula, Constant):
+        if isinstance(neg_formula, Constant):
             neg_cols = set(neg_formula.value.columns)
-        else:
+        elif isinstance(neg_formula, RelationalAlgebraOperation):
+            neg_cols = neg_formula.columns()
+        if any((col.type is ColumnInt) for col in neg_cols):
             raise NegativeFormulaNotNamedRelationException(neg_formula)
         return neg_cols
 
@@ -425,7 +435,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     ):
         named_columns = classified_formulas["named_columns"]
         extended_projections = tuple(
-            ExtendedProjectionListMember(c, c) for c in named_columns
+            FunctionApplicationListMember(c, c) for c in named_columns
         )
         stack = list(classified_formulas["eq_formulas"])
         if len(stack) == 0:
@@ -451,7 +461,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             else:
                 stack.insert(0, formula)
                 continue
-            extended_projections += (ExtendedProjectionListMember(src, dst),)
+            extended_projections += (FunctionApplicationListMember(src, dst),)
             named_columns.add(dst)
             seen_counts = collections.defaultdict(int)
         new_output = ExtendedProjection(output, extended_projections)
@@ -478,7 +488,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             cols_for_fun_exp = get_expression_columns(fun_exp)
             if cols_for_fun_exp.issubset(named_columns):
                 extended_projections.append(
-                    ExtendedProjectionListMember(fun_exp, dst_column)
+                    FunctionApplicationListMember(fun_exp, dst_column)
                 )
                 dst_columns.add(dst_column)
             else:
@@ -486,7 +496,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         if len(extended_projections) > 0:
             for column in classified_formulas["named_columns"]:
                 extended_projections.append(
-                    ExtendedProjectionListMember(column, column)
+                    FunctionApplicationListMember(column, column)
                 )
             output = ExtendedProjection(output, extended_projections)
 

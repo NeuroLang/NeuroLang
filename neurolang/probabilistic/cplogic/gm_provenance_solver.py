@@ -17,8 +17,8 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
-    NaturalJoinInverse,
     ProvenanceAlgebraSet,
+    NaturalJoinInverse,
     RelationalAlgebraProvenanceCountingSolver,
 )
 from . import (
@@ -51,7 +51,7 @@ def solve_succ_query(query_predicate, cpl_program):
     where
 
         -   P(x) is a positive literal
-        -   P is any (probabilistic, intensional, extensional)
+        -   P is any (probabilistic, intentional, extensional)
             predicate symbol
         -   x is a universally-quantified variable
 
@@ -77,7 +77,7 @@ def solve_succ_query(query_predicate, cpl_program):
             compactness and make it possible to leverage relational
             algebra operations to solve queries on the graphical model,
             as is detailed in the next step. The links between the
-            random variables of the graphical model anad their CPDs are
+            random variables of the graphical model and their CPDs are
             determined by the structure of the initial program. A view
             of the initial grounded expressions is maintained because it
             is necessary for solving queries.
@@ -260,8 +260,8 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
 
         """
         node = operation.valued_node[0]
-        relation = node.relation.value
-        prov_col = node.probability_column.value
+        relation = node.relation
+        prov_col = node.probability_column
         prov_set = ProvenanceAlgebraSet(relation, prov_col)
         prov_set.__debug_expression__ = node.expression
         return prov_set
@@ -357,7 +357,7 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         choice_node = operation.valued_node[0]
         choice_value = operation.valued_node[1]
         prov_set = ProvenanceAlgebraSet(
-            choice_node.relation.value, choice_node.probability_column.value,
+            choice_node.relation, choice_node.probability_column,
         )
         prov_set.__debug_expression__ = choice_node.expression
         return Selection(

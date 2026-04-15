@@ -1,0 +1,43 @@
+#queryContainer .nl-query-input-header {
+  display: flex;
+  align-items: center;
+  background-color: #e8e8e8;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+#queryContainer .code-mirror-container {
+  padding: 0;
+}
+
+#queryContainer .nl-query-download-buttons {
+  margin-left: auto !important;
+}
+
+#queryContainer .nl-query-download-buttons a {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+#queryContainer .nl-query-download-buttons a:hover {
+  color: rgba(0, 0, 0, 0.8);
+}
+
+#queryContainer .CodeMirror {
+  height: 20em;
+  width: 100%;
+}
+
+#queryTextArea+.CodeMirror pre {
+  padding-bottom: .5em;
+}
+
+#queryContainer .query-segment {
+  padding: 0;
+}
+
+#queryAlert {
+  display: none;
+}
+
+#queryAlert .nl-query-message {
+  margin: 0;
+}

@@ -127,28 +127,19 @@ def test_probabilistic_ontology_code():
     x = Symbol("x")
     y = Symbol("y")
     prob = Symbol("prob")
-    p2 = Symbol("http://www.w3.org/2002/03owlt/hasValue/premises001#p")
+    p2 = Symbol("premises001:p2")
     test_base_q1 = Union((Implication(answer1(x, y), p2(x, y)),))
     test_base_q2 = Union(
         (Implication(answer2(x), Conjunction((answer1(x, y), prob(x)))),)
     )
 
     onto = OntologyParser(io.StringIO(test_case))
-    predicate_tuples, union_of_constraints = onto.parse_ontology()
-    prob_onto_solver.walk(union_of_constraints)
-    triples = predicate_tuples[onto.get_triples_symbol()]
-    pointers = predicate_tuples[onto.get_pointers_symbol()]
-
-    prob_onto_solver.add_extensional_predicate_from_tuples(
-        onto.get_triples_symbol(), triples
-    )
-    prob_onto_solver.add_extensional_predicate_from_tuples(
-        onto.get_pointers_symbol(), pointers
-    )
+    constraints, _, _ = onto.parse_ontology()
+    prob_onto_solver.set_constraints(constraints)
 
     iterable = [
-        "http://www.w3.org/2002/03owlt/hasValue/premises001#i",
-        "http://www.w3.org/2002/03owlt/hasValue/premises001#b",
+        "premises001:i",
+        "premises001:b",
     ]
     probability = 1 / len(iterable)
     iterable = [(probability,) + tuple(tupl) for tupl in iterable]

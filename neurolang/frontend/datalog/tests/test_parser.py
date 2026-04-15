@@ -1,8 +1,26 @@
-from operator import add, eq, mul, pow, sub, truediv
+from operator import add, eq, lt, mul, pow, sub, truediv
+
+import pytest
+
+
+from neurolang.logic import ExistentialPredicate
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
-from ....probabilistic.expressions import Condition, ProbabilisticPredicate
-from ....expressions import Constant, Symbol, FunctionApplication
+from ....expressions import (
+    Command,
+    Constant,
+    FunctionApplication,
+    Lambda,
+    Query,
+    Statement,
+    Symbol
+)
+from ....exceptions import UnexpectedTokenError
+from ....probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticFact
+)
 from ..standard_syntax import ExternalSymbol, parser
 
 
@@ -24,7 +42,7 @@ def test_facts():
     assert res == Union((
         Fact(Symbol('A')(Constant('x'), Constant(3))),
         Fact(Symbol('http://uri#test-fact')(Constant('x'))),
-        Implication(
+        Query(
             Symbol('ans')(),
             Conjunction((
                 Symbol('A')(Symbol('x'), Symbol('y')),
@@ -58,7 +76,7 @@ def test_rules():
         Implication(A(x), Conjunction((B(x, fresh_arg),))),
     ))
 
-    res = parser('A(x):-B(x, y), C(3, z), z == 4')
+    res = parser('A(x):-B(x, y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
             A(x),
@@ -68,7 +86,7 @@ def test_rules():
         ),
     ))
 
-    res = parser('A(x):-B(x + 5 * 2, y), C(3, z), z == 4')
+    res = parser('A(x):-B(x + 5 * 2, y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
             A(x),
@@ -84,7 +102,7 @@ def test_rules():
         ),
     ))
 
-    res = parser('A(x):-B(x / 2, y), C(3, z), z == 4')
+    res = parser('A(x):-B(x / 2, y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
             A(x),
@@ -98,7 +116,7 @@ def test_rules():
         ),
     ))
 
-    res = parser('A(x):-B(f(x), y), C(3, z), z == 4')
+    res = parser('A(x):-B(f(x), y), C(3, z), (z == 4)')
     assert res == Union((
         Implication(
             A(x),
@@ -182,7 +200,7 @@ def test_probabilistic_fact():
     res = parser('p::A(3)')
     assert res == Union((
         Implication(
-            ProbabilisticPredicate(p, A(Constant(3.))),
+            ProbabilisticFact(p, A(Constant(3.))),
             Constant(True)
         ),
     ))
@@ -190,13 +208,38 @@ def test_probabilistic_fact():
     res = parser('0.8::A("a b", 3)')
     assert res == Union((
         Implication(
-            ProbabilisticPredicate(
+            ProbabilisticFact(
                 Constant(0.8),
                 A(Constant("a b"), Constant(3.))
             ),
             Constant(True)
         ),
     ))
+
+    exp = Symbol("exp")
+    d = Symbol("d")
+    x = Symbol("x")
+    B = Symbol("B")
+    res = parser("B(x) :: exp(-d / 5.0) :- A(x, d) , (d < 0.8)")
+    expected = Union(
+        (
+            Implication(
+                ProbabilisticFact(
+                    FunctionApplication(
+                        exp,
+                        (
+                            Constant(truediv)(
+                                Constant(mul)(Constant(-1), d), Constant(5.0)
+                            ),
+                        ),
+                    ),
+                    B(x),
+                ),
+                Conjunction((A(x, d), Constant(lt)(d, Constant(0.8)))),
+            ),
+        )
+    )
+    assert res == expected
 
 
 def test_condition():
@@ -235,4 +278,201 @@ def test_condition():
         ),
     ))
 
+    assert res == expected
+
+
+def test_existential():
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    s1 = Symbol("s1")
+    s2 = Symbol("s2")
+
+    res = parser("C(x) :- B(x), exists(s1; A(s1))")
+    expected = Union(
+        (
+            Implication(
+                C(x), Conjunction((B(x), ExistentialPredicate(s1, A(s1))))
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser("C(x) :- B(x), ∃(s1 st A(s1))")
+    assert res == expected
+
+    res = parser("C(x) :- B(x), exists(s1, s2; A(s1), A(s2))")
+
+    expected = Union(
+        (
+            Implication(
+                C(x),
+                Conjunction(
+                    (
+                        B(x),
+                        ExistentialPredicate(
+                            s2,
+                            ExistentialPredicate(
+                                s1, Conjunction((A(s1), A(s2)))
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+    )
+
+    assert res == expected
+
+    # try :
+    #     res = parser("C(x) :- B(x), exists(s1; )")
+    # except UnexpectedToken as e:
+    #     raise UnexpectedTokenError from e
+    with pytest.raises(UnexpectedTokenError):
+        res = parser("C(x) :- B(x), exists(s1; )")
+
+
+def test_query():
+    ans = Symbol("ans")
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("ans(x) :- B(x, y), C(3, y)")
+    assert res == Union(
+        (Query(ans(x), Conjunction((B(x, y), C(Constant(3), y)))),)
+    )
+
+
+def test_prob_implicit():
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("B(x, PROB, y) :- C(x, y)")
+    assert res == Union(
+        (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
+    )
+
+
+def test_prob_explicit():
+    B = Symbol("B")
+    C = Symbol("C")
+    x = Symbol("x")
+    y = Symbol("y")
+    res = parser("B(x, PROB(x, y), y) :- C(x, y)")
+    assert res == Union(
+        (Implication(B(x, PROB(x, y), y), Conjunction((C(x, y),))),)
+    )
+
+
+def test_lambda_definition():
+    c = Symbol("c")
+    x = Symbol("x")
+
+    res = parser("c := lambda x: x + 1")
+    expression = Lambda((x,), FunctionApplication(
+        Constant(add), (x, Constant[int](1))
+    ))
+    expected = Union((
+        Statement(c, expression),
+    ))
+    assert expected == res
+
+
+def test_lambda_definition_statement():
+    c = Symbol("c")
+    x = Symbol("x")
+    y = Symbol("y")
+
+    res = parser("c(x, y) := x + y")
+    expression = Lambda((x, y), FunctionApplication(
+        Constant(add), (x, y)
+    ))
+    expected = Union((
+        Statement(c, expression),
+    ))
+    assert expected == res
+
+
+def test_lambda_application():
+    c = Symbol("c")
+    x = Symbol("x")
+
+    res = parser("c := (lambda x: x + 1)(2)")
+    expression = FunctionApplication(
+        Lambda((x,), FunctionApplication(
+            Constant(add), (x, Constant[int](1))
+        )),
+        (Constant[int](2),)
+    )
+    expected = Union((
+        Statement(c, expression),
+    ))
+    assert expected == res
+
+
+def test_command_syntax():
+    res = parser('.load_csv(A, "http://myweb/file.csv", B)')
+    expected = Union(
+        (
+            Command(
+                Symbol("load_csv"),
+                (Symbol("A"), Constant("http://myweb/file.csv"), Symbol("B")),
+                (),
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser('.load_csv("http://myweb/file.csv")')
+    expected = Union(
+        (
+            Command(
+                Symbol("load_csv"), (Constant("http://myweb/file.csv"),), ()
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser(".load_csv()")
+    expected = Union((Command(Symbol("load_csv"), (), ()),))
+    assert res == expected
+
+    res = parser('.load_csv(sep=",")')
+    expected = Union(
+        (Command("load_csv", (), ((Symbol("sep"), Constant(",")),)),)
+    )
+    assert res == expected
+
+    res = parser('.load_csv(sep=",", header=None, index_col=0)')
+    expected = Union(
+        (
+            Command(
+                "load_csv",
+                (),
+                (
+                    (Symbol("sep"), Constant(",")),
+                    (Symbol("header"), Symbol("None")),
+                    (Symbol("index_col"), Constant(0)),
+                ),
+            ),
+        )
+    )
+    assert res == expected
+
+    res = parser('.load_csv(A, "http://myweb/file.csv", sep=",", header=None)')
+    expected = Union(
+        (
+            Command(
+                "load_csv",
+                (Symbol("A"), "http://myweb/file.csv"),
+                (
+                    (Symbol("sep"), Constant(",")),
+                    (Symbol("header"), Symbol("None")),
+                ),
+            ),
+        )
+    )
     assert res == expected

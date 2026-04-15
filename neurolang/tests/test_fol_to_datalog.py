@@ -29,6 +29,7 @@ from ..logic.transformations import (
     CollapseDisjunctions,
     CollapseConjunctions,
     convert_to_pnf_with_cnf_matrix,
+    convert_to_pnf_with_dnf_matrix,
 )
 from ..logic.horn_clauses import (
     MoveNegationsToAtomsOrExistentialQuantifiers,
@@ -310,6 +311,14 @@ def test_move_quantifiers_up():
         X, UniversalPredicate(Y, Disjunction((P, Negation(R(X, Y)))))
     )
 
+    exp = Conjunction(
+        (P, UniversalPredicate(X, Negation(UniversalPredicate(Y, R(X, Y)))))
+    )
+    res = MoveQuantifiersUp().walk(exp)
+    assert res == UniversalPredicate(
+        X, ExistentialPredicate(Y, Conjunction((P, Negation(R(X, Y)))))
+    )
+
 
 def test_distribute_disjunction():
     P = Symbol("P")
@@ -376,6 +385,25 @@ def test_transform_to_cnf():
             Disjunction((P, A, Q)),
             Disjunction((P, B, Q)),
             Disjunction((P, C, D, Q)),
+        )
+    )
+
+
+def test_transform_to_dnf():
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol("C")
+    D = Symbol("D")
+    P = Symbol("P")
+    Q = Symbol("Q")
+    exp = Disjunction((P, Conjunction((A, B, Disjunction((C, D)))), Q))
+    res = convert_to_pnf_with_dnf_matrix(exp)
+    assert res == Disjunction(
+        (
+            P,
+            Conjunction((A, B, C)),
+            Conjunction((A, B, D)),
+            Q
         )
     )
 

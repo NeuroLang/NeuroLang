@@ -4,8 +4,8 @@ import numpy as np
 
 from .. import expressions as ir
 from ..datalog import DatalogProgram
+from ..datalog.chase import Chase
 from ..datalog.aggregation import (
-    Chase,
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation
 )
@@ -15,11 +15,13 @@ from ..logic.horn_clauses import Fol2DatalogMixin
 from ..region_solver import RegionSolver
 from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..utils.data_manipulation import parse_region_label_map
-from .datalog.intermediate_sugar import (
+from .datalog.sugar import (
     TranslateSSugarToSelectByColumn,
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities
 )
+from ..commands import CommandsMixin
+from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol
 
@@ -72,6 +74,8 @@ class RegionFrontendDatalogSolver(
     TranslateHeadConstantsToEqualities,
     Fol2DatalogMixin,
     RegionSolver,
+    CommandsMixin,
+    NumpyFunctionsMixin,
     DatalogWithAggregationMixin,
     DatalogProgramNegationMixin,
     DatalogProgram,

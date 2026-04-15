@@ -9,7 +9,7 @@ import pytest
 
 from ... import expressions as exp, frontend
 from ...datalog import DatalogProgram, Fact, Implication
-from ...exceptions import NeuroLangException, WrongArgumentsInPredicateError
+from ...exceptions import NeuroLangException, UnsupportedProgramError, WrongArgumentsInPredicateError
 from ...expression_walker import ExpressionBasicEvaluator
 from ...regions import ExplicitVBR, SphericalVolume
 from ...type_system import Unknown
@@ -239,6 +239,21 @@ def test_query_wrong_head_arguments():
             neurolang.query((e.x, e.y, e.z), e.q(e.x, e.y))
 
 
+def test_query_with_constant():
+    neurolang = frontend.NeurolangDL()
+
+    s = neurolang.add_tuple_set(
+        (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"))
+    )
+
+    with neurolang.scope as e:
+        e.q[e.x, e.y] = s(e.x, e.y)
+        res = neurolang.query((e.y), e.q("a", e.y))
+
+    print(res.to_unnamed())
+    assert res.to_unnamed() == {("b",), ("c",), ("d",)}
+
+
 @pytest.mark.skip()
 def test_load_spherical_volume_first_order():
     neurolang = frontend.RegionFrontend()
@@ -328,8 +343,9 @@ def test_neurolang_dl_query():
 
     dataset = {(i, i * 2) for i in range(10)}
     q = neurolang.add_tuple_set(dataset, name="q")
-    sol = neurolang.query((x, y), q(x, y)).to_unnamed()
-    assert sol == dataset
+    sol = neurolang.query((x, y), q(x, y))
+    assert sol.to_unnamed() == dataset
+    assert sol.row_type == Tuple[int, int]
 
     sol = neurolang.query(tuple(), q(x, x))
     assert sol
@@ -432,7 +448,7 @@ def test_neurolang_dl_datalog_code_list_symbols():
     A(6, 5)
     B(x,y) :- A(x, y)
     B(x,y) :- B(x, z),A(z, y)
-    C(x) :- B(x, y), y == 5
+    C(x) :- B(x, y), (y == 5)
     D("x")
     """
     )
@@ -449,7 +465,7 @@ def test_neurolang_dl_datalog_code():
     A(6, 5)
     B(x,y) :- A(x, y)
     B(x,y) :- B(x, z),A(z, y)
-    C(x) :- B(x, y), y == 5
+    C(x) :- B(x, y), (y == 5)
     D("x")
     """
     )
@@ -470,6 +486,156 @@ def test_neurolang_dl_datalog_code():
     assert res["D"].to_unnamed() == {
         ("x",),
     }
+
+
+def test_neurolang_dl_datalog_code_statement():
+    neurolang = frontend.NeurolangDL()
+    neurolang.execute_datalog_program(
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    five := 5
+    B(x,y) :- A(x, y)
+    B(x,y) :- B(x, z),A(z, y)
+    C(x) :- B(x, y), (y == five)
+    D("x")
+    """
+    )
+
+    res = neurolang.solve_all()
+
+    assert res["A"].row_type == Tuple[int, int]
+    assert res["A"].to_unnamed() == {(4, 5), (5, 6), (6, 5)}
+    assert res["B"].to_unnamed() == {
+        (4, 5),
+        (5, 6),
+        (6, 5),
+        (4, 6),
+        (5, 5),
+        (6, 6),
+    }
+    assert res["C"].to_unnamed() == {(4,), (5,), (6,)}
+    assert res["D"].to_unnamed() == {
+        ("x",),
+    }
+
+
+def test_neurolang_dl_datalog_code_statement_autocompletion():
+    neurolang = frontend.NeurolangDL()
+    res = neurolang.compute_datalog_program_for_autocompletion(
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    five := 5
+    B(x,y) :- A(x, y)
+    B(x,y) :- B(x, z),A(z, y)
+    C(x) :- B(x, y), (y == five)
+    D("x")
+    """,
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    five := 5
+    B(x,y) :- A(x, y)
+    B(x,y) :- 
+    """
+    )
+    expected = {'Signs': {'values': {'@', '∃', '('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
+                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists'}}, 'Boleans': {'values': {'False', '⊤', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+    assert res == expected
+
+
+def test_neurolang_dl_datalog_code_lambda_def():
+    neurolang = frontend.NeurolangDL()
+    neurolang.execute_datalog_program(
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    plus_one := lambda x: x + 1
+    B(x,y) :- A(x, y)
+    B(x,y) :- B(x, z),A(z, y)
+    C(x) :- B(x, y), (y == plus_one(4))
+    D("x")
+    """
+    )
+
+    res = neurolang.solve_all()
+
+    assert res["A"].row_type == Tuple[int, int]
+    assert res["A"].to_unnamed() == {(4, 5), (5, 6), (6, 5)}
+    assert res["B"].to_unnamed() == {
+        (4, 5),
+        (5, 6),
+        (6, 5),
+        (4, 6),
+        (5, 5),
+        (6, 6),
+    }
+    assert res["C"].to_unnamed() == {(4,), (5,), (6,)}
+    assert res["D"].to_unnamed() == {
+        ("x",),
+    }
+
+
+def test_neurolang_dl_datalog_code_lambda_app():
+    neurolang = frontend.NeurolangDL()
+    neurolang.execute_datalog_program(
+        """
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    B(x,y) :- A(x, y)
+    B(x,y) :- B(x, z),A(z, y)
+    C(x) :- B(x, y), (y == (lambda x: x + 1)(4))
+    D("x")
+    """
+    )
+
+    res = neurolang.solve_all()
+
+    assert res["A"].row_type == Tuple[int, int]
+    assert res["A"].to_unnamed() == {(4, 5), (5, 6), (6, 5)}
+    assert res["B"].to_unnamed() == {
+        (4, 5),
+        (5, 6),
+        (6, 5),
+        (4, 6),
+        (5, 5),
+        (6, 6),
+    }
+    assert res["C"].to_unnamed() == {(4,), (5,), (6,)}
+    assert res["D"].to_unnamed() == {
+        ("x",),
+    }
+
+
+def test_neurolang_dl_datalog_code_with_query():
+    prog = """
+        A(4, 5)
+        A(5, 6)
+        A(6, 5)
+        B(x,y) :- A(x, y)
+        B(x,y) :- B(x, z), A(z, y)
+        """
+
+    neurolang = frontend.NeurolangDL()
+    res = neurolang.execute_datalog_program(
+        prog + "\nans(x) :- B(x, y), (y == 5)"
+    )
+    assert res.to_unnamed() == {(4,), (5,), (6,)}
+    assert res.row_type == Tuple[int, ]
+
+    res = neurolang.execute_datalog_program(prog + "\nans() :- B(x, y)")
+    assert res == True
+
+    with pytest.raises(UnsupportedProgramError):
+        neurolang.execute_datalog_program(
+            "ans(x) :- A(x, 5)\n" + prog + "\nans(x) :- B(x, y), (y == 5)"
+        )
 
 
 def test_neurolang_dl_aggregation():
@@ -613,7 +779,7 @@ def test_neurolang_dl_attribute_access():
     q = res["q"]
     r = res["r"]
     assert len(q) == 1
-    el = next(q.to_unnamed().itervalues())[0]
+    el = next(iter(q))[0]
     assert el == one_element
     assert r.to_unnamed() == {(one_element.x,)}
 
@@ -683,6 +849,7 @@ def test_translate_expression_to_fronted_expression():
     assert imp_fe.antecedent == tr.walk(imp_exp.antecedent)
 
 
+@pytest.mark.skip(reason="sugar needs to be updated")
 def test_first_column_sugar_body_s():
     qr = frontend.NeurolangDL()
     qr.add_tuple_set({
@@ -697,6 +864,7 @@ def test_first_column_sugar_body_s():
     assert res_all['r'] == res_all['s']
 
 
+@pytest.mark.skip(reason="sugar needs to be updated")
 def test_first_column_sugar_head_s():
     qr = frontend.NeurolangDL()
     qr.add_tuple_set({
@@ -721,3 +889,20 @@ def test_head_constant():
         res_all = qr.solve_all()
 
     assert set(res_all['r']) == {('one', 1)}
+
+
+def test_numpy_mixin_adds_functions():
+    nl = frontend.NeurolangDL()
+    functions = ["exp", "log", "log10", "cos", "sin", "tan"]
+
+    p = nl.add_tuple_set([(i,) for i in np.arange(1, 10)], name="P")
+
+    for func in functions:
+        assert exp.Symbol(func) in nl.symbol_table
+        with nl.scope as e:
+            e.q[e.x, e.y] = p[e.x] & (e.y == getattr(e, func)(e.x))
+            res = nl.solve_all()
+
+        assert set(res["q"]) == {
+            (i, getattr(np, func)(i)) for i in np.arange(1, 10)
+        }

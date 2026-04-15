@@ -2,10 +2,10 @@ import numpy as np
 
 from ..perior_tree import BoundedAABB, Boundary, Tree
 
-def _generate_random_box(x_bounds, y_bounds, boundry, size_bounds):
+def _generate_random_box(x_bounds, y_bounds, boundary, size_bounds):
     lower_bound = np.array([np.random.uniform(*b) for b in (x_bounds, y_bounds)])
     upper_bound = lower_bound + np.random.uniform(*size_bounds, size=2)
-    return BoundedAABB(lower_bound, upper_bound, boundry)
+    return BoundedAABB(lower_bound, upper_bound, boundary)
 
 def test_point_adjust_position():
     period_bound = Boundary((0, 0), (10, 10))
@@ -20,7 +20,7 @@ def test_vector_adjust_direction():
     assert dir_vec == (-0.5, 0.5)
 
 
-    # #TODO: refa ploting
+    # #TODO: refa plotting
     # rect = plt.Rectangle(period_bound[0], period_bound.width(), period_bound.height(), facecolor="#aaaaaa")
     # fig, ax = plt.subplots()
     # ax.add_patch(rect)
@@ -47,7 +47,7 @@ def test_aabbs_union_in_bound():
     assert box1.expand(box2) == BoundedAABB((1, 1), (6, 8), period_bound)
 
 
-    # #Todo: refa ploting
+    # #Todo: refa plotting
     # fig, ax = plt.subplots()
     # ax.add_patch(patches.Rectangle(box1[0], box1.width(), box1.height(), hatch='+', fill=False))
     # ax.add_patch(patches.Rectangle(box2[0], box2.width(), box2.height(), hatch='*', fill=False))

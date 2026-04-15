@@ -1,20 +1,78 @@
+import logging
+import operator
 import typing
-from typing import AbstractSet
+from typing import AbstractSet, Tuple
 
-from ..datalog.expression_processing import EQ, conjunct_formulas
-from ..datalog.instance import MapInstance
+from ..datalog.aggregation import is_builtin_aggregation_functor
+from ..datalog.expression_processing import (
+    EQ,
+    conjunct_formulas,
+    extract_logic_free_variables
+)
+from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
 from ..expression_pattern_matching import add_match
-from ..expression_walker import PatternWalker
-from ..expressions import Constant, Symbol
-from ..logic import TRUE, Implication, Union
+from ..expression_walker import (
+    ChainedWalker,
+    ExpressionWalker,
+    PatternWalker,
+)
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
+from ..logic import TRUE, Conjunction, Implication, Union
+from ..relational_algebra import (
+    EliminateTrivialProjections,
+    ExtendedProjection,
+    FunctionApplicationListMember,
+    Projection,
+    PushInSelections,
+    RelationalAlgebraOperation,
+    RelationalAlgebraSolver,
+    RenameOptimizations,
+    Selection,
+    SimplifyExtendedProjectionsWithConstants,
+    str2columnstr_constant
+)
+from ..relational_algebra.optimisers import PushUnnamedSelectionsUp
+from ..relational_algebra_provenance import (
+    NaturalJoinInverse,
+    ProvenanceAlgebraSet
+)
 from .cplogic.program import CPLogicProgram
+from .exceptions import RepeatedTuplesInProbabilisticRelationError
 from .expression_processing import (
     construct_within_language_succ_result,
-    is_query_based_probfact,
+    is_query_based_probpredicate,
     is_within_language_prob_query,
-    within_language_succ_query_to_intensional_rule,
+    within_language_succ_query_to_intensional_rule
 )
 from .expressions import Condition, ProbabilisticPredicate
+from .probabilistic_semiring_solver import (
+    ProbSemiringToRelationalAlgebraSolver
+)
+
+AND = Constant(operator.and_)
+NE = Constant(operator.ne)
+
+ZERO = Constant[float](0.)
+GT = Constant(operator.gt)
+
+
+def _qbased_probfact_needs_translation(formula: Implication) -> bool:
+    if isinstance(formula.antecedent, FunctionApplication):
+        antecedent_pred = formula.antecedent
+    elif (
+        isinstance(formula.antecedent, Conjunction)
+        and len(formula.antecedent.formulas) == 1
+    ):
+        antecedent_pred = formula.antecedent.formulas[0]
+    else:
+        return True
+    return not (
+        isinstance(antecedent_pred.functor, Symbol)
+        and antecedent_pred.functor.is_fresh
+    )
+
+
+LOG = logging.getLogger(__name__)
 
 
 class QueryBasedProbFactToDetRule(PatternWalker):
@@ -39,13 +97,17 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     @add_match(
         Union,
         lambda union: any(
-            is_query_based_probfact(formula) for formula in union.formulas
+            is_query_based_probpredicate(formula)
+            and _qbased_probfact_needs_translation(formula)
+            for formula in union.formulas
         ),
     )
     def union_with_query_based_pfact(self, union):
         new_formulas = list()
         for formula in union.formulas:
-            if is_query_based_probfact(formula):
+            if is_query_based_probpredicate(
+                formula
+            ) and _qbased_probfact_needs_translation(formula):
                 (
                     det_rule,
                     prob_rule,
@@ -58,29 +120,57 @@ class QueryBasedProbFactToDetRule(PatternWalker):
                 new_formulas.append(formula)
         return self.walk(Union(tuple(new_formulas)))
 
-    @add_match(Implication, is_query_based_probfact)
+    @add_match(
+        Implication,
+        lambda implication: is_query_based_probpredicate(implication)
+        and _qbased_probfact_needs_translation(implication),
+    )
     def query_based_probafact(self, impl):
-        return self.walk(
-            Union(
-                self._query_based_probabilistic_fact_to_det_and_prob_rules(
-                    impl
-                )
-            )
-        )
+        (
+            det_rule,
+            prob_rule,
+        ) = self._query_based_probabilistic_fact_to_det_and_prob_rules(impl)
+        return self.walk(Union((det_rule, prob_rule)))
 
     @staticmethod
     def _query_based_probabilistic_fact_to_det_and_prob_rules(impl):
         prob_symb = Symbol.fresh()
         det_pred_symb = Symbol.fresh()
-        eq_formula = EQ(prob_symb, impl.consequent.probability)
+        agg_functor = QueryBasedProbFactToDetRule._get_agg_functor(impl)
+        if agg_functor is None:
+            eq_formula = EQ(prob_symb, impl.consequent.probability)
+            det_consequent = det_pred_symb(
+                prob_symb, *impl.consequent.body.args
+            )
+            prob_antecedent = det_consequent
+        else:
+            assert len(impl.consequent.probability.args) == 1
+            eq_formula = EQ(prob_symb, impl.consequent.probability.args[0])
+            det_consequent = det_pred_symb(
+                agg_functor(prob_symb), *impl.consequent.body.args
+            )
+            prob_antecedent = det_pred_symb(
+                prob_symb, *impl.consequent.body.args
+            )
         det_antecedent = conjunct_formulas(impl.antecedent, eq_formula)
-        det_consequent = det_pred_symb(prob_symb, *impl.consequent.body.args)
         det_rule = Implication(det_consequent, det_antecedent)
-        prob_consequent = ProbabilisticPredicate(
+        prob_consequent = impl.consequent.apply(
             prob_symb, impl.consequent.body
         )
-        prob_rule = Implication(prob_consequent, det_consequent)
+        prob_rule = Implication(prob_consequent, prob_antecedent)
         return det_rule, prob_rule
+
+    @staticmethod
+    def _get_agg_functor(
+        impl: Implication,
+    ) -> typing.Union[None, typing.Callable]:
+        if not isinstance(
+            impl.consequent.probability, FunctionApplication
+        ) or not is_builtin_aggregation_functor(
+            impl.consequent.probability.functor
+        ):
+            return
+        return impl.consequent.probability.functor
 
 
 def _solve_within_language_prob_query(
@@ -104,12 +194,7 @@ def _solve_for_probabilistic_rule(
     succ_prob_solver: typing.Callable,
 ):
     provset = succ_prob_solver(rule, cpl)
-    relation = Constant[AbstractSet](
-        provset.value,
-        auto_infer_type=False,
-        verify_type=False,
-    )
-    return relation
+    return provset.relation
 
 
 def compute_probabilistic_solution(
@@ -119,27 +204,83 @@ def compute_probabilistic_solution(
     prob_idb,
     succ_prob_solver,
     marg_prob_solver,
+    check_qbased_pfact_tuple_unicity=False,
 ):
     solution = MapInstance()
-    cpl = _build_probabilistic_program(
-        det_edb, pfact_db, pchoice_edb, prob_idb
+    cpl, prob_idb = _build_probabilistic_program(
+        det_edb,
+        pfact_db,
+        pchoice_edb,
+        prob_idb,
+        check_qbased_pfact_tuple_unicity,
     )
     for rule in prob_idb.formulas:
         if is_within_language_prob_query(rule):
             relation = _solve_within_language_prob_query(
                 cpl, rule, succ_prob_solver, marg_prob_solver
             )
-        else:
-            relation = _solve_for_probabilistic_rule(
-                cpl, rule, succ_prob_solver
+            solution[rule.consequent.functor] = Constant[AbstractSet](
+                relation.value.to_unnamed()
             )
-        solution[rule.consequent.functor] = Constant[AbstractSet](
-            relation.value.to_unnamed()
-        )
     return solution
 
 
-def _discard_query_based_probfacts(prob_idb):
+def lift_solve_marg_query(rule, cpl, succ_solver):
+    """
+    Solve a MARG query on a CP-Logic program.
+
+    Parameters
+    ----------
+    query : Implication
+        Consequent must be of type `Condition`.
+        MARG query of the form `ans(x) :- P(x)`.
+    cpl_program : CPLogicProgram
+        CP-Logic program on which the query should be solved.
+
+    Returns
+    -------
+    ProvenanceAlgebraSet
+        Provenance set labelled with probabilities for each tuple in the result
+        set.
+
+    """
+    res_args = tuple(s for s in rule.consequent.args if isinstance(s, Symbol))
+
+    joint_antecedent = Conjunction(
+        (
+            rule.antecedent.conditioned,
+            rule.antecedent.conditioning
+        )
+    )
+    joint_logic_variables = set(res_args)
+    joint_rule = Implication(
+        Symbol.fresh()(*joint_logic_variables), joint_antecedent
+    )
+    joint_provset = succ_solver(
+        joint_rule, cpl, run_relational_algebra_solver=False
+    )
+
+    denominator_antecedent = rule.antecedent.conditioning
+    denominator_logic_variables = (
+        extract_logic_free_variables(denominator_antecedent) & res_args
+    )
+    denominator_rule = Implication(
+        Symbol.fresh()(*denominator_logic_variables), denominator_antecedent
+    )
+    denominator_provset = succ_solver(
+        denominator_rule, cpl, run_relational_algebra_solver=False
+    )
+    query_solver = generate_provenance_query_solver({}, True)
+    provset = query_solver.walk(
+        Projection(
+            NaturalJoinInverse(joint_provset, denominator_provset),
+            tuple(str2columnstr_constant(s.name) for s in res_args),
+        )
+    )
+    return provset
+
+
+def _discard_query_based_probpredicates(prob_idb):
     return Union(
         tuple(
             formula
@@ -152,10 +293,16 @@ def _discard_query_based_probfacts(prob_idb):
     )
 
 
-def _add_to_probabilistic_program(add_fun, pred_symb, expr, det_edb):
+def _add_to_probabilistic_program(
+    add_fun,
+    pred_symb,
+    expr,
+    det_edb,
+    check_qbased_pfact_tuple_unicity=False,
+):
     # handle set-based probabilistic tables
     if isinstance(expr, Constant[typing.AbstractSet]):
-        ra_set = expr
+        ra_set = expr.value
     # handle query-based probabilistic facts
     elif isinstance(expr, Union):
         impl = expr.formulas[0]
@@ -163,11 +310,40 @@ def _add_to_probabilistic_program(add_fun, pred_symb, expr, det_edb):
         # P(x_1, ..., x_n) : y :- Q(y, x_1, ..., x_n)
         # where Q is an extensional relation symbol
         # so the values can be retrieved from the EDB
-        ra_set = det_edb[impl.antecedent.functor]
-    add_fun(pred_symb, ra_set.value.unwrap())
+        if impl.antecedent.functor in det_edb:
+            ra_set = det_edb[impl.antecedent.functor].value
+            if check_qbased_pfact_tuple_unicity:
+                _check_tuple_prob_unicity(ra_set)
+        else:
+            ra_set = WrappedRelationalAlgebraFrozenSet.dum()
+    add_fun(pred_symb, ra_set.unwrap())
 
 
-def _build_probabilistic_program(det_edb, pfact_db, pchoice_edb, prob_idb):
+def _check_tuple_prob_unicity(ra_set: Constant[AbstractSet]) -> None:
+    length = len(ra_set)
+    proj_cols = list(ra_set.columns)[1:]
+    length_without_probs = len(ra_set.projection(*proj_cols))
+    if length_without_probs != length:
+        n_repeated_tuples = length - length_without_probs
+        raise RepeatedTuplesInProbabilisticRelationError(
+            n_repeated_tuples,
+            length,
+            "Some tuples have multiple probability labels. "
+            f"Found {n_repeated_tuples} tuple repetitions, out of "
+            f"{length} total tuples. If your query-based probabilistic fact "
+            "leads to multiple probabilities for the same tuple, you might "
+            "want to consider aggregating these probabilities by taking their "
+            "maximum or average.",
+        )
+
+
+def _build_probabilistic_program(
+    det_edb,
+    pfact_db,
+    pchoice_edb,
+    prob_idb,
+    check_qbased_pfact_tuple_unicity=False,
+):
     cpl = CPLogicProgram()
     db_to_add_fun = [
         (det_edb, cpl.add_extensional_predicate_from_tuples),
@@ -176,10 +352,181 @@ def _build_probabilistic_program(det_edb, pfact_db, pchoice_edb, prob_idb):
     ]
     for database, add_fun in db_to_add_fun:
         for pred_symb, expr in database.items():
-            _add_to_probabilistic_program(add_fun, pred_symb, expr, det_edb)
+            _add_to_probabilistic_program(
+                add_fun,
+                pred_symb,
+                expr,
+                det_edb,
+                check_qbased_pfact_tuple_unicity,
+            )
     # remove query-based probabilistic facts that have already been processed
     # and transformed into probabilistic tables based on the deterministic
     # solution of their probability and antecedent
-    prob_idb = _discard_query_based_probfacts(prob_idb)
+    prob_idb = _discard_query_based_probpredicates(prob_idb)
     cpl.walk(prob_idb)
-    return cpl
+    return cpl, prob_idb
+
+
+class FloatArithmeticSimplifier(PatternWalker):
+    @add_match(
+        FunctionApplication(
+            Constant[typing.Any](operator.mul),
+            (Constant[float](1.0), Expression[typing.Any]))
+        )
+    def simplify_mul_left(self, expression):
+        return self.walk(expression.args[1])
+
+    @add_match(
+        FunctionApplication(
+            Constant[typing.Any](operator.mul),
+            (Expression[typing.Any], Constant[float](1.0))
+        )
+    )
+    def simplify_mul_right(self, expression):
+        return self.walk(expression.args[0])
+
+
+class RAQueryOptimiser(
+    EliminateTrivialProjections,
+    PushInSelections,
+    RenameOptimizations,
+    SimplifyExtendedProjectionsWithConstants,
+    FloatArithmeticSimplifier,
+    PushUnnamedSelectionsUp,
+    ExpressionWalker,
+):
+    pass
+
+
+class AddNeededProjections(PatternWalker):
+    def __init__(self, needed_projections):
+        self.needed_projections = needed_projections
+
+    @add_match(ProvenanceAlgebraSet)
+    def add_projection(self, expression):
+        if self.needed_projections:
+            projections = (
+                self.needed_projections +
+                (FunctionApplicationListMember(
+                    expression.provenance_column,
+                    expression.provenance_column
+                ),)
+            )
+            expression = ProvenanceAlgebraSet(
+                ExtendedProjection(
+                    expression.relation,
+                    projections
+                ),
+                expression.provenance_column
+            )
+        return expression
+
+
+class FilterZeroProbability(ExpressionWalker):
+    @add_match(ProvenanceAlgebraSet)
+    def add_zero_filter(self, expression):
+        return ProvenanceAlgebraSet(
+            Selection(
+                expression.relation,
+                GT(expression.provenance_column, ZERO)
+            ),
+            expression.provenance_column
+        )
+
+
+def generate_provenance_query_solver(
+    symbol_table, run_relational_algebra_solver,
+    needed_projections=None,
+    solver_class=ProbSemiringToRelationalAlgebraSolver
+):
+    """
+    Generate a walker that solves a RAP query.
+
+    Parameters
+    ----------
+    symbol_table : Mapping
+        Mapping from symbols to probabilistic or deterministic sets to
+        solve the query.
+    run_relational_algebra_solver : bool
+        if `true` the walker will return a ProvenanceAlgebraSet containing
+        a NamedAlgebraSet as `relation` attribute. If `false` the walker will
+        produce a relational algebra expression as `relation` attribute.
+    solver_class: PatternWalker
+        class to translate a provenance RA sets program into a RA program.
+        Default is `ProbSemiringToRelationalAlgebraSolver`.
+    """
+
+    if needed_projections is None:
+        needed_projections = tuple()
+
+    class LogExpression(PatternWalker):
+        def __init__(self, logger, message, level):
+            self.logger = logger
+            self.message = message
+            self.level = level
+
+        @add_match(...)
+        def log_exp(self, expression):
+            LOG.log(self.level, self.message, expression)
+            return expression
+
+    steps = [
+        RAQueryOptimiser(),
+        solver_class(symbol_table=symbol_table),
+        LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
+        AddNeededProjections(needed_projections),
+        FilterZeroProbability(),
+        RAQueryOptimiser(),
+        LogExpression(LOG, "Optimised RA query %s", logging.INFO)
+    ]
+
+    if run_relational_algebra_solver:
+        steps.append(RelationalAlgebraSolver())
+
+    query_compiler = ChainedWalker(*steps)
+    return query_compiler
+
+
+def compute_projections_needed_to_reintroduce_head_terms(
+    ra_query: RelationalAlgebraOperation,
+    flat_query: Implication,
+    unified_query: Implication,
+) -> Tuple[FunctionApplicationListMember, ...]:
+    """
+    Produce the extended projection list for the terms that have been
+    removed through unification of the query.
+
+    There are two such cases:
+
+    1. A head variable was repeated, such as in `ans(y, y)` and the extensional
+    plan computes all possible values for `y` but will output only one column.
+    This function makes sure that a second column for `y` is outputted, and that
+    the resulting solution set will be a binary relation, as required.
+
+    2. The query's head contains a constant, such as in `ans(2, y)`, in which
+    case a constant column is added to the solution set.
+
+    """
+    proj_list = list()
+    needed = False
+    for old, new in zip(
+        flat_query.consequent.args, unified_query.consequent.args
+    ):
+        dst_column = str2columnstr_constant(old.name)
+        fun_exp = dst_column
+        if new != old:
+            if isinstance(new, Symbol):
+                fun_exp = str2columnstr_constant(new.name)
+            elif isinstance(new, Constant):
+                fun_exp = new
+            else:
+                raise ValueError(
+                    f"Unexpected argument {new}. "
+                    "Expected symbol or constant"
+                )
+            needed = True
+        member = FunctionApplicationListMember(fun_exp, dst_column)
+        proj_list.append(member)
+    if not needed:
+        proj_list = []
+    return tuple(proj_list)

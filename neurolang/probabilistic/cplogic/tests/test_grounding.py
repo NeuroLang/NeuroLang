@@ -12,7 +12,7 @@ from ...expression_processing import add_to_union, is_probabilistic_fact
 from ...expressions import (
     Grounding,
     ProbabilisticChoiceGrounding,
-    ProbabilisticPredicate,
+    ProbabilisticFact,
 )
 from ..grounding import ground_cplogic_program
 from ..program import CPLogicProgram
@@ -29,8 +29,8 @@ b = Constant("b")
 
 
 def test_cplogic_grounding():
-    pfact1 = Implication(ProbabilisticPredicate(p, P(a)), Constant[bool](True))
-    pfact2 = Implication(ProbabilisticPredicate(p, P(b)), Constant[bool](True))
+    pfact1 = Implication(ProbabilisticFact(p, P(a)), Constant[bool](True))
+    pfact2 = Implication(ProbabilisticFact(p, P(b)), Constant[bool](True))
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
     code = Union((pfact1, pfact2, rule, Fact(Q(a)), Fact(Q(b))))
     cpl_program = CPLogicProgram()
@@ -80,7 +80,7 @@ def test_cplogic_grounding_general():
     pfacts = Union(
         tuple(
             Implication(
-                ProbabilisticPredicate(prob, P(const)), Constant[bool](True)
+                ProbabilisticFact(prob, P(const)), Constant[bool](True)
             )
             for (prob, const) in {
                 (Constant[float](0.2), a),
@@ -99,7 +99,7 @@ def test_cplogic_grounding_general():
         grounding
         for grounding in grounded.expressions
         if isinstance(grounding.expression, Implication)
-        and isinstance(grounding.expression.consequent, ProbabilisticPredicate)
+        and isinstance(grounding.expression.consequent, ProbabilisticFact)
         and grounding.expression.consequent.body.functor == P
     )
     assert set(pfact_grounding.relation.value) == {(0.2, "a"), (0.6, "b")}

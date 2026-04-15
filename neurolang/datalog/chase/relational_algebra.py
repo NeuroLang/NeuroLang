@@ -13,7 +13,7 @@ from ...expression_walker import ExpressionWalker, ReplaceSymbolWalker
 from ...logic.unification import apply_substitution_arguments
 from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
-                                   RelationalAlgebraPushInSelections,
+                                   PushInSelections,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import Unknown, is_leq_informative
 from ...utils import NamedRelationalAlgebraFrozenSet
@@ -143,7 +143,7 @@ class ChaseRelationalAlgebraPlusCeriMixin:
 
 
 class NamedRelationalAlgebraOptimiser(
-    RelationalAlgebraPushInSelections,
+    PushInSelections,
     ExpressionWalker
 ):
     pass
@@ -191,7 +191,7 @@ class ChaseNamedRelationalAlgebraMixin:
             )
         except ProjectionOverMissingColumnsError:
             raise WrongArgumentsInPredicateError(
-                "There is a preducate in the query with the "
+                "There is a predicate in the query with the "
                 "wrong number of arguments."
             )
 
@@ -260,7 +260,10 @@ class ChaseNamedRelationalAlgebraMixin:
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
         substitutions_columns = set(substitutions.columns)
-        if substitutions_columns.isdisjoint(consequent.args):
+        if (
+            substitutions_columns.isdisjoint(consequent.args)
+            or instance[consequent.functor].value.is_empty()
+        ):
             return substitutions
 
         args = []
@@ -301,7 +304,10 @@ class ChaseNamedRelationalAlgebraMixin:
         self, rule_predicates_iterator, instance, restriction_instance
     ):
         symbol_table = defaultdict(
-            lambda: Constant[AbstractSet](WrappedRelationalAlgebraSet())
+            lambda: Constant[AbstractSet](
+                WrappedRelationalAlgebraSet(),
+                verify_type=False
+            )
         )
         symbol_table.update(instance)
         for k, v in restriction_instance.items():
@@ -331,20 +337,17 @@ class ChaseNamedRelationalAlgebraMixin:
 
     @lru_cache(1024)
     def translate_conjunction_to_named_ra(self, conjunction):
-        builtin_symbols = {
-            k: v
-            for k, v in self.datalog_program.symbol_table.items()
-            if (
-                v.type is not Unknown and
-                is_leq_informative(v.type, Callable)
-            )
-        }
+        if not hasattr(self, "_builtins"):
+            self._builtins = self.datalog_program.builtins()
+
+        builtin_symbols = self._builtins
         rsw = ReplaceSymbolWalker(builtin_symbols)
         conjunction = rsw.walk(conjunction)
         traslator_to_named_ra = TranslateToNamedRA()
         LOG.info(f"Translating and optimising CQ {conjunction} to RA")
         ra_code = traslator_to_named_ra.walk(conjunction)
         ra_code = NamedRelationalAlgebraOptimiser().walk(ra_code)
+        ra_code = RelationalAlgebraOptimiser().walk(ra_code)
         return ra_code
 
     def compute_result_set(
@@ -360,7 +363,6 @@ class ChaseNamedRelationalAlgebraMixin:
                     if arg in substitutions.columns
                 )
             )
-            new_tuples = WrappedRelationalAlgebraSet(new_tuples)
         else:
             tuples = [
                 tuple(

@@ -2,21 +2,27 @@ import collections
 from typing import AbstractSet, Iterable
 
 import numpy
+from neurolang.datalog.constraints_representation import RightImplication
+
+from neurolang.relational_algebra import str2columnstr_constant
 
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
     conjunct_formulas,
-    enforce_conjunction,
+    extract_logic_atoms,
     extract_logic_predicates,
-    reachable_code,
+    reachable_code
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import TRUE, Conjunction, Implication, Union
+from ..logic import TRUE, Conjunction, Implication, Negation, Union
+from ..logic.transformations import GuaranteeConjunction
+from ..relational_algebra import Projection, RelationalAlgebraSolver
+from ..utils import OrderedSet
 from .exceptions import DistributionDoesNotSumToOneError
-from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
+from .expressions import PROB, ProbabilisticPredicate, ProbabilisticFact, ProbabilisticQuery
 
 
 def is_probabilistic_fact(expression):
@@ -40,21 +46,17 @@ def is_probabilistic_fact(expression):
     """
     return (
         isinstance(expression, Implication)
-        and isinstance(expression.consequent, ProbabilisticPredicate)
+        and isinstance(expression.consequent, ProbabilisticFact)
         and isinstance(expression.consequent.body, FunctionApplication)
         and expression.antecedent == TRUE
     )
 
 
-def is_query_based_probfact(expression):
+def is_query_based_probpredicate(expression):
     return (
         isinstance(expression, Implication)
         and isinstance(expression.consequent, ProbabilisticPredicate)
         and expression.antecedent != TRUE
-        and not (
-            isinstance(expression.antecedent, FunctionApplication)
-            and expression.antecedent.functor.is_fresh
-        )
     )
 
 
@@ -175,7 +177,7 @@ def separate_deterministic_probabilistic_code(
         initial_unclassified_length = len(unclassified_code)
         preds_antecedent = set(
             p.functor
-            for p in extract_logic_predicates(pred.antecedent)
+            for p in extract_logic_atoms(pred.antecedent)
             if p.functor != pred.consequent.functor
             and not is_builtin(p, program.builtins())
         )
@@ -245,10 +247,12 @@ def construct_within_language_succ_result(provset, rule):
     proj_cols = list()
     for arg in rule.consequent.args:
         if isinstance(arg, Symbol):
-            proj_cols.append(arg.name)
+            proj_cols.append(str2columnstr_constant(arg.name))
         elif isinstance(arg, ProbabilisticQuery) and arg.functor == PROB:
             proj_cols.append(provset.provenance_column)
-    return Constant[AbstractSet](provset.value.projection(*proj_cols))
+    return RelationalAlgebraSolver().walk(
+        Projection(provset.relation, proj_cols)
+    )
 
 
 def group_preds_by_functor(predicates, filter_set=None):
@@ -270,7 +274,7 @@ def group_preds_by_functor(predicates, filter_set=None):
     dict of functors to set of predicates
 
     """
-    grouped = collections.defaultdict(set)
+    grouped = collections.defaultdict(OrderedSet)
     for pred in predicates:
         if filter_set is None or pred.functor in filter_set:
             grouped[pred.functor].add(pred)
@@ -304,7 +308,7 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
     grouped_pchoice_preds = group_preds_by_functor(
         predicates, pchoice_pred_symbs
     )
-    eq_set = set()
+    eq_set = OrderedSet()
     for predicates in grouped_pchoice_preds.values():
         predicates = list(predicates)
         arity = len(predicates[0].args)
@@ -325,7 +329,7 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
 
 def lift_optimization_for_choice_predicates(query, program):
     """Replace multiple instances of choice predicates by
-    single instances enforncing the definition that the probability
+    single instances enforcing the definition that the probability
     that two different grounded choice predicates are mutually exclusive.
 
     Parameters
@@ -344,23 +348,32 @@ def lift_optimization_for_choice_predicates(query, program):
     """
     if len(program.pchoice_pred_symbs) == 0:
         return query
+    positive_predicates = OrderedSet()
+    negative_predicates = OrderedSet()
+    for pred in extract_logic_predicates(query):
+        if isinstance(pred, Negation):
+            negative_predicates.add(pred)
+        else:
+            positive_predicates.add(pred)
     pchoice_eqs = get_probchoice_variable_equalities(
-        query.formulas, program.pchoice_pred_symbs
+        positive_predicates,
+        program.pchoice_pred_symbs
     )
     if len(pchoice_eqs) == 0:
         return query
     eq_conj = Conjunction(tuple(EQ(x, y) for x, y in pchoice_eqs))
-    grpd_preds = group_preds_by_functor(query.formulas)
-    new_formulas = set(eq_conj.formulas)
+    grpd_preds = group_preds_by_functor(positive_predicates)
+    new_formulas = OrderedSet(eq_conj.formulas) | OrderedSet(negative_predicates)
     for functor, preds in grpd_preds.items():
         if functor not in program.pchoice_pred_symbs:
-            new_formulas |= set(preds)
+            new_formulas |= OrderedSet(preds)
         else:
             conj = conjunct_formulas(Conjunction(tuple(preds)), eq_conj)
             unifier = UnifyVariableEqualities()
             rule = Implication(Symbol.fresh()(tuple()), conj)
-            unified_conj = enforce_conjunction(unifier.walk(rule).antecedent)
-            new_formulas |= set(unified_conj.formulas)
+            unified_antecedent = unifier.walk(rule).antecedent
+            unified_conj = GuaranteeConjunction().walk(unified_antecedent)
+            new_formulas |= OrderedSet(unified_conj.formulas)
     new_query = Conjunction(tuple(new_formulas))
     return new_query
 
@@ -378,10 +391,16 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
             or pred_symb not in program.intensional_database()
         ):
             continue
+
+        if isinstance(program.symbol_table[pred_symb], Constant):
+            continue
+
         for rule in program.symbol_table[pred_symb].formulas:
+            if isinstance(rule, RightImplication):
+                continue
             stack += [
                 apred.functor
-                for apred in extract_logic_predicates(rule.antecedent)
+                for apred in extract_logic_atoms(rule.antecedent)
                 if apred.functor not in wlq_symbs
             ]
     return False

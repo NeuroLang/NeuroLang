@@ -34,7 +34,21 @@ class ProbabilisticPredicate(Definition):
 
     def __repr__(self):
         return "ProbabilisticPredicate{{{} :: {} : {}}}".format(
-            self.probability, self.body, self.type
+            self.body, self.probability, self.type
+        )
+
+
+class ProbabilisticChoice(ProbabilisticPredicate):
+    def __repr__(self):
+        return "ProbabilisticChoice{{{} :: {} : {}}}".format(
+            self.body, self.probability, self.type
+        )
+
+
+class ProbabilisticFact(ProbabilisticPredicate):
+    def __repr__(self):
+        return "ProbabilisticFact{{{} :: {} : {}}}".format(
+            self.body, self.probability, self.type
         )
 
 

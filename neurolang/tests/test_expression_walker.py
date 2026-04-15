@@ -1,3 +1,4 @@
+from collections import defaultdict
 from pytest import raises
 
 from .. import expression_walker
@@ -221,3 +222,24 @@ def test_replace_expression_with_tuple():
     assert isinstance(result[1], Tuple)
     assert result[1][0] == s3
     assert result[1][1] is s2 and result[1][1].is_fresh
+
+
+def test_resolve_symbol_mixin():
+    class ResolveSymbols(
+        expression_walker.ResolveSymbolMixin,
+        expression_walker.ExpressionWalker
+    ):
+        def __init__(self, symbol_table):
+            self.symbol_table = symbol_table
+
+    rs = ResolveSymbols({S_('a'): C_('a')})
+
+    assert rs.walk(S_('a')) == C_('a')
+    assert rs.walk(S_('b')) == S_('b')
+
+    symbol_table = defaultdict(lambda: C_(0))
+    symbol_table[S_('a')] = C_('a')
+    rs = ResolveSymbols(symbol_table)
+
+    assert rs.walk(S_('a')) == C_('a')
+    assert rs.walk(S_('b')) == C_(0)

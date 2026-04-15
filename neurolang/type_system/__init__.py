@@ -14,11 +14,14 @@ from typing import (AbstractSet, Any, Callable, Generic, Iterable, Mapping,
 
 import numpy as np
 from typing_inspect import (get_origin, is_callable_type, is_generic_type,
-                            is_tuple_type, is_typevar, is_union_type)
+                            is_tuple_type, is_typevar, is_union_type, get_parameters)
 
 from ..exceptions import NeuroLangException
 
-NEW_TYPING = sys.version_info[:3] >= (3, 7, 0)
+
+NEW_TYPING_39 = sys.version_info[:3] >= (3, 9, 0)
+NEW_TYPING_37 = (sys.version_info[:3] >= (3, 7, 0)) and not NEW_TYPING_39
+NEW_TYPING_312 = sys.version_info[:2] >= (3, 12)
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -27,7 +30,7 @@ class NeuroLangTypeException(NeuroLangException):
 
 if sys.version_info < (3, 6, 0):
     raise ImportError("Only python 3.6 and over compatible")
-if not NEW_TYPING:
+if not (NEW_TYPING_37 or NEW_TYPING_39):
     from typing import _FinalTypingBase
 
     class _Unknown(_FinalTypingBase, _root=True):
@@ -46,19 +49,15 @@ if not NEW_TYPING:
             raise TypeError("Unknown cannot be used with issubclass().")
 
     Unknown = _Unknown(_root=True)
-else:
-    from typing import _SpecialForm, _Final, _Immutable, _GenericAlias
+elif NEW_TYPING_37 or NEW_TYPING_39:
+    from typing import _Final, _GenericAlias
+    if not NEW_TYPING_312:
+        from typing import _Immutable
+        _Unknown_bases = (_Final, _Immutable)
+    else:
+        _Unknown_bases = (_Final,)
 
-    Unknown = _SpecialForm(
-        'Unknown', doc="""
-        Special type indicating an unknown type.
-
-        - Unknown is compatible with every type.
-        - Unknown is less informative than all types.
-        """
-    )
-
-    class Unknown(_Final, _Immutable, _root=True):
+    class Unknown(*_Unknown_bases, _root=True):
         """Special type indicating an unknown type.
 
         - Unknown is compatible with every type.
@@ -66,6 +65,9 @@ else:
         """
 
         __slots__ = ()
+
+        def __call__(self, *args, **kwds):
+            raise TypeError(f"Cannot instantiate {self!r}")
 
         def __instancecheck__(self, obj):
             raise TypeError("Unknown cannot be used with isinstance().")
@@ -75,7 +77,7 @@ else:
 
 
 type_order = {
-    np.int64: (np.int,),
+    np.int64: (int,),
     np.bool_: (bool,),
     bool: (np.bool_,),
     int: (np.int64, float, complex),
@@ -201,6 +203,18 @@ def is_type(type_):
     )
 
 
+def _has_type_args(type_):
+    """
+    Check if a type is truly parameterized with concrete args.
+
+    In Python 3.14, bare Union has __args__ as a member_descriptor (not a
+    tuple), whereas parameterized Union[int, float].__args__ is a tuple.
+    This helper returns True only when __args__ is an actual tuple.
+    """
+    args = getattr(type_, '__args__', None)
+    return isinstance(args, tuple)
+
+
 def is_parametrical(type_):
     is_parametrical_generic = any(
         p(type_)
@@ -209,9 +223,14 @@ def is_parametrical(type_):
     ) and not getattr(type_, '_is_protocol', False)
 
     if is_parametrical_generic:
-        if NEW_TYPING:
+        if NEW_TYPING_37:
             return getattr(type_, '_special', False) or (
                 is_union_type(type_) and not hasattr(type_, '__args__')
+            )
+        elif NEW_TYPING_39:
+            return not (
+                _has_type_args(type_) or
+                hasattr(type_, '__parameters')
             )
         else:
             return type_.__args__ is None
@@ -227,12 +246,17 @@ def is_parameterized(type_):
     )
 
     if is_parametrical_generic:
-        if NEW_TYPING:
+        if NEW_TYPING_37:
             return not (
                 getattr(type_, '_special', False) or (
                     is_union_type(type_) and not hasattr(type_, '__args__')
                 ) or
                 getattr(type_, '_is_protocol', False)
+            )
+        elif NEW_TYPING_39:
+            return (
+                _has_type_args(type_) or
+                hasattr(type, '__parameters__')
             )
         else:
             return get_origin(type_) is not type_
@@ -289,14 +313,17 @@ def infer_type(value, deep=False, recursive_callback=None):
 
 def infer_type_iterables(value, deep=True, recursive_callback=infer_type):
     inner_type = Unknown
-    it = iter(value)
-    if not deep:
-        it = islice(it, 1)
+    if hasattr(value, "set_row_type"):
+        inner_type = value.set_row_type
+    else:
+        it = iter(value)
+        if not deep:
+            it = islice(it, 1)
 
-    for element in it:
-        inner_type = unify_types(
-            recursive_callback(element), inner_type
-        )
+        for element in it:
+            inner_type = unify_types(
+                recursive_callback(element), inner_type
+            )
     if isinstance(value, AbstractSet):
         return AbstractSet[inner_type]
     elif isinstance(value, Sequence):
@@ -327,9 +354,8 @@ def replace_type_variable(type_, type_hint, type_var=None):
             type_, get_args(type_hint), type_var=type_var
         )
         new_args = tuple(new_args)
-        origin = get_origin(type_hint)
         return replace_type_variable_fix_python36_37(
-            type_hint, origin, new_args
+            type_hint, new_args
         )
     elif isinstance(type_hint, Iterable):
         return [
@@ -340,11 +366,14 @@ def replace_type_variable(type_, type_hint, type_var=None):
         return type_hint
 
 
-def replace_type_variable_fix_python36_37(type_hint, origin, new_args):
-    if NEW_TYPING and isinstance(type_hint, _GenericAlias):
+def replace_type_variable_fix_python36_37(type_hint, new_args):
+    if (
+        (NEW_TYPING_37 or NEW_TYPING_39) and
+        isinstance(type_hint, _GenericAlias)
+    ):
         new_type = type_hint.copy_with(new_args)
     else:
-        new_type = origin[new_args]
+        new_type = get_origin(type_hint)[new_args]
     return new_type
 
 

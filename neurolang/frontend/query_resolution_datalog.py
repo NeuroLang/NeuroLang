@@ -5,6 +5,8 @@ Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
+from neurolang.datalog.magic_sets import magic_rewrite
+from neurolang.exceptions import UnsupportedProgramError
 from typing import (
     AbstractSet,
     Dict,
@@ -21,8 +23,10 @@ import pandas as pd
 
 from .. import datalog
 from .. import expressions as ir
-from ..datalog import aggregation
+from .. import logic
+from ..datalog.chase import Chase
 from ..datalog.constraints_representation import RightImplication
+from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
     TranslateToDatalogSemantics,
     reachable_code,
@@ -30,7 +34,6 @@ from ..datalog.expression_processing import (
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.standard_syntax import parser as datalog_parser
-from .datalog.natural_syntax import parser as nat_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
@@ -48,7 +51,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def __init__(
         self,
         program_ir: DatalogProgram,
-        chase_class: Type[aggregation.Chase] = aggregation.Chase,
+        chase_class: Type[Chase] = Chase,
     ) -> "QueryBuilderDatalog":
         """
         Query builder with query, Region, Neurosynth capabilities
@@ -58,9 +61,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         program_ir : DatalogProgram
             Datalog program's intermediate representation,
             usually blank
-        chase_class : Type[aggregation.Chase], optional
+        chase_class : Type[Chase], optional
             used to compute deterministic solutions,
-            by default aggregation.Chase
+            by default Chase
 
         Returns
         -------
@@ -74,7 +77,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
         self.datalog_parser = datalog_parser
-        self.nat_datalog_parser = nat_datalog_parser
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -194,28 +196,129 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.program_ir.walk(rule)
         return rule
 
-    def execute_datalog_program(self, code: str) -> None:
+    def execute_datalog_program(
+        self, code: str
+    ) -> Union[None, bool, RelationalAlgebraFrozenSet]:
         """
-        Execute a Datalog program in classical syntax
+        Execute a Datalog program in classical syntax.
+        If the program contains a query, in the form `ans(x) :- R(x)`,
+        then this query is executed against the program and the result is
+        returned. Otherwise returns None.
 
         Parameters
         ----------
         code : string
             Datalog program.
+
+        Examples
+        --------
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
+        >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
+        l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
+        >>> prog = '''
+        ...        l2(x, y) :- l(x, y), (x == y)
+        ...        ans(x) :- l2(x, y)
+        ...        '''
+        >>> with nl.environment as e:
+        ...     q = nl.execute_datalog_program(prog)
+        >>> q
+        ... q: typing.AbstractSet[typing.Tuple[int]] = [(2,)]
         """
         intermediate_representation = self.datalog_parser(code)
-        self.program_ir.walk(intermediate_representation)
+        queries = [
+            rule
+            for rule in intermediate_representation.formulas
+            if isinstance(rule, ir.Query)
+        ]
+        if len(queries) == 0:
+            self.program_ir.walk(intermediate_representation)
+            return
+        elif len(queries) == 1:
+            query = self.frontend_translator.walk(queries[0])
+            program = logic.Union(
+                [
+                    rule
+                    for rule in intermediate_representation.formulas
+                    if not isinstance(rule, ir.Query)
+                ]
+            )
+            self.program_ir.walk(program)
+            return self.query(query.head.arguments, query.body)
+        else:
+            raise UnsupportedProgramError(
+                "Only one query, in the form of ans(...) :- R(...) is "
+                "supported. Datalog program has more than one query rule: "
+                "{}".format(
+                    "\n".join(
+                        [
+                            str(self.frontend_translator.walk(q))
+                            for q in queries
+                        ]
+                    )
+                )
+            )
 
-    def execute_nat_datalog_program(self, code: str) -> None:
-        """Execute a natural language Datalog program in classical syntax
+    def compute_datalog_program_for_autocompletion(
+            self, code: str, autocompletion_code
+    ) -> Dict:
+        """
+        Computes a Datalog program in classical syntax.
+        Returns the next accepted tokens of the program.
 
         Parameters
         ----------
         code : string
             Datalog program.
+        autocompletion_code : str
+            Datalog program for autocompletion.
+
+        Examples
+        --------
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
+        >>> prog_complete = '''
+        ...        l2(x, y) :- l(x, y), (x == y)
+        ...        ans(x) :- l2(x, y)
+        ...        '''
+        >>> prog = '''
+        ...        l2(x, y) :- l(x, y), (x == y)
+        ...        ans(x) :-
+        ...        '''
+        >>> with nl.environment as e:
+        ...     q = nl.compute_datalog_program_for_autocompletion(prog_complete, prog)
+        >>> q
+        ... {
+        ...     'Signs': {'@', '∃', '('}, 'Numbers': set(), 'Text': set(), 'Operators': {'¬', '~'},
+        ...     'Cmd_identifier': set(), 'Functions': {'lambda'}, 'Identifier_regexp': set(),
+        ...     'Reserved words': {'exists', 'EXISTS'}, 'Boleans': {'⊤', '⊥', 'False', 'True'},
+        ...     'Expression symbols': set(), 'Python string': set(),
+        ...     'Strings': {'<identifier regular expression>', '<command identifier>'}, 'commands': set(),
+        ...     'functions': set(), 'base symbols': set(), 'query symbols': set()
+        ... }
         """
-        intermediate_representation = self.nat_datalog_parser(code)
-        self.program_ir.walk(intermediate_representation)
+        # All the following code before return is mandatory to retrieve
+        # the query symbols without actually running the query
+        intermediate_representation = self.datalog_parser(code)
+        queries = [
+            rule
+            for rule in intermediate_representation.formulas
+            if isinstance(rule, ir.Query)
+        ]
+        if len(queries) == 1:
+            self.frontend_translator.walk(queries[0])
+            program = logic.Union(
+                [
+                    rule
+                    for rule in intermediate_representation.formulas
+                    if not isinstance(rule, ir.Query)
+                ]
+            )
+            self.program_ir.walk(program)
+        else:
+            self.program_ir.walk(intermediate_representation)
+        res = self.datalog_parser(autocompletion_code, None, None, True)
+        return res
 
     def query(
         self, *args
@@ -224,7 +327,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Performs an inferential query on the database.
         There are three modalities
         1. If there is only one argument, the query returns `True` or `False`
-        depending on wether the query could be inferred.
+        depending on whether the query could be inferred.
         2. If there are two arguments and the first is a tuple of `fe.Symbol`,
         it returns the set of results meeting the query in the second argument.
         3. If the first argument is a predicate (e.g. `Q(x)`) it performs the
@@ -287,7 +390,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
-        [Internal usage - documentation for developpers]
+        [Internal usage - documentation for developers]
 
         Performs an inferential query. Will return as first output
         an AbstractSet with as many elements as solutions of the
@@ -364,22 +467,42 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             raise ValueError("Wrong head syntax")
         query_expression = self._declare_implication(new_head, predicate)
 
-        reachable_rules = reachable_code(query_expression, self.program_ir)
-        solution = self.chase_class(
-            self.program_ir, rules=reachable_rules
-        ).build_chase_solution()
+        try:
+            with self.scope:
+                magic_query_expression = self.magic_sets_rewrite_program(
+                    query_expression)
+                reachable_rules = reachable_code(
+                    magic_query_expression, self.program_ir)
+                solution = self.chase_class(
+                    self.program_ir, rules=reachable_rules
+                ).build_chase_solution()
+                self.program_ir.symbol_table = self.symbol_table.enclosing_scope
+                functor = magic_query_expression.consequent.functor
+        except InvalidMagicSetError:
+            reachable_rules = reachable_code(query_expression, self.program_ir)
+            solution = self.chase_class(
+                self.program_ir, rules=reachable_rules
+            ).build_chase_solution()
+            self.program_ir.symbol_table = self.symbol_table.enclosing_scope
 
         solution_set = solution.get(
-            functor.name, ir.Constant(WrappedRelationalAlgebraFrozenSet())
+            functor, ir.Constant(WrappedRelationalAlgebraFrozenSet())
         )
-        self.program_ir.symbol_table = self.symbol_table.enclosing_scope
 
         if isinstance(head, tuple):
+            row_type = solution_set.value.row_type
             solution_set = NamedRelationalAlgebraFrozenSet(
-                    tuple(s.expression.name for s in head),
-                    solution_set.value.unwrap()
-                )
+                tuple(s.expression.name for s in head),
+                solution_set.value.unwrap()
+            )
+            solution_set.row_type = row_type
         return solution_set, functor_orig
+
+    def magic_sets_rewrite_program(self, query_expression):
+        goal, mr = magic_rewrite(query_expression.consequent, self.program_ir)
+        self.program_ir.walk(mr)
+        new_query_expression = self.program_ir.symbol_table[goal].formulas[0]
+        return new_query_expression
 
     def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
@@ -433,7 +556,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         Creates an AbstractSet fe.Symbol containing the elements specified in
         the iterable with a List[Tuple[Any, ...]] format (see examples).
-        Typically used to crate extensional facts from existing databases
+        Typically used to create extensional facts from existing databases
 
         Parameters
         ----------
