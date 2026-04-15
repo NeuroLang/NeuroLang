@@ -2,8 +2,12 @@
 
 .. currentmodule:: neurolang
 
-User Guide
-==========
+API Reference
+=============
+
+Complete API documentation for all public NeuroLang modules.
+Generated automatically from docstrings.
+
 
 End-User Frontend
 -----------------
