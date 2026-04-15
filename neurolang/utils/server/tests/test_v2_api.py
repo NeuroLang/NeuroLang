@@ -311,3 +311,116 @@ class TestV1BackwardCompatibility:
         response = test_case.fetch("/v1/engines")
         # Should not return 404; the exact code depends on mock setup
         assert response.code != 404
+
+
+# ---------------------------------------------------------------------------
+# V2SquallHandler
+# ---------------------------------------------------------------------------
+
+
+def _make_squall_engine_and_nqm():
+    """Create a real (toy) engine backed by simple EDB facts and an NQM mock."""
+    from contextlib import contextmanager
+    from neurolang.frontend.probabilistic_frontend import RegionFrontendCPLogicSolver
+    from neurolang.expressions import Symbol
+
+    engine = RegionFrontendCPLogicSolver()
+    engine.add_extensional_predicate_from_tuples(
+        Symbol("item"), [("a",), ("b",), ("c",), ("d",)]
+    )
+    engine.add_extensional_predicate_from_tuples(
+        Symbol("item_count"), [("a", 0), ("a", 1), ("b", 2), ("c", 3)]
+    )
+
+    engine_set = MagicMock()
+
+    @contextmanager
+    def _ctx(timeout=None):
+        yield engine
+
+    engine_set.engine = _ctx
+
+    mock_nqm = MagicMock(spec=NeurolangQueryManager)
+    config_toy = MagicMock()
+    config_toy.key = "toy"
+    mock_nqm.configs = {config_toy: 1}
+    mock_nqm.engines = {"toy": engine_set}
+    mock_nqm.get_atlas.side_effect = KeyError("no atlas")
+    return mock_nqm
+
+
+@pytest.fixture
+def squall_test_case():
+    nqm = _make_squall_engine_and_nqm()
+    tc = TornadoV2TestCase(nqm)
+    tc.setUp()
+    yield tc
+    tc.tearDown()
+
+
+class TestV2SquallHandler:
+    def test_squall_parse_only_returns_200(self, squall_test_case):
+        """A rule-only program (no obtain) returns 200 with 'parsed' key."""
+        body = json.dumps({"program": "define as large every Item that has an item_count."})
+        resp = squall_test_case.fetch(
+            "/v2/squall/toy",
+            method="POST",
+            body=body,
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.code == 200
+        data = json.loads(resp.body)
+        assert data["status"] == "ok"
+        assert "parsed" in data["data"]
+
+    def test_squall_obtain_returns_results(self, squall_test_case):
+        """An 'obtain' program executes and returns rows in 'results'."""
+        body = json.dumps({"program": "obtain every Item that has an item_count."})
+        resp = squall_test_case.fetch(
+            "/v2/squall/toy",
+            method="POST",
+            body=body,
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.code == 200
+        data = json.loads(resp.body)
+        assert data["status"] == "ok", f"error: {data}"
+        results = data["data"]["results"]
+        assert isinstance(results, list)
+        assert len(results) == 1          # one obtain clause
+        rows = results[0]
+        assert isinstance(rows, list)
+        # Items a, b, c have item_count; d does not
+        row_values = {tuple(r) for r in rows}
+        assert row_values == {("a",), ("b",), ("c",)}
+
+    def test_squall_unknown_engine_returns_404(self, squall_test_case):
+        body = json.dumps({"program": "obtain every item."})
+        resp = squall_test_case.fetch(
+            "/v2/squall/does_not_exist",
+            method="POST",
+            body=body,
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.code == 404
+
+    def test_squall_empty_program_returns_400(self, squall_test_case):
+        body = json.dumps({"program": "   "})
+        resp = squall_test_case.fetch(
+            "/v2/squall/toy",
+            method="POST",
+            body=body,
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.code == 400
+
+    def test_squall_invalid_program_returns_error_status(self, squall_test_case):
+        body = json.dumps({"program": "this is not valid squall @@@@"})
+        resp = squall_test_case.fetch(
+            "/v2/squall/toy",
+            method="POST",
+            body=body,
+            headers={"Content-Type": "application/json"},
+        )
+        data = json.loads(resp.body)
+        assert data["status"] == "error"

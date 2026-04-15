@@ -668,11 +668,17 @@ class V2SquallHandler(JSONRequestHandler):
     """
 
     def post(self, engine_key: str) -> None:
-        from ...frontend.datalog.squall_syntax_lark import parser as squall_parser
+        from ...frontend.datalog.squall_syntax_lark import (
+            parser as squall_parser,
+            SquallProgram,
+        )
+        from ...frontend.datalog.squall import LogicSimplifier
+        from ...expressions import Symbol, Constant
+        from ...datalog import Implication
 
         nqm = self.application.nqm
-        known_keys = {config.key for config in nqm.configs.keys()}
-        if engine_key not in known_keys:
+        engine_set = nqm.engines.get(engine_key)
+        if engine_set is None:
             raise tornado.web.HTTPError(
                 status_code=404,
                 log_message=f"Engine '{engine_key}' not found.",
@@ -699,6 +705,72 @@ class V2SquallHandler(JSONRequestHandler):
             )
             return
 
-        self.write_json_reponse({
-            "parsed": repr(parsed),
-        })
+        simplifier = LogicSimplifier()
+
+        # Programs with no ``obtain`` clauses just return the logical form.
+        if not isinstance(parsed, SquallProgram):
+            self.write_json_reponse({
+                "parsed": repr(simplifier.walk(parsed)),
+            })
+            return
+
+        # Programs with ``obtain`` clauses: execute against the engine.
+        try:
+            with engine_set.engine() as engine:
+                if engine is None:
+                    raise tornado.web.HTTPError(
+                        status_code=503,
+                        log_message=f"Engine '{engine_key}' is temporarily unavailable.",
+                    )
+
+                from ...datalog.chase import Chase
+
+                # Walk all rule definitions into the engine.
+                for rule in parsed.rules:
+                    engine.walk(simplifier.walk(rule))
+
+                # For each obtain query (now a Query expression), convert to
+                # an Implication with a fresh head symbol, walk it in, then
+                # solve and collect results.
+                query_syms = []
+                for query_expr in parsed.queries:
+                    q_sym = Symbol.fresh()
+                    impl = Implication(q_sym(query_expr.head), query_expr.body)
+                    engine.walk(impl)
+                    query_syms.append(q_sym)
+
+                chase = Chase(engine)
+                solution = chase.build_chase_solution()
+
+                result_rows = []
+                for q_sym in query_syms:
+                    if q_sym in solution:
+                        rows = []
+                        for row in solution[q_sym].value:
+                            # Rows may be Constant-wrapped tuples of Constants
+                            if isinstance(row, Constant):
+                                inner = row.value
+                                rows.append([
+                                    c.value if isinstance(c, Constant) else c
+                                    for c in inner
+                                ])
+                            else:
+                                rows.append(list(row))
+                    else:
+                        rows = []
+                    result_rows.append(rows)
+
+                self.write_json_reponse({
+                    "parsed": repr(
+                        simplifier.walk(parsed.rules[0])
+                        if len(parsed.rules) == 1
+                        else Constant(True)
+                    ),
+                    "results": result_rows,
+                })
+        except tornado.web.HTTPError:
+            raise
+        except Exception as exc:
+            self.write_json_reponse(
+                {"error": str(exc)}, status="error"
+            )

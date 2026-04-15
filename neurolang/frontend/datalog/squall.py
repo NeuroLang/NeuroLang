@@ -4,8 +4,10 @@ Logic simplifier for SQUALL parsed expressions.
 Collapses nested conjunctions, removes trivial operations,
 and normalizes quantifier expressions produced by the SQUALL parser.
 """
+from ...datalog.aggregation import AggregationApplication
+from ...datalog.expressions import AggregationApplication as _AggApp
 from ...expression_walker import ExpressionWalker, add_match
-from ...expressions import Constant, FunctionApplication, Symbol
+from ...expressions import Constant, FunctionApplication, Query, Symbol
 from ...logic import (
     Conjunction,
     ExistentialPredicate,
@@ -17,6 +19,7 @@ from ...logic.transformations import (
     CollapseConjunctionsMixin,
     RemoveTrivialOperationsMixin,
 )
+from ...probabilistic.expressions import ProbabilisticFact
 
 
 class LogicSimplifier(
@@ -87,6 +90,35 @@ class LogicSimplifier(
         body = self.walk(expression.body)
         if body != expression.body:
             return UniversalPredicate(expression.head, body)
+        return expression
+
+    @add_match(_AggApp)
+    def walk_aggregation_application(self, expression):
+        new_args = tuple(self.walk(a) for a in expression.args)
+        if new_args != expression.args:
+            return _AggApp(expression.functor, new_args)
+        return expression
+
+    @add_match(
+        Conjunction,
+        lambda e: any(f == Constant(True) for f in e.formulas),
+    )
+    def remove_true_from_conjunction(self, expression):
+        """Remove Constant(True) conjuncts, e.g. from 'has a noun' clauses."""
+        remaining = tuple(
+            f for f in expression.formulas if f != Constant(True)
+        )
+        if not remaining:
+            return Constant(True)
+        if len(remaining) == 1:
+            return self.walk(remaining[0])
+        return self.walk(Conjunction(remaining))
+
+    @add_match(Query)
+    def walk_query(self, expression):
+        body = self.walk(expression.body)
+        if body != expression.body:
+            return Query(expression.head, body)
         return expression
 
     @add_match(FunctionApplication)

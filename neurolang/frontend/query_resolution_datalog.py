@@ -33,6 +33,7 @@ from ..datalog.expression_processing import (
 )
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
+from .datalog.squall_syntax_lark import parser as squall_parser, SquallProgram
 from .datalog.standard_syntax import parser as datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
@@ -258,6 +259,85 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     )
                 )
             )
+
+    def execute_squall_program(
+        self, code: str
+    ) -> Union[None, NamedRelationalAlgebraFrozenSet, Dict[str, NamedRelationalAlgebraFrozenSet]]:
+        """
+        Execute a SQUALL (controlled English) program.
+
+        Parses *code* as a SQUALL program and walks the resulting rules into
+        the engine.  If the program contains ``obtain`` clauses the
+        corresponding queries are executed and their results returned.
+
+        Parameters
+        ----------
+        code : str
+            SQUALL program text.  May contain any mixture of
+            ``define as …`` rule definitions and ``obtain …`` queries.
+
+        Returns
+        -------
+        None
+            When *code* contains only rule definitions (no ``obtain``).
+        NamedRelationalAlgebraFrozenSet
+            When *code* contains exactly one ``obtain`` clause.
+        Dict[str, NamedRelationalAlgebraFrozenSet]
+            When *code* contains two or more ``obtain`` clauses, keyed
+            ``"obtain_0"``, ``"obtain_1"``, … in declaration order.
+
+        Examples
+        --------
+        >>> from neurolang.frontend import NeurolangPDL
+        >>> nl = NeurolangPDL()
+        >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+        >>> nl.execute_squall_program(
+        ...     "define as Active every person that plays."
+        ... ) is None
+        True
+        >>> result = nl.execute_squall_program("obtain every Person that plays.")
+        >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+        ['alice']
+        """
+        parsed = squall_parser(code)
+
+        # Rules-only (no obtain) — backward-compat: returns Union/Implication
+        if not isinstance(parsed, SquallProgram):
+            self.program_ir.walk(parsed)
+            return None
+
+        # Walk all rule definitions into the engine.
+        for rule in parsed.rules:
+            self.program_ir.walk(rule)
+
+        if not parsed.queries:
+            return None
+
+        # For each obtain query, introduce a fresh head symbol and walk in
+        # the corresponding Implication so Chase can compute the result set.
+        query_entries = []
+        for i, q in enumerate(parsed.queries):
+            h = ir.Symbol.fresh()
+            self.program_ir.walk(
+                datalog.Implication(h(q.head), q.body)
+            )
+            query_entries.append((f"obtain_{i}", h))
+
+        solution = self.chase_class(self.program_ir).build_chase_solution()
+
+        results = {}
+        for key, h in query_entries:
+            col_names = self.predicate_parameter_names(h.name)
+            ra = NamedRelationalAlgebraFrozenSet(
+                col_names, solution[h].value.unwrap()
+            )
+            ra.row_type = solution[h].value.row_type
+            results[key] = ra
+
+        if len(results) == 1:
+            return results["obtain_0"]
+        return results
 
     def compute_datalog_program_for_autocompletion(
             self, code: str, autocompletion_code

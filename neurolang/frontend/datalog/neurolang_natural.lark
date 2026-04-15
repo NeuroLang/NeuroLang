@@ -35,7 +35,7 @@ rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
 
 rule_body2_cond : det ng1 _CONDITIONED _TO det ng1
 
-PROBABLY : _PROBABLY
+PROBABLY : _PROBABLY | _LIKELY
 _BREAK : "," | ";"
 
 ?s : bool{s_b}
@@ -80,8 +80,12 @@ app : _IN number"D" -> app_dimension
 dims : dim                    -> dims_base
      | dim _CONJUNCTION dims  -> dims_rec
 
-dim : _PER ng2      -> dim_ng2
-    | _PER npc{THE} -> dim_npc
+dim : _PER ng2              -> dim_ng2
+    | _PER npc{THE}         -> dim_npc
+    | agg_func _OF npc{THE} -> dim_agg
+
+agg_func : AGG_FUNC
+AGG_FUNC : "count" | "sum" | "max" | "min" | "average"
 
 ?rel : bool{rel_b}
      | _DASH bool{rel_b} _DASH
@@ -112,8 +116,12 @@ term : label
       | aux{have} vphave  -> vp_aux
       | aux{do} vpdo      -> vp_aux
 
-vpdo : verb1 [ cp ]         -> vpdo_v1
-     | verbn opn -> vpdo_vn
+vpdo : PROBABLY verb1 [ cp ]                  -> vpdo_prob_v1
+     | PROBABLY verbn opn                     -> vpdo_prob_vn
+     | verb1 [ cp ] _WITH _PROBABILITY number -> vpdo_explicit_prob_v1
+     | verbn opn _WITH _PROBABILITY number    -> vpdo_explicit_prob_vn
+     | verb1 [ cp ]                           -> vpdo_v1
+     | verbn opn                              -> vpdo_vn
 
 vpbe : "there"       -> vpbe_there
      | rel           -> vpbe_rel
@@ -277,6 +285,7 @@ _OR : "or"
 _PER : "per"
 _PROBABILITY : "probability"
 _PROBABLY : "probably"
+_LIKELY : "likely"
 _SOME : "some"
 _SUCH : "such"
 _THAN : "than"
@@ -296,9 +305,9 @@ _WHOM : "whom"
 _WHOSE : "whose"
 
 
-LOWER_NAME : /(?!(\b(a|all|an|and|are|as|by|conditioned|define|defines|do|does|did|every|equal|from|for|greater|given|obtain|has|hasn't|have|had|if|in|is|isn't|lower|no|not|of|or|per|probability|probably|some|such|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
-UPPER_NAME : /(?!(\b(a|all|an|and|are|as|by|conditioned|define|defines|do|does|did|every|equal|from|for|greater|given|obtain|has|hasn't|have|had|if|in|is|isn't|lower|no|not|of|or|per|probability|probably|some|such|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
-NAME : /(?!(\b(a|all|an|and|are|as|by|conditioned|define|defines|do|does|did|every|equal|from|for|greater|given|obtain|has|hasn't|have|had|if|in|is|isn't|lower|no|not|of|or|per|probability|probably|some|such|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-zA-Z_]\w*/
+LOWER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
+UPPER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
+NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-zA-Z_]\w*/
 UPPER_NAME_QUOTED : /`[A-Z][^`]*`/
 LOWER_NAME_QUOTED : /`[a-z][^`]*`/
 STRING : /[^']+/
