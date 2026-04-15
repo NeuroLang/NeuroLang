@@ -51,7 +51,7 @@ which we formalise in Python as:
 the full example is in our gallery in :ref:`sphx_glr_auto_examples_plot_load_destrieux_left_hemisphere_gyri.py`.
 
 
-Negation can also be used in Neurolang. For instance
+Negation can also be used in NeuroLang. For instance
 
 
 Disjunctions in Logic Programming
