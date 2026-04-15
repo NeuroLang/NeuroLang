@@ -57,10 +57,11 @@ dev = [
     "problog"
 ]
 doc = [
-    "sphinx>=4.2.0",
-    "sphinx_bootstrap_theme",
+    "sphinx>=7.0",
+    "pydata-sphinx-theme>=0.15",
+    "sphinx-design>=0.5",
     "sphinx-gallery",
-    "numpydoc",
+    "numpydoc"
 ]
 server = [
     "tornado",

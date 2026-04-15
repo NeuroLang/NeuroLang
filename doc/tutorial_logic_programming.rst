@@ -2,9 +2,10 @@ NeuroLang for Logic Programmers
 ===============================
 
 
-NeuroLang is implemented over the basis of Datalog+/- with probabilistic extensions. In that there are two main frontend which might came useful: the python_embedded_ frontend and the datalog_ frontend
+NeuroLang is implemented on top of Datalog+/- with probabilistic extensions.
+The primary way to use it is the :ref:`python_embedded` Python-embedded frontend.
 
-.. python_embedded_
+.. _python_embedded:
 
 Using Datalog Embedded in Python
 --------------------------------
@@ -23,7 +24,7 @@ Then, we can add some facts (connected) and rules (reachable)::
   ...   e.reachable[e.x, e.y] = e.connected[e.x, e.y]
   ...   e.reachable[e.x, e.y] = e.reachable[e.x, e.z] & e.connected[e.z, e.y]
 
-please note how the environment :python:`e` allows for the creation of logic programming symbols
+please note how the environment ``e`` allows for the creation of logic programming symbols
 dynamically.
 
 With this we now have program loaded in memory which can be explored as::
@@ -57,6 +58,11 @@ from a tuple iterable or a `numpy.array` as follows::
 Including Aggregations and Builtin Functions
 --------------------------------------------
 
+.. note::
+
+   The aggregation API is under active development. The examples below
+   illustrate the intended syntax.
+
 Suppose that now we want to obtain the number of destinations
 reachable by each starting point. For this we need a new aggregation
 function that counts the number of distinct elements. Specifically::
@@ -89,7 +95,7 @@ we can then count all arrivals for starts `0` and `1`::
 Adding Constraints and Open Knowledge Rules
 -------------------------------------------
 
-Neurolang also supports tuple-generating dependencies (TGDs).
+NeuroLang also supports tuple-generating dependencies (TGDs).
 We can say that a person is a parent if they have a child::
 
   >>> from neurolang.frontend import NeurolangPDL
