@@ -92,6 +92,7 @@ from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
+from .datalog.squall import ResolveInvertedFunctionApplicationMixin
 
 
 class RegionFrontendCPLogicSolver(
@@ -111,6 +112,7 @@ class RegionFrontendCPLogicSolver(
     DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
     TypedSymbolTableMixin,
+    ResolveInvertedFunctionApplicationMixin,
     ExpressionBasicEvaluator,
 ):
     pass
