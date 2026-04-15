@@ -575,3 +575,23 @@ def test_lark_semantics_aggregation(datalog_simple):
     solution = chase.build_chase_solution()["max_items"].value
     expected = set([('a', 1), ('b', 2), ('c', 3)])
     assert solution == expected
+
+
+def test_inverted_function_application_ir_node():
+    """InvertedFunctionApplication reverses args when walked through mixin."""
+    from neurolang.frontend.datalog.squall import (
+        InvertedFunctionApplication,
+        ResolveInvertedFunctionApplicationMixin,
+    )
+    from neurolang.expression_walker import ExpressionWalker
+
+    class _Resolver(ResolveInvertedFunctionApplicationMixin, ExpressionWalker):
+        pass
+
+    f = Symbol("reports")
+    s = Symbol("s")
+    x = Symbol("x")
+    # Surface order: (s, x) — after resolution should become (x, s)
+    inv = InvertedFunctionApplication(f, (s, x))
+    result = _Resolver().walk(inv)
+    assert result == f(x, s), f"Expected reports(x, s), got {result}"

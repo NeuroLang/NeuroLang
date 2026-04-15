@@ -6,7 +6,7 @@ and normalizes quantifier expressions produced by the SQUALL parser.
 """
 from ...datalog.aggregation import AggregationApplication
 from ...datalog.expressions import AggregationApplication as _AggApp
-from ...expression_walker import ExpressionWalker, add_match
+from ...expression_walker import ExpressionWalker, PatternWalker, add_match
 from ...expressions import Constant, FunctionApplication, Query, Symbol
 from ...logic import (
     Conjunction,
@@ -20,6 +20,39 @@ from ...logic.transformations import (
     RemoveTrivialOperationsMixin,
 )
 from ...probabilistic.expressions import ProbabilisticFact
+
+
+
+class InvertedFunctionApplication(FunctionApplication):
+    """
+    Intermediate IR node emitted by the SQUALL transformer for transitive
+    verbs prefixed with '~'.  Carries the same functor and args as a
+    FunctionApplication built with the *surface* argument order
+    (subject first, object(s) after), but signals that the order must be
+    reversed before the rule enters the engine.
+
+    Example
+    -------
+    SQUALL: ``every study ~reports a voxel``
+    Transformer emits: ``InvertedFunctionApplication(reports, (study, voxel))``
+    Mixin resolves to:  ``reports(voxel, study)``
+
+    Resolved by ResolveInvertedFunctionApplicationMixin.
+    """
+
+
+class ResolveInvertedFunctionApplicationMixin(PatternWalker):
+    """
+    Rewrites ``InvertedFunctionApplication(f, (a, b, …))`` to
+    ``f(…, b, a)`` (fully reversed argument tuple) at walk time.
+
+    Must appear before ``ExpressionBasicEvaluator`` in any solver MRO
+    that processes SQUALL output containing ``~`` verbs.
+    """
+
+    @add_match(InvertedFunctionApplication)
+    def resolve_inverted(self, expr):
+        return expr.functor(*reversed(expr.args))
 
 
 class LogicSimplifier(
