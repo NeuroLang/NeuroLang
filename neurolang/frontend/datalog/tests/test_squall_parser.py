@@ -18,7 +18,7 @@ from ....logic import (
     UniversalPredicate
 )
 from ....probabilistic.expressions import ProbabilisticPredicate
-from ..squall import LogicSimplifier
+from ..squall import InvertedFunctionApplication, LogicSimplifier
 from ..squall_syntax_lark import parser
 from ..standard_syntax import ExternalSymbol
 from ...probabilistic_frontend import RegionFrontendCPLogicSolver, Chase
@@ -113,7 +113,7 @@ def verb1():
 @pytest.fixture(scope="module")
 def verb2():
     return [
-        ("~sings", lambda x, y: Symbol("sings")(x, y))
+        ("~sings", lambda x, y: InvertedFunctionApplication(Symbol("sings"), (x, y)))
     ]
 
 
@@ -158,8 +158,8 @@ def nouns_1():
 @pytest.fixture(scope="module")
 def nouns_2():
     return [
-        ("~author", Symbol("author")),
-        ("~publication_year", Symbol("publication_year"))
+        ("~author", lambda x, y: InvertedFunctionApplication(Symbol("author"), (x, y))),
+        ("~publication_year", lambda x, y: InvertedFunctionApplication(Symbol("publication_year"), (x, y)))
     ]
 
 
@@ -603,3 +603,50 @@ def test_inverted_function_application_ir_node():
     inv3 = InvertedFunctionApplication(f, (a, b, c))
     result3 = _Resolver().walk(inv3)
     assert result3 == f(c, b, a), f"Expected reports(c, b, a), got {result3}"
+
+
+def test_squall_transitive_inv_argument_order():
+    """~verb in a relative clause produces InvertedFunctionApplication in the IR."""
+    from neurolang.frontend.datalog.squall import InvertedFunctionApplication
+
+    # "define as authored every Paper ?p that a Person ~author ?p."
+    # The ~author relative clause: a Person ~author [the paper]
+    # transitive_inv fires → _InverseVerbSymbol(author)
+    # Surface call: author(person_var, paper_var) → InvertedFunctionApplication
+    result = parser(
+        "define as authored every Paper ?p that a Person ~author ?p."
+    )
+    assert isinstance(result, Implication), f"Expected Implication, got {type(result)}"
+
+    # Recursive search for InvertedFunctionApplication nodes (with cycle guard)
+    import neurolang.frontend.datalog.squall as sq
+
+    found = []
+    seen = set()
+
+    def _search(obj):
+        oid = id(obj)
+        if oid in seen:
+            return
+        seen.add(oid)
+        if isinstance(obj, sq.InvertedFunctionApplication):
+            found.append(obj)
+        if hasattr(obj, '__dict__'):
+            for v in obj.__dict__.values():
+                if hasattr(v, '__iter__') and not isinstance(v, (str, bytes)):
+                    try:
+                        for item in v:
+                            _search(item)
+                    except TypeError:
+                        pass
+                elif hasattr(v, '__dict__'):
+                    _search(v)
+
+    _search(result)
+    assert found, (
+        f"Expected InvertedFunctionApplication in IR, but none found.\n"
+        f"Full IR: {repr(result)}"
+    )
+    assert any(n.functor == Symbol("author") for n in found), (
+        f"Expected InvertedFunctionApplication with functor 'author', got: {found}"
+    )

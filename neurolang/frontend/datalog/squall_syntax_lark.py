@@ -46,8 +46,9 @@ Known stubs (parsed but not semantically implemented)
 - **``rule_body2_cond``** — present in the grammar but has no transformer
   handler; falls through to ``_default`` and returns a raw list.
 - **Inverse transitive prefix ``~``** — ``transitive_inv`` and
-  ``transitive_multiple_inv`` set ``sym._inverse = True`` but nothing reads
-  that flag; argument-order inversion is not applied.
+  ``transitive_multiple_inv`` now return ``_InverseVerbSymbol`` instances
+  which emit ``InvertedFunctionApplication`` when called; argument-order
+  inversion is applied by ``ResolveInvertedFunctionApplicationMixin``.
 
 References
 ----------
@@ -71,6 +72,7 @@ from ...expressions import (
 )
 from ...logic import Disjunction, ExistentialPredicate, UniversalPredicate
 from ...probabilistic.expressions import ProbabilisticFact
+from .squall import InvertedFunctionApplication
 
 
 class SquallProgram:
@@ -131,6 +133,24 @@ _AGG_FUNC_MAP = {
     "min":     Constant(min),
     "average": Constant(np.mean),
 }
+
+
+class _InverseVerbSymbol:
+    """
+    Thin callable wrapper returned by ``transitive_inv`` /
+    ``transitive_multiple_inv``.  Calling it with ``(subject, *objects)``
+    produces an :class:`InvertedFunctionApplication` so that
+    :class:`ResolveInvertedFunctionApplicationMixin` can reverse the argument
+    order at walk time, without any changes to ``_apply_ops`` or ``rel_vpn``.
+    """
+
+    def __init__(self, symbol):
+        self.symbol = symbol
+        self.name = symbol.name  # lets downstream code treat it like a Symbol
+
+    def __call__(self, *args):
+        return InvertedFunctionApplication(self.symbol, args)
+
 
 class SquallTransformer(Transformer):
     """
@@ -994,9 +1014,11 @@ class SquallTransformer(Transformer):
         return Symbol(name)
 
     def transitive_inv(self, args):
-        sym = args[0] if isinstance(args[0], Symbol) else Symbol(args[0].value)
-        sym._inverse = True
-        return sym
+        token = args[0]
+        name = token.value if hasattr(token, 'value') else token.name
+        if name.startswith('`') and name.endswith('`'):
+            name = name[1:-1]
+        return _InverseVerbSymbol(Symbol(name))
 
     def transitive_multiple(self, args):
         if isinstance(args[0], Symbol):
@@ -1009,9 +1031,11 @@ class SquallTransformer(Transformer):
         return Symbol(name)
 
     def transitive_multiple_inv(self, args):
-        sym = args[0] if isinstance(args[0], Symbol) else Symbol(args[0].value)
-        sym._inverse = True
-        return sym
+        token = args[0]
+        name = token.value if hasattr(token, 'value') else token.name
+        if name.startswith('`') and name.endswith('`'):
+            name = name[1:-1]
+        return _InverseVerbSymbol(Symbol(name))
 
     def upper_identifier(self, args):
         name = args[0].value
