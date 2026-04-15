@@ -95,7 +95,7 @@ we can then count all arrivals for starts `0` and `1`::
 Adding Constraints and Open Knowledge Rules
 -------------------------------------------
 
-Neurolang also supports tuple-generating dependencies (TGDs).
+NeuroLang also supports tuple-generating dependencies (TGDs).
 We can say that a person is a parent if they have a child::
 
   >>> from neurolang.frontend import NeurolangPDL
