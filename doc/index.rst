@@ -88,3 +88,4 @@ a guided walkthrough.
    tutorial_logic_programming
    changelog
    contributing
+   authors
