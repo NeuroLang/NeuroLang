@@ -9,6 +9,7 @@ on:
 jobs:
   build-docs:
     runs-on: ubuntu-latest
+    python-version: "3.14"
 
     steps:
       - name: Checkout repository
