@@ -370,6 +370,8 @@ def test_squall_quantified_np_nv2(
 
 
 def test_squall_voxel_activation():
+    from neurolang.frontend.datalog.squall import InvertedFunctionApplication
+
     query = "every voxel (?x; ?y; ?z) that a study ?s ~reports activates"
     res = parser(f"squall {query}")
     x = Symbol("x")
@@ -393,11 +395,10 @@ def test_squall_voxel_activation():
                         ExistentialPredicate(
                             s,
                             Conjunction((
-                                reports(s, x, y, z),
+                                InvertedFunctionApplication(reports, (s, x, y, z)),
                                 study(s)
                             ))
                         )
-
                     ))
                 )
             )
