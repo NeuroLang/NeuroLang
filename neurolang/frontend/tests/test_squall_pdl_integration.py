@@ -153,3 +153,34 @@ def test_execute_squall_aggregation(nl_counts):
     # Build set of (item, max_count) pairs from whatever columns are present
     rows = set(map(tuple, df.values.tolist()))
     assert rows == {("a", 1), ("b", 2), ("c", 3)}
+
+
+@pytest.fixture
+def nl_author():
+    """NeurolangPDL with paper/author facts stored as author(paper, person)."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [("p1",), ("p2",), ("p3",)], name="paper"
+    )
+    engine.add_tuple_set(
+        [("alice",), ("bob",)], name="person"
+    )
+    engine.add_tuple_set(
+        [("p1", "alice"), ("p2", "alice"), ("p3", "bob")], name="author"
+    )
+    return engine
+
+
+def test_execute_squall_tilde_inversion_end_to_end(nl_author):
+    """~author reverses argument order so author(paper, person) is matched correctly.
+
+    'obtain every Paper that a Person ~author.' means:
+      - for each paper p, there exists a person x such that author(p, x)
+      - ~author means the SQUALL subject (paper) is arg[0] of the stored relation
+    Expected: all three papers are returned.
+    """
+    result = nl_author.execute_squall_program(
+        "obtain every Paper that a Person ~author."
+    )
+    rows = set(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    assert rows == {"p1", "p2", "p3"}
