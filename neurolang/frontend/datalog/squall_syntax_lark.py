@@ -340,6 +340,29 @@ class SquallTransformer(Transformer):
         if det is None or ng1 is None:
             return ('_rule_body', ([], Constant(True)))
 
+        # Handle aggregation ng1 (e.g. "every Create_overlay of the Prob_map")
+        agg_info = getattr(ng1, '_agg_info', None)
+        if agg_info is not None:
+            agg_func_const, npc_cps, per_vars = agg_info
+            captured = []
+
+            def capturing_cont(v, _cap=captured):
+                _cap.append(v)
+                return Constant(True)
+
+            npc_formula = npc_cps(capturing_cont)
+            if captured and isinstance(captured[0], Symbol):
+                q = captured[0]
+            elif isinstance(npc_formula, ExistentialPredicate):
+                q = npc_formula.head
+            else:
+                q = Symbol.fresh()
+
+            agg_expr = _AggApp(agg_func_const, (q,))
+            body_formula = npc_formula
+            head_args = [agg_expr]
+            return ('_rule_body', (head_args, body_formula))
+
         # Get var_info from ng1 to extract the variable
         var_info = getattr(ng1, '_var_info', None)
         if var_info is not None:
@@ -664,19 +687,26 @@ class SquallTransformer(Transformer):
         # (pattern: "every Max of the Quantity where ?i item_count per ?i"),
         # produce a tagged ng1 with _agg_info so det_every can build
         # AggregationApplication in the head.
-        if agg_func_from_noun is not None and npc is not None:
-            def ng_agg(x):
-                # Fallback: used only if det_every does not intercept _agg_info.
-                # Introduce a fresh aggregation variable and build body from npc.
-                q = Symbol.fresh()
-                body_formula = npc(lambda v: Constant(True))
-                agg_expr = _AggApp(agg_func_from_noun, (q,))
-                return agg_expr
+        if npc is not None:
+            # Enter aggregation path whenever "noun OF the npc" is present.
+            # Built-in names (count/sum/max/min/average) map to Python callables;
+            # arbitrary names become Symbol(noun_name) — TranslateToLogicWithAggregation
+            # promotes any FunctionApplication in a rule head to AggregationApplication.
+            agg_func = (
+                agg_func_from_noun if agg_func_from_noun is not None
+                else (Symbol(noun_name) if noun_name else None)
+            )
+            if agg_func is not None:
+                def ng_agg(x):
+                    # Fallback body — only used if det_every does not intercept _agg_info.
+                    q = Symbol.fresh()
+                    npc(lambda v: Constant(True))
+                    return _AggApp(agg_func, (q,))
 
-            ng_agg._agg_info = (agg_func_from_noun, npc, list(per_vars))
-            if app is not None:
-                ng_agg._var_info = app
-            return ng_agg
+                ng_agg._agg_info = (agg_func, npc, list(per_vars))
+                if app is not None:
+                    ng_agg._var_info = app
+                return ng_agg
 
         if agg_specs:
             agg_func_const, agg_npc = agg_specs[0]

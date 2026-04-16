@@ -741,3 +741,25 @@ def test_rule_op_marg_produces_prob_query_in_head():
         f"Expected ProbabilisticQuery(PROB, ...) in head args, got: {head_args}"
     )
 
+
+
+def test_ng1_agg_npc_arbitrary_functor():
+    """'every Custom_func of the Relation' uses Symbol as aggregation functor."""
+    from neurolang.expressions import Symbol, FunctionApplication
+    from neurolang.datalog.expressions import AggregationApplication
+
+    # Non-builtin aggregation function: create_overlay is not in _AGG_FUNC_MAP
+    result = parser(
+        "define as Result every Create_overlay of the Prob_map."
+    )
+    assert isinstance(result, Implication), f"Expected Implication, got {type(result)}"
+    head_args = result.consequent.args
+    assert len(head_args) >= 1, f"Expected at least 1 head arg, got: {head_args}"
+    # The arg should be a FunctionApplication with functor Symbol("create_overlay")
+    agg_arg = head_args[0]
+    assert isinstance(agg_arg, (FunctionApplication, AggregationApplication)), (
+        f"Expected FunctionApplication/AggregationApplication, got {type(agg_arg)}"
+    )
+    assert agg_arg.functor == Symbol("create_overlay"), (
+        f"Expected functor Symbol('create_overlay'), got {agg_arg.functor}"
+    )
