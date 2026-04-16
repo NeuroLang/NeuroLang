@@ -71,7 +71,7 @@ from ...expressions import (
     Symbol,
 )
 from ...logic import Disjunction, ExistentialPredicate, UniversalPredicate
-from ...probabilistic.expressions import ProbabilisticFact
+from ...probabilistic.expressions import Condition, ProbabilisticFact
 from .squall import InvertedFunctionApplication
 
 
@@ -326,16 +326,32 @@ class SquallTransformer(Transformer):
         return ('_rule_body', (head_args, body_formula))
 
     def rule_body1_cond_prior(self, args):
-        det = args[0]
-        ng1 = args[1]
-        s = args[2]
-        return s
+        # Grammar: det ng1 _CONDITIONED _TO s
+        # args = [det, ng1, s]
+        det, ng1, s = args[0], args[1], args[2]
+        var_info = getattr(ng1, '_var_info', None)
+        x = var_info if var_info is not None else Symbol.fresh()
+        conditioned_body = ng1(x)
+        return ('_rule_body', ([x], Condition(conditioned_body, s)))
 
     def rule_body1_cond_posterior(self, args):
-        s = args[0]
-        det = args[1]
-        ng1 = args[2]
-        return s
+        # Grammar: s _CONDITIONED _TO det ng1
+        # args = [s, det, ng1]
+        s, det, ng1 = args[0], args[1], args[2]
+        var_info = getattr(ng1, '_var_info', None)
+        x = var_info if var_info is not None else Symbol.fresh()
+        conditioned_body = ng1(x)
+        return ('_rule_body', ([x], Condition(s, conditioned_body)))
+
+    def rule_body2_cond(self, args):
+        # Grammar: det ng1_left _CONDITIONED _TO det ng1_right
+        # args = [det1, ng1_left, det2, ng1_right]
+        _, ng1_left, _, ng1_right = args
+        var_info = getattr(ng1_left, '_var_info', None)
+        x = var_info if var_info is not None else Symbol.fresh()
+        conditioned_body = ng1_left(x)
+        conditioning_body = ng1_right(x)
+        return ('_rule_body', ([x], Condition(conditioned_body, conditioning_body)))
 
     # ---- Sentences ----
 

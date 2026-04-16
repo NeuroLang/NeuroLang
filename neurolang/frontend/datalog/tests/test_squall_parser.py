@@ -634,3 +634,41 @@ def test_squall_transitive_inv_argument_order():
     assert any(n.functor == Symbol("author") for n in collector.found), (
         f"Expected InvertedFunctionApplication with functor 'author', got: {collector.found}"
     )
+
+
+def test_squall_conditioned_prior_produces_condition_node():
+    """rule_body1_cond_prior returns an Implication with Condition antecedent."""
+    from neurolang.probabilistic.expressions import Condition
+
+    # Grammar: define as probably verb1 rule_body1_cond_prior
+    # rule_body1_cond_prior: det ng1 CONDITIONED TO s
+    # verb1 is intransitive (upper_identifier); s must be a full sentence (np vp)
+    result = parser(
+        "define as probably Published every Voxel conditioned to every Study activates."
+    )
+    assert isinstance(result, Implication), (
+        f"Expected Implication, got {type(result).__name__}"
+    )
+    assert isinstance(result.antecedent, Condition), (
+        f"Expected Condition in antecedent, got {type(result.antecedent).__name__}: "
+        f"{repr(result.antecedent)}"
+    )
+
+
+def test_squall_conditioned_posterior_produces_condition_node():
+    """rule_body1_cond_posterior returns an Implication with Condition antecedent."""
+    from neurolang.probabilistic.expressions import Condition
+
+    # Grammar: define as probably verb1 rule_body1_cond_posterior
+    # rule_body1_cond_posterior: s CONDITIONED TO det ng1
+    # verb1 is intransitive (upper_identifier); s must be a full sentence (np vp)
+    result = parser(
+        "define as probably Published every Study activates conditioned to every Voxel."
+    )
+    assert isinstance(result, Implication), (
+        f"Expected Implication, got {type(result).__name__}"
+    )
+    assert isinstance(result.antecedent, Condition), (
+        f"Expected Condition in antecedent, got {type(result.antecedent).__name__}: "
+        f"{repr(result.antecedent)}"
+    )
