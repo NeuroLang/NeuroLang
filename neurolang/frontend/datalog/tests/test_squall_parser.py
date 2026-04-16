@@ -653,6 +653,18 @@ def test_squall_conditioned_prior_produces_condition_node():
         f"Expected Condition in antecedent, got {type(result.antecedent).__name__}: "
         f"{repr(result.antecedent)}"
     )
+    cond = result.antecedent
+    # In the prior form (det ng1 CONDITIONED TO s):
+    #   conditioned = the NP predicate (Voxel)
+    #   conditioning = the sentence (Study activates)
+    cond_syms = {s.name.lower() for s in cond.conditioned._symbols}
+    ing_syms = {s.name.lower() for s in cond.conditioning._symbols}
+    assert "voxel" in cond_syms, (
+        f"Expected 'voxel' in conditioned (first arg), got: {repr(cond.conditioned)}"
+    )
+    assert "study" in ing_syms or "activates" in ing_syms, (
+        f"Expected 'study' or 'activates' in conditioning (second arg), got: {repr(cond.conditioning)}"
+    )
 
 
 def test_squall_conditioned_posterior_produces_condition_node():
@@ -671,4 +683,16 @@ def test_squall_conditioned_posterior_produces_condition_node():
     assert isinstance(result.antecedent, Condition), (
         f"Expected Condition in antecedent, got {type(result.antecedent).__name__}: "
         f"{repr(result.antecedent)}"
+    )
+    cond = result.antecedent
+    # In the posterior form (s CONDITIONED TO det ng1):
+    #   conditioned = the sentence (Study activates)
+    #   conditioning = the NP predicate (Voxel)
+    cond_syms = {s.name.lower() for s in cond.conditioned._symbols}
+    ing_syms = {s.name.lower() for s in cond.conditioning._symbols}
+    assert "study" in cond_syms or "activates" in cond_syms, (
+        f"Expected 'study' or 'activates' in conditioned (first arg), got: {repr(cond.conditioned)}"
+    )
+    assert "voxel" in ing_syms, (
+        f"Expected 'voxel' in conditioning (second arg), got: {repr(cond.conditioning)}"
     )
