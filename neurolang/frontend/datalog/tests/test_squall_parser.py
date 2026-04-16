@@ -696,3 +696,26 @@ def test_squall_conditioned_posterior_produces_condition_node():
     assert "voxel" in ing_syms, (
         f"Expected 'voxel' in conditioning (second arg), got: {repr(cond.conditioning)}"
     )
+
+
+def test_rule_body1_cond_prior_tuple_var_info():
+    """rule_body1_cond_prior unpacks tuple _var_info into separate head args."""
+    from neurolang.probabilistic.expressions import Condition
+
+    result = parser(
+        "define as probably Published every Voxel (?x; ?y; ?z) "
+        "conditioned to every Study activates."
+    )
+    assert isinstance(result, Implication), f"Expected Implication, got {type(result)}"
+    assert isinstance(result.antecedent, Condition), (
+        f"Expected Condition in antecedent, got {type(result.antecedent)}"
+    )
+    # head should have 3 args (x, y, z), not 1 arg that is a tuple
+    head_args = result.consequent.args
+    assert len(head_args) == 3, (
+        f"Expected 3 head args for (?x;?y;?z), got {len(head_args)}: {head_args}"
+    )
+    from neurolang.expressions import Symbol
+    assert all(isinstance(a, Symbol) for a in head_args), (
+        f"All head args should be Symbols, got: {head_args}"
+    )

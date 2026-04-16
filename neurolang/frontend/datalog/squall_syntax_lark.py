@@ -330,28 +330,46 @@ class SquallTransformer(Transformer):
         # args = [det, ng1, s]
         det, ng1, s = args[0], args[1], args[2]
         var_info = getattr(ng1, '_var_info', None)
-        x = var_info if var_info is not None else Symbol.fresh()
-        conditioned_body = ng1(x)
-        return ('_rule_body', ([x], Condition(conditioned_body, s)))
+        if isinstance(var_info, tuple):
+            head_args = list(var_info)
+            conditioned_body = ng1(var_info)
+        else:
+            x = var_info if var_info is not None else Symbol.fresh()
+            head_args = [x]
+            conditioned_body = ng1(x)
+        return ('_rule_body', (head_args, Condition(conditioned_body, s)))
 
     def rule_body1_cond_posterior(self, args):
         # Grammar: s _CONDITIONED _TO det ng1
         # args = [s, det, ng1]
         s, det, ng1 = args[0], args[1], args[2]
         var_info = getattr(ng1, '_var_info', None)
-        x = var_info if var_info is not None else Symbol.fresh()
-        conditioned_body = ng1(x)
-        return ('_rule_body', ([x], Condition(s, conditioned_body)))
+        if isinstance(var_info, tuple):
+            head_args = list(var_info)
+            conditioned_body = ng1(var_info)
+        else:
+            x = var_info if var_info is not None else Symbol.fresh()
+            head_args = [x]
+            conditioned_body = ng1(x)
+        return ('_rule_body', (head_args, Condition(s, conditioned_body)))
 
     def rule_body2_cond(self, args):
         # Grammar: det ng1_left _CONDITIONED _TO det ng1_right
         # args = [det1, ng1_left, det2, ng1_right]
         _, ng1_left, _, ng1_right = args
         var_info = getattr(ng1_left, '_var_info', None)
-        x = var_info if var_info is not None else Symbol.fresh()
-        conditioned_body = ng1_left(x)
-        conditioning_body = ng1_right(x)
-        return ('_rule_body', ([x], Condition(conditioned_body, conditioning_body)))
+        if isinstance(var_info, tuple):
+            head_args = list(var_info)
+            conditioned_body = ng1_left(var_info)
+        else:
+            x = var_info if var_info is not None else Symbol.fresh()
+            head_args = [x]
+            conditioned_body = ng1_left(x)
+        conditioning_body = ng1_right(
+            var_info if isinstance(var_info, tuple)
+            else (head_args[0] if head_args else Symbol.fresh())
+        )
+        return ('_rule_body', (head_args, Condition(conditioned_body, conditioning_body)))
 
     # ---- Sentences ----
 
