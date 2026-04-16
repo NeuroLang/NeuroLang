@@ -38,17 +38,17 @@ Queries::
 
     obtain every item that activates      →  SquallProgram with Query expression
 
-Known stubs (parsed but not semantically implemented)
-------------------------------------------------------
-- **Conditioned rules** — ``rule_body1_cond`` / ``rule_body1_cond_prior`` /
-  ``rule_body1_cond_posterior``: the conditioning NP is silently discarded;
-  only the sentence ``s`` is returned.
-- **``rule_body2_cond``** — present in the grammar but has no transformer
-  handler; falls through to ``_default`` and returns a raw list.
+Implemented constructs (previously stubs)
+-----------------------------------------
+- **Conditioned rules** — ``rule_body1_cond_prior`` / ``rule_body1_cond_posterior`` /
+  ``rule_body2_cond``: all three handlers now produce
+  ``Condition(conditioned, conditioning)`` in the rule body, which
+  ``TranslateProbabilisticQueryMixin.rewrite_conditional_query`` rewrites into
+  the three-rule conditional probability form.
 - **Inverse transitive prefix ``~``** — ``transitive_inv`` and
-  ``transitive_multiple_inv`` now return ``_InverseVerbSymbol`` instances
-  which emit ``InvertedFunctionApplication`` when called; argument-order
-  inversion is applied by ``ResolveInvertedFunctionApplicationMixin``.
+  ``transitive_multiple_inv`` return ``_InverseVerbSymbol``, which emits
+  ``InvertedFunctionApplication`` nodes resolved by
+  ``ResolveInvertedFunctionApplicationMixin`` to reversed argument order.
 
 References
 ----------
