@@ -162,6 +162,8 @@ def nl_author():
     engine.add_tuple_set(
         [("p1",), ("p2",), ("p3",)], name="paper"
     )
+    # 'a Person ~author' requires a Person EDB so the existential
+    # variable is drawn from a bounded domain, not left unconstrained.
     engine.add_tuple_set(
         [("alice",), ("bob",)], name="person"
     )
@@ -172,11 +174,14 @@ def nl_author():
 
 
 def test_execute_squall_tilde_inversion_end_to_end(nl_author):
-    """~author reverses argument order so author(paper, person) is matched correctly.
+    """~author inverts the default SQUALL argument order.
 
-    'obtain every Paper that a Person ~author.' means:
-      - for each paper p, there exists a person x such that author(p, x)
-      - ~author means the SQUALL subject (paper) is arg[0] of the stored relation
+    In standard SQUALL, 'a Person author' would resolve to author(person, paper)
+    (the existential subject is arg[0]). The tilde flips this to author(paper,
+    person), matching the EDB column order [paper, person] stored in the fixture.
+
+    'obtain every Paper that a Person ~author.' therefore asks:
+      for each paper p, there exists a person x such that author(p, x).
     Expected: all three papers are returned.
     """
     result = nl_author.execute_squall_program(
