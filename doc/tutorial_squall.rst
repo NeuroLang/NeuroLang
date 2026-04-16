@@ -343,6 +343,29 @@ clause::
     >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
     ['alice']
 
+**MARG queries — conditional probability**
+
+The ``with probability … conditioned to …`` form defines a *marginal* (MARG)
+conditional probability relation.  The engine rewrites it into numerator,
+denominator and final ratio rules automatically, adding a probability column as
+the last argument.
+
+.. code-block:: python
+
+   nl = NeurolangPDL()
+   nl.add_tuple_set([("s1",), ("s2",)], name="study")
+   nl.add_tuple_set([("s1",)], name="selected_study")
+   nl.add_tuple_set([("s2",)], name="open_world_studies")
+   nl.add_tuple_set([("s1",), ("s2",)], name="reported")
+   nl.execute_squall_program(
+       "define as Prob_report with probability every Reported ?s "
+       "conditioned to every Selected_study ?s that Open_world_studies."
+   )
+
+The relation ``prob_report`` will contain one column per variable plus a
+final probability column computed as
+``P(reported | selected_study & open_world_studies)``.
+
 
 9. Aggregations
 ----------------
@@ -378,6 +401,26 @@ The following rule computes the maximum ``item_count`` value per item::
     [('a', 1), ('b', 2), ('c', 3)]
 
 Item ``"d"`` is absent because it has no ``item_count``.
+
+**Global aggregation (no groupby)**
+
+When no ``per`` clause is given, the aggregation function receives *all free
+variables* of the source relation.  Any callable registered in the engine's
+symbol table can be used as the aggregation functor:
+
+.. code-block:: python
+
+   from neurolang.expressions import Symbol, Constant
+
+   nl = NeurolangPDL()
+   nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
+   nl.symbol_table[Symbol("collect_all")] = Constant(lambda vals: sorted(vals))
+   nl.execute_squall_program(
+       "define as Result every Collect_all of the Item."
+   )
+
+The relation ``result`` will contain the output of ``collect_all`` applied over
+all tuples from ``item``.
 
 
 10. Multiple Rules in One Program
