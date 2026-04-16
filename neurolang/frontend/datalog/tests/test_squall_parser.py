@@ -719,3 +719,25 @@ def test_rule_body1_cond_prior_tuple_var_info():
     assert all(isinstance(a, Symbol) for a in head_args), (
         f"All head args should be Symbols, got: {head_args}"
     )
+
+
+def test_rule_op_marg_produces_prob_query_in_head():
+    """'with probability … conditioned to …' produces ProbabilisticQuery(PROB,...) in head."""
+    from neurolang.probabilistic.expressions import Condition, ProbabilisticQuery, PROB
+
+    result = parser(
+        "define as Published with probability every Voxel "
+        "conditioned to every Study activates."
+    )
+    assert isinstance(result, Implication), f"Expected Implication, got {type(result)}"
+    assert isinstance(result.antecedent, Condition), (
+        f"Expected Condition in antecedent, got {type(result.antecedent)}"
+    )
+    # Head must contain a ProbabilisticQuery(PROB, ...) argument
+    head_args = result.consequent.args
+    prob_args = [a for a in head_args if isinstance(a, ProbabilisticQuery)
+                 and a.functor == PROB]
+    assert prob_args, (
+        f"Expected ProbabilisticQuery(PROB, ...) in head args, got: {head_args}"
+    )
+

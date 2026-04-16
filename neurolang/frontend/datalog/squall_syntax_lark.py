@@ -71,7 +71,9 @@ from ...expressions import (
     Symbol,
 )
 from ...logic import Disjunction, ExistentialPredicate, UniversalPredicate
-from ...probabilistic.expressions import Condition, ProbabilisticFact
+from ...probabilistic.expressions import (
+    Condition, ProbabilisticFact, ProbabilisticQuery, PROB
+)
 from .squall import InvertedFunctionApplication
 
 
@@ -224,6 +226,32 @@ class SquallTransformer(Transformer):
         else:
             prob_val = np_prob
         return Implication(ProbabilisticFact(prob_val, head), body_formula)
+
+    def rule_op_marg(self, args):
+        """Build a MARG query from ``define as verb with probability rule_body1_cond``.
+
+        Emits:
+            Implication(
+                verb(head_vars..., ProbabilisticQuery(PROB, (head_vars...))),
+                Condition(conditioned, conditioning)
+            )
+
+        TranslateProbabilisticQueryMixin.rewrite_conditional_query then rewrites
+        this into the standard three-rule conditional probability form, adding
+        the probability as the last column of the output relation.
+        """
+        items = [a for a in args if a is not None]
+        verb = items[0]
+        body_result = items[1]
+
+        if isinstance(body_result, tuple) and body_result[0] == '_rule_body':
+            head_args, body_formula = body_result[1]
+        else:
+            head_args, body_formula = [], Constant(True)
+
+        prob_query_arg = ProbabilisticQuery(PROB, tuple(head_args))
+        head = verb(*(list(head_args) + [prob_query_arg]))
+        return Implication(head, body_formula)
 
     def rule_opnn(self, args):
         """Build an n-ary Datalog rule from ``define as verbn rule_body1 ops``.
