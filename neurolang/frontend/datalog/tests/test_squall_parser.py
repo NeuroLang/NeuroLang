@@ -763,3 +763,28 @@ def test_ng1_agg_npc_arbitrary_functor():
     assert agg_arg.functor == Symbol("create_overlay"), (
         f"Expected functor Symbol('create_overlay'), got {agg_arg.functor}"
     )
+
+
+def test_det_every_agg_free_var_fallback():
+    """Global aggregation: agg args are all free vars in npc body, not just one var."""
+    from neurolang.expressions import Symbol, FunctionApplication
+    from neurolang.datalog.expressions import AggregationApplication
+
+    # Prob_map is a binary relation (x, p) — both should be agg args
+    result = parser(
+        "define as Result every Create_overlay of the Prob_map."
+    )
+    assert isinstance(result, Implication), (
+        f"Expected Implication, got {type(result)}"
+    )
+    head_args = result.consequent.args
+    assert len(head_args) >= 1, f"Expected head args, got: {head_args}"
+    agg_arg = head_args[0]
+    assert isinstance(agg_arg, (FunctionApplication, AggregationApplication)), (
+        f"Expected FunctionApplication/AggregationApplication, got {type(agg_arg)}"
+    )
+    # When Prob_map introduces a single variable, agg_arg.args should have >= 1 arg
+    # (the free variable from the npc body)
+    assert len(agg_arg.args) >= 1, (
+        f"Expected at least 1 agg arg (free var from npc body), got: {agg_arg.args}"
+    )

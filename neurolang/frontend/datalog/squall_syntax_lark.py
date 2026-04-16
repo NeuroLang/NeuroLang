@@ -71,6 +71,7 @@ from ...expressions import (
     Symbol,
 )
 from ...logic import Disjunction, ExistentialPredicate, UniversalPredicate
+from ...logic.expression_processing import extract_logic_free_variables
 from ...probabilistic.expressions import (
     Condition, ProbabilisticFact, ProbabilisticQuery, PROB
 )
@@ -491,10 +492,8 @@ class SquallTransformer(Transformer):
                 agg_info = getattr(ng, '_agg_info', None)
                 if agg_info is not None:
                     agg_func_const, npc_cps, per_vars = agg_info
-                    # Apply the npc with a capturing continuation to extract
-                    # the witness variable q.  We use a mutable container to
-                    # capture x from inside the closure, while returning
-                    # Constant(True) so no spurious conjuncts appear in the body.
+
+                    # Build the npc body formula to discover free variables.
                     captured = []
 
                     def capturing_cont(v, _cap=captured):
@@ -502,20 +501,36 @@ class SquallTransformer(Transformer):
                         return Constant(True)
 
                     npc_formula = npc_cps(capturing_cont)
-                    if captured and isinstance(captured[0], Symbol):
-                        q = captured[0]
-                    elif isinstance(npc_formula, ExistentialPredicate):
-                        q = npc_formula.head
-                    else:
-                        q = Symbol.fresh()
 
-                    # Build AggregationApplication and hand it to the scope
-                    # collector so it ends up in the rule head.
-                    agg_expr = _AggApp(agg_func_const, (q,))
+                    if per_vars:
+                        # Explicit groupby: use the captured witness variable
+                        # (same as the original single-var path).
+                        if captured and isinstance(captured[0], Symbol):
+                            agg_args = (captured[0],)
+                        elif isinstance(npc_formula, ExistentialPredicate):
+                            agg_args = (npc_formula.head,)
+                        else:
+                            agg_args = (Symbol.fresh(),)
+                    else:
+                        # No explicit groupby: aggregate over all free variables
+                        # in the npc body, sorted by name for determinism.
+                        free_vars = extract_logic_free_variables(npc_formula)
+                        if free_vars:
+                            agg_args = tuple(
+                                sorted(free_vars, key=lambda s: s.name)
+                            )
+                        elif captured and isinstance(captured[0], Symbol):
+                            agg_args = (captured[0],)
+                        elif isinstance(npc_formula, ExistentialPredicate):
+                            agg_args = (npc_formula.head,)
+                        else:
+                            agg_args = (Symbol.fresh(),)
+
+                    agg_expr = _AggApp(agg_func_const, agg_args)
                     d(agg_expr)  # adds agg_expr to head_args
 
                     # Return the npc formula so _flatten_to_datalog extracts
-                    # the body predicates (quantity(q), item_count(i, q), …).
+                    # the body predicates.
                     return npc_formula
 
                 var_info = getattr(ng, '_var_info', None)
