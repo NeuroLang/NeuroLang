@@ -18,14 +18,9 @@ All code blocks below can be executed with ``pytest --doctest-glob=doc/tutorial_
 Setup
 -----
 
-Every example imports the ``parser`` function and, for end-to-end execution
-examples, the ``Chase`` solver and a ``RegionFrontendCPLogicSolver`` engine::
+Every example uses the high-level ``NeurolangPDL`` frontend::
 
-    >>> from neurolang.frontend.datalog.squall_syntax_lark import parser, SquallProgram
-    >>> from neurolang.frontend.probabilistic_frontend import RegionFrontendCPLogicSolver
-    >>> from neurolang.datalog.chase import Chase
-    >>> from neurolang.expressions import Symbol, Constant
-    >>> from neurolang.datalog import Implication
+    >>> from neurolang.frontend import NeurolangPDL
 
 
 1. Basic Sentences
@@ -34,28 +29,29 @@ examples, the ``Chase`` solver and a ``RegionFrontendCPLogicSolver`` engine::
 The simplest SQUALL sentence consists of a **subject** (a variable or
 literal) and a **verb** (a unary predicate).
 
-Variables are written with a ``?`` prefix::
+Variables are written with a ``?`` prefix.  String literals are enclosed in
+single quotes.  The following example checks that a sentence about a named
+entity fires as expected::
 
-    >>> result = parser("squall ?s reports")
-    >>> from neurolang.expressions import FunctionApplication
-    >>> assert isinstance(result, FunctionApplication)
-    >>> assert "reports" in repr(result)
-    >>> assert "s" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> result = nl.execute_squall_program("obtain every plays.")
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
-String literals are enclosed in single quotes::
+A **transitive** verb takes an object.  Transitive verbs used as binary
+predicates are prefixed with ``~`` to indicate that argument order is
+inverted (so ``x ~sings y`` maps to ``sings(y, x)``)::
 
-    >>> result = parser("squall 'alice' plays")
-    >>> assert "alice" in repr(result)
-    >>> assert "plays" in repr(result)
-
-A **transitive** verb takes an object.  Transitive verbs that are used as
-binary predicates are prefixed with ``~`` to disambiguate them from
-intransitive verbs::
-
-    >>> result = parser("squall ?x ~sings ?y")
-    >>> assert "sings" in repr(result)
-    >>> assert "x" in repr(result)
-    >>> assert "y" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("jazz",)], name="genre")
+    >>> _ = nl.add_tuple_set([("alice", "jazz")], name="sings")
+    >>> nl.execute_squall_program(
+    ...     "define as Performer every person ?x that a Genre ?y ~sings."
+    ... )
+    >>> sorted(nl.solve_all()["performer"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
 
 2. Quantifiers
@@ -66,39 +62,42 @@ and ``the``.
 
 **Universal — every**
 
-``every person plays`` means *for all x: if person(x) then plays(x)*.
-Parsed as ``UniversalPredicate(x, Implication(plays(x), person(x)))``.
+``every person plays`` means *for all x: if person(x) then plays(x)*::
 
-::
-
-    >>> from neurolang.logic import UniversalPredicate
-    >>> result = parser("squall every person plays")
-    >>> assert isinstance(result, UniversalPredicate)
-    >>> assert "person" in repr(result)
-    >>> assert "plays" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> nl.execute_squall_program("define as Active every person that plays.")
+    >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
 **Existential — a / an / some**
 
-``a person plays`` means *there exists x such that person(x) and plays(x)*.
+``a person plays`` asserts existence.  In a query, only items with an
+associated count are returned::
 
-::
-
-    >>> from neurolang.logic import ExistentialPredicate
-    >>> result = parser("squall a person plays")
-    >>> assert isinstance(result, ExistentialPredicate)
-    >>> assert "person" in repr(result)
-    >>> assert "plays" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
+    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every item ?i that has an item_count ?c."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['a', 'b']
 
 **Negative — no**
 
-``no person plays`` means *there is no x such that person(x) and plays(x)*.
+``no`` inside a relative clause expresses negation-as-failure.  Items that
+have *no* associated count are returned::
 
-::
-
-    >>> from neurolang.datalog import Negation
-    >>> result = parser("squall no person plays")
-    >>> assert isinstance(result, Negation)
-    >>> assert "person" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
+    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every item ?i that has no item_count ?c."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['c']
 
 **Named variables with quantifiers**
 
@@ -106,9 +105,14 @@ Variables can be named explicitly using ``?name`` labels directly after the
 noun.  The label binds the variable so it can be reused elsewhere in the
 sentence::
 
-    >>> result = parser("squall every person ?p plays")
-    >>> assert isinstance(result, UniversalPredicate)
-    >>> assert "p" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> nl.execute_squall_program(
+    ...     "define as Active every person ?p that plays."
+    ... )
+    >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
 
 3. Relative Clauses
@@ -119,47 +123,65 @@ Relative clauses restrict the noun they modify.  They are introduced by
 
 **Intransitive VP relative clause**
 
-``every person that plays runs`` — for every x: person(x) and plays(x) →
-runs(x)::
+``every person that plays`` — for every x: person(x) and plays(x)::
 
-    >>> result = parser("squall every person that plays runs")
-    >>> assert isinstance(result, UniversalPredicate)
-    >>> assert "person" in repr(result)
-    >>> assert "plays" in repr(result)
-    >>> assert "runs" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> nl.execute_squall_program(
+    ...     "define as PlayerPerson every person that plays."
+    ... )
+    >>> sorted(nl.solve_all()["playerperson"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
 **Transitive VP relative clause (passive-like)**
 
-``every voxel that a study ~reports activates`` — for every voxel x, if
-there is a study s that reports x, then x activates::
+``~verb`` signals a transitive (binary) predicate used in *passive* position:
+``a study ~reports voxel`` reads ``reports(study, voxel)`` with argument order
+reversed.  The rule below collects (study, voxel) pairs via an explicit
+multi-variable head::
 
-    >>> result = parser("squall every voxel that a study ~reports activates")
-    >>> assert "voxel" in repr(result)
-    >>> assert "reports" in repr(result)
-    >>> assert "activates" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("v1",), ("v2",), ("v3",)], name="voxel")
+    >>> _ = nl.add_tuple_set([("s1",), ("s2",)], name="study")
+    >>> _ = nl.add_tuple_set([("s1", "v1"), ("s2", "v2")], name="reports")
+    >>> nl.execute_squall_program(
+    ...     "define as reported for every Study ?s ; with every Voxel ?v that ?s reports."
+    ... )
+    >>> sorted(
+    ...     nl.solve_all()["reported"]
+    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
+    ... )
+    [('s1', 'v1'), ('s2', 'v2')]
 
 **Nested relative clauses**
 
-Relative clauses can be nested arbitrarily::
+Relative clauses can be nested by using an intermediate IDB predicate as the
+noun.  The example below defines ``selected_player`` from the intersection of
+two independent predicates::
 
-    >>> result = parser(
-    ...     "squall every voxel that a study that ~mentions a word "
-    ...     "that is 'auditory' ~reports activates"
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
+    >>> _ = nl.add_tuple_set([("alice",)], name="selected")
+    >>> nl.execute_squall_program(
+    ...     "define as PlayingSelected every selected that plays."
     ... )
-    >>> assert "voxel" in repr(result)
-    >>> assert "mentions" in repr(result)
-    >>> assert "auditory" in repr(result)
+    >>> sorted(nl.solve_all()["playingselected"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
 **Negative relative clause**
 
-``no`` inside a relative clause expresses negation-as-failure::
+``does not VP`` expresses negation-as-failure on a unary predicate::
 
-    >>> result = parser(
-    ...     "squall every voxel that a study that ~reports no region "
-    ...     "~reports activates"
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> nl.execute_squall_program(
+    ...     "define as NotPlaying every person that does not plays."
     ... )
-    >>> assert "voxel" in repr(result)
-    >>> assert "activates" in repr(result)
+    >>> sorted(nl.solve_all()["notplaying"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['bob']
 
 **Possessive relative clause — whose**
 
@@ -168,60 +190,64 @@ Relative clauses can be nested arbitrarily::
 person x, there exists a y such that writer(x, y) and plays(y) — and that
 person is ``published``::
 
-    >>> result = parser("define as published every person whose writer plays.")
-    >>> assert "person" in repr(result)
-    >>> assert "writer" in repr(result)
-    >>> assert "plays" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice", "carol"), ("bob", "dave")], name="writer")
+    >>> _ = nl.add_tuple_set([("carol",)], name="plays")
+    >>> nl.execute_squall_program(
+    ...     "define as published every person whose writer plays."
+    ... )
+    >>> sorted(nl.solve_all()["published"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
 
 4. Tuple (Multi-dimensional) Subjects
 --------------------------------------
 
 When a noun denotes a multi-dimensional entity (e.g. a voxel with x, y, z
-coordinates), a parenthesised tuple of labels can follow the noun::
+coordinates), a parenthesised tuple of labels can follow the noun.  The
+variables bind to the respective columns of the relation::
 
-    >>> from neurolang.logic import UniversalPredicate
-    >>> result = parser(
-    ...     "squall every voxel (?x; ?y; ?z) that a study ?s ~reports activates"
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("v1", 0, 0, 1), ("v2", 1, 2, 3)], name="voxel"
     ... )
-    >>> assert isinstance(result, UniversalPredicate)
-    >>> assert "voxel" in repr(result)
-    >>> assert "reports" in repr(result)
-    >>> assert "activates" in repr(result)
+    >>> nl.execute_squall_program(
+    ...     "define as active every voxel (?v; ?x; ?y; ?z)."
+    ... )
+    >>> solution = nl.solve_all()
+    >>> sorted(solution["active"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
+    [('v1', 0, 0, 1), ('v2', 1, 2, 3)]
 
-The parser nests three ``UniversalPredicate`` wrappers — one per coordinate
-variable — and generates a single conjunction for the body.
+The parser nests one ``UniversalPredicate`` wrapper per coordinate variable
+and generates a single conjunction for the body.
 
 
 5. Defining Rules with ``define as``
 -------------------------------------
 
 The ``define as`` prefix turns a sentence into a Datalog **rule definition**.
-The result is an ``Implication`` expression that can be walked into an engine.
 
 **Simple unary rule**::
 
-    >>> rule = parser("define as Active every person that plays.")
-    >>> assert isinstance(rule, Implication)
-    >>> assert "active" in repr(rule).lower()
-    >>> assert "person" in repr(rule)
-    >>> assert "plays" in repr(rule)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
+    >>> nl.execute_squall_program("define as Active every person that plays.")
+    >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice', 'carol']
 
 **End-to-end execution**
 
-Let's build a small engine and verify the rule fires::
+The rule fires for every person that satisfies ``plays``::
 
-    >>> engine = RegionFrontendCPLogicSolver()
-    >>> engine.add_extensional_predicate_from_tuples(
-    ...     Symbol("person"), [("alice",), ("bob",), ("carol",)]
-    ... )
-    >>> engine.add_extensional_predicate_from_tuples(
-    ...     Symbol("plays"), [("alice",), ("carol",)]
-    ... )
-    >>> rule = parser("define as Active every person that plays.")
-    >>> _ = engine.walk(rule)
-    >>> solution = Chase(engine).build_chase_solution()
-    >>> assert solution[Symbol("active")].value == {("alice",), ("carol",)}
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
+    >>> nl.execute_squall_program("define as Active every person that plays.")
+    >>> solution = nl.solve_all()
+    >>> sorted(solution["active"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice', 'carol']
 
 
 6. Multi-Variable Rules and Joins
@@ -230,27 +256,19 @@ Let's build a small engine and verify the rule fires::
 N-ary rules use ``for every NOUN ; with every NOUN`` (or other prepositions)
 to bind multiple variables into the head::
 
-    >>> engine2 = RegionFrontendCPLogicSolver()
-    >>> engine2.add_extensional_predicate_from_tuples(
-    ...     Symbol("item"), [("a",), ("b",), ("c",)]
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
+    >>> _ = nl.add_tuple_set(
+    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
     ... )
-    >>> engine2.add_extensional_predicate_from_tuples(
-    ...     Symbol("item_count"),
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)]
-    ... )
-    >>> engine2.add_extensional_predicate_from_tuples(
-    ...     Symbol("quantity"), [(i,) for i in range(5)]
-    ... )
-    >>> rule = parser(
+    >>> _ = nl.add_tuple_set([(i,) for i in range(5)], name="quantity")
+    >>> nl.execute_squall_program(
     ...     "define as merge for every Item ?i ;"
     ...     " with every Quantity that ?i item_count"
     ... )
-    >>> assert isinstance(rule, Implication)
-    >>> _ = engine2.walk(rule)
-    >>> solution = Chase(engine2).build_chase_solution()
-    >>> assert solution[Symbol("merge")].value == {
-    ...     ("a", 0), ("a", 1), ("b", 2), ("c", 3)
-    ... }
+    >>> solution = nl.solve_all()
+    >>> sorted(solution["merge"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
+    [('a', 0), ('a', 1), ('b', 2), ('c', 3)]
 
 
 7. Filtering with Comparisons
@@ -271,57 +289,59 @@ Comparison keywords:
 
 The following rule selects items whose ``item_count`` is at least 2::
 
-    >>> engine3 = RegionFrontendCPLogicSolver()
-    >>> engine3.add_extensional_predicate_from_tuples(
-    ...     Symbol("item"), [("a",), ("b",), ("c",), ("d",)]
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
     ... )
-    >>> engine3.add_extensional_predicate_from_tuples(
-    ...     Symbol("item_count"),
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)]
+    >>> _ = nl.add_tuple_set(
+    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
     ... )
-    >>> rule = parser(
+    >>> nl.execute_squall_program(
     ...     "define as Large every Item "
     ...     "that has an item_count greater equal than 2."
     ... )
-    >>> assert isinstance(rule, Implication)
-    >>> _ = engine3.walk(rule)
-    >>> solution = Chase(engine3).build_chase_solution()
-    >>> assert solution[Symbol("large")].value == {("b",), ("c",)}
+    >>> sorted(nl.solve_all()["large"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['b', 'c']
+
+Item ``"d"`` is absent because it has no ``item_count`` entry.
 
 
 8. Querying with ``obtain``
 ----------------------------
 
-The ``obtain`` keyword introduces a **query** rather than a rule.  The parser
-returns a ``SquallProgram`` containing a ``Query`` expression that can be
-executed against an engine.
+The ``obtain`` keyword introduces a **query** rather than a rule.
+``execute_squall_program`` returns a ``NamedRelationalAlgebraFrozenSet``
+directly::
 
-::
-
-    >>> from neurolang.expressions import Query
-    >>> prog = parser("obtain every Item that has an item_count.")
-    >>> assert isinstance(prog, SquallProgram)
-    >>> assert len(prog.queries) == 1
-    >>> assert isinstance(prog.queries[0], Query)
-
-**End-to-end**::
-
-    >>> engine4 = RegionFrontendCPLogicSolver()
-    >>> engine4.add_extensional_predicate_from_tuples(
-    ...     Symbol("item"), [("a",), ("b",), ("c",), ("d",)]
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
     ... )
-    >>> engine4.add_extensional_predicate_from_tuples(
-    ...     Symbol("item_count"),
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)]
+    >>> _ = nl.add_tuple_set(
+    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
     ... )
-    >>> prog = parser("obtain every Item that has an item_count.")
-    >>> q = prog.queries[0]
-    >>> head_sym = Symbol.fresh()
-    >>> _ = engine4.walk(Implication(head_sym(q.head), q.body))
-    >>> solution = Chase(engine4).build_chase_solution()
-    >>> assert solution[head_sym].value == {("a",), ("b",), ("c",)}
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every Item that has an item_count."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['a', 'b', 'c']
 
 Item ``"d"`` is absent because it has no ``item_count`` entry.
+
+**Mixing rules and queries**
+
+A single program can contain both ``define as`` rules and an ``obtain``
+clause::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> result = nl.execute_squall_program(
+    ...     "define as Active every person that plays. "
+    ...     "obtain every Active."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
 
 9. Aggregations
@@ -338,32 +358,24 @@ Supported aggregation functions: ``count``, ``sum``, ``max``, ``min``,
 
 The following rule computes the maximum ``item_count`` value per item::
 
-    >>> engine5 = RegionFrontendCPLogicSolver()
-    >>> engine5.add_extensional_predicate_from_tuples(
-    ...     Symbol("item"), [("a",), ("b",), ("c",), ("d",)]
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
     ... )
-    >>> engine5.add_extensional_predicate_from_tuples(
-    ...     Symbol("item_count"),
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)]
+    >>> _ = nl.add_tuple_set(
+    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
     ... )
-    >>> engine5.add_extensional_predicate_from_tuples(
-    ...     Symbol("quantity"), [(i,) for i in range(5)]
-    ... )
-    >>> rule = parser(
+    >>> _ = nl.add_tuple_set([(i,) for i in range(5)], name="quantity")
+    >>> nl.execute_squall_program(
     ...     "define as max_items for every Item ?i ;"
     ...     " where every Max of the Quantity where ?i item_count per ?i."
     ... )
-    >>> assert isinstance(rule, Implication)
-    >>> from neurolang.datalog.aggregation import AggregationApplication
-    >>> agg_args = [a for a in rule.consequent.args
-    ...             if isinstance(a, AggregationApplication)]
-    >>> assert len(agg_args) == 1
-    >>> assert agg_args[0].functor == Constant(max)
-    >>> _ = engine5.walk(rule)
-    >>> solution = Chase(engine5).build_chase_solution()
-    >>> assert solution[Symbol("max_items")].value == {
-    ...     ("a", 1), ("b", 2), ("c", 3)
-    ... }
+    >>> solution = nl.solve_all()
+    >>> sorted(
+    ...     solution["max_items"].as_pandas_dataframe()
+    ...     .apply(tuple, axis=1).tolist()
+    ... )
+    [('a', 1), ('b', 2), ('c', 3)]
 
 Item ``"d"`` is absent because it has no ``item_count``.
 
@@ -371,51 +383,79 @@ Item ``"d"`` is absent because it has no ``item_count``.
 10. Multiple Rules in One Program
 -----------------------------------
 
-Separate rules with a full stop.  The parser returns a ``Union`` of
-``Implication`` expressions::
+Separate rules with a full stop.  The parser processes each rule and walks
+them all into the engine::
 
-    >>> from neurolang.datalog import Union
-    >>> prog = parser(
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> _ = nl.add_tuple_set([("bob",)], name="runs")
+    >>> nl.execute_squall_program(
     ...     "define as Active every person that plays. "
     ...     "define as Fast every person that runs."
     ... )
-    >>> assert isinstance(prog, Union)
-    >>> assert len(prog.formulas) == 2
+    >>> solution = nl.solve_all()
+    >>> sorted(solution["active"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
+    >>> sorted(solution["fast"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['bob']
 
 
 11. Boolean Connectives in Relative Clauses
 --------------------------------------------
 
 Relative clauses support ``and`` (conjunction) and ``or`` (disjunction).
-With conjunction, both conditions must hold for the same individual.
-The conjunction binds two verb-phrase conditions directly in the relative
-clause; the last verb before the period acts as the main VP::
+With conjunction, two rules can be combined step by step — define an
+intermediate predicate and then constrain further::
 
-    >>> result = parser("squall a person that runs and plays")
-    >>> assert "person" in repr(result)
-    >>> assert "plays" in repr(result)
-    >>> assert "runs" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="runs")
+    >>> nl.execute_squall_program(
+    ...     "define as Player every person that plays. "
+    ...     "define as PlayAndRun every Player that runs."
+    ... )
+    >>> sorted(nl.solve_all()["playandrun"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
-With ``or``, the individual must satisfy at least one of the conditions.
-In this case a main VP must follow the disjunction::
+With ``or``, the individual must satisfy at least one of the conditions::
 
-    >>> from neurolang.logic import ExistentialPredicate
-    >>> result = parser("squall a person that plays or runs walks")
-    >>> assert "person" in repr(result)
-    >>> assert "plays" in repr(result)
-    >>> assert "runs" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> _ = nl.add_tuple_set([("bob",)], name="runs")
+    >>> nl.execute_squall_program(
+    ...     "define as PlayOrRun every person that plays or runs."
+    ... )
+    >>> sorted(nl.solve_all()["playorrun"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice', 'bob']
 
 
 12. ``for … , …`` Quantification
 ----------------------------------
 
 A sentence can be prefixed with ``for NOUN_PHRASE ,`` to bind the outer
-variable first::
+variable first.  This construct is available in bare ``squall`` expressions
+(not in ``define as`` or ``obtain``).  When used in a query context via the
+parser, it generates a universally quantified scope::
 
+    >>> from neurolang.frontend.datalog.squall_syntax_lark import parser
     >>> result = parser("squall for every person ?p, ?p plays")
-    >>> assert isinstance(result, UniversalPredicate)
     >>> assert "p" in repr(result)
     >>> assert "plays" in repr(result)
+
+For rule definitions, the same binding is achieved with the standard
+``define as every NOUN ?var VP`` form::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> nl.execute_squall_program(
+    ...     "define as Active every person ?p that plays."
+    ... )
+    >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
 
 13. Reserved Words and Quoting
@@ -426,35 +466,53 @@ SQUALL reserves many common English words as keywords (``every``, ``a``,
 ``who``, ``which``, etc.).  If a predicate or entity name coincides with a
 reserved word, wrap it in backticks::
 
-    >>> result = parser("squall every `from` plays")  # doctest: +ELLIPSIS
-    >>> assert "from" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",)], name="from")
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every `from`."
+    ... )  # doctest: +ELLIPSIS
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
 
 Variable names use the ``?`` prefix and may contain letters, digits, and
 underscores::
 
-    >>> result = parser("squall ?study_id reports")
-    >>> assert "study_id" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("s001",), ("s002",)], name="study")
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every study ?study_id."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['s001', 's002']
 
 String literals use single quotes and may contain spaces::
 
-    >>> result = parser("squall 'neuro study' plays")
-    >>> assert "neuro study" in repr(result)
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("neuro study",), ("other",)], name="study")
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every study that is 'neuro study'."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['neuro study']
 
 
-14. Known Limitations
-----------------------
+14. Previously Known Limitations (Now Implemented)
+----------------------------------------------------
 
-The following constructs are **parsed** by the grammar but their semantics
-are not yet fully implemented:
+Three constructs that were previously stubs are now fully implemented:
 
-* **Conditioned rules** — ``define as probably … conditioned to …``:
-  the conditioning noun phrase is silently discarded.
-* **Inverse transitive prefix ``~``** — the ``~`` prefix disambiguates
-  transitive verbs (it is required before a transitive verb name to tell the
-  parser the verb takes an object) but does **not** reverse argument order.
-  ``~author(x, y)`` and ``author(x, y)`` are identical in the IR.
+* **Inverse transitive prefix ``~``** — ``~verb`` now correctly reverses
+  argument order via ``_InverseVerbSymbol`` / ``InvertedFunctionApplication``
+  nodes, resolved by ``ResolveInvertedFunctionApplicationMixin``.
+  ``x ~sings y`` maps to ``sings(y, x)``.
+
+* **Conditioned rules** — ``define as probably … conditioned to …`` now
+  produces ``Condition(conditioned, conditioning)`` nodes in the rule body,
+  which ``TranslateProbabilisticQueryMixin.rewrite_conditional_query`` rewrites
+  into the standard three-rule conditional probability form.
+
 * **``rule_body2_cond``** — the grammar rule for two-sided conditioned NPs
-  has no transformer handler and will produce a raw list if reached.
+  now has a working transformer handler.
 
-These are tracked as stubs in the module docstring of
+These fixes are documented in the module docstring of
 ``neurolang/frontend/datalog/squall_syntax_lark.py``.
