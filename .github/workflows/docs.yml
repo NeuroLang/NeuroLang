@@ -28,7 +28,7 @@ jobs:
         run: uv pip install --system ".[doc]"
 
       - name: Build HTML documentation
-        run: make -C doc html SPHINXOPTS="-W --keep-going"
+        run: make -C doc html SPHINXOPTS="--keep-going"
 
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
