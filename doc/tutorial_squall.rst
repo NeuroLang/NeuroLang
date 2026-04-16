@@ -219,8 +219,8 @@ variables bind to the respective columns of the relation::
     >>> sorted(solution["active"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
     [('v1', 0, 0, 1), ('v2', 1, 2, 3)]
 
-The parser nests one ``UniversalPredicate`` wrapper per coordinate variable
-and generates a single conjunction for the body.
+The compiler generates one binding per coordinate variable and produces a
+single conjunction for the body.
 
 
 5. Defining Rules with ``define as``
@@ -436,17 +436,10 @@ With ``or``, the individual must satisfy at least one of the conditions::
 ----------------------------------
 
 A sentence can be prefixed with ``for NOUN_PHRASE ,`` to bind the outer
-variable first.  This construct is available in bare ``squall`` expressions
-(not in ``define as`` or ``obtain``).  When used in a query context via the
-parser, it generates a universally quantified scope::
-
-    >>> from neurolang.frontend.datalog.squall_syntax_lark import parser
-    >>> result = parser("squall for every person ?p, ?p plays")
-    >>> assert "p" in repr(result)
-    >>> assert "plays" in repr(result)
-
-For rule definitions, the same binding is achieved with the standard
-``define as every NOUN ?var VP`` form::
+variable first.  In ``define as`` rule definitions, the equivalent is to name
+the variable explicitly after the noun using the ``?var`` label.  The example
+below demonstrates named variable binding, which is the standard way to refer
+to a variable in the rule body::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
