@@ -808,9 +808,11 @@ def test_rule_body2_cond_parses():
 
 
 def test_rel_body_function_call_parses():
-    """'every Person that euclidean(?x, ?y) holds' should parse to a body atom."""
+    """'every Person that euclidean(?x, ?y) holds' should parse to a body atom
+    that includes the subject (noun-head) variable alongside the two labels."""
     from ..squall_syntax_lark import parser
     from ....datalog import Implication
+    from ....logic.expression_processing import extract_logic_free_variables
 
     result = parser(
         "squall define as Close every Person that euclidean(?x, ?y) holds."
@@ -821,3 +823,8 @@ def test_rel_body_function_call_parses():
     # The body should contain a FunctionApplication for euclidean
     body_str = str(implications[0].antecedent)
     assert "euclidean" in body_str.lower(), f"euclidean not in body: {body_str}"
+    # subject var + ?x + ?y → at least 3 free variables in the antecedent
+    free_vars = extract_logic_free_variables(implications[0].antecedent)
+    assert len(free_vars) >= 3, (
+        f"Expected >=3 free vars (subject + 2 labels), got {free_vars}"
+    )

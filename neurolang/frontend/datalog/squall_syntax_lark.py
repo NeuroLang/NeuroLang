@@ -835,9 +835,9 @@ class SquallTransformer(Transformer):
             y = label_vars[0]
             return ('_rel', lambda x: func_sym(x, y))
         else:
-            # N-ary: all args explicit, subject NOT prepended
+            # N-ary: subject is prepended so noun head is constrained
             def rel(x, _vars=label_vars):
-                return func_sym(*_vars)
+                return func_sym(x, *_vars)
             return ('_rel', rel)
 
     def rel_adj1(self, args):
