@@ -863,12 +863,14 @@ def test_two_anonymous_wildcards_get_distinct_symbols():
     implications = [r for r in rules if isinstance(r, Implication)]
     assert len(implications) == 1
     body = implications[0].antecedent
-    # Collect callable args (ANONYMOUS_LABEL lambdas) across all body formulas
+    # Collect callable args (ANONYMOUS_LABEL lambdas) across all body formulas.
+    # Symbol is also callable so filter by checking it's not an Expression.
+    from ....expressions import Expression
     wildcard_lambdas = []
     for formula in body.formulas:
         if hasattr(formula, "args"):
             for arg in formula.args:
-                if callable(arg):
+                if callable(arg) and not isinstance(arg, Expression):
                     wildcard_lambdas.append(arg)
     # Each '_' should produce a distinct lambda object
     assert len(wildcard_lambdas) == 2, (
