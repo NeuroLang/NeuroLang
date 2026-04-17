@@ -122,6 +122,10 @@ tags
 # pytest profiling results directory
 prof/
 
+#coding assistants
+superpowers
+.claude
+.factory
 
 # other
 scratch
