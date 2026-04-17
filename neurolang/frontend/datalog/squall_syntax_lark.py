@@ -884,16 +884,24 @@ class SquallTransformer(Transformer):
         return lambda x: ProbabilisticFact(fresh_prob, _apply_ops(ops, verb, x))
 
     def vpdo_explicit_prob_v1(self, args):
-        # "verb1 [cp] with probability number"
+        # "verb1 [cp] with probability op"
         verb1 = args[0]
-        prob_value = args[-1]   # Constant(float)
+        prob_raw = args[-1]
+        if callable(prob_raw) and not isinstance(prob_raw, (Symbol, Constant)):
+            prob_value = prob_raw(lambda v: v)
+        else:
+            prob_value = prob_raw
         return lambda x: ProbabilisticFact(prob_value, verb1(x))
 
     def vpdo_explicit_prob_vn(self, args):
-        # "verbn opn with probability number"
+        # "verbn opn with probability op"
         verb = args[0]
-        prob_value = args[-1]   # Constant(float)
+        prob_raw = args[-1]
         ops = args[1] if len(args) > 2 else None
+        if callable(prob_raw) and not isinstance(prob_raw, (Symbol, Constant)):
+            prob_value = prob_raw(lambda v: v)
+        else:
+            prob_value = prob_raw
         if ops is not None:
             return lambda x: ProbabilisticFact(
                 prob_value, _apply_ops(ops, verb, x)

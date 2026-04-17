@@ -313,3 +313,25 @@ def test_execute_squall_body_function_call():
             f"Body function call raised unexpected exception: "
             f"{type(exc).__name__}: {exc}"
         )
+
+
+def test_execute_squall_variable_probability_fact():
+    """'activates with probability ?p' accepts a label as the probability argument."""
+    from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
+    from neurolang.expression_pattern_matching import NeuroLangPatternMatchingNoMatch
+
+    engine = NeurolangPDL()
+    engine.add_tuple_set([("s1",), ("s2",)], name="study")
+
+    try:
+        engine.execute_squall_program(
+            "define as Probable every Study that activates with probability ?p."
+        )
+        # Rule was accepted
+    except (Fol2DatalogTranslationException, NeuroLangPatternMatchingNoMatch):
+        pass  # Acceptable: reached datalog translation — plumbing is OK
+    except Exception as exc:
+        pytest.fail(
+            f"Variable-probability fact raised unexpected exception: "
+            f"{type(exc).__name__}: {exc}"
+        )

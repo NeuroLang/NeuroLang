@@ -121,8 +121,8 @@ term : label
 
 vpdo : PROBABLY verb1 [ cp ]                  -> vpdo_prob_v1
      | PROBABLY verbn opn                     -> vpdo_prob_vn
-     | verb1 [ cp ] _WITH _PROBABILITY number -> vpdo_explicit_prob_v1
-     | verbn opn _WITH _PROBABILITY number    -> vpdo_explicit_prob_vn
+     | verb1 [ cp ] _WITH _PROBABILITY op -> vpdo_explicit_prob_v1
+     | verbn opn _WITH _PROBABILITY op    -> vpdo_explicit_prob_vn
      | verb1 [ cp ]                           -> vpdo_v1
      | verbn opn                              -> vpdo_vn
 

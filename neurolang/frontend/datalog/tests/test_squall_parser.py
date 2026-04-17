@@ -892,7 +892,20 @@ def test_vpdo_explicit_prob_v1_accepts_variable():
     rules = result if isinstance(result, list) else [result]
     implications = [r for r in rules if isinstance(r, Implication)]
     assert len(implications) == 1
-    head = implications[0].consequent
-    assert isinstance(head, ProbabilisticFact), f"Expected ProbabilisticFact, got {type(head)}"
-    assert isinstance(head.probability, Symbol)
-    assert head.probability.name == "p"
+    # The ProbabilisticFact appears in the rule body (antecedent)
+    body = implications[0].antecedent
+    # Collect all subexpressions to find the ProbabilisticFact
+    def find_pf(expr):
+        if isinstance(expr, ProbabilisticFact):
+            return expr
+        if hasattr(expr, 'formulas'):
+            for f in expr.formulas:
+                pf = find_pf(f)
+                if pf is not None:
+                    return pf
+        return None
+    pf = find_pf(body)
+    assert pf is not None, f"No ProbabilisticFact found in body: {body}"
+    # Probability should be a Symbol (the label ?p)
+    assert isinstance(pf.probability, Symbol), f"Expected Symbol, got {type(pf.probability)}"
+    assert pf.probability.name == "p"
