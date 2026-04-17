@@ -26,6 +26,7 @@ rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
         | _rule_start PROBABLY verb1 rule_body1_cond
         | _rule_start verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
         | _rule_start verb1 _WITH _PROBABILITY rule_body1_cond -> rule_op_marg
+        | _rule_start verb1 _WITH _PROBABILITY rule_body2_cond -> rule_op_marg
 
 ?rulen : _rule_start verbn rule_body1 _BREAK? ops -> rule_opnn
        | _rule_start PROBABLY verbn rule_body1 _CONDITIONED? _BREAK? ops -> rule_opnn_per

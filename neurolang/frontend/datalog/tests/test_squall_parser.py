@@ -788,3 +788,20 @@ def test_det_every_agg_free_var_fallback():
     assert len(agg_arg.args) >= 1, (
         f"Expected at least 1 agg arg (free var from npc body), got: {agg_arg.args}"
     )
+
+
+def test_rule_body2_cond_parses():
+    """define as … with probability every A conditioned to every B should parse."""
+    from ....probabilistic.expressions import Condition, ProbabilisticQuery, PROB
+
+    result = parser(
+        "define as spread with probability every virus conditioned to every study."
+    )
+    assert isinstance(result, Implication), (
+        f"Expected Implication, got {type(result)}"
+    )
+    body = result.antecedent
+    assert isinstance(body, Condition), f"Expected Condition, got {type(body)}"
+    head_args = result.consequent.args
+    prob_args = [a for a in head_args if isinstance(a, ProbabilisticQuery)]
+    assert prob_args, f"Expected ProbabilisticQuery in head args, got: {head_args}"
