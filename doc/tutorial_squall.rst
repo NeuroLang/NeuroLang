@@ -689,77 +689,175 @@ triples where the last column is
 16. Missing SQUALL Syntax — Gap Report
 -----------------------------------------
 
-The following Datalog / IR patterns appear in codebase examples but
-**cannot currently be expressed in SQUALL**:
+The following Datalog / IR patterns appear in codebase examples with their
+current status as of 2026-04-17:
 
-.. list-table::
+.. list-table:: SQUALL gap report (updated 2026-04-17)
    :header-rows: 1
-   :widths: 35 35 30
+   :widths: 40 15 45
 
    * - Feature
-     - Datalog / IR form
-     - SQUALL status
-   * - **Probabilistic fact (@ weight)**
-       ``VoxelReported @ max(exp(-d/5))``
-     - ``pred(x) @ agg_func(expr)``
-     - ❌ No syntax. Only ``with probability`` (PROB) is supported; weighted
-       aggregation in the head annotation is IR-only.
-   * - **EUCLIDEAN / built-in functions**
-       ``d == EUCLIDEAN(i1,j1,k1,i2,j2,k2)``
-     - Function call in body constraint
-     - ❌ No syntax for arithmetic function calls in the body.
-       Only comparison operators (``greater/lower/equal``) are supported.
-   * - **Arithmetic in body**
-       ``d < 1``, ``count > 0``
-     - Comparison against an expression
-     - ⚠️ Comparison against a *literal* works (Section 7).
-       Comparison against a *computed variable* (e.g. ``d == f(...)``)
-       does not.
-   * - **Anonymous / don't-care variables**
-       ``term_in_study_tfidf(s, t, _)``
-     - Underscore wildcard in n-ary predicate
-     - ⚠️ ``_`` is parsed as ``ANONYMOUS_LABEL`` and generates a fresh
-       variable, but there is no ergonomic way to say "any third column"
-       in a binary-noun position.
-   * - **Two-sided conditioned NP**
-       ``NP conditioned to NP``
-     - ``rule_body2_cond``
-     - ⚠️ Grammar rule exists; transformer exists; but there is no
-       ``rule_op`` alternative that uses ``rule_body2_cond`` directly,
-       so it is only reachable from ``rule_body1_cond``.
-   * - **Disjunction at rule level**
-       Two ``Implication`` rules with the same head
-     - ``head :- body1. head :- body2.``
-     - ✅ Supported via two separate ``define as`` sentences.
-       Inline ``or`` inside a relative clause is also supported (Section 11).
-   * - **Existential in rule head**
-       ``head(x, f(x))`` with a function in the head
-     - Skolem-like functional term
-     - ❌ Not supported.
-   * - **Recursive rules**
-       ``path(x,z) :- path(x,y), edge(y,z)``
-     - Self-referential body
-     - ✅ Supported — define the IDB name and use it in the body of a
-       later rule. The engine performs a stratified chase.
+     - Status
+     - Notes
+   * - ``rule_body2_cond`` two-sided conditioned NP
+     - ✅ Fixed
+     - ``define as X with probability every A conditioned to every B`` now routes to ``rule_op_marg``
+   * - Function calls in rule body (e.g. ``euclidean(?x,?y)``)
+     - ✅ Fixed
+     - Use ``rel_fun_call``: ``every A that euclidean(?x,?y) holds``
+   * - Comparison against computed variable (``?w greater than ?threshold``)
+     - ✅ Confirmed working
+     - Use ``rel_comp`` with a label in the RHS ``op`` position
+   * - Anonymous wildcard ``_`` in n-ary predicates
+     - ✅ Confirmed working
+     - Each ``_`` creates a distinct fresh symbol; ``every Study that _ activates`` works
+   * - Variable/expression as explicit probability (``with probability ?p``)
+     - ✅ Fixed
+     - ``vpdo_explicit_prob_v1/vn`` now accept any NP including labels
+   * - Skolem-like functional terms in rule head
+     - ❌ Not supported
+     - Requires IR changes beyond transformer scope
+
+.. rubric:: Examples — previously missing, now working
+
+**Symmetric conditioned probability:**
+
+.. code-block:: text
+
+    define as spread with probability every virus conditioned to every study.
+
+**Function call in body:**
+
+.. code-block:: text
+
+    define as Close every Pair that euclidean(?x, ?y) holds.
+
+**Variable probability:**
+
+.. code-block:: text
+
+    define as Probable every Study that activates with probability ?p.
+
+**Anonymous wildcard:**
+
+.. code-block:: text
+
+    define as HasActivation every Study that _ activates.
 
 
-17. Previously Known Limitations (Now Implemented)
-----------------------------------------------------
+17. Using the IR Builder (``with nl.environment as e:``)
+=========================================================
 
-Three constructs that were previously stubs are now fully implemented:
+Every SQUALL sentence is compiled into NeuroLang's intermediate representation
+(IR).  You can also write IR directly using the **environment context manager**.
+This is useful when:
 
-* **Inverse transitive prefix ``~``** — ``~verb`` now correctly reverses
-  argument order via ``_InverseVerbSymbol`` / ``InvertedFunctionApplication``
-  nodes, resolved by ``ResolveInvertedFunctionApplicationMixin``.
-  ``x ~sings y`` maps to ``sings(y, x)``.
+- a pattern has no SQUALL syntax yet;
+- you need to mix Python logic with declarative rules;
+- you want to inspect or reuse the IR objects from a rule.
 
-* **Conditioned rules** — ``define as probably … conditioned to …`` now
-  produces ``Condition(conditioned, conditioning)`` nodes in the rule body,
-  which ``TranslateProbabilisticQueryMixin.rewrite_conditional_query`` rewrites
-  into the standard three-rule conditional probability form.
+**Scope vs Environment**
 
-* **``rule_body2_cond``** — the grammar rule for two-sided conditioned NPs
-  now has a working transformer handler.
+``nl.scope`` — symbols are popped from the symbol table when the ``with``
+block exits (clean, no side effects).
 
-These fixes are documented in the module docstring of
-``neurolang/frontend/datalog/squall_syntax_lark.py``.
+``nl.environment`` — symbols persist in the symbol table after exit
+(use when rules must be visible to later ``solve_all()`` calls).
+
+Both use the same ``e.<Name>`` attribute syntax.
+
+**Rule equivalence cheat-sheet**
+
+**Simple unary rule**
+
+SQUALL:
+
+.. code-block:: text
+
+    define as Active every person that plays.
+
+IR builder:
+
+.. code-block:: python
+
+    with nl.environment as e:
+        e.active[e.x] = e.person(e.x) & e.plays(e.x)
+    sol = nl.solve_all()
+
+**Binary / n-ary rule**
+
+SQUALL:
+
+.. code-block:: text
+
+    define as author_of for every Paper ?p ; where every Author ?a ; where ?a wrote ?p.
+
+IR builder:
+
+.. code-block:: python
+
+    with nl.environment as e:
+        e.author_of[e.p, e.a] = e.wrote(e.a, e.p)
+
+**Probabilistic fact**
+
+SQUALL:
+
+.. code-block:: text
+
+    define as probably activates every study.
+
+IR builder:
+
+.. code-block:: python
+
+    from neurolang.probabilistic.expressions import ProbabilisticFact
+    from neurolang.expressions import Symbol
+
+    with nl.environment as e:
+        p = Symbol.fresh()
+        e.activates[e.s] = ProbabilisticFact(p, e.study(e.s))
+
+**Marginalisation (MARG) query**
+
+SQUALL:
+
+.. code-block:: text
+
+    define as prob_map with probability every focus_reported (?x; ?y; ?z; ?s)
+        conditioned to every selected_study ?s that open_world_studies.
+
+IR builder:
+
+.. code-block:: python
+
+    from neurolang.probabilistic.expressions import ProbabilisticQuery, Condition, PROB
+
+    with nl.environment as e:
+        x, y, z, s = e.x, e.y, e.z, e.s
+        e.prob_map[x, y, z, s, ProbabilisticQuery(PROB, (x, y, z, s))] = Condition(
+            e.focus_reported(x, y, z, s),
+            e.selected_study(s) & e.open_world_studies(s)
+        )
+
+**Aggregation**
+
+SQUALL:
+
+.. code-block:: text
+
+    define as max_items for every Item ?i ;
+        where every Max of the Quantity where ?i item_count per ?i.
+
+IR builder:
+
+.. code-block:: python
+
+    from neurolang.datalog.aggregation import AggregationApplication
+    from neurolang.expressions import Constant
+
+    with nl.environment as e:
+        q = e.q
+        e.max_items[e.i, AggregationApplication(Constant(max), (q,))] = (
+            e.item(e.i) & e.item_count(e.i, q)
+        )
