@@ -1,0 +1,6 @@
+﻿neurolang.expression\_pattern\_matching
+=======================================
+
+.. currentmodule:: neurolang
+
+.. autodata:: expression_pattern_matching

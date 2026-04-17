@@ -1,0 +1,6 @@
+﻿neurolang.NeurolangPDL
+======================
+
+.. currentmodule:: neurolang
+
+.. autodata:: NeurolangPDL

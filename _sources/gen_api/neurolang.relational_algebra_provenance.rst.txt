@@ -1,0 +1,6 @@
+﻿neurolang.relational\_algebra\_provenance
+=========================================
+
+.. currentmodule:: neurolang
+
+.. autodata:: relational_algebra_provenance

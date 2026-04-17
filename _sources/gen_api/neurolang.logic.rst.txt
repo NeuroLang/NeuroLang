@@ -1,0 +1,6 @@
+﻿neurolang.logic
+===============
+
+.. currentmodule:: neurolang
+
+.. autodata:: logic

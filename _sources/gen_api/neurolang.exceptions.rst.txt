@@ -1,0 +1,6 @@
+﻿neurolang.exceptions
+====================
+
+.. currentmodule:: neurolang
+
+.. autodata:: exceptions

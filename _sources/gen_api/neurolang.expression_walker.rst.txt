@@ -1,0 +1,6 @@
+﻿neurolang.expression\_walker
+============================
+
+.. currentmodule:: neurolang
+
+.. autodata:: expression_walker

@@ -1,0 +1,6 @@
+﻿neurolang.probabilistic
+=======================
+
+.. currentmodule:: neurolang
+
+.. autodata:: probabilistic

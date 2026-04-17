@@ -1,0 +1,64 @@
+/* NeuroLang brand colour overrides for PyData Sphinx Theme */
+
+/* Light mode */
+:root {
+    --pst-color-primary: #5C6BC0;
+    --pst-color-primary-highlight: #3949AB;
+    --pst-color-secondary: #26A69A;
+    --pst-color-accent: #26A69A;
+}
+
+/* Dark mode */
+[data-theme="dark"] {
+    --pst-color-primary: #7986CB;
+    --pst-color-primary-highlight: #5C6BC0;
+    --pst-color-secondary: #4DB6AC;
+    --pst-color-accent: #4DB6AC;
+}
+
+/* Hero section on the landing page */
+.nl-hero {
+    padding: 3rem 1rem 2.5rem;
+    text-align: center;
+    border-bottom: 1px solid var(--pst-color-border);
+    margin-bottom: 2rem;
+}
+
+.nl-hero h1 {
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--pst-color-primary);
+    margin-bottom: 0.5rem;
+}
+
+.nl-hero .nl-tagline {
+    font-size: 1.2rem;
+    color: var(--pst-color-secondary-text);
+    margin-bottom: 1.5rem;
+}
+
+.nl-hero .nl-cta-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* Feature card grid */
+.nl-feature-grid {
+    margin: 2rem 0;
+}
+
+/* Quickstart block */
+.nl-quickstart {
+    background: var(--pst-color-surface);
+    border-left: 4px solid var(--pst-color-primary);
+    border-radius: 4px;
+    padding: 1.25rem 1.5rem;
+    margin: 2rem 0;
+}
+
+.nl-quickstart h3 {
+    margin-top: 0;
+    color: var(--pst-color-primary);
+}
