@@ -55,7 +55,7 @@ dev = [
     "pytest-benchmark",
     "pytest-cov",
     "tornado>=6.5.5",
-    "pyyaml>=6.0.3"
+    "pyyaml>=6.0.3",
     "problog"
 ]
 
@@ -117,15 +117,6 @@ force_grid_wrap = 0
 use_parentheses = true
 line_length = 79
 combine_as_imports = true
-[build-system]
-requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
-build-backend = "setuptools.build_meta"
-
-dev = [
-
-]
-
-
 
 [tool.codespell]
 ignore-words-list = "anc"
