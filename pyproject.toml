@@ -17,6 +17,7 @@ classifiers = [
     "Programming Language :: Python",
     "Topic :: Scientific/Engineering",
 ]
+
 keywords = [
     "logic programming",
     "probabilistic logic programming",
@@ -26,6 +27,7 @@ keywords = [
     "neuroimaging",
     "datalog",
 ]
+
 dependencies = [
     "numpy",
     "scipy",
@@ -39,10 +41,7 @@ dependencies = [
     "seaborn",
     "typing_inspect",
     "rdflib>=6.0.0",
-    "sqlalchemy>=1.4",
-    "pytest>=9.0.3",
-    "tornado>=6.5.5",
-    "pyyaml>=6.0.3",
+    "sqlalchemy>=1.4"
 ]
 
 [project.urls]
@@ -52,22 +51,25 @@ Homepage = "https://neurolang.github.io"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
+    "pytest>=9.0.3",
     "pytest-benchmark",
     "pytest-cov",
-    "tornado",
-    "pyyaml",
+    "tornado>=6.5.5",
+    "pyyaml>=6.0.3"
     "problog"
 ]
+
 doc = [
-    "sphinx>=4.2.0",
-    "sphinx_bootstrap_theme",
+    "sphinx>=7.0",
+    "pydata-sphinx-theme>=0.15",
+    "sphinx-design>=0.5",
     "sphinx-gallery",
-    "numpydoc",
+    "numpydoc"
 ]
+
 server = [
-    "tornado",
-    "pyyaml",
+    "tornado>=6.5.5",
+    "pyyaml>=6.0.3"
 ]
 
 [project.scripts]
@@ -115,3 +117,15 @@ force_grid_wrap = 0
 use_parentheses = true
 line_length = 79
 combine_as_imports = true
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+dev = [
+
+]
+
+
+
+[tool.codespell]
+ignore-words-list = "anc"

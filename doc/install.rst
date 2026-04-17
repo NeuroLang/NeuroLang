@@ -1,192 +1,130 @@
-Installing Neurolang
+Installing NeuroLang
 ====================
 
-.. |dependencies| replace:: 
-   Neurolang requires a Python installation and the following dependencies: 
-   ipython, scipy, scikit-learn, joblib, matplotlib, nibabel, nilearn.
+NeuroLang requires **Python ≥ 3.8**. The recommended way to install it is
+with `uv <https://github.com/astral-sh/uv>`_ — a fast Python package manager —
+or with standard ``pip``.
 
+.. tab-set::
 
- 
+   .. tab-item:: Windows
 
-Windows
--------
+      **1. Install uv**
 
-First: download and install 64 bit Anaconda
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      Open PowerShell and run:
 
-We recommend that you **install a complete 64 bit scientific Python
-distribution
-like** `Anaconda <%0A%20%20%20%20%20%20%20https://www.anaconda.com/download/>`__
-. Since it meets all the requirements of neurolang, it will save you
-time and trouble. You could also check
-`PythonXY <http://python-xy.github.io/>`__ as an alternative.
+      .. code-block:: powershell
 
-|dependencies|
+         powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 
-Second: open a Command Prompt
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      Or use pip directly if you already have Python installed:
 
-| **(Press "Win-R", type "cmd" and press "Enter". This will open the
-   program cmd.exe, which is the command prompt)**
-| Then type the following line and press "Enter"
+      .. code-block:: text
 
-.. container:: code
+         pip install uv
 
-   ::
+      **2. Install NeuroLang**
 
-      pip install -U --user neurolang
+      .. code-block:: text
 
-Third: open IPython
-~~~~~~~~~~~~~~~~~~~
+         uv pip install neurolang
 
-| **(You can open it by writing "ipython" in the command prompt and
-   pressing "Enter")**
-| Then type in the following line and press "Enter":
+      **3. Verify**
 
-.. container:: code
+      Open a new terminal and run:
 
-   ::
+      .. code-block:: text
 
-      In [1]: import neurolang
+         python -c "import neurolang; print('NeuroLang installed OK')"
 
-If no error occurs, you have installed neurolang correctly.
+   .. tab-item:: macOS
 
+      **1. Install uv**
 
-Mac
----
+      .. code-block:: bash
 
+         curl -LsSf https://astral.sh/uv/install.sh | sh
 
-First: download and install 64 bit
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      **2. Install NeuroLang**
 
-`Anaconda <https://www.anaconda.com/download/>`__
+      .. code-block:: bash
 
-We recommend that you **install a complete 64 bit scientific Python
-distribution
-like** `Anaconda <https://www.anaconda.com/download/>`__. Since it
-meets all the requirements of neurolang, it will save you time and
-trouble.
+         uv pip install neurolang
 
+      **3. Verify**
 
-Second: open a Terminal
-~~~~~~~~~~~~~~~~~~~~~~~
+      .. code-block:: bash
 
-| **(Navigate to /Applications/Utilities and double-click on
-   Terminal)**
-| Then type the following line and press "Enter"
+         python -c "import neurolang; print('NeuroLang installed OK')"
 
-.. container:: code
+   .. tab-item:: Linux
 
-   ::
+      **1. Install uv**
 
-      pip install -U --user neurolang
+      .. code-block:: bash
 
-Third: open IPython
-~~~~~~~~~~~~~~~~~~~
+         curl -LsSf https://astral.sh/uv/install.sh | sh
 
-| **(You can open it by writing "ipython" in the terminal and
-   pressing "Enter")**
-| Then type in the following line and press "Enter":
+      **2. Install NeuroLang**
 
-.. container:: code
+      .. code-block:: bash
 
-   ::
+         uv pip install neurolang
 
-      In [1]: import neurolang
+      **3. Verify**
 
-If no error occurs, you have installed neurolang correctly.
+      .. code-block:: bash
 
-Linux
------
+         python -c "import neurolang; print('NeuroLang installed OK')"
 
-If you are using **Ubuntu or Debian**
+   .. tab-item:: From source
 
-First: Install dependencies
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      Clone the repository and install in editable mode with all dev and doc
+      dependencies:
 
-Install or ask your system administrator to install the following
-packages using the distribution package manager: **ipython** ,
-**scipy**, **scikit-learn** (sometimes called sklearn, or
-python-sklearn), **joblib**, **matplotlib** (sometimes called
-python-matplotlib) and **nibabel** (sometimes called
-python-nibabel).
+      .. code-block:: bash
 
-**If you do not have access to the package manager we recommend
-that you install a complete 64 bit scientific Python distribution
-like** `Anaconda <https://www.anaconda.com/download/>`__. Since
-it meets all the requirements of neurolang, it will save you time
-and trouble.
+         git clone https://github.com/NeuroLang/NeuroLang.git
+         cd NeuroLang
+         uv pip install -e ".[dev,doc]"
 
-Second: open a Terminal
-~~~~~~~~~~~~~~~~~~~~~~~
+      To update your local copy:
 
-| **(Press ctrl+alt+t and a Terminal console will pop up)**
-| Then type the following line and press "Enter"
+      .. code-block:: bash
 
-.. container:: code
+         git pull
+         uv pip install -e ".[dev,doc]"
 
-   ::
+      Verify:
 
-      pip install -U --user neurolang
+      .. code-block:: bash
 
-Third: open IPython
-~~~~~~~~~~~~~~~~~~~
+         python -c "import neurolang; print('NeuroLang installed OK')"
 
-| **(You can open it by writing "ipython" in the terminal and
-   pressing "Enter")**
-| Then type in the following line and press "Enter":
 
-.. container:: code
+Using pip without uv
+---------------------
 
-   ::
+If you prefer plain pip:
 
-      In [1]: import neurolang
+.. code-block:: bash
 
-If no error occurs, you have installed neurolang correctly.
+   pip install neurolang
 
-To Install the development version
-----------------------------------
 
-**Use git as an alternative to using pip, to get the latest
-neurolang version**
+Dependencies
+------------
 
-Simply run the following command (as a shell command, not a Python
-command):
+NeuroLang requires the following libraries (installed automatically):
 
-.. container:: code
-
-   ::
-
-      git clone https://github.com/neurolang/neurolang.git
-
-In the future, you can readily update your copy of neurolang by
-executing “git pull” in the neurolang root directory (as a shell
-command).
-
-If you really do not want to use git, you may still download the
-latest development snapshot from the following link (unziping
-required):
-https://github.com/neurolang/neurolang/archive/master.zip
-
-**Install in the neurolang directory created by the previous
-steps, run (again, as a shell command):**
-
-.. container:: code
-
-   ::
-
-      python setup.py develop --user
-
-**Now to test everything is set up correctly, open IPython and
-type in the following line:**
-
-.. container:: code
-
-   ::
-
-      In [1]: import neurolang
-
-If no error occurs, you have installed neurolang correctly.
+* `NumPy <https://numpy.org>`_
+* `SciPy <https://scipy.org>`_
+* `pandas <https://pandas.pydata.org>`_
+* `nibabel <https://nipy.org/nibabel/>`_
+* `nilearn <https://nilearn.github.io>`_
+* `scikit-learn <https://scikit-learn.org>`_
+* `matplotlib <https://matplotlib.org>`_
+* `rdflib <https://rdflib.readthedocs.io>`_
 
 Installing alternative backends for Neurolang
 ---------------------------------------------

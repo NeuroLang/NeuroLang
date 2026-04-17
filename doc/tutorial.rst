@@ -6,7 +6,12 @@ Get Started with NeuroLang
 First Steps With NeuroLang
 --------------------------
 NeuroLang is a unifying formalism to perform complex queries and explorations using heterogeneous data sources like tabular data,
-volumetric images, and ontologies. To perform this in sound manner, NeuroLang is a probabilistic logic programming language based on Datalog [abiteboul1995]_, [maier2018]_. 
+volumetric images, and ontologies. To perform this in sound manner, NeuroLang is a probabilistic logic programming language based on Datalog [abiteboul1995]_, [maier2018]_.
+
+.. note::
+
+   If you are already familiar with logic programming, see
+   :doc:`tutorial_logic_programming` for a more technical walkthrough.
 
 
 The whole idea of logic programming is to be able to make assertions of the style:
@@ -35,7 +40,7 @@ Finally, for notation convenience, we will drop the quantifiers, assuming that a
    \operatorname{left\_hemisphere\_gyrus}(x) \leftarrow  \operatorname{destrieux\_atlas}(l, x) \wedge \operatorname{startswith}('L\,G', l)
 
 
-which we formalise in python as:
+which we formalise in Python as:
 
 .. code-block:: python
 
@@ -46,7 +51,7 @@ which we formalise in python as:
 the full example is in our gallery in :ref:`sphx_glr_auto_examples_plot_load_destrieux_left_hemisphere_gyri.py`.
 
 
-Negation can also be used in Neurolang. For instance
+Negation can also be used in NeuroLang. For instance
 
 
 Disjunctions in Logic Programming
@@ -74,7 +79,7 @@ alternatively, this can be written as a set of two propositions
  \end{cases}
 
 
-which we formalise in Neurlang in the classical logical programming syntax:
+which we formalise in NeuroLang in the classical logical programming syntax:
 
 .. code-block:: python
 
