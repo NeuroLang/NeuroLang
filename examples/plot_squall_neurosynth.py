@@ -51,7 +51,7 @@ from neurolang.frontend.neurosynth_utils import get_ns_mni_peaks_reported
 ###############################################################################
 # Data preparation
 # ----------------
-# Load the MNI T1 atlas resampled to 4 mm isotropic voxels.
+# Set the data directory and load the MNI T1 atlas resampled to 4 mm voxels.
 
 data_dir = Path.home() / "neurolang_data"
 
@@ -118,8 +118,10 @@ nl.load_neurosynth_term_study_associations(
 # * ``with probability … conditioned to`` — MARG query (conditional probability)
 # * ``every Agg_create_region_overlay of the …`` — aggregation into brain image
 #
-# Note: the tuple label syntax ``(?s; ?t; ?tfidf)`` requires named variables —
-# the grammar's tuple form does not support the ``_`` anonymous placeholder.
+# Note: SQUALL's tuple-label syntax ``(?s; ?t; ?tfidf)`` requires named
+# variables — the grammar does not allow the ``_`` anonymous placeholder
+# inside ``(; ;)`` tuples.  ``?tfidf`` binds the TF-IDF weight column
+# but is intentionally absent from the rule head, so it is projected away.
 
 squall_program = """
 define as Activation every Peak_reported (?i; ?j; ?k; ?s)
@@ -141,7 +143,7 @@ nl.execute_squall_program(squall_program)
 # %%
 ###############################################################################
 # Solve and retrieve the probability map
-# ---------------------------------------
+# --------------------------------------
 
 solution = nl.solve_all()
 result_image = (
