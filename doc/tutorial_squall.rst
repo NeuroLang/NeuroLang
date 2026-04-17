@@ -532,7 +532,218 @@ String literals use single quotes and may contain spaces::
     ['neuro study']
 
 
-14. Previously Known Limitations (Now Implemented)
+15. Neuroimaging Domain Examples
+----------------------------------
+
+This section mirrors the patterns used in the actual NeuroLang examples
+(``examples/squall_examples.py``, ``examples/plot_neurosynth_implementation.py``)
+and shows how the same queries are expressed in SQUALL.
+
+**Finding activated voxels reported by studies**
+
+Each study in NeuroSynth reports ``(study, voxel)`` pairs.  We want to
+collect every voxel that at least one study has reported as activated.
+The predicate ``?s reports ?v`` maps to ``reports(s, v)``::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1",), ("s2",), ("s3",)], name="study"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("v1",), ("v2",), ("v3",)], name="voxel"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1", "v1"), ("s2", "v1"), ("s2", "v2")], name="reports"
+    ... )
+    >>> nl.execute_squall_program(
+    ...     "define as Activated every Voxel ?v that a Study ?s reports."
+    ... )
+    >>> sorted(nl.solve_all()["activated"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['v1', 'v2']
+
+.. note::
+
+   The tilde (``~``) *reverses* argument order.  Use it when the EDB stores
+   ``(voxel, study)`` so that ``?v ~reports ?s`` maps to ``reports(v, s)``
+   which the engine sees as ``reports(voxel, study)``.
+
+**Filtering by study category (two-rule chain)**
+
+Select a subset of studies by a category predicate, then collect the
+voxels those studies report::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1",), ("s2",)], name="auditory_study"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("v1",), ("v2",), ("v3",)], name="voxel"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1", "v1"), ("s2", "v2"), ("s2", "v3")], name="reports"
+    ... )
+    >>> nl.execute_squall_program(
+    ...     "define as Auditory_voxel every Voxel ?v "
+    ...     "that an Auditory_study ?s reports."
+    ... )
+    >>> sorted(nl.solve_all()["auditory_voxel"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['v1', 'v2', 'v3']
+
+The two-rule chain pattern is the SQUALL equivalent of:
+
+.. code-block:: text
+
+   auditory_voxel(v) :- voxel(v), auditory_study(s), reports(s, v).
+
+**Atlas region filtering — registering a custom predicate**
+
+Custom Python functions registered in ``symbol_table`` become body
+predicates.  The example below uses the built-in ``startswith`` to
+filter atlas region names:
+
+.. code-block:: python
+
+   from neurolang.expressions import Symbol, Constant
+
+   nl = NeurolangPDL()
+   nl.symbol_table[Symbol("startswith")] = Constant(str.startswith)
+   nl.add_tuple_set(
+       [("L S_temporal_sup",), ("R S_temporal_sup",), ("L G_frontal_sup",)],
+       name="atlas_label"
+   )
+   # SQUALL (intransitive predicate acting on the registered function):
+   # define as Left_label every Atlas_label ?label that startswith 'L '.
+   #
+   # NOTE: string literals in body predicates currently require a
+   # comparison rel_comp form; the above is illustrative — see the
+   # Gap Report (Section 16) for the current limitation.
+
+.. note::
+
+   String-literal arguments to arbitrary body predicates are not yet
+   supported.  The workaround is to pre-filter the EDB in Python before
+   calling ``execute_squall_program``.
+
+**Multi-variable brain activation rule (tuple subject)**
+
+When voxels are stored as ``(x, y, z)`` coordinate triples, the tuple
+label syntax binds all three columns at once::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1",), ("s2",)], name="study"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [(0, 1, 2), (3, 4, 5), (6, 7, 8)], name="voxel"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1", 0, 1, 2), ("s2", 3, 4, 5)], name="focus_reported"
+    ... )
+    >>> nl.execute_squall_program(
+    ...     "define as Activation every Voxel (?x; ?y; ?z) "
+    ...     "that a Study ?s focus_reported."
+    ... )
+    >>> sorted(
+    ...     nl.solve_all()["activation"]
+    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
+    ... )
+    [(0, 1, 2), (3, 4, 5)]
+
+The tuple subject ``(?x; ?y; ?z)`` binds the three coordinate columns of
+``voxel`` and re-uses those variables in the ``focus_reported`` body
+(column order: study, x, y, z).
+
+**Conditional probability (MARG) — activation probability**
+
+The MARG form computes the conditional probability that a study-voxel
+pair is activated given a conditioning predicate.  The full NeuroSynth
+equivalent (see ``examples/plot_neurosynth_implementation.py``) is:
+
+.. code-block:: python
+
+   nl = NeurolangPDL()
+   nl.add_uniform_probabilistic_choice_over_set(
+       [("s1",), ("s2",), ("s3",)], name="selected_study"
+   )
+   nl.add_tuple_set([("s1", 0, 1, 2), ("s2", 3, 4, 5)],
+                    name="focus_reported")
+   nl.add_tuple_set([("s1",), ("s2",)], name="term_assoc")
+   nl.execute_squall_program(
+       "define as Activation every Focus_reported (?s; ?x; ?y; ?z) "
+       "that Selected_study. "
+       "define as Prob_map with probability every Activation (?s; ?x; ?y; ?z) "
+       "conditioned to every Term_assoc ?s."
+   )
+
+The relation ``prob_map`` will contain ``(s, x, y, z, probability)``
+triples where the last column is
+``P(focus_reported(s,x,y,z) | term_assoc(s))``.
+
+.. note::
+
+   A full probabilistic solve requires ``NeurolangPDL.solve_all()``
+   after ``execute_squall_program`` and a CPLogic-compatible EDB loaded
+   via ``add_uniform_probabilistic_choice_over_set``.
+
+
+16. Missing SQUALL Syntax — Gap Report
+-----------------------------------------
+
+The following Datalog / IR patterns appear in codebase examples but
+**cannot currently be expressed in SQUALL**:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 35 30
+
+   * - Feature
+     - Datalog / IR form
+     - SQUALL status
+   * - **Probabilistic fact (@ weight)**
+       ``VoxelReported @ max(exp(-d/5))``
+     - ``pred(x) @ agg_func(expr)``
+     - ❌ No syntax. Only ``with probability`` (PROB) is supported; weighted
+       aggregation in the head annotation is IR-only.
+   * - **EUCLIDEAN / built-in functions**
+       ``d == EUCLIDEAN(i1,j1,k1,i2,j2,k2)``
+     - Function call in body constraint
+     - ❌ No syntax for arithmetic function calls in the body.
+       Only comparison operators (``greater/lower/equal``) are supported.
+   * - **Arithmetic in body**
+       ``d < 1``, ``count > 0``
+     - Comparison against an expression
+     - ⚠️ Comparison against a *literal* works (Section 7).
+       Comparison against a *computed variable* (e.g. ``d == f(...)``)
+       does not.
+   * - **Anonymous / don't-care variables**
+       ``term_in_study_tfidf(s, t, _)``
+     - Underscore wildcard in n-ary predicate
+     - ⚠️ ``_`` is parsed as ``ANONYMOUS_LABEL`` and generates a fresh
+       variable, but there is no ergonomic way to say "any third column"
+       in a binary-noun position.
+   * - **Two-sided conditioned NP**
+       ``NP conditioned to NP``
+     - ``rule_body2_cond``
+     - ⚠️ Grammar rule exists; transformer exists; but there is no
+       ``rule_op`` alternative that uses ``rule_body2_cond`` directly,
+       so it is only reachable from ``rule_body1_cond``.
+   * - **Disjunction at rule level**
+       Two ``Implication`` rules with the same head
+     - ``head :- body1. head :- body2.``
+     - ✅ Supported via two separate ``define as`` sentences.
+       Inline ``or`` inside a relative clause is also supported (Section 11).
+   * - **Existential in rule head**
+       ``head(x, f(x))`` with a function in the head
+     - Skolem-like functional term
+     - ❌ Not supported.
+   * - **Recursive rules**
+       ``path(x,z) :- path(x,y), edge(y,z)``
+     - Self-referential body
+     - ✅ Supported — define the IDB name and use it in the body of a
+       later rule. The engine performs a stratified chase.
+
+
+17. Previously Known Limitations (Now Implemented)
 ----------------------------------------------------
 
 Three constructs that were previously stubs are now fully implemented:
