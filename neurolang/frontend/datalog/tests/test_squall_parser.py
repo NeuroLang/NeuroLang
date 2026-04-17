@@ -828,3 +828,52 @@ def test_rel_body_function_call_parses():
     assert len(free_vars) >= 3, (
         f"Expected >=3 free vars (subject + 2 labels), got {free_vars}"
     )
+
+
+def test_rel_comp_variable_rhs_parses():
+    """'that has an item_weight ?w greater than ?threshold' — variable RHS comparison."""
+    from ..squall_syntax_lark import parser
+
+    result = parser(
+        "define as Heavy every Item "
+        "that has an item_weight ?w greater than ?threshold."
+    )
+    rules = result if isinstance(result, list) else [result]
+    implications = [r for r in rules if isinstance(r, Implication)]
+    assert len(implications) == 1
+    body_str = str(implications[0].antecedent)
+    # Both ?w and ?threshold should appear as free variables in the body
+    assert "threshold" in body_str, f"threshold not in body: {body_str}"
+
+
+def test_anonymous_wildcard_in_nary_predicate():
+    """'every Study that _ activates' — wildcard fills first arg of activates."""
+    result = parser("define as HasActivation every Study that _ activates.")
+    rules = result if isinstance(result, list) else [result]
+    implications = [r for r in rules if isinstance(r, Implication)]
+    assert len(implications) == 1
+
+
+def test_two_anonymous_wildcards_get_distinct_symbols():
+    """Two '_' labels in the same rule produce two distinct fresh-symbol lambdas."""
+    result = parser(
+        "define as TwoCols every Study ?s that ~activates _ and ~reports _ ."
+    )
+    rules = result if isinstance(result, list) else [result]
+    implications = [r for r in rules if isinstance(r, Implication)]
+    assert len(implications) == 1
+    body = implications[0].antecedent
+    # Collect callable args (ANONYMOUS_LABEL lambdas) across all body formulas
+    wildcard_lambdas = []
+    for formula in body.formulas:
+        if hasattr(formula, "args"):
+            for arg in formula.args:
+                if callable(arg):
+                    wildcard_lambdas.append(arg)
+    # Each '_' should produce a distinct lambda object
+    assert len(wildcard_lambdas) == 2, (
+        f"Expected 2 wildcard lambdas, got {wildcard_lambdas}"
+    )
+    assert wildcard_lambdas[0] is not wildcard_lambdas[1], (
+        "The two '_' wildcards must be distinct lambda objects"
+    )
