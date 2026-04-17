@@ -71,17 +71,14 @@ server = [
 [project.scripts]
 neuro-server = "neurolang.utils.server.app:main"
 
-[tool.setuptools.packages.find]
-namespaces = false
-
-[tool.setuptools.package-data]
-neurolang = [
-    "utils/server/neurolang-web/dist/*",
-    "utils/server/neurolang-web/dist/**/*",
-    "frontend/datalog/*.json",
-    "config/config.ini",
-    "utils/server/queries.yaml",
+[tool.hatch.build.targets.wheel]
+packages = ["neurolang"]
+artifacts = [
+    "neurolang/utils/server/neurolang-web/dist/**",
 ]
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
 
 [tool.hatch.version]
 source = "vcs"
