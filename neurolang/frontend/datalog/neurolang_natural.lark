@@ -100,6 +100,7 @@ rel_b : (_THAT | _WHICH | _WHERE | _WHO ) vp                -> rel_vp
       | _WHOSE ng2 vp                                       -> rel_ng2
       | _SUCH _THAT s                                       -> rel_s
       | comparison (_THAN | _TO) op                         -> rel_comp
+      | (_THAT | _WHICH | _WHERE ) identifier "(" label ("," label)* ")" _HOLDS -> rel_fun_call
       | adj1 [ cp ]                                         -> rel_adj1
 //      | adjn opn                                            -> rel_adjn
 
@@ -302,14 +303,15 @@ _WHEN : "when"
 _WHERE : "where"
 _WHICH : "which"
 _WITH : "with"
+_HOLDS : "holds"
 _WHO : "who"
 _WHOM : "whom"
 _WHOSE : "whose"
 
 
-LOWER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
-UPPER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
-NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-zA-Z_]\w*/
+LOWER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
+UPPER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
+NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-zA-Z_]\w*/
 UPPER_NAME_QUOTED : /`[A-Z][^`]*`/
 LOWER_NAME_QUOTED : /`[a-z][^`]*`/
 STRING : /[^']+/

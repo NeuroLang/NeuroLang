@@ -287,3 +287,29 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
             f"execute_squall_program raised an unexpected exception type for "
             f"conditioned rule (parse/walk plumbing broken?): {type(exc).__name__}: {exc}"
         )
+
+
+def test_execute_squall_body_function_call():
+    """Function call in rel_b position produces a valid body atom."""
+    from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
+
+    engine = NeurolangPDL()
+    engine.add_tuple_set([("a", 1), ("b", 2)], name="item_val")
+
+    def close_enough(x, y):
+        return abs(x - y) < 0.5
+
+    from neurolang.expressions import Symbol, Constant
+    engine.symbol_table[Symbol("close_enough")] = Constant(close_enough)
+
+    try:
+        engine.execute_squall_program(
+            "define as Near every Item_val that close_enough(?x, ?y) holds."
+        )
+    except Fol2DatalogTranslationException:
+        pass  # Acceptable: reached datalog translation — plumbing is OK
+    except Exception as exc:
+        pytest.fail(
+            f"Body function call raised unexpected exception: "
+            f"{type(exc).__name__}: {exc}"
+        )

@@ -805,3 +805,19 @@ def test_rule_body2_cond_parses():
     head_args = result.consequent.args
     prob_args = [a for a in head_args if isinstance(a, ProbabilisticQuery)]
     assert prob_args, f"Expected ProbabilisticQuery in head args, got: {head_args}"
+
+
+def test_rel_body_function_call_parses():
+    """'every Person that euclidean(?x, ?y) holds' should parse to a body atom."""
+    from ..squall_syntax_lark import parser
+    from ....datalog import Implication
+
+    result = parser(
+        "squall define as Close every Person that euclidean(?x, ?y) holds."
+    )
+    rules = result if isinstance(result, list) else [result]
+    implications = [r for r in rules if isinstance(r, Implication)]
+    assert len(implications) == 1
+    # The body should contain a FunctionApplication for euclidean
+    body_str = str(implications[0].antecedent)
+    assert "euclidean" in body_str.lower(), f"euclidean not in body: {body_str}"

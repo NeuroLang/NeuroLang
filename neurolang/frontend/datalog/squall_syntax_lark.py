@@ -815,6 +815,31 @@ class SquallTransformer(Transformer):
             return op(lambda y: Constant(comparison)(x, y))
         return ('_rel', rel)
 
+    def rel_fun_call(self, args):
+        """Handle ``identifier(label, label, ...)`` as a body predicate atom."""
+        func_sym = args[0]   # Symbol from identifier handler
+        label_cps_list = args[1:]  # list of CPS lambdas from label handler
+
+        # Materialise each label CPS into a concrete Symbol.
+        label_vars = []
+        for lbl_cps in label_cps_list:
+            if callable(lbl_cps) and not isinstance(lbl_cps, (Symbol, Constant)):
+                label_vars.append(lbl_cps(lambda v: v))
+            elif isinstance(lbl_cps, Symbol):
+                label_vars.append(lbl_cps)
+            else:
+                label_vars.append(Symbol.fresh())
+
+        if len(label_vars) == 1:
+            # Binary predicate: subject + one explicit arg
+            y = label_vars[0]
+            return ('_rel', lambda x: func_sym(x, y))
+        else:
+            # N-ary: all args explicit, subject NOT prepended
+            def rel(x, _vars=label_vars):
+                return func_sym(*_vars)
+            return ('_rel', rel)
+
     def rel_adj1(self, args):
         adj = args[0]
         return ('_rel', adj)
