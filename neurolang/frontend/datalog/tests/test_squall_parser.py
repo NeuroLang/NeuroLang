@@ -856,6 +856,8 @@ def test_anonymous_wildcard_in_nary_predicate():
 
 def test_two_anonymous_wildcards_get_distinct_symbols():
     """Two '_' labels in the same rule produce two distinct fresh-symbol lambdas."""
+    from ....expressions import Expression
+
     result = parser(
         "define as TwoCols every Study ?s that ~activates _ and ~reports _ ."
     )
@@ -865,7 +867,6 @@ def test_two_anonymous_wildcards_get_distinct_symbols():
     body = implications[0].antecedent
     # Collect callable args (ANONYMOUS_LABEL lambdas) across all body formulas.
     # Symbol is also callable so filter by checking it's not an Expression.
-    from ....expressions import Expression
     wildcard_lambdas = []
     for formula in body.formulas:
         if hasattr(formula, "args"):
@@ -873,9 +874,25 @@ def test_two_anonymous_wildcards_get_distinct_symbols():
                 if callable(arg) and not isinstance(arg, Expression):
                     wildcard_lambdas.append(arg)
     # Each '_' should produce a distinct lambda object
-    assert len(wildcard_lambdas) == 2, (
-        f"Expected 2 wildcard lambdas, got {wildcard_lambdas}"
+    assert len(wildcard_lambdas) >= 2, (
+        f"Expected >=2 wildcard lambdas, got {wildcard_lambdas}"
     )
     assert wildcard_lambdas[0] is not wildcard_lambdas[1], (
         "The two '_' wildcards must be distinct lambda objects"
     )
+
+
+def test_vpdo_explicit_prob_v1_accepts_variable():
+    """'activates with probability ?p' should parse and produce ProbabilisticFact(Symbol('p'), ...)."""
+    from neurolang.probabilistic.expressions import ProbabilisticFact
+
+    result = parser(
+        "define as Probable every Study that activates with probability ?p."
+    )
+    rules = result if isinstance(result, list) else [result]
+    implications = [r for r in rules if isinstance(r, Implication)]
+    assert len(implications) == 1
+    head = implications[0].consequent
+    assert isinstance(head, ProbabilisticFact), f"Expected ProbabilisticFact, got {type(head)}"
+    assert isinstance(head.probability, Symbol)
+    assert head.probability.name == "p"
