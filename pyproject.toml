@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
 [project]
 name = "neurolang"
@@ -83,8 +83,11 @@ neurolang = [
     "utils/server/queries.yaml",
 ]
 
-[tool.setuptools_scm]
-version_file = "neurolang/_version_scm.py"
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "neurolang/_version_scm.py"
 
 [tool.pytest.ini_options]
 norecursedirs = [".git", "_build", "tmp*", "scratch*", "deprecated*"]
