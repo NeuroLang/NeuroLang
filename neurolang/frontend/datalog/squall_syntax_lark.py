@@ -840,9 +840,9 @@ class SquallTransformer(Transformer):
             # the labels already cover every argument position and the
             # tuple must NOT be prepended — it would produce wrong arity.
             def rel(x, _vars=label_vars):
-                if isinstance(x, tuple):
-                    return func_sym(*_vars)
-                return func_sym(x, *_vars)
+                if isinstance(x, Symbol):
+                    return func_sym(x, *_vars)
+                return func_sym(*_vars)
             return ('_rel', rel)
 
     def rel_adj1(self, args):

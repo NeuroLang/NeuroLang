@@ -934,3 +934,8 @@ def test_rel_fun_call_tuple_subject_no_prepend():
     var_names = {v.name for v in free_vars}
     assert "i1" in var_names, f"i1 missing from free vars {var_names}"
     assert "i2" in var_names, f"i2 missing from free vars {var_names}"
+    # Confirm no extra args were prepended (tuple must not appear as first arg):
+    # 6 explicit labels in is_near + ?s from the tuple subject → exactly 7 free variables expected
+    assert len(free_vars) == 7, (
+        f"Expected exactly 7 free vars (i1,j1,k1,i2,j2,k2,s), got {free_vars}"
+    )
