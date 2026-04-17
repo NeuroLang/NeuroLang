@@ -401,31 +401,11 @@ def load_destrieux_atlas(data_dir, nl):
     )
 
     destrieux_atlas_images = nib.load(destrieux_atlas["maps"])
-    raw_labels = destrieux_atlas["labels"]
-
-    # nilearn >= 0.10 returns labels as a plain list of strings;
-    # older versions returned a list of (int_label, bytes_name) tuples.
-    # Detect the format by checking the first element.
-    if raw_labels and isinstance(raw_labels[0], str):
-        # New format: list of strings; index position is the atlas label value.
-        destrieux_atlas_labels = {
-            label: name.replace("-", " ").replace("_", " ")
-            for label, name in enumerate(raw_labels)
-            if name != "Background"
-        }
-    else:
-        # Old format: iterable of (int_label, bytes_or_str_name) pairs.
-        def _decode(name):
-            if isinstance(name, bytes):
-                return name.decode("utf-8")
-            return str(name)
-
-        destrieux_atlas_labels = {
-            label: _decode(name).replace("-", " ").replace("_", " ")
-            for label, name in raw_labels
-            if name not in (b"Background", "Background")
-        }
-
+    destrieux_atlas_labels = {
+        label: str(name.replace("-", " ").replace("_", " "))
+        for label, name in destrieux_atlas["labels"]
+        if name != b"Background"
+    }
     nl.add_atlas_set(
         "destrieux", destrieux_atlas_labels, destrieux_atlas_images
     )

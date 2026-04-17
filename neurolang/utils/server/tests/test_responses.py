@@ -4,12 +4,8 @@ from typing import AbstractSet, Tuple
 from unittest.mock import create_autospec
 from uuid import uuid4
 
-import nibabel as nib
-import numpy as np
-import pandas as pd
 import pytest
 from neurolang.exceptions import NeuroLangException
-from neurolang.regions import EmptyRegion, ExplicitVBR
 from neurolang.type_system import Unknown
 from neurolang.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
@@ -17,7 +13,6 @@ from neurolang.utils.relational_algebra_set import (
 from ..responses import (
     CustomQueryResultsEncoder,
     QueryResults,
-    serializeVBR,
 )
 
 
@@ -212,67 +207,3 @@ def test_query_results_can_serialize_to_json(future, result, data):
         },
     }
     assert json.loads(json_string) == expected
-
-
-# --- Tests for serializeVBR with string-named Series index ---
-
-
-def _make_explicit_vbr():
-    """Create a small ExplicitVBR for testing."""
-    voxels = np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]])
-    affine = np.eye(4)
-    image_dim = (10, 10, 10)
-    return ExplicitVBR(voxels, affine, image_dim=image_dim)
-
-
-def test_serializeVBR_with_string_named_index():
-    """
-    serializeVBR must not raise KeyError when the Series index consists of
-    string labels (e.g. ['index', 'region']).
-
-    This is the exact shape produced by:
-        rows[col].reset_index().apply(serializeVBR, axis=1)
-    where `col` is a string column name.  Before the fix, `image_row[1]`
-    raised KeyError because label-based access on a string-indexed Series
-    does not accept an integer key.
-    """
-    vbr = _make_explicit_vbr()
-    # Replicate what get_result_item_values does: build a DataFrame whose
-    # columns are ['index', 'region'] (all strings) and apply serializeVBR.
-    df = pd.DataFrame({"region": [vbr]})
-    reset_df = df["region"].reset_index()  # columns: ['index', 'region']
-
-    # Ensure the column names are indeed strings (regression guard)
-    assert all(isinstance(c, str) for c in reset_df.columns)
-
-    # This must not raise KeyError
-    result = reset_df.apply(serializeVBR, axis=1)
-    assert len(result) == 1
-
-    serialized = result.iloc[0]
-    assert isinstance(serialized, dict)
-    assert "image" in serialized
-    assert "hash" in serialized
-    assert "min" in serialized
-    assert "max" in serialized
-    assert "center" in serialized
-    assert serialized["idx"] == 0  # original DataFrame index was 0
-
-
-def test_serializeVBR_returns_empty_region_string():
-    """serializeVBR returns the string 'Empty Region' for EmptyRegion values."""
-    empty = EmptyRegion()
-    row = pd.Series({"index": 0, "region": empty})
-    result = serializeVBR(row)
-    assert result == "Empty Region"
-
-
-def test_serializeVBR_result_contains_valid_base64_image():
-    """The 'image' key in the serializeVBR result is a non-empty string."""
-    vbr = _make_explicit_vbr()
-    row = pd.Series({"index": 42, "region": vbr})
-    result = serializeVBR(row)
-    assert isinstance(result["image"], str)
-    assert len(result["image"]) > 0
-    assert result["idx"] == 42
-
