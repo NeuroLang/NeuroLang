@@ -74,7 +74,7 @@ class CustomBuildHook(BuildHookInterface):
             Path(self.root) / "neurolang" / "config" / "config.ini"
         )
         config = configparser.ConfigParser(
-            allow_no_value=True, comment_prefixes="//"
+            allow_no_value=True, comment_prefixes=("//", "#")
         )
         config.optionxform = str
         config.read(config_file)
