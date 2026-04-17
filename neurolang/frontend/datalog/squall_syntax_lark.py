@@ -835,8 +835,13 @@ class SquallTransformer(Transformer):
             y = label_vars[0]
             return ('_rel', lambda x: func_sym(x, y))
         else:
-            # N-ary: subject is prepended so noun head is constrained
+            # N-ary: prepend subject only when it is a scalar Symbol.
+            # When the enclosing noun binds a tuple (e.g. Foo (?a;?b;?c)),
+            # the labels already cover every argument position and the
+            # tuple must NOT be prepended — it would produce wrong arity.
             def rel(x, _vars=label_vars):
+                if isinstance(x, tuple):
+                    return func_sym(*_vars)
                 return func_sym(x, *_vars)
             return ('_rel', rel)
 

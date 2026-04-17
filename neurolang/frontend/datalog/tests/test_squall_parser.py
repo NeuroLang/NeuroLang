@@ -909,3 +909,28 @@ def test_vpdo_explicit_prob_v1_accepts_variable():
     # Probability should be a Symbol (the label ?p)
     assert isinstance(pf.probability, Symbol), f"Expected Symbol, got {type(pf.probability)}"
     assert pf.probability.name == "p"
+
+
+def test_rel_fun_call_tuple_subject_no_prepend():
+    """rel_fun_call with a tuple-subject noun must NOT prepend the tuple as first arg.
+
+    'every Focus_reported (?i2;?j2;?k2;?s) that is_near(?i1,?j1,?k1,?i2,?j2,?k2) holds'
+    should emit is_near(i1,j1,k1,i2,j2,k2) — the six explicit labels, nothing extra.
+    Specifically, both i1 and i2 must appear as free variables in the rule body.
+    """
+    from ....datalog import Implication
+    from ....logic.expression_processing import extract_logic_free_variables
+
+    result = parser(
+        "squall define as Near every Focus_reported (?i2; ?j2; ?k2; ?s) "
+        "that is_near(?i1, ?j1, ?k1, ?i2, ?j2, ?k2) holds."
+    )
+    rules = result if isinstance(result, list) else [result]
+    implications = [r for r in rules if isinstance(r, Implication)]
+    assert len(implications) == 1
+    body_str = str(implications[0].antecedent)
+    assert "is_near" in body_str.lower(), f"is_near not in body: {body_str}"
+    free_vars = extract_logic_free_variables(implications[0].antecedent)
+    var_names = {v.name for v in free_vars}
+    assert "i1" in var_names, f"i1 missing from free vars {var_names}"
+    assert "i2" in var_names, f"i2 missing from free vars {var_names}"
