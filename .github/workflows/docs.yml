@@ -36,6 +36,8 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          deploy_key: ${{ secrets.NEUROLANG_GITHUB_IO_DEPLOY_KEY }}
+          external_repository: neurolang/neurolang.github.io
+          publish_branch: develop
           publish_dir: ./doc/_build/html
           force_orphan: true
