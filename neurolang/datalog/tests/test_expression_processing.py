@@ -30,6 +30,7 @@ from ..expression_processing import (
     HeadConstantToBodyEquality,
     HeadRepeatedVariableToBodyEquality,
     maybe_deconjunct_single_pred,
+    is_to_be_sorted_equality,
 )
 from ..instance import MapInstance
 
@@ -561,3 +562,26 @@ def test_maybe_deconjunct():
         Conjunction((P(x), Q(x)))
     ) == Conjunction((P(x), Q(x)))
     assert maybe_deconjunct_single_pred(Conjunction((P(x),))) == P(x)
+
+
+def test_is_to_be_sorted_equality_with_unknown_type():
+    """
+    Regression test for GH-821: is_to_be_sorted_equality should return False
+    (not raise ValueError) when the functor has an uninferred/Unknown type
+    that causes is_leq_informative to raise ValueError internally.
+    """
+    from ...type_system import Unknown
+
+    # Create a functor with Callable[..., Unknown] type — this happens when a
+    # function's signature cannot be inspected (infer_type_builtins fallback).
+    # Comparing such a type via is_leq_informative raises ValueError because
+    # Ellipsis is not a valid type according to is_type().
+    functor_with_ellipsis = Constant[typing.Callable[..., Unknown]](
+        eq, auto_infer_type=False
+    )
+    x = S_("x")
+    y = S_[str]("y")
+    formula = functor_with_ellipsis(x, y)
+
+    # Should return False without raising ValueError
+    assert not is_to_be_sorted_equality(formula)
