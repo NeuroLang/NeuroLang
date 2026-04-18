@@ -576,12 +576,12 @@ def test_is_to_be_sorted_equality_with_unknown_type():
     # function's signature cannot be inspected (infer_type_builtins fallback).
     # Comparing such a type via is_leq_informative raises ValueError because
     # Ellipsis is not a valid type according to is_type().
-    functor_with_ellipsis = Constant[typing.Callable[..., Unknown]](
+    functor_with_uninferred_type = Constant[typing.Callable[..., Unknown]](
         eq, auto_infer_type=False
     )
     x = S_("x")
     y = S_[str]("y")
-    formula = functor_with_ellipsis(x, y)
+    formula = functor_with_uninferred_type(x, y)
 
     # Should return False without raising ValueError
     assert not is_to_be_sorted_equality(formula)
