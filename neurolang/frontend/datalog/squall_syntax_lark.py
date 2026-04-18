@@ -347,22 +347,40 @@ class SquallTransformer(Transformer):
             agg_func_const, npc_cps, per_vars = agg_info
             captured = []
 
-            def capturing_cont(v, _cap=captured):
-                _cap.append(v)
+            def capturing_cont(v, *extra, _cap=captured):
+                # multi-arg call when _apply_to_vars expands a tuple label
+                if extra:
+                    _cap.append((v,) + extra)
+                else:
+                    _cap.append(v)
                 return Constant(True)
 
             npc_formula = npc_cps(capturing_cont)
-            if captured and isinstance(captured[0], Symbol):
-                q = captured[0]
-            elif isinstance(npc_formula, ExistentialPredicate):
-                q = npc_formula.head
-            else:
-                q = Symbol.fresh()
 
-            agg_expr = _AggApp(agg_func_const, (q,))
-            body_formula = npc_formula
+            # Strip nested ExistentialPredicates so the body is safe-range.
+            bare_body = npc_formula
+            while isinstance(bare_body, ExistentialPredicate):
+                bare_body = bare_body.body
+            if (
+                isinstance(bare_body, Conjunction)
+                and len(bare_body.formulas) == 2
+                and bare_body.formulas[1] == Constant(True)
+            ):
+                bare_body = bare_body.formulas[0]
+
+            # Determine aggregation arguments from captured variables.
+            # tuple-labeled npc (e.g. "of the Foo (?i;?j;?k;?p)") captures
+            # all column variables as a tuple in the first entry.
+            if captured and isinstance(captured[0], tuple):
+                agg_args = tuple(captured[0])
+            elif captured and isinstance(captured[0], Symbol):
+                agg_args = tuple(captured)
+            else:
+                agg_args = (Symbol.fresh(),)
+
+            agg_expr = _AggApp(agg_func_const, agg_args)
             head_args = [agg_expr]
-            return ('_rule_body', (head_args, body_formula))
+            return ('_rule_body', (head_args, bare_body))
 
         # Get var_info from ng1 to extract the variable
         var_info = getattr(ng1, '_var_info', None)
@@ -496,42 +514,70 @@ class SquallTransformer(Transformer):
                     # Build the npc body formula to discover free variables.
                     captured = []
 
-                    def capturing_cont(v, _cap=captured):
-                        _cap.append(v)
+                    def capturing_cont(v, *extra, _cap=captured):
+                        # Called with (v,) for scalar npc or (v, *rest) when
+                        # _apply_to_vars expands a tuple label: d(*syms).
+                        if extra:
+                            # multi-arg call from a tuple-labeled npc
+                            _cap.append((v,) + extra)
+                        else:
+                            _cap.append(v)
                         return Constant(True)
 
                     npc_formula = npc_cps(capturing_cont)
 
+                    # Flatten captured entries: a tuple entry means a tuple-labeled
+                    # npc was used (e.g. "the Foo (?i;?j;?k;?p)").
+                    if captured and isinstance(captured[0], tuple):
+                        captured_flat = list(captured[0])
+                    else:
+                        captured_flat = [c for c in captured if isinstance(c, Symbol)]
+
+                    # Strip nested ExistentialPredicates to recover the bare body
+                    # predicate, which avoids "not safe range" errors when all
+                    # variables are existentially bound inside the npc formula.
+                    bare_body = npc_formula
+                    while isinstance(bare_body, ExistentialPredicate):
+                        bare_body = bare_body.body
+                    # Collapse Conjunction(pred, True) → pred
+                    if (
+                        isinstance(bare_body, Conjunction)
+                        and len(bare_body.formulas) == 2
+                        and bare_body.formulas[1] == Constant(True)
+                    ):
+                        bare_body = bare_body.formulas[0]
+
                     if per_vars:
                         # Explicit groupby: use the captured witness variable
                         # (same as the original single-var path).
-                        if captured and isinstance(captured[0], Symbol):
-                            agg_args = (captured[0],)
+                        if captured_flat:
+                            agg_args = (captured_flat[0],)
                         elif isinstance(npc_formula, ExistentialPredicate):
                             agg_args = (npc_formula.head,)
                         else:
                             agg_args = (Symbol.fresh(),)
                     else:
-                        # No explicit groupby: aggregate over all free variables
-                        # in the npc body, sorted by name for determinism.
-                        free_vars = extract_logic_free_variables(npc_formula)
-                        if free_vars:
-                            agg_args = tuple(
-                                sorted(free_vars, key=lambda s: s.name)
-                            )
-                        elif captured and isinstance(captured[0], Symbol):
-                            agg_args = (captured[0],)
-                        elif isinstance(npc_formula, ExistentialPredicate):
-                            agg_args = (npc_formula.head,)
+                        # No explicit groupby: use all captured vars (covers
+                        # tuple-labeled npcs such as "the Foo (?i;?j;?k;?p)").
+                        if captured_flat:
+                            agg_args = tuple(captured_flat)
                         else:
-                            agg_args = (Symbol.fresh(),)
+                            free_vars = extract_logic_free_variables(bare_body)
+                            if free_vars:
+                                agg_args = tuple(
+                                    sorted(free_vars, key=lambda s: s.name)
+                                )
+                            elif isinstance(npc_formula, ExistentialPredicate):
+                                agg_args = (npc_formula.head,)
+                            else:
+                                agg_args = (Symbol.fresh(),)
 
                     agg_expr = _AggApp(agg_func_const, agg_args)
                     d(agg_expr)  # adds agg_expr to head_args
 
-                    # Return the npc formula so _flatten_to_datalog extracts
-                    # the body predicates.
-                    return npc_formula
+                    # Return the bare body predicate (existentials stripped) so
+                    # that _flatten_to_datalog can extract a safe-range body.
+                    return bare_body
 
                 var_info = getattr(ng, '_var_info', None)
                 if var_info is not None and isinstance(var_info, tuple):

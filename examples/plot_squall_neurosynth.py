@@ -8,10 +8,12 @@ using `SQUALL controlled natural language
 <https://doi.org/10.18653/v1/2020.acl-main.235>`_ instead of the IR builder
 DSL.
 
-The four logic rules are expressed as plain English sentences and executed via
-:func:`~neurolang.frontend.NeurolangPDL.execute_squall_program`. Compare with
-:ref:`sphx_glr_auto_examples_plot_neurosynth_implementation.py` which writes
-identical rules using ``with nl.scope as e:``.
+The four logic rules plus an ``obtain`` query are expressed as plain English
+sentences and executed via
+:func:`~neurolang.frontend.NeurolangPDL.execute_squall_program`, which
+returns the query result directly when an ``obtain`` clause is present. Compare
+with :ref:`sphx_glr_auto_examples_plot_neurosynth_implementation.py` which
+writes identical rules using ``with nl.scope as e:``.
 
 .. rubric:: The SQUALL program
 
@@ -28,7 +30,9 @@ identical rules using ``with nl.scope as e:``.
         conditioned to every Term_association ?t that is 'auditory'.
 
     define as Activation_given_term_image
-        every Agg_create_region_overlay of the Activation_given_term.
+        every Agg_create_region_overlay of the Activation_given_term (?i; ?j; ?k; ?p).
+
+    obtain every Activation_given_term_image (?x).
 """
 
 # %%
@@ -111,17 +115,19 @@ nl.load_neurosynth_term_study_associations(
 ###############################################################################
 # SQUALL controlled-English program
 # ----------------------------------
-# Four sentences replace the entire ``with nl.scope as e:`` block.
+# Four ``define`` sentences plus one ``obtain`` clause replace the entire
+# ``with nl.scope as e:`` block and the separate ``nl.query()`` call.
 #
-# * ``such that ?s is a Selected_study``  — existential filter: study is selected
-# * ``?t that is 'auditory'``             — string equality filter on the term
-# * ``with probability … conditioned to`` — MARG query (conditional probability)
-# * ``every Agg_create_region_overlay of the …`` — aggregation into brain image
+# * ``such that ?s is a Selected_study``         — existential study filter
+# * ``?t that is 'auditory'``                    — string equality on term
+# * ``with probability … conditioned to``        — MARG conditional probability
+# * ``of the Activation_given_term (?i;?j;?k;?p)`` — explicit tuple label so
+#   the aggregation functor receives all four columns (i, j, k, probability)
+# * ``obtain every Activation_given_term_image (?x)`` — runs only this query
 #
-# Note: SQUALL's tuple-label syntax ``(?s; ?t; ?tfidf)`` requires named
-# variables — the grammar does not allow the ``_`` anonymous placeholder
-# inside ``(; ;)`` tuples.  ``?tfidf`` binds the TF-IDF weight column
-# but is intentionally absent from the rule head, so it is projected away.
+# Note: ``?tfidf`` binds the TF-IDF weight column but is absent from the rule
+# head (projected away); SQUALL requires every argument in a tuple label to be
+# a named variable — anonymous wildcards are not supported in that position.
 
 squall_program = """
 define as Activation every Peak_reported (?i; ?j; ?k; ?s)
@@ -135,23 +141,21 @@ define as Activation_given_term with probability
     conditioned to every Term_association ?t that is 'auditory'.
 
 define as Activation_given_term_image
-    every Agg_create_region_overlay of the Activation_given_term.
+    every Agg_create_region_overlay of the Activation_given_term (?i; ?j; ?k; ?p).
+
+obtain every Activation_given_term_image (?x).
 """
 
-nl.execute_squall_program(squall_program)
+result_set = nl.execute_squall_program(squall_program)
 
 # %%
 ###############################################################################
 # Solve and retrieve the probability map
 # --------------------------------------
+# The ``obtain`` clause executes only the image query; ``result_set`` is the
+# single-column result directly from :func:`execute_squall_program`.
 
-solution = nl.solve_all()
-result_image = (
-    solution["activation_given_term_image"]
-    .as_pandas_dataframe()
-    .iloc[0, 0]
-    .spatial_image()
-)
+result_image = result_set.as_pandas_dataframe().iloc[0, 0].spatial_image()
 
 # %%
 ###############################################################################
