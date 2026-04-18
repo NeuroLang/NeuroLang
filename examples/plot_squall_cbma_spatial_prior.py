@@ -69,7 +69,7 @@ mni_t1_2mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 2)
 # %%
 ###############################################################################
 # Set up engine and register aggregation symbol
-# ---------------------------------------------
+# ----------------------------------------------
 # ``max_proximity`` folds a column of ``exp(−d/5)`` proximity values into
 # their maximum.  ``agg_create_region_overlay`` aggregates the final result
 # into a brain overlay image.
@@ -122,12 +122,15 @@ nl.load_neurosynth_term_study_associations(
 
 # %%
 ###############################################################################
-# Build the ``near_focus`` proximity table
-# ----------------------------------------
-# For every voxel ``(i1,j1,k1)`` and study ``s``, the table records
-# ``exp(−d/5)`` for each reported focus ``(i2,j2,k2)`` whose Euclidean
-# distance ``d`` to the voxel is strictly less than 1 voxel.  This is the
-# spatial-decay weight used in the coordinate-based meta-analysis model.
+# Build the ``near_focus`` proximity table (Python pre-computation)
+# ------------------------------------------------------------------
+# SQUALL's grammar supports only a single subject noun phrase per rule, so a
+# two-noun cross-join (Voxel × Focus_reported with a distance filter) cannot be
+# expressed as a SQUALL sentence.  The proximity table is therefore pre-computed
+# here in Python.  For every voxel ``(i1,j1,k1)`` and study ``s``, it records
+# ``exp(−d/5)`` for each reported focus ``(i2,j2,k2)`` within strictly less than
+# 1 voxel distance ``d``.  This is the spatial-decay weight used in the
+# coordinate-based meta-analysis model.
 
 shape = mni_t1_2mm.get_fdata().shape
 voxel_ijk = np.array(
@@ -158,8 +161,10 @@ nl.add_tuple_set(near_focus_df, name="near_focus")
 #             — arbitrary-functor aggregation; four ``per`` dims (joined with
 #             ``and``) define the groupby key ``(i1, j1, k1, s)``.
 # Sentences 2–3  ``such that ?s is a Selected_study`` — existential study
-#             filter.  ``?tfidf`` binds the TF-IDF column but is projected away
-#             (absent from the rule head); tuple labels require named variables.
+#             filter.  ``?tfidf`` binds the TF-IDF weight column but is
+#             projected away (absent from the rule head); SQUALL requires every
+#             argument in a tuple label to be a named variable — anonymous
+#             wildcards are not allowed in that position.
 # Sentence 4  ``with probability … conditioned to … that is 'emotion'`` — MARG
 #             query.
 # Sentence 5  ``every Agg_create_region_overlay of the Probmap`` — brain image
