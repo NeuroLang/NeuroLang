@@ -163,3 +163,25 @@ def test_infer_type():
     assert infer_type(op.invert) is Callable[[bool], bool]
     assert infer_type(op.eq) is Callable[[Unknown, Unknown], bool]
     assert infer_type(op.add) is Callable[[Unknown, Unknown], Unknown]
+
+
+def test_is_leq_informative_callable_ellipsis():
+    """
+    Regression test: `Callable[..., T]` uses `...` (Ellipsis) as a type
+    parameter meaning "any arguments". `is_leq_informative` must not raise
+    ValueError when it encounters Ellipsis while comparing Callable type args.
+
+    This was triggered when `Constant(operator.eq).__eq__` compared two EQ
+    constants whose functor type could be `Callable[..., bool]`.
+    """
+    # Direct Callable[..., T] comparisons must not raise
+    assert is_leq_informative(Callable[..., bool], Callable[..., bool])
+    assert is_leq_informative(Callable[..., int], Callable[..., int])
+
+    # Ellipsis on one side vs concrete args — not compatible
+    assert not is_leq_informative(
+        Callable[[int], bool], Callable[..., bool]
+    )
+    assert not is_leq_informative(
+        Callable[..., bool], Callable[[int], bool]
+    )
