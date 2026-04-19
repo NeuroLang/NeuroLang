@@ -1008,8 +1008,12 @@ class CollapseConjunctiveAntecedents(CollapseConjunctions):
 
 
 def is_to_be_sorted_equality(formula):
+    try:
+        is_eq_functor = formula.functor == Constant(operator.eq)
+    except ValueError:
+        return False
     return (
-        formula.functor == Constant(operator.eq)
+        is_eq_functor
         and isinstance(formula.args[1], Symbol)
         and not isinstance(formula.args[0], Symbol)
     )
