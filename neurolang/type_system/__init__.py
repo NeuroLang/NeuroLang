@@ -111,6 +111,11 @@ def is_consistent(type1, type2):
 
 
 def is_leq_informative(left, right):
+    # `...` (Ellipsis) appears as a type parameter in `Callable[..., T]`
+    # (meaning "any arguments"). Treat it as a wildcard: two Ellipsis
+    # parameters are always compatible with each other.
+    if left is ... or right is ...:
+        return left is right
     if not (is_type(left) and is_type(right)):
         raise ValueError('Both parameters need to be types')
     if (
