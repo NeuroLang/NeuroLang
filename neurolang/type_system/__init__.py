@@ -14,7 +14,8 @@ from typing import (AbstractSet, Any, Callable, Generic, Iterable, Mapping,
 
 import numpy as np
 from typing_inspect import (get_origin, is_callable_type, is_generic_type,
-                            is_tuple_type, is_typevar, is_union_type, get_parameters)
+                            is_tuple_type, is_typevar, is_union_type,
+                            get_parameters, get_args as ti_get_args)
 
 from ..exceptions import NeuroLangException
 
@@ -99,6 +100,17 @@ def is_consistent(type1, type2):
         if not is_consistent(generic1, generic2):
             return False
 
+        if is_callable_type(type1):
+            args1, ret1 = get_args(type1)
+            args2, ret2 = get_args(type2)
+            if args1 is ... or args2 is ...:
+                return is_consistent(ret1, ret2)
+            return (
+                len(args1) == len(args2) and
+                is_consistent(ret1, ret2) and
+                all(is_consistent(a1, a2) for a1, a2 in zip(args1, args2))
+            )
+
         type_parameters1 = get_args(type1)
         type_parameters2 = get_args(type2)
 
@@ -111,17 +123,6 @@ def is_consistent(type1, type2):
 
 
 def is_leq_informative(left, right):
-    # `...` (Ellipsis) appears as a type parameter in `Callable[..., T]`
-    # meaning "any/unknown arguments". In gradual typing it is the least
-    # informative (least precise) argument-spec, analogous to `Unknown` for
-    # ordinary types:
-    #   - `... ≤ anything`  → True  (Ellipsis is less informative than any
-    #                                concrete parameter list, including itself)
-    #   - `concrete ≤ ...`  → False (a known arg-spec is more informative)
-    if left is ...:
-        return True
-    if right is ...:
-        return False
     if not (is_type(left) and is_type(right)):
         raise ValueError('Both parameters need to be types')
     if (
@@ -187,16 +188,25 @@ def is_leq_informative_parameterized_right(left, right):
         type_parameters_left = get_args(left)
         type_parameters_right = get_args(right)
 
-        # `Callable[..., T]` uses Ellipsis as the sole "args" element,
-        # meaning "unknown/any argument types". It is the least informative
-        # argument spec, so `Callable[..., T] ≤ Callable[anything, T]`
-        # regardless of arity. Handle this before the length check so that
-        # multi-argument callables compare correctly.
-        if type_parameters_left == (Ellipsis,) + type_parameters_right[-1:]:
-            # left is Callable[..., R], right is Callable[anything, R]
-            # check only the return-type component
-            return is_leq_informative(
-                type_parameters_left[-1], type_parameters_right[-1]
+        # For Callable types, get_args returns ([arg_types], return_type).
+        # The arg_types list may be Ellipsis (meaning "any args") on the left
+        # side. Compare arg lists and return types separately.
+        if is_callable_type(left):
+            args_left, ret_left = type_parameters_left
+            args_right, ret_right = type_parameters_right
+            if not is_leq_informative(ret_left, ret_right):
+                return False
+            # Ellipsis arg-spec means "unknown args" — least informative
+            if args_left is ...:
+                return True
+            if args_right is ...:
+                return False
+            return (
+                len(args_left) == len(args_right) and
+                all(
+                    is_leq_informative(a_l, a_r)
+                    for a_l, a_r in zip(args_left, args_right)
+                )
             )
 
         if len(type_parameters_left) != len(type_parameters_right):
@@ -505,7 +515,7 @@ def infer_type_builtins(builtin):
 
 def get_args(type_):
     if is_parameterized(type_):
-        ret = type_.__args__
+        ret = ti_get_args(type_)
         if ret is None:
             ret = tuple()
     elif is_parametrical(type_):

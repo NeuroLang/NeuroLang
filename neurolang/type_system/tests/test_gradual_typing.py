@@ -101,10 +101,10 @@ def test_typing_callable_from_annotated_function():
     t = typing_callable_from_annotated_function(fun)
 
     origin = get_origin(Callable)
-    args = get_args(t)
+    arg_types, return_type = get_args(t)
     assert issubclass(origin, Callable)
-    assert args[0] is int and args[1] is str
-    assert args[2] is float
+    assert arg_types[0] is int and arg_types[1] is str
+    assert return_type is float
 
 
 def test_replace_subtype():
