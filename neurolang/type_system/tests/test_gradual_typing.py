@@ -168,20 +168,20 @@ def test_infer_type():
 def test_is_leq_informative_callable_ellipsis():
     """
     Regression test: `Callable[..., T]` uses `...` (Ellipsis) as a type
-    parameter meaning "any arguments". `is_leq_informative` must not raise
-    ValueError when it encounters Ellipsis while comparing Callable type args.
+    parameter meaning "any/unknown arguments". `is_leq_informative` must not
+    raise ValueError when it encounters Ellipsis while comparing Callable type
+    args.
 
-    This was triggered when `Constant(operator.eq).__eq__` compared two EQ
-    constants whose functor type could be `Callable[..., bool]`.
+    In gradual typing `...` is the least informative argument-spec (analogous
+    to `Unknown` for ordinary types):
+      - Callable[..., T]  ≤  Callable[[A, B], T]  → True
+        (unknown args are less informative than concrete args)
+      - Callable[[A, B], T]  ≤  Callable[..., T]  → False
+        (concrete args are more informative than unknown)
     """
-    # Direct Callable[..., T] comparisons must not raise
+    # Callable[..., T] is less informative than any concrete Callable
+    assert is_leq_informative(Callable[..., bool], Callable[[int], bool])
     assert is_leq_informative(Callable[..., bool], Callable[..., bool])
-    assert is_leq_informative(Callable[..., int], Callable[..., int])
 
-    # Ellipsis on one side vs concrete args — not compatible
-    assert not is_leq_informative(
-        Callable[[int], bool], Callable[..., bool]
-    )
-    assert not is_leq_informative(
-        Callable[..., bool], Callable[[int], bool]
-    )
+    # A concrete Callable is NOT less informative than Callable[..., T]
+    assert not is_leq_informative(Callable[[int], bool], Callable[..., bool])
