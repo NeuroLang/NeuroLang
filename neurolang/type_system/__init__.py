@@ -187,6 +187,18 @@ def is_leq_informative_parameterized_right(left, right):
         type_parameters_left = get_args(left)
         type_parameters_right = get_args(right)
 
+        # `Callable[..., T]` uses Ellipsis as the sole "args" element,
+        # meaning "unknown/any argument types". It is the least informative
+        # argument spec, so `Callable[..., T] ≤ Callable[anything, T]`
+        # regardless of arity. Handle this before the length check so that
+        # multi-argument callables compare correctly.
+        if type_parameters_left == (Ellipsis,) + type_parameters_right[-1:]:
+            # left is Callable[..., R], right is Callable[anything, R]
+            # check only the return-type component
+            return is_leq_informative(
+                type_parameters_left[-1], type_parameters_right[-1]
+            )
+
         if len(type_parameters_left) != len(type_parameters_right):
             return False
 
