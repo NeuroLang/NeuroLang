@@ -578,6 +578,13 @@ class Symbol(Expression):
             return len(symbol.value)
 
     def __eq__(self, other: Union[Expression, Any]) -> bool:
+        if self.query_builder.logic_programming and isinstance(
+            other, Expression
+        ):
+            # In logic-programming mode, return an IR equality Operation so
+            # that patterns like (e.term == word_lower[e.onto_term]) compile
+            # to an ExtendedProjection rather than a Python bool.
+            return op_bind(op.eq)(self, other)
         if isinstance(other, Expression):
             return self.expression == other.expression
         else:
