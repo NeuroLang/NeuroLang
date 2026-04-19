@@ -906,3 +906,32 @@ def test_numpy_mixin_adds_functions():
         assert set(res["q"]) == {
             (i, getattr(np, func)(i)) for i in np.arange(1, 10)
         }
+
+
+def test_symbol_eq_user_function_extended_projection():
+    """
+    Regression test: `e.out_var == user_func[e.in_var]` inside a scope must
+    produce an ExtendedProjection column (not a Python bool).
+
+    Before the fix, `Symbol.__eq__` returned a plain bool in logic-programming
+    mode, so the conjunction body contained True/False instead of an IR
+    equality expression, and the rule was silently dropped or raised an error.
+    """
+    nl = frontend.NeurolangDL()
+
+    terms = nl.add_tuple_set([("Hello",), ("World",)], name="terms")
+
+    @nl.add_symbol
+    def word_lower(name: str) -> str:
+        return name.lower()
+
+    with nl.scope as e:
+        e.lower_terms[e.term, e.lower] = (
+            terms[e.term] & (e.lower == word_lower[e.term])
+        )
+        res = nl.solve_all()
+
+    assert set(res["lower_terms"]) == {
+        ("Hello", "hello"),
+        ("World", "world"),
+    }
