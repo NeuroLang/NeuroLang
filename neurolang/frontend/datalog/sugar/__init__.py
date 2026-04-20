@@ -258,7 +258,7 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
         if functor.type is Unknown:
             arity = None
         elif is_leq_informative(functor.type, Callable):
-            arity = len(get_args(functor.type)[:-1])
+            arity = len(get_args(functor.type)[0])
         elif is_leq_informative(functor.type, AbstractSet):
             arity = len(get_args(get_args(functor.type)[0]))
         else:
