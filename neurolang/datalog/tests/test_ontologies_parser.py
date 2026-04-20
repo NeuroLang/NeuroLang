@@ -765,3 +765,53 @@ def test_entity_rules_inclusion():
 
     fresh_var = rule.consequent.args[0]
     assert rule == Implication(chair(fresh_var), entity(fresh_var, Constant('chair')))
+
+
+def test_connector_edb_populated_for_word_lower():
+    """
+    Regression test: loading an ontology should populate the connector
+    symbol's EDB with (entity_name, lower_label) tuples so that queries
+    like ``e.term == word_lower[e.onto_term]`` (which compile to an
+    ExtendedProjection) can find matching rows via the connector.
+
+    Before the fix, ``_parse_property`` created entity rules that used
+    the connector symbol in their body but never inserted corresponding
+    EDB facts for that symbol, causing ``lower_terms`` to return empty.
+    """
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+             xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+             xmlns:owl="http://www.w3.org/2002/07/owl#">
+        <owl:Class rdf:about="http://example.org/Cognition">
+            <rdfs:label>Cognition</rdfs:label>
+        </owl:Class>
+        <owl:Class rdf:about="http://example.org/Memory">
+            <rdfs:label>Memory</rdfs:label>
+        </owl:Class>
+    </rdf:RDF>'''
+
+    nl = NeurolangPDL()
+    connector = nl.load_ontology(io.StringIO(owl))
+
+    word_lower = nl.add_symbol(
+        lambda x: x.lower(),
+        name='word_lower',
+        type_=str,
+    )
+
+    with nl.scope as e:
+        e.ontology_terms[e.term, e.onto_term] = connector(e.onto_term, e.term)
+        e.lower_terms[e.term, e.onto_term] = (
+            e.ontology_terms(e.term, e.onto_term)
+            & (e.term == word_lower[e.onto_term])
+        )
+        result = nl.query(
+            (e.term, e.onto_term), e.lower_terms(e.term, e.onto_term)
+        )
+
+    df = result.as_pandas_dataframe()
+    rows = set(zip(df['term'], df['onto_term']))
+    assert ('cognition', 'Cognition') in rows
+    assert ('memory', 'Memory') in rows
+    assert ('cognition', 'Cognition') in rows
+    assert ('memory', 'Memory') in rows
