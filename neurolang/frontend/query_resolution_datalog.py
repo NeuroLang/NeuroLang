@@ -314,25 +314,71 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         if not parsed.queries:
             return None
 
-        # For each obtain query, introduce a fresh head symbol and walk in
-        # the corresponding Implication so Chase can compute the result set.
-        query_entries = []
-        for i, q in enumerate(parsed.queries):
-            h = ir.Symbol.fresh()
-            self.program_ir.walk(
-                datalog.Implication(h(q.head), q.body)
-            )
-            query_entries.append((f"obtain_{i}", h))
-
-        solution = self.chase_class(self.program_ir).build_chase_solution()
-
+        # Execute each obtain query.
+        # For probabilistic engines (NeurolangPDL) we wrap q.body as a
+        # frontend Expression and delegate to self._execute_query, which
+        # applies magic-sets rewriting and stratified solving.
+        # For plain Datalog engines we fall back to reachable_code + chase.
         results = {}
-        for key, h in query_entries:
-            col_names = self.predicate_parameter_names(h.name)
-            ra = NamedRelationalAlgebraFrozenSet(
-                col_names, solution[h].value.unwrap()
-            )
-            ra.row_type = solution[h].value.row_type
+        for i, q in enumerate(parsed.queries):
+            key = f"obtain_{i}"
+            head_sym = q.head
+            head_vars = (head_sym,) if isinstance(head_sym, ir.Symbol) else tuple(head_sym)
+
+            if hasattr(self, '_solve'):
+                # NeurolangPDL path: push a scope containing ALL define rules
+                # so that reachable_code_from_query sees a cohesive, scoped
+                # unit (mirrors what `with nl.scope as e: ... nl.query(...)` does).
+                import neurolang.frontend.query_resolution_expressions as fe_mod
+                h = ir.Symbol.fresh()
+                query_impl = datalog.Implication(h(*head_vars), q.body)
+                self.program_ir.push_scope()
+                try:
+                    # Re-walk define rules into the scoped layer.
+                    for rule in parsed.rules:
+                        self.program_ir.walk(rule)
+                    self.program_ir.walk(query_impl)
+                    fe_pred = fe_mod.Expression(self, h(*head_vars))
+                    fe_head = tuple(
+                        fe_mod.Expression(self, ir.Symbol(s.name))
+                        for s in head_vars
+                    )
+                    # _execute_query with a tuple head returns a
+                    # NamedRelationalAlgebraFrozenSet directly (not wrapped
+                    # in ir.Constant), so we can use it as-is.
+                    ra, _ = self._execute_query(fe_head, fe_pred)
+                finally:
+                    self.program_ir.pop_scope()
+                results[key] = ra
+            else:
+                # Pure Datalog path: build fresh implication, chase reachable rules
+                h = ir.Symbol.fresh()
+                query_impl = datalog.Implication(h(*head_vars), q.body)
+                self.program_ir.symbol_table = self.symbol_table.create_scope()
+                try:
+                    self.program_ir.walk(query_impl)
+                    try:
+                        magic_query_impl = self.magic_sets_rewrite_program(query_impl)
+                        reachable_rules = reachable_code(
+                            magic_query_impl, self.program_ir
+                        )
+                        functor = magic_query_impl.consequent.functor
+                    except Exception:
+                        reachable_rules = reachable_code(query_impl, self.program_ir)
+                        functor = h
+                    solution = self.chase_class(
+                        self.program_ir, rules=reachable_rules
+                    ).build_chase_solution()
+                finally:
+                    self.program_ir.symbol_table = self.symbol_table.enclosing_scope
+                solution_set = solution.get(
+                    functor, ir.Constant(WrappedRelationalAlgebraFrozenSet())
+                )
+                col_names = tuple(s.name for s in head_vars)
+                ra = NamedRelationalAlgebraFrozenSet(
+                    col_names, solution_set.value.unwrap()
+                )
+                ra.row_type = solution_set.value.row_type
             results[key] = ra
 
         if len(results) == 1:

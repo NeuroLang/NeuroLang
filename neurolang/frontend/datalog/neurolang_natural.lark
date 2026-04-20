@@ -194,7 +194,10 @@ pp : prep np -> pp_np
 
 label : _LABEL_MARKER label_identifier
       | ANONYMOUS_LABEL
-      | "(" _LABEL_MARKER label_identifier (";" _LABEL_MARKER label_identifier )* ")"
+      | "(" label_tuple_item (";" label_tuple_item )* ")"
+
+label_tuple_item : _LABEL_MARKER label_identifier
+                 | ANONYMOUS_LABEL
 
 _LABEL_MARKER : "?"
               | "@"

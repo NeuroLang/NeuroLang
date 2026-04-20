@@ -26,7 +26,7 @@ writes identical rules using ``with nl.scope as e:``.
         such that ?s is a Selected_study.
 
     define as Activation_given_term with probability
-        every Activation (?i; ?j; ?k)
+        every Activation (?i; ?j; ?k; _)
         conditioned to every Term_association ?t that is 'auditory'.
 
     define as Activation_given_term_image
@@ -121,6 +121,8 @@ nl.load_neurosynth_term_study_associations(
 # * ``such that ?s is a Selected_study``         — existential study filter
 # * ``?t that is 'auditory'``                    — string equality on term
 # * ``with probability … conditioned to``        — MARG conditional probability
+# * ``(?i; ?j; ?k; _)``                          — ``_`` drops the study column
+#   from the conditioned head (anonymous wildcard)
 # * ``of the Activation_given_term (?i;?j;?k;?p)`` — explicit tuple label so
 #   the aggregation functor receives all four columns (i, j, k, probability)
 # * ``obtain every Activation_given_term_image (?x)`` — runs only this query
@@ -137,8 +139,8 @@ define as Term_association every Term_in_study_tfidf (?s; ?t; ?tfidf)
     such that ?s is a Selected_study.
 
 define as Activation_given_term with probability
-    every Activation (?i; ?j; ?k)
-    conditioned to every Term_association ?t that is 'auditory'.
+    every Activation (?i; ?j; ?k; _)
+    conditioned to every Term_association (?s; ?t; _) such that ?t is 'auditory'.
 
 define as Activation_given_term_image
     every Agg_create_region_overlay of the Activation_given_term (?i; ?j; ?k; ?p).

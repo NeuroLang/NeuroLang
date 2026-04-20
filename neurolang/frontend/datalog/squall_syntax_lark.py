@@ -101,6 +101,24 @@ class SquallProgram:
         self.queries = list(queries)
 
 
+class _AnonymousVar:
+    """Sentinel for a ``_`` wildcard in a tuple label.
+
+    When encountered in a tuple label ``(?i; ?j; _)``, this placeholder
+    causes the corresponding argument position to be bound to a fresh
+    existential variable in the *body* of the rule but **not** to appear
+    in the *head*.  The existential variable is materialised on demand via
+    :meth:`as_symbol`.
+    """
+
+    def __init__(self):
+        # Allocate one fresh symbol per anonymous slot.
+        self._sym = Symbol.fresh()
+
+    def as_symbol(self):
+        return self._sym
+
+
 GRAMMAR_PATH = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
     "neurolang_natural.lark"
@@ -153,6 +171,43 @@ class _InverseVerbSymbol:
 
     def __call__(self, *args):
         return InvertedFunctionApplication(self.symbol, args)
+
+
+def _resolve_var_info(var_info):
+    """Return (body_args, head_args) from a _var_info value.
+
+    ``body_args`` is the tuple of all symbols (including fresh symbols for
+    anonymous ``_`` wildcards) used to build the rule *body* predicate.
+    ``head_args`` is the tuple of *named* symbols that appear in the rule
+    *head*; anonymous wildcards are excluded.
+
+    Parameters
+    ----------
+    var_info : Symbol, tuple, or None
+        The ``_var_info`` attribute attached to an ng1 function.
+
+    Returns
+    -------
+    body_args : tuple or Symbol or None
+        The argument tuple / symbol for calling ``ng(body_args)``.
+    head_args : list
+        The list of head variables (no anonymous vars).
+    """
+    if var_info is None:
+        return None, []
+    if isinstance(var_info, Symbol):
+        return var_info, [var_info]
+    if isinstance(var_info, tuple):
+        body_args = tuple(
+            item.as_symbol() if isinstance(item, _AnonymousVar) else item
+            for item in var_info
+        )
+        head_args = [
+            item for item in var_info if not isinstance(item, _AnonymousVar)
+        ]
+        return body_args, head_args
+    # Fallback (callable _var_info — not expected in normal use)
+    return var_info, [var_info]
 
 
 class SquallTransformer(Transformer):
@@ -384,14 +439,13 @@ class SquallTransformer(Transformer):
 
         # Get var_info from ng1 to extract the variable
         var_info = getattr(ng1, '_var_info', None)
-        if var_info is not None:
-            head_args = list(var_info) if isinstance(var_info, tuple) else [var_info]
-        else:
-            var_info = Symbol.fresh()
-            head_args = [var_info]
+        body_args, head_args = _resolve_var_info(var_info)
+        if body_args is None:
+            body_args = Symbol.fresh()
+            head_args = [body_args]
 
         # Get the body formula from ng1
-        body_formula = ng1(var_info if isinstance(var_info, tuple) else var_info)
+        body_formula = ng1(body_args)
 
         return ('_rule_body', (head_args, body_formula))
 
@@ -400,13 +454,11 @@ class SquallTransformer(Transformer):
         # args = [det, ng1, s]
         det, ng1, s = args[0], args[1], args[2]
         var_info = getattr(ng1, '_var_info', None)
-        if isinstance(var_info, tuple):
-            head_args = list(var_info)
-            conditioned_body = ng1(var_info)
-        else:
-            x = var_info if var_info is not None else Symbol.fresh()
-            head_args = [x]
-            conditioned_body = ng1(x)
+        body_args, head_args = _resolve_var_info(var_info)
+        if body_args is None:
+            body_args = Symbol.fresh()
+            head_args = [body_args]
+        conditioned_body = ng1(body_args)
         return ('_rule_body', (head_args, Condition(conditioned_body, s)))
 
     def rule_body1_cond_posterior(self, args):
@@ -414,31 +466,31 @@ class SquallTransformer(Transformer):
         # args = [s, det, ng1]
         s, det, ng1 = args[0], args[1], args[2]
         var_info = getattr(ng1, '_var_info', None)
-        if isinstance(var_info, tuple):
-            head_args = list(var_info)
-            conditioned_body = ng1(var_info)
-        else:
-            x = var_info if var_info is not None else Symbol.fresh()
-            head_args = [x]
-            conditioned_body = ng1(x)
+        body_args, head_args = _resolve_var_info(var_info)
+        if body_args is None:
+            body_args = Symbol.fresh()
+            head_args = [body_args]
+        conditioned_body = ng1(body_args)
         return ('_rule_body', (head_args, Condition(s, conditioned_body)))
 
     def rule_body2_cond(self, args):
         # Grammar: det ng1_left _CONDITIONED _TO det ng1_right
         # args = [det1, ng1_left, det2, ng1_right]
         _, ng1_left, _, ng1_right = args
-        var_info = getattr(ng1_left, '_var_info', None)
-        if isinstance(var_info, tuple):
-            head_args = list(var_info)
-            conditioned_body = ng1_left(var_info)
-        else:
-            x = var_info if var_info is not None else Symbol.fresh()
-            head_args = [x]
-            conditioned_body = ng1_left(x)
-        conditioning_body = ng1_right(
-            var_info if isinstance(var_info, tuple)
-            else (head_args[0] if head_args else Symbol.fresh())
-        )
+        var_info_left = getattr(ng1_left, '_var_info', None)
+        body_args_left, head_args = _resolve_var_info(var_info_left)
+        if body_args_left is None:
+            body_args_left = Symbol.fresh()
+            head_args = [body_args_left]
+        conditioned_body = ng1_left(body_args_left)
+        # Use the right ng1's own _var_info — do NOT pass the left var_info.
+        # The right side is an independent noun phrase (e.g. "every Term_association ?t
+        # that is 'auditory'") with its own bound variable(s).
+        var_info_right = getattr(ng1_right, '_var_info', None)
+        body_args_right, _ = _resolve_var_info(var_info_right)
+        if body_args_right is None:
+            body_args_right = Symbol.fresh()
+        conditioning_body = ng1_right(body_args_right)
         return ('_rule_body', (head_args, Condition(conditioned_body, conditioning_body)))
 
     # ---- Sentences ----
@@ -581,11 +633,11 @@ class SquallTransformer(Transformer):
 
                 var_info = getattr(ng, '_var_info', None)
                 if var_info is not None and isinstance(var_info, tuple):
-                    syms = var_info
-                    body = ng(syms)
-                    scope = _apply_to_vars(d, syms)
+                    body_syms, head_syms = _resolve_var_info(var_info)
+                    body = ng(body_syms)
+                    scope = _apply_to_vars(d, head_syms)
                     result = Implication(scope, body)
-                    for sym in syms:
+                    for sym in head_syms:
                         result = UniversalPredicate(sym, result)
                     return result
                 elif var_info is not None:
@@ -606,11 +658,11 @@ class SquallTransformer(Transformer):
             def apply_d(d):
                 var_info = getattr(ng, '_var_info', None)
                 if var_info is not None and isinstance(var_info, tuple):
-                    syms = var_info
-                    body = ng(syms)
-                    scope = _apply_to_vars(d, syms)
+                    body_syms, head_syms = _resolve_var_info(var_info)
+                    body = ng(body_syms)
+                    scope = _apply_to_vars(d, head_syms)
                     result = Conjunction((body, scope))
-                    for sym in syms:
+                    for sym in head_syms:
                         result = ExistentialPredicate(sym, result)
                     return result
                 elif var_info is not None:
@@ -631,11 +683,11 @@ class SquallTransformer(Transformer):
             def apply_d(d):
                 var_info = getattr(ng, '_var_info', None)
                 if var_info is not None and isinstance(var_info, tuple):
-                    syms = var_info
-                    body = ng(syms)
-                    scope = _apply_to_vars(d, syms)
+                    body_syms, head_syms = _resolve_var_info(var_info)
+                    body = ng(body_syms)
+                    scope = _apply_to_vars(d, head_syms)
                     result = Conjunction((body, scope))
-                    for sym in syms:
+                    for sym in head_syms:
                         result = ExistentialPredicate(sym, result)
                     return result
                 elif var_info is not None:
@@ -655,7 +707,15 @@ class SquallTransformer(Transformer):
         def no(ng):
             def apply_d(d):
                 var_info = getattr(ng, '_var_info', None)
-                if var_info is not None:
+                if var_info is not None and isinstance(var_info, tuple):
+                    body_syms, head_syms = _resolve_var_info(var_info)
+                    body = ng(body_syms)
+                    scope = _apply_to_vars(d, head_syms)
+                    result = Conjunction((body, scope))
+                    for sym in head_syms:
+                        result = ExistentialPredicate(sym, result)
+                    return Negation(result)
+                elif var_info is not None:
                     x = var_info
                 else:
                     x = Symbol.fresh()
@@ -679,7 +739,9 @@ class SquallTransformer(Transformer):
                 rel = item[1]
             elif isinstance(item, Symbol):
                 app = item
-            elif isinstance(item, tuple) and all(isinstance(s, Symbol) for s in item):
+            elif isinstance(item, tuple) and all(
+                isinstance(s, (Symbol, _AnonymousVar)) for s in item
+            ):
                 app = item
             elif callable(item) and not isinstance(item, (Symbol, Constant)):
                 # Could be a CPS function from app_label or something else
@@ -687,13 +749,26 @@ class SquallTransformer(Transformer):
                     app = item
 
         def ng(x):
+            # Resolve _AnonymousVar instances to their fresh symbols for body.
             if isinstance(x, tuple):
-                noun_app = noun1(*x)
+                body_args = tuple(
+                    item.as_symbol() if isinstance(item, _AnonymousVar) else item
+                    for item in x
+                )
+                noun_app = noun1(*body_args)
             else:
                 noun_app = noun1(x)
             parts = [noun_app]
             if rel is not None:
-                rel_val = rel(x)
+                rel_x = x
+                if isinstance(x, tuple):
+                    # Apply rel to the first named (non-anonymous) var or the tuple
+                    named = [
+                        item.as_symbol() if isinstance(item, _AnonymousVar) else item
+                        for item in x
+                    ]
+                    rel_x = tuple(named) if len(named) > 1 else named[0]
+                rel_val = rel(rel_x)
                 if isinstance(rel_val, Conjunction):
                     parts.extend(rel_val.formulas)
                 elif rel_val is not None:
@@ -1247,17 +1322,37 @@ class SquallTransformer(Transformer):
     def label_identifier(self, args):
         return Symbol(args[0].value)
 
+    def label_tuple_item(self, args):
+        """Handle a single item in a tuple label: ?var or _ (anonymous)."""
+        if len(args) == 1:
+            item = args[0]
+            if isinstance(item, Symbol):
+                return item
+            # ANONYMOUS_LABEL token ("_") → anonymous wildcard sentinel
+            if hasattr(item, 'type') and item.type == 'ANONYMOUS_LABEL':
+                return _AnonymousVar()
+            if hasattr(item, 'value') and item.value == '_':
+                return _AnonymousVar()
+        # Fallback: anonymous
+        return _AnonymousVar()
+
     def label(self, args):
         if len(args) == 1:
             marker = args[0]
+            if isinstance(marker, _AnonymousVar):
+                return lambda d: d(marker.as_symbol())
             if hasattr(marker, 'value') and marker.value == '_':
                 return lambda d: d(Symbol.fresh())
             sym = marker
             return lambda d: d(sym)
+        # Tuple label: args are Symbols or _AnonymousVar instances.
         labels = list(args)
         if len(labels) == 1:
-            sym = labels[0]
+            item = labels[0]
+            sym = item.as_symbol() if isinstance(item, _AnonymousVar) else item
             return lambda d: d(sym)
+        # Build the tuple, preserving _AnonymousVar markers so ng1_noun can
+        # exclude anonymous positions from the rule head.
         return lambda d: d(tuple(labels))
 
     def ANONYMOUS_LABEL(self, token):

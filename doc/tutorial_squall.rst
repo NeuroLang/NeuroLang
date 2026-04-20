@@ -222,6 +222,32 @@ variables bind to the respective columns of the relation::
 The compiler generates one binding per coordinate variable and produces a
 single conjunction for the body.
 
+**Anonymous wildcard ``_`` in tuple labels**
+
+Use ``_`` inside a tuple label to match a column in the body without
+projecting it into the rule head.  Each ``_`` creates a distinct fresh
+variable — the column is consumed in the join but dropped from the output.
+
+This is particularly useful when a base relation has more columns than
+needed in the derived predicate.  For example, ``peak_reported`` stores
+``(i, j, k, study_id)`` but we want ``activation`` to contain only the
+three spatial coordinates::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
+    ... )
+    >>> nl.execute_squall_program(
+    ...     "define as Activation every Peak_reported (?i; ?j; ?k; _)."
+    ... )
+    >>> solution = nl.solve_all()
+    >>> sorted(solution["activation"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
+    [(10, 20, 30), (11, 21, 31)]
+
+The study-id column is matched in the body by the fresh symbol produced for
+``_``, but it does not appear in the ``activation`` head.  Multiple ``_``
+wildcards in the same tuple each get a distinct fresh variable.
+
 
 5. Defining Rules with ``define as``
 -------------------------------------
@@ -350,21 +376,37 @@ conditional probability relation.  The engine rewrites it into numerator,
 denominator and final ratio rules automatically, adding a probability column as
 the last argument.
 
-.. code-block:: python
+When the conditioned relation has more columns than the MARG head needs, use
+``_`` wildcards to drop the extra columns::
 
-   nl = NeurolangPDL()
-   nl.add_tuple_set([("s1",), ("s2",)], name="study")
-   nl.add_tuple_set([("s1",)], name="selected_study")
-   nl.add_tuple_set([("s2",)], name="open_world_studies")
-   nl.add_tuple_set([("s1",), ("s2",)], name="reported")
-   nl.execute_squall_program(
-       "define as Prob_report with probability every Reported ?s "
-       "conditioned to every Selected_study ?s that Open_world_studies."
-   )
+.. code-block:: text
 
-The relation ``prob_report`` will contain one column per variable plus a
-final probability column computed as
-``P(reported | selected_study & open_world_studies)``.
+    define as Activation every Peak_reported (?i; ?j; ?k; ?s)
+        such that ?s is a Selected_study.
+
+    define as Term_association every Term_in_study_tfidf (?s; ?t; ?tfidf)
+        such that ?s is a Selected_study.
+
+    define as Activation_given_term with probability
+        every Activation (?i; ?j; ?k; _)
+        conditioned to every Term_association (?s; ?t; _) such that ?t is 'auditory'.
+
+Here ``every Activation (?i; ?j; ?k; _)`` matches the 4-column ``activation``
+relation (i, j, k, study_id) but projects out only the 3 spatial coordinates
+into the MARG head.  Similarly ``every Term_association (?s; ?t; _)`` reads all
+three columns of the relation but drops the ``tfidf`` weight from the
+conditioning formula.
+
+The relation ``activation_given_term`` will have columns
+``(i, j, k, probability)`` where the last column is
+``P(activation(i,j,k) | term_association(s,t)  ∧  t = 'auditory')``.
+
+.. note::
+
+   When using MARG with tuple-labeled relations, the arity of the conditioned
+   and conditioning noun-phrases must exactly match the corresponding relation
+   arities.  Use ``_`` for columns that exist in the body relation but should
+   not appear in the head.
 
 
 9. Aggregations
@@ -655,44 +697,50 @@ The tuple subject ``(?x; ?y; ?z)`` binds the three coordinate columns of
 
 **Conditional probability (MARG) — activation probability**
 
-The MARG form computes the conditional probability that a study-voxel
-pair is activated given a conditioning predicate.  The full NeuroSynth
-equivalent (see ``examples/plot_neurosynth_implementation.py``) is:
+The MARG form computes the conditional probability that a voxel is activated
+given a conditioning predicate.  The full NeuroSynth forward-model pattern
+(see ``examples/plot_squall_neurosynth.py``) is:
 
-.. code-block:: python
+.. code-block:: text
 
-   nl = NeurolangPDL()
-   nl.add_uniform_probabilistic_choice_over_set(
-       [("s1",), ("s2",), ("s3",)], name="selected_study"
-   )
-   nl.add_tuple_set([("s1", 0, 1, 2), ("s2", 3, 4, 5)],
-                    name="focus_reported")
-   nl.add_tuple_set([("s1",), ("s2",)], name="term_assoc")
-   nl.execute_squall_program(
-       "define as Activation every Focus_reported (?s; ?x; ?y; ?z) "
-       "that Selected_study. "
-       "define as Prob_map with probability every Activation (?s; ?x; ?y; ?z) "
-       "conditioned to every Term_assoc ?s."
-   )
+    define as Activation every Peak_reported (?i; ?j; ?k; ?s)
+        such that ?s is a Selected_study.
 
-The relation ``prob_map`` will contain ``(s, x, y, z, probability)``
-triples where the last column is
-``P(focus_reported(s,x,y,z) | term_assoc(s))``.
+    define as Term_association every Term_in_study_tfidf (?s; ?t; ?tfidf)
+        such that ?s is a Selected_study.
+
+    define as Activation_given_term with probability
+        every Activation (?i; ?j; ?k; _)
+        conditioned to every Term_association (?s; ?t; _) such that ?t is 'auditory'.
+
+    define as Activation_given_term_image
+        every Agg_create_region_overlay of the Activation_given_term (?i; ?j; ?k; ?p).
+
+    obtain every Activation_given_term_image (?x).
+
+Key points:
+
+* ``(?i; ?j; ?k; _)`` on the conditioned side — the ``_`` drops the
+  study-id column so the MARG head is ``(i, j, k, PROB(i,j,k))``.
+* ``(?s; ?t; _)`` on the conditioning side — the ``_`` drops the
+  ``tfidf`` weight column; only ``(s, t)`` appear in the conditioning formula.
+* The ``obtain`` clause at the end causes ``execute_squall_program`` to return
+  the query result directly as a ``NamedRelationalAlgebraFrozenSet``.
 
 .. note::
 
-   A full probabilistic solve requires ``NeurolangPDL.solve_all()``
-   after ``execute_squall_program`` and a CPLogic-compatible EDB loaded
-   via ``add_uniform_probabilistic_choice_over_set``.
+   A full probabilistic solve requires a CPLogic-compatible EDB loaded via
+   ``add_uniform_probabilistic_choice_over_set``.  See
+   ``examples/plot_squall_neurosynth.py`` for the complete runnable example.
 
 
 16. Missing SQUALL Syntax — Gap Report
 -----------------------------------------
 
 The following Datalog / IR patterns appear in codebase examples with their
-current status as of 2026-04-17:
+current status as of 2026-04-20:
 
-.. list-table:: SQUALL gap report (updated 2026-04-17)
+.. list-table:: SQUALL gap report (updated 2026-04-20)
    :header-rows: 1
    :widths: 40 15 45
 
@@ -708,12 +756,15 @@ current status as of 2026-04-17:
    * - Comparison against computed variable (``?w greater than ?threshold``)
      - ✅ Confirmed working
      - Use ``rel_comp`` with a label in the RHS ``op`` position
-   * - Anonymous wildcard ``_`` in n-ary predicates
-     - ✅ Confirmed working
-     - Each ``_`` creates a distinct fresh symbol; ``every Study that _ activates`` works
+   * - Anonymous wildcard ``_`` in tuple labels (``(?i; ?j; ?k; _)``)
+     - ✅ Fixed
+     - Each ``_`` creates a distinct fresh variable matched in the body but dropped from the head; works in both conditioned and conditioning NPs of MARG rules
    * - Variable/expression as explicit probability (``with probability ?p``)
      - ✅ Fixed
      - ``vpdo_explicit_prob_v1/vn`` now accept any NP including labels
+   * - ``obtain`` clause returning results directly
+     - ✅ Fixed
+     - ``execute_squall_program`` returns a ``NamedRelationalAlgebraFrozenSet`` when a single ``obtain`` is present
    * - Skolem-like functional terms in rule head
      - ❌ Not supported
      - Requires IR changes beyond transformer scope
