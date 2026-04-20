@@ -617,6 +617,17 @@ class OntologyParser:
                     )
                 )
                 self._add_rules([rule])
+                # Also populate the connector EDB with (entity_uri, lower_label)
+                # so that dependency_matrix can resolve the connector predicate.
+                connector_est = FunctionApplication[bool](
+                    self.connector_symbol,
+                    (
+                        Constant[str](entity.name, verify_type=False),
+                        Constant[str](lower_name, verify_type=False),
+                    ),
+                    verify_type=False,
+                )
+                self._categorize_structural_knowledge([connector_est])
 
             prop_name = label.name.split(":")[-1]
             neurolang_prop = Symbol(
