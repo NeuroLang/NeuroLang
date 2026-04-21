@@ -33,6 +33,7 @@ from ..datalog.expression_processing import (
 )
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
+from .datalog.squall_syntax_lark import parser as squall_parser, SquallProgram
 from .datalog.standard_syntax import parser as datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
@@ -258,6 +259,131 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     )
                 )
             )
+
+    def execute_squall_program(
+        self, code: str
+    ) -> Union[None, NamedRelationalAlgebraFrozenSet, Dict[str, NamedRelationalAlgebraFrozenSet]]:
+        """
+        Execute a SQUALL (controlled English) program.
+
+        Parses *code* as a SQUALL program and walks the resulting rules into
+        the engine.  If the program contains ``obtain`` clauses the
+        corresponding queries are executed and their results returned.
+
+        Parameters
+        ----------
+        code : str
+            SQUALL program text.  May contain any mixture of
+            ``define as …`` rule definitions and ``obtain …`` queries.
+
+        Returns
+        -------
+        None
+            When *code* contains only rule definitions (no ``obtain``).
+        NamedRelationalAlgebraFrozenSet
+            When *code* contains exactly one ``obtain`` clause.
+        Dict[str, NamedRelationalAlgebraFrozenSet]
+            When *code* contains two or more ``obtain`` clauses, keyed
+            ``"obtain_0"``, ``"obtain_1"``, … in declaration order.
+
+        Examples
+        --------
+        >>> from neurolang.frontend import NeurolangPDL
+        >>> nl = NeurolangPDL()
+        >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+        >>> nl.execute_squall_program(
+        ...     "define as Active every person that plays."
+        ... ) is None
+        True
+        >>> result = nl.execute_squall_program("obtain every Person that plays.")
+        >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+        ['alice']
+        """
+        parsed = squall_parser(code)
+
+        # Rules-only (no obtain) — backward-compat: returns Union/Implication
+        if not isinstance(parsed, SquallProgram):
+            self.program_ir.walk(parsed)
+            return None
+
+        # Walk all rule definitions into the engine.
+        for rule in parsed.rules:
+            self.program_ir.walk(rule)
+
+        if not parsed.queries:
+            return None
+
+        # Execute each obtain query.
+        # For probabilistic engines (NeurolangPDL) we wrap q.body as a
+        # frontend Expression and delegate to self._execute_query, which
+        # applies magic-sets rewriting and stratified solving.
+        # For plain Datalog engines we fall back to reachable_code + chase.
+        results = {}
+        for i, q in enumerate(parsed.queries):
+            key = f"obtain_{i}"
+            head_sym = q.head
+            head_vars = (head_sym,) if isinstance(head_sym, ir.Symbol) else tuple(head_sym)
+
+            if hasattr(self, '_solve'):
+                # NeurolangPDL path: push a scope containing ALL define rules
+                # so that reachable_code_from_query sees a cohesive, scoped
+                # unit (mirrors what `with nl.scope as e: ... nl.query(...)` does).
+                import neurolang.frontend.query_resolution_expressions as fe_mod
+                h = ir.Symbol.fresh()
+                query_impl = datalog.Implication(h(*head_vars), q.body)
+                self.program_ir.push_scope()
+                try:
+                    # Re-walk define rules into the scoped layer.
+                    for rule in parsed.rules:
+                        self.program_ir.walk(rule)
+                    self.program_ir.walk(query_impl)
+                    fe_pred = fe_mod.Expression(self, h(*head_vars))
+                    fe_head = tuple(
+                        fe_mod.Expression(self, ir.Symbol(s.name))
+                        for s in head_vars
+                    )
+                    # _execute_query with a tuple head returns a
+                    # NamedRelationalAlgebraFrozenSet directly (not wrapped
+                    # in ir.Constant), so we can use it as-is.
+                    ra, _ = self._execute_query(fe_head, fe_pred)
+                finally:
+                    self.program_ir.pop_scope()
+                results[key] = ra
+            else:
+                # Pure Datalog path: build fresh implication, chase reachable rules
+                h = ir.Symbol.fresh()
+                query_impl = datalog.Implication(h(*head_vars), q.body)
+                self.program_ir.symbol_table = self.symbol_table.create_scope()
+                try:
+                    self.program_ir.walk(query_impl)
+                    try:
+                        magic_query_impl = self.magic_sets_rewrite_program(query_impl)
+                        reachable_rules = reachable_code(
+                            magic_query_impl, self.program_ir
+                        )
+                        functor = magic_query_impl.consequent.functor
+                    except Exception:
+                        reachable_rules = reachable_code(query_impl, self.program_ir)
+                        functor = h
+                    solution = self.chase_class(
+                        self.program_ir, rules=reachable_rules
+                    ).build_chase_solution()
+                finally:
+                    self.program_ir.symbol_table = self.symbol_table.enclosing_scope
+                solution_set = solution.get(
+                    functor, ir.Constant(WrappedRelationalAlgebraFrozenSet())
+                )
+                col_names = tuple(s.name for s in head_vars)
+                ra = NamedRelationalAlgebraFrozenSet(
+                    col_names, solution_set.value.unwrap()
+                )
+                ra.row_type = solution_set.value.row_type
+            results[key] = ra
+
+        if len(results) == 1:
+            return results["obtain_0"]
+        return results
 
     def compute_datalog_program_for_autocompletion(
             self, code: str, autocompletion_code
