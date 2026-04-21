@@ -101,10 +101,10 @@ def test_typing_callable_from_annotated_function():
     t = typing_callable_from_annotated_function(fun)
 
     origin = get_origin(Callable)
-    args = get_args(t)
+    arg_types, return_type = get_args(t)
     assert issubclass(origin, Callable)
-    assert args[0] is int and args[1] is str
-    assert args[2] is float
+    assert arg_types[0] is int and arg_types[1] is str
+    assert return_type is float
 
 
 def test_replace_subtype():
@@ -163,3 +163,26 @@ def test_infer_type():
     assert infer_type(op.invert) is Callable[[bool], bool]
     assert infer_type(op.eq) is Callable[[Unknown, Unknown], bool]
     assert infer_type(op.add) is Callable[[Unknown, Unknown], Unknown]
+
+
+def test_is_leq_informative_callable_ellipsis():
+    """
+    Regression test: `Callable[..., T]` uses `...` (Ellipsis) as a type
+    parameter meaning "any/unknown arguments". `is_leq_informative` must not
+    raise ValueError and must treat `...` as the least-informative arg-spec,
+    analogous to `Unknown` for ordinary types.
+
+    `Callable[..., T] ≤ Callable[anything, T]` regardless of arity, because
+    unknown args are less informative than any concrete argument spec.
+    """
+    # Callable[..., T] is less informative than any same-return-type Callable
+    assert is_leq_informative(Callable[..., bool], Callable[[int], bool])
+    assert is_leq_informative(Callable[..., bool], Callable[[int, str], bool])
+    assert is_leq_informative(Callable[..., bool], Callable[..., bool])
+
+    # Unknown return type flows through correctly
+    assert is_leq_informative(Callable[..., Unknown], Callable[[int], bool])
+
+    # A concrete Callable is NOT less informative than Callable[..., T]
+    assert not is_leq_informative(Callable[[int], bool], Callable[..., bool])
+    assert not is_leq_informative(Callable[[int, str], bool], Callable[..., bool])
