@@ -613,3 +613,45 @@ def test_extension_f_given_integration(tmp_path):
         f"'conditioned to' raised {type(exc_cond).__name__} but "
         f"'given' raised {type(exc_given).__name__} — walk plumbing differs"
     )
+
+
+def test_extension_d_for_each_integration(tmp_path):
+    """Rule using 'for each' groupby produces same IR structure as 'per'."""
+    from typing import Iterable
+
+    def _build(keyword):
+        nl = NeurolangPDL()
+
+        def agg_collect(vals: Iterable) -> float:
+            return float(sum(vals))
+
+        nl.add_symbol(agg_collect, name="agg_collect")
+        nl.add_tuple_set(
+            [(1, 10, "s1"), (2, 20, "s2")], name="data"
+        )
+        nl.execute_squall_program(
+            f"define as Result with a probability of "
+            f"the Agg_collect of the Data (?v; _; ?s) "
+            f"{keyword} ?i, ?s "
+            f"that data(?i, ?v, ?s) holds."
+        )
+        idb = nl.program_ir.intensional_database()
+        # find the rule(s) whose consequent functor name contains "result"
+        rules = [
+            rule
+            for pred_rules in idb.values()
+            for rule in pred_rules.formulas
+            if "result" in rule.consequent.functor.name.lower()
+        ]
+        return rules
+
+    rules_per = _build("per")
+    rules_foreach = _build("for each")
+    assert rules_per, "No result rules found for 'per'"
+    assert rules_foreach, "No result rules found for 'for each'"
+    # Both variants must produce the same number of consequent args
+    args_per = {len(r.consequent.args) for r in rules_per}
+    args_foreach = {len(r.consequent.args) for r in rules_foreach}
+    assert args_per == args_foreach, (
+        f"'per' consequent arg counts {args_per} != 'for each' {args_foreach}"
+    )

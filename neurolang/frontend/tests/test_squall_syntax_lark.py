@@ -144,3 +144,28 @@ def test_extension_h_with_inferred_probability(nl_setup):
     assert isinstance(prog_inferred.antecedent, Condition)
     # Consequent functors should match
     assert prog_plain.consequent.functor == prog_inferred.consequent.functor
+
+
+def test_extension_d_for_each_alias_per(nl_setup):
+    """'for each ?i, ?j, ?k and for each ?s' produces same dims as 'per ?i, ?j, ?k and per ?s'."""
+    from neurolang.frontend.datalog.squall_syntax_lark import parser
+    from neurolang.logic import Implication
+
+    prog_per = parser(
+        "define as Reported_voxel with a probability of "
+        "the Kernelized_max_proximity of the Focus (?i2; ?j2; ?k2; ?s) "
+        "per ?i1, ?j1, ?k1 and per ?s "
+        "where (?i1; ?j1; ?k1) is a Voxel."
+    )
+    prog_foreach = parser(
+        "define as Reported_voxel with a probability of "
+        "the Kernelized_max_proximity of the Focus (?i2; ?j2; ?k2; ?s) "
+        "for each ?i1, ?j1, ?k1 and for each ?s "
+        "where (?i1; ?j1; ?k1) is a Voxel."
+    )
+    assert isinstance(prog_per, Implication)
+    assert isinstance(prog_foreach, Implication)
+    # Head args (per-vars) must be the same set
+    per_args = {a.name for a in prog_per.consequent.body.args}
+    foreach_args = {a.name for a in prog_foreach.consequent.body.args}
+    assert per_args == foreach_args
