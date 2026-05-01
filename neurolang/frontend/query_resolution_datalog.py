@@ -162,6 +162,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         Creates an right implication of the consequent by the antecedent
         and adds the rule to the current program:
+
+        .. code-block:: text
+
             antecedent -> consequent
 
         Parameters

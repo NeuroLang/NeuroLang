@@ -9,10 +9,8 @@ voxel's probability of being reported by a study is weighted by
 language <https://doi.org/10.18653/v1/2020.acl-main.235>`_ instead of the
 IR builder DSL.
 
-A small Python helper builds the ``near_focus`` proximity table
-(voxel × study pairs within 1 voxel of a reported focus together with their
-``exp(−d/5)`` proximity values) before the SQUALL program runs.  The remaining
-five logic rules are then expressed as plain English sentences passed to
+All five logic rules, including the distance-weighted voxel proximity
+aggregation, are expressed as plain English sentences passed to
 :func:`~neurolang.frontend.NeurolangPDL.execute_squall_program`.  Compare with
 :ref:`sphx_glr_auto_examples_plot_cbma_spatial_prior.py` which writes the same
 computation using ``with nl.environment as e:``.
@@ -21,19 +19,23 @@ computation using ``with nl.environment as e:``.
 
 .. code-block:: text
 
-    define as Voxel_reported every Max_proximity of the Near_focus
-        per ?i1 and per ?j1 and per ?k1 and per ?s.
+    define as Voxel_reported with a probability of
+        the Agg_max_proximity of the Focus_reported (?i2; ?j2; ?k2; ?s)
+            per ?i1 and per ?j1 and per ?k1 and per ?s
+            that voxel(?i1, ?j1, ?k1) holds
+            and such that ?d is equal to EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2)
+            and ?d is lower than 1.
 
-    define as Term_association every Term_in_study_tfidf (?s; ?t; ?tfidf)
+    define as Term_association every Term_in_study_tfidf (?s; ?t; _)
         such that ?s is a Selected_study.
 
     define as Activation every Voxel_reported (?i; ?j; ?k; ?s)
         such that ?s is a Selected_study.
 
-    define as Probmap with probability every Activation (?i; ?j; ?k)
-        conditioned to every Term_association ?t that is 'emotion'.
+    define as Probmap with probability every Activation (?i; ?j; ?k; _)
+        conditioned to every Term_association (_; ?t) such that ?t is 'emotion'.
 
-    define as Img every Agg_create_region_overlay of the Probmap.
+    define as Img every Agg_create_region_overlay of the Probmap (?i; ?j; ?k; ?p).
 """
 
 # %%
@@ -54,7 +56,6 @@ from neurolang.frontend import ExplicitVBR, ExplicitVBROverlay, NeurolangPDL
 from neurolang.frontend.neurosynth_utils import get_ns_mni_peaks_reported
 
 # %%
-###############################################################################
 # Data preparation
 # ----------------
 # Set the data directory and load the MNI T1 atlas resampled to 2 mm voxels.
@@ -67,14 +68,33 @@ mni_t1 = nibabel.load(
 mni_t1_2mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 2)
 
 # %%
-###############################################################################
-# Set up engine and register aggregation symbol
-# ----------------------------------------------
-# ``max_proximity`` folds a column of ``exp(−d/5)`` proximity values into
-# their maximum.  ``agg_create_region_overlay`` aggregates the final result
-# into a brain overlay image.
+# Set up engine and register aggregation symbols
+# -----------------------------------------------
+# ``euclidean`` computes the Euclidean distance between two voxel coordinates.
+# ``agg_max_proximity`` folds a collection of distances into
+# ``max(exp(−d/5))``, the spatial-decay weight used in coordinate-based
+# meta-analysis.  ``agg_create_region_overlay`` assembles the final
+# probability map into a brain overlay image.
 
 nl = NeurolangPDL()
+
+
+def euclidean(
+    i1: int, j1: int, k1: int, i2: int, j2: int, k2: int
+) -> float:
+    """Euclidean distance between two voxel coordinates (numpy-vectorised)."""
+    return np.sqrt(
+        (i1 - i2) ** 2 + (j1 - j2) ** 2 + (k1 - k2) ** 2
+    )
+
+
+nl.add_symbol(euclidean, name="EUCLIDEAN")
+
+
+@nl.add_symbol
+def agg_max_proximity(d_values: Iterable) -> float:
+    """Aggregate: max exp(−d/5) over a collection of distances."""
+    return float(np.max(np.exp(-np.asarray(d_values) / 5.0)))
 
 
 @nl.add_symbol
@@ -88,17 +108,13 @@ def agg_create_region_overlay(
     )
 
 
-@nl.add_symbol
-def max_proximity(values: Iterable) -> float:
-    """Aggregation: max over a collection of exp(-d/5) proximity values."""
-    return float(max(values))
-
-
 # %%
-###############################################################################
 # Load the NeuroSynth database
 # ----------------------------
-# All relation names are lowercase to match SQUALL's case-folding convention.
+# Register peaks, study IDs, and term–study associations as extensional facts.
+# Relation names are lowercase so they match SQUALL's case-folding convention.
+# The full voxel grid is registered so the SQUALL rule can cross-join voxels
+# with foci and filter by distance inline — no Python pre-computation needed.
 
 peak_data = get_ns_mni_peaks_reported(data_dir)
 ijk_positions = np.round(
@@ -112,6 +128,8 @@ peak_data["j"] = ijk_positions[:, 1]
 peak_data["k"] = ijk_positions[:, 2]
 peak_data = peak_data[["i", "j", "k", "id"]]
 
+nl.add_tuple_set(peak_data, name="focus_reported")
+
 study_ids = nl.load_neurosynth_study_ids(data_dir, "study")
 nl.add_uniform_probabilistic_choice_over_set(
     study_ids.value, name="selected_study"
@@ -120,80 +138,62 @@ nl.load_neurosynth_term_study_associations(
     data_dir, "term_in_study_tfidf", tfidf_threshold=1e-3
 )
 
-# %%
-###############################################################################
-# Build the ``near_focus`` proximity table (Python pre-computation)
-# ------------------------------------------------------------------
-# SQUALL's grammar supports only a single subject noun phrase per rule, so a
-# two-noun cross-join (Voxel × Focus_reported with a distance filter) cannot be
-# expressed as a SQUALL sentence.  The proximity table is therefore pre-computed
-# here in Python.  For every voxel ``(i1,j1,k1)`` and study ``s``, it records
-# ``exp(−d/5)`` for each reported focus ``(i2,j2,k2)`` within strictly less than
-# 1 voxel distance ``d``.  This is the spatial-decay weight used in the
-# coordinate-based meta-analysis model.
-
+# Full voxel grid (vectorised, no loop)
 shape = mni_t1_2mm.get_fdata().shape
-voxel_ijk = np.array(
-    list(np.ndindex(*shape)), dtype=np.int32
-)  # (N_voxels, 3)
-
-foci_ijk = peak_data[["i", "j", "k"]].values.astype(np.int32)
-foci_study = peak_data["id"].values
-
-rows = []
-for idx, (fi, fj, fk) in enumerate(foci_ijk):
-    dists = np.linalg.norm(voxel_ijk - np.array([fi, fj, fk]), axis=1)
-    mask = dists < 1.0
-    prox = np.exp(-dists[mask] / 5.0)
-    for (vi, vj, vk), p in zip(voxel_ijk[mask], prox):
-        rows.append((int(vi), int(vj), int(vk), int(foci_study[idx]), float(p)))
-
-near_focus_df = pd.DataFrame(rows, columns=["i1", "j1", "k1", "s", "proximity"])
-nl.add_tuple_set(near_focus_df, name="near_focus")
+voxel_df = pd.DataFrame(
+    np.array(list(np.ndindex(*shape)), dtype=np.int32),
+    columns=["i", "j", "k"],
+)
+nl.add_tuple_set(voxel_df, name="voxel")
 
 # %%
-###############################################################################
 # SQUALL controlled-English program
 # ----------------------------------
 # Five sentences replace the ``with nl.environment as e:`` block.
 #
-# Sentence 1  ``every Max_proximity of the Near_focus per ?i1 and per …``
-#             — arbitrary-functor aggregation; four ``per`` dims (joined with
-#             ``and``) define the groupby key ``(i1, j1, k1, s)``.
-# Sentences 2–3  ``such that ?s is a Selected_study`` — existential study
-#             filter.  ``?tfidf`` binds the TF-IDF weight column but is
-#             projected away (absent from the rule head); SQUALL requires every
-#             argument in a tuple label to be a named variable — anonymous
-#             wildcards are not allowed in that position.
-# Sentence 4  ``with probability … conditioned to … that is 'emotion'`` — MARG
-#             query.
+# Sentence 1  Probabilistic aggregation: "with a probability of the
+#             Agg_max_proximity of the Focus_reported per ?i1 ... that
+#             voxel(?i1,?j1,?k1) holds and such that ?d is equal to
+#             euclidean(...) and ?d is lower than 1"
+#             — inline distance computation and filter.  The ``per`` variables
+#             become the head predicate arguments; ``agg_max_proximity``
+#             aggregates over distances ``?d`` that pass the ``<1`` threshold.
+# Sentences 2-3  ``such that ?s is a Selected_study`` — existential study
+#             filter; ``_`` (anonymous wildcard) drops the tfidf column from
+#             Term_association's head so only (study, term) are exposed.
+# Sentence 4  ``conditioned to every Term_association (_; ?t) such that ?t
+#             is 'emotion'`` — MARG conditional probability query; ``_``
+#             hides the study column in the conditioning noun phrase.
 # Sentence 5  ``every Agg_create_region_overlay of the Probmap`` — brain image
 #             aggregation.
 
 squall_program = """
-define as Voxel_reported every Max_proximity of the Near_focus
-    per ?i1 and per ?j1 and per ?k1 and per ?s.
+define as Voxel_reported with a probability of
+    the Agg_max_proximity of the Focus_reported (?i2; ?j2; ?k2; ?s)
+        per ?i1 and per ?j1 and per ?k1 and per ?s
+        that voxel(?i1, ?j1, ?k1) holds
+        and such that ?d is equal to EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2)
+        and ?d is lower than 2.
 
-define as Term_association every Term_in_study_tfidf (?s; ?t; ?tfidf)
+define as Term_association every Term_in_study_tfidf (?s; ?t; _)
     such that ?s is a Selected_study.
 
 define as Activation every Voxel_reported (?i; ?j; ?k; ?s)
     such that ?s is a Selected_study.
 
-define as Probmap with probability every Activation (?i; ?j; ?k)
-    conditioned to every Term_association ?t that is 'emotion'.
+define as Probmap with probability every Activation (?i; ?j; ?k; _)
+    conditioned to every Term_association (_; ?t) such that ?t is 'emotion'.
 
-define as Img every Agg_create_region_overlay of the Probmap.
+define as Img every Agg_create_region_overlay of the Probmap (?i; ?j; ?k; ?p).
 """
 
 nl.execute_squall_program(squall_program)
-
 # %%
-###############################################################################
 # Solve and retrieve the probability map
 # --------------------------------------
 
 solution = nl.solve_all()
+print(solution.keys())
 result_image = (
     solution["img"]
     .as_pandas_dataframe()
@@ -202,7 +202,6 @@ result_image = (
 )
 
 # %%
-###############################################################################
 # Plot
 # ----
 

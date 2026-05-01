@@ -56,9 +56,10 @@ class RelationalAlgebraError(NeuroLangException):
 class NotConjunctiveExpression(NeuroLangException):
     """
     This expression is not conjunctive. In this case, an expression is
-    conjunctive if it is a conjunction of
-      - Constant
-      - A function or predicate of constants
+    conjunctive if it is a conjunction of:
+
+    - Constant
+    - A function or predicate of constants
     """
 
     pass
@@ -67,10 +68,11 @@ class NotConjunctiveExpression(NeuroLangException):
 class NotConjunctiveExpressionNegation(NotConjunctiveExpression):
     """
     This expression is not conjunctive. In this case, an expression is
-    conjunctive if it is a conjunction of
-      - Constant
-      - A function or predicate of conjunctive arguments
-      - A negated predicate of conjunctive arguments
+    conjunctive if it is a conjunction of:
+
+    - Constant
+    - A function or predicate of conjunctive arguments
+    - A negated predicate of conjunctive arguments
     """
 
     pass
@@ -79,10 +81,11 @@ class NotConjunctiveExpressionNegation(NotConjunctiveExpression):
 class NotConjunctiveExpressionNestedPredicates(NotConjunctiveExpression):
     """
     This expression is not conjunctive. In this case, an expression is
-    conjunctive if it is a conjunction of
-      - Constant
-      - A function or predicate of conjunctive arguments
-      - A quantifier of conjunctive arguments
+    conjunctive if it is a conjunction of:
+
+    - Constant
+    - A function or predicate of conjunctive arguments
+    - A quantifier of conjunctive arguments
 
     Note that in this case, negated predicates are not valid (negation and
     aggregation cannot be used in the same rule).
@@ -238,13 +241,15 @@ class WrongArgumentsInPredicateError(NeuroLangException):
     NetworkReported is defined with two variables but used with three
     in the second rule:
 
-    NetworkReported(n, s) :- RegionReported(
-        r, s
-    ) & RegionInNetwork(r, n)
-    StudyMatchingNetworkQuery(s, n) :- (
-        RegionReported("VWFA", s)
-        & NetworkReported(n, s, r)
-    )
+    .. code-block:: text
+
+        NetworkReported(n, s) :- RegionReported(
+            r, s
+        ) & RegionInNetwork(r, n)
+        StudyMatchingNetworkQuery(s, n) :- (
+            RegionReported("VWFA", s)
+            & NetworkReported(n, s, r)
+        )
     """
 
     pass
@@ -290,22 +295,26 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
 
     Examples
     --------
-    PositiveReverseInferenceSegregationQuery(
-        t, n, PROB(t, n)
-    ) :- (TopicAssociation(t, s) // SelectedStudy(s)) // (
-        StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
-    )
+    .. code-block:: text
+
+        PositiveReverseInferenceSegregationQuery(
+            t, n, PROB(t, n)
+        ) :- (TopicAssociation(t, s) // SelectedStudy(s)) // (
+            StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
+        )
 
     This formula is not in DNF since it is a disjunction of a disjunction
     (TopicAssociation(t, s) // SelectedStudy(s)) and a conjunction
     (StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)).
-    A valid query would be :
+    A valid query would be:
 
-    PositiveReverseInferenceSegregationQuery(
-        t, n, PROB(t, n)
-    ) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (
-        StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
-    )
+    .. code-block:: text
+
+        PositiveReverseInferenceSegregationQuery(
+            t, n, PROB(t, n)
+        ) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (
+            StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
+        )
 
     .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
         (Addison Wesley, 1995), Addison-Wesley.
@@ -330,19 +339,23 @@ class NegativeFormulaNotSafeRangeException(TranslateToNamedRAException):
 
     Examples
     --------
-    StudyNotMatchingSegregationQuery(s, n) :- (
-        ~StudyMatchingNetworkQuery(s, n)
-        & Network(n)
-    )
+    .. code-block:: text
 
-    Variable `s` is present in the negated `StudyMatchingNetworkQuery`
+        StudyNotMatchingSegregationQuery(s, n) :- (
+            ~StudyMatchingNetworkQuery(s, n)
+            & Network(n)
+        )
+
+    Variable ``s`` is present in the negated ``StudyMatchingNetworkQuery``
     literal but is not present in a non-negated literal. A valid query body
-    would be :
+    would be:
 
-    StudyNotMatchingSegregationQuery(s, n) :- (
-        ~StudyMatchingNetworkQuery(s, n)
-        & Study(s) & Network(n)
-    )
+    .. code-block:: text
+
+        StudyNotMatchingSegregationQuery(s, n) :- (
+            ~StudyMatchingNetworkQuery(s, n)
+            & Study(s) & Network(n)
+        )
 
     .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
         (Addison Wesley, 1995), Addison-Wesley.

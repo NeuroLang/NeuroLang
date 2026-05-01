@@ -52,33 +52,20 @@ sphinx_gallery_conf = {
     "gallery_dirs": "auto_examples",
     "doc_module": ("neurolang",),
     "backreferences_dir": "gen_api",
-    # Do not attempt to execute examples — neurolang requires Python <3.12
-    # and neuroimaging data not present in CI.
-    "plot_gallery": False,
 }
 
 # -- Autosummary / Autodoc ----------------------------------------------------
 autosummary_generate = True
+autosummary_generate_overwrite = True
 autodoc_default_options = {
     "members": True,
     "inherited-members": True,
 }
 
-# neurolang uses private typing internals removed in Python 3.12.
-# Mock the entire package so autodoc/autosummary can still produce stubs.
-autodoc_mock_imports = [
-    "neurolang",
-    "neurolang.frontend",
-    "neurolang.expressions",
-    "neurolang.expression_pattern_matching",
-    "neurolang.expression_walker",
-    "neurolang.exceptions",
-    "neurolang.logic",
-    "neurolang.datalog",
-    "neurolang.probabilistic",
-    "neurolang.relational_algebra",
-    "neurolang.relational_algebra_provenance",
-]
+# numpydoc: don't try to create stub pages for class members
+numpydoc_class_members_toctree = False
+
+# neurolang imports cleanly under Python 3.12+ — no mock needed.
 
 # -- Intersphinx --------------------------------------------------------------
 intersphinx_mapping = {
