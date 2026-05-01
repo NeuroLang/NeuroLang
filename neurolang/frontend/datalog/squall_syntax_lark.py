@@ -1960,6 +1960,7 @@ def parser(code, locals=None, globals=None):
         result = SquallProgram(
             rules=[simplifier.walk(r) for r in result.rules],
             queries=result.queries,
+            query_names=result.query_names,
         )
     elif isinstance(result, Union):
         result = Union(tuple(simplifier.walk(f) for f in result.formulas))

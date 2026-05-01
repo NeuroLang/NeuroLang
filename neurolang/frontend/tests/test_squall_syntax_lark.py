@@ -191,3 +191,17 @@ def test_extension_g_query_as_produces_squall_program(nl_setup):
         if hasattr(r, 'consequent') and hasattr(r.consequent, 'functor')
     }
     assert 'image' in rule_functor_names, f"'image' not found in rule functors: {rule_functor_names}"
+
+
+def test_extension_g_query_names_forwarded_through_parser(nl_setup):
+    """query_names must survive the LogicSimplifier reconstruction in parser()."""
+    from neurolang.frontend.datalog.squall_syntax_lark import parser, SquallProgram
+
+    result = parser(
+        "obtain every Pair (?x; ?y) as My_pairs."
+    )
+    assert isinstance(result, SquallProgram)
+    # query_names must have been forwarded — not empty
+    assert result.query_names, f"query_names was dropped: {result.query_names!r}"
+    assert 0 in result.query_names
+    assert result.query_names[0] == "my_pairs"
