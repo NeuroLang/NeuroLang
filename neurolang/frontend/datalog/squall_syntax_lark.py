@@ -1142,6 +1142,34 @@ class SquallTransformer(Transformer):
                 return func_sym(*_vars)
             return ('_rel', rel)
 
+    def rel_tuple_noun(self, args):
+        """Handle 'where (?i; ?j; ?k) is a Noun' → Noun(i, j, k) in rule body.
+
+        args[0] : CPS label lambda (from `label` handler) or Symbol
+        args[1] : Symbol from `noun1` handler (already lowercased)
+
+        The enclosing subject variable x is ignored — the tuple provides all
+        argument positions explicitly, just like rel_fun_call with explicit labels.
+        """
+        label_val = args[0]
+        noun = args[1]   # Symbol, e.g. Symbol('voxel')
+
+        # Materialise the label CPS to get the underlying tuple of Symbols.
+        if callable(label_val) and not isinstance(label_val, (Symbol, Constant)):
+            raw = label_val(lambda x: x)
+        else:
+            raw = label_val
+
+        tup = raw if isinstance(raw, tuple) else (raw,)
+
+        # Resolve _AnonymousVar markers to fresh symbols.
+        body_syms = tuple(
+            item.as_symbol() if isinstance(item, _AnonymousVar) else item
+            for item in tup
+        )
+
+        return ('_rel', lambda x: noun(*body_syms))
+
     def rel_adj1(self, args):
         adj = args[0]
         return ('_rel', adj)

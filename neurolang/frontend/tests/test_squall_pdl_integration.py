@@ -431,3 +431,45 @@ def test_execute_squall_compact_per_list():
     assert any(c >= 4 for c in arg_counts), (
         f"Expected a rule consequent with >=4 args, got arg counts: {arg_counts}"
     )
+
+
+def test_execute_squall_where_tuple_is_noun():
+    """'where (?i; ?j; ?k) is a Noun' expands to Noun(i, j, k) in rule body.
+
+    The clause is semantically equivalent to 'that noun(?i, ?j, ?k) holds'.
+    We verify that the rule body contains a FunctionApplication of voxel with 3 args.
+    """
+    from neurolang.expressions import Constant, FunctionApplication, Symbol
+    from neurolang.logic import Conjunction
+
+    engine = NeurolangPDL()
+    _ = engine.add_tuple_set(
+        [(0, 0, 0), (1, 1, 1)], name="voxel"
+    )
+    _ = engine.add_tuple_set(
+        [(0, 0, 0, 10), (1, 1, 1, 20)], name="focus"
+    )
+
+    engine.execute_squall_program(
+        "define as Near every Focus (?i2; ?j2; ?k2; ?s) "
+        "where (?i2; ?j2; ?k2) is a Voxel."
+    )
+
+    idb = engine.program_ir.intensional_database()
+    near_symb = next(k for k in idb if k.name == "near")
+    rule = idb[near_symb].formulas[0]
+
+    body = rule.antecedent
+    formulas = body.formulas if isinstance(body, Conjunction) else [body]
+    voxel_calls = [
+        f for f in formulas
+        if isinstance(f, FunctionApplication)
+        and isinstance(f.functor, Symbol)
+        and f.functor.name == "voxel"
+    ]
+    assert len(voxel_calls) == 1, (
+        f"Expected exactly one voxel(...) call in body, got: {formulas}"
+    )
+    assert len(voxel_calls[0].args) == 3, (
+        f"Expected voxel(i,j,k) with 3 args, got: {voxel_calls[0]}"
+    )
