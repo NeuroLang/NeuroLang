@@ -104,6 +104,7 @@ rel_b : (_THAT | _WHICH | _WHERE | _WHO ) vp                -> rel_vp
       | comparison (_THAN | _TO) op                         -> rel_comp
       | (_THAT | _WHICH | _WHERE ) identifier "(" label ("," label)* ")" _HOLDS -> rel_fun_call
       | _WHERE label (_IS | _ARE) (_A | _AN) noun1          -> rel_tuple_noun
+      | _WHERE s                                            -> rel_s
       | adj1 [ cp ]                                         -> rel_adj1
 //      | adjn opn                                            -> rel_adjn
 

@@ -473,3 +473,33 @@ def test_execute_squall_where_tuple_is_noun():
     assert len(voxel_calls[0].args) == 3, (
         f"Expected voxel(i,j,k) with 3 args, got: {voxel_calls[0]}"
     )
+
+
+def test_extension_e_where_integration(tmp_path):
+    """Full program using 'where' instead of 'such that' produces same solution."""
+    import pandas as pd
+    from ..probabilistic_frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    df = pd.DataFrame({"x": [1, 2, 3]})
+    nl.add_tuple_set(df, name="item")
+    df2 = pd.DataFrame({"x": [1, 2]})
+    nl.add_tuple_set(df2, name="selected")
+
+    # with 'such that'
+    nl.execute_squall_program(
+        "define as Result every Item (?x) such that ?x is a Selected."
+    )
+    sol_such = nl.solve_all()["result"].as_pandas_dataframe()
+
+    nl2 = NeurolangPDL()
+    nl2.add_tuple_set(df, name="item")
+    nl2.add_tuple_set(df2, name="selected")
+
+    # with 'where'
+    nl2.execute_squall_program(
+        "define as Result every Item (?x) where ?x is a Selected."
+    )
+    sol_where = nl2.solve_all()["result"].as_pandas_dataframe()
+
+    assert set(sol_such["x"]) == set(sol_where["x"])
