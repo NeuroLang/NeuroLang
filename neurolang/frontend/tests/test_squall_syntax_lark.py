@@ -98,3 +98,27 @@ def test_extension_e_rel_tuple_noun_not_shadowed(nl_setup):
     # Should contain voxel(i, j, k) — the tuple membership expansion,
     # NOT an is_a/sentence-level construction.
     assert 'voxel' in body_repr.lower()
+
+
+def test_extension_f_given_as_conditioned_to(nl_setup):
+    """'given every X (…)' parses identically to 'conditioned to every X (…)'."""
+    from neurolang.frontend.datalog.squall_syntax_lark import parser
+    from neurolang.probabilistic.expressions import Condition
+    from neurolang.logic import Implication
+
+    prog_cond = parser(
+        "define as Probmap with probability every Activation (?i; ?j; ?k; _) "
+        "conditioned to every Selected_study (_)."
+    )
+    prog_given = parser(
+        "define as Probmap with probability every Activation (?i; ?j; ?k; _) "
+        "given every Selected_study (_)."
+    )
+    assert isinstance(prog_cond, Implication)
+    assert isinstance(prog_given, Implication)
+    # Both antecedents must be Condition instances
+    assert isinstance(prog_cond.antecedent, Condition)
+    assert isinstance(prog_given.antecedent, Condition)
+    # conditioned and conditioning bodies must match structurally
+    assert type(prog_cond.antecedent.conditioned) == type(prog_given.antecedent.conditioned)
+    assert type(prog_cond.antecedent.conditioning) == type(prog_given.antecedent.conditioning)

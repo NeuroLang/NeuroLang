@@ -33,10 +33,10 @@ rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
        | _rule_start PROBABLY verbn rule_body1 _CONDITIONED? _BREAK? ops -> rule_opnn_per
 
 rule_body1 : prep? det ng1
-rule_body1_cond : det ng1 _CONDITIONED _TO s -> rule_body1_cond_prior
-                | s _CONDITIONED _TO det ng1 -> rule_body1_cond_posterior
+rule_body1_cond : det ng1 (_CONDITIONED _TO | _GIVEN) s -> rule_body1_cond_prior
+                | s (_CONDITIONED _TO | _GIVEN) det ng1 -> rule_body1_cond_posterior
 
-rule_body2_cond : det ng1 _CONDITIONED _TO det ng1
+rule_body2_cond : det ng1 (_CONDITIONED _TO | _GIVEN) det ng1
 
 PROBABLY : _PROBABLY | _LIKELY
 _BREAK : "," | ";"
