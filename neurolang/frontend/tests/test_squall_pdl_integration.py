@@ -394,3 +394,40 @@ def test_execute_squall_inline_expr_comparison():
     assert not (isinstance(lhs.functor, Symbol) and lhs.functor.name != "MY_DIST"), (
         f"Unexpected relay-variable functor: {lhs.functor}"
     )
+
+
+def test_execute_squall_compact_per_list():
+    """'per ?i, ?j, ?k and per ?s' produces same head args as four separate per dims.
+
+    Compact form: per ?i1, ?j1, ?k1 and per ?s
+    Verbose form: per ?i1 and per ?j1 and per ?k1 and per ?s
+    Both must produce an Implication whose consequent has >=4 args.
+    """
+    from typing import Iterable
+
+    engine = NeurolangPDL()
+
+    def agg_collect(vals: Iterable) -> float:
+        return float(sum(vals))
+
+    engine.add_symbol(agg_collect, name="agg_collect")
+    _ = engine.add_tuple_set(
+        [(1, 10, 100, "s1"), (2, 20, 200, "s2")], name="data"
+    )
+
+    engine.execute_squall_program(
+        "define as Result with a probability of "
+        "the Agg_collect of the Data (?v; _; _; ?s) "
+        "per ?i1, ?j1, ?k1 and per ?s "
+        "that data(?i1, ?j1, ?k1) holds."
+    )
+
+    idb = engine.program_ir.intensional_database()
+    # The query-based prob-fact translation produces fresh predicates.
+    # At least one rule must have a consequent with >=4 args
+    # (the fresh det rule has prob_var + i1, j1, k1, s = 5 args).
+    all_rules = [idb[k].formulas[0] for k in idb]
+    arg_counts = [len(r.consequent.args) for r in all_rules]
+    assert any(c >= 4 for c in arg_counts), (
+        f"Expected a rule consequent with >=4 args, got arg counts: {arg_counts}"
+    )

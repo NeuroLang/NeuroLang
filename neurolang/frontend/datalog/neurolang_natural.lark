@@ -27,6 +27,7 @@ rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
         | _rule_start verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
         | _rule_start verb1 _WITH _PROBABILITY rule_body1_cond -> rule_op_marg
         | _rule_start verb1 _WITH _PROBABILITY rule_body2_cond -> rule_op_marg
+        | _rule_start verb1 _WITH _A _PROBABILITY _OF np -> rule_op_prob_agg
 
 ?rulen : _rule_start verbn rule_body1 _BREAK? ops -> rule_opnn
        | _rule_start PROBABLY verbn rule_body1 _CONDITIONED? _BREAK? ops -> rule_opnn_per
@@ -70,7 +71,7 @@ NO : _NO
 np2 : det ng2
 
 ng1 : noun1 [ app ] [ rel ] -> ng1_noun
-    | noun1 [ app ] ( _OF | _FROM ) npc{_THE}  [ dims ]   -> ng1_agg_npc
+    | noun1 [ app ] ( _OF | _FROM ) npc{_THE}  [ dims ] [ rel ]   -> ng1_agg_npc
     // | noun1 [ app ] ng1 [ dims ]           -> ng1_agg_ng1
 ng2 : noun2 [ app ]
 
@@ -82,9 +83,10 @@ app : _IN number"D" -> app_dimension
 dims : dim                    -> dims_base
      | dim _CONJUNCTION dims  -> dims_rec
 
-dim : _PER ng2              -> dim_ng2
-    | _PER npc{THE}         -> dim_npc
-    | agg_func _OF npc{THE} -> dim_agg
+dim : _PER ng2                         -> dim_ng2
+    | _PER npc{THE} ("," npc{THE})+    -> dim_npc_list
+    | _PER npc{THE}                    -> dim_npc
+    | agg_func _OF npc{THE}            -> dim_agg
 
 agg_func : AGG_FUNC
 AGG_FUNC : "count" | "sum" | "max" | "min" | "average"
@@ -241,10 +243,11 @@ expr_mul{x} : ( expr_mul{x} MUL )? expr_pow{x}
 expr_pow{x} : expr_exponent{x} (pow expr_exponential{x})?
 ?expr_exponent{x} : expr_atom{x}
 ?expr_exponential{x} : expr_atom{x}
-expr_atom{x} : "(" expr{x} ")"                             -> expr_atom_par
-             | "(" expr{x} (";" expr{x})+ ")"              -> expr_atom_tuple
-             | identifier"(" (expr{x} ("," expr{x})*)? ")" -> expr_atom_fun
-             | term                                        -> expr_atom_term
+expr_atom{x} : "(" expr{x} ")"                                        -> expr_atom_par
+             | "(" expr{x} (";" expr{x})+ ")"                         -> expr_atom_tuple
+             | identifier"(" (expr{x} ("," expr{x})*)? ")"            -> expr_atom_fun
+             | UPPER_NAME"(" (expr{x} ("," expr{x})*)? ")"            -> expr_atom_fun_upper
+             | term                                                    -> expr_atom_term
              | x
 
 SUM : "+" 
