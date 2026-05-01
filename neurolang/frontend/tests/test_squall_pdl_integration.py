@@ -506,7 +506,85 @@ def test_extension_e_where_integration(tmp_path):
 
 
 def test_extension_f_given_integration(tmp_path):
-    """'given every X' produces same MARG solution as 'conditioned to every X'."""
+    """'given every X' parses to identical IR as 'conditioned to every X'.
+
+    Approach:
+    1. Parse both sentence variants with the SQUALL parser and compare the
+       resulting Implication structures (functor, Condition antecedent type,
+       and Condition sub-expression functors must be equal).
+    2. Walk both programs into fresh engines and confirm neither raises an
+       unexpected exception — the same exception type (if any) is acceptable
+       since MARG engine limitations affect both paths equally.
+    """
+    from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
+    from neurolang.probabilistic.expressions import Condition
+    from neurolang.logic import Implication
+
+    COND_SENTENCE = (
+        "define as Probmap with probability every Activation (?i; ?j; ?k) "
+        "conditioned to every Selected_study (_)."
+    )
+    GIVEN_SENTENCE = (
+        "define as Probmap with probability every Activation (?i; ?j; ?k) "
+        "given every Selected_study (_)."
+    )
+
+    # --- IR structural comparison -------------------------------------------
+    ir_cond = squall_parser(COND_SENTENCE)
+    ir_given = squall_parser(GIVEN_SENTENCE)
+
+    # Both should return an Implication (rules-only, no obtain clause)
+    assert isinstance(ir_cond, Implication), (
+        f"'conditioned to' parser returned {type(ir_cond).__name__}, expected Implication"
+    )
+    assert isinstance(ir_given, Implication), (
+        f"'given' parser returned {type(ir_given).__name__}, expected Implication"
+    )
+
+    # Head functor must be the same predicate name
+    assert ir_cond.consequent.functor == ir_given.consequent.functor, (
+        f"Head functors differ: {ir_cond.consequent.functor!r} vs "
+        f"{ir_given.consequent.functor!r}"
+    )
+
+    # Both antecedents must be a Condition (not a plain Conjunction/Atom)
+    assert isinstance(ir_cond.antecedent, Condition), (
+        f"'conditioned to' antecedent is {type(ir_cond.antecedent).__name__}, expected Condition"
+    )
+    assert isinstance(ir_given.antecedent, Condition), (
+        f"'given' antecedent is {type(ir_given.antecedent).__name__}, expected Condition"
+    )
+
+    # The Condition's conditioned/conditioning sub-expressions must have the
+    # same type and — where applicable — the same top-level functor.
+    cond_body = ir_cond.antecedent.conditioned
+    given_body = ir_given.antecedent.conditioned
+    assert type(cond_body) == type(given_body), (
+        f"Condition.conditioned types differ: {type(cond_body).__name__!r} vs "
+        f"{type(given_body).__name__!r}"
+    )
+
+    cond_cond = ir_cond.antecedent.conditioning
+    given_cond = ir_given.antecedent.conditioning
+    assert type(cond_cond) == type(given_cond), (
+        f"Condition.conditioning types differ: {type(cond_cond).__name__!r} vs "
+        f"{type(given_cond).__name__!r}"
+    )
+
+    # For FunctionApplication nodes we can also compare functor names.
+    from neurolang.expressions import FunctionApplication
+    if isinstance(cond_body, FunctionApplication) and isinstance(given_body, FunctionApplication):
+        assert cond_body.functor == given_body.functor, (
+            f"Condition.conditioned functors differ: {cond_body.functor!r} vs "
+            f"{given_body.functor!r}"
+        )
+    if isinstance(cond_cond, FunctionApplication) and isinstance(given_cond, FunctionApplication):
+        assert cond_cond.functor == given_cond.functor, (
+            f"Condition.conditioning functors differ: {cond_cond.functor!r} vs "
+            f"{given_cond.functor!r}"
+        )
+
+    # --- Engine walk: both variants must raise the same exception type -------
     from neurolang.frontend import NeurolangPDL
     import pandas as pd
 
@@ -518,32 +596,20 @@ def test_extension_f_given_integration(tmp_path):
         nl.add_uniform_probabilistic_choice_over_set(study_ids, name="selected_study")
         return nl
 
-    nl1 = _build_engine()
-    nl2 = _build_engine()
-
     exc_cond = None
     exc_given = None
 
     try:
-        nl1.execute_squall_program(
-            "define as Probmap with probability every Activation (?i; ?j; ?k) "
-            "conditioned to every Selected_study (_)."
-        )
+        _build_engine().execute_squall_program(COND_SENTENCE)
     except Exception as e:
         exc_cond = e
 
     try:
-        nl2.execute_squall_program(
-            "define as Probmap with probability every Activation (?i; ?j; ?k) "
-            "given every Selected_study (_)."
-        )
+        _build_engine().execute_squall_program(GIVEN_SENTENCE)
     except Exception as e:
         exc_given = e
 
-    # Both variants must behave identically — either both succeed or both raise
-    # the same type of exception (engine may not fully solve MARG, but the
-    # parse/walk plumbing must be equivalent).
     assert type(exc_cond) == type(exc_given), (
         f"'conditioned to' raised {type(exc_cond).__name__} but "
-        f"'given' raised {type(exc_given).__name__}"
+        f"'given' raised {type(exc_given).__name__} — walk plumbing differs"
     )
