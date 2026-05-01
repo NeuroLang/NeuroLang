@@ -25,8 +25,8 @@ _rule_start : _DEFINE _AS
 rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
         | _rule_start PROBABLY verb1 rule_body1_cond
         | _rule_start verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
-        | _rule_start verb1 _WITH _PROBABILITY rule_body1_cond -> rule_op_marg
-        | _rule_start verb1 _WITH _PROBABILITY rule_body2_cond -> rule_op_marg
+        | _rule_start verb1 _WITH _INFERRED? _PROBABILITY rule_body1_cond -> rule_op_marg
+        | _rule_start verb1 _WITH _INFERRED? _PROBABILITY rule_body2_cond -> rule_op_marg
         | _rule_start verb1 _WITH _A _PROBABILITY _OF np -> rule_op_prob_agg
 
 ?rulen : _rule_start verbn rule_body1 _BREAK? ops -> rule_opnn
@@ -279,6 +279,7 @@ _FROM : "from"
 _FOR : "for"
 _GREATER : "greater"
 _GIVEN : "given"
+_INFERRED : "inferred"
 _OBTAIN : "obtain"
 _HAS : "has"
 _HASN_T : "hasn't"
@@ -317,9 +318,9 @@ _WHOM : "whom"
 _WHOSE : "whose"
 
 
-LOWER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
-UPPER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
-NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-zA-Z_]\w*/
+LOWER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
+UPPER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
+NAME : /(?!(\b(a|all|an|and|are|as|average|by|conditioned|count|define|defines|do|does|did|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-zA-Z_]\w*/
 UPPER_NAME_QUOTED : /`[A-Z][^`]*`/
 LOWER_NAME_QUOTED : /`[a-z][^`]*`/
 STRING : /[^']+/

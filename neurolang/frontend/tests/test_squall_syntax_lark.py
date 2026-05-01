@@ -122,3 +122,25 @@ def test_extension_f_given_as_conditioned_to(nl_setup):
     # conditioned and conditioning bodies must match structurally
     assert type(prog_cond.antecedent.conditioned) == type(prog_given.antecedent.conditioned)
     assert type(prog_cond.antecedent.conditioning) == type(prog_given.antecedent.conditioning)
+
+
+def test_extension_h_with_inferred_probability(nl_setup):
+    """'with inferred probability … conditioned to …' parses same as 'with probability … conditioned to …'."""
+    from neurolang.frontend.datalog.squall_syntax_lark import parser
+    from neurolang.probabilistic.expressions import Condition
+    from neurolang.logic import Implication
+
+    prog_plain = parser(
+        "define as Probmap with probability every Activation (?i; ?j; ?k; _) "
+        "conditioned to every Selected_study (_)."
+    )
+    prog_inferred = parser(
+        "define as Probmap with inferred probability every Activation (?i; ?j; ?k; _) "
+        "conditioned to every Selected_study (_)."
+    )
+    assert isinstance(prog_plain, Implication)
+    assert isinstance(prog_inferred, Implication)
+    assert isinstance(prog_plain.antecedent, Condition)
+    assert isinstance(prog_inferred.antecedent, Condition)
+    # Consequent functors should match
+    assert prog_plain.consequent.functor == prog_inferred.consequent.functor
