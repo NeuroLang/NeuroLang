@@ -50,8 +50,11 @@ def test_extension_e_where_as_such_that_variable(nl_setup):
     )
     from neurolang.logic import Implication
     assert isinstance(prog_where, Implication)
-    # The antecedent must mention selected_study somewhere
-    assert "selected_study" in str(prog_where.antecedent).lower()
+    # IR-level assertion: the antecedent must mention selected_study
+    # (from 'where ?x is a Selected_study'), confirming the where clause
+    # body was actually wired into the rule — not silently dropped.
+    body_repr = repr(prog_where.antecedent)
+    assert 'selected_study' in body_repr.lower()
 
 
 def test_extension_e_where_inline_expr(nl_setup):
@@ -80,3 +83,18 @@ def test_extension_e_where_inline_expr(nl_setup):
     assert has_lt(prog_such.antecedent)
     assert has_lt(prog_where.antecedent)
     assert _normalize_fresh(prog_such.antecedent) == _normalize_fresh(prog_where.antecedent)
+
+
+def test_extension_e_rel_tuple_noun_not_shadowed(nl_setup):
+    """where (?i;?j;?k) is a Voxel still parses as rel_tuple_noun after Extension E."""
+    from neurolang.frontend.datalog.squall_syntax_lark import parser
+    from neurolang.logic import Implication
+
+    prog = parser(
+        "define as Foo every Bar (?x) where (?i; ?j; ?k) is a Voxel."
+    )
+    assert isinstance(prog, Implication)
+    body_repr = repr(prog.antecedent)
+    # Should contain voxel(i, j, k) — the tuple membership expansion,
+    # NOT an is_a/sentence-level construction.
+    assert 'voxel' in body_repr.lower()
