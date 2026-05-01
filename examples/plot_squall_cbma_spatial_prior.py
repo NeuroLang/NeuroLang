@@ -19,28 +19,26 @@ computation using ``with nl.environment as e:``.
 
 .. code-block:: text
 
-    define as Voxel_reported with a probability of
-        the Agg_max_proximity of the Focus_reported (?i2; ?j2; ?k2; ?s)
-            per ?i1, ?j1, ?k1 and per ?s
+    define as Reported_voxel with a probability of
+        the Kernelized_max_proximity of the Reported_focus (?i2; ?j2; ?k2; ?s)
+            for each ?i1, ?j1, ?k1 and for each ?s
             where (?i1; ?j1; ?k1) is a Voxel
-            and such that EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2) is lower than 5.
+            and where EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2) is lower than 2.
 
-    define as Term_association every Term_in_study_tfidf (?s; ?t; _)
-        such that ?s is a Selected_study.
+    define as Study_term every Term_in_study_with_tfidf (?s; ?t; _)
+        where ?s is a Selected_study.
 
-    define as Activation every Voxel_reported (?i; ?j; ?k; ?s)
-        such that ?s is a Selected_study.
+    define as Active_voxel every Reported_voxel (?i; ?j; ?k; ?s)
+        where ?s is a Selected_study.
 
-    define as Probmap with probability every Activation (?i; ?j; ?k; _)
-        conditioned to every Term_association (_; ?t) such that ?t is 'emotion'.
+    define as Activation_map with inferred probability every Active_voxel (?i; ?j; ?k; _)
+        given every Study_term (_; ?t) where ?t is 'emotion'.
 
-    define as Img every Agg_create_region_overlay of the Probmap (?i; ?j; ?k; ?p).
+    obtain the Brain_image of the Activation_map (?i; ?j; ?k; ?p) as Image.
 """
 
 # %%
 import warnings
-
-warnings.filterwarnings("ignore")
 
 from pathlib import Path
 from typing import Iterable
@@ -53,6 +51,8 @@ import numpy as np
 import pandas as pd
 from neurolang.frontend import ExplicitVBR, ExplicitVBROverlay, NeurolangPDL
 from neurolang.frontend.neurosynth_utils import get_ns_mni_peaks_reported
+
+warnings.filterwarnings("ignore")
 
 # %%
 # Data preparation
@@ -70,9 +70,9 @@ mni_t1_2mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 2)
 # Set up engine and register aggregation symbols
 # -----------------------------------------------
 # ``euclidean`` computes the Euclidean distance between two voxel coordinates.
-# ``agg_max_proximity`` folds a collection of distances into
+# ``kernelized_max_proximity`` folds a collection of distances into
 # ``max(exp(−d/5))``, the spatial-decay weight used in coordinate-based
-# meta-analysis.  ``agg_create_region_overlay`` assembles the final
+# meta-analysis.  ``brain_image`` assembles the final
 # probability map into a brain overlay image.
 
 nl = NeurolangPDL()
@@ -91,13 +91,13 @@ nl.add_symbol(euclidean, name="EUCLIDEAN")
 
 
 @nl.add_symbol
-def agg_max_proximity(d_values: Iterable) -> float:
+def kernelized_max_proximity(d_values: Iterable) -> float:
     """Aggregate: max exp(−d/5) over a collection of distances."""
     return float(np.max(np.exp(-np.asarray(d_values) / 5.0)))
 
 
 @nl.add_symbol
-def agg_create_region_overlay(
+def brain_image(
     i: Iterable, j: Iterable, k: Iterable, p: Iterable
 ) -> ExplicitVBR:
     """Aggregate (i,j,k,probability) rows into a brain overlay image."""
@@ -127,14 +127,14 @@ peak_data["j"] = ijk_positions[:, 1]
 peak_data["k"] = ijk_positions[:, 2]
 peak_data = peak_data[["i", "j", "k", "id"]]
 
-nl.add_tuple_set(peak_data, name="focus_reported")
+nl.add_tuple_set(peak_data, name="reported_focus")
 
 study_ids = nl.load_neurosynth_study_ids(data_dir, "study")
 nl.add_uniform_probabilistic_choice_over_set(
     study_ids.value, name="selected_study"
 )
 nl.load_neurosynth_term_study_associations(
-    data_dir, "term_in_study_tfidf", tfidf_threshold=1e-3
+    data_dir, "term_in_study_with_tfidf", tfidf_threshold=1e-3
 )
 
 # Full voxel grid (vectorised, no loop)
@@ -150,37 +150,37 @@ nl.add_tuple_set(voxel_df, name="voxel")
 # ----------------------------------
 # Five sentences replace the ``with nl.environment as e:`` block.
 #
-# Sentence 1  Probabilistic aggregation: ``per ?i1, ?j1, ?k1 and per ?s``
+# Sentence 1  Probabilistic aggregation: ``for each ?i1, ?j1, ?k1 and for each ?s``
 #             groups by the four head variables; ``where (?i1; ?j1; ?k1) is
 #             a Voxel`` constrains the focus coordinates to voxel grid
-#             membership; ``EUCLIDEAN(…) is lower than 5`` filters by
+#             membership; ``where EUCLIDEAN(…) is lower than 2`` filters by
 #             proximity inline — no relay variable needed.
-# Sentences 2-3  ``such that ?s is a Selected_study`` — existential study
+# Sentences 2-3  ``where ?s is a Selected_study`` — existential study
 #             filter; ``_`` (anonymous wildcard) drops the tfidf column from
-#             Term_association's head so only (study, term) are exposed.
-# Sentence 4  ``conditioned to every Term_association (_; ?t) such that ?t
-#             is 'emotion'`` — MARG conditional probability query; ``_``
+#             Study_term's head so only (study, term) are exposed.
+# Sentence 4  ``given every Study_term (_; ?t) where ?t is 'emotion'`` —
+#             conditional probability query with ``inferred probability``; ``_``
 #             hides the study column in the conditioning noun phrase.
-# Sentence 5  ``every Agg_create_region_overlay of the Probmap`` — brain image
-#             aggregation.
+# Sentence 5  ``obtain the Brain_image of the Activation_map … as Image`` —
+#             brain image aggregation using the ``obtain … as`` form.
 
 squall_program = """
-define as Voxel_reported with a probability of
-    the Agg_max_proximity of the Focus_reported (?i2; ?j2; ?k2; ?s)
-        per ?i1, ?j1, ?k1 and per ?s
+define as Reported_voxel with a probability of
+    the Kernelized_max_proximity of the Reported_focus (?i2; ?j2; ?k2; ?s)
+        for each ?i1, ?j1, ?k1 and for each ?s
         where (?i1; ?j1; ?k1) is a Voxel
-        and such that EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2) is lower than 5.
+        and where EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2) is lower than 2.
 
-define as Term_association every Term_in_study_tfidf (?s; ?t; _)
-    such that ?s is a Selected_study.
+define as Study_term every Term_in_study_with_tfidf (?s; ?t; _)
+    where ?s is a Selected_study.
 
-define as Activation every Voxel_reported (?i; ?j; ?k; ?s)
-    such that ?s is a Selected_study.
+define as Active_voxel every Reported_voxel (?i; ?j; ?k; ?s)
+    where ?s is a Selected_study.
 
-define as Probmap with probability every Activation (?i; ?j; ?k; _)
-    conditioned to every Term_association (_; ?t) such that ?t is 'emotion'.
+define as Activation_map with inferred probability every Active_voxel (?i; ?j; ?k; _)
+    given every Study_term (_; ?t) where ?t is 'emotion'.
 
-define as Img every Agg_create_region_overlay of the Probmap (?i; ?j; ?k; ?p).
+obtain the Brain_image of the Activation_map (?i; ?j; ?k; ?p) as Image.
 """
 
 nl.execute_squall_program(squall_program)
@@ -191,7 +191,7 @@ nl.execute_squall_program(squall_program)
 solution = nl.solve_all()
 print(solution.keys())
 result_image = (
-    solution["img"]
+    solution["image"]
     .as_pandas_dataframe()
     .iloc[0, 0]
     .spatial_image()
@@ -206,3 +206,4 @@ plot = nilearn.plotting.plot_stat_map(
     result_image, threshold=np.percentile(img[img > 0], 95)
 )
 nilearn.plotting.show()
+print("Done")
