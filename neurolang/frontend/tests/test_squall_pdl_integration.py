@@ -335,3 +335,62 @@ def test_execute_squall_variable_probability_fact():
             f"Variable-probability fact raised unexpected exception: "
             f"{type(exc).__name__}: {exc}"
         )
+
+
+def test_execute_squall_inline_expr_comparison():
+    """'such that EUCLIDEAN(a,b) is lower than 5' works without a relay variable.
+
+    This path: rel_s -> s_np_vp -> vpbe_rel -> rel_comp already exists.
+    The test confirms the function-call expression is correctly used as the
+    left operand of the comparison (not a relay variable).
+    """
+    import operator
+    from neurolang.expressions import Constant, FunctionApplication, Symbol
+    from neurolang.logic import Conjunction, Implication
+
+    engine = NeurolangPDL()
+
+    def my_dist(a, b):
+        return abs(a - b)
+
+    engine.symbol_table[Symbol("MY_DIST")] = Constant(my_dist)
+    _ = engine.add_tuple_set([(1,), (3,), (10,)], name="point")
+
+    # Parse: "such that MY_DIST(?x, ?x) is lower than 5"
+    # Expected body contains: lt(MY_DIST(x, x), 5)  (no relay variable)
+    # Note: uppercase function names in `and` position after another clause
+    # require `such that` as introducer (the grammar's rel_s path).
+    result = engine.execute_squall_program(
+        "define as Close every Point (?x) "
+        "such that MY_DIST(?x, ?x) is lower than 5."
+    )
+    assert result is None  # rules-only, no obtain
+
+    # Inspect the intensional rule that was added
+    idb = engine.program_ir.intensional_database()
+    close_symb = next(k for k in idb if k.name == "close")
+    rule = idb[close_symb].formulas[0]
+
+    # Body must contain a FunctionApplication of lt (operator.lt)
+    body = rule.antecedent
+    formulas = body.formulas if isinstance(body, Conjunction) else [body]
+    lt_atoms = [
+        f for f in formulas
+        if isinstance(f, FunctionApplication)
+        and isinstance(f.functor, Constant)
+        and f.functor.value is operator.lt
+    ]
+    assert len(lt_atoms) == 1, f"Expected one lt atom, got: {formulas}"
+    lt_atom = lt_atoms[0]
+    # Left operand must be FunctionApplication(MY_DIST, ...) — functor is a
+    # Constant wrapping my_dist (registered via symbol_table) or Symbol("MY_DIST").
+    lhs = lt_atom.args[0]
+    assert isinstance(lhs, FunctionApplication), (
+        f"Expected FunctionApplication as lt left arg, got: {lhs}"
+    )
+    # The functor may be Symbol("MY_DIST") or Constant(my_dist) depending on
+    # when type resolution runs; either way it must NOT be a plain Symbol
+    # representing a relay variable like ?d.
+    assert not (isinstance(lhs.functor, Symbol) and lhs.functor.name != "MY_DIST"), (
+        f"Unexpected relay-variable functor: {lhs.functor}"
+    )
