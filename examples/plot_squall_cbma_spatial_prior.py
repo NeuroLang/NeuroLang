@@ -21,10 +21,9 @@ computation using ``with nl.environment as e:``.
 
     define as Voxel_reported with a probability of
         the Agg_max_proximity of the Focus_reported (?i2; ?j2; ?k2; ?s)
-            per ?i1 and per ?j1 and per ?k1 and per ?s
-            that voxel(?i1, ?j1, ?k1) holds
-            and such that ?d is equal to EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2)
-            and ?d is lower than 1.
+            per ?i1, ?j1, ?k1 and per ?s
+            where (?i1; ?j1; ?k1) is a Voxel
+            and such that EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2) is lower than 5.
 
     define as Term_association every Term_in_study_tfidf (?s; ?t; _)
         such that ?s is a Selected_study.
@@ -151,13 +150,11 @@ nl.add_tuple_set(voxel_df, name="voxel")
 # ----------------------------------
 # Five sentences replace the ``with nl.environment as e:`` block.
 #
-# Sentence 1  Probabilistic aggregation: "with a probability of the
-#             Agg_max_proximity of the Focus_reported per ?i1 ... that
-#             voxel(?i1,?j1,?k1) holds and such that ?d is equal to
-#             euclidean(...) and ?d is lower than 1"
-#             — inline distance computation and filter.  The ``per`` variables
-#             become the head predicate arguments; ``agg_max_proximity``
-#             aggregates over distances ``?d`` that pass the ``<1`` threshold.
+# Sentence 1  Probabilistic aggregation: ``per ?i1, ?j1, ?k1 and per ?s``
+#             groups by the four head variables; ``where (?i1; ?j1; ?k1) is
+#             a Voxel`` constrains the focus coordinates to voxel grid
+#             membership; ``EUCLIDEAN(…) is lower than 5`` filters by
+#             proximity inline — no relay variable needed.
 # Sentences 2-3  ``such that ?s is a Selected_study`` — existential study
 #             filter; ``_`` (anonymous wildcard) drops the tfidf column from
 #             Term_association's head so only (study, term) are exposed.
@@ -170,10 +167,9 @@ nl.add_tuple_set(voxel_df, name="voxel")
 squall_program = """
 define as Voxel_reported with a probability of
     the Agg_max_proximity of the Focus_reported (?i2; ?j2; ?k2; ?s)
-        per ?i1 and per ?j1 and per ?k1 and per ?s
-        that voxel(?i1, ?j1, ?k1) holds
-        and such that ?d is equal to EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2)
-        and ?d is lower than 2.
+        per ?i1, ?j1, ?k1 and per ?s
+        where (?i1; ?j1; ?k1) is a Voxel
+        and such that EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2) is lower than 5.
 
 define as Term_association every Term_in_study_tfidf (?s; ?t; _)
     such that ?s is a Selected_study.
