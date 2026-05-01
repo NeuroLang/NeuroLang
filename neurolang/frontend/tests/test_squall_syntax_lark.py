@@ -169,3 +169,25 @@ def test_extension_d_for_each_alias_per(nl_setup):
     per_args = {a.name for a in prog_per.consequent.body.args}
     foreach_args = {a.name for a in prog_foreach.consequent.body.args}
     assert per_args == foreach_args
+
+
+def test_extension_g_query_as_produces_squall_program(nl_setup):
+    """'obtain ops as Name' returns a SquallProgram with a named IDB rule and query."""
+    from neurolang.frontend.datalog.squall_syntax_lark import parser, SquallProgram
+    from neurolang.expressions import Symbol
+    from neurolang.logic import Implication
+
+    result = parser(
+        "define as Active_voxel every Reported_voxel (?i; ?j; ?k; ?s) "
+        "where ?s is a Selected_study.\n"
+        "obtain the Brain_image of the Active_voxel (?i; ?j; ?k; ?p) as Image."
+    )
+    assert isinstance(result, SquallProgram), f"Expected SquallProgram, got {type(result)}"
+    assert result.queries, "Expected at least one query"
+    # The IDB rules should include an Image(...) or image(...) head
+    rule_functor_names = {
+        r.consequent.functor.name.lower()
+        for r in result.rules
+        if hasattr(r, 'consequent') and hasattr(r.consequent, 'functor')
+    }
+    assert 'image' in rule_functor_names, f"'image' not found in rule functors: {rule_functor_names}"

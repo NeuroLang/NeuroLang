@@ -225,15 +225,21 @@ class SquallTransformer(Transformer):
     def squall(self, args):
         rules = []
         queries = []
+        has_query_as = False
         for a in args:
             if a is None:
                 continue
             if isinstance(a, tuple) and len(a) == 2 and a[0] == '_query':
                 queries.append(a[1])
+            elif isinstance(a, tuple) and len(a) == 2 and a[0] == '_query_as':
+                impl, q = a[1]
+                rules.append(impl)
+                queries.append(q)
+                has_query_as = True
             else:
                 rules.append(a)
 
-        if queries:
+        if queries or has_query_as:
             return SquallProgram(rules=rules, queries=queries)
 
         # Backward compat: no queries → return Union or single rule
@@ -1602,7 +1608,7 @@ class SquallTransformer(Transformer):
         terms = [a for a in args[1:] if a is not None]
         return FunctionApplication(name, tuple(terms))
 
-    def query(self, args):
+    def query_unnamed(self, args):
         # "obtain ops" — convert the CPS noun phrase into a Query expression.
         # ops is a CPS callable: (d -> formula) representing the NP.
         # Apply it to (lambda x: x) to get a quantified formula, then
@@ -1615,6 +1621,67 @@ class SquallTransformer(Transformer):
 
         formula = ops(lambda x: x)
         return ('_query', _cps_formula_to_query(formula))
+
+    def query_as(self, args):
+        """Handle 'obtain ops as Name'.
+
+        Builds Implication(name_sym(*free_vars), body) as an IDB rule,
+        then returns ('_query_as', (impl, query)) so squall() can
+        register both the rule and the query.
+        """
+        ops, name_sym = args[0], args[1]   # ops: CPS NP; name_sym: Symbol
+
+        # Use a capturing continuation to harvest the head variables and the
+        # body formula from the CPS noun phrase, handling both the single-var
+        # and tuple-label (multi-var) cases.
+        captured_vars = []
+
+        def capturing_d(*var_args):
+            """Continuation that records head variables and returns a sentinel."""
+            if len(var_args) == 1:
+                captured_vars.append(var_args[0])
+            else:
+                captured_vars.extend(var_args)
+            return Constant(True)  # sentinel scope value
+
+        if callable(ops) and not isinstance(ops, (Symbol, Constant)):
+            body_formula = ops(capturing_d)
+        else:
+            body_formula = ops
+
+        # Strip nested quantifiers and Implication wrappers to reach the bare body.
+        while isinstance(body_formula, (UniversalPredicate, ExistentialPredicate)):
+            body_formula = body_formula.body
+        if isinstance(body_formula, Implication):
+            # Implication(scope, restriction) — scope is the captured sentinel (True),
+            # restriction is the actual body predicate (antecedent).
+            body_formula = body_formula.antecedent
+
+        # Strip sentinel True from top-level Conjunction
+        def _strip_true(f):
+            if isinstance(f, Conjunction):
+                parts = [p for p in f.formulas if p != Constant(True)]
+                if not parts:
+                    return Constant(True)
+                if len(parts) == 1:
+                    return parts[0]
+                return Conjunction(tuple(parts))
+            return f
+
+        body_formula = _strip_true(body_formula)
+
+        # If no vars were captured, use free variables from the body.
+        if not captured_vars:
+            free = sorted(extract_logic_free_variables(body_formula), key=lambda s: s.name)
+            head_vars = free
+        else:
+            head_vars = [v for v in captured_vars if isinstance(v, Symbol)]
+
+        head = name_sym(*head_vars) if head_vars else name_sym()
+        impl = Implication(head, body_formula)
+        q = Query(head, body_formula)
+
+        return ('_query_as', (impl, q))
 
     # ---- Dimension / Aggregation ----
 

@@ -324,9 +324,17 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         # For plain Datalog engines we fall back to reachable_code + chase.
         results = {}
         for i, q in enumerate(parsed.queries):
-            key = f"obtain_{i}"
             head_sym = q.head
-            head_vars = (head_sym,) if isinstance(head_sym, ir.Symbol) else tuple(head_sym)
+            if isinstance(head_sym, ir.Symbol):
+                head_vars = (head_sym,)
+                key = f"obtain_{i}"
+            elif isinstance(head_sym, ir.FunctionApplication):
+                # Named query from 'obtain ops as Name': head is Name(x, y, ...)
+                head_vars = tuple(head_sym.args)
+                key = head_sym.functor.name
+            else:
+                head_vars = tuple(head_sym)
+                key = f"obtain_{i}"
 
             if hasattr(self, '_solve'):
                 # NeurolangPDL path: push a scope containing ALL define rules
@@ -385,7 +393,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             results[key] = ra
 
         if len(results) == 1:
-            return results["obtain_0"]
+            return next(iter(results.values()))
         return results
 
     def compute_datalog_program_for_autocompletion(

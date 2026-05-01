@@ -16,7 +16,8 @@ _SEPARATOR : "."
 
 command : "#" identifier "(" (term ("," term)* )* ")"
 
-query : _OBTAIN ops
+query : _OBTAIN ops _AS upper_identifier  -> query_as
+      | _OBTAIN ops                        -> query_unnamed
 
 sentence : s
 

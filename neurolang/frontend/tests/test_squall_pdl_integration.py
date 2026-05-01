@@ -655,3 +655,21 @@ def test_extension_d_for_each_integration(tmp_path):
     assert args_per == args_foreach, (
         f"'per' consequent arg counts {args_per} != 'for each' {args_foreach}"
     )
+
+
+def test_extension_g_obtain_as_integration(tmp_path):
+    """'obtain … as Name' defines a relation and exposes it in solve_all() under the lowercased name."""
+    from neurolang.frontend import NeurolangPDL
+    import pandas as pd
+
+    nl = NeurolangPDL()
+    df = pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    nl.add_tuple_set(df, name="pair")
+
+    nl.execute_squall_program(
+        "obtain every Pair (?x; ?y) as My_pairs."
+    )
+    sol = nl.solve_all()
+    assert "my_pairs" in sol, f"Expected 'my_pairs' in solution, got: {list(sol.keys())}"
+    result_df = sol["my_pairs"].as_pandas_dataframe()
+    assert len(result_df) == 3
