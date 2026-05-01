@@ -673,3 +673,4 @@ def test_extension_g_obtain_as_integration(tmp_path):
     assert "my_pairs" in sol, f"Expected 'my_pairs' in solution, got: {list(sol.keys())}"
     result_df = sol["my_pairs"].as_pandas_dataframe()
     assert len(result_df) == 3
+    assert set(result_df.columns) == {"x", "y"}

@@ -96,9 +96,13 @@ class SquallProgram:
         CPS noun-phrase callables, one per ``obtain`` clause.
     """
 
-    def __init__(self, rules, queries):
+    def __init__(self, rules, queries, query_names=None):
         self.rules = list(rules)
         self.queries = list(queries)
+        # Mapping from query index (0-based position in self.queries) to the
+        # user-supplied name for 'obtain … as Name' clauses.  Unnamed queries
+        # have no entry here.
+        self.query_names = dict(query_names) if query_names is not None else {}
 
 
 class _AnonymousVar:
@@ -225,22 +229,22 @@ class SquallTransformer(Transformer):
     def squall(self, args):
         rules = []
         queries = []
-        has_query_as = False
+        query_names = {}  # index → name for 'obtain … as Name' clauses
         for a in args:
             if a is None:
                 continue
             if isinstance(a, tuple) and len(a) == 2 and a[0] == '_query':
                 queries.append(a[1])
             elif isinstance(a, tuple) and len(a) == 2 and a[0] == '_query_as':
-                impl, q = a[1]
+                impl, q, name_str = a[1]
                 rules.append(impl)
+                query_names[len(queries)] = name_str
                 queries.append(q)
-                has_query_as = True
             else:
                 rules.append(a)
 
-        if queries or has_query_as:
-            return SquallProgram(rules=rules, queries=queries)
+        if queries:
+            return SquallProgram(rules=rules, queries=queries, query_names=query_names)
 
         # Backward compat: no queries → return Union or single rule
         if len(rules) == 1:
@@ -1681,7 +1685,7 @@ class SquallTransformer(Transformer):
         impl = Implication(head, body_formula)
         q = Query(head, body_formula)
 
-        return ('_query_as', (impl, q))
+        return ('_query_as', (impl, q, name_sym.name.lower()))
 
     # ---- Dimension / Aggregation ----
 

@@ -310,7 +310,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.program_ir.walk(parsed)
             return None
 
-        # Walk all rule definitions into the engine.
+        # Walk all rule definitions into the engine (global scope).
+        # This makes the rules available to solve_all() and any code that
+        # inspects the global symbol table after the call returns.
         for rule in parsed.rules:
             self.program_ir.walk(rule)
 
@@ -325,16 +327,19 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         results = {}
         for i, q in enumerate(parsed.queries):
             head_sym = q.head
-            if isinstance(head_sym, ir.Symbol):
-                head_vars = (head_sym,)
+            # Use the explicit name from 'obtain … as Name' if present;
+            # fall back to a positional key for unnamed obtain clauses.
+            if i in parsed.query_names:
+                key = parsed.query_names[i]
+            else:
                 key = f"obtain_{i}"
-            elif isinstance(head_sym, ir.FunctionApplication):
-                # Named query from 'obtain ops as Name': head is Name(x, y, ...)
+
+            if isinstance(head_sym, ir.FunctionApplication):
                 head_vars = tuple(head_sym.args)
-                key = head_sym.functor.name
+            elif isinstance(head_sym, ir.Symbol):
+                head_vars = (head_sym,)
             else:
                 head_vars = tuple(head_sym)
-                key = f"obtain_{i}"
 
             if hasattr(self, '_solve'):
                 # NeurolangPDL path: push a scope containing ALL define rules
@@ -345,7 +350,13 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 query_impl = datalog.Implication(h(*head_vars), q.body)
                 self.program_ir.push_scope()
                 try:
-                    # Re-walk define rules into the scoped layer.
+                    # Re-walk define rules into the pushed (scoped) layer so
+                    # that reachable_code, which inspects the current scope's
+                    # symbol table, can find them.  The outer walk (above)
+                    # persists them in the global scope for solve_all(); this
+                    # inner walk is NOT redundant — push_scope() creates a
+                    # fresh overlay that does not inherit the global IDB entries
+                    # as far as reachable_code is concerned.
                     for rule in parsed.rules:
                         self.program_ir.walk(rule)
                     self.program_ir.walk(query_impl)
