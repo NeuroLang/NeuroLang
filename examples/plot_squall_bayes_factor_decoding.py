@@ -77,6 +77,7 @@ import nilearn.plotting
 import numpy as np
 import pandas as pd
 import siibra
+from nilearn.surface import vol_to_surf
 
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.neurosynth_utils import (
@@ -315,3 +316,27 @@ top_terms = (
     .head(TOP_N)
 )
 print(top_terms[["term", "bf"]].to_string(index=False))
+
+# %%
+# Plot — right fusiform gyrus anatomy (ventral view)
+# ---------------------------------------------------
+# Show the right fusiform gyrus ROI on the fsaverage5 inflated surface,
+# right hemisphere, ventral viewpoint with the anterior pole at the top.
+# Sulcal depth map provides shading to aid anatomical orientation.
+
+fsaverage = nilearn.datasets.fetch_surf_fsaverage("fsaverage5")
+
+roi_texture = vol_to_surf(region_mask_2mm, fsaverage["pial_right"])
+
+nilearn.plotting.plot_surf_roi(
+    surf_mesh=fsaverage["infl_right"],
+    roi_map=roi_texture,
+    hemi="right",
+    view="ventral",
+    bg_map=fsaverage["sulc_right"],
+    bg_on_data=True,
+    darkness=0.7,
+    title=f"Right fusiform gyrus (Julich-Brain v{JULICH_VERSION})",
+    colorbar=False,
+)
+nilearn.plotting.show()
