@@ -145,3 +145,75 @@ print(
     f"Right fusiform gyrus mask: "
     f"{int(region_mask_2mm.get_fdata().sum())} voxels at 2 mm"
 )
+
+# %%
+# Data preparation — Neurosynth peaks → study_activates
+# ------------------------------------------------------
+# Load reported activation foci from Neurosynth, convert MNI (x,y,z) to
+# voxel indices in the 2 mm MNI grid, then use the Julich-Brain labelled map
+# to assign each peak to an anatomical region.
+#
+# The four fusiform gyrus areas (FG1–FG4 right) are unified under
+# ``TARGET_LABEL`` so the SQUALL ``obtain`` filter ``where ?r is 'right
+# fusiform gyrus'`` matches them.
+#
+# ``study_activates(study_id, region)`` has study_id first so SQUALL's
+# ``Selected_study that ~activates ?r`` joins on column 0.
+
+peak_data = get_ns_mni_peaks_reported(data_dir)
+
+ijk = np.round(
+    nibabel.affines.apply_affine(
+        np.linalg.inv(mni_t1_2mm.affine),
+        peak_data[["x", "y", "z"]].values.astype(float),
+    )
+).astype(int)
+peak_data = peak_data.copy()
+peak_data["i"] = ijk[:, 0]
+peak_data["j"] = ijk[:, 1]
+peak_data["k"] = ijk[:, 2]
+
+# Build label → region-name lookup from the Julich-Brain map.
+# get_index(region_name) returns a MapIndex with .label (int) attribute.
+label_to_name = {
+    julich_map.get_index(r).label: r
+    for r in julich_map.regions
+}
+
+# Resample the full labelled volume to the 2 mm MNI grid.
+label_vol_2mm = nilearn.image.resample_to_img(
+    julich_map.fetch(),
+    mni_t1_2mm,
+    interpolation="nearest",
+)
+label_arr = label_vol_2mm.get_fdata().astype(int)
+
+# Keep only peaks inside the image bounds.
+shape = label_arr.shape
+in_bounds = (
+    (peak_data["i"] >= 0) & (peak_data["i"] < shape[0]) &
+    (peak_data["j"] >= 0) & (peak_data["j"] < shape[1]) &
+    (peak_data["k"] >= 0) & (peak_data["k"] < shape[2])
+)
+peak_data = peak_data[in_bounds].copy()
+
+# Look up the region name for each peak voxel.
+peak_labels = label_arr[
+    peak_data["i"].values,
+    peak_data["j"].values,
+    peak_data["k"].values,
+]
+peak_data["region"] = [label_to_name.get(int(lbl), None) for lbl in peak_labels]
+peak_data = peak_data.dropna(subset=["region"])
+
+# Unify the four fusiform areas under TARGET_LABEL.
+peak_data["region"] = peak_data["region"].apply(
+    lambda r: TARGET_LABEL if r in FUSIFORM_AREAS else r
+)
+
+study_activates_df = peak_data[["id", "region"]].drop_duplicates()
+print(f"study_activates: {len(study_activates_df)} (study, region) pairs")
+fusiform_studies = study_activates_df[
+    study_activates_df["region"] == TARGET_LABEL
+]
+print(f"  → {len(fusiform_studies)} studies activate the right fusiform gyrus")
