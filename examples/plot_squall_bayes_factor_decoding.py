@@ -217,3 +217,33 @@ fusiform_studies = study_activates_df[
     study_activates_df["region"] == TARGET_LABEL
 ]
 print(f"  → {len(fusiform_studies)} studies activate the right fusiform gyrus")
+
+# %%
+# Set up NeuroLang engine
+# -----------------------
+
+nl = NeurolangPDL()
+
+# %%
+# Register extensional relations
+# ------------------------------
+# ``study_activates(study_id, region)`` — from peak-to-region assignment above.
+# ``study_mentions(study_id, term)``    — from Neurosynth TF-IDF associations.
+# Both have study_id first so SQUALL's ``Selected_study that ~activates ?r``
+# and ``Selected_study that ~mentions ?t`` join on column 0.
+
+nl.add_tuple_set(study_activates_df, name="study_activates")
+
+term_data = get_ns_term_study_associations(data_dir, tfidf_threshold=1e-3)
+study_mentions_df = term_data[["id", "term"]].drop_duplicates()
+nl.add_tuple_set(study_mentions_df, name="study_mentions")
+
+# Uniform probabilistic choice over all studies that appear in both relations.
+study_ids = sorted(
+    set(study_activates_df["id"]) & set(study_mentions_df["id"])
+)
+study_ids_df = pd.DataFrame({"id": study_ids})
+nl.add_uniform_probabilistic_choice_over_set(
+    study_ids_df, name="selected_study"
+)
+print(f"Studies: {len(study_ids_df)}, term-study pairs: {len(study_mentions_df)}")
