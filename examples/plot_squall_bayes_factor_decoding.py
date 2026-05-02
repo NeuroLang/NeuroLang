@@ -340,3 +340,39 @@ nilearn.plotting.plot_surf_roi(
     colorbar=False,
 )
 nilearn.plotting.show()
+
+# %%
+# Plot — top terms by Bayes Factor
+# --------------------------------
+# Horizontal bar chart of the top-N cognitive terms ranked by BF for the
+# right fusiform gyrus.  A vertical dashed line marks the Jeffreys
+# ``BF > sqrt(10)`` threshold for "substantial" evidence.
+
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(figsize=(7, 0.4 * len(top_terms) + 1))
+
+ax.barh(
+    top_terms["term"],
+    top_terms["bf"],
+    color="steelblue",
+    edgecolor="white",
+)
+ax.axvline(
+    BF_THRESHOLD,
+    color="tomato",
+    linestyle="--",
+    linewidth=1.2,
+    label=rf"BF = $\sqrt{{10}}$ ≈ 3.16",
+)
+ax.set_xlabel("Bayes Factor")
+ax.set_title(
+    f"Top-{TOP_N} cognitive terms for the right fusiform gyrus\n"
+    f"(Julich-Brain v{JULICH_VERSION}, Neurosynth)"
+)
+ax.legend(frameon=False)
+ax.invert_yaxis()
+plt.tight_layout()
+plt.show()
+
+print("Done")
