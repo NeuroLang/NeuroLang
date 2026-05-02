@@ -247,3 +247,71 @@ nl.add_uniform_probabilistic_choice_over_set(
     study_ids_df, name="selected_study"
 )
 print(f"Studies: {len(study_ids_df)}, term-study pairs: {len(study_mentions_df)}")
+
+# %%
+# SQUALL controlled-English program
+# ----------------------------------
+# Three ``define`` sentences compute the three probability distributions.
+# The ``obtain`` clause selects only the right fusiform gyrus — magic sets
+# pushes this filter backwards through all rules, avoiding computation for
+# all other regions.
+#
+# Sentence 1  Joint probability P(R,T): every selected study that both
+#             activates region ?r and mentions term ?t.  The study variable
+#             is the grammatical subject (``Selected_study``), existentially
+#             quantified away; only ?r and ?t appear in the head.
+# Sentence 2  Marginal P(R): every selected study that activates region ?r.
+# Sentence 3  Marginal P(T): every selected study that mentions term ?t.
+# Obtain      Retrieve all three probability columns for the right fusiform
+#             gyrus only; the ``where ?r is '...'`` filter triggers magic sets.
+
+squall_program = """
+define as Region_term_cooccurrence with a probability of
+    every Selected_study that ~activates ?r and ~mentions ?t
+    for each ?r and for each ?t.
+
+define as Region_prevalence with a probability of
+    every Selected_study that ~activates ?r
+    for each ?r.
+
+define as Term_prevalence with a probability of
+    every Selected_study that ~mentions ?t
+    for each ?t.
+
+obtain every Region_term_cooccurrence (?r; ?t; ?p_rt)
+    and every Region_prevalence (?r; ?p_r)
+    and every Term_prevalence (?t; ?p_t)
+    where ?r is 'right fusiform gyrus'.
+"""
+
+# %%
+# Execute SQUALL program
+# ----------------------
+# ``execute_squall_program`` with an ``obtain`` clause returns the result
+# directly — no ``solve_all()`` needed.  The ``where ?r is '...'`` filter
+# in the obtain clause triggers magic-sets optimisation.
+
+result = nl.execute_squall_program(squall_program)
+
+# %%
+# Compute Bayes Factor
+# --------------------
+# BF(r, t) = [P(R,T)/P(R)] / [(P(T) - P(R,T)) / (1 - P(R))]
+#
+# ``result`` is a NamedRelationalAlgebraFrozenSet (single obtain clause).
+# Column order: region, term, p_rt, p_r, p_t.
+
+bf_df = result.as_pandas_dataframe()
+bf_df.columns = ["region", "term", "p_rt", "p_r", "p_t"]
+
+bf_df["bf"] = (
+    (bf_df["p_rt"] / bf_df["p_r"])
+    / ((bf_df["p_t"] - bf_df["p_rt"]) / (1.0 - bf_df["p_r"]))
+)
+
+top_terms = (
+    bf_df[bf_df["bf"] > BF_THRESHOLD]
+    .sort_values("bf", ascending=False)
+    .head(TOP_N)
+)
+print(top_terms[["term", "bf"]].to_string(index=False))
