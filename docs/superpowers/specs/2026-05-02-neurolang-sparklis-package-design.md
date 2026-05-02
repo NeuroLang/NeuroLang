@@ -81,8 +81,7 @@ name = "neurolang-sparklis"
 version = "0.1.0"
 requires-python = ">=3.8"
 dependencies = [
-    "neurolang",          # engine only — must be installed separately (not on PyPI);
-                          # install with: uv pip install -e /path/to/neurolang
+    "neurolang @ git+https://github.com/NeuroLang/NeuroLang.git",
     "tornado",
     "nibabel",
     "nilearn",
@@ -198,7 +197,8 @@ known versions:
 ```bash
 # Clone and set up
 cd ~/sources/neurolang-sparklis
-uv sync                       # creates .venv, installs all deps including neurolang
+uv sync                       # creates .venv, installs all deps
+                              # neurolang pulled directly from github.com/NeuroLang/NeuroLang
 
 # Start the full stack
 uv run neuro-sparklis --port 8888
