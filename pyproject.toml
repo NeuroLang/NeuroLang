@@ -41,7 +41,8 @@ dependencies = [
     "seaborn",
     "typing_inspect",
     "rdflib>=6.0.0",
-    "sqlalchemy>=1.4"
+    "sqlalchemy>=1.4",
+    "siibra>=1.0.1a15",
 ]
 
 [project.urls]
@@ -120,3 +121,8 @@ combine_as_imports = true
 
 [tool.codespell]
 ignore-words-list = "anc"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.2.0",
+]
