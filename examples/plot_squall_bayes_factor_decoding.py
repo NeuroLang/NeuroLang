@@ -105,3 +105,43 @@ TARGET_LABEL = "right fusiform gyrus"
 
 BF_THRESHOLD = np.sqrt(10)   # Jeffreys "substantial" evidence ≈ 3.16
 TOP_N = 20                   # terms to display in bar chart
+
+# %%
+# Data preparation — MNI atlas
+# ----------------------------
+# Load the ICBM152 T1 template and downsample to 2 mm isotropic voxels.
+
+mni_t1 = nibabel.load(
+    nilearn.datasets.fetch_icbm152_2009(data_dir=str(data_dir / "icbm"))["t1"]
+)
+mni_t1_2mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 2)
+
+# %%
+# Data preparation — right fusiform gyrus mask (siibra / Julich-Brain)
+# --------------------------------------------------------------------
+# Fetch the Julich-Brain v2.9 labelled map and build a binary union mask for
+# the right fusiform gyrus (Areas FG1–FG4).  Each area is fetched individually
+# with ``julich_map.fetch(region=name)`` (returns a 0/1 NIfTI), then the four
+# masks are OR-combined and resampled to the 2 mm MNI grid.
+# The mask image is used only for the region anatomy plot (section 6a).
+
+julich_map = siibra.get_map(
+    parcellation=f"julich {JULICH_VERSION}",
+    space="mni152",
+    maptype=siibra.MapType.LABELLED,
+)
+
+# Fetch and union the four FG areas into one binary mask.
+area_masks = [julich_map.fetch(region=area) for area in FUSIFORM_AREAS]
+combined_arr = np.zeros(area_masks[0].shape, dtype=np.uint8)
+for m in area_masks:
+    combined_arr |= (m.get_fdata() > 0).astype(np.uint8)
+
+region_mask_img = nibabel.Nifti1Image(combined_arr, area_masks[0].affine)
+region_mask_2mm = nilearn.image.resample_to_img(
+    region_mask_img, mni_t1_2mm, interpolation="nearest"
+)
+print(
+    f"Right fusiform gyrus mask: "
+    f"{int(region_mask_2mm.get_fdata().sum())} voxels at 2 mm"
+)
