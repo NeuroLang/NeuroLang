@@ -52,8 +52,6 @@ dev = [
     "pytest>=7.0",
     "pytest-benchmark",
     "pytest-cov",
-    "tornado",
-    "pyyaml",
     "problog"
 ]
 doc = [
@@ -63,13 +61,6 @@ doc = [
     "sphinx-gallery",
     "numpydoc"
 ]
-server = [
-    "tornado",
-    "pyyaml",
-]
-
-[project.scripts]
-neuro-server = "neurolang.utils.server.app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["neurolang"]
