@@ -39,30 +39,38 @@ into a single ``'right fusiform gyrus'`` label for the decoding analysis.
 
 .. code-block:: text
 
-    define as Region_term_cooccurrence with a probability of
-        every Selected_study that ~activates ?r and ~mentions ?t
-        for each ?r and for each ?t.
+    define as Prob_region_term every Region_term (?s; ?r; ?t)
+        where ?s is a Selected_study.
+    define as Region_term_cooccurrence with inferred probability
+        every Prob_region_term (_; ?r; ?t).
 
-    define as Region_prevalence with a probability of
-        every Selected_study that ~activates ?r
-        for each ?r.
+    define as Study_region every Activates (?s; ?r)
+        where ?s is a Selected_study.
+    define as Region_prevalence with inferred probability
+        every Study_region (_; ?r).
 
-    define as Term_prevalence with a probability of
-        every Selected_study that ~mentions ?t
-        for each ?t.
+    define as Study_term every Mentions (?s; ?t)
+        where ?s is a Selected_study.
+    define as Term_prevalence with inferred probability
+        every Study_term (_; ?t).
 
-    obtain every Region_term_cooccurrence (?r; ?t; ?p_rt)
-        and every Region_prevalence (?r; ?p_r)
-        and every Term_prevalence (?t; ?p_t)
-        where ?r is 'right fusiform gyrus'.
+    obtain every Region_term_cooccurrence (?r; ?t; ?p)
+        where ?r is 'right fusiform gyrus' as P_rt.
+    obtain every Region_prevalence (?r; ?p)
+        where ?r is 'right fusiform gyrus' as P_r.
+    obtain every Term_prevalence (?t; ?p) as P_t.
 
-The three ``define`` sentences use ``Selected_study`` as the grammatical
-subject (existentially quantified away) so no study variable appears in the
-rule heads.  ``~activates`` and ``~mentions`` are transitive verbs whose
-subjects are studies — matching the ``study_activates(study_id, region)``
-and ``study_mentions(study_id, term)`` extensional relations.
-The Bayes Factor is computed in Python from the three retrieved probability
-columns.
+The ``define`` sentences set up intermediate relations
+(``Prob_region_term``, ``Study_region``, ``Study_term``) that join the
+deterministic Neurosynth data with the probabilistic ``Selected_study``
+choice.  The three ``with inferred probability`` rules then ask the
+NeuroLang solver to compute the marginalised probabilities — study is
+quantified away by the anonymous ``_`` wildcard so only region and/or
+term remain in the rule heads.  The ``obtain … as`` clauses return the
+results directly; the ``where ?r is '…'`` filter triggers magic-sets
+optimisation, pushing the region constant backwards and limiting
+computation to the fusiform gyrus.  The Bayes Factor is then evaluated
+in Python from the three probability tables.
 """
 
 # %%
@@ -148,8 +156,8 @@ print(
 )
 
 # %%
-# Data preparation — Neurosynth peaks → study_activates
-# ------------------------------------------------------
+# Data preparation — Neurosynth peaks → activates
+# -------------------------------------------------
 # Load reported activation foci from Neurosynth, convert MNI (x,y,z) to
 # voxel indices in the 2 mm MNI grid, then use the Julich-Brain labelled map
 # to assign each peak to an anatomical region.
@@ -158,8 +166,8 @@ print(
 # ``TARGET_LABEL`` so the SQUALL ``obtain`` filter ``where ?r is 'right
 # fusiform gyrus'`` matches them.
 #
-# ``study_activates(study_id, region)`` has study_id first so SQUALL's
-# ``Selected_study that ~activates ?r`` joins on column 0.
+# ``activates(study_id, region)`` has study_id first so the SQUALL
+# ``Activates (?s; ?r)`` clauses join on column 0.
 
 peak_data = get_ns_mni_peaks_reported(data_dir)
 
@@ -213,7 +221,7 @@ peak_data["region"] = peak_data["region"].apply(
 )
 
 study_activates_df = peak_data[["id", "region"]].drop_duplicates()
-print(f"study_activates: {len(study_activates_df)} (study, region) pairs")
+print(f"activates: {len(study_activates_df)} (study, region) pairs")
 fusiform_studies = study_activates_df[
     study_activates_df["region"] == TARGET_LABEL
 ]
@@ -228,16 +236,24 @@ nl = NeurolangPDL()
 # %%
 # Register extensional relations
 # ------------------------------
-# ``study_activates(study_id, region)`` — from peak-to-region assignment above.
-# ``study_mentions(study_id, term)``    — from Neurosynth TF-IDF associations.
-# Both have study_id first so SQUALL's ``Selected_study that ~activates ?r``
-# and ``Selected_study that ~mentions ?t`` join on column 0.
-
-nl.add_tuple_set(study_activates_df, name="study_activates")
+# ``activates(study_id, region)``  — from peak-to-region assignment above.
+# ``mentions(study_id, term)``     — from Neurosynth TF-IDF associations.
+# ``region_term(study_id, region, term)`` — join of the two above.
+# All three have ``study_id`` first so the SQUALL ``where ?s is a Selected_study``
+# clauses join naturally on column 0.
 
 term_data = get_ns_term_study_associations(data_dir, tfidf_threshold=1e-3)
 study_mentions_df = term_data[["id", "term"]].drop_duplicates()
-nl.add_tuple_set(study_mentions_df, name="study_mentions")
+
+# Register relations with the names SQUALL expects (lowercase for case-folding).
+nl.add_tuple_set(study_activates_df, name="activates")
+nl.add_tuple_set(study_mentions_df, name="mentions")
+
+# Build the (study, region, term) join for the joint probability rule.
+region_term_df = study_activates_df.merge(
+    study_mentions_df, on="id"
+)[["id", "region", "term"]]
+nl.add_tuple_set(region_term_df, name="region_term")
 
 # Uniform probabilistic choice over all studies that appear in both relations.
 study_ids = sorted(
@@ -247,50 +263,54 @@ study_ids_df = pd.DataFrame({"id": study_ids})
 nl.add_uniform_probabilistic_choice_over_set(
     study_ids_df, name="selected_study"
 )
-print(f"Studies: {len(study_ids_df)}, term-study pairs: {len(study_mentions_df)}")
+print(
+    f"Studies: {len(study_ids_df)}, "
+    f"term-study pairs: {len(study_mentions_df)}, "
+    f"region-term tuples: {len(region_term_df)}"
+)
 
 # %%
 # SQUALL controlled-English program
 # ----------------------------------
-# Three ``define`` sentences compute the three probability distributions.
-# The ``obtain`` clause selects only the right fusiform gyrus — magic sets
-# pushes this filter backwards through all rules, avoiding computation for
-# all other regions.
+# Intermediate rules join the deterministic Neurosynth data with the
+# probabilistic ``Selected_study`` choice.  The three ``with inferred
+# probability`` rules ask the solver for the marginalised probabilities
+# — the anonymous ``_`` wildcard quantifies the study away so only region
+# and/or term remain in the rule heads.
 #
-# Sentence 1  Joint probability P(R,T): every selected study that both
-#             activates region ?r and mentions term ?t.  The study variable
-#             is the grammatical subject (``Selected_study``), existentially
-#             quantified away; only ?r and ?t appear in the head.
-# Sentence 2  Marginal P(R): every selected study that activates region ?r.
-# Sentence 3  Marginal P(T): every selected study that mentions term ?t.
-# Obtain      Retrieve all three probability columns for the right fusiform
-#             gyrus only; the ``where ?r is '...'`` filter triggers magic sets.
+# The ``obtain … as`` clauses return the results directly (no ``solve_all``).
+# The ``where ?r is 'right fusiform gyrus'`` filter triggers magic-sets
+# optimisation, pushing the constant backwards and limiting computation to
+# the target region.
 
 squall_program = """
-define as Region_term_cooccurrence with a probability of
-    every Selected_study that ~activates ?r and ~mentions ?t
-    for each ?r and for each ?t.
+define as Prob_region_term every Region_term (?s; ?r; ?t)
+    where ?s is a Selected_study.
+define as Region_term_cooccurrence with inferred probability
+    every Prob_region_term (_; ?r; ?t).
 
-define as Region_prevalence with a probability of
-    every Selected_study that ~activates ?r
-    for each ?r.
+define as Study_region every Activates (?s; ?r)
+    where ?s is a Selected_study.
+define as Region_prevalence with inferred probability
+    every Study_region (_; ?r).
 
-define as Term_prevalence with a probability of
-    every Selected_study that ~mentions ?t
-    for each ?t.
+define as Study_term every Mentions (?s; ?t)
+    where ?s is a Selected_study.
+define as Term_prevalence with inferred probability
+    every Study_term (_; ?t).
 
-obtain every Region_term_cooccurrence (?r; ?t; ?p_rt)
-    and every Region_prevalence (?r; ?p_r)
-    and every Term_prevalence (?t; ?p_t)
-    where ?r is 'right fusiform gyrus'.
+obtain every Region_term_cooccurrence (?r; ?t; ?p)
+    where ?r is 'right fusiform gyrus' as P_rt.
+obtain every Region_prevalence (?r; ?p)
+    where ?r is 'right fusiform gyrus' as P_r.
+obtain every Term_prevalence (?t; ?p) as P_t.
 """
 
 # %%
 # Execute SQUALL program
 # ----------------------
-# ``execute_squall_program`` with an ``obtain`` clause returns the result
-# directly — no ``solve_all()`` needed.  The ``where ?r is '...'`` filter
-# in the obtain clause triggers magic-sets optimisation.
+# ``execute_squall_program`` with named ``obtain … as`` clauses returns a
+# dict of results directly — no ``solve_all()`` needed.
 
 result = nl.execute_squall_program(squall_program)
 
@@ -299,11 +319,21 @@ result = nl.execute_squall_program(squall_program)
 # --------------------
 # BF(r, t) = [P(R,T)/P(R)] / [(P(T) - P(R,T)) / (1 - P(R))]
 #
-# ``result`` is a NamedRelationalAlgebraFrozenSet (single obtain clause).
-# Column order: region, term, p_rt, p_r, p_t.
+# The three probability tables are retrieved from the NeuroLang solver;
+# the BF formula is evaluated in pandas from the marginalised values.
 
-bf_df = result.as_pandas_dataframe()
-bf_df.columns = ["region", "term", "p_rt", "p_r", "p_t"]
+p_rt_df = result["p_rt"].as_pandas_dataframe()
+p_rt_df.columns = ["region", "term", "p_rt"]
+p_r_df = result["p_r"].as_pandas_dataframe()
+p_r_df.columns = ["region", "p_r"]
+p_t_df = result["p_t"].as_pandas_dataframe()
+p_t_df.columns = ["term", "p_t"]
+
+bf_df = (
+    p_rt_df[p_rt_df["region"] == TARGET_LABEL]
+    .merge(p_r_df[p_r_df["region"] == TARGET_LABEL], on="region")
+    .merge(p_t_df, on="term")
+)
 
 bf_df["bf"] = (
     (bf_df["p_rt"] / bf_df["p_r"])
@@ -326,19 +356,34 @@ print(top_terms[["term", "bf"]].to_string(index=False))
 
 fsaverage = nilearn.datasets.fetch_surf_fsaverage("fsaverage5")
 
-roi_texture = vol_to_surf(region_mask_2mm, fsaverage["pial_right"])
-
-nilearn.plotting.plot_surf_roi(
-    surf_mesh=fsaverage["infl_right"],
-    roi_map=roi_texture,
-    hemi="right",
-    view="ventral",
-    bg_map=fsaverage["sulc_right"],
-    bg_on_data=True,
-    darkness=0.7,
-    title=f"Right fusiform gyrus (Julich-Brain v{JULICH_VERSION})",
-    colorbar=False,
-)
+try:
+    # vol_to_surf requires an integer-typed NIfTI; cast before projecting.
+    region_mask_int = nibabel.Nifti1Image(
+        region_mask_2mm.get_fdata().astype(np.int16),
+        region_mask_2mm.affine,
+    )
+    roi_texture = vol_to_surf(region_mask_int, fsaverage["pial_right"])
+    # vol_to_surf can return interpolated float values; binarise before plotting.
+    roi_texture = (roi_texture > 0.5).astype(int)
+    nilearn.plotting.plot_surf_roi(
+        surf_mesh=fsaverage["infl_right"],
+        roi_map=roi_texture,
+        hemi="right",
+        view="ventral",
+        bg_map=fsaverage["sulc_right"],
+        bg_on_data=True,
+        title=f"Right fusiform gyrus (Julich-Brain v{JULICH_VERSION})",
+        colorbar=False,
+    )
+except Exception as e:
+    print(f"Surface plot skipped: {e}")
+    nilearn.plotting.plot_roi(
+        region_mask_2mm,
+        bg_img=mni_t1_2mm,
+        display_mode="z",
+        cut_coords=5,
+        title=f"Right fusiform gyrus (Julich-Brain v{JULICH_VERSION})",
+    )
 nilearn.plotting.show()
 
 # %%

@@ -26,6 +26,7 @@ _rule_start : _DEFINE _AS
 rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
         | _rule_start PROBABLY verb1 rule_body1_cond
         | _rule_start verb1 _WITH _PROBABILITY np rule_body1 -> rule_op_prob
+        | _rule_start verb1 _WITH _INFERRED? _PROBABILITY rule_body1 -> rule_op_marg
         | _rule_start verb1 _WITH _INFERRED? _PROBABILITY rule_body1_cond -> rule_op_marg
         | _rule_start verb1 _WITH _INFERRED? _PROBABILITY rule_body2_cond -> rule_op_marg
         | _rule_start verb1 _WITH _A _PROBABILITY _OF np -> rule_op_prob_agg
