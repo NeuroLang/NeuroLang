@@ -223,6 +223,13 @@ class SquallTransformer(Transformer):
     and produce a logical formula with the quantifier in scope.
     """
 
+    def __init__(self):
+        super().__init__()
+        self._symbol_scope = {}
+
+    def _clear_scope(self):
+        self._symbol_scope.clear()
+
     def start(self, args):
         return args[0]
 
@@ -257,6 +264,7 @@ class SquallTransformer(Transformer):
     # ---- Rules ----
 
     def rule_op(self, args):
+        self._clear_scope()
         items = [a for a in args if a is not None and not (isinstance(a, str) and a.lower() == "probably")]
         verb = items[0]  # verb1 (Symbol = head predicate name)
         body_result = items[1]  # from rule_body1: (head_args, body_formula)
@@ -275,6 +283,7 @@ class SquallTransformer(Transformer):
             return Implication(verb(), body_result if isinstance(body_result, Conjunction) else Constant(True))
 
     def rule_op_prob(self, args):
+        self._clear_scope()
         # "define as verb with probability np rule_body1"
         # args: [verb1, np_prob_cps, body_result]
         items = [a for a in args if a is not None]
@@ -294,6 +303,7 @@ class SquallTransformer(Transformer):
         return Implication(ProbabilisticFact(prob_val, head), body_formula)
 
     def rule_op_marg(self, args):
+        self._clear_scope()
         """Build a MARG query from ``define as verb with probability rule_body1_cond``.
 
         Emits:
@@ -320,6 +330,7 @@ class SquallTransformer(Transformer):
         return Implication(head, body_formula)
 
     def rule_op_prob_agg(self, args):
+        self._clear_scope()
         """Build a probabilistic aggregation rule.
 
         Grammar: ``define as verb1 WITH A PROBABILITY OF np``
@@ -401,6 +412,7 @@ class SquallTransformer(Transformer):
         return Implication(ProbabilisticFact(agg_expr, head), bare_body)
 
     def rule_opnn(self, args):
+        self._clear_scope()
         """Build an n-ary Datalog rule from ``define as verbn rule_body1 ops``.
 
         ``rule_body1`` supplies the primary subject variable(s) and body
@@ -441,6 +453,7 @@ class SquallTransformer(Transformer):
         return Implication(consequent, full_body)
 
     def rule_opnn_per(self, args):
+        self._clear_scope()
         # "define as probably verbn rule_body1 [conditioned?] [break?] ops"
         # The VP now carries ProbabilisticFact via vpdo_prob_vn, so this
         # rule_opnn_per handler collects the result similarly to rule_opnn.
@@ -742,6 +755,9 @@ class SquallTransformer(Transformer):
                     return result
                 elif var_info is not None:
                     x = var_info
+                    noun_name = getattr(ng, '_noun_name', None)
+                    if noun_name:
+                        self._symbol_scope[noun_name] = x
                     body = ng(x)
                     scope = d(x)
                     return UniversalPredicate(x, Implication(scope, body))
@@ -756,6 +772,13 @@ class SquallTransformer(Transformer):
     def det_the(self, args):
         def the(ng):
             def apply_d(d):
+                noun_name = getattr(ng, '_noun_name', None)
+                if noun_name and noun_name in self._symbol_scope:
+                    x = self._symbol_scope[noun_name]
+                    body = ng(x)
+                    scope = d(x)
+                    return ExistentialPredicate(x, Conjunction((body, scope)))
+
                 # Special handling for aggregation ng1 — mirrors det_every.
                 agg_info = getattr(ng, '_agg_info', None)
                 if agg_info is not None:
@@ -948,6 +971,8 @@ class SquallTransformer(Transformer):
             if len(parts) == 1:
                 return parts[0]
             return Conjunction(tuple(parts))
+
+        ng._noun_name = noun1.name if isinstance(noun1, Symbol) else None
 
         if app is not None:
             ng._var_info = app
@@ -1627,6 +1652,7 @@ class SquallTransformer(Transformer):
         return ('_query', _cps_formula_to_query(formula))
 
     def query_as(self, args):
+        self._clear_scope()
         """Handle 'obtain ops as Name'.
 
         Builds Implication(name_sym(*free_vars), body) as an IDB rule,
