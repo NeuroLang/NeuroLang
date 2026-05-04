@@ -495,6 +495,59 @@ class SquallTransformer(Transformer):
         consequent = verb(*head_vars) if head_vars else verb()
         return Implication(consequent, body_formula)
 
+    def rule_opnn_prob(self, args):
+        """`define as verbn with probability np rule_body2`"""
+        self._clear_scope()
+        items = [a for a in args if a is not None]
+        verb = items[0]
+        np_prob = items[1]
+        body_result = items[2] if len(items) > 2 else None
+
+        if isinstance(body_result, tuple) and body_result[0] == '_rule_body2':
+            head_vars, body_formula = body_result[1]
+        else:
+            head_vars, body_formula = [], Constant(True)
+
+        if callable(np_prob) and not isinstance(np_prob, (Symbol, Constant)):
+            prob_val = np_prob(lambda x: x)
+        else:
+            prob_val = np_prob
+
+        head = verb(*head_vars) if head_vars else verb()
+        return Implication(ProbabilisticFact(prob_val, head), body_formula)
+
+    def rule_opnn_marg(self, args):
+        """`define as verbn with inferred probability rule_body2`"""
+        self._clear_scope()
+        items = [a for a in args if a is not None]
+        verb = items[0]
+        body_result = items[1] if len(items) > 1 else None
+
+        if isinstance(body_result, tuple) and body_result[0] == '_rule_body2':
+            head_vars, body_formula = body_result[1]
+        else:
+            head_vars, body_formula = [], Constant(True)
+
+        prob_query_arg = ProbabilisticQuery(PROB, tuple(head_vars))
+        head = verb(*(list(head_vars) + [prob_query_arg]))
+        return Implication(head, body_formula)
+
+    def rule_opnn_per_compound(self, args):
+        """`define as probably verbn rule_body2`"""
+        self._clear_scope()
+        items = [a for a in args if a is not None and not (isinstance(a, str) and a.lower() in ('probably', 'conditioned'))]
+        verb = items[0]
+        body_result = items[1] if len(items) > 1 else None
+
+        if isinstance(body_result, tuple) and body_result[0] == '_rule_body2':
+            head_vars, body_formula = body_result[1]
+        else:
+            head_vars, body_formula = [], Constant(True)
+
+        fresh_prob = Symbol.fresh()
+        consequent = verb(*head_vars) if head_vars else verb()
+        return Implication(ProbabilisticFact(fresh_prob, consequent), body_formula)
+
     def rule_body1(self, args):
         items = [a for a in args if a is not None]
         # items: [optional_prep, det, ng1]
