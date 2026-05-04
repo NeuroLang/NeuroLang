@@ -1,4 +1,21 @@
 # -*- coding: utf-8 -*-
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     custom_cell_magics: kql
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.11.2
+#   kernelspec:
+#     display_name: .venv
+#     language: python
+#     name: python3
+# ---
+
+# %%
 r"""
 Bayes Factor Decoding of the Right Fusiform Gyrus in SQUALL Controlled English
 ===============================================================================
@@ -49,9 +66,9 @@ into a single ``'right fusiform gyrus'`` label for the decoding analysis.
     define as Term_probability with inferred probability
         every Mentioned_term.
 
-    define as Cooccurrence for every Region ?r
-        ; for every Term ?t
-        where a Selected_study ?s ~activates ?r and ~mentions ?t.
+    define as Cooccurrence
+        for every Region and for every Term
+        where a Selected_study activates the Region and mentions the Term.
 
     define as Joint_probability with inferred probability
         every Cooccurrence (?r; ?t).
@@ -66,15 +83,16 @@ The first two pairs of ``define`` sentences use natural-language
 relative clauses (``every Region that a Selected_study activates``) to
 build binary intermediate rules that inject the probabilistic
 ``Selected_study`` choice into the body with **zero explicit variables**.
-The ternary cooccurrence rule is also expressed in natural language,
-using ``for every … where … such that`` with the ``~`` inverse-verb
-prefix so the SQUALL transformer produces the correct argument order
-for the binary EDB relations (the join is done by the NeuroLang solver,
-not in pandas).  The three ``with inferred probability`` rules then ask
-the solver for the marginalised probabilities — study is quantified away
-so only region and/or term remain in the rule heads.  The ``obtain …
-as`` clauses return the results directly; the ``where ?r is '…'`` filter
-triggers magic-sets optimisation, pushing the region constant backwards
+The ternary cooccurrence rule is now expressed entirely in natural
+English using the new compound-quantifier and anaphora support —
+``for every Region and for every Term where a Selected_study activates
+the Region and mentions the Term`` — so the join is done by the NeuroLang
+solver with no ``~`` inverse-verb prefix and no explicit labels.
+The three ``with inferred probability`` rules then ask the solver for
+the marginalised probabilities — study is quantified away so only region
+and/or term remain in the rule heads.  The ``obtain … as`` clauses return
+the results directly; the ``where ?r is '…'`` filter triggers magic-sets
+optimisation, pushing the region constant backwards
 and limiting computation to the fusiform gyrus.  The Bayes Factor is
 then evaluated in Python from the three probability tables.
 """
@@ -287,13 +305,13 @@ print(
 # Natural-language relative clauses (``every Region that a Selected_study
 # activates``) build binary intermediate rules that join the deterministic
 # Neurosynth data with the probabilistic ``Selected_study`` choice without
-# any explicit variables.  The ternary cooccurrence rule is also expressed
-# in natural language using ``for every … where … such that`` with the
-# ``~`` inverse-verb prefix, so the SQUALL transformer produces the correct
-# argument order for the binary EDB relations.  The three ``with inferred
-# probability`` rules ask the solver for the marginalised probabilities —
-# the anonymous ``_`` wildcard quantifies the study away so only region
-# and/or term remain in the rule heads.
+# any explicit variables.  The ternary cooccurrence rule uses the new
+# compound-quantifier and anaphora support — ``for every Region and for
+# every Term where a Selected_study activates the Region and mentions the
+# Term`` — so the join is done by the NeuroLang solver with no ``~`` prefix
+# and no explicit labels.  The three ``with inferred probability`` rules ask
+# the solver for the marginalised probabilities — study is quantified away
+# so only region and/or term remain in the rule heads.
 #
 # The ``obtain … as`` clauses return the results directly (no ``solve_all``).
 # The ``where ?r is 'right fusiform gyrus'`` filter triggers magic-sets
@@ -311,9 +329,9 @@ define as Mentioned_term every Term that a Selected_study mentions.
 define as Term_probability with inferred probability
     every Mentioned_term.
 
-define as Cooccurrence for every Region ?r
-    ; for every Term ?t
-    where a Selected_study ?s ~activates ?r and ~mentions ?t.
+define as Cooccurrence
+    for every Region and for every Term
+    where a Selected_study activates the Region and mentions the Term.
 
 define as Joint_probability with inferred probability
     every Cooccurrence (?r; ?t).
