@@ -7,8 +7,10 @@ symbolic Datalog notation.  Under the hood, each sentence is translated to a
 NeuroLang logical expression using Montague semantics in
 Continuation-Passing Style.
 
-This tutorial walks through every supported construct with runnable examples.
-All code blocks below can be executed with ``pytest --doctest-glob=doc/tutorial_squall.rst``.
+This tutorial is a **SQUALL language reference** — each section shows SQUALL
+programs as standalone text.  The section *Running SQUALL Programs from Python*
+explains how to execute them from the NeuroLang Python interface.  All examples
+are validated with doctests (run with ``pytest --doctest-glob=doc/tutorial_squall.rst``).
 
 .. contents:: Contents
    :local:
@@ -23,6 +25,78 @@ Every example uses the high-level ``NeurolangPDL`` frontend::
     >>> from neurolang.frontend import NeurolangPDL
 
 
+Running SQUALL Programs from Python
+------------------------------------
+
+SQUALL programs are plain strings passed to ``execute_squall_program``.  The
+workflow is:
+
+1. Create a ``NeurolangPDL`` engine.
+2. Register EDB facts with ``add_tuple_set``.
+3. Execute a SQUALL program string.
+4. Inspect the results with ``solve_all()`` or via the direct return from
+   ``obtain`` queries.
+
+**Registering facts**
+
+EDB predicates are registered as Python tuples::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("alice",), ("bob",), ("carol",)], name="person"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("alice",), ("carol",)], name="plays"
+    ... )
+
+**Defining a rule**
+
+Pass a SQUALL ``define as`` sentence to ``execute_squall_program``::
+
+    >>> nl.execute_squall_program(
+    ...     "define as Active every person that plays."
+    ... )
+
+**Querying with ``solve_all``**
+
+``solve_all()`` returns a dictionary of all derived relations::
+
+    >>> solution = nl.solve_all()
+    >>> sorted(
+    ...     solution["active"].as_pandas_dataframe().iloc[:, 0].tolist()
+    ... )
+    ['alice', 'carol']
+
+**Querying with ``obtain``**
+
+When the program ends with an ``obtain`` clause, ``execute_squall_program``
+returns the result directly::
+
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every person that plays."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice', 'carol']
+
+**Multiple rules and an obtain clause**
+
+A single program string can contain several rules and a final query::
+
+    >>> result = nl.execute_squall_program(
+    ...     "define as Player every person that plays. "
+    ...     "define as Runner every person that runs. "
+    ...     "obtain every Player."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice', 'carol']
+
+.. note::
+
+   All subsequent sections show SQUALL programs as standalone text.  To run
+   them, paste the program into ``execute_squall_program(...)`` after
+   registering the required tuple sets.
+
+
 1. Basic Sentences
 ------------------
 
@@ -30,8 +104,15 @@ The simplest SQUALL sentence consists of a **subject** (a variable or
 literal) and a **verb** (a unary predicate).
 
 Variables are written with a ``?`` prefix.  String literals are enclosed in
-single quotes.  The following example checks that a sentence about a named
-entity fires as expected::
+single quotes.
+
+**Unary query**
+
+.. code-block:: squall
+
+    obtain every plays.
+
+Result: all entities in the ``plays`` relation::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",)], name="plays")
@@ -42,6 +123,16 @@ entity fires as expected::
 A **transitive** verb takes an object.  Transitive verbs used as binary
 predicates are prefixed with ``~`` to indicate that argument order is
 inverted (so ``x ~sings y`` maps to ``sings(y, x)``)::
+
+.. code-block:: squall
+
+    define as Performer every person ?x that a Genre ?y ~sings.
+
+.. code-block:: squall
+
+    obtain every Performer.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
@@ -64,6 +155,16 @@ and ``the``.
 
 ``every person plays`` means *for all x: if person(x) then plays(x)*::
 
+.. code-block:: squall
+
+    define as Active every person that plays.
+
+.. code-block:: squall
+
+    obtain every Active.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
     >>> _ = nl.add_tuple_set([("alice",)], name="plays")
@@ -75,6 +176,12 @@ and ``the``.
 
 ``a person plays`` asserts existence.  In a query, only items with an
 associated count are returned::
+
+.. code-block:: squall
+
+    obtain every item ?i that has an item_count ?c.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
@@ -90,6 +197,12 @@ associated count are returned::
 ``no`` inside a relative clause expresses negation-as-failure.  Items that
 have *no* associated count are returned::
 
+.. code-block:: squall
+
+    obtain every item ?i that has no item_count ?c.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
     >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
@@ -104,6 +217,16 @@ have *no* associated count are returned::
 Variables can be named explicitly using ``?name`` labels directly after the
 noun.  The label binds the variable so it can be reused elsewhere in the
 sentence::
+
+.. code-block:: squall
+
+    define as Active every person ?p that plays.
+
+.. code-block:: squall
+
+    obtain every Active.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
@@ -125,6 +248,16 @@ Relative clauses restrict the noun they modify.  They are introduced by
 
 ``every person that plays`` — for every x: person(x) and plays(x)::
 
+.. code-block:: squall
+
+    define as PlayerPerson every person that plays.
+
+.. code-block:: squall
+
+    obtain every PlayerPerson.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
     >>> _ = nl.add_tuple_set([("alice",)], name="plays")
@@ -141,12 +274,23 @@ Relative clauses restrict the noun they modify.  They are introduced by
 reversed.  The rule below collects (study, voxel) pairs via an explicit
 multi-variable head::
 
+.. code-block:: squall
+
+    define as reported for every Study ?s ; with every Voxel ?v that ?s reports.
+
+.. code-block:: squall
+
+    obtain every reported.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("v1",), ("v2",), ("v3",)], name="voxel")
     >>> _ = nl.add_tuple_set([("s1",), ("s2",)], name="study")
     >>> _ = nl.add_tuple_set([("s1", "v1"), ("s2", "v2")], name="reports")
     >>> nl.execute_squall_program(
-    ...     "define as reported for every Study ?s ; with every Voxel ?v that ?s reports."
+    ...     "define as reported for every Study ?s ;"
+    ...     " with every Voxel that ?s reports."
     ... )
     >>> sorted(
     ...     nl.solve_all()["reported"]
@@ -159,6 +303,16 @@ multi-variable head::
 Relative clauses can be nested by using an intermediate IDB predicate as the
 noun.  The example below defines ``selected_player`` from the intersection of
 two independent predicates::
+
+.. code-block:: squall
+
+    define as PlayingSelected every selected that plays.
+
+.. code-block:: squall
+
+    obtain every PlayingSelected.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
@@ -173,6 +327,16 @@ two independent predicates::
 **Negative relative clause**
 
 ``does not VP`` expresses negation-as-failure on a unary predicate::
+
+.. code-block:: squall
+
+    define as NotPlaying every person that does not plays.
+
+.. code-block:: squall
+
+    obtain every NotPlaying.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
@@ -189,6 +353,16 @@ two independent predicates::
 ``define as published every person whose writer plays.`` means: for every
 person x, there exists a y such that writer(x, y) and plays(y) — and that
 person is ``published``::
+
+.. code-block:: squall
+
+    define as published every person whose writer plays.
+
+.. code-block:: squall
+
+    obtain every published.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
@@ -207,6 +381,16 @@ person is ``published``::
 When a noun denotes a multi-dimensional entity (e.g. a voxel with x, y, z
 coordinates), a parenthesised tuple of labels can follow the noun.  The
 variables bind to the respective columns of the relation::
+
+.. code-block:: squall
+
+    define as active every voxel (?v; ?x; ?y; ?z).
+
+.. code-block:: squall
+
+    obtain every active.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set(
@@ -233,6 +417,16 @@ needed in the derived predicate.  For example, ``peak_reported`` stores
 ``(i, j, k, study_id)`` but we want ``activation`` to contain only the
 three spatial coordinates::
 
+.. code-block:: squall
+
+    define as Activation every Peak_reported (?i; ?j; ?k; _).
+
+.. code-block:: squall
+
+    obtain every Activation.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set(
     ...     [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
@@ -254,7 +448,17 @@ wildcards in the same tuple each get a distinct fresh variable.
 
 The ``define as`` prefix turns a sentence into a Datalog **rule definition**.
 
-**Simple unary rule**::
+**Simple unary rule**
+
+.. code-block:: squall
+
+    define as Active every person that plays.
+
+.. code-block:: squall
+
+    obtain every Active.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
@@ -263,24 +467,22 @@ The ``define as`` prefix turns a sentence into a Datalog **rule definition**.
     >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
     ['alice', 'carol']
 
-**End-to-end execution**
-
-The rule fires for every person that satisfies ``plays``::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
-    >>> nl.execute_squall_program("define as Active every person that plays.")
-    >>> solution = nl.solve_all()
-    >>> sorted(solution["active"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice', 'carol']
-
 
 6. Multi-Variable Rules and Joins
 ----------------------------------
 
 N-ary rules use ``for every NOUN ; with every NOUN`` (or other prepositions)
 to bind multiple variables into the head::
+
+.. code-block:: squall
+
+    define as merge for every Item ?i ; with every Quantity that ?i item_count.
+
+.. code-block:: squall
+
+    obtain every merge.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
@@ -304,6 +506,17 @@ When a rule head needs more than one variable, the **compound quantifier**
 syntax chains ``for every`` clauses with ``and``, followed by a ``where``
 sentence that describes the join condition.  This reads much more naturally
 than the semicolon-based multi-variable form::
+
+.. code-block:: squall
+
+    define as Cooccurrence for every Region ?r and for every Term ?t
+        where a Selected_study ?s activates ?r and mentions ?t.
+
+.. code-block:: squall
+
+    obtain every Cooccurrence.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
@@ -333,6 +546,18 @@ Inside the ``where`` sentence, ``the Noun`` can refer back to the variable
 introduced by a preceding ``for every Noun``.  This is called **anaphora**
 resolution.  The example below says exactly the same thing as the previous
 one but uses ``the Region`` and ``the Term`` instead of explicit labels::
+
+.. code-block:: squall
+
+    define as Cooccurrence
+        for every Region and for every Term
+        where a Selected_study activates the Region and mentions the Term.
+
+.. code-block:: squall
+
+    obtain every Cooccurrence.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
@@ -369,6 +594,16 @@ falls back to the normal existential behaviour (creating a fresh variable).
 now appear on n-ary heads built with compound quantifiers.  The syntax is
 identical to the unary case; the engine automatically handles the extra
 head variables::
+
+.. code-block:: squall
+
+    define as Joint_prob with inferred probability
+        for every Region ?r and for every Term ?t
+        where ?r cooccurs ?t.
+
+    obtain every Joint_prob (?r; ?t; ?p).
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
@@ -411,6 +646,16 @@ Comparison keywords:
 
 The following rule selects items whose ``item_count`` is at least 2::
 
+.. code-block:: squall
+
+    define as Large every Item that has an item_count greater equal than 2.
+
+.. code-block:: squall
+
+    obtain every Large.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set(
     ...     [("a",), ("b",), ("c",), ("d",)], name="item"
@@ -435,6 +680,12 @@ The ``obtain`` keyword introduces a **query** rather than a rule.
 ``execute_squall_program`` returns a ``NamedRelationalAlgebraFrozenSet``
 directly::
 
+.. code-block:: squall
+
+    obtain every Item that has an item_count.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set(
     ...     [("a",), ("b",), ("c",), ("d",)], name="item"
@@ -454,6 +705,13 @@ Item ``"d"`` is absent because it has no ``item_count`` entry.
 
 A single program can contain both ``define as`` rules and an ``obtain``
 clause::
+
+.. code-block:: squall
+
+    define as Active every person that plays.
+    obtain every Active.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
@@ -475,7 +733,7 @@ the last argument.
 When the conditioned relation has more columns than the MARG head needs, use
 ``_`` wildcards to drop the extra columns::
 
-.. code-block:: text
+.. code-block:: squall
 
     define as Activation every Peak_reported (?i; ?j; ?k; ?s)
         such that ?s is a Selected_study.
@@ -519,6 +777,17 @@ Supported aggregation functions: ``count``, ``sum``, ``max``, ``min``,
 
 The following rule computes the maximum ``item_count`` value per item::
 
+.. code-block:: squall
+
+    define as max_items for every Item ?i ;
+        where every Max of the Quantity where ?i item_count per ?i.
+
+.. code-block:: squall
+
+    obtain every max_items.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set(
     ...     [("a",), ("b",), ("c",), ("d",)], name="item"
@@ -544,7 +813,11 @@ Item ``"d"`` is absent because it has no ``item_count``.
 
 When no ``per`` clause is given, the aggregation function receives *all free
 variables* of the source relation.  Any callable registered in the engine's
-symbol table can be used as the aggregation functor:
+symbol table can be used as the aggregation functor::
+
+    define as Result every Collect_all of the Item.
+
+To use the above, register ``collect_all`` in Python first::
 
 .. code-block:: python
 
@@ -553,9 +826,7 @@ symbol table can be used as the aggregation functor:
    nl = NeurolangPDL()
    nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
    nl.symbol_table[Symbol("collect_all")] = Constant(lambda vals: sorted(vals))
-   nl.execute_squall_program(
-       "define as Result every Collect_all of the Item."
-   )
+   nl.execute_squall_program("define as Result every Collect_all of the Item.")
 
 The relation ``result`` will contain the output of ``collect_all`` applied over
 all tuples from ``item``.
@@ -566,6 +837,18 @@ all tuples from ``item``.
 
 Separate rules with a full stop.  The parser processes each rule and walks
 them all into the engine::
+
+.. code-block:: squall
+
+    define as Active every person that plays.
+    define as Fast every person that runs.
+
+.. code-block:: squall
+
+    obtain every Active.
+    obtain every Fast.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
@@ -589,6 +872,17 @@ Relative clauses support ``and`` (conjunction) and ``or`` (disjunction).
 With conjunction, two rules can be combined step by step — define an
 intermediate predicate and then constrain further::
 
+.. code-block:: squall
+
+    define as Player every person that plays.
+    define as PlayAndRun every Player that runs.
+
+.. code-block:: squall
+
+    obtain every PlayAndRun.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
     >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
@@ -601,6 +895,16 @@ intermediate predicate and then constrain further::
     ['alice']
 
 With ``or``, the individual must satisfy at least one of the conditions::
+
+.. code-block:: squall
+
+    define as PlayOrRun every person that plays or runs.
+
+.. code-block:: squall
+
+    obtain every PlayOrRun.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
@@ -622,6 +926,16 @@ the variable explicitly after the noun using the ``?var`` label.  The example
 below demonstrates named variable binding, which is the standard way to refer
 to a variable in the rule body::
 
+.. code-block:: squall
+
+    define as Active every person ?p that plays.
+
+.. code-block:: squall
+
+    obtain every Active.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
     >>> _ = nl.add_tuple_set([("alice",)], name="plays")
@@ -640,6 +954,12 @@ SQUALL reserves many common English words as keywords (``every``, ``a``,
 ``who``, ``which``, etc.).  If a predicate or entity name coincides with a
 reserved word, wrap it in backticks::
 
+.. code-block:: squall
+
+    obtain every `from`.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("alice",)], name="from")
     >>> result = nl.execute_squall_program(
@@ -651,6 +971,12 @@ reserved word, wrap it in backticks::
 Variable names use the ``?`` prefix and may contain letters, digits, and
 underscores::
 
+.. code-block:: squall
+
+    obtain every study ?study_id.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("s001",), ("s002",)], name="study")
     >>> result = nl.execute_squall_program(
@@ -660,6 +986,12 @@ underscores::
     ['s001', 's002']
 
 String literals use single quotes and may contain spaces::
+
+.. code-block:: squall
+
+    obtain every study that is 'neuro study'.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set([("neuro study",), ("other",)], name="study")
@@ -682,6 +1014,16 @@ and shows how the same queries are expressed in SQUALL.
 Each study in NeuroSynth reports ``(study, voxel)`` pairs.  We want to
 collect every voxel that at least one study has reported as activated.
 The predicate ``?s reports ?v`` maps to ``reports(s, v)``::
+
+.. code-block:: squall
+
+    define as Activated every Voxel ?v that a Study ?s reports.
+
+.. code-block:: squall
+
+    obtain every Activated.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set(
@@ -710,6 +1052,17 @@ The predicate ``?s reports ?v`` maps to ``reports(s, v)``::
 Select a subset of studies by a category predicate, then collect the
 voxels those studies report::
 
+.. code-block:: squall
+
+    define as Auditory_voxel every Voxel ?v
+        that an Auditory_study ?s reports.
+
+.. code-block:: squall
+
+    obtain every Auditory_voxel.
+
+Execution::
+
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set(
     ...     [("s1",), ("s2",)], name="auditory_study"
@@ -737,7 +1090,7 @@ The two-rule chain pattern is the SQUALL equivalent of:
 
 Custom Python functions registered in ``symbol_table`` become body
 predicates.  The example below uses the built-in ``startswith`` to
-filter atlas region names:
+filter atlas region names::
 
 .. code-block:: python
 
@@ -766,6 +1119,17 @@ filter atlas region names:
 
 When voxels are stored as ``(x, y, z)`` coordinate triples, the tuple
 label syntax binds all three columns at once::
+
+.. code-block:: squall
+
+    define as Activation every Voxel (?x; ?y; ?z)
+        that a Study ?s focus_reported.
+
+.. code-block:: squall
+
+    obtain every Activation.
+
+Execution::
 
     >>> nl = NeurolangPDL()
     >>> _ = nl.add_tuple_set(
@@ -797,7 +1161,7 @@ The MARG form computes the conditional probability that a voxel is activated
 given a conditioning predicate.  The full NeuroSynth forward-model pattern
 (see ``examples/plot_squall_neurosynth.py``) is:
 
-.. code-block:: text
+.. code-block:: squall
 
     define as Activation every Peak_reported (?i; ?j; ?k; ?s)
         such that ?s is a Selected_study.
@@ -834,6 +1198,8 @@ Key points:
 The following pattern (taken from ``examples/plot_squall_bayes_factor_decoding.py``)
 uses compound quantifiers and anaphora to express a ternary join in plain
 English with zero explicit variables::
+
+.. code-block:: squall
 
     define as Cooccurrence
         for every Region and for every Term
