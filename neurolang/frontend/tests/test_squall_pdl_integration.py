@@ -674,3 +674,64 @@ def test_extension_g_obtain_as_integration(tmp_path):
     result_df = sol["my_pairs"].as_pandas_dataframe()
     assert len(result_df) == 3
     assert set(result_df.columns) == {"x", "y"}
+
+
+def test_execute_squall_compound_rule():
+    """Compound quantifier rule with deterministic body solves end-to-end."""
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
+    nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
+    nl.add_tuple_set([("A",), ("B",)], name="region")
+    nl.add_tuple_set([("x",), ("y",)], name="term")
+
+    result = nl.execute_squall_program(
+        "define as Cooccurrence for every Region ?r and for every Term ?t "
+        "where ?s activates ?r and mentions ?t. "
+        "obtain every Cooccurrence (?r; ?t) as P_rt."
+    )
+    df = result.as_pandas_dataframe()
+    assert len(df) == 3
+    assert set(df.columns) == {"r", "t"}
+    assert set(df.itertuples(index=False, name=None)) == {
+        ("A", "x"),
+        ("A", "y"),
+        ("B", "x"),
+    }
+
+
+def test_execute_squall_compound_probabilistic_rule_smoke():
+    """Compound quantifier MARG rule parses and reaches translate_implication.
+
+    Smoke test — full probabilistic solving is blocked by a pre-existing
+    limitation (fol_query_to_datalog_program does not support ProbabilisticQuery
+    in the head, and flatten_query does not support existential bodies). We
+    verify the rule parses correctly and that the failure mode is the expected
+    Fol2DatalogTranslationException, consistent with existing MARG smoke tests.
+    """
+    from neurolang.frontend import NeurolangPDL
+    from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
+    nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
+    nl.add_tuple_set([("A",), ("B",)], name="region")
+    nl.add_tuple_set([("x",), ("y",)], name="term")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",), ("s3",)], name="selected_study"
+    )
+
+    try:
+        nl.execute_squall_program(
+            "define as Cooccurrence with inferred probability "
+            "for every Region ?r and for every Term ?t "
+            "where a Selected_study ?s activates ?r and mentions ?t."
+        )
+    except Fol2DatalogTranslationException:
+        pass  # Expected: reached translate_implication — plumbing is OK
+    except Exception as exc:
+        pytest.fail(
+            f"Unexpected exception when walking compound probabilistic rule: "
+            f"{type(exc).__name__}: {exc}"
+        )
