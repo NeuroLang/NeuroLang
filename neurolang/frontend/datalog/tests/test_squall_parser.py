@@ -10,7 +10,7 @@ from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....datalog.aggregation import AggregationApplication
 from ....expression_pattern_matching import add_match
 from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
-from ....expressions import Constant, Query, Symbol
+from ....expressions import Constant, FunctionApplication, Query, Symbol
 from ....logic import (
     ExistentialPredicate,
     LogicOperator,
@@ -112,8 +112,11 @@ def verb1():
 
 @pytest.fixture(scope="module")
 def verb2():
+    # Parser now resolves InvertedFunctionApplication at parse time.
+    # _apply_ops pre-swaps inverse-verb args before the resolver reverses
+    # them back, so the final IR has normal subject-first order.
     return [
-        ("~sings", lambda x, y: InvertedFunctionApplication(Symbol("sings"), (x, y)))
+        ("~sings", lambda x, y: Symbol("sings")(x, y))
     ]
 
 
@@ -157,9 +160,11 @@ def nouns_1():
 
 @pytest.fixture(scope="module")
 def nouns_2():
+    # Parser now resolves InvertedFunctionApplication at parse time, so
+    # expected IR uses plain FunctionApplication with reversed arguments.
     return [
-        ("~author", lambda x, y: InvertedFunctionApplication(Symbol("author"), (x, y))),
-        ("~publication_year", lambda x, y: InvertedFunctionApplication(Symbol("publication_year"), (x, y)))
+        ("~author", lambda x, y: Symbol("author")(y, x)),
+        ("~publication_year", lambda x, y: Symbol("publication_year")(y, x))
     ]
 
 
@@ -607,32 +612,40 @@ def test_inverted_function_application_ir_node():
 
 
 def test_squall_transitive_inv_argument_order():
-    """~verb in a relative clause produces InvertedFunctionApplication in the IR."""
-    from neurolang.frontend.datalog.squall import InvertedFunctionApplication
-
-    # Collector walker: records every InvertedFunctionApplication encountered
-    class _Collector(ExpressionWalker):
-        def __init__(self):
-            self.found = []
-
-        @add_match(InvertedFunctionApplication)
-        def collect_inverted(self, expr):
-            self.found.append(expr)
-            return expr
+    """~verb in a relative clause resolves to plain FunctionApplication with
+    reversed argument order (done by the parser simplifier)."""
 
     result = parser(
         "define as authored every Paper ?p that a Person ~author ?p."
     )
     assert isinstance(result, Implication), f"Expected Implication, got {type(result)}"
 
-    collector = _Collector()
-    collector.walk(result)
-    assert collector.found, (
-        f"Expected InvertedFunctionApplication in IR, but none found.\n"
+    # Walk the rule body and locate the author(...) atom.
+    # Because the parser simplifier resolves InvertedFunctionApplication,
+    # the IR should contain author(?p, fresh) — paper first, person second.
+    body_atoms = []
+    stack = [result.antecedent]
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication):
+            body_atoms.append(expr)
+        elif hasattr(expr, 'formulas'):
+            stack.extend(expr.formulas)
+        elif hasattr(expr, 'body'):
+            stack.append(expr.body)
+
+    author_atoms = [a for a in body_atoms if a.functor == Symbol("author")]
+    assert author_atoms, (
+        f"Expected author(...) in rule body, but none found.\n"
         f"Full IR: {repr(result)}"
     )
-    assert any(n.functor == Symbol("author") for n in collector.found), (
-        f"Expected InvertedFunctionApplication with functor 'author', got: {collector.found}"
+    atom = author_atoms[0]
+    # author(?p, fresh) — paper (subject) first, person (object) second
+    assert atom.args[0] == Symbol("p"), (
+        f"Expected first arg to be ?p, got {atom.args[0]}"
+    )
+    assert isinstance(atom.args[1], Symbol), (
+        f"Expected second arg to be a fresh Symbol, got {atom.args[1]}"
     )
 
 
@@ -855,9 +868,7 @@ def test_anonymous_wildcard_in_nary_predicate():
 
 
 def test_two_anonymous_wildcards_get_distinct_symbols():
-    """Two '_' labels in the same rule produce two distinct fresh-symbol lambdas."""
-    from ....expressions import Expression
-
+    """Two '_' labels in the same rule produce two distinct fresh symbols."""
     result = parser(
         "define as TwoCols every Study ?s that ~activates _ and ~reports _ ."
     )
@@ -865,20 +876,19 @@ def test_two_anonymous_wildcards_get_distinct_symbols():
     implications = [r for r in rules if isinstance(r, Implication)]
     assert len(implications) == 1
     body = implications[0].antecedent
-    # Collect callable args (ANONYMOUS_LABEL lambdas) across all body formulas.
-    # Symbol is also callable so filter by checking it's not an Expression.
-    wildcard_lambdas = []
+    # Collect fresh Symbol args (generated from '_') across all body formulas.
+    fresh_syms = []
     for formula in body.formulas:
         if hasattr(formula, "args"):
             for arg in formula.args:
-                if callable(arg) and not isinstance(arg, Expression):
-                    wildcard_lambdas.append(arg)
-    # Each '_' should produce a distinct lambda object
-    assert len(wildcard_lambdas) >= 2, (
-        f"Expected >=2 wildcard lambdas, got {wildcard_lambdas}"
+                if isinstance(arg, Symbol) and arg.name.startswith("fresh_"):
+                    fresh_syms.append(arg)
+    # Each '_' should produce a distinct fresh symbol
+    assert len(fresh_syms) >= 2, (
+        f"Expected >=2 fresh symbols, got {fresh_syms}"
     )
-    assert wildcard_lambdas[0] is not wildcard_lambdas[1], (
-        "The two '_' wildcards must be distinct lambda objects"
+    assert fresh_syms[0] is not fresh_syms[1], (
+        "The two '_' wildcards must produce distinct symbols"
     )
 
 

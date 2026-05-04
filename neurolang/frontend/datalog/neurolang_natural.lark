@@ -171,8 +171,8 @@ intransitive : upper_identifier
              | identifier
 transitive : identifier
            | "~" identifier -> transitive_inv
-transitive_multiple : identifier
-                    | "~" identifier -> transitive_multiple_inv
+transitive_multiple : intransitive
+                    | "~" intransitive -> transitive_multiple_inv
 
 op : prep? np             -> op_np
    | _DASH prep? np _DASH -> op_np

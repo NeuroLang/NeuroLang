@@ -1586,7 +1586,7 @@ class SquallTransformer(Transformer):
         return lambda d: d(tuple(labels))
 
     def ANONYMOUS_LABEL(self, token):
-        return lambda d: d(Symbol.fresh())
+        return _AnonymousVar()
 
     def term(self, args):
         return args[0]
@@ -1889,11 +1889,25 @@ def _conj_flat(a, b):
 
 def _apply_ops(ops, verb, subject):
     """Apply operation arguments to a transitive verb."""
+    # When verb is an _InverseVerbSymbol (from the ``~`` prefix), the
+    # ResolveInvertedFunctionApplicationMixin walker will reverse the
+    # argument tuple.  In relative-clause context the caller already
+    # supplies (object, subject) so the reversal is correct, but in
+    # ``such that`` sentence context the caller supplies (subject, object)
+    # and the reversal would swap them.  We detect the wrapper here and
+    # pre-swap so the final result is (subject, object) in both cases.
+    is_inverse = isinstance(verb, _InverseVerbSymbol)
     if callable(ops) and not isinstance(ops, (Symbol, Constant)):
+        if is_inverse:
+            return ops(lambda obj: verb(obj, subject))
         return ops(lambda obj: verb(subject, obj))
     elif isinstance(ops, tuple):
+        if is_inverse:
+            return verb(*ops, subject)
         return verb(subject, *ops)
     else:
+        if is_inverse:
+            return verb(ops, subject)
         return verb(subject, ops)
 
 
@@ -1954,8 +1968,13 @@ def parser(code, locals=None, globals=None):
     """
     tree = COMPILED_GRAMMAR.parse(code.strip())
     result = SquallTransformer().transform(tree)
-    from .squall import LogicSimplifier
-    simplifier = LogicSimplifier()
+    from .squall import LogicSimplifier, ResolveInvertedFunctionApplicationMixin
+    from neurolang.expression_walker import ExpressionWalker
+
+    class _SquallSimplifier(ResolveInvertedFunctionApplicationMixin, LogicSimplifier, ExpressionWalker):
+        pass
+
+    simplifier = _SquallSimplifier()
     if isinstance(result, SquallProgram):
         result = SquallProgram(
             rules=[simplifier.walk(r) for r in result.rules],

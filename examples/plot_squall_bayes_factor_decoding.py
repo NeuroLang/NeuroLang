@@ -39,38 +39,44 @@ into a single ``'right fusiform gyrus'`` label for the decoding analysis.
 
 .. code-block:: text
 
-    define as Prob_region_term every Region_term (?s; ?r; ?t)
-        where ?s is a Selected_study.
-    define as Region_term_cooccurrence with inferred probability
-        every Prob_region_term (_; ?r; ?t).
+    define as Active_region every Region that a Selected_study activates.
 
-    define as Study_region every Activates (?s; ?r)
-        where ?s is a Selected_study.
-    define as Region_prevalence with inferred probability
-        every Study_region (_; ?r).
+    define as Region_probability with inferred probability
+        every Active_region.
 
-    define as Study_term every Mentions (?s; ?t)
-        where ?s is a Selected_study.
-    define as Term_prevalence with inferred probability
-        every Study_term (_; ?t).
+    define as Mentioned_term every Term that a Selected_study mentions.
 
-    obtain every Region_term_cooccurrence (?r; ?t; ?p)
+    define as Term_probability with inferred probability
+        every Mentioned_term.
+
+    define as Cooccurrence for every Region ?r
+        ; for every Term ?t
+        where a Selected_study ?s ~activates ?r and ~mentions ?t.
+
+    define as Joint_probability with inferred probability
+        every Cooccurrence (?r; ?t).
+
+    obtain every Joint_probability (?r; ?t; ?p)
         where ?r is 'right fusiform gyrus' as P_rt.
-    obtain every Region_prevalence (?r; ?p)
+    obtain every Region_probability (?r; ?p)
         where ?r is 'right fusiform gyrus' as P_r.
-    obtain every Term_prevalence (?t; ?p) as P_t.
+    obtain every Term_probability (?t; ?p) as P_t.
 
-The ``define`` sentences set up intermediate relations
-(``Prob_region_term``, ``Study_region``, ``Study_term``) that join the
-deterministic Neurosynth data with the probabilistic ``Selected_study``
-choice.  The three ``with inferred probability`` rules then ask the
-NeuroLang solver to compute the marginalised probabilities — study is
-quantified away by the anonymous ``_`` wildcard so only region and/or
-term remain in the rule heads.  The ``obtain … as`` clauses return the
-results directly; the ``where ?r is '…'`` filter triggers magic-sets
-optimisation, pushing the region constant backwards and limiting
-computation to the fusiform gyrus.  The Bayes Factor is then evaluated
-in Python from the three probability tables.
+The first two pairs of ``define`` sentences use natural-language
+relative clauses (``every Region that a Selected_study activates``) to
+build binary intermediate rules that inject the probabilistic
+``Selected_study`` choice into the body with **zero explicit variables**.
+The ternary cooccurrence rule is also expressed in natural language,
+using ``for every … where … such that`` with the ``~`` inverse-verb
+prefix so the SQUALL transformer produces the correct argument order
+for the binary EDB relations (the join is done by the NeuroLang solver,
+not in pandas).  The three ``with inferred probability`` rules then ask
+the solver for the marginalised probabilities — study is quantified away
+so only region and/or term remain in the rule heads.  The ``obtain …
+as`` clauses return the results directly; the ``where ?r is '…'`` filter
+triggers magic-sets optimisation, pushing the region constant backwards
+and limiting computation to the fusiform gyrus.  The Bayes Factor is
+then evaluated in Python from the three probability tables.
 """
 
 # %%
@@ -238,9 +244,8 @@ nl = NeurolangPDL()
 # ------------------------------
 # ``activates(study_id, region)``  — from peak-to-region assignment above.
 # ``mentions(study_id, term)``     — from Neurosynth TF-IDF associations.
-# ``region_term(study_id, region, term)`` — join of the two above.
-# All three have ``study_id`` first so the SQUALL ``where ?s is a Selected_study``
-# clauses join naturally on column 0.
+# All three have ``study_id`` first so the SQUALL natural-language clauses
+# join naturally on column 0.
 
 term_data = get_ns_term_study_associations(data_dir, tfidf_threshold=1e-3)
 study_mentions_df = term_data[["id", "term"]].drop_duplicates()
@@ -249,33 +254,45 @@ study_mentions_df = term_data[["id", "term"]].drop_duplicates()
 nl.add_tuple_set(study_activates_df, name="activates")
 nl.add_tuple_set(study_mentions_df, name="mentions")
 
-# Build the (study, region, term) join for the joint probability rule.
-region_term_df = study_activates_df.merge(
-    study_mentions_df, on="id"
-)[["id", "region", "term"]]
-nl.add_tuple_set(region_term_df, name="region_term")
-
-# Uniform probabilistic choice over all studies that appear in both relations.
+# Register unary type predicates so SQUALL natural-language nouns resolve.
 study_ids = sorted(
     set(study_activates_df["id"]) & set(study_mentions_df["id"])
 )
+nl.add_tuple_set(
+    study_activates_df[["region"]].drop_duplicates().rename(
+        columns={"region": "region"}
+    ),
+    name="region",
+)
+nl.add_tuple_set(
+    study_mentions_df[["term"]].drop_duplicates().rename(
+        columns={"term": "term"}
+    ),
+    name="term",
+)
+
+# Uniform probabilistic choice over all studies that appear in both relations.
 study_ids_df = pd.DataFrame({"id": study_ids})
 nl.add_uniform_probabilistic_choice_over_set(
     study_ids_df, name="selected_study"
 )
 print(
     f"Studies: {len(study_ids_df)}, "
-    f"term-study pairs: {len(study_mentions_df)}, "
-    f"region-term tuples: {len(region_term_df)}"
+    f"term-study pairs: {len(study_mentions_df)}"
 )
 
 # %%
 # SQUALL controlled-English program
 # ----------------------------------
-# Intermediate rules join the deterministic Neurosynth data with the
-# probabilistic ``Selected_study`` choice.  The three ``with inferred
-# probability`` rules ask the solver for the marginalised probabilities
-# — the anonymous ``_`` wildcard quantifies the study away so only region
+# Natural-language relative clauses (``every Region that a Selected_study
+# activates``) build binary intermediate rules that join the deterministic
+# Neurosynth data with the probabilistic ``Selected_study`` choice without
+# any explicit variables.  The ternary cooccurrence rule is also expressed
+# in natural language using ``for every … where … such that`` with the
+# ``~`` inverse-verb prefix, so the SQUALL transformer produces the correct
+# argument order for the binary EDB relations.  The three ``with inferred
+# probability`` rules ask the solver for the marginalised probabilities —
+# the anonymous ``_`` wildcard quantifies the study away so only region
 # and/or term remain in the rule heads.
 #
 # The ``obtain … as`` clauses return the results directly (no ``solve_all``).
@@ -284,26 +301,28 @@ print(
 # the target region.
 
 squall_program = """
-define as Prob_region_term every Region_term (?s; ?r; ?t)
-    where ?s is a Selected_study.
-define as Region_term_cooccurrence with inferred probability
-    every Prob_region_term (_; ?r; ?t).
+define as Active_region every Region that a Selected_study activates.
 
-define as Study_region every Activates (?s; ?r)
-    where ?s is a Selected_study.
-define as Region_prevalence with inferred probability
-    every Study_region (_; ?r).
+define as Region_probability with inferred probability
+    every Active_region.
 
-define as Study_term every Mentions (?s; ?t)
-    where ?s is a Selected_study.
-define as Term_prevalence with inferred probability
-    every Study_term (_; ?t).
+define as Mentioned_term every Term that a Selected_study mentions.
 
-obtain every Region_term_cooccurrence (?r; ?t; ?p)
+define as Term_probability with inferred probability
+    every Mentioned_term.
+
+define as Cooccurrence for every Region ?r
+    ; for every Term ?t
+    where a Selected_study ?s ~activates ?r and ~mentions ?t.
+
+define as Joint_probability with inferred probability
+    every Cooccurrence (?r; ?t).
+
+obtain every Joint_probability (?r; ?t; ?p)
     where ?r is 'right fusiform gyrus' as P_rt.
-obtain every Region_prevalence (?r; ?p)
+obtain every Region_probability (?r; ?p)
     where ?r is 'right fusiform gyrus' as P_r.
-obtain every Term_prevalence (?t; ?p) as P_t.
+obtain every Term_probability (?t; ?p) as P_t.
 """
 
 # %%
