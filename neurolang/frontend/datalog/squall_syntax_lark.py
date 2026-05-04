@@ -900,9 +900,7 @@ class SquallTransformer(Transformer):
                 noun_name = getattr(ng, '_noun_name', None)
                 if noun_name and noun_name in self._symbol_scope:
                     x = self._symbol_scope[noun_name]
-                    body = ng(x)
-                    scope = d(x)
-                    return ExistentialPredicate(x, Conjunction((body, scope)))
+                    return d(x)
 
                 # Special handling for aggregation ng1 — mirrors det_every.
                 agg_info = getattr(ng, '_agg_info', None)

@@ -297,6 +297,102 @@ to bind multiple variables into the head::
     [('a', 0), ('a', 1), ('b', 2), ('c', 3)]
 
 
+6b. Compound Quantifiers and Anaphora
+--------------------------------------
+
+When a rule head needs more than one variable, the **compound quantifier**
+syntax chains ``for every`` clauses with ``and``, followed by a ``where``
+sentence that describes the join condition.  This reads much more naturally
+than the semicolon-based multi-variable form::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
+    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
+    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="selected_study")
+    >>> _ = nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
+    >>> _ = nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
+    >>> nl.execute_squall_program(
+    ...     "define as Cooccurrence for every Region ?r and for every Term ?t "
+    ...     "where a Selected_study ?s activates ?r and mentions ?t."
+    ... )
+    >>> sorted(
+    ...     nl.solve_all()["cooccurrence"]
+    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
+    ... )
+    [('A', 'x'), ('A', 'y'), ('B', 'x')]
+
+The ``for every Region ?r and for every Term ?t`` part binds ``r`` and
+``t`` into the head.  The ``where`` sentence is the rule body; it can
+use any of the usual SQUALL constructs (relative clauses, comparisons,
+etc.).  Explicit labels after each noun let you refer to the same
+variable in the body.
+
+**Anaphoric definite references**
+
+Inside the ``where`` sentence, ``the Noun`` can refer back to the variable
+introduced by a preceding ``for every Noun``.  This is called **anaphora**
+resolution.  The example below says exactly the same thing as the previous
+one but uses ``the Region`` and ``the Term`` instead of explicit labels::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
+    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
+    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="selected_study")
+    >>> _ = nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
+    >>> _ = nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
+    >>> nl.execute_squall_program(
+    ...     "define as Cooccurrence "
+    ...     "for every Region and for every Term "
+    ...     "where a Selected_study activates the Region and mentions the Term."
+    ... )
+    >>> sorted(
+    ...     nl.solve_all()["cooccurrence"]
+    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
+    ... )
+    [('A', 'x'), ('A', 'y'), ('B', 'x')]
+
+The transformer remembers which variable ``for every Region`` bound and
+re-uses that same symbol when ``the Region`` appears later in the sentence.
+If ``the Noun`` is used when no matching ``for every Noun`` is in scope, it
+falls back to the normal existential behaviour (creating a fresh variable).
+
+.. note::
+
+   Anaphora works within a single rule or query only — there is no
+   inter-sentence scope yet.
+
+
+6c. Probabilistic N-ary Rules
+-------------------------------
+
+``with inferred probability``, ``with probability``, and ``probably`` can
+now appear on n-ary heads built with compound quantifiers.  The syntax is
+identical to the unary case; the engine automatically handles the extra
+head variables::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
+    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
+    >>> _ = nl.add_tuple_set(
+    ...     [("A", "x"), ("A", "y"), ("B", "x")], name="cooccurs"
+    ... )
+    >>> result = nl.execute_squall_program(
+    ...     "define as Joint_prob with inferred probability "
+    ...     "for every Region ?r and for every Term ?t "
+    ...     "where ?r cooccurs ?t. "
+    ...     "obtain every Joint_prob (?r; ?t; ?p) as P."
+    ... )
+    >>> df = result.as_pandas_dataframe()
+    >>> df.columns = ["r", "t", "p"]
+    >>> sorted(df.itertuples(index=False, name=None))
+    [('A', 'x', 1.0), ('A', 'y', 1.0), ('B', 'x', 1.0)]
+
+When the body contains existentials (e.g. ``a Selected_study``), use an
+intermediate deterministic rule to flatten the body first, then define the
+probabilistic rule over the intermediate relation.  This pattern is shown in
+Section 15.
+
+
 7. Filtering with Comparisons
 ------------------------------
 
@@ -733,6 +829,30 @@ Key points:
    ``add_uniform_probabilistic_choice_over_set``.  See
    ``examples/plot_squall_neurosynth.py`` for the complete runnable example.
 
+**Compound quantifier example — co-occurrence of region and term**
+
+The following pattern (taken from ``examples/plot_squall_bayes_factor_decoding.py``)
+uses compound quantifiers and anaphora to express a ternary join in plain
+English with zero explicit variables::
+
+    define as Cooccurrence
+        for every Region and for every Term
+        where a Selected_study activates the Region and mentions the Term.
+
+    define as Joint_probability with inferred probability
+        every Cooccurrence (?r; ?t).
+
+* ``for every Region and for every Term`` binds both variables into the head.
+* ``the Region`` and ``the Term`` are resolved anaphorically — they refer back
+to the variables bound by the two ``for every`` clauses, so no explicit labels
+are needed.
+* ``activates the Region`` maps to ``activates(s, r)`` and ``mentions the Term``
+maps to ``mentions(s, t)``; the study variable ``s`` is introduced by
+``a Selected_study`` and exists only in the body.
+* The intermediate ``cooccurrence`` rule has a flat head, so it can be queried
+with the standard probabilistic solver.  The ``joint_probability`` rule then
+adds the marginal probability column.
+
 
 16. Missing SQUALL Syntax — Gap Report
 -----------------------------------------
@@ -765,6 +885,15 @@ current status as of 2026-04-20:
    * - ``obtain`` clause returning results directly
      - ✅ Fixed
      - ``execute_squall_program`` returns a ``NamedRelationalAlgebraFrozenSet`` when a single ``obtain`` is present
+   * - Compound quantifiers (`for every X and for every Y where …`)
+     - ✅ Fixed
+     - Added ``rule_body2``, ``quant_list``, ``quant_clause`` grammar; ``rule_opnn_compound`` transformer
+   * - Anaphoric definite references (`the Noun` → bound variable)
+     - ✅ Fixed
+     - ``_symbol_scope`` tracks noun-to-variable mapping per rule; ``det_the`` resolves from scope
+   * - Probabilistic n-ary predicates (`with inferred probability` on n-ary heads)
+     - ✅ Fixed
+     - ``rule_opnn_prob``, ``rule_opnn_marg``, ``rule_opnn_per_compound`` handlers; no engine changes needed
    * - Skolem-like functional terms in rule head
      - ❌ Not supported
      - Requires IR changes beyond transformer scope
