@@ -19,7 +19,7 @@ from ....logic import (
 )
 from ....probabilistic.expressions import ProbabilisticPredicate
 from ..squall import InvertedFunctionApplication, LogicSimplifier
-from ..squall_syntax_lark import parser
+from ..squall_syntax_lark import parser, SquallProgram
 from ..standard_syntax import ExternalSymbol
 from ...probabilistic_frontend import RegionFrontendCPLogicSolver, Chase
 
@@ -949,3 +949,112 @@ def test_rel_fun_call_tuple_subject_no_prepend():
     assert len(free_vars) == 7, (
         f"Expected exactly 7 free vars (i1,j1,k1,i2,j2,k2,s), got {free_vars}"
     )
+
+
+def test_anaphora_the_noun_resolves_to_quantifier_var():
+    result = parser(
+        "define as Test for every Region where a Study activates the Region."
+    )
+    assert isinstance(result, Implication)
+    # Find the region(...) and activates(...) atoms in the body
+    body_atoms = []
+    stack = [result.antecedent]
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication):
+            body_atoms.append(expr)
+        elif hasattr(expr, 'formulas'):
+            stack.extend(expr.formulas)
+        elif hasattr(expr, 'body'):
+            stack.append(expr.body)
+
+    region_atom = next(a for a in body_atoms if a.functor == Symbol("region"))
+    activates_atom = next(a for a in body_atoms if a.functor == Symbol("activates"))
+    # The variable in region(r) should be the same as the second arg of activates(s, r)
+    region_var = region_atom.args[0]
+    activates_region_var = activates_atom.args[1]
+    assert region_var == activates_region_var, (
+        f"Expected anaphora resolution: region var {region_var} != activates arg {activates_region_var}"
+    )
+
+
+def test_anaphora_unbound_noun_creates_existential():
+    result = parser(
+        "obtain every Region that activates the Term."
+    )
+    assert isinstance(result, SquallProgram)
+    q = result.queries[0]
+    # Body should contain an existential for Term (not in scope)
+    body_atoms = []
+    stack = [q.body]
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication):
+            body_atoms.append(expr)
+        elif hasattr(expr, 'formulas'):
+            stack.extend(expr.formulas)
+        elif hasattr(expr, 'body'):
+            stack.append(expr.body)
+
+    term_atoms = [a for a in body_atoms if a.functor == Symbol("term")]
+    assert len(term_atoms) >= 1, "Expected at least one term(...) atom from existential fallback"
+
+
+def test_compound_quantifier_explicit_vars():
+    result = parser(
+        "define as Cooccurrence for every Region ?r and for every Term ?t "
+        "where a Selected_study ?s activates ?r and mentions ?t."
+    )
+    assert isinstance(result, Implication)
+    # Head should be cooccurrence(r, t)
+    assert result.consequent.functor == Symbol("cooccurrence")
+    assert len(result.consequent.args) == 2
+    assert result.consequent.args[0] == Symbol("r")
+    assert result.consequent.args[1] == Symbol("t")
+    # Body should contain region(r), term(t), selected_study(s), activates(s, r), mentions(s, t)
+    body_atoms = []
+    stack = [result.antecedent]
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication):
+            body_atoms.append(expr)
+        elif hasattr(expr, 'formulas'):
+            stack.extend(expr.formulas)
+        elif hasattr(expr, 'body'):
+            stack.append(expr.body)
+    functors = {a.functor.name for a in body_atoms}
+    assert "region" in functors
+    assert "term" in functors
+    assert "selected_study" in functors
+    assert "activates" in functors
+    assert "mentions" in functors
+
+
+def test_compound_quantifier_marg():
+    result = parser(
+        "define as Joint_probability with inferred probability "
+        "for every Region ?r and for every Term ?t "
+        "where a Selected_study ?s activates ?r and mentions ?t."
+    )
+    assert isinstance(result, Implication)
+    assert result.consequent.functor == Symbol("joint_probability")
+    # Head should have 3 args: r, t, PROB(r, t)
+    assert len(result.consequent.args) == 3
+    from neurolang.probabilistic.expressions import ProbabilisticQuery, PROB
+    prob_term = result.consequent.args[2]
+    assert isinstance(prob_term, ProbabilisticQuery)
+    assert prob_term.functor == PROB
+
+
+def test_compound_quantifier_explicit_prob():
+    from neurolang.probabilistic.expressions import ProbabilisticFact
+    result = parser(
+        "define as Weighted with probability 0.5 "
+        "for every Region ?r and for every Term ?t "
+        "where a Selected_study ?s activates ?r and mentions ?t."
+    )
+    assert isinstance(result, Implication)
+    assert isinstance(result.consequent, ProbabilisticFact)
+    assert result.consequent.probability == Constant(0.5)
+    assert result.consequent.body.functor == Symbol("weighted")
+    assert len(result.consequent.body.args) == 2

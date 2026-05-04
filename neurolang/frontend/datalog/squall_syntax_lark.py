@@ -637,7 +637,7 @@ class SquallTransformer(Transformer):
         ng1 = items[0]
         app = items[1] if len(items) > 1 else None
 
-        var_info = getattr(ng1, '_var_info', None)
+        var_info = app if app is not None else getattr(ng1, '_var_info', None)
         if var_info is not None:
             body_args, head_args = _resolve_var_info(var_info)
             if body_args is None:
@@ -1350,7 +1350,9 @@ class SquallTransformer(Transformer):
         verb1 = args[0]
         cp = args[1] if len(args) > 1 and args[1] is not None else None
         if cp is not None:
-            return lambda x: verb1(x)
+            def vp(x):
+                return _apply_ops(cp, verb1, x)
+            return vp
         return verb1
 
     def vpdo_vn(self, args):
