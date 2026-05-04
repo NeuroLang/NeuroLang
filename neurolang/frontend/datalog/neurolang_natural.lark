@@ -31,14 +31,26 @@ rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
         | _rule_start verb1 _WITH _INFERRED? _PROBABILITY rule_body2_cond -> rule_op_marg
         | _rule_start verb1 _WITH _A _PROBABILITY _OF np -> rule_op_prob_agg
 
-?rulen : _rule_start verbn rule_body1 _BREAK? ops -> rule_opnn
+?rulen : _rule_start verbn rule_body1 _BREAK? ops   -> rule_opnn
+       | _rule_start verbn rule_body2               -> rule_opnn_compound
        | _rule_start PROBABLY verbn rule_body1 _CONDITIONED? _BREAK? ops -> rule_opnn_per
+       | _rule_start PROBABLY verbn rule_body2      -> rule_opnn_per_compound
+       | _rule_start verbn _WITH _PROBABILITY np rule_body2 -> rule_opnn_prob
+       | _rule_start verbn _WITH _INFERRED? _PROBABILITY rule_body2 -> rule_opnn_marg
 
 rule_body1 : prep? det ng1
 rule_body1_cond : det ng1 (_CONDITIONED _TO | _GIVEN) s -> rule_body1_cond_prior
                 | s (_CONDITIONED _TO | _GIVEN) det ng1 -> rule_body1_cond_posterior
 
 rule_body2_cond : det ng1 (_CONDITIONED _TO | _GIVEN) det ng1
+
+rule_body2 : quant_list _WHERE s                    -> rule_body2_where
+
+quant_list : quant_clause                           -> quant_list_single
+           | quant_list _AND quant_clause            -> quant_list_rec
+
+quant_clause : _FOR _EVERY ng1 [ app ]               -> quant_clause_ng1
+             | _FOR _EVERY npc{THE}                  -> quant_clause_npc
 
 PROBABLY : _PROBABLY | _LIKELY
 _BREAK : "," | ";"
