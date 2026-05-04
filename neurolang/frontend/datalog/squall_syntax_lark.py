@@ -477,6 +477,24 @@ class SquallTransformer(Transformer):
         full_body = Conjunction(tuple(all_body_parts)) if len(all_body_parts) > 1 else all_body_parts[0]
         return Implication(ProbabilisticFact(fresh_prob, consequent), full_body)
 
+    def rule_opnn_compound(self, args):
+        """Build an n-ary Datalog rule from compound quantifiers.
+
+        Grammar: `define as verbn rule_body2`
+        """
+        self._clear_scope()
+        items = [a for a in args if a is not None]
+        verb = items[0]
+        body_result = items[1] if len(items) > 1 else None
+
+        if isinstance(body_result, tuple) and body_result[0] == '_rule_body2':
+            head_vars, body_formula = body_result[1]
+        else:
+            head_vars, body_formula = [], Constant(True)
+
+        consequent = verb(*head_vars) if head_vars else verb()
+        return Implication(consequent, body_formula)
+
     def rule_body1(self, args):
         items = [a for a in args if a is not None]
         # items: [optional_prep, det, ng1]
@@ -556,6 +574,60 @@ class SquallTransformer(Transformer):
         body_formula = ng1(body_args)
 
         return ('_rule_body', (head_args, body_formula))
+
+    def quant_clause_ng1(self, args):
+        """Handle `for every Region [?r]` in a compound quantifier list.
+
+        Returns `('_quant_clause', (var, type_predicate))`.
+        """
+        items = [a for a in args if a is not None]
+        ng1 = items[0]
+        app = items[1] if len(items) > 1 else None
+
+        var_info = getattr(ng1, '_var_info', None)
+        if var_info is not None:
+            body_args, head_args = _resolve_var_info(var_info)
+            if body_args is None:
+                body_args = Symbol.fresh()
+                head_args = [body_args]
+        else:
+            body_args = Symbol.fresh()
+            head_args = [body_args]
+
+        # Register noun name in scope for anaphora
+        noun_name = getattr(ng1, '_noun_name', None)
+        if noun_name:
+            self._symbol_scope[noun_name] = body_args
+
+        type_predicate = ng1(body_args)
+        return ('_quant_clause', (body_args, type_predicate))
+
+    def quant_list_single(self, args):
+        return [args[0]]
+
+    def quant_list_rec(self, args):
+        prev_list = args[0]
+        new_clause = args[1]
+        return prev_list + [new_clause]
+
+    def rule_body2_where(self, args):
+        """Handle `for every X and for every Y where ...`.
+
+        Returns `('_rule_body2', (head_vars, body_formula))`.
+        """
+        quant_list = args[0]
+        where_sentence = args[1]
+
+        head_vars = []
+        type_preds = []
+        for clause in quant_list:
+            _, (var, type_pred) = clause
+            head_vars.append(var)
+            type_preds.append(type_pred)
+
+        body_parts = type_preds + [where_sentence]
+        body_formula = Conjunction(tuple(body_parts))
+        return ('_rule_body2', (head_vars, body_formula))
 
     def rule_body1_cond_prior(self, args):
         # Grammar: det ng1 _CONDITIONED _TO s
