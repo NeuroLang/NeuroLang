@@ -20,81 +20,9 @@ are validated with doctests (run with ``pytest --doctest-glob=doc/tutorial_squal
 Setup
 -----
 
-Every example uses the high-level ``NeurolangPDL`` frontend::
+All examples assume the ``NeurolangPDL`` frontend is imported:
 
     >>> from neurolang.frontend import NeurolangPDL
-
-
-Running SQUALL Programs from Python
-------------------------------------
-
-SQUALL programs are plain strings passed to ``execute_squall_program``.  The
-workflow is:
-
-1. Create a ``NeurolangPDL`` engine.
-2. Register EDB facts with ``add_tuple_set``.
-3. Execute a SQUALL program string.
-4. Inspect the results with ``solve_all()`` or via the direct return from
-   ``obtain`` queries.
-
-**Registering facts**
-
-EDB predicates are registered as Python tuples::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("alice",), ("bob",), ("carol",)], name="person"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("alice",), ("carol",)], name="plays"
-    ... )
-
-**Defining a rule**
-
-Pass a SQUALL ``define as`` sentence to ``execute_squall_program``::
-
-    >>> nl.execute_squall_program(
-    ...     "define as Active every person that plays."
-    ... )
-
-**Querying with ``solve_all``**
-
-``solve_all()`` returns a dictionary of all derived relations::
-
-    >>> solution = nl.solve_all()
-    >>> sorted(
-    ...     solution["active"].as_pandas_dataframe().iloc[:, 0].tolist()
-    ... )
-    ['alice', 'carol']
-
-**Querying with ``obtain``**
-
-When the program ends with an ``obtain`` clause, ``execute_squall_program``
-returns the result directly::
-
-    >>> result = nl.execute_squall_program(
-    ...     "obtain every person that plays."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice', 'carol']
-
-**Multiple rules and an obtain clause**
-
-A single program string can contain several rules and a final query::
-
-    >>> result = nl.execute_squall_program(
-    ...     "define as Player every person that plays. "
-    ...     "define as Runner every person that runs. "
-    ...     "obtain every Player."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice', 'carol']
-
-.. note::
-
-   All subsequent sections show SQUALL programs as standalone text.  To run
-   them, paste the program into ``execute_squall_program(...)`` after
-   registering the required tuple sets.
 
 
 1. Basic Sentences
