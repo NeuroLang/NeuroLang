@@ -40,13 +40,7 @@ single quotes.
 
     obtain every plays.
 
-Result: all entities in the ``plays`` relation::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> result = nl.execute_squall_program("obtain every plays.")
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: all entities in the ``plays`` relation (e.g. ``alice`` if ``plays`` contains ``("alice",)``).
 
 A **transitive** verb takes an object.  Transitive verbs used as binary
 predicates are prefixed with ``~`` to indicate that argument order is
@@ -60,17 +54,8 @@ inverted (so ``x ~sings y`` maps to ``sings(y, x)``)::
 
     obtain every Performer.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("jazz",)], name="genre")
-    >>> _ = nl.add_tuple_set([("alice", "jazz")], name="sings")
-    >>> nl.execute_squall_program(
-    ...     "define as Performer every person ?x that a Genre ?y ~sings."
-    ... )
-    >>> sorted(nl.solve_all()["performer"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: ``performer`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
+``genre`` contains ``("jazz",)``, and ``sings`` contains ``("alice", "jazz")``.
 
 
 2. Quantifiers
@@ -91,14 +76,8 @@ and ``the``.
 
     obtain every Active.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> nl.execute_squall_program("define as Active every person that plays.")
-    >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: ``active`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
+and ``plays`` contains ``("alice",)``.
 
 **Existential — a / an / some**
 
@@ -109,16 +88,9 @@ associated count are returned::
 
     obtain every item ?i that has an item_count ?c.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
-    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
-    >>> result = nl.execute_squall_program(
-    ...     "obtain every item ?i that has an item_count ?c."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['a', 'b']
+Result: the query returns ``a`` and ``b`` if ``item`` contains ``a, b, c`` and
+``item_count`` maps ``a→1``, ``b→2``. Item ``c`` is absent because it has no
+``item_count`` entry.
 
 **Negative — no**
 
@@ -129,16 +101,9 @@ have *no* associated count are returned::
 
     obtain every item ?i that has no item_count ?c.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
-    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
-    >>> result = nl.execute_squall_program(
-    ...     "obtain every item ?i that has no item_count ?c."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['c']
+Result: the query returns ``c`` if ``item`` contains ``a, b, c`` and
+``item_count`` maps ``a→1``, ``b→2``. Items ``a`` and ``b`` are excluded because
+they have associated counts.
 
 **Named variables with quantifiers**
 
@@ -154,16 +119,8 @@ sentence::
 
     obtain every Active.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> nl.execute_squall_program(
-    ...     "define as Active every person ?p that plays."
-    ... )
-    >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: ``active`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
+and ``plays`` contains ``("alice",)``.
 
 
 3. Relative Clauses
@@ -184,16 +141,8 @@ Relative clauses restrict the noun they modify.  They are introduced by
 
     obtain every PlayerPerson.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> nl.execute_squall_program(
-    ...     "define as PlayerPerson every person that plays."
-    ... )
-    >>> sorted(nl.solve_all()["playerperson"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: ``playerperson`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
+and ``plays`` contains ``("alice",)``.
 
 **Transitive VP relative clause (passive-like)**
 
@@ -210,21 +159,9 @@ multi-variable head::
 
     obtain every reported.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("v1",), ("v2",), ("v3",)], name="voxel")
-    >>> _ = nl.add_tuple_set([("s1",), ("s2",)], name="study")
-    >>> _ = nl.add_tuple_set([("s1", "v1"), ("s2", "v2")], name="reports")
-    >>> nl.execute_squall_program(
-    ...     "define as reported for every Study ?s ;"
-    ...     " with every Voxel that ?s reports."
-    ... )
-    >>> sorted(
-    ...     nl.solve_all()["reported"]
-    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
-    ... )
-    [('s1', 'v1'), ('s2', 'v2')]
+Result: ``reported`` contains ``("s1", "v1")`` and ``("s2", "v2")`` if
+``voxel`` contains ``v1, v2, v3``, ``study`` contains ``s1, s2``, and
+``reports`` contains ``("s1", "v1")`` and ``("s2", "v2")``.
 
 **Nested relative clauses**
 
@@ -240,17 +177,9 @@ two independent predicates::
 
     obtain every PlayingSelected.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
-    >>> _ = nl.add_tuple_set([("alice",)], name="selected")
-    >>> nl.execute_squall_program(
-    ...     "define as PlayingSelected every selected that plays."
-    ... )
-    >>> sorted(nl.solve_all()["playingselected"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: ``playingselected`` contains ``alice`` if ``person`` contains ``alice``,
+``bob``, and ``carol``; ``plays`` contains ``alice`` and ``carol``; and
+``selected`` contains ``alice``.
 
 **Negative relative clause**
 
@@ -264,16 +193,8 @@ Execution::
 
     obtain every NotPlaying.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> nl.execute_squall_program(
-    ...     "define as NotPlaying every person that does not plays."
-    ... )
-    >>> sorted(nl.solve_all()["notplaying"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['bob']
+Result: ``notplaying`` contains ``bob`` if ``person`` contains ``alice`` and ``bob``,
+and ``plays`` contains ``("alice",)``.
 
 **Possessive relative clause — whose**
 
@@ -290,17 +211,9 @@ person is ``published``::
 
     obtain every published.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice", "carol"), ("bob", "dave")], name="writer")
-    >>> _ = nl.add_tuple_set([("carol",)], name="plays")
-    >>> nl.execute_squall_program(
-    ...     "define as published every person whose writer plays."
-    ... )
-    >>> sorted(nl.solve_all()["published"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: ``published`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
+``writer`` contains ``("alice", "carol")`` and ``("bob", "dave")``, and
+``plays`` contains ``("carol",)``.
 
 
 4. Tuple (Multi-dimensional) Subjects
@@ -318,18 +231,8 @@ variables bind to the respective columns of the relation::
 
     obtain every active.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("v1", 0, 0, 1), ("v2", 1, 2, 3)], name="voxel"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as active every voxel (?v; ?x; ?y; ?z)."
-    ... )
-    >>> solution = nl.solve_all()
-    >>> sorted(solution["active"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
-    [('v1', 0, 0, 1), ('v2', 1, 2, 3)]
+Result: ``active`` contains ``("v1", 0, 0, 1)`` and ``("v2", 1, 2, 3)`` if
+``voxel`` contains those tuples.
 
 The compiler generates one binding per coordinate variable and produces a
 single conjunction for the body.
@@ -353,18 +256,9 @@ three spatial coordinates::
 
     obtain every Activation.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as Activation every Peak_reported (?i; ?j; ?k; _)."
-    ... )
-    >>> solution = nl.solve_all()
-    >>> sorted(solution["activation"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
-    [(10, 20, 30), (11, 21, 31)]
+Result: ``activation`` contains ``(10, 20, 30)`` and ``(11, 21, 31)`` if
+``peak_reported`` contains ``(10, 20, 30, "s1")`` and ``(11, 21, 31, "s2")``.
+The study-id column is consumed in the join but dropped from the head.
 
 The study-id column is matched in the body by the fresh symbol produced for
 ``_``, but it does not appear in the ``activation`` head.  Multiple ``_``
@@ -386,14 +280,8 @@ The ``define as`` prefix turns a sentence into a Datalog **rule definition**.
 
     obtain every Active.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
-    >>> nl.execute_squall_program("define as Active every person that plays.")
-    >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice', 'carol']
+Result: ``active`` contains ``alice`` and ``carol`` if ``person`` contains
+``alice``, ``bob``, and ``carol``, and ``plays`` contains ``alice`` and ``carol``.
 
 
 6. Multi-Variable Rules and Joins
@@ -410,21 +298,9 @@ to bind multiple variables into the head::
 
     obtain every merge.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
-    >>> _ = nl.add_tuple_set(
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
-    ... )
-    >>> _ = nl.add_tuple_set([(i,) for i in range(5)], name="quantity")
-    >>> nl.execute_squall_program(
-    ...     "define as merge for every Item ?i ;"
-    ...     " with every Quantity that ?i item_count"
-    ... )
-    >>> solution = nl.solve_all()
-    >>> sorted(solution["merge"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
-    [('a', 0), ('a', 1), ('b', 2), ('c', 3)]
+Result: ``merge`` contains ``("a", 0)``, ``("a", 1)``, ``("b", 2)``, and
+``("c", 3)`` if ``item`` contains ``a, b, c``, ``item_count`` contains those
+tuples, and ``quantity`` contains ``0`` through ``4``.
 
 
 6b. Compound Quantifiers and Anaphora
@@ -444,23 +320,11 @@ than the semicolon-based multi-variable form::
 
     obtain every Cooccurrence.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
-    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
-    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="selected_study")
-    >>> _ = nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
-    >>> _ = nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
-    >>> nl.execute_squall_program(
-    ...     "define as Cooccurrence for every Region ?r and for every Term ?t "
-    ...     "where a Selected_study ?s activates ?r and mentions ?t."
-    ... )
-    >>> sorted(
-    ...     nl.solve_all()["cooccurrence"]
-    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
-    ... )
-    [('A', 'x'), ('A', 'y'), ('B', 'x')]
+Result: ``cooccurrence`` contains ``("A", "x")``, ``("A", "y")``, and ``("B", "x")``
+when ``region`` contains ``A`` and ``B``, ``term`` contains ``x`` and ``y``,
+``selected_study`` contains ``s1``, ``s2``, ``s3``, ``activates`` contains
+``("s1", "A")``, ``("s2", "A")``, ``("s3", "B")``, and ``mentions`` contains
+``("s1", "x")``, ``("s2", "y")``, ``("s3", "x")``.
 
 The ``for every Region ?r and for every Term ?t`` part binds ``r`` and
 ``t`` into the head.  The ``where`` sentence is the rule body; it can
@@ -485,24 +349,8 @@ one but uses ``the Region`` and ``the Term`` instead of explicit labels::
 
     obtain every Cooccurrence.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
-    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
-    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="selected_study")
-    >>> _ = nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
-    >>> _ = nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
-    >>> nl.execute_squall_program(
-    ...     "define as Cooccurrence "
-    ...     "for every Region and for every Term "
-    ...     "where a Selected_study activates the Region and mentions the Term."
-    ... )
-    >>> sorted(
-    ...     nl.solve_all()["cooccurrence"]
-    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
-    ... )
-    [('A', 'x'), ('A', 'y'), ('B', 'x')]
+Result: same as above — ``cooccurrence`` contains ``("A", "x")``, ``("A", "y")``,
+and ``("B", "x")`` under the same EDB assumptions.
 
 The transformer remembers which variable ``for every Region`` bound and
 re-uses that same symbol when ``the Region`` appears later in the sentence.
@@ -531,24 +379,11 @@ head variables::
 
     obtain every Joint_prob (?r; ?t; ?p).
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
-    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
-    >>> _ = nl.add_tuple_set(
-    ...     [("A", "x"), ("A", "y"), ("B", "x")], name="cooccurs"
-    ... )
-    >>> result = nl.execute_squall_program(
-    ...     "define as Joint_prob with inferred probability "
-    ...     "for every Region ?r and for every Term ?t "
-    ...     "where ?r cooccurs ?t. "
-    ...     "obtain every Joint_prob (?r; ?t; ?p) as P."
-    ... )
-    >>> df = result.as_pandas_dataframe()
-    >>> df.columns = ["r", "t", "p"]
-    >>> sorted(df.itertuples(index=False, name=None))
-    [('A', 'x', 1.0), ('A', 'y', 1.0), ('B', 'x', 1.0)]
+Result: ``joint_prob`` contains ``("A", "x", 1.0)``, ``("A", "y", 1.0)``,
+and ``("B", "x", 1.0)`` when ``region`` contains ``A`` and ``B``, ``term``
+contains ``x`` and ``y``, and ``cooccurs`` contains ``("A", "x")``,
+``("A", "y")``, and ``("B", "x")``. The ``obtain`` clause returns these
+three tuples with inferred probability ``1.0``.
 
 When the body contains existentials (e.g. ``a Selected_study``), use an
 intermediate deterministic rule to flatten the body first, then define the
@@ -582,21 +417,8 @@ The following rule selects items whose ``item_count`` is at least 2::
 
     obtain every Large.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as Large every Item "
-    ...     "that has an item_count greater equal than 2."
-    ... )
-    >>> sorted(nl.solve_all()["large"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['b', 'c']
+Result: ``large`` contains ``b`` and ``c`` if ``item`` contains ``a, b, c, d``
+and ``item_count`` maps ``a→0,1``, ``b→2``, ``c→3``.
 
 Item ``"d"`` is absent because it has no ``item_count`` entry.
 
@@ -612,20 +434,8 @@ directly::
 
     obtain every Item that has an item_count.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
-    ... )
-    >>> result = nl.execute_squall_program(
-    ...     "obtain every Item that has an item_count."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['a', 'b', 'c']
+Result: the query returns ``a``, ``b``, and ``c`` if ``item`` contains
+``a, b, c, d`` and ``item_count`` maps ``a→0,1``, ``b→2``, ``c→3``.
 
 Item ``"d"`` is absent because it has no ``item_count`` entry.
 
@@ -639,17 +449,8 @@ clause::
     define as Active every person that plays.
     obtain every Active.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> result = nl.execute_squall_program(
-    ...     "define as Active every person that plays. "
-    ...     "obtain every Active."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: the query returns ``alice`` if ``person`` contains ``alice`` and ``bob``
+and ``plays`` contains ``("alice",)``.
 
 **MARG queries — conditional probability**
 
@@ -714,26 +515,10 @@ The following rule computes the maximum ``item_count`` value per item::
 
     obtain every max_items.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
-    ... )
-    >>> _ = nl.add_tuple_set([(i,) for i in range(5)], name="quantity")
-    >>> nl.execute_squall_program(
-    ...     "define as max_items for every Item ?i ;"
-    ...     " where every Max of the Quantity where ?i item_count per ?i."
-    ... )
-    >>> solution = nl.solve_all()
-    >>> sorted(
-    ...     solution["max_items"].as_pandas_dataframe()
-    ...     .apply(tuple, axis=1).tolist()
-    ... )
-    [('a', 1), ('b', 2), ('c', 3)]
+Result: ``max_items`` contains ``("a", 1)``, ``("b", 2)``, and ``("c", 3)``
+if ``item`` contains ``a, b, c, d``, ``quantity`` contains ``0`` through ``4``,
+and ``item_count`` maps ``a→0,1``, ``b→2``, ``c→3``. Item ``"d"`` is absent
+because it has no ``item_count`` entry.
 
 Item ``"d"`` is absent because it has no ``item_count``.
 
@@ -741,23 +526,15 @@ Item ``"d"`` is absent because it has no ``item_count``.
 
 When no ``per`` clause is given, the aggregation function receives *all free
 variables* of the source relation.  Any callable registered in the engine's
-symbol table can be used as the aggregation functor::
+symbol table can be used as the aggregation functor.
+
+.. code-block:: squall
 
     define as Result every Collect_all of the Item.
 
-To use the above, register ``collect_all`` in Python first::
-
-.. code-block:: python
-
-   from neurolang.expressions import Symbol, Constant
-
-   nl = NeurolangPDL()
-   nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
-   nl.symbol_table[Symbol("collect_all")] = Constant(lambda vals: sorted(vals))
-   nl.execute_squall_program("define as Result every Collect_all of the Item.")
-
-The relation ``result`` will contain the output of ``collect_all`` applied over
-all tuples from ``item``.
+Result: ``result`` contains the collected output of ``collect_all`` applied over
+all tuples from ``item``. This requires ``collect_all`` to be registered as an
+aggregation functor in the engine's symbol table.
 
 
 10. Multiple Rules in One Program
@@ -776,21 +553,9 @@ them all into the engine::
     obtain every Active.
     obtain every Fast.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> _ = nl.add_tuple_set([("bob",)], name="runs")
-    >>> nl.execute_squall_program(
-    ...     "define as Active every person that plays. "
-    ...     "define as Fast every person that runs."
-    ... )
-    >>> solution = nl.solve_all()
-    >>> sorted(solution["active"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
-    >>> sorted(solution["fast"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['bob']
+Result: ``active`` contains ``alice`` and ``fast`` contains ``bob`` if
+``person`` contains ``alice`` and ``bob``, ``plays`` contains ``("alice",)``,
+and ``runs`` contains ``("bob",)``.
 
 
 11. Boolean Connectives in Relative Clauses
@@ -809,18 +574,9 @@ intermediate predicate and then constrain further::
 
     obtain every PlayAndRun.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="runs")
-    >>> nl.execute_squall_program(
-    ...     "define as Player every person that plays. "
-    ...     "define as PlayAndRun every Player that runs."
-    ... )
-    >>> sorted(nl.solve_all()["playandrun"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: ``playandrun`` contains ``alice`` if ``person`` contains ``alice``,
+``bob``, and ``carol``; ``plays`` contains ``alice`` and ``carol``; and
+``runs`` contains ``alice`` and ``bob``.
 
 With ``or``, the individual must satisfy at least one of the conditions::
 
@@ -832,17 +588,9 @@ With ``or``, the individual must satisfy at least one of the conditions::
 
     obtain every PlayOrRun.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> _ = nl.add_tuple_set([("bob",)], name="runs")
-    >>> nl.execute_squall_program(
-    ...     "define as PlayOrRun every person that plays or runs."
-    ... )
-    >>> sorted(nl.solve_all()["playorrun"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice', 'bob']
+Result: ``playorrun`` contains ``alice`` and ``bob`` if ``person`` contains
+``alice``, ``bob``, and ``carol``; ``plays`` contains ``("alice",)``; and
+``runs`` contains ``("bob",)``.
 
 
 12. ``for … , …`` Quantification
@@ -862,16 +610,8 @@ to a variable in the rule body::
 
     obtain every Active.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> nl.execute_squall_program(
-    ...     "define as Active every person ?p that plays."
-    ... )
-    >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: ``active`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``
+and ``plays`` contains ``("alice",)``.
 
 
 13. Reserved Words and Quoting
@@ -886,15 +626,8 @@ reserved word, wrap it in backticks::
 
     obtain every `from`.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",)], name="from")
-    >>> result = nl.execute_squall_program(
-    ...     "obtain every `from`."
-    ... )  # doctest: +ELLIPSIS
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['alice']
+Result: ``from`` contains ``alice`` if the EDB relation ``from`` contains
+``("alice",)``.
 
 Variable names use the ``?`` prefix and may contain letters, digits, and
 underscores::
@@ -903,15 +636,8 @@ underscores::
 
     obtain every study ?study_id.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("s001",), ("s002",)], name="study")
-    >>> result = nl.execute_squall_program(
-    ...     "obtain every study ?study_id."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['s001', 's002']
+Result: the query returns ``s001`` and ``s002`` if ``study`` contains those
+tuples.
 
 String literals use single quotes and may contain spaces::
 
@@ -919,15 +645,8 @@ String literals use single quotes and may contain spaces::
 
     obtain every study that is 'neuro study'.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("neuro study",), ("other",)], name="study")
-    >>> result = nl.execute_squall_program(
-    ...     "obtain every study that is 'neuro study'."
-    ... )
-    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
-    ['neuro study']
+Result: the query returns ``neuro study`` if ``study`` contains
+``("neuro study",)`` and ``("other",)``.
 
 
 15. Neuroimaging Domain Examples
@@ -951,23 +670,9 @@ The predicate ``?s reports ?v`` maps to ``reports(s, v)``::
 
     obtain every Activated.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("s1",), ("s2",), ("s3",)], name="study"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("v1",), ("v2",), ("v3",)], name="voxel"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("s1", "v1"), ("s2", "v1"), ("s2", "v2")], name="reports"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as Activated every Voxel ?v that a Study ?s reports."
-    ... )
-    >>> sorted(nl.solve_all()["activated"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['v1', 'v2']
+Result: ``activated`` contains ``v1`` and ``v2`` if ``study`` contains
+``s1, s2, s3``, ``voxel`` contains ``v1, v2, v3``, and ``reports`` contains
+``("s1", "v1")``, ``("s2", "v1")``, and ``("s2", "v2")``.
 
 .. note::
 
@@ -989,24 +694,10 @@ voxels those studies report::
 
     obtain every Auditory_voxel.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("s1",), ("s2",)], name="auditory_study"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("v1",), ("v2",), ("v3",)], name="voxel"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("s1", "v1"), ("s2", "v2"), ("s2", "v3")], name="reports"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as Auditory_voxel every Voxel ?v "
-    ...     "that an Auditory_study ?s reports."
-    ... )
-    >>> sorted(nl.solve_all()["auditory_voxel"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['v1', 'v2', 'v3']
+Result: ``auditory_voxel`` contains ``v1``, ``v2``, and ``v3`` if
+``auditory_study`` contains ``s1`` and ``s2``, ``voxel`` contains ``v1, v2, v3``,
+and ``reports`` contains ``("s1", "v1")``, ``("s2", "v2")``, and
+``("s2", "v3")``.
 
 The two-rule chain pattern is the SQUALL equivalent of:
 
@@ -1016,26 +707,22 @@ The two-rule chain pattern is the SQUALL equivalent of:
 
 **Atlas region filtering — registering a custom predicate**
 
-Custom Python functions registered in ``symbol_table`` become body
-predicates.  The example below uses the built-in ``startswith`` to
-filter atlas region names::
+Custom predicates registered in the engine's symbol table can be used in
+SQUALL body positions.  The example below assumes ``startswith`` is available
+as a registered predicate::
 
-.. code-block:: python
+.. code-block:: squall
 
-   from neurolang.expressions import Symbol, Constant
+    define as Left_label every Atlas_label ?label that startswith 'L '.
 
-   nl = NeurolangPDL()
-   nl.symbol_table[Symbol("startswith")] = Constant(str.startswith)
-   nl.add_tuple_set(
-       [("L S_temporal_sup",), ("R S_temporal_sup",), ("L G_frontal_sup",)],
-       name="atlas_label"
-   )
-   # SQUALL (intransitive predicate acting on the registered function):
-   # define as Left_label every Atlas_label ?label that startswith 'L '.
-   #
-   # NOTE: string literals in body predicates currently require a
-   # comparison rel_comp form; the above is illustrative — see the
-   # Gap Report (Section 16) for the current limitation.
+.. code-block:: squall
+
+    obtain every Left_label.
+
+Result: ``left_label`` contains ``"L S_temporal_sup"`` and ``"L G_frontal_sup"``
+if ``atlas_label`` contains ``("L S_temporal_sup",)``, ``("R S_temporal_sup",)``,
+and ``("L G_frontal_sup",)`` and ``startswith`` is registered as a binary
+predicate.
 
 .. note::
 
@@ -1057,27 +744,10 @@ label syntax binds all three columns at once::
 
     obtain every Activation.
 
-Execution::
-
-    >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
-    ...     [("s1",), ("s2",)], name="study"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [(0, 1, 2), (3, 4, 5), (6, 7, 8)], name="voxel"
-    ... )
-    >>> _ = nl.add_tuple_set(
-    ...     [("s1", 0, 1, 2), ("s2", 3, 4, 5)], name="focus_reported"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as Activation every Voxel (?x; ?y; ?z) "
-    ...     "that a Study ?s focus_reported."
-    ... )
-    >>> sorted(
-    ...     nl.solve_all()["activation"]
-    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
-    ... )
-    [(0, 1, 2), (3, 4, 5)]
+Result: ``activation`` contains ``(0, 1, 2)`` and ``(3, 4, 5)`` if ``study``
+contains ``s1`` and ``s2``, ``voxel`` contains ``(0, 1, 2)``, ``(3, 4, 5)``,
+and ``(6, 7, 8)``, and ``focus_reported`` contains ``("s1", 0, 1, 2)`` and
+``("s2", 3, 4, 5)``.
 
 The tuple subject ``(?x; ?y; ?z)`` binds the three coordinate columns of
 ``voxel`` and re-uses those variables in the ``focus_reported`` body
