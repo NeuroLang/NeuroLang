@@ -818,6 +818,308 @@ with the standard probabilistic solver.  The ``joint_probability`` rule then
 adds the marginal probability column.
 
 
+Running SQUALL Programs from Python
+=====================================
+
+All of the SQUALL snippets shown in the previous sections can be executed
+from Python using the ``NeurolangPDL`` frontend.  The general workflow is:
+
+1. Create a ``NeurolangPDL`` engine.
+2. Register EDB facts with ``add_tuple_set``.
+3. Execute a SQUALL program string with ``execute_squall_program``.
+4. Inspect results with ``solve_all()`` or via the direct return from
+   ``obtain`` queries.
+
+The subsections below demonstrate each pattern.
+
+
+Registering facts and running a simple rule
+--------------------------------------------
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("alice",), ("bob",), ("carol",)], name="person"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("alice",), ("carol",)], name="plays"
+    ... )
+    >>> nl.execute_squall_program(
+    ...     "define as Active every person that plays."
+    ... )
+    >>> sorted(
+    ...     nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist()
+    ... )
+    ['alice', 'carol']
+
+
+Querying with ``obtain`` (direct return)
+-----------------------------------------
+
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every person that plays."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice', 'carol']
+
+
+Multiple rules and an obtain clause in one program
+---------------------------------------------------
+
+    >>> result = nl.execute_squall_program(
+    ...     "define as Player every person that plays. "
+    ...     "define as Runner every person that runs. "
+    ...     "obtain every Player."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice', 'carol']
+
+
+Transitive verbs and binary predicates
+---------------------------------------
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("jazz",)], name="genre")
+    >>> _ = nl.add_tuple_set([("alice", "jazz")], name="sings")
+    >>> nl.execute_squall_program(
+    ...     "define as Performer every person ?x that a Genre ?y ~sings."
+    ... )
+    >>> sorted(nl.solve_all()["performer"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
+
+
+Quantifiers: every, a, no
+--------------------------
+
+**Every**
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> nl.execute_squall_program("define as Active every person that plays.")
+    >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
+
+**A / an / some**
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
+    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every item ?i that has an item_count ?c."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['a', 'b']
+
+**No**
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
+    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
+    >>> result = nl.execute_squall_program(
+    ...     "obtain every item ?i that has no item_count ?c."
+    ... )
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['c']
+
+
+Relative clauses and negation
+------------------------------
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> nl.execute_squall_program(
+    ...     "define as NotPlaying every person that does not plays."
+    ... )
+    >>> sorted(nl.solve_all()["notplaying"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['bob']
+
+
+Tuple (multi-dimensional) subjects
+-----------------------------------
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("v1", 0, 0, 1), ("v2", 1, 2, 3)], name="voxel"
+    ... )
+    >>> nl.execute_squall_program(
+    ...     "define as active every voxel (?v; ?x; ?y; ?z)."
+    ... )
+    >>> solution = nl.solve_all()
+    >>> sorted(solution["active"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
+    [('v1', 0, 0, 1), ('v2', 1, 2, 3)]
+
+Anonymous wildcard ``_``::
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
+    ... )
+    >>> nl.execute_squall_program(
+    ...     "define as Activation every Peak_reported (?i; ?j; ?k; _)."
+    ... )
+    >>> solution = nl.solve_all()
+    >>> sorted(solution["activation"].as_pandas_dataframe().apply(tuple, axis=1).tolist())
+    [(10, 20, 30), (11, 21, 31)]
+
+
+Compound quantifiers and anaphora
+----------------------------------
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
+    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
+    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="selected_study")
+    >>> _ = nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
+    >>> _ = nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
+    >>> nl.execute_squall_program(
+    ...     "define as Cooccurrence "
+    ...     "for every Region and for every Term "
+    ...     "where a Selected_study activates the Region and mentions the Term."
+    ... )
+    >>> sorted(
+    ...     nl.solve_all()["cooccurrence"]
+    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
+    ... )
+    [('A', 'x'), ('A', 'y'), ('B', 'x')]
+
+
+Probabilistic n-ary rules
+--------------------------
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
+    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
+    >>> _ = nl.add_tuple_set(
+    ...     [("A", "x"), ("A", "y"), ("B", "x")], name="cooccurs"
+    ... )
+    >>> result = nl.execute_squall_program(
+    ...     "define as Joint_prob with inferred probability "
+    ...     "for every Region ?r and for every Term ?t "
+    ...     "where ?r cooccurs ?t. "
+    ...     "obtain every Joint_prob (?r; ?t; ?p) as P."
+    ... )
+    >>> df = result.as_pandas_dataframe()
+    >>> df.columns = ["r", "t", "p"]
+    >>> sorted(df.itertuples(index=False, name=None))
+    [('A', 'x', 1.0), ('A', 'y', 1.0), ('B', 'x', 1.0)]
+
+
+Filtering with comparisons
+---------------------------
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
+    ... )
+    >>> nl.execute_squall_program(
+    ...     "define as Large every Item "
+    ...     "that has an item_count greater equal than 2."
+    ... )
+    >>> sorted(nl.solve_all()["large"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['b', 'c']
+
+
+Aggregations
+-------------
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("a",), ("b",), ("c",), ("d",)], name="item"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
+    ... )
+    >>> _ = nl.add_tuple_set([(i,) for i in range(5)], name="quantity")
+    >>> nl.execute_squall_program(
+    ...     "define as max_items for every Item ?i ;"
+    ...     " where every Max of the Quantity where ?i item_count per ?i."
+    ... )
+    >>> solution = nl.solve_all()
+    >>> sorted(
+    ...     solution["max_items"].as_pandas_dataframe()
+    ...     .apply(tuple, axis=1).tolist()
+    ... )
+    [('a', 1), ('b', 2), ('c', 3)]
+
+
+Boolean connectives
+--------------------
+
+**Conjunction (and)**
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="runs")
+    >>> nl.execute_squall_program(
+    ...     "define as Player every person that plays. "
+    ...     "define as PlayAndRun every Player that runs."
+    ... )
+    >>> sorted(nl.solve_all()["playandrun"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice']
+
+**Disjunction (or)**
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> _ = nl.add_tuple_set([("bob",)], name="runs")
+    >>> nl.execute_squall_program(
+    ...     "define as PlayOrRun every person that plays or runs."
+    ... )
+    >>> sorted(nl.solve_all()["playorrun"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice', 'bob']
+
+
+Neuroimaging domain examples
+-----------------------------
+
+**Activated voxels**
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1",), ("s2",), ("s3",)], name="study"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("v1",), ("v2",), ("v3",)], name="voxel"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1", "v1"), ("s2", "v1"), ("s2", "v2")], name="reports"
+    ... )
+    >>> nl.execute_squall_program(
+    ...     "define as Activated every Voxel ?v that a Study ?s reports."
+    ... )
+    >>> sorted(nl.solve_all()["activated"].as_pandas_dataframe().iloc[:, 0].tolist())
+    ['v1', 'v2']
+
+**Multi-variable activation (tuple subject)**
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1",), ("s2",)], name="study"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [(0, 1, 2), (3, 4, 5), (6, 7, 8)], name="voxel"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1", 0, 1, 2), ("s2", 3, 4, 5)], name="focus_reported"
+    ... )
+    >>> nl.execute_squall_program(
+    ...     "define as Activation every Voxel (?x; ?y; ?z) "
+    ...     "that a Study ?s focus_reported."
+    ... )
+    >>> sorted(
+    ...     nl.solve_all()["activation"]
+    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
+    ... )
+    [(0, 1, 2), (3, 4, 5)]
+
+
 16. Missing SQUALL Syntax — Gap Report
 -----------------------------------------
 
