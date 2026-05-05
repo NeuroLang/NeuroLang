@@ -44,7 +44,7 @@ Result: all entities in the ``plays`` relation (e.g. ``alice`` if ``plays`` cont
 
 A **transitive** verb takes an object.  Transitive verbs used as binary
 predicates are prefixed with ``~`` to indicate that argument order is
-inverted (so ``x ~sings y`` maps to ``sings(y, x)``)::
+inverted (so ``x ~sings y`` maps to ``sings(y, x)``).
 
 .. code-block:: squall
 
@@ -66,7 +66,7 @@ and ``the``.
 
 **Universal — every**
 
-``every person plays`` means *for all x: if person(x) then plays(x)*::
+``every person plays`` means *for all x: if person(x) then plays(x)*.
 
 .. code-block:: squall
 
@@ -82,7 +82,7 @@ and ``plays`` contains ``("alice",)``.
 **Existential — a / an / some**
 
 ``a person plays`` asserts existence.  In a query, only items with an
-associated count are returned::
+associated count are returned.
 
 .. code-block:: squall
 
@@ -95,7 +95,7 @@ Result: the query returns ``a`` and ``b`` if ``item`` contains ``a, b, c`` and
 **Negative — no**
 
 ``no`` inside a relative clause expresses negation-as-failure.  Items that
-have *no* associated count are returned::
+have *no* associated count are returned.
 
 .. code-block:: squall
 
@@ -109,7 +109,7 @@ they have associated counts.
 
 Variables can be named explicitly using ``?name`` labels directly after the
 noun.  The label binds the variable so it can be reused elsewhere in the
-sentence::
+sentence.
 
 .. code-block:: squall
 
@@ -131,7 +131,7 @@ Relative clauses restrict the noun they modify.  They are introduced by
 
 **Intransitive VP relative clause**
 
-``every person that plays`` — for every x: person(x) and plays(x)::
+``every person that plays`` — for every x: person(x) and plays(x).
 
 .. code-block:: squall
 
@@ -149,7 +149,7 @@ and ``plays`` contains ``("alice",)``.
 ``~verb`` signals a transitive (binary) predicate used in *passive* position:
 ``a study ~reports voxel`` reads ``reports(study, voxel)`` with argument order
 reversed.  The rule below collects (study, voxel) pairs via an explicit
-multi-variable head::
+multi-variable head.
 
 .. code-block:: squall
 
@@ -167,7 +167,7 @@ Result: ``reported`` contains ``("s1", "v1")`` and ``("s2", "v2")`` if
 
 Relative clauses can be nested by using an intermediate IDB predicate as the
 noun.  The example below defines ``selected_player`` from the intersection of
-two independent predicates::
+two independent predicates.
 
 .. code-block:: squall
 
@@ -183,7 +183,7 @@ Result: ``playingselected`` contains ``alice`` if ``person`` contains ``alice``,
 
 **Negative relative clause**
 
-``does not VP`` expresses negation-as-failure on a unary predicate::
+``does not VP`` expresses negation-as-failure on a unary predicate.
 
 .. code-block:: squall
 
@@ -201,7 +201,7 @@ and ``plays`` contains ``("alice",)``.
 ``whose NG2 VP`` expresses a possessive relationship via a binary noun.
 ``define as published every person whose writer plays.`` means: for every
 person x, there exists a y such that writer(x, y) and plays(y) — and that
-person is ``published``::
+person is ``published``.
 
 .. code-block:: squall
 
@@ -221,7 +221,7 @@ Result: ``published`` contains ``alice`` if ``person`` contains ``alice`` and ``
 
 When a noun denotes a multi-dimensional entity (e.g. a voxel with x, y, z
 coordinates), a parenthesised tuple of labels can follow the noun.  The
-variables bind to the respective columns of the relation::
+variables bind to the respective columns of the relation.
 
 .. code-block:: squall
 
@@ -246,7 +246,7 @@ variable — the column is consumed in the join but dropped from the output.
 This is particularly useful when a base relation has more columns than
 needed in the derived predicate.  For example, ``peak_reported`` stores
 ``(i, j, k, study_id)`` but we want ``activation`` to contain only the
-three spatial coordinates::
+three spatial coordinates.
 
 .. code-block:: squall
 
@@ -288,7 +288,7 @@ Result: ``active`` contains ``alice`` and ``carol`` if ``person`` contains
 ----------------------------------
 
 N-ary rules use ``for every NOUN ; with every NOUN`` (or other prepositions)
-to bind multiple variables into the head::
+to bind multiple variables into the head.
 
 .. code-block:: squall
 
@@ -309,7 +309,7 @@ tuples, and ``quantity`` contains ``0`` through ``4``.
 When a rule head needs more than one variable, the **compound quantifier**
 syntax chains ``for every`` clauses with ``and``, followed by a ``where``
 sentence that describes the join condition.  This reads much more naturally
-than the semicolon-based multi-variable form::
+than the semicolon-based multi-variable form.
 
 .. code-block:: squall
 
@@ -337,7 +337,7 @@ variable in the body.
 Inside the ``where`` sentence, ``the Noun`` can refer back to the variable
 introduced by a preceding ``for every Noun``.  This is called **anaphora**
 resolution.  The example below says exactly the same thing as the previous
-one but uses ``the Region`` and ``the Term`` instead of explicit labels::
+one but uses ``the Region`` and ``the Term`` instead of explicit labels.
 
 .. code-block:: squall
 
@@ -369,7 +369,7 @@ falls back to the normal existential behaviour (creating a fresh variable).
 ``with inferred probability``, ``with probability``, and ``probably`` can
 now appear on n-ary heads built with compound quantifiers.  The syntax is
 identical to the unary case; the engine automatically handles the extra
-head variables::
+head variables.
 
 .. code-block:: squall
 
@@ -407,7 +407,7 @@ Comparison keywords:
 * ``equal to``
 * ``not equal to``
 
-The following rule selects items whose ``item_count`` is at least 2::
+The following rule selects items whose ``item_count`` is at least 2.
 
 .. code-block:: squall
 
@@ -428,7 +428,7 @@ Item ``"d"`` is absent because it has no ``item_count`` entry.
 
 The ``obtain`` keyword introduces a **query** rather than a rule.
 ``execute_squall_program`` returns a ``NamedRelationalAlgebraFrozenSet``
-directly::
+directly.
 
 .. code-block:: squall
 
@@ -442,7 +442,7 @@ Item ``"d"`` is absent because it has no ``item_count`` entry.
 **Mixing rules and queries**
 
 A single program can contain both ``define as`` rules and an ``obtain``
-clause::
+clause.
 
 .. code-block:: squall
 
@@ -460,7 +460,7 @@ denominator and final ratio rules automatically, adding a probability column as
 the last argument.
 
 When the conditioned relation has more columns than the MARG head needs, use
-``_`` wildcards to drop the extra columns::
+``_`` wildcards to drop the extra columns.
 
 .. code-block:: squall
 
@@ -504,7 +504,7 @@ The syntax follows the pattern::
 Supported aggregation functions: ``count``, ``sum``, ``max``, ``min``,
 ``average``.
 
-The following rule computes the maximum ``item_count`` value per item::
+The following rule computes the maximum ``item_count`` value per item.
 
 .. code-block:: squall
 
@@ -541,7 +541,7 @@ aggregation functor in the engine's symbol table.
 -----------------------------------
 
 Separate rules with a full stop.  The parser processes each rule and walks
-them all into the engine::
+them all into the engine.
 
 .. code-block:: squall
 
@@ -563,7 +563,7 @@ and ``runs`` contains ``("bob",)``.
 
 Relative clauses support ``and`` (conjunction) and ``or`` (disjunction).
 With conjunction, two rules can be combined step by step — define an
-intermediate predicate and then constrain further::
+intermediate predicate and then constrain further.
 
 .. code-block:: squall
 
@@ -578,7 +578,7 @@ Result: ``playandrun`` contains ``alice`` if ``person`` contains ``alice``,
 ``bob``, and ``carol``; ``plays`` contains ``alice`` and ``carol``; and
 ``runs`` contains ``alice`` and ``bob``.
 
-With ``or``, the individual must satisfy at least one of the conditions::
+With ``or``, the individual must satisfy at least one of the conditions.
 
 .. code-block:: squall
 
@@ -600,7 +600,7 @@ A sentence can be prefixed with ``for NOUN_PHRASE ,`` to bind the outer
 variable first.  In ``define as`` rule definitions, the equivalent is to name
 the variable explicitly after the noun using the ``?var`` label.  The example
 below demonstrates named variable binding, which is the standard way to refer
-to a variable in the rule body::
+to a variable in the rule body.
 
 .. code-block:: squall
 
@@ -620,7 +620,7 @@ and ``plays`` contains ``("alice",)``.
 SQUALL reserves many common English words as keywords (``every``, ``a``,
 ``the``, ``that``, ``is``, ``has``, ``not``, ``and``, ``or``, ``where``,
 ``who``, ``which``, etc.).  If a predicate or entity name coincides with a
-reserved word, wrap it in backticks::
+reserved word, wrap it in backticks.
 
 .. code-block:: squall
 
@@ -630,7 +630,7 @@ Result: ``from`` contains ``alice`` if the EDB relation ``from`` contains
 ``("alice",)``.
 
 Variable names use the ``?`` prefix and may contain letters, digits, and
-underscores::
+underscores.
 
 .. code-block:: squall
 
@@ -639,7 +639,7 @@ underscores::
 Result: the query returns ``s001`` and ``s002`` if ``study`` contains those
 tuples.
 
-String literals use single quotes and may contain spaces::
+String literals use single quotes and may contain spaces.
 
 .. code-block:: squall
 
@@ -660,7 +660,7 @@ and shows how the same queries are expressed in SQUALL.
 
 Each study in NeuroSynth reports ``(study, voxel)`` pairs.  We want to
 collect every voxel that at least one study has reported as activated.
-The predicate ``?s reports ?v`` maps to ``reports(s, v)``::
+The predicate ``?s reports ?v`` maps to ``reports(s, v)``.
 
 .. code-block:: squall
 
@@ -683,7 +683,7 @@ Result: ``activated`` contains ``v1`` and ``v2`` if ``study`` contains
 **Filtering by study category (two-rule chain)**
 
 Select a subset of studies by a category predicate, then collect the
-voxels those studies report::
+voxels those studies report.
 
 .. code-block:: squall
 
@@ -709,7 +709,7 @@ The two-rule chain pattern is the SQUALL equivalent of:
 
 Custom predicates registered in the engine's symbol table can be used in
 SQUALL body positions.  The example below assumes ``startswith`` is available
-as a registered predicate::
+as a registered predicate.
 
 .. code-block:: squall
 
@@ -733,7 +733,7 @@ predicate.
 **Multi-variable brain activation rule (tuple subject)**
 
 When voxels are stored as ``(x, y, z)`` coordinate triples, the tuple
-label syntax binds all three columns at once::
+label syntax binds all three columns at once.
 
 .. code-block:: squall
 
@@ -795,7 +795,7 @@ Key points:
 
 The following pattern (taken from ``examples/plot_squall_bayes_factor_decoding.py``)
 uses compound quantifiers and anaphora to express a ternary join in plain
-English with zero explicit variables::
+English with zero explicit variables.
 
 .. code-block:: squall
 
