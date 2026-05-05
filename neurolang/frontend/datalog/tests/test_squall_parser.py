@@ -978,6 +978,31 @@ def test_anaphora_the_noun_resolves_to_quantifier_var():
     )
 
 
+def test_anaphora_the_noun_with_nd_annotation_resolves():
+    result = parser(
+        "define as ActiveVoxel for every Voxel in 3D where a Study reports the Voxel."
+    )
+    assert isinstance(result, Implication)
+    body_atoms = []
+    stack = [result.antecedent]
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication):
+            body_atoms.append(expr)
+        elif hasattr(expr, 'formulas'):
+            stack.extend(expr.formulas)
+        elif hasattr(expr, 'body'):
+            stack.append(expr.body)
+
+    voxel_atom = next(a for a in body_atoms if a.functor == Symbol("voxel"))
+    reports_atom = next(a for a in body_atoms if a.functor == Symbol("reports"))
+    voxel_var = voxel_atom.args[0]
+    reports_voxel_var = reports_atom.args[1]
+    assert voxel_var == reports_voxel_var, (
+        f"Expected ND anaphora resolution: voxel var {voxel_var} != reports arg {reports_voxel_var}"
+    )
+
+
 def test_anaphora_unbound_noun_creates_existential():
     result = parser(
         "obtain every Region that activates the Term."

@@ -1841,7 +1841,7 @@ class SquallTransformer(Transformer):
     # ---- Dimension / Aggregation ----
 
     def app_dimension(self, args):
-        return lambda x: x
+        return None
 
     def app_label(self, args):
         label = args[0]
