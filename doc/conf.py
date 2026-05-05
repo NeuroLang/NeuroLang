@@ -36,23 +36,26 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
     "numpydoc.numpydoc",
-    "sphinx_gallery.gen_gallery",
     "sphinx_design",
+    "squall_lexer",
 ]
 
 templates_path = ["_templates"]
 source_suffix = ".rst"
 master_doc = "index"
+_no_gallery = os.environ.get("NEUROLANG_NO_GALLERY", "0") == "1"
 exclude_patterns = ["_build"]
 pygments_style = "friendly"
 
 # -- Sphinx Gallery -----------------------------------------------------------
-sphinx_gallery_conf = {
-    "examples_dirs": "../examples",
-    "gallery_dirs": "auto_examples",
-    "doc_module": ("neurolang",),
-    "backreferences_dir": "gen_api",
-}
+if not _no_gallery:
+    extensions.append("sphinx_gallery.gen_gallery")
+    sphinx_gallery_conf = {
+        "examples_dirs": "../examples",
+        "gallery_dirs": "auto_examples",
+        "doc_module": ("neurolang",),
+        "backreferences_dir": "gen_api",
+    }
 
 # -- Autosummary / Autodoc ----------------------------------------------------
 autosummary_generate = True
@@ -64,6 +67,10 @@ autodoc_default_options = {
 
 # numpydoc: don't try to create stub pages for class members
 numpydoc_class_members_toctree = False
+
+# Suppress warnings for Python built-in inherited methods (maketrans, from_bytes, to_bytes)
+# that produce unavoidable autodoc signature or import errors.
+suppress_warnings = ["autodoc.import_object"]
 
 # neurolang imports cleanly under Python 3.12+ — no mock needed.
 

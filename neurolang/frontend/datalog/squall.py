@@ -31,7 +31,7 @@ class InvertedFunctionApplication(FunctionApplication):
     (subject first, object(s) after), but signals that the order must be
     reversed before the rule enters the engine.
 
-    Example
+    Examples
     -------
     SQUALL: ``every study ~reports a voxel``
     Transformer emits: ``InvertedFunctionApplication(reports, (study, voxel))``

@@ -237,7 +237,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         List[fe.Expression]
             see description
 
-        Example
+        Examples
         -------
         >>> nl = NeurolangPDL()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
@@ -393,7 +393,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             extensional and intentional facts that have been derived
             through the current program, optionally with probabilities
 
-        Example
+        Examples
         -------
         Note: example ran with pandas backend
         >>> nl = NeurolangPDL()
@@ -654,7 +654,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         in the same possible world, contrary to a probabilistic choice.
         See example for details.
 
-        Warning
+        Warnings
         -------
         Typing for the iterable is improper, true -but yet unsupported
         in Python typing- typing should be Iterable[Tuple[float, Any, ...]]
@@ -677,7 +677,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         fe.Symbol
             see description
 
-        Example
+        Examples
         -------
         >>> nl = NeurolangPDL()
         >>> p = [(0.8, 'a', 'b'), (0.7, 'b', 'c')]
@@ -714,7 +714,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         in the set are mutually exclusive.
         See example for details.
 
-        Warning
+        Warnings
         -------
         Typing for the iterable is improper, true -but yet unsupported-
         typing should be Iterable[Tuple[float, Any, ...]]
@@ -743,7 +743,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         DistributionDoesNotSumToOneError
             if float probabilities do not sum to 1.
 
-        Example
+        Examples
         -------
         >>> nl = NeurolangPDL()
         >>> p = [(0.8, 'a', 'b'), (0.2, 'b', 'c')]
@@ -811,7 +811,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         fe.Symbol
             see description
 
-        Example
+        Examples
         -------
         >>> nl = NeurolangPDL()
         >>> p = [('a',), ('b',)]

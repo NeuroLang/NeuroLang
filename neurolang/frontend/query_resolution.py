@@ -93,7 +93,7 @@ class QueryBuilderBase:
         ValueError
             if no symbol could be found with given name
 
-        Example
+        Examples
         -------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
@@ -255,7 +255,7 @@ class QueryBuilderBase:
         QuerySymbolsProxy
             in dynamic mode, can be used to create symbols on-the-fly
 
-        Example
+        Examples
         -------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
@@ -287,7 +287,7 @@ class QueryBuilderBase:
         QuerySymbolsProxy
             in dynamic mode, can be used to create symbols on-the-fly
 
-        Example
+        Examples
         -------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
@@ -345,7 +345,7 @@ class QueryBuilderBase:
         List[str]
             list of symbols of type leq Callable
 
-        Example
+        Examples
         -------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
@@ -390,7 +390,7 @@ class QueryBuilderBase:
         fe.Symbol
             created symbol
 
-        Example
+        Examples
         -------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
@@ -451,7 +451,7 @@ class QueryBuilderBase:
         ValueError
             if no symbol could be found with given name
 
-        Example
+        Examples
         -------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)

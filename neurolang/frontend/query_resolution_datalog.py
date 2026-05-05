@@ -90,7 +90,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         List[fe.Expression]
             see description
 
-        Example
+        Examples
         -------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
@@ -132,7 +132,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         fe.Expression
             see description
 
-        Example
+        Examples
         -------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
@@ -181,7 +181,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         fe.Expression
             see description
 
-        Example
+        Examples
         -------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
@@ -488,7 +488,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]
             read the descrpition.
 
-        Example
+        Examples
         -------
         Note: example ran with pandas backend
         >>> p_ir = DatalogProgram()
@@ -663,7 +663,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             extensional and intentional facts that have been derived
             through the current program
 
-        Example
+        Examples
         -------
         Note: example ran with pandas backend
         >>> p_ir = DatalogProgram()
