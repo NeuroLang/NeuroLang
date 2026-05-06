@@ -94,7 +94,7 @@ class QueryBuilderBase:
             if no symbol could be found with given name
 
         Examples
-        -------
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> nl.add_symbol(3, "x")
@@ -251,12 +251,12 @@ class QueryBuilderBase:
         when exiting the environment context
 
         Yields
-        -------
+        ------
         QuerySymbolsProxy
             in dynamic mode, can be used to create symbols on-the-fly
 
         Examples
-        -------
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> with nl.environment as e:
@@ -283,12 +283,12 @@ class QueryBuilderBase:
         when exiting the scope context
 
         Yields
-        -------
+        ------
         QuerySymbolsProxy
             in dynamic mode, can be used to create symbols on-the-fly
 
         Examples
-        -------
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> with nl.scope as e:
@@ -346,7 +346,7 @@ class QueryBuilderBase:
             list of symbols of type leq Callable
 
         Examples
-        -------
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> def f(x: int) -> int:
@@ -391,7 +391,7 @@ class QueryBuilderBase:
             created symbol
 
         Examples
-        -------
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> @nl.add_symbol
@@ -452,7 +452,7 @@ class QueryBuilderBase:
             if no symbol could be found with given name
 
         Examples
-        -------
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> nl.add_symbol(3, "x")

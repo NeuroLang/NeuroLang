@@ -30,7 +30,7 @@ class ForbiddenDisjunctionError(ForbiddenExpressionError):
     predicate.
 
     Examples
-    ----------
+    --------
     ProbActivation(r, PROB(r)) :- RegionReported(r, s) & SelectedStudy(s)
     ProbActivation(r, PROB(r)) :- ~RegionReported(r, s) & SelectedStudy(s)
 

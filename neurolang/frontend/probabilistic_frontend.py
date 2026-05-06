@@ -238,7 +238,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             see description
 
         Examples
-        -------
+        --------
         >>> nl = NeurolangPDL()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
         ...     [("a",), ("b",), ("c",)], name="P"
@@ -394,7 +394,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             through the current program, optionally with probabilities
 
         Examples
-        -------
+        --------
         Note: example ran with pandas backend
         >>> nl = NeurolangPDL()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
@@ -406,13 +406,6 @@ class NeurolangPDL(QueryBuilderDatalog):
         >>> with nl.scope as e:
         ...     e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
         ...     solution = nl.solve_all()
-        >>> solution
-        {
-            'Z':
-                PROB        x
-            0   0.111111    a
-            1   0.111111    c
-        }
         """
         solution_ir = self._solve()
         solution = {}
@@ -655,7 +648,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         See example for details.
 
         Warnings
-        -------
+        --------
         Typing for the iterable is improper, true -but yet unsupported
         in Python typing- typing should be Iterable[Tuple[float, Any, ...]]
         See examples
@@ -678,7 +671,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             see description
 
         Examples
-        -------
+        --------
         >>> nl = NeurolangPDL()
         >>> p = [(0.8, 'a', 'b'), (0.7, 'b', 'c')]
         >>> nl.add_probabilistic_facts_from_tuples(p, name="P")
@@ -715,7 +708,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         See example for details.
 
         Warnings
-        -------
+        --------
         Typing for the iterable is improper, true -but yet unsupported-
         typing should be Iterable[Tuple[float, Any, ...]]
         See examples
@@ -744,7 +737,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             if float probabilities do not sum to 1.
 
         Examples
-        -------
+        --------
         >>> nl = NeurolangPDL()
         >>> p = [(0.8, 'a', 'b'), (0.2, 'b', 'c')]
         >>> nl.add_probabilistic_choice_from_tuples(p, name="P")
@@ -812,7 +805,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             see description
 
         Examples
-        -------
+        --------
         >>> nl = NeurolangPDL()
         >>> p = [('a',), ('b',)]
         >>> nl.add_uniform_probabilistic_choice_over_set(p, name="P")

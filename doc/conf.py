@@ -45,6 +45,8 @@ source_suffix = ".rst"
 master_doc = "index"
 _no_gallery = os.environ.get("NEUROLANG_NO_GALLERY", "0") == "1"
 exclude_patterns = ["_build"]
+if _no_gallery:
+    exclude_patterns.append("auto_examples")
 pygments_style = "friendly"
 
 # -- Sphinx Gallery -----------------------------------------------------------
@@ -63,6 +65,7 @@ autosummary_generate_overwrite = True
 autodoc_default_options = {
     "members": True,
     "inherited-members": True,
+    "exclude-members": "maketrans,from_bytes,to_bytes",
 }
 
 # numpydoc: don't try to create stub pages for class members
@@ -70,7 +73,7 @@ numpydoc_class_members_toctree = False
 
 # Suppress warnings for Python built-in inherited methods (maketrans, from_bytes, to_bytes)
 # that produce unavoidable autodoc signature or import errors.
-suppress_warnings = ["autodoc.import_object"]
+suppress_warnings = ["autodoc.import_object", "autodoc"]
 
 # neurolang imports cleanly under Python 3.12+ — no mock needed.
 

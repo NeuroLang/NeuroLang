@@ -49,7 +49,7 @@ The general workflow is:
 4. Inspect results with ``solve_all()`` or via the direct return from
    ``obtain`` queries.
 
-Full Python API details are in `Appendix A`_.
+Full Python API details are in `appendix-a`_.
 
 
 Part 2: Nouns and Quantification
@@ -257,6 +257,8 @@ inverted (so ``x ~sings y`` maps to ``sings(y, x)``).
 
 Result: ``performer`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
 ``genre`` contains ``("jazz",)``, and ``sings`` contains ``("alice", "jazz")``.
+
+.. _3-3-auxiliaries:
 
 3.3 Auxiliaries — ``does`` / ``is`` / ``has``
 ----------------------------------------------
@@ -555,7 +557,7 @@ Result: ``playorrun`` contains ``alice`` and ``bob`` if ``person`` contains
 5.3 Negation — ``not``
 -----------------------
 
-``does not VP`` expresses negation-as-failure.  See `3.3 Auxiliaries`_ for
+``does not VP`` expresses negation-as-failure.  See `3-3-auxiliaries`_ for
 details and examples.
 
 
@@ -821,7 +823,7 @@ automatically.
 When the body contains existentials (e.g. ``a Selected_study``), use an
 intermediate deterministic rule to flatten the body first, then define the
 probabilistic rule over the intermediate relation.  This pattern is shown
-in `Part 11`_.
+in `part-11`_.
 
 
 Part 9: Aggregations
@@ -892,6 +894,8 @@ parenthesised argument list using the same term syntax as the rest of
 SQUALL (labels, literals, or identifiers).  The trailing ``.`` follows
 the normal sentence rule.
 
+
+.. _part-11:
 
 Part 11: Neuroimaging Domain Examples
 =======================================

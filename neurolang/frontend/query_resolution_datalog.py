@@ -91,7 +91,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             see description
 
         Examples
-        -------
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
@@ -133,7 +133,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             see description
 
         Examples
-        -------
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
@@ -182,7 +182,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             see description
 
         Examples
-        -------
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
@@ -489,7 +489,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             read the descrpition.
 
         Examples
-        -------
+        --------
         Note: example ran with pandas backend
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
@@ -500,13 +500,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ...     s1 = nl.query(e.l2[e.x, e.y])
         ...     s2 = nl.query((e.x,), e.l2[e.x, e.y])
         ...     s3 = nl.query(e.l3[e.x], e.l2[e.x, e.y])
-        >>> s1
-        True
-        >>> s2
-            x
-        0   2
-        >>> s3
-        l3: typing.AbstractSet[typing.Tuple[int]] = [(2,)]
         """
         if len(args) == 1:
             predicate = args[0]
@@ -664,7 +657,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             through the current program
 
         Examples
-        -------
+        --------
         Note: example ran with pandas backend
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
@@ -673,16 +666,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         >>> with nl.scope as e:
         ...     e.l2[e.x] = e.l[e.x, e.y] & (e.x == e.y)
         ...     solution = nl.solve_all()
-        >>> solution
-        {
-            'l':
-                0   1
-            0   1   2
-            1   2   2
-            'l2':
-                x
-            0   2
-        }
         """
         solution_ir = self.chase_class(self.program_ir).build_chase_solution()
 
