@@ -417,3 +417,48 @@ class UnexpectedTokenError(ParserError):
 
 class UnexpectedCharactersError(ParserError):
     pass
+
+
+class SquallSemanticError(NeuroLangException):
+    """Semantic error in a SQUALL program — parse succeeded but semantics invalid.
+
+    Raised when the SQUALL transformer encounters a valid parse tree that
+    represents a logically invalid or unsupported construction, such as:
+    - a rule with an empty body
+    - an anaphoric ``the Noun`` with no matching ``for every Noun`` in scope
+    - an unrecognised comparison or aggregation function
+    - a missing determiner or noun group in a rule body
+
+    Parameters
+    ----------
+    message : str
+        Human-readable description of the error.
+    line : int, optional
+        1-based source line number where the error was detected.
+    column : int, optional
+        1-based source column number where the error was detected.
+    source_line : str, optional
+        The full source line text for context display.
+    """
+
+    def __init__(self, message, *, line=None, column=None, source_line=None):
+        self.message = message
+        self.line = line
+        self.column = column
+        self.source_line = source_line
+
+    def __str__(self):
+        if self.source_line and self.column is not None:
+            pointer = " " * (max(0, self.column - 1)) + "^~~~~~"
+            return (
+                f"SQUALL semantic error (line {self.line}):\n"
+                f"    {self.source_line.strip()}\n"
+                f"    {pointer}\n"
+                f"{self.message}"
+            )
+        if self.line is not None:
+            return (
+                f"SQUALL semantic error (line {self.line}, "
+                f"col {self.column}): {self.message}"
+            )
+        return f"SQUALL semantic error: {self.message}"

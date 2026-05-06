@@ -59,11 +59,21 @@ import os
 
 import numpy as np
 from lark import Lark, Transformer
+from lark.exceptions import (
+    LarkError, UnexpectedCharacters, UnexpectedToken,
+    VisitError,
+)
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.aggregation import AggregationApplication
 from ...datalog.expressions import AggregationApplication as _AggApp
+from ...exceptions import (
+    NeuroLangException,
+    SquallSemanticError,
+    UnexpectedCharactersError,
+    UnexpectedTokenError,
+)
 from ...expressions import (
     Constant,
     FunctionApplication,
@@ -223,12 +233,34 @@ class SquallTransformer(Transformer):
     and produce a logical formula with the quantifier in scope.
     """
 
-    def __init__(self):
+    def __init__(self, source_lines=None):
         super().__init__()
         self._symbol_scope = {}
+        self._source_lines = source_lines or []
+        self._current_line = None
+        self._current_column = None
 
     def _clear_scope(self):
         self._symbol_scope.clear()
+
+    def _capture_pos(self, token):
+        if hasattr(token, 'line') and hasattr(token, 'column'):
+            self._current_line = token.line
+            self._current_column = token.column
+
+    def _make_error(self, message):
+        source_line = None
+        if (
+            self._current_line is not None
+            and 1 <= self._current_line <= len(self._source_lines)
+        ):
+            source_line = self._source_lines[self._current_line - 1]
+        return SquallSemanticError(
+            message,
+            line=self._current_line,
+            column=self._current_column,
+            source_line=source_line,
+        )
 
     def start(self, args):
         return args[0]
@@ -280,7 +312,11 @@ class SquallTransformer(Transformer):
                 head = verb()
             return Implication(head, body_formula)
         else:
-            return Implication(verb(), body_result if isinstance(body_result, Conjunction) else Constant(True))
+            raise self._make_error(
+                "Cannot construct rule body — expected a noun phrase after "
+                "the verb.  For compound-quantifier rules, use "
+                "'for every X and for every Y where …'."
+            )
 
     def rule_op_prob(self, args):
         self._clear_scope()
@@ -293,7 +329,10 @@ class SquallTransformer(Transformer):
         if isinstance(body_result, tuple) and body_result[0] == '_rule_body':
             head_args, body_formula = body_result[1]
         else:
-            head_args, body_formula = [], Constant(True)
+            raise self._make_error(
+                "Cannot construct rule body — expected a noun phrase after "
+                "the verb."
+            )
         head = verb(*head_args) if head_args else verb()
         # Extract probability value from CPS NP
         if callable(np_prob) and not isinstance(np_prob, (Symbol, Constant)):
@@ -323,7 +362,10 @@ class SquallTransformer(Transformer):
         if isinstance(body_result, tuple) and body_result[0] == '_rule_body':
             head_args, body_formula = body_result[1]
         else:
-            head_args, body_formula = [], Constant(True)
+            raise self._make_error(
+                "Cannot construct MARG rule body — expected a conditioned "
+                "noun phrase after 'with probability'."
+            )
 
         prob_query_arg = ProbabilisticQuery(PROB, tuple(head_args))
         head = verb(*(list(head_args) + [prob_query_arg]))
@@ -465,7 +507,10 @@ class SquallTransformer(Transformer):
         if isinstance(body_result, tuple) and body_result[0] == '_rule_body':
             body_args, body_formula = body_result[1]
         else:
-            body_args, body_formula = [], Constant(True)
+            raise self._make_error(
+                "Cannot construct n-ary rule body — expected a noun phrase "
+                "after the verb."
+            )
 
         head_args = list(body_args)
         all_body_parts = [body_formula]
@@ -490,7 +535,10 @@ class SquallTransformer(Transformer):
         if isinstance(body_result, tuple) and body_result[0] == '_rule_body2':
             head_vars, body_formula = body_result[1]
         else:
-            head_vars, body_formula = [], Constant(True)
+            raise self._make_error(
+                "Cannot construct compound-quantifier rule body — expected "
+                "'for every X and for every Y where ...'."
+            )
 
         consequent = verb(*head_vars) if head_vars else verb()
         return Implication(consequent, body_formula)
@@ -506,7 +554,10 @@ class SquallTransformer(Transformer):
         if isinstance(body_result, tuple) and body_result[0] == '_rule_body2':
             head_vars, body_formula = body_result[1]
         else:
-            head_vars, body_formula = [], Constant(True)
+            raise self._make_error(
+                "Cannot construct compound-quantifier probabilistic rule "
+                "body — expected 'for every X and for every Y where ...'."
+            )
 
         if callable(np_prob) and not isinstance(np_prob, (Symbol, Constant)):
             prob_val = np_prob(lambda x: x)
@@ -526,7 +577,10 @@ class SquallTransformer(Transformer):
         if isinstance(body_result, tuple) and body_result[0] == '_rule_body2':
             head_vars, body_formula = body_result[1]
         else:
-            head_vars, body_formula = [], Constant(True)
+            raise self._make_error(
+                "Cannot construct compound-quantifier MARG rule body — "
+                "expected 'for every X and for every Y where ...'."
+            )
 
         prob_query_arg = ProbabilisticQuery(PROB, tuple(head_vars))
         head = verb(*(list(head_vars) + [prob_query_arg]))
@@ -542,7 +596,10 @@ class SquallTransformer(Transformer):
         if isinstance(body_result, tuple) and body_result[0] == '_rule_body2':
             head_vars, body_formula = body_result[1]
         else:
-            head_vars, body_formula = [], Constant(True)
+            raise self._make_error(
+                "Cannot construct compound-quantifier 'probably' rule body "
+                "— expected 'for every X and for every Y where ...'."
+            )
 
         fresh_prob = Symbol.fresh()
         consequent = verb(*head_vars) if head_vars else verb()
@@ -567,9 +624,16 @@ class SquallTransformer(Transformer):
                 pass  # prep
 
         if det is None and ng1 is None and len(items) == 1:
-            return items[0]
+            raise self._make_error(
+                "Cannot identify determiner or noun group in rule body.  "
+                "Expected a noun phrase such as 'every Voxel that fires' "
+                "or 'a Study'."
+            )
         if det is None or ng1 is None:
-            return ('_rule_body', ([], Constant(True)))
+            raise self._make_error(
+                "Incomplete rule body — missing determiner (every/a/the) or "
+                "noun group.  Expected a full noun phrase after the verb."
+            )
 
         # Handle aggregation ng1 (e.g. "every Create_overlay of the Prob_map")
         agg_info = getattr(ng1, '_agg_info', None)
@@ -616,14 +680,16 @@ class SquallTransformer(Transformer):
                 bare_body = Conjunction((bare_body, extra_formula))
             return ('_rule_body', (head_args, bare_body))
 
-        # Get var_info from ng1 to extract the variable
         var_info = getattr(ng1, '_var_info', None)
         body_args, head_args = _resolve_var_info(var_info)
         if body_args is None:
             body_args = Symbol.fresh()
             head_args = [body_args]
 
-        # Get the body formula from ng1
+        noun_name = getattr(ng1, '_noun_name', None)
+        if noun_name:
+            self._symbol_scope[noun_name] = body_args
+
         body_formula = ng1(body_args)
 
         return ('_rule_body', (head_args, body_formula))
@@ -748,8 +814,11 @@ class SquallTransformer(Transformer):
         val = args[0]
         if callable(val) and not isinstance(val, (Symbol, Constant, FunctionApplication)):
             return val
-        # Wrap raw values (Constant, Symbol) in CPS
-        return lambda d: d(val)
+        if isinstance(val, (Symbol, Constant, FunctionApplication, tuple)):
+            return lambda d: d(val)
+        raise self._make_error(
+            f"Cannot interpret '{type(val).__name__}' as a noun phrase."
+        )
 
     def np_quantified(self, args):
         det = args[0]
@@ -946,16 +1015,11 @@ class SquallTransformer(Transformer):
                                 agg_args = (Symbol.fresh(),)
 
                     agg_expr = _AggApp(agg_func_const, agg_args)
-                    # Tag the AggApp with per_vars so rule_op_prob_agg can
-                    # recover the groupby variables directly.
                     agg_expr._per_vars = list(per_vars)
 
                     if extra_rel is not None:
                         extra_formula = extra_rel(None)
                         extended_body = Conjunction((bare_body, extra_formula))
-                        # Recompute agg_args: free vars introduced by extra_rel
-                        # that are NOT per_vars — these are the variables to
-                        # aggregate over (e.g. distance variable ?d).
                         per_set = set(per_vars)
                         npc_free = extract_logic_free_variables(bare_body)
                         extra_free = extract_logic_free_variables(extended_body)
@@ -973,6 +1037,15 @@ class SquallTransformer(Transformer):
 
                     d(agg_expr)
                     return bare_body
+
+                if noun_name and self._symbol_scope:
+                    raise self._make_error(
+                        f"Cannot resolve 'the {noun_name}' — "
+                        f"'{noun_name}' was not introduced by any "
+                        f"preceding 'for every {noun_name}' clause.  "
+                        f"Add 'for every {noun_name}' before 'where', "
+                        f"or use 'a {noun_name}' instead."
+                    )
 
                 var_info = getattr(ng, '_var_info', None)
                 if var_info is not None and isinstance(var_info, tuple):
@@ -1227,7 +1300,9 @@ class SquallTransformer(Transformer):
         verb = args[1]
         ops = args[2] if len(args) > 2 else None
         def rel(x):
-            if isinstance(x, tuple):
+            if ops is not None:
+                return np(lambda y: ops(lambda z: verb(y, z)))
+            elif isinstance(x, tuple):
                 return np(lambda y: verb(y, *x))
             else:
                 return np(lambda y: verb(y, x))
@@ -1340,7 +1415,14 @@ class SquallTransformer(Transformer):
             elif isinstance(a, str):
                 tokens.append(a.lower())
         key = tuple(tokens)
-        return COMPARISON_OPS.get(key, eq)
+        op = COMPARISON_OPS.get(key)
+        if op is None:
+            raise self._make_error(
+                f"Unrecognised comparison: '{'/'.join(tokens)}'.  "
+                "Valid comparisons: greater [equal] than, "
+                "lower [equal] than, [not] equal to."
+            )
+        return op
 
     # ---- Verb Phrases ----
 
@@ -1461,7 +1543,10 @@ class SquallTransformer(Transformer):
         elif len(items) == 1:
             ng1 = items[0]
             return self.det_the([])(ng1)
-        return self.det1_some([])(lambda x: Constant(True))
+        raise self._make_error(
+            "Empty noun phrase complement — expected a noun or determiner "
+            "+ noun after the verb."
+        )
 
     # ---- Operations / Prepositional Phrases ----
 
@@ -1642,6 +1727,7 @@ class SquallTransformer(Transformer):
     # ---- Terminals / Atoms ----
 
     def intransitive(self, args):
+        self._capture_pos(args[0])
         if isinstance(args[0], Symbol):
             return args[0]
         name = args[0].value
@@ -1650,6 +1736,7 @@ class SquallTransformer(Transformer):
         return Symbol(name.lower())
 
     def transitive(self, args):
+        self._capture_pos(args[0])
         if isinstance(args[0], Symbol):
             return args[0]
         name = args[0].value
@@ -1660,6 +1747,7 @@ class SquallTransformer(Transformer):
         return Symbol(name)
 
     def transitive_inv(self, args):
+        self._capture_pos(args[0])
         token = args[0]
         name = token.value if hasattr(token, 'value') else token.name
         if name.startswith('`') and name.endswith('`'):
@@ -1669,6 +1757,7 @@ class SquallTransformer(Transformer):
         return _InverseVerbSymbol(Symbol(name))
 
     def transitive_multiple(self, args):
+        self._capture_pos(args[0])
         if isinstance(args[0], Symbol):
             return args[0]
         name = args[0].value
@@ -1679,6 +1768,7 @@ class SquallTransformer(Transformer):
         return Symbol(name)
 
     def transitive_multiple_inv(self, args):
+        self._capture_pos(args[0])
         token = args[0]
         name = token.value if hasattr(token, 'value') else token.name
         if name.startswith('`') and name.endswith('`'):
@@ -1688,18 +1778,21 @@ class SquallTransformer(Transformer):
         return _InverseVerbSymbol(Symbol(name))
 
     def upper_identifier(self, args):
+        self._capture_pos(args[0])
         name = args[0].value
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
         return Symbol(name.lower())
 
     def identifier(self, args):
+        self._capture_pos(args[0])
         name = args[0].value
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
         return Symbol(name)
 
     def label_identifier(self, args):
+        self._capture_pos(args[0])
         return Symbol(args[0].value)
 
     def label_tuple_item(self, args):
@@ -1904,15 +1997,30 @@ class SquallTransformer(Transformer):
         return ('_per', groupby_var)
 
     def dim_agg(self, args):
-        # "count of the activations" → ('_agg', Constant(len), npc_cps)
-        agg_func_const = args[0]   # already a Constant from agg_func()
-        npc = args[1]              # CPS NP or Symbol
+        agg_func_const = args[0]
+        npc = args[1]
+        if npc is None:
+            raise self._make_error(
+                "'of the <Relation>' missing after aggregation function.  "
+                "Expected: 'the count of the Items' or similar."
+            )
+        if not isinstance(npc, (Symbol, Constant)) and not callable(npc):
+            raise self._make_error(
+                f"Cannot use '{type(npc).__name__}' as a relation reference "
+                f"after 'of the'."
+            )
         return ('_agg', agg_func_const, npc)
 
     def agg_func(self, args):
         token = args[0]
         name = token.value if hasattr(token, 'value') else str(token)
-        return _AGG_FUNC_MAP.get(name.lower(), Constant(len))
+        func = _AGG_FUNC_MAP.get(name.lower())
+        if func is None:
+            raise self._make_error(
+                f"Unknown aggregation function '{name}'.  "
+                "Valid: count, sum, max, min, average."
+            )
+        return func
 
     # ---- Probabilistic ----
 
@@ -1920,6 +2028,9 @@ class SquallTransformer(Transformer):
         return "probably"
 
     def _default(self, data, children, meta):
+        if hasattr(meta, 'line') and hasattr(meta, 'column'):
+            self._current_line = meta.line
+            self._current_column = meta.column
         if len(children) == 1:
             return children[0]
         return children if children else None
@@ -2019,8 +2130,10 @@ def _apply_to_vars(d, syms):
     if callable(d):
         try:
             return d(*syms)
-        except TypeError:
-            return d(syms)
+        except TypeError as e:
+            if "positional argument" in str(e) or "takes " in str(e):
+                return d(syms)
+            raise
     return d
 
 
@@ -2116,9 +2229,45 @@ def parser(code, locals=None, globals=None):
     -------
     Union or Expression
         Parsed logical expression(s).
+
+    Raises
+    ------
+    UnexpectedTokenError
+        A token was encountered that the grammar did not expect.
+    UnexpectedCharactersError
+        The lexer could not match the input to any terminal.
+    SquallSemanticError
+        The input parsed successfully but represents an invalid or
+        unsupported construction (empty body, unresolved anaphora, etc.).
     """
-    tree = COMPILED_GRAMMAR.parse(code.strip())
-    result = SquallTransformer().transform(tree)
+    source_code = code.strip()
+    try:
+        tree = COMPILED_GRAMMAR.parse(source_code)
+    except UnexpectedToken as e:
+        raise UnexpectedTokenError(
+            str(e), line=e.line - 1, column=e.column - 1
+        ) from e
+    except UnexpectedCharacters as e:
+        raise UnexpectedCharactersError(
+            str(e), line=e.line - 1, column=e.column - 1
+        ) from e
+    except LarkError as e:
+        raise NeuroLangException(
+            f"Parse error: {e}"
+        ) from e
+
+    try:
+        result = SquallTransformer(
+            source_lines=source_code.splitlines()
+        ).transform(tree)
+    except VisitError as e:
+        orig = e.orig_exc
+        if isinstance(orig, SquallSemanticError):
+            raise orig from e
+        raise SquallSemanticError(
+            f"Internal error while processing '{e.rule}': {orig}"
+        ) from e
+
     from .squall import LogicSimplifier, ResolveInvertedFunctionApplicationMixin
     from neurolang.expression_walker import ExpressionWalker
 
