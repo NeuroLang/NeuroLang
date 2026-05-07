@@ -38,9 +38,29 @@ from .datalog.standard_syntax import parser as datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
+from ..logic.horn_clauses import Fol2DatalogTranslationException
 from . import query_resolution_expressions as fe
 
 __all__ = ["QueryBuilderDatalog"]
+
+
+def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exception:
+    orig = exc.__cause__
+    if orig and "Variables in head" in str(orig):
+        new_msg = (
+            f"SQUALL semantic error: Variable mismatch between rule definition and query.\n\n"
+            f"The rule head uses a variable that doesn't appear in the body, "
+            f"or the query uses variables that don't match the rule head.\n\n"
+            f"Common fixes:\n"
+            f"1. Add explicit labels in rule definitions:\n"
+            f"   'define as X for every Noun ?x that...' (not just 'every Noun')\n"
+            f"2. Ensure query variables match rule head variables:\n"
+            f"   'obtain every X (?x; ?y)' must match the rule head\n"
+            f"3. Check that rule body variables are used in the head\n\n"
+            f"Original error: {orig}"
+        )
+        exc.args = (new_msg,)
+    return exc
 
 
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
@@ -307,14 +327,20 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         # Rules-only (no obtain) — backward-compat: returns Union/Implication
         if not isinstance(parsed, SquallProgram):
-            self.program_ir.walk(parsed)
+            try:
+                self.program_ir.walk(parsed)
+            except Fol2DatalogTranslationException as e:
+                raise _wrap_fol_error_for_squall(e) from e
             return None
 
         # Walk all rule definitions into the engine (global scope).
         # This makes the rules available to solve_all() and any code that
         # inspects the global symbol table after the call returns.
         for rule in parsed.rules:
-            self.program_ir.walk(rule)
+            try:
+                self.program_ir.walk(rule)
+            except Fol2DatalogTranslationException as e:
+                raise _wrap_fol_error_for_squall(e) from e
 
         if not parsed.queries:
             return None
