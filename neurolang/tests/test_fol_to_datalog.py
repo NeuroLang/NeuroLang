@@ -918,6 +918,22 @@ def test_convert_srnf2horn_disjunction():
     assert program == expected
 
 
+def test_convert_srnf2horn_with_probabilistic_query_head():
+    from neurolang.probabilistic.expressions import ProbabilisticQuery, PROB
+    x = Symbol("x")
+    P = Symbol("P")
+    Ans = Symbol("Ans")
+
+    head = Ans(x, ProbabilisticQuery(PROB, (x,)))
+    body = P(x)
+
+    result = convert_srnf_to_horn_clauses(head, body)
+    assert len(result.formulas) == 1
+    clause = result.formulas[0]
+    assert clause.head.functor == Ans
+    assert len(clause.head.args) == 2
+
+
 class Datalog(
     TranslateToLogic, DatalogProgramNegation, ExpressionBasicEvaluator
 ):
