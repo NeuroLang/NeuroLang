@@ -1083,3 +1083,38 @@ def test_compound_quantifier_explicit_prob():
     assert result.consequent.probability == Constant(0.5)
     assert result.consequent.body.functor == Symbol("weighted")
     assert len(result.consequent.body.args) == 2
+
+
+def test_obtain_unnamed_simple_predicate():
+    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
+    from neurolang.expressions import Query, Symbol
+
+    result = parser(
+        "define as Active every Person that plays. "
+        "obtain every Active."
+    )
+    assert isinstance(result, SquallProgram)
+    assert len(result.queries) == 1
+    q = result.queries[0]
+    assert isinstance(q, Query)
+    assert isinstance(q.head, Symbol), f"Expected Symbol head, got {type(q.head)}"
+    assert "active" in repr(q.body).lower()
+
+
+def test_obtain_unnamed_with_tuple_label_parses():
+    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
+    from neurolang.expressions import Query
+
+    result = parser(
+        "define as term_prob with inferred probability "
+        "for every Term that a Selected_study study_term. "
+        "obtain every term_prob (?t; ?p)."
+    )
+    assert isinstance(result, SquallProgram)
+    assert len(result.queries) == 1
+    q = result.queries[0]
+    assert isinstance(q, Query)
+    assert isinstance(q.head, tuple), f"Expected tuple head, got {type(q.head)}"
+    assert len(q.head) == 2, f"Expected 2 head vars, got {len(q.head)}"
+    head_names = [h.name for h in q.head]
+    assert "t" in head_names and "p" in head_names, f"Expected t and p in head, got {head_names}"

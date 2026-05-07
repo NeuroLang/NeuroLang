@@ -1866,7 +1866,40 @@ class SquallTransformer(Transformer):
             x = Symbol.fresh()
             return ('_query', Query(x, ops if not isinstance(ops, Symbol) else ops(x)))
 
-        formula = ops(lambda x: x)
+        captured_vars = []
+
+        def capturing_d(*var_args):
+            if len(var_args) == 1:
+                captured_vars.append(var_args[0])
+            else:
+                captured_vars.extend(var_args)
+            return Constant(True)
+
+        formula = ops(capturing_d)
+
+        if captured_vars:
+            head_vars = [v for v in captured_vars if isinstance(v, Symbol)]
+            while isinstance(formula, (UniversalPredicate, ExistentialPredicate)):
+                formula = formula.body
+            if isinstance(formula, Implication):
+                body_formula = formula.antecedent
+            else:
+                body_formula = formula
+            if isinstance(body_formula, Conjunction):
+                parts = [p for p in body_formula.formulas if p != Constant(True)]
+                if not parts:
+                    body_formula = Constant(True)
+                elif len(parts) == 1:
+                    body_formula = parts[0]
+                else:
+                    body_formula = Conjunction(tuple(parts))
+            from .squall import LogicSimplifier
+            if len(head_vars) == 1:
+                q = Query(head_vars[0], body_formula)
+            else:
+                q = Query(tuple(head_vars), body_formula)
+            return ('_query', LogicSimplifier().walk(q))
+
         return ('_query', _cps_formula_to_query(formula))
 
     def query_as(self, args):
