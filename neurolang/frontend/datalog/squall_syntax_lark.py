@@ -1729,8 +1729,13 @@ class SquallTransformer(Transformer):
     def intransitive(self, args):
         self._capture_pos(args[0])
         if isinstance(args[0], Symbol):
-            return args[0]
+            sym = args[0]
+            if sym.name.startswith("probably_"):
+                return Symbol(sym.name[9:].lower())
+            return sym
         name = args[0].value
+        if name.startswith("probably_"):
+            name = name[9:]
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
         return Symbol(name.lower())
@@ -1738,10 +1743,15 @@ class SquallTransformer(Transformer):
     def transitive(self, args):
         self._capture_pos(args[0])
         if isinstance(args[0], Symbol):
-            return args[0]
+            sym = args[0]
+            if sym.name.startswith("probably_"):
+                return Symbol(sym.name[9:])
+            return sym
         name = args[0].value
         if name.startswith("~"):
             name = name[1:]
+        if name.startswith("probably_"):
+            name = name[9:]
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
         return Symbol(name)
@@ -1763,6 +1773,8 @@ class SquallTransformer(Transformer):
         name = args[0].value
         if name.startswith("~"):
             name = name[1:]
+        if name.startswith("probably_"):
+            name = name[9:]
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
         return Symbol(name)
@@ -1773,8 +1785,10 @@ class SquallTransformer(Transformer):
         name = token.value if hasattr(token, 'value') else token.name
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
-        if name.startswith('~'):
+        if name.startswith("~"):
             name = name[1:]
+        if name.startswith("probably_"):
+            name = name[9:]
         return _InverseVerbSymbol(Symbol(name))
 
     def upper_identifier(self, args):
@@ -1787,6 +1801,8 @@ class SquallTransformer(Transformer):
     def identifier(self, args):
         self._capture_pos(args[0])
         name = args[0].value
+        if name.startswith("probably_"):
+            name = name[9:]
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
         return Symbol(name)

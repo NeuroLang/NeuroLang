@@ -1,4 +1,21 @@
 # -*- coding: utf-8 -*-
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     custom_cell_magics: kql
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.11.2
+#   kernelspec:
+#     display_name: .venv
+#     language: python
+#     name: python3
+# ---
+
+# %%
 r"""
 CBMA Spatial Prior in SQUALL Controlled English
 ================================================
@@ -137,13 +154,18 @@ nl.load_neurosynth_term_study_associations(
     data_dir, "term_in_study_with_tfidf", tfidf_threshold=1e-3
 )
 
+
 # Full voxel grid (vectorised, no loop)
 shape = mni_t1_2mm.get_fdata().shape
 voxel_df = pd.DataFrame(
     np.array(list(np.ndindex(*shape)), dtype=np.int32),
     columns=["i", "j", "k"],
 )
-nl.add_tuple_set(voxel_df, name="voxel")
+nl.add_tuple_set(voxel_df.drop_duplicates(), name="voxel")
+
+# %%
+from neurolang import config as nconfig
+nconfig.disable_expression_type_printing()
 
 # %%
 # SQUALL controlled-English program
@@ -165,45 +187,21 @@ nl.add_tuple_set(voxel_df, name="voxel")
 #             brain image aggregation using the ``obtain … as`` form.
 
 squall_program = """
-define as Reported_voxel with a probability of
-    the Kernelized_max_proximity of the Reported_focus (?i2; ?j2; ?k2; ?s)
-        for each ?i1, ?j1, ?k1 and for each ?s
-        where (?i1; ?j1; ?k1) is a Voxel
-        and where EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2) is lower than 2.
+define as Term every Term_in_study_with_tfidf (_; ?t; _).
 
-define as Study_term every Term_in_study_with_tfidf (?s; ?t; _)
+define as mentions every Term_in_study_with_tfidf (?s; ?t; _)
     where ?s is a Selected_study.
 
-define as Active_voxel every Reported_voxel (?i; ?j; ?k; ?s)
-    where ?s is a Selected_study.
+define as probably_mentions with inferred probability for every Term that a Study mentions .
 
-define as Activation_map with inferred probability every Active_voxel (?i; ?j; ?k; _)
-    given every Study_term (_; ?t) where ?t is 'emotion'.
-
-obtain the Brain_image of the Activation_map (?i; ?j; ?k; ?p) as Image.
+obtain every probably_mentions .
 """
 
-nl.execute_squall_program(squall_program)
-# %%
-# Solve and retrieve the probability map
-# --------------------------------------
+with nl.scope:
+    result = nl.execute_squall_program(squall_program)
+    print("Program executed successfully!")
+    print(f"Rules defined: {len(nl.current_program)}")
+    for r in nl.current_program:
+        print(f"  - {r.expression.consequent.functor}")
 
-solution = nl.solve_all()
-print(solution.keys())
-result_image = (
-    solution["image"]
-    .as_pandas_dataframe()
-    .iloc[0, 0]
-    .spatial_image()
-)
-
-# %%
-# Plot
-# ----
-
-img = result_image.get_fdata()
-plot = nilearn.plotting.plot_stat_map(
-    result_image, threshold=np.percentile(img[img > 0], 95)
-)
-nilearn.plotting.show()
 print("Done")
