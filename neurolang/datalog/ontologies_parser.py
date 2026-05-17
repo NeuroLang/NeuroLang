@@ -489,7 +489,7 @@ class OntologyParser:
         value = self._parse_name(nodes[0])
         return [
             RightImplication(
-                Symbol(ent)(x), Symbol(onProp)(
+                ent(x), onProp(
                     x,
                     Constant[str](value, verify_type=False)
                 )
