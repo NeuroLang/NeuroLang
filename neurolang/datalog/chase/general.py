@@ -334,7 +334,7 @@ class ChaseGeneral():
             if hasattr(pred_value, '__len__') and not isinstance(pred_value, Constant):
                 try:
                     return len(pred_value)
-                except:
+                except Exception:
                     return 0
             return 0
 
