@@ -125,6 +125,23 @@ def clear_cache():
         _dalvi_suciu_lift_cache.clear()
 
 
+def _get_from_cache(cache_key):
+    """Try to get a value from the cache."""
+    with _dalvi_suciu_lift_cache_lock:
+        try:
+            return _dalvi_suciu_lift_cache[cache_key]
+        except KeyError:
+            return None
+
+
+def _add_to_cache(cache_key, value):
+    """Add a value to the cache with LRU eviction."""
+    with _dalvi_suciu_lift_cache_lock:
+        _dalvi_suciu_lift_cache[cache_key] = value
+        while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
+            _dalvi_suciu_lift_cache.popitem(last=False)
+
+
 def _make_symbol_table_key(symbol_table):
     """Convert a symbol table mapping into an immutable, hashable key."""
     key_items = []
@@ -372,11 +389,10 @@ def dalvi_suciu_lift(rule, symbol_table):
     # objects that have already been garbage-collected.
     cache_key = (id(rule), st_key)
 
-    with _dalvi_suciu_lift_cache_lock:
-        try:
-            return _dalvi_suciu_lift_cache[cache_key]
-        except KeyError:
-            pass
+    # Check cache first
+    cached_result = _get_from_cache(cache_key)
+    if cached_result is not None:
+        return cached_result
 
     #  rule = RemoveUniversalPredicates().walk(rule)
     rule = RTO.walk(rule)
@@ -384,10 +400,7 @@ def dalvi_suciu_lift(rule, symbol_table):
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:
         plan = res
-        with _dalvi_suciu_lift_cache_lock:
-            _dalvi_suciu_lift_cache[cache_key] = plan
-            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
-                _dalvi_suciu_lift_cache.popitem(last=False)
+        _add_to_cache(cache_key, plan)
         return plan
 
     rule_cnf = convert_ucq_to_ccq(rule, transformation='CNF')
@@ -397,10 +410,7 @@ def dalvi_suciu_lift(rule, symbol_table):
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
         )
-        with _dalvi_suciu_lift_cache_lock:
-            _dalvi_suciu_lift_cache[cache_key] = res
-            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
-                _dalvi_suciu_lift_cache.popitem(last=False)
+        _add_to_cache(cache_key, res)
         return res
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
@@ -409,42 +419,27 @@ def dalvi_suciu_lift(rule, symbol_table):
         res = components_plan(
             connected_components, rap.Union, symbol_table
         )
-        with _dalvi_suciu_lift_cache_lock:
-            _dalvi_suciu_lift_cache[cache_key] = res
-            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
-                _dalvi_suciu_lift_cache.popitem(last=False)
+        _add_to_cache(cache_key, res)
         return res
 
     rule_pdnf = convert_to_pnf_with_dnf_matrix(rule_dnf)
     has_svs, plan = has_separator_variables(rule_pdnf, symbol_table)
     if has_svs:
-        with _dalvi_suciu_lift_cache_lock:
-            _dalvi_suciu_lift_cache[cache_key] = plan
-            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
-                _dalvi_suciu_lift_cache.popitem(last=False)
+        _add_to_cache(cache_key, plan)
         return plan
 
     has_safe_plan, plan = disjoint_project(rule_dnf, symbol_table)
     if has_safe_plan:
-        with _dalvi_suciu_lift_cache_lock:
-            _dalvi_suciu_lift_cache[cache_key] = plan
-            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
-                _dalvi_suciu_lift_cache.popitem(last=False)
+        _add_to_cache(cache_key, plan)
         return plan
 
     if len(rule_cnf.formulas) > 1:
         res = inclusion_exclusion_conjunction(rule_cnf, symbol_table)
-        with _dalvi_suciu_lift_cache_lock:
-            _dalvi_suciu_lift_cache[cache_key] = res
-            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
-                _dalvi_suciu_lift_cache.popitem(last=False)
+        _add_to_cache(cache_key, res)
         return res
 
     res = NonLiftable(rule)
-    with _dalvi_suciu_lift_cache_lock:
-        _dalvi_suciu_lift_cache[cache_key] = res
-        while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
-            _dalvi_suciu_lift_cache.popitem(last=False)
+    _add_to_cache(cache_key, res)
     return res
 
 
