@@ -9,9 +9,12 @@ otherwise it can cause major side-effects which are hard to track. See
 https://github.com/jpype-project/jpype/issues/933 for reference.
 """
 import warnings
+
 import pytest
+
 try:
     import dask_sql
+
     from neurolang.utils.relational_algebra_set.dask_helpers import (
         DaskContextManager,
     )
@@ -80,7 +83,7 @@ def clear_dask_context_after_test_module():
 def clear_probabilistic_caches():
     """Clear probabilistic resolution caches before each test to avoid
     stale state across test boundaries."""
-    from neurolang.probabilistic import dalvi_suciu_lift, containment
+    from neurolang.probabilistic import containment, dalvi_suciu_lift
 
     dalvi_suciu_lift.clear_cache()
     containment.clear_cache()

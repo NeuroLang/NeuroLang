@@ -1,11 +1,10 @@
 from typing import AbstractSet
-from ...expressions import Symbol
+
+from ...expressions import Constant, Symbol
 from ...logic import Conjunction
-from .. import containment
-from .. import dalvi_suciu_lift
-from ..probabilistic_ra_utils import ProbabilisticFactSet
-from ...expressions import Constant
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from .. import containment, dalvi_suciu_lift
+from ..probabilistic_ra_utils import ProbabilisticFactSet
 
 
 def test_containment_cache_is_populated():

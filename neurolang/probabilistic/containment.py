@@ -7,15 +7,14 @@ from ..expressions import Constant, Symbol
 from ..logic import Disjunction, Implication, Union
 from ..logic.expression_processing import (
     extract_logic_atoms,
-    extract_logic_free_variables
+    extract_logic_free_variables,
 )
 from ..logic.transformations import (
     MakeExistentialsImplicit,
     PushExistentialsDown,
     RemoveUniversalPredicates,
-    convert_to_pnf_with_dnf_matrix
+    convert_to_pnf_with_dnf_matrix,
 )
-
 
 LOG = logging.getLogger(__name__)
 

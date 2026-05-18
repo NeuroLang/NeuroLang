@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Mapping
 from functools import reduce
 from itertools import chain, combinations
 from typing import AbstractSet
@@ -7,11 +8,7 @@ import numpy as np
 
 from .. import relational_algebra_provenance as rap
 from ..config import config
-from collections.abc import Mapping
-from ..datalog.expression_processing import (
-    UnifyVariableEqualities,
-    flatten_query
-)
+from ..datalog.expression_processing import UnifyVariableEqualities, flatten_query
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import (
     NeuroLangException,
@@ -19,21 +16,16 @@ from ..exceptions import (
     NotInFONegE,
     NotRankedException,
     NotUnateException,
-    UnsupportedSolverError
+    UnsupportedSolverError,
 )
 from ..expression_walker import (
     ExpressionWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match,
-    expression_iterator
+    expression_iterator,
 )
-from ..expressions import (
-    Constant,
-    FunctionApplication,
-    Symbol,
-    TypedSymbolTableMixin
-)
+from ..expressions import Constant, FunctionApplication, Symbol, TypedSymbolTableMixin
 from ..logic import (
     FALSE,
     Conjunction,
@@ -44,12 +36,12 @@ from ..logic import (
     Negation,
     Quantifier,
     Union,
-    UniversalPredicate
+    UniversalPredicate,
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
-    extract_logic_predicates
+    extract_logic_predicates,
 )
 from ..logic.transformations import (
     ExtractConjunctiveQueryWithNegation,
@@ -63,7 +55,7 @@ from ..logic.transformations import (
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
     RemoveUniversalPredicates,
-    convert_to_pnf_with_dnf_matrix
+    convert_to_pnf_with_dnf_matrix,
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -71,30 +63,25 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
-from .expression_processing import (
-    is_builtin,
-    lift_optimization_for_choice_predicates
-)
+from .expression_processing import is_builtin, lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     NonLiftable,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_deterministic_relation,
-    is_atom_a_probabilistic_choice_relation
+    is_atom_a_probabilistic_choice_relation,
 )
-from .probabilistic_semiring_solver import (
-    ProbSemiringToRelationalAlgebraSolver
-)
+from .probabilistic_semiring_solver import ProbSemiringToRelationalAlgebraSolver
 from .query_resolution import (
     compute_projections_needed_to_reintroduce_head_terms,
     generate_provenance_query_solver,
-    lift_solve_marg_query
+    lift_solve_marg_query,
 )
 from .ranking import partially_rank_query, verify_that_the_query_is_ranked
 from .shattering import shatter_constants
@@ -105,7 +92,7 @@ from .transforms import (
     convert_to_dnf_existential_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
-    unify_existential_variables
+    unify_existential_variables,
 )
 
 LOG = logging.getLogger(__name__)
@@ -125,8 +112,8 @@ _MAX_DALVI_SUCU_CACHE_SIZE = 4096
 # Thread-safe LRU cache: OrderedDict keys are (id(rule), st_key).
 # id(rule) is unique among simultaneously-live objects in CPython.
 # st_key (stored in the value) guards against id reuse after GC.
-from collections import OrderedDict
 import threading
+from collections import OrderedDict
 
 _dalvi_suciu_lift_cache = OrderedDict()
 _dalvi_suciu_lift_cache_lock = threading.RLock()
