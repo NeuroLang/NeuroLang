@@ -333,7 +333,11 @@ class CPLogicMixin(PatternWalker):
         pred_symb = implication.consequent.functor.cast(
             UnionOfConjunctiveQueries
         )
-        if pred_symb in self.symbol_table:
+        # Check only the *local* scope for duplicates so that scoped re-walks
+        # (e.g. push_scope() in execute_squall_program) do not falsely report a
+        # disjunction when the rule was already stored in an enclosing scope.
+        local_table = getattr(self.symbol_table, '_symbols', self.symbol_table)
+        if pred_symb in local_table:
             raise ForbiddenDisjunctionError(
                 "Disjunctive within-language probabilistic queries "
                 "are not allowed"

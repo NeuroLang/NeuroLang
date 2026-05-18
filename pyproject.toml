@@ -17,6 +17,7 @@ classifiers = [
     "Programming Language :: Python",
     "Topic :: Scientific/Engineering",
 ]
+
 keywords = [
     "logic programming",
     "probabilistic logic programming",
@@ -26,6 +27,7 @@ keywords = [
     "neuroimaging",
     "datalog",
 ]
+
 dependencies = [
     "numpy",
     "scipy",
@@ -40,6 +42,7 @@ dependencies = [
     "typing_inspect",
     "rdflib>=6.0.0",
     "sqlalchemy>=1.4",
+    "siibra>=1.0.1a15",
 ]
 
 [project.urls]
@@ -49,11 +52,12 @@ Homepage = "https://neurolang.github.io"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
+    "pytest>=9.0.3",
     "pytest-benchmark",
     "pytest-cov",
     "problog"
 ]
+
 doc = [
     "sphinx>=7.0",
     "pydata-sphinx-theme>=0.15",
@@ -61,6 +65,14 @@ doc = [
     "sphinx-gallery",
     "numpydoc"
 ]
+
+server = [
+    "tornado>=6.5.5",
+    "pyyaml>=6.0.3"
+]
+
+[project.scripts]
+neuro-server = "neurolang.utils.server.app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["neurolang"]
@@ -79,6 +91,7 @@ version-file = "neurolang/_version_scm.py"
 
 [tool.pytest.ini_options]
 norecursedirs = [".git", "_build", "tmp*", "scratch*", "deprecated*"]
+addopts = "--doctest-glob=doc/tutorial_squall.rst"
 
 [tool.coverage.run]
 omit = [
@@ -104,6 +117,10 @@ use_parentheses = true
 line_length = 79
 combine_as_imports = true
 
-
 [tool.codespell]
 ignore-words-list = "anc"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.2.0",
+]

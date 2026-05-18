@@ -82,6 +82,7 @@ a guided walkthrough.
 
    install
    tutorial
+   tutorial_squall
    concepts
    auto_examples/index
    api

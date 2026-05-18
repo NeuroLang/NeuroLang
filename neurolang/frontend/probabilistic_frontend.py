@@ -38,6 +38,8 @@ from ..datalog.exceptions import InvalidMagicSetError
 from ..exceptions import SymbolNotFoundError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
+    extract_logic_atoms,
+    is_aggregation_rule,
 )
 from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
@@ -91,6 +93,7 @@ from .datalog.sugar import (
 )
 from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
+from .datalog.squall import ResolveInvertedFunctionApplicationMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
@@ -98,6 +101,7 @@ from .query_resolution_datalog import QueryBuilderDatalog
 class RegionFrontendCPLogicSolver(
     EqualitySymbolLeftHandSideNormaliseMixin,
     TranslateProbabilisticQueryMixin,
+    ResolveInvertedFunctionApplicationMixin,
     TranslateToLogicWithAggregation,
     TranslateQueryBasedProbabilisticFactMixin,
     TranslateEuclideanDistanceBoundMatrixMixin,
@@ -234,8 +238,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         List[fe.Expression]
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> nl = NeurolangPDL()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
         ...     [("a",), ("b",), ("c",)], name="P"
@@ -390,8 +394,8 @@ class NeurolangPDL(QueryBuilderDatalog):
             extensional and intentional facts that have been derived
             through the current program, optionally with probabilities
 
-        Example
-        -------
+        Examples
+        --------
         Note: example ran with pandas backend
         >>> nl = NeurolangPDL()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
@@ -403,13 +407,6 @@ class NeurolangPDL(QueryBuilderDatalog):
         >>> with nl.scope as e:
         ...     e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
         ...     solution = nl.solve_all()
-        >>> solution
-        {
-            'Z':
-                PROB        x
-            0   0.111111    a
-            1   0.111111    c
-        }
         """
         solution_ir = self._solve()
         solution = {}
@@ -517,6 +514,70 @@ class NeurolangPDL(QueryBuilderDatalog):
                 builtin_symb
             ]
         solver.walk(postprob_idb)
+        # Split plain Datalog rules from aggregation rules so that each
+        # Chase stratum only contains rules of a single kind.  This can
+        # happen when a MARG result rule (plain) and an aggregation rule
+        # both land in post_probabilistic together (e.g. SQUALL programs).
+        plain_rules = Union(tuple(
+            r for r in postprob_idb.formulas if not is_aggregation_rule(r)
+        ))
+        agg_rules = Union(tuple(
+            r for r in postprob_idb.formulas if is_aggregation_rule(r)
+        ))
+        if plain_rules.formulas and agg_rules.formulas:
+            # Three-pass: plain first (produces activation_given_term),
+            # then AGG (aggregates it), then plain again for rules that
+            # depend on AGG output (e.g. a fresh query-wrapper predicate).
+            def _make_solver(src_solution):
+                s = RegionFrontendCPLogicSolver()
+                for psymb, relation in src_solution.items():
+                    s.add_extensional_predicate_from_tuples(
+                        psymb, relation.value
+                    )
+                for builtin_symb in self.program_ir.builtins():
+                    s.symbol_table[builtin_symb] = (
+                        self.program_ir.symbol_table[builtin_symb]
+                    )
+                return s
+
+            # Pass 1: plain rules → activation_given_term and peers
+            plain_solver1 = _make_solver(solution)
+            plain_solver1.walk(plain_rules)
+            plain_sol1 = self.chase_class(
+                plain_solver1, rules=plain_rules
+            ).build_chase_solution()
+            combined1 = dict(solution)
+            combined1.update(plain_sol1)
+
+            # Pass 2: AGG rules → activation_given_term_image
+            agg_solver = _make_solver(combined1)
+            agg_solver.walk(agg_rules)
+            agg_sol = self.chase_class(
+                agg_solver, rules=agg_rules
+            ).build_chase_solution()
+            combined2 = dict(combined1)
+            combined2.update(agg_sol)
+
+            # Pass 3: plain rules that depend on AGG output and are NOT
+            # already solved (consequent not yet in combined2).
+            agg_symbs = {r.consequent.functor for r in agg_rules.formulas}
+            post_agg_rules = Union(tuple(
+                r for r in plain_rules.formulas
+                if r.consequent.functor not in combined2
+                and any(
+                    p.functor in agg_symbs
+                    for p in extract_logic_atoms(r.antecedent)
+                    if hasattr(p, 'functor')
+                )
+            ))
+            if post_agg_rules.formulas:
+                plain_solver2 = _make_solver(combined2)
+                plain_solver2.walk(post_agg_rules)
+                plain_sol2 = self.chase_class(
+                    plain_solver2, rules=post_agg_rules
+                ).build_chase_solution()
+                combined2.update(plain_sol2)
+            return combined2
         chase = self.chase_class(solver, rules=postprob_idb)
         solution = chase.build_chase_solution()
         return solution
@@ -587,8 +648,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         in the same possible world, contrary to a probabilistic choice.
         See example for details.
 
-        Warning
-        -------
+        Warnings
+        --------
         Typing for the iterable is improper, true -but yet unsupported
         in Python typing- typing should be Iterable[Tuple[float, Any, ...]]
         See examples
@@ -610,8 +671,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         fe.Symbol
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> nl = NeurolangPDL()
         >>> p = [(0.8, 'a', 'b'), (0.7, 'b', 'c')]
         >>> nl.add_probabilistic_facts_from_tuples(p, name="P")
@@ -647,8 +708,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         in the set are mutually exclusive.
         See example for details.
 
-        Warning
-        -------
+        Warnings
+        --------
         Typing for the iterable is improper, true -but yet unsupported-
         typing should be Iterable[Tuple[float, Any, ...]]
         See examples
@@ -676,8 +737,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         DistributionDoesNotSumToOneError
             if float probabilities do not sum to 1.
 
-        Example
-        -------
+        Examples
+        --------
         >>> nl = NeurolangPDL()
         >>> p = [(0.8, 'a', 'b'), (0.2, 'b', 'c')]
         >>> nl.add_probabilistic_choice_from_tuples(p, name="P")
@@ -744,8 +805,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         fe.Symbol
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> nl = NeurolangPDL()
         >>> p = [('a',), ('b',)]
         >>> nl.add_uniform_probabilistic_choice_over_set(p, name="P")

@@ -122,6 +122,10 @@ tags
 # pytest profiling results directory
 prof/
 
+#coding assistants
+superpowers
+.claude
+.factory
 
 # other
 scratch
@@ -134,3 +138,90 @@ utest.xml
 utest.xml
 *prof
 neurolang/frontend/neurosynth_data/
+examples_scratch/__init__.py
+examples_scratch/data-neurosynth_version-7_coordinates.tsv.gz
+examples_scratch/data-neurosynth_version-7_metadata.tsv.gz
+examples_scratch/data-neurosynth_version-7_vocab-terms_source-abstract_type-tfidf_features.npz
+examples_scratch/data-neurosynth_version-7_vocab-terms_vocabulary.txt
+examples_scratch/document_activations.csv
+examples_scratch/louis_topics_per_label
+examples_scratch/new_ns_example.ipynb
+examples_scratch/new_ns_example.py
+examples_scratch/plot_destrieux_queries.py
+examples_scratch/plot_load_destrieux_datalog_ir.py
+examples_scratch/plot_neurolang_datalog_example-Copy1.py
+examples_scratch/population_labels.csv
+examples_scratch/prob_fear.nii.gz
+examples_scratch/problog_ns.py
+examples_scratch/README.txt
+examples_scratch/region_interpretation_application.ipynb
+examples_scratch/term_documents.csv
+examples_scratch/OHBM 2020 - Open Science Room/Untitled.ipynb
+examples_scratch/OHBM 2020 - Open Science Room/Untitled1.ipynb
+examples_scratch/OHBM 2020 - Open Science Room/neurolang_data/neurosynth/database.txt
+examples_scratch/OHBM 2020 - Open Science Room/neurolang_data/neurosynth/features.txt
+examples_scratch/OHBM 2020 - Open Science Room/neurolang_data/ontologies/neurofma_fma3.0.owl
+examples_scratch/majd/ConnectivityNotebook.ipynb
+examples_scratch/majd/ConnectivityNotebook.py
+examples_scratch/majd/data_utils.py
+examples_scratch/majd/data-neurosynth_version-7_coordinates.tsv.gz
+examples_scratch/majd/data-neurosynth_version-7_metadata.tsv.gz
+examples_scratch/majd/data-neurosynth_version-7_vocab-terms_source-abstract_type-tfidf_features.npz
+examples_scratch/majd/data-neurosynth_version-7_vocab-terms_vocabulary.txt
+examples_scratch/majd/lpfc_mask.nii
+examples_scratch/majd/PaperScripts.ipynb
+examples_scratch/majd/PaperScripts.py
+examples_old/cmba_master.stats
+examples_old/cmba_rap_old.stats
+examples_old/cmba_rap_symbol.stats
+examples_old/cmba.html
+examples_old/cmba.json
+examples_old/cmba.stats
+examples_old/document_activations.csv
+examples_old/general_notebook_plotting.py
+examples_old/general_notebook_queries.py
+examples_old/general_notebook.py
+examples_old/plot_cbma_spatial_prior_2.py
+examples_old/plot_cbma_spatial_prior_w_profiling.py
+examples_old/plot_neurosynth_implementation_natural_syntax.py
+examples_old/term_documents.csv
+examples_old/dask-worker-space/global.lock
+examples_old/dask-worker-space/purge.lock
+examples_old/dask-worker-space/worker-k3zcuc1p.dirlock
+examples_old/neurolang/database.txt
+examples_old/neurolang/features.txt
+examples_old/neurolang/frontend/neurosynth_data/database.txt
+examples_old/neurolang/frontend/neurosynth_data/features.txt
+examples_old/neurolang_data/destrieux/destrieux_2009/destrieux2009_rois_labels_lateralized.csv
+examples_old/neurolang_data/destrieux/destrieux_2009/destrieux2009_rois_labels.csv
+examples_old/neurolang_data/destrieux/destrieux_2009/destrieux2009_rois_lateralized.nii.gz
+examples_old/neurolang_data/destrieux/destrieux_2009/destrieux2009_rois.nii.gz
+examples_old/neurolang_data/destrieux/destrieux_2009/destrieux2009.rst
+examples_old/neurolang_data/destrieux/destrieux_2009/README.txt
+examples_old/neurolang_data/icbm/icbm152_2009/COPYING
+examples_old/neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_csf_tal_nlin_sym_09a.nii.gz
+examples_old/neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_gm_tal_nlin_sym_09a.nii.gz
+examples_old/neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_pd_tal_nlin_sym_09a.nii.gz
+examples_old/neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t1_tal_nlin_sym_09a_eye_mask.nii.gz
+examples_old/neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t1_tal_nlin_sym_09a_face_mask.nii.gz
+examples_old/neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t1_tal_nlin_sym_09a_mask.nii.gz
+examples_old/neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t1_tal_nlin_sym_09a.nii.gz
+examples_old/neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t2_relx_tal_nlin_sym_09a.nii.gz
+examples_old/neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t2_tal_nlin_sym_09a.nii.gz
+examples_old/neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_wm_tal_nlin_sym_09a.nii.gz
+neurolang_data/icbm/README.md
+neurolang_data/icbm/icbm152_2009/COPYING
+neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_csf_tal_nlin_sym_09a.nii.gz
+neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_gm_tal_nlin_sym_09a.nii.gz
+neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_pd_tal_nlin_sym_09a.nii.gz
+neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t1_tal_nlin_sym_09a_eye_mask.nii.gz
+neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t1_tal_nlin_sym_09a_face_mask.nii.gz
+neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t1_tal_nlin_sym_09a_mask.nii.gz
+neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t1_tal_nlin_sym_09a.nii.gz
+neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t2_relx_tal_nlin_sym_09a.nii.gz
+neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_t2_tal_nlin_sym_09a.nii.gz
+neurolang_data/icbm/icbm152_2009/mni_icbm152_nlin_sym_09a/mni_icbm152_wm_tal_nlin_sym_09a.nii.gz
+neurolang_data/neurosynth/database.txt
+neurolang_data/neurosynth/features.txt
+uv.lock
+cov.xml

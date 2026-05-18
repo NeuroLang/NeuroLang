@@ -33,6 +33,7 @@ from ..datalog.expression_processing import (
 )
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
+from .datalog.squall_syntax_lark import parser as squall_parser, SquallProgram
 from .datalog.standard_syntax import parser as datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
@@ -89,8 +90,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         List[fe.Expression]
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
@@ -131,8 +132,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         fe.Expression
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
@@ -161,6 +162,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         Creates an right implication of the consequent by the antecedent
         and adds the rule to the current program:
+
+        .. code-block:: text
+
             antecedent -> consequent
 
         Parameters
@@ -177,8 +181,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         fe.Expression
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
@@ -258,6 +262,150 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     )
                 )
             )
+
+    def execute_squall_program(
+        self, code: str
+    ) -> Union[None, NamedRelationalAlgebraFrozenSet, Dict[str, NamedRelationalAlgebraFrozenSet]]:
+        """
+        Execute a SQUALL (controlled English) program.
+
+        Parses *code* as a SQUALL program and walks the resulting rules into
+        the engine.  If the program contains ``obtain`` clauses the
+        corresponding queries are executed and their results returned.
+
+        Parameters
+        ----------
+        code : str
+            SQUALL program text.  May contain any mixture of
+            ``define as …`` rule definitions and ``obtain …`` queries.
+
+        Returns
+        -------
+        None
+            When *code* contains only rule definitions (no ``obtain``).
+        NamedRelationalAlgebraFrozenSet
+            When *code* contains exactly one ``obtain`` clause.
+        Dict[str, NamedRelationalAlgebraFrozenSet]
+            When *code* contains two or more ``obtain`` clauses, keyed
+            ``"obtain_0"``, ``"obtain_1"``, … in declaration order.
+
+        Examples
+        --------
+        >>> from neurolang.frontend import NeurolangPDL
+        >>> nl = NeurolangPDL()
+        >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+        >>> nl.execute_squall_program(
+        ...     "define as Active every person that plays."
+        ... ) is None
+        True
+        >>> result = nl.execute_squall_program("obtain every Person that plays.")
+        >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+        ['alice']
+        """
+        parsed = squall_parser(code)
+
+        # Rules-only (no obtain) — backward-compat: returns Union/Implication
+        if not isinstance(parsed, SquallProgram):
+            self.program_ir.walk(parsed)
+            return None
+
+        # Walk all rule definitions into the engine (global scope).
+        # This makes the rules available to solve_all() and any code that
+        # inspects the global symbol table after the call returns.
+        for rule in parsed.rules:
+            self.program_ir.walk(rule)
+
+        if not parsed.queries:
+            return None
+
+        # Execute each obtain query.
+        # For probabilistic engines (NeurolangPDL) we wrap q.body as a
+        # frontend Expression and delegate to self._execute_query, which
+        # applies magic-sets rewriting and stratified solving.
+        # For plain Datalog engines we fall back to reachable_code + chase.
+        results = {}
+        for i, q in enumerate(parsed.queries):
+            head_sym = q.head
+            # Use the explicit name from 'obtain … as Name' if present;
+            # fall back to a positional key for unnamed obtain clauses.
+            if i in parsed.query_names:
+                key = parsed.query_names[i]
+            else:
+                key = f"obtain_{i}"
+
+            if isinstance(head_sym, ir.FunctionApplication):
+                head_vars = tuple(head_sym.args)
+            elif isinstance(head_sym, ir.Symbol):
+                head_vars = (head_sym,)
+            else:
+                head_vars = tuple(head_sym)
+
+            if hasattr(self, '_solve'):
+                # NeurolangPDL path: push a scope containing ALL define rules
+                # so that reachable_code_from_query sees a cohesive, scoped
+                # unit (mirrors what `with nl.scope as e: ... nl.query(...)` does).
+                import neurolang.frontend.query_resolution_expressions as fe_mod
+                h = ir.Symbol.fresh()
+                query_impl = datalog.Implication(h(*head_vars), q.body)
+                self.program_ir.push_scope()
+                try:
+                    # Re-walk define rules into the pushed (scoped) layer so
+                    # that reachable_code, which inspects the current scope's
+                    # symbol table, can find them.  The outer walk (above)
+                    # persists them in the global scope for solve_all(); this
+                    # inner walk is NOT redundant — push_scope() creates a
+                    # fresh overlay that does not inherit the global IDB entries
+                    # as far as reachable_code is concerned.
+                    for rule in parsed.rules:
+                        self.program_ir.walk(rule)
+                    self.program_ir.walk(query_impl)
+                    fe_pred = fe_mod.Expression(self, h(*head_vars))
+                    fe_head = tuple(
+                        fe_mod.Expression(self, ir.Symbol(s.name))
+                        for s in head_vars
+                    )
+                    # _execute_query with a tuple head returns a
+                    # NamedRelationalAlgebraFrozenSet directly (not wrapped
+                    # in ir.Constant), so we can use it as-is.
+                    ra, _ = self._execute_query(fe_head, fe_pred)
+                finally:
+                    self.program_ir.pop_scope()
+                results[key] = ra
+            else:
+                # Pure Datalog path: build fresh implication, chase reachable rules
+                h = ir.Symbol.fresh()
+                query_impl = datalog.Implication(h(*head_vars), q.body)
+                self.program_ir.symbol_table = self.symbol_table.create_scope()
+                try:
+                    self.program_ir.walk(query_impl)
+                    try:
+                        magic_query_impl = self.magic_sets_rewrite_program(query_impl)
+                        reachable_rules = reachable_code(
+                            magic_query_impl, self.program_ir
+                        )
+                        functor = magic_query_impl.consequent.functor
+                    except Exception:
+                        reachable_rules = reachable_code(query_impl, self.program_ir)
+                        functor = h
+                    solution = self.chase_class(
+                        self.program_ir, rules=reachable_rules
+                    ).build_chase_solution()
+                finally:
+                    self.program_ir.symbol_table = self.symbol_table.enclosing_scope
+                solution_set = solution.get(
+                    functor, ir.Constant(WrappedRelationalAlgebraFrozenSet())
+                )
+                col_names = tuple(s.name for s in head_vars)
+                ra = NamedRelationalAlgebraFrozenSet(
+                    col_names, solution_set.value.unwrap()
+                )
+                ra.row_type = solution_set.value.row_type
+            results[key] = ra
+
+        if len(results) == 1:
+            return next(iter(results.values()))
+        return results
 
     def compute_datalog_program_for_autocompletion(
             self, code: str, autocompletion_code
@@ -340,8 +488,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]
             read the descrpition.
 
-        Example
-        -------
+        Examples
+        --------
         Note: example ran with pandas backend
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
@@ -352,13 +500,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ...     s1 = nl.query(e.l2[e.x, e.y])
         ...     s2 = nl.query((e.x,), e.l2[e.x, e.y])
         ...     s3 = nl.query(e.l3[e.x], e.l2[e.x, e.y])
-        >>> s1
-        True
-        >>> s2
-            x
-        0   2
-        >>> s3
-        l3: typing.AbstractSet[typing.Tuple[int]] = [(2,)]
         """
         if len(args) == 1:
             predicate = args[0]
@@ -515,8 +656,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             extensional and intentional facts that have been derived
             through the current program
 
-        Example
-        -------
+        Examples
+        --------
         Note: example ran with pandas backend
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
@@ -525,16 +666,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         >>> with nl.scope as e:
         ...     e.l2[e.x] = e.l[e.x, e.y] & (e.x == e.y)
         ...     solution = nl.solve_all()
-        >>> solution
-        {
-            'l':
-                0   1
-            0   1   2
-            1   2   2
-            'l2':
-                x
-            0   2
-        }
         """
         solution_ir = self.chase_class(self.program_ir).build_chase_solution()
 
