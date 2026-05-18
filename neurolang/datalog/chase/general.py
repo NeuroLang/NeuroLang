@@ -412,7 +412,35 @@ class ChaseGeneral():
             return None
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
-        return substitutions
+        if not substitutions:
+            return substitutions
+
+        if consequent.functor not in instance:
+            return substitutions
+
+        existing_relation = instance[consequent.functor]
+        if not existing_relation or len(existing_relation) == 0:
+            return substitutions
+
+        existing_tuples = {tuple(row.value) for row in existing_relation}
+
+        def compute_tuple_value(arg, substitution):
+            if isinstance(arg, Symbol) and arg in substitution:
+                val = substitution[arg]
+                return val.value if hasattr(val, 'value') else val
+            elif isinstance(arg, Constant):
+                return arg.value
+            return arg
+
+        filtered = []
+        for substitution in substitutions:
+            tuple_values = tuple(
+                compute_tuple_value(arg, substitution) for arg in consequent.args
+            )
+            if tuple_values not in existing_tuples:
+                filtered.append(substitution)
+
+        return filtered
 
     def build_chase_solution(self):
         instance = MapInstance()
@@ -488,14 +516,17 @@ class ChaseSemiNaive:
         continue_chase = not instance_update.is_empty()
         while continue_chase:
             instance = instance | instance_update
-            instance_update = MapInstance()
+            delta = instance_update
+            new_update = MapInstance()
             continue_chase = False
             for rule in rules:
                 with log_performance(LOG, 'Evaluating rule %s', (rule,)):
-                    instance_update = self.per_rule_update(
-                        rule, instance, instance_update
+                    rule_update = self.chase_step(
+                        instance, rule, restriction_instance=delta
                     )
-                continue_chase |= not instance_update.is_empty()
+                    new_update = new_update | rule_update
+                    continue_chase |= not rule_update.is_empty()
+            instance_update = new_update
         return instance
 
     def per_rule_update(self, rule, instance, instance_update):
