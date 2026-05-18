@@ -35,7 +35,6 @@ from ..datalog.aggregation import (
 from ..datalog.chase import Chase
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.exceptions import InvalidMagicSetError
-from ..exceptions import SymbolNotFoundError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
 )
@@ -360,7 +359,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                 self.program_ir.walk(magic_rules)
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
-        except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
+        except (InvalidMagicSetError, UnsupportedProgramError) :
             solution = self._solve(query)
 
         if not isinstance(head, tuple):
