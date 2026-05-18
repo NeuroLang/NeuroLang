@@ -3,8 +3,8 @@ from typing import AbstractSet, Iterable
 
 import numpy
 
-from neurolang.datalog.constraints_representation import RightImplication
-from neurolang.relational_algebra import str2columnstr_constant
+from ..datalog.constraints_representation import RightImplication
+from ..relational_algebra import str2columnstr_constant
 
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
