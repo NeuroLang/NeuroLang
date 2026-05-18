@@ -516,14 +516,14 @@ class ChaseNaive:
     """
     def execute_chase(self, rules, instance_update, instance):
         while not instance_update.is_empty():
-            instance |= instance_update
+            instance = instance | instance_update
             new_update = MapInstance()
             for rule in rules:
                 with log_performance(LOG, 'Evaluating rule %s', (rule,)):
                     upd = self.chase_step(
                         instance | instance_update, rule,
                     )
-                    new_update |= upd
+                new_update = new_update | upd
             instance_update = new_update
         return instance
 
@@ -536,7 +536,7 @@ class ChaseSemiNaive:
     def execute_chase(self, rules, instance_update, instance):
         continue_chase = not instance_update.is_empty()
         while continue_chase:
-            instance |= instance_update
+            instance = instance | instance_update
             delta = instance_update
             new_update = MapInstance()
             continue_chase = False
@@ -545,7 +545,7 @@ class ChaseSemiNaive:
                     rule_update = self.chase_step(
                         instance, rule, restriction_instance=delta
                     )
-                    new_update |= rule_update
+                    new_update = new_update | rule_update
                     continue_chase |= not rule_update.is_empty()
             instance_update = new_update
         return instance
