@@ -151,6 +151,9 @@ class ChaseGeneral():
                 predicates_to_evaluate += unresolved_predicates
                 unresolved_predicates = []
 
+            if len(substitutions) == 0:
+                return []
+
         if len(unresolved_predicates) == 0:
             return substitutions
         else:
@@ -325,6 +328,18 @@ class ChaseGeneral():
                 builtin_predicates.append((predicate, functor))
             else:
                 return ([], [], [])
+
+        def _get_predicate_size(p):
+            pred_value = p[1]
+            if hasattr(pred_value, '__len__') and not isinstance(pred_value, Constant):
+                try:
+                    return len(pred_value)
+                except Exception:
+                    return 0
+            return 0
+
+        restricted_predicates.sort(key=_get_predicate_size)
+        nonrestricted_predicates.sort(key=_get_predicate_size)
 
         return (
             restricted_predicates, nonrestricted_predicates, builtin_predicates

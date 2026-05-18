@@ -134,3 +134,6 @@ utest.xml
 utest.xml
 *prof
 neurolang/frontend/neurosynth_data/
+
+# worktrees
+.worktrees/
