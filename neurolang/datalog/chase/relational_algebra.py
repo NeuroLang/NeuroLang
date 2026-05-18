@@ -309,13 +309,16 @@ class ChaseNamedRelationalAlgebraMixin:
                 verify_type=False
             )
         )
-        symbol_table.update(instance)
-        for k, v in restriction_instance.items():
-            if k in symbol_table:
-                s = symbol_table[k]
-                v = v.apply(s.value | v.value)
-            symbol_table[k] = v
+        # Differential evaluation fix: For semi-naive chase, only use the
+        # delta (restriction_instance) for recursive predicates.  Using the
+        # full instance | restriction_instance causes unbounded join growth.
         predicates = tuple(rule_predicates_iterator)
+        for predicate in predicates:
+            functor = predicate.functor
+            if functor in restriction_instance:
+                symbol_table[functor] = restriction_instance[functor]
+            elif functor in instance:
+                symbol_table[functor] = instance[functor]
 
         if len(predicates) == 0:
             return [{}]
