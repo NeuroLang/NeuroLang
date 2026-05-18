@@ -151,6 +151,9 @@ class ChaseGeneral():
                 predicates_to_evaluate += unresolved_predicates
                 unresolved_predicates = []
 
+            if len(substitutions) == 0:
+                return []
+
         if len(unresolved_predicates) == 0:
             return substitutions
         else:
@@ -326,6 +329,18 @@ class ChaseGeneral():
             else:
                 return ([], [], [])
 
+        def _get_predicate_size(p):
+            pred_value = p[1]
+            if hasattr(pred_value, '__len__') and not isinstance(pred_value, Constant):
+                try:
+                    return len(pred_value)
+                except:
+                    return 0
+            return 0
+
+        restricted_predicates.sort(key=_get_predicate_size)
+        nonrestricted_predicates.sort(key=_get_predicate_size)
+
         return (
             restricted_predicates, nonrestricted_predicates, builtin_predicates
         )
@@ -415,10 +430,13 @@ class ChaseGeneral():
         if not substitutions:
             return substitutions
 
-        if consequent.functor not in instance:
+        try:
+            existing_relation = instance[consequent.functor]
+        except KeyError:
             return substitutions
 
-        existing_relation = instance[consequent.functor]
+        if hasattr(existing_relation, 'value'):
+            existing_relation = existing_relation.value
         if not existing_relation or len(existing_relation) == 0:
             return substitutions
 
@@ -441,6 +459,9 @@ class ChaseGeneral():
                 filtered.append(substitution)
 
         return filtered
+
+    def _is_wrapped_named_set(self, substitutions):
+        return hasattr(substitutions, 'columns') and hasattr(substitutions, 'named_tuple_type')
 
     def build_chase_solution(self):
         instance = MapInstance()
@@ -495,14 +516,14 @@ class ChaseNaive:
     """
     def execute_chase(self, rules, instance_update, instance):
         while not instance_update.is_empty():
-            instance = instance | instance_update
+            instance |= instance_update
             new_update = MapInstance()
             for rule in rules:
                 with log_performance(LOG, 'Evaluating rule %s', (rule,)):
                     upd = self.chase_step(
                         instance | instance_update, rule,
                     )
-                new_update = new_update | upd
+                    new_update |= upd
             instance_update = new_update
         return instance
 
@@ -515,7 +536,7 @@ class ChaseSemiNaive:
     def execute_chase(self, rules, instance_update, instance):
         continue_chase = not instance_update.is_empty()
         while continue_chase:
-            instance = instance | instance_update
+            instance |= instance_update
             delta = instance_update
             new_update = MapInstance()
             continue_chase = False
@@ -524,7 +545,7 @@ class ChaseSemiNaive:
                     rule_update = self.chase_step(
                         instance, rule, restriction_instance=delta
                     )
-                    new_update = new_update | rule_update
+                    new_update |= rule_update
                     continue_chase |= not rule_update.is_empty()
             instance_update = new_update
         return instance
