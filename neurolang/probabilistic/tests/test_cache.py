@@ -1,3 +1,4 @@
+import pytest
 from typing import AbstractSet
 
 from ...expressions import Constant, Symbol
@@ -18,17 +19,22 @@ def test_containment_cache_is_populated():
     q2 = Conjunction((R(x, y), S(y)))
 
     containment.clear_cache()
-    assert containment.is_contained.cache_info().hits == 0
-    assert containment.is_contained.cache_info().misses == 0
+    if not (containment.is_contained.cache_info().hits == 0):
+        raise AssertionError(f'Assertion failed: containment.is_contained.cache_info().hits == 0')
+    if not (containment.is_contained.cache_info().misses == 0):
+        raise AssertionError(f'Assertion failed: containment.is_contained.cache_info().misses == 0')
 
     # first call populates cache
     containment.is_contained(q1, q2)
-    assert containment.is_contained.cache_info().misses == 1
-    assert containment.is_contained.cache_info().hits == 0
+    if not (containment.is_contained.cache_info().misses == 1):
+        raise AssertionError(f'Assertion failed: containment.is_contained.cache_info().misses == 1')
+    if not (containment.is_contained.cache_info().hits == 0):
+        raise AssertionError(f'Assertion failed: containment.is_contained.cache_info().hits == 0')
 
     # second identical call should hit
     containment.is_contained(q1, q2)
-    assert containment.is_contained.cache_info().hits == 1
+    if not (containment.is_contained.cache_info().hits == 1):
+        raise AssertionError(f'Assertion failed: containment.is_contained.cache_info().hits == 1')
 
 
 def test_dalvi_suciu_lift_cache_is_populated():
@@ -51,15 +57,19 @@ def test_dalvi_suciu_lift_cache_is_populated():
     }
 
     dalvi_suciu_lift.clear_cache()
-    assert len(dalvi_suciu_lift._dalvi_suciu_lift_cache) == 0
+    if not (len(dalvi_suciu_lift._dalvi_suciu_lift_cache) == 0):
+        raise AssertionError(f'Assertion failed: len(dalvi_suciu_lift._dalvi_suciu_lift_cache) == 0')
 
     plan1 = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
-    assert len(dalvi_suciu_lift._dalvi_suciu_lift_cache) == 1
+    if not (len(dalvi_suciu_lift._dalvi_suciu_lift_cache) == 1):
+        raise AssertionError(f'Assertion failed: len(dalvi_suciu_lift._dalvi_suciu_lift_cache) == 1')
 
     plan2 = dalvi_suciu_lift.dalvi_suciu_lift(query, symbol_table)
-    assert len(dalvi_suciu_lift._dalvi_suciu_lift_cache) == 1
+    if not (len(dalvi_suciu_lift._dalvi_suciu_lift_cache) == 1):
+        raise AssertionError(f'Assertion failed: len(dalvi_suciu_lift._dalvi_suciu_lift_cache) == 1')
     # cached result should be the same object
-    assert plan1 is plan2
+    if not (plan1 is plan2):
+        raise AssertionError(f'Assertion failed: plan1 is plan2')
 
 
 def test_containment_cache_clear():
@@ -69,8 +79,11 @@ def test_containment_cache_clear():
     q = Conjunction((R(x),))
 
     containment.is_contained(q, q)
-    assert containment.is_contained.cache_info().misses >= 1
+    if not (containment.is_contained.cache_info().misses >= 1):
+        raise AssertionError(f'Assertion failed: containment.is_contained.cache_info().misses >= 1')
 
     containment.clear_cache()
-    assert containment.is_contained.cache_info().misses == 0
-    assert containment.is_contained.cache_info().hits == 0
+    if not (containment.is_contained.cache_info().misses == 0):
+        raise AssertionError(f'Assertion failed: containment.is_contained.cache_info().misses == 0')
+    if not (containment.is_contained.cache_info().hits == 0):
+        raise AssertionError(f'Assertion failed: containment.is_contained.cache_info().hits == 0')
