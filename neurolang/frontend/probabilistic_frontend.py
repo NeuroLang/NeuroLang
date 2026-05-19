@@ -6,6 +6,7 @@ Complements QueryBuilderDatalog class with probabilistic capabilities
 2- sove probabilistic queries
 """
 import collections
+import functools
 import typing
 from typing import (
     AbstractSet,
@@ -93,6 +94,40 @@ from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
+
+
+def instance_lru_cache(key_fn, maxsize=128):
+    """LRU cache decorator for instance methods with non-hashable arguments.
+
+    key_fn(*args, **kwargs) must return a hashable cache key.
+    The cache is stored per-instance to avoid cross-instance sharing.
+    Call wrapper.cache_clear(instance) to invalidate.
+    """
+    def decorator(method):
+        cache_attr = f'_lru_cache_{method.__name__}'
+
+        @functools.wraps(method)
+        def wrapper(self, *args, **kwargs):
+            cache = getattr(self, cache_attr, None)
+            if cache is None:
+                cache = collections.OrderedDict()
+                setattr(self, cache_attr, cache)
+            key = key_fn(*args, **kwargs)
+            if key in cache:
+                cache.move_to_end(key)
+                return cache[key]
+            result = method(self, *args, **kwargs)
+            cache[key] = result
+            if maxsize is not None and len(cache) > maxsize:
+                cache.popitem(last=False)
+            return result
+
+        def cache_clear(instance):
+            setattr(instance, cache_attr, collections.OrderedDict())
+
+        wrapper.cache_clear = cache_clear
+        return wrapper
+    return decorator
 
 
 class RegionFrontendCPLogicSolver(
@@ -220,6 +255,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             for e in expressions:
                 self.program_ir.walk(e)
 
+        self._rewrite_det_idb.cache_clear(self)
         return self.connector_symbol
 
     @property
@@ -454,7 +490,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         Result obtained after resolution of the deterministic stratum
         '''
         if "__constraints__" in self.symbol_table:
-            det_idb = self._rewrite_program_with_ontology(det_idb)
+            det_idb = self._rewrite_det_idb(det_idb)
             if hasattr(self, 'connector_symbol'):
                 connector_rules = tuple(
                     [q
@@ -560,6 +596,20 @@ class NeurolangPDL(QueryBuilderDatalog):
             query_row_type, proj_row_type
         )
         return ir.Constant[AbstractSet](query_solution)
+
+    @instance_lru_cache(
+        key_fn=lambda det_idb: frozenset(str(r) for r in det_idb.formulas),
+        maxsize=32,
+    )
+    def _rewrite_det_idb(self, det_idb):
+        """Xrewrite det_idb against ontology constraints, LRU-cached per instance.
+
+        Only the Xrewrite step is cached. The connector_rules scan that follows
+        in _solve_deterministic_stratum accesses live program_ir and is NOT
+        cached, so EDB added after load_ontology() remains visible.
+        Cache is invalidated by load_ontology() on each call.
+        """
+        return self._rewrite_program_with_ontology(det_idb)
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
