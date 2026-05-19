@@ -9,7 +9,11 @@ from ..probabilistic_ra_utils import ProbabilisticFactSet
 
 
 class TestContainmentCache(unittest.TestCase):
-    """Test containment caching functionality."""
+    """Test containment caching functionality.
+    
+    This test suite verifies that the containment cache is properly
+    populated and accessed during repeated containment checks.
+    """
 
     def test_containment_cache_is_populated(self):
         """Repeated identical containment checks should be cached."""
@@ -36,7 +40,11 @@ class TestContainmentCache(unittest.TestCase):
 
 
 class TestDalviSuciuLiftCache(unittest.TestCase):
-    """Test Dalvi-Suciu lift caching functionality."""
+    """Test Dalvi-Suciu lift caching functionality.
+    
+    This test suite verifies that the Dalvi-Suciu lift cache is properly
+    populated and accessed during repeated lifted-plan computations.
+    """
 
     def test_dalvi_suciu_lift_cache_is_populated(self):
         """Repeated identical lifted-plan calls should be cached."""
@@ -76,7 +84,9 @@ class TestDalviSuciuLiftCache(unittest.TestCase):
         q = Conjunction((R(x),))
 
         containment.is_contained(q, q)
-        self.assertGreaterEqual(containment.is_contained.cache_info().misses, 1)
+        self.assertGreaterEqual(
+            containment.is_contained.cache_info().misses, 1
+        )
 
         containment.clear_cache()
         self.assertEqual(containment.is_contained.cache_info().misses, 0)

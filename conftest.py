@@ -52,7 +52,7 @@ def pytest_sessionstart(session: pytest.Session):
 
     The dask-sql library uses the jpype library which starts a JVM and allows
     us to use Java classes from Python. But the JVM will trigger a
-    segmentation fault when starting and when interrupting threads and Pythons
+    segmentation fault when starting and when interrupting threads and Python's
     fault handler can intercept these operations and interpret these as
     real faults. So we need to disable faulthandlers which pytest starts
     otherwise we get segmentation faults when running the tests.
@@ -71,8 +71,8 @@ def pytest_sessionstart(session: pytest.Session):
 def clear_dask_context_after_test_module():
     """
     We use only one DaskContextManager for the application and its context gets
-    clustered with objects quite fast when running the tests, so this fixture clears
-    the context after each test function.
+    clustered with objects quite fast when running the tests, so this fixture 
+    clears the context after each test function.
     """
     yield 0
 
