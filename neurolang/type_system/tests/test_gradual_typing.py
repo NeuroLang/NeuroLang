@@ -28,18 +28,18 @@ class TestGradualTyping(unittest.TestCase):
         self.assertFalse(is_parametrical(SupportsInt))
 
 
-def test_parameterized():
-    assert not is_parameterized(Set)
-    assert not is_parameterized(AbstractSet)
-    assert not is_parameterized(Union)
-    assert not is_parameterized(Callable)
-    assert is_parameterized(Set[int])
-    assert is_parameterized(AbstractSet[int])
-    assert is_parameterized(Union[int, float])
-    assert is_parameterized(Callable[[int], float])
-    assert not is_parameterized(int)
-    assert not is_parameterized(T)
-    assert not is_parameterized(SupportsInt)
+    def test_parameterized(self):
+        self.assertFalse(is_parameterized(Set))
+        self.assertFalse(is_parameterized(AbstractSet))
+        self.assertFalse(is_parameterized(Union))
+        self.assertFalse(is_parameterized(Callable))
+        self.assertTrue(is_parameterized(Set[int]))
+        self.assertTrue(is_parameterized(AbstractSet[int]))
+        self.assertTrue(is_parameterized(Union[int, float]))
+        self.assertTrue(is_parameterized(Callable[[int], float]))
+        self.assertFalse(is_parameterized(int))
+        self.assertFalse(is_parameterized(T))
+        self.assertFalse(is_parameterized(SupportsInt))
 
 
 def test_get_type_args():
