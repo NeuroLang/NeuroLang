@@ -315,7 +315,17 @@ class ChaseNamedRelationalAlgebraMixin:
                 s = symbol_table[k]
                 v = v.apply(s.value | v.value)
             symbol_table[k] = v
+        # Differential evaluation fix: for positive body predicates that
+        # exist in restriction_instance, use ONLY the delta instead of the
+        # merged instance|delta.  This restores semi-naive differential
+        # evaluation. Negated predicates keep the merged value so that
+        # set-difference (RA difference) computes correctly.
         predicates = tuple(rule_predicates_iterator)
+        for predicate in predicates:
+            if isinstance(predicate, FunctionApplication):
+                functor = predicate.functor
+                if functor in restriction_instance:
+                    symbol_table[functor] = restriction_instance[functor]
 
         if len(predicates) == 0:
             return [{}]

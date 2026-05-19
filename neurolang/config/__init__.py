@@ -69,6 +69,12 @@ class NeurolangConfigParser(configparser.ConfigParser):
     def disable_probabilistic_solver_check_unate(self):
         self.set("PROBABILISTIC_SOLVER", "check_unate", "False")
 
+    def get_chase_max_iterations(self):
+        return self.getint("CHASE", "max_iterations", fallback=10000)
+
+    def set_chase_max_iterations(self, value):
+        self.set("CHASE", "max_iterations", str(value))
+
 
 config = NeurolangConfigParser()
 
