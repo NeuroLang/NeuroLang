@@ -8,7 +8,9 @@ import numpy as np
 
 from .. import relational_algebra_provenance as rap
 from ..config import config
-from ..datalog.expression_processing import UnifyVariableEqualities, flatten_query
+from ..datalog.expression_processing import (
+    UnifyVariableEqualities, flatten_query
+)
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import (
     NeuroLangException,
@@ -25,7 +27,9 @@ from ..expression_walker import (
     add_match,
     expression_iterator,
 )
-from ..expressions import Constant, FunctionApplication, Symbol, TypedSymbolTableMixin
+from ..expressions import (
+    Constant, FunctionApplication, Symbol, TypedSymbolTableMixin
+)
 from ..logic import (
     FALSE,
     Conjunction,
@@ -722,7 +726,9 @@ def connected_components(adjacency_matrix):
         component_follow = [idx]
         while component_follow:
             idx = component_follow.pop()
-            idxs = set(np.atleast_1d(adjacency_matrix[idx]).nonzero()[0]) - component
+            idxs = set(
+                np.atleast_1d(adjacency_matrix[idx]).nonzero()[0]
+            ) - component
             component |= idxs
             component_follow += idxs
         components.append(component)
