@@ -1118,3 +1118,49 @@ def test_obtain_unnamed_with_tuple_label_parses():
     assert len(q.head) == 2, f"Expected 2 head vars, got {len(q.head)}"
     head_names = [h.name for h in q.head]
     assert "t" in head_names and "p" in head_names, f"Expected t and p in head, got {head_names}"
+
+
+def test_probably_prefix_in_wlq_head_is_preserved():
+    """Regression: probably_X in a rule head must not be stripped to X.
+
+    Before the fix, terminal handlers unconditionally stripped the
+    ``probably_`` prefix from all identifiers, including rule-head verbs.
+    This caused ``define as probably_mentions ...`` to produce a rule for
+    ``mentions`` instead of ``probably_mentions``, colliding with a
+    deterministic ``mentions`` rule and causing the chase to hang.
+    """
+    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
+    from neurolang.probabilistic.expressions import ProbabilisticQuery
+
+    program_text = (
+        "define as mentions every Term_in_study (?s; ?t). "
+        "define as probably_mentions with inferred probability "
+        "for every Term that a Study mentions. "
+        "obtain every probably_mentions."
+    )
+    result = parser(program_text)
+
+    assert isinstance(result, SquallProgram), (
+        f"Expected SquallProgram, got {type(result)}"
+    )
+    rules = result.rules
+    # First rule: deterministic mentions
+    det_rule = rules[0]
+    assert det_rule.consequent.functor.name == "mentions", (
+        f"Expected deterministic rule for 'mentions', "
+        f"got '{det_rule.consequent.functor.name}'"
+    )
+    # Second rule: WLQ probably_mentions — head functor must be probably_mentions,
+    # NOT 'mentions' (which would cause a collision with the deterministic rule).
+    wlq_rule = rules[1]
+    wlq_functor_name = wlq_rule.consequent.functor.name
+    assert wlq_functor_name == "probably_mentions", (
+        f"WLQ head functor was stripped to '{wlq_functor_name}'; "
+        "expected 'probably_mentions'. This indicates the probably_ prefix is "
+        "being incorrectly stripped from rule heads."
+    )
+    # The WLQ head must also carry a ProbabilisticQuery PROB argument.
+    assert any(
+        isinstance(arg, ProbabilisticQuery)
+        for arg in wlq_rule.consequent.args
+    ), "Expected a ProbabilisticQuery PROB arg in the WLQ head"

@@ -289,9 +289,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         Execute a SQUALL (controlled English) program.
 
-        Parses *code* as a SQUALL program and walks the resulting rules into
-        the engine.  If the program contains ``obtain`` clauses the
-        corresponding queries are executed and their results returned.
+        Parses *code* as a SQUALL program, walks rule definitions into the
+        engine, and executes ``obtain`` queries the same way
+        `execute_datalog_program` handles ``ans(x) :- R(x)`` — by building a
+        fresh helper implication and delegating to `self.query` (or
+        `self._execute_query` for probabilistic engines).
 
         Parameters
         ----------
@@ -345,88 +347,46 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         if not parsed.queries:
             return None
 
-        # Execute each obtain query.
-        # For probabilistic engines (NeurolangPDL) we wrap q.body as a
-        # frontend Expression and delegate to self._execute_query, which
-        # applies magic-sets rewriting and stratified solving.
-        # For plain Datalog engines we fall back to reachable_code + chase.
+        # Execute each obtain query by building a fresh helper predicate
+        # h(head_vars) :- q.body and delegating to query(), exactly as
+        # execute_datalog_program does for ans(...) :- R(...).
         results = {}
         for i, q in enumerate(parsed.queries):
-            head_sym = q.head
-            # Use the explicit name from 'obtain … as Name' if present;
-            # fall back to a positional key for unnamed obtain clauses.
-            if i in parsed.query_names:
-                key = parsed.query_names[i]
-            else:
-                key = f"obtain_{i}"
+            key = parsed.query_names.get(i, f"obtain_{i}")
 
-            if isinstance(head_sym, ir.FunctionApplication):
-                head_vars = tuple(head_sym.args)
-            elif isinstance(head_sym, ir.Symbol):
-                head_vars = (head_sym,)
+            # Extract head variables from the Query expression.
+            head = q.head
+            if isinstance(head, ir.FunctionApplication):
+                head_vars = tuple(head.args)
+            elif isinstance(head, ir.Symbol):
+                head_vars = (head,)
             else:
-                head_vars = tuple(head_sym)
+                head_vars = tuple(head)
 
-            if hasattr(self, '_solve'):
-                # NeurolangPDL path: push a scope containing ALL define rules
-                # so that reachable_code_from_query sees a cohesive, scoped
-                # unit (mirrors what `with nl.scope as e: ... nl.query(...)` does).
-                import neurolang.frontend.query_resolution_expressions as fe_mod
-                h = ir.Symbol.fresh()
-                query_impl = datalog.Implication(h(*head_vars), q.body)
-                self.program_ir.push_scope()
-                try:
-                    # Re-walk define rules into the pushed (scoped) layer so
-                    # that reachable_code, which inspects the current scope's
-                    # symbol table, can find them.  The outer walk (above)
-                    # persists them in the global scope for solve_all(); this
-                    # inner walk is NOT redundant — push_scope() creates a
-                    # fresh overlay that does not inherit the global IDB entries
-                    # as far as reachable_code is concerned.
-                    for rule in parsed.rules:
-                        self.program_ir.walk(rule)
-                    self.program_ir.walk(query_impl)
-                    fe_pred = fe_mod.Expression(self, h(*head_vars))
-                    fe_head = tuple(
-                        fe_mod.Expression(self, ir.Symbol(s.name))
-                        for s in head_vars
-                    )
-                    # _execute_query with a tuple head returns a
-                    # NamedRelationalAlgebraFrozenSet directly (not wrapped
-                    # in ir.Constant), so we can use it as-is.
-                    ra, _ = self._execute_query(fe_head, fe_pred)
-                finally:
-                    self.program_ir.pop_scope()
-                results[key] = ra
-            else:
-                # Pure Datalog path: build fresh implication, chase reachable rules
-                h = ir.Symbol.fresh()
-                query_impl = datalog.Implication(h(*head_vars), q.body)
-                self.program_ir.symbol_table = self.symbol_table.create_scope()
-                try:
-                    self.program_ir.walk(query_impl)
-                    try:
-                        magic_query_impl = self.magic_sets_rewrite_program(query_impl)
-                        reachable_rules = reachable_code(
-                            magic_query_impl, self.program_ir
-                        )
-                        functor = magic_query_impl.consequent.functor
-                    except Exception:
-                        reachable_rules = reachable_code(query_impl, self.program_ir)
-                        functor = h
-                    solution = self.chase_class(
-                        self.program_ir, rules=reachable_rules
-                    ).build_chase_solution()
-                finally:
-                    self.program_ir.symbol_table = self.symbol_table.enclosing_scope
-                solution_set = solution.get(
-                    functor, ir.Constant(WrappedRelationalAlgebraFrozenSet())
+            # Build a fresh helper head and implication.
+            h = ir.Symbol.fresh()
+            query_impl = datalog.Implication(h(*head_vars), q.body)
+
+            # _execute_query needs the helper predicate to be walked into the
+            # engine so magic-sets / chase resolution can find it.  Using
+            # push_scope/pop_scope keeps the temporary rule local to the query
+            # and avoids polluting the global symbol table.  The define rules
+            # are re-walked into the scope so that probabilistic predicates
+            # are materialised there with the correct signatures for the
+            # chase (e.g. `probably_mentions(x, PROB(x))`).
+            self.program_ir.push_scope()
+            try:
+                for rule in parsed.rules:
+                    self.program_ir.walk(rule)
+                self.program_ir.walk(query_impl)
+                fe_pred = fe.Expression(self, h(*head_vars))
+                fe_head = tuple(
+                    fe.Expression(self, ir.Symbol(s.name))
+                    for s in head_vars
                 )
-                col_names = tuple(s.name for s in head_vars)
-                ra = NamedRelationalAlgebraFrozenSet(
-                    col_names, solution_set.value.unwrap()
-                )
-                ra.row_type = solution_set.value.row_type
+                ra, _ = self._execute_query(fe_head, fe_pred)
+            finally:
+                self.program_ir.pop_scope()
             results[key] = ra
 
         if len(results) == 1:

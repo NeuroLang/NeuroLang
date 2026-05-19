@@ -88,31 +88,32 @@ from ...probabilistic.expressions import (
 from .squall import InvertedFunctionApplication
 
 
-class SquallProgram:
+class SquallProgram(Union):
     """
-    Container for a parsed SQUALL program that contains both rule definitions
-    and ``obtain`` queries.
+    Container returned when a SQUALL program contains ``obtain`` queries.
 
-    When a SQUALL program contains only rule definitions (``define as …``),
-    the parser returns a plain ``Union`` or ``Implication`` for backward
-    compatibility.  When ``obtain`` clauses are present, a ``SquallProgram``
-    is returned so the handler can separate rules from queries.
-
-    Attributes
-    ----------
-    rules : list
-        ``Implication`` / ``Fact`` / ``ProbabilisticFact`` objects.
-    queries : list
-        CPS noun-phrase callables, one per ``obtain`` clause.
+    Subclasses :class:`Union` so it is a plain ``Union`` of
+    ``Implication``/``Fact`` rules and ``Query`` expressions.  This lets
+    ``DatalogProgram.walk`` and ``ExpressionWalker``s handle it just like the
+    output of ``standard_syntax``.
     """
 
-    def __init__(self, rules, queries, query_names=None):
-        self.rules = list(rules)
-        self.queries = list(queries)
-        # Mapping from query index (0-based position in self.queries) to the
-        # user-supplied name for 'obtain … as Name' clauses.  Unnamed queries
-        # have no entry here.
+    def __init__(
+        self,
+        rules,
+        queries,
+        query_names: dict = None,
+    ):
+        super().__init__(tuple(rules) + tuple(queries))
         self.query_names = dict(query_names) if query_names is not None else {}
+
+    @property
+    def rules(self):
+        return [f for f in self.formulas if isinstance(f, (Implication, Fact))]
+
+    @property
+    def queries(self):
+        return [f for f in self.formulas if isinstance(f, Query)]
 
 
 class _AnonymousVar:
@@ -1729,13 +1730,8 @@ class SquallTransformer(Transformer):
     def intransitive(self, args):
         self._capture_pos(args[0])
         if isinstance(args[0], Symbol):
-            sym = args[0]
-            if sym.name.startswith("probably_"):
-                return Symbol(sym.name[9:].lower())
-            return sym
+            return args[0]
         name = args[0].value
-        if name.startswith("probably_"):
-            name = name[9:]
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
         return Symbol(name.lower())
@@ -1743,15 +1739,10 @@ class SquallTransformer(Transformer):
     def transitive(self, args):
         self._capture_pos(args[0])
         if isinstance(args[0], Symbol):
-            sym = args[0]
-            if sym.name.startswith("probably_"):
-                return Symbol(sym.name[9:])
-            return sym
+            return args[0]
         name = args[0].value
         if name.startswith("~"):
             name = name[1:]
-        if name.startswith("probably_"):
-            name = name[9:]
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
         return Symbol(name)
@@ -1773,8 +1764,6 @@ class SquallTransformer(Transformer):
         name = args[0].value
         if name.startswith("~"):
             name = name[1:]
-        if name.startswith("probably_"):
-            name = name[9:]
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
         return Symbol(name)
@@ -1787,8 +1776,6 @@ class SquallTransformer(Transformer):
             name = name[1:-1]
         if name.startswith("~"):
             name = name[1:]
-        if name.startswith("probably_"):
-            name = name[9:]
         return _InverseVerbSymbol(Symbol(name))
 
     def upper_identifier(self, args):
@@ -1801,8 +1788,6 @@ class SquallTransformer(Transformer):
     def identifier(self, args):
         self._capture_pos(args[0])
         name = args[0].value
-        if name.startswith("probably_"):
-            name = name[9:]
         if name.startswith('`') and name.endswith('`'):
             name = name[1:-1]
         return Symbol(name)
