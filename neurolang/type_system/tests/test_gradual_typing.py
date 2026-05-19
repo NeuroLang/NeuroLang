@@ -1,4 +1,5 @@
 import operator as op
+import unittest
 from typing import (AbstractSet, Any, Callable, Generic, Mapping, Set,
                     SupportsInt, T, Tuple, Union)
 
@@ -10,18 +11,21 @@ from .. import (NeuroLangTypeException, Unknown, get_args, get_origin,
                 typing_callable_from_annotated_function)
 
 
-def test_parametrical():
-    assert is_parametrical(Set)
-    assert is_parametrical(AbstractSet)
-    assert is_parametrical(Union)
-    assert is_parametrical(Callable)
-    assert not is_parametrical(Set[int])
-    assert not is_parametrical(AbstractSet[int])
-    assert not is_parametrical(Union[int, float])
-    assert not is_parametrical(Callable[[int], float])
-    assert not is_parametrical(int)
-    assert not is_parametrical(T)
-    assert not is_parametrical(SupportsInt)
+class TestGradualTyping(unittest.TestCase):
+    """Test gradual typing functionality."""
+
+    def test_parametrical(self):
+        self.assertTrue(is_parametrical(Set))
+        self.assertTrue(is_parametrical(AbstractSet))
+        self.assertTrue(is_parametrical(Union))
+        self.assertTrue(is_parametrical(Callable))
+        self.assertFalse(is_parametrical(Set[int]))
+        self.assertFalse(is_parametrical(AbstractSet[int]))
+        self.assertFalse(is_parametrical(Union[int, float]))
+        self.assertFalse(is_parametrical(Callable[[int], float]))
+        self.assertFalse(is_parametrical(int))
+        self.assertFalse(is_parametrical(T))
+        self.assertFalse(is_parametrical(SupportsInt))
 
 
 def test_parameterized():
