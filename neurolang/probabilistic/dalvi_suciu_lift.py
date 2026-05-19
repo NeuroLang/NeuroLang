@@ -107,7 +107,9 @@ __all__ = [
 
 
 # Bound cache to avoid unbounded memory growth in long-running processes.
-_MAX_DALVI_SUCU_CACHE_SIZE = config.getint("probabilistic.cache", "dalvi_suciu_max_size", fallback=4096)
+_MAX_DALVI_SUCU_CACHE_SIZE = config.getint(
+    "probabilistic.cache", "dalvi_suciu_max_size", fallback=4096
+)
 
 # Thread-safe LRU cache: OrderedDict keys are (id(rule), st_key).
 # id(rule) is unique among simultaneously-live objects in CPython.

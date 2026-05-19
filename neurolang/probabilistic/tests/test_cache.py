@@ -76,7 +76,9 @@ class TestDalviSuciuLiftCache(unittest.TestCase):
         q = Conjunction((R(x),))
 
         containment.is_contained(q, q)
-        self.assertGreaterEqual(containment.is_contained.cache_info().misses, 1)
+        self.assertGreaterEqual(
+            containment.is_contained.cache_info().misses, 1
+        )
 
         containment.clear_cache()
         self.assertEqual(containment.is_contained.cache_info().misses, 0)

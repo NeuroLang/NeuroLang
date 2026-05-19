@@ -1,7 +1,6 @@
-"""
-Pytest configuration file.
+"""Pytest configuration file.
 
-NOTE: Do not remove the unused dask_sql import !
+NOTE: Do not remove the unused dask_sql import!
 
 The dask_sql library uses jpype to start a JVM and access Java objects
 from python. This JVM needs to be started before we import neurolang,
@@ -56,7 +55,8 @@ def pytest_sessionstart(session: pytest.Session):
     fault handler can intercept these operations and interpret these as
     real faults. So we need to disable faulthandlers which pytest starts
     otherwise we get segmentation faults when running the tests.
-    See (https://jpype.readthedocs.io/en/latest/userguide.html#errors-reported-by-python-fault-handler)
+    See (https://jpype.readthedocs.io/en/latest/userguide.html#
+errors-reported-by-python-fault-handler)
     """
     try:
         import faulthandler
@@ -71,7 +71,7 @@ def pytest_sessionstart(session: pytest.Session):
 def clear_dask_context_after_test_module():
     """
     We use only one DaskContextManager for the application and its context gets
-    clustered with objects quite fast when running the tests, so this fixture clears
+    clustered with objects quite fast when running the tests, so this fixture
     the context after each test function.
     """
     yield 0
@@ -82,7 +82,7 @@ def clear_dask_context_after_test_module():
 @pytest.fixture(autouse=True)
 def clear_probabilistic_caches():
     """Clear probabilistic resolution caches before each test.
-    
+
     This avoids stale state across test boundaries.
     """
     from neurolang.probabilistic import containment, dalvi_suciu_lift
