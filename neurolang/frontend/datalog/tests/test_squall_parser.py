@@ -1164,3 +1164,106 @@ def test_probably_prefix_in_wlq_head_is_preserved():
         isinstance(arg, ProbabilisticQuery)
         for arg in wlq_rule.consequent.args
     ), "Expected a ProbabilisticQuery PROB arg in the WLQ head"
+
+
+def test_full_squall_program_ir_structure():
+    """The full 6-rule SQUALL program from the Datalog→SQUALL translation
+    produces the correct IR structure for every rule type:
+
+    1. rule_op_prob_agg (CBMA-style) — AggregationApplication + ProbabilisticFact
+    2. probably + non-cond rule_body1 — ProbabilisticFact with fresh Symbol
+    3. deterministic rule with where filter
+    4. deterministic projection rule
+    5. MARG with conditioned-to
+    6. aggregation in head with AggregationApplication
+    """
+    from neurolang.probabilistic.expressions import (
+        Condition, ProbabilisticFact, ProbabilisticQuery,
+    )
+    from neurolang.logic import Implication, Conjunction
+    from neurolang.datalog.aggregation import AggregationApplication as AggApp
+
+    program_text = """
+define as Voxel_reported with a probability of
+    the Proximity_indicator of the Peak_reported (?x2; ?y2; ?z2; ?s)
+        for each ?x, ?y, ?z and for each ?s
+        where (?x; ?y; ?z) is a Voxel
+        and where EUCLIDEAN(?x, ?y, ?z, ?x2, ?y2, ?z2) is lower than 4.
+
+define as probably Term_in_study every Term_in_study_tfidf (?term; _; ?study).
+
+define as Term_association every Term_in_study (?term; ?study)
+    where ?study is a Selected_study.
+
+define as Activation every Voxel_reported (?x; ?y; ?z; ?s)
+    where ?s is a Selected_study.
+
+define as Activation_given_term with probability
+    every Activation (?x; ?y; ?z)
+    conditioned to every Term_association ?t that is 'emotion'.
+
+define as Activation_given_term_image
+    every Agg_create_region_overlay of the Activation_given_term (?x; ?y; ?z; ?p).
+
+obtain every Activation_given_term_image (?result).
+"""
+    result = parser(program_text)
+    assert isinstance(result, SquallProgram), (
+        f"Expected SquallProgram, got {type(result)}"
+    )
+    rules = result.rules
+    assert len(rules) == 6, f"Expected 6 rules, got {len(rules)}"
+    assert len(result.queries) == 1, (
+        f"Expected 1 obtain query, got {len(result.queries)}"
+    )
+
+    r1 = rules[0]
+    assert isinstance(r1, Implication), f"Rule 1 expected Implication, got {type(r1)}"
+    assert isinstance(r1.consequent, ProbabilisticFact)
+    assert r1.consequent.functor.name == "voxel_reported"
+    assert len(r1.consequent.args) == 4
+    agg_prob = r1.consequent.probability
+    assert isinstance(agg_prob, AggApp)
+    assert agg_prob.functor.name == "proximity_indicator"
+    body1 = r1.antecedent
+    assert isinstance(body1, Conjunction)
+    body1_str = str(body1)
+    assert "voxel" in body1_str
+    assert "peak_reported" in body1_str
+    assert "EUCLIDEAN" in body1_str
+    assert "lt" in body1_str
+
+    r2 = rules[1]
+    assert isinstance(r2, Implication)
+    assert isinstance(r2.consequent, ProbabilisticFact)
+    assert r2.consequent.probability.is_fresh
+    assert r2.consequent.functor.name == "term_in_study"
+    assert len(r2.consequent.args) == 2
+
+    r3 = rules[2]
+    assert isinstance(r3, Implication)
+    assert not isinstance(r3.consequent, ProbabilisticFact)
+    assert r3.consequent.functor.name == "term_association"
+    assert "selected_study" in str(r3.antecedent)
+
+    r4 = rules[3]
+    assert isinstance(r4, Implication)
+    assert not isinstance(r4.consequent, ProbabilisticFact)
+    assert r4.consequent.functor.name == "activation"
+
+    r5 = rules[4]
+    assert isinstance(r5, Implication)
+    assert isinstance(r5.antecedent, Condition)
+    assert any(isinstance(a, ProbabilisticQuery) for a in r5.consequent.args)
+    assert r5.consequent.functor.name == "activation_given_term"
+
+    r6 = rules[5]
+    assert isinstance(r6, Implication)
+    has_agg_app = any(isinstance(a, AggApp) for a in r6.consequent.args)
+    assert has_agg_app
+    agg_app = next(a for a in r6.consequent.args if isinstance(a, AggApp))
+    assert agg_app.functor.name == "agg_create_region_overlay"
+    assert r6.consequent.functor.name == "activation_given_term_image"
+
+    q = result.queries[0]
+    assert q.body.functor.name == "activation_given_term_image"

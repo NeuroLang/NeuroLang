@@ -743,3 +743,55 @@ def test_execute_squall_compound_probabilistic_rule_smoke():
             f"Unexpected exception when walking compound probabilistic rule: "
             f"{type(exc).__name__}: {exc}"
         )
+
+
+def test_execute_squall_cbma_spatial_prior_ir():
+    """CBMA-style spatial prior rule with EUCLIDEAN and proximity_indicator
+
+    Verifies that a ``rule_op_prob_agg`` rule with ``EUCLIDEAN(…)`` distance
+    filter, ``for each`` groupby, and a registered ``proximity_indicator``
+    aggregation function can be parsed and walked into the engine.
+    """
+    from typing import Iterable
+
+    engine = NeurolangPDL()
+
+    def euclidean(i1, j1, k1, i2, j2, k2):
+        return ((i1 - i2) ** 2 + (j1 - j2) ** 2 + (k1 - k2) ** 2) ** 0.5
+    engine.add_symbol(euclidean, name="EUCLIDEAN")
+
+    def proximity_indicator(values: Iterable) -> float:
+        return 1.0
+    engine.add_symbol(proximity_indicator, name="proximity_indicator")
+
+    _ = engine.add_tuple_set(
+        [(0, 0, 0), (1, 1, 1), (2, 2, 2)], name="voxel"
+    )
+    _ = engine.add_tuple_set(
+        [(0, 0, 0, "s1"), (3, 3, 3, "s1")], name="peak"
+    )
+
+    engine.execute_squall_program(
+        "define as Voxel_reported with a probability of "
+        "the Proximity_indicator of the Peak (?x2; ?y2; ?z2; ?s) "
+        "for each ?x, ?y, ?z and for each ?s "
+        "where (?x; ?y; ?z) is a Voxel "
+        "and where EUCLIDEAN(?x, ?y, ?z, ?x2, ?y2, ?z2) is lower than 4."
+    )
+
+    idb = engine.program_ir.intensional_database()
+    assert len(idb) > 0, "Expected at least one IDB rule after walking"
+
+    found = False
+    for pred_symb, union in idb.items():
+        for rule in union.formulas:
+            if "voxel_reported" in rule.consequent.functor.name:
+                found = True
+                body_str = str(rule.antecedent)
+                assert "x" in body_str, (
+                    f"Body should reference head vars: {body_str}"
+                )
+    assert found, (
+        "No voxel_reported rule found in IDB: "
+        f"{[k.name for k in idb.keys()]}"
+    )

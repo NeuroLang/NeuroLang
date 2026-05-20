@@ -298,6 +298,10 @@ class SquallTransformer(Transformer):
 
     def rule_op(self, args):
         self._clear_scope()
+        had_probably = any(
+            isinstance(a, str) and a.lower() == "probably"
+            for a in args if a is not None
+        )
         items = [a for a in args if a is not None and not (isinstance(a, str) and a.lower() == "probably")]
         verb = items[0]  # verb1 (Symbol = head predicate name)
         body_result = items[1]  # from rule_body1: (head_args, body_formula)
@@ -311,6 +315,13 @@ class SquallTransformer(Transformer):
                     head = verb(head_args)
             else:
                 head = verb()
+            # When PROBABLY is present on a non-conditional rule body, wrap the
+            # head in a ProbabilisticFact with a fresh probability variable.
+            # Conditional bodies (body_formula is a Condition) are handled
+            # by the existing MARG plumbing and must NOT be wrapped here.
+            if had_probably and not isinstance(body_formula, Condition):
+                fresh_prob = Symbol.fresh()
+                return Implication(ProbabilisticFact(fresh_prob, head), body_formula)
             return Implication(head, body_formula)
         else:
             raise self._make_error(
