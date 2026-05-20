@@ -770,6 +770,18 @@ The relation ``activation_given_term`` will have columns
 ``(i, j, k, probability)`` where the last column is
 ``P(activation(i,j,k) | term_association(s,t) ∧ t = 'auditory')``.
 
+The keyword ``given`` is a synonym for ``conditioned to``, and is often
+more natural for spatial-prior and atlas-filtering patterns:
+
+.. code-block:: squall
+
+    define as Activation_map with inferred probability every Active_voxel (?i; ?j; ?k; _)
+        given every Study_term (_; ?t) where ?t is 'emotion'.
+
+This reads: *"the inferred probability of activation at (i, j, k) given
+the study term is 'emotion'"*.  The ``_`` in each tuple label drops the
+study-id column from the respective side.
+
 .. note::
 
    When using MARG with tuple-labeled relations, the arity of the conditioned
@@ -880,8 +892,14 @@ Part 10: Program-Level Features
 
 A SQUALL program may include directive lines of the form
 ``#name(arg, ...)`` to pass structured metadata or configuration to the
-engine.  Commands are parsed as ``FunctionApplication(name, args)`` and
-forwarded to the engine; their effect depends on the registered handler.
+engine.  Directives are parsed as ``FunctionApplication(name, args)``
+and processed by ``execute_squall_program`` before rule walking.
+
+The following directive is currently supported:
+
+``#set_backend('backend')``
+    Switch the relational algebra backend before walking the rules.
+    ``backend`` may be ``'pandas'``, ``'dask'``, or ``'duckdb'``.
 
 .. code-block:: squall
 
@@ -889,10 +907,10 @@ forwarded to the engine; their effect depends on the registered handler.
     define as Active every person that plays.
     obtain every Active.
 
-Commands are written with a leading ``#``, a lowercase name, and a
+Directives are written with a leading ``#``, a lowercase name, and a
 parenthesised argument list using the same term syntax as the rest of
 SQUALL (labels, literals, or identifiers).  The trailing ``.`` follows
-the normal sentence rule.
+the normal sentence rule.  Unknown directives are silently ignored.
 
 
 .. _part-11:
@@ -973,11 +991,7 @@ if ``atlas_label`` contains ``("L S_temporal_sup",)``, ``("R S_temporal_sup",)``
 and ``("L G_frontal_sup",)`` and ``startswith`` is registered as a binary
 predicate.
 
-.. note::
 
-   String-literal arguments to arbitrary body predicates are not yet
-   supported.  The workaround is to pre-filter the EDB in Python before
-   calling ``execute_squall_program``.
 
 11.4 Multi-Variable Brain Activation
 --------------------------------------
@@ -1488,9 +1502,9 @@ Appendix C: Gap Report
 ========================
 
 The following Datalog / IR patterns appear in codebase examples with their
-current status as of 2026-04-20:
+current status:
 
-.. list-table:: SQUALL gap report (updated 2026-04-20)
+.. list-table:: SQUALL gap report (updated 2026-05-21)
    :header-rows: 1
    :widths: 40 15 45
 
@@ -1515,6 +1529,9 @@ current status as of 2026-04-20:
    * - ``obtain`` clause returning results directly
      - ✅ Fixed
      - ``execute_squall_program`` returns a ``NamedRelationalAlgebraFrozenSet`` when a single ``obtain`` is present
+   * - ``obtain … as Name``
+     - ✅ Fixed
+     - ``query_as`` transformer; result named by user
    * - Compound quantifiers (``for every X and for every Y where …``)
      - ✅ Fixed
      - Added ``rule_body2``, ``quant_list``, ``quant_clause`` grammar; ``rule_opnn_compound`` transformer
@@ -1524,6 +1541,18 @@ current status as of 2026-04-20:
    * - Probabilistic n-ary predicates (``with inferred probability`` on n-ary heads)
      - ✅ Fixed
      - ``rule_opnn_prob``, ``rule_opnn_marg``, ``rule_opnn_per_compound`` handlers; no engine changes needed
+   * - String / numeric literals in body predicates (``startswith('L ')``)
+     - ✅ Fixed
+     - ``rel_fun_call`` grammar accepts ``literal`` arguments; parsed as ``Constant`` values
+   * - ``#set_backend`` directive in SQUALL programs
+     - ✅ Fixed
+     - ``command()`` transformer builds ``FunctionApplication``; ``execute_squall_program`` calls ``config.set_query_backend()``
+   * - ``given`` keyword as MARG conditioner (``… given every X …``)
+     - ✅ Fixed
+     - ``rule_op_marg`` and ``rule_body1_cond`` accept ``given`` as synonym for ``conditioned to``
+   * - Rules + queries mixed in a single ``execute_squall_program`` call
+     - ✅ Fixed
+     - Probabilistic rules walked once in a shared scope; ``ForbiddenDisjunctionError`` from re-walk caught silently
    * - Skolem-like functional terms in rule head
      - ❌ Not supported
      - Requires IR changes beyond transformer scope

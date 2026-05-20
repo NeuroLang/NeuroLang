@@ -1267,3 +1267,90 @@ obtain every Activation_given_term_image (?result).
 
     q = result.queries[0]
     assert q.body.functor.name == "activation_given_term_image"
+
+
+def test_rel_fun_call_with_string_literal():
+    """rel_fun_call with a string literal argument parses correctly.
+
+    ``every Atlas_label ?label that startswith('L ') holds`` should emit
+    a body atom ``startswith(label, 'L ')`` with the constant ``'L '``
+    as the second argument.
+    """
+    from ....datalog import Implication
+    from ....expressions import Constant, FunctionApplication
+
+    result = parser(
+        "define as Left_label every Atlas_label ?label "
+        "that startswith('L ') holds."
+    )
+    assert isinstance(result, Implication)
+    body = result.antecedent
+    # Walk the body to find the startswith atom
+    startswith_atom = None
+    stack = [body]
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication) and expr.functor.name == "startswith":
+            startswith_atom = expr
+            break
+        if hasattr(expr, 'formulas'):
+            stack.extend(expr.formulas)
+        elif hasattr(expr, 'body'):
+            stack.append(expr.body)
+    assert startswith_atom is not None, (
+        f"No startswith atom found in body: {body}"
+    )
+    # Second arg should be a Constant with value 'L '
+    second_arg = startswith_atom.args[1]
+    assert isinstance(second_arg, Constant), (
+        f"Expected Constant for string literal, got {type(second_arg)}: {second_arg}"
+    )
+    assert second_arg.value == 'L ', (
+        f"Expected 'L ', got {second_arg.value!r}"
+    )
+
+
+def test_rel_fun_call_with_numeric_literal():
+    """rel_fun_call with a numeric literal argument parses correctly."""
+    from ....datalog import Implication
+    from ....expressions import Constant, FunctionApplication
+
+    result = parser(
+        "define as Large every Item ?i that size_greater(42) holds."
+    )
+    assert isinstance(result, Implication)
+    body = result.antecedent
+    size_atom = None
+    stack = [body]
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication) and expr.functor.name == "size_greater":
+            size_atom = expr
+            break
+        if hasattr(expr, 'formulas'):
+            stack.extend(expr.formulas)
+        elif hasattr(expr, 'body'):
+            stack.append(expr.body)
+    assert size_atom is not None, f"No size_greater atom found in body: {body}"
+    second_arg = size_atom.args[1]
+    assert isinstance(second_arg, Constant), (
+        f"Expected Constant for numeric literal, got {type(second_arg)}"
+    )
+    assert second_arg.value == 42
+
+
+def test_command_parses_and_preserves_in_squall_program():
+    """#set_backend('pandas') parses and is preserved in SquallProgram.commands."""
+    from ..squall_syntax_lark import SquallProgram
+    from ....expressions import FunctionApplication
+
+    result = parser(
+        "#set_backend('pandas').\n"
+        "define as Active every person that plays.\n"
+        "obtain every Active."
+    )
+    assert isinstance(result, SquallProgram), f"Expected SquallProgram, got {type(result)}"
+    assert len(result.commands) == 1, f"Expected 1 command, got {len(result.commands)}"
+    cmd = result.commands[0]
+    assert isinstance(cmd, FunctionApplication), f"Expected FunctionApplication, got {type(cmd)}"
+    assert cmd.functor.name == "set_backend", f"Expected 'set_backend', got {cmd.functor.name}"

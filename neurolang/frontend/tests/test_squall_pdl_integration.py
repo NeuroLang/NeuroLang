@@ -795,3 +795,15 @@ def test_execute_squall_cbma_spatial_prior_ir():
         "No voxel_reported rule found in IDB: "
         f"{[k.name for k in idb.keys()]}"
     )
+
+
+def test_set_backend_directive_in_squall_program(nl):
+    """#set_backend directive at the top of a SQUALL program is processed correctly."""
+    result = nl.execute_squall_program(
+        "#set_backend('pandas').\n"
+        "define as Active every Person that plays.\n"
+        "obtain every Active."
+    )
+    # Single obtain returns the relation directly
+    rows = list(result)
+    assert len(rows) > 0, "Expected at least one row"

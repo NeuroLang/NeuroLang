@@ -103,9 +103,11 @@ class SquallProgram(Union):
         rules,
         queries,
         query_names: dict = None,
+        commands: list = None,
     ):
         super().__init__(tuple(rules) + tuple(queries))
         self.query_names = dict(query_names) if query_names is not None else {}
+        self.commands = list(commands) if commands is not None else []
 
     @property
     def rules(self):
@@ -269,6 +271,7 @@ class SquallTransformer(Transformer):
     def squall(self, args):
         rules = []
         queries = []
+        commands = []
         query_names = {}  # index → name for 'obtain … as Name' clauses
         for a in args:
             if a is None:
@@ -280,11 +283,16 @@ class SquallTransformer(Transformer):
                 rules.append(impl)
                 query_names[len(queries)] = name_str
                 queries.append(q)
+            elif isinstance(a, tuple) and len(a) == 2 and a[0] == '_command':
+                commands.append(a[1])
             else:
                 rules.append(a)
 
-        if queries:
-            return SquallProgram(rules=rules, queries=queries, query_names=query_names)
+        if queries or commands:
+            return SquallProgram(
+                rules=rules, queries=queries, query_names=query_names,
+                commands=commands,
+            )
 
         # Backward compat: no queries → return Union or single rule
         if len(rules) == 1:
@@ -381,6 +389,7 @@ class SquallTransformer(Transformer):
 
         prob_query_arg = ProbabilisticQuery(PROB, tuple(head_args))
         head = verb(*(list(head_args) + [prob_query_arg]))
+
         return Implication(head, body_formula)
 
     def rule_op_prob_agg(self, args):
@@ -1358,30 +1367,42 @@ class SquallTransformer(Transformer):
         return ('_rel', rel)
 
     def rel_fun_call(self, args):
-        """Handle ``identifier(label, label, ...)`` as a body predicate atom."""
+        """Handle ``identifier(label, label, ...)`` as a body predicate atom.
+
+        Each argument position may be a **label** (``?x``, ``_``, or tuple
+        label) or a **literal** (string constant ``'prefix'`` or numeric
+        constant ``42``).  Labels become ``Symbol`` variables; literals
+        become ``Constant`` values that are wired into the body atom
+        directly.
+        """
         func_sym = args[0]   # Symbol from identifier handler
-        label_cps_list = args[1:]  # list of CPS lambdas from label handler
+        raw_args = args[1:]  # mix of CPS lambdas (labels) and Constants (literals)
 
-        # Materialise each label CPS into a concrete Symbol.
-        label_vars = []
-        for lbl_cps in label_cps_list:
-            if callable(lbl_cps) and not isinstance(lbl_cps, (Symbol, Constant)):
-                label_vars.append(lbl_cps(lambda v: v))
-            elif isinstance(lbl_cps, Symbol):
-                label_vars.append(lbl_cps)
+        # Materialise each argument into a concrete Symbol or Constant.
+        materialised = []
+        for a in raw_args:
+            if isinstance(a, Constant):
+                # Literal value (string / number) — pass through as-is.
+                materialised.append(a)
+            elif callable(a) and not isinstance(a, (Symbol, Constant)):
+                # CPS label lambda from the ``label`` handler.
+                materialised.append(a(lambda v: v))
+            elif isinstance(a, Symbol):
+                # Direct Symbol (e.g. from a non-CPS label path).
+                materialised.append(a)
             else:
-                label_vars.append(Symbol.fresh())
+                materialised.append(Symbol.fresh())
 
-        if len(label_vars) == 1:
+        if len(materialised) == 1:
             # Binary predicate: subject + one explicit arg
-            y = label_vars[0]
+            y = materialised[0]
             return ('_rel', lambda x: func_sym(x, y))
         else:
             # N-ary: prepend subject only when it is a scalar Symbol.
             # When the enclosing noun binds a tuple (e.g. Foo (?a;?b;?c)),
             # the labels already cover every argument position and the
             # tuple must NOT be prepended — it would produce wrong arity.
-            def rel(x, _vars=label_vars):
+            def rel(x, _vars=materialised):
                 if isinstance(x, Symbol):
                     return func_sym(x, *_vars)
                 return func_sym(*_vars)
@@ -1865,7 +1886,7 @@ class SquallTransformer(Transformer):
     def command(self, args):
         name = args[0]
         terms = [a for a in args[1:] if a is not None]
-        return FunctionApplication(name, tuple(terms))
+        return ('_command', FunctionApplication(name, tuple(terms)))
 
     def query_unnamed(self, args):
         # "obtain ops" — convert the CPS noun phrase into a Query expression.
@@ -2325,6 +2346,7 @@ def parser(code, locals=None, globals=None):
             rules=[simplifier.walk(r) for r in result.rules],
             queries=result.queries,
             query_names=result.query_names,
+            commands=result.commands,
         )
     elif isinstance(result, Union):
         result = Union(tuple(simplifier.walk(f) for f in result.formulas))

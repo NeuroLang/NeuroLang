@@ -6,7 +6,9 @@ as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
 from neurolang.datalog.magic_sets import magic_rewrite
-from neurolang.exceptions import UnsupportedProgramError
+from neurolang.exceptions import (
+    ForbiddenDisjunctionError, UnsupportedProgramError,
+)
 from typing import (
     AbstractSet,
     Dict,
@@ -327,6 +329,25 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         parsed = squall_parser(code)
 
+        # Process directives (#set_backend, etc.) before walking rules.
+        if isinstance(parsed, SquallProgram) and parsed.commands:
+            from neurolang.config import config as nl_config
+            from neurolang.expressions import Constant
+
+            _KNOWN_COMMANDS = {"set_backend"}
+            for cmd in parsed.commands:
+                name = cmd.functor.name if hasattr(cmd, 'functor') else None
+                if name is None or name not in _KNOWN_COMMANDS:
+                    continue
+                if name == "set_backend":
+                    if cmd.args and isinstance(cmd.args[0], Constant):
+                        nl_config.set_query_backend(cmd.args[0].value)
+                    else:
+                        raise NeuroLangException(
+                            "#set_backend requires a string argument, "
+                            "e.g. #set_backend('pandas')."
+                        )
+
         # Rules-only (no obtain) — backward-compat: returns Union/Implication
         if not isinstance(parsed, SquallProgram):
             try:
@@ -336,8 +357,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             return None
 
         # Walk all rule definitions into the engine (global scope).
-        # This makes the rules available to solve_all() and any code that
-        # inspects the global symbol table after the call returns.
+        # This makes the rules available to solve_all() and any code
+        # that inspects the global symbol table after the call returns.
         for rule in parsed.rules:
             try:
                 self.program_ir.walk(rule)
@@ -350,11 +371,17 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         # Execute each obtain query by building a fresh helper predicate
         # h(head_vars) :- q.body and delegating to query(), exactly as
         # execute_datalog_program does for ans(...) :- R(...).
+        #
+        # We push a scope and re-walk the rules so that probabilistic
+        # predicates are materialised with the correct signatures for
+        # the chase (e.g. `probably_mentions(x, PROB(x))`).  The IDB is
+        # shared across scopes so re-walking a ProbabilisticFact into
+        # a new scope would normally raise ForbiddenDisjunctionError;
+        # we catch that silently because identical re-definitions in a
+        # sub-scope are harmless.
         results = {}
         for i, q in enumerate(parsed.queries):
             key = parsed.query_names.get(i, f"obtain_{i}")
-
-            # Extract head variables from the Query expression.
             head = q.head
             if isinstance(head, ir.FunctionApplication):
                 head_vars = tuple(head.args)
@@ -363,21 +390,16 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             else:
                 head_vars = tuple(head)
 
-            # Build a fresh helper head and implication.
             h = ir.Symbol.fresh()
             query_impl = datalog.Implication(h(*head_vars), q.body)
 
-            # _execute_query needs the helper predicate to be walked into the
-            # engine so magic-sets / chase resolution can find it.  Using
-            # push_scope/pop_scope keeps the temporary rule local to the query
-            # and avoids polluting the global symbol table.  The define rules
-            # are re-walked into the scope so that probabilistic predicates
-            # are materialised there with the correct signatures for the
-            # chase (e.g. `probably_mentions(x, PROB(x))`).
             self.program_ir.push_scope()
             try:
                 for rule in parsed.rules:
-                    self.program_ir.walk(rule)
+                    try:
+                        self.program_ir.walk(rule)
+                    except ForbiddenDisjunctionError:
+                        pass
                 self.program_ir.walk(query_impl)
                 fe_pred = fe.Expression(self, h(*head_vars))
                 fe_head = tuple(

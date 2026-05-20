@@ -51,7 +51,12 @@ computation using ``with nl.environment as e:``.
     define as Activation_map with inferred probability every Active_voxel (?i; ?j; ?k; _)
         given every Study_term (_; ?t) where ?t is 'emotion'.
 
-    obtain the Brain_image of the Activation_map (?i; ?j; ?k; ?p) as Image.
+    obtain every Activation_map (?i; ?j; ?k; ?p) as Image.
+
+The result is returned as a relation with columns ``i``, ``j``, ``k``, ``p``
+(probability).  We then assemble the brain overlay in Python using the
+:func:`~neurolang.frontend.ExplicitVBROverlay` helper — see ``brain_image``
+below.
 """
 
 # %%
@@ -187,21 +192,41 @@ nconfig.disable_expression_type_printing()
 #             brain image aggregation using the ``obtain … as`` form.
 
 squall_program = """
-define as Term every Term_in_study_with_tfidf (_; ?t; _).
+define as Reported_voxel with a probability of
+    the Kernelized_max_proximity of the Reported_focus (?i2; ?j2; ?k2; ?s)
+        for each ?i1, ?j1, ?k1 and for each ?s
+        where (?i1; ?j1; ?k1) is a Voxel
+        and where EUCLIDEAN(?i1, ?j1, ?k1, ?i2, ?j2, ?k2) is lower than 2.
 
-define as mentions every Term_in_study_with_tfidf (?s; ?t; _)
+define as Study_term every Term_in_study_with_tfidf (?s; ?t; _)
     where ?s is a Selected_study.
 
-define as probably_mentions with inferred probability for every Term that a Study mentions .
+define as Active_voxel every Reported_voxel (?i; ?j; ?k; ?s)
+    where ?s is a Selected_study.
 
-obtain every probably_mentions .
+define as Activation_map with inferred probability every Active_voxel (?i; ?j; ?k; _)
+    given every Study_term (_; ?t) where ?t is 'emotion'.
+
+obtain every Activation_map (?i; ?j; ?k; ?p) as Image.
 """
 
 with nl.scope:
     result = nl.execute_squall_program(squall_program)
-    print("Program executed successfully!")
+
+    # The obtain … as query returns rows (i, j, k, probability).
+    # Assemble them into a brain overlay for visualisation.
+    image = brain_image(
+        result["i"], result["j"], result["k"], result["p"]
+    )
+    print("Brain image assembled — shape:", image.shape)
+    print(f"Non-zero voxels: {np.count_nonzero(image)}")
     print(f"Rules defined: {len(nl.current_program)}")
     for r in nl.current_program:
         print(f"  - {r.expression.consequent.functor}")
+
+    # Plot the result
+    nilearn.plotting.plot_stat_map(
+        image, bg_img=mni_t1_2mm, title="SQUALL CBMA Spatial Prior",
+    )
 
 print("Done")
