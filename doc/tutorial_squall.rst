@@ -240,16 +240,18 @@ The simplest verb is an **intransitive** predicate: one argument (the subject).
 Result: ``playerperson`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
 and ``plays`` contains ``("alice",)``.
 
-3.2 Transitive Verbs and Argument Order (``~``)
--------------------------------------------------
+.. _part-3-verb-args:
 
-A **transitive** verb takes an object.  Transitive verbs used as binary
-predicates are prefixed with ``~`` to indicate that argument order is
-inverted (so ``x ~sings y`` maps to ``sings(y, x)``).
+3.2 Transitive Verbs
+--------------------
+
+A **transitive** verb takes an object noun phrase following it, just as in
+English.  The verb applies to its subject (the head noun) and its object
+(the noun phrase after the verb) in natural subject-verb-object order.
 
 .. code-block:: squall
 
-    define as Performer every person ?x that a Genre ?y ~sings.
+    define as Performer every person that sings a Genre.
 
 .. code-block:: squall
 
@@ -257,6 +259,24 @@ inverted (so ``x ~sings y`` maps to ``sings(y, x)``).
 
 Result: ``performer`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
 ``genre`` contains ``("jazz",)``, and ``sings`` contains ``("alice", "jazz")``.
+
+The rule reads: *"every person that sings a genre"* — ``sings(person, genre)``
+maps the subject (``person``) to the first argument and the object (``genre``)
+to the second argument of the binary ``sings`` predicate.
+
+.. note::
+
+   When the EDB predicate stores its arguments in the **reverse** order
+   (e.g. ``reports`` stores ``(study, voxel)`` and you want to query from
+   the voxel's perspective), use the ``~`` prefix to invert the argument
+   order::
+
+       every Voxel that a Study ~reports.
+
+   reads as *"a study reports a voxel"* in English, but maps to
+   ``reports(voxel, study)`` — the ``~`` swaps the arguments so the
+   subject (``Voxel``) becomes the second argument and the object
+   (``Study``) becomes the first.
 
 .. _3-3-auxiliaries:
 
@@ -367,8 +387,9 @@ Relative clauses restrict the noun they modify.  They are introduced by
 4.2 Transitive VP
 ------------------
 
-``~verb`` signals a transitive (binary) predicate used in *passive* position.
-The rule below collects (study, voxel) pairs via an explicit multi-variable head.
+A transitive verb takes an object NP after it in natural order (see
+:ref:`part-3-verb-args`).  The rule below collects (study, voxel) pairs
+via an explicit multi-variable head.
 
 .. code-block:: squall
 
@@ -798,8 +819,8 @@ marginal probability over the joint distribution.
 .. code-block:: squall
 
     define as Joint_prob with inferred probability
-        for every Region ?r and for every Term ?t
-        where ?r cooccurs ?t.
+        for every Region and for every Term
+        where the Region cooccurs the Term.
 
     obtain every Joint_prob (?r; ?t; ?p).
 
@@ -930,7 +951,7 @@ collect every voxel that at least one study has reported as activated.
 
 .. code-block:: squall
 
-    define as Activated every Voxel ?v that a Study ?s reports.
+    define as Activated every Voxel that a Study reports.
 
 .. code-block:: squall
 
@@ -942,9 +963,9 @@ Result: ``activated`` contains ``v1`` and ``v2`` if ``study`` contains
 
 .. note::
 
-   The tilde (``~``) *reverses* argument order.  Use it when the EDB stores
-   ``(voxel, study)`` so that ``?v ~reports ?s`` maps to ``reports(v, s)``
-   which the engine sees as ``reports(voxel, study)``.
+    The tilde (``~``) *reverses* argument order (see :ref:`part-3-verb-args`).
+    Use it when the EDB stores ``(voxel, study)`` so that ``?v ~reports ?s``
+    maps to ``reports(v, s)`` which the engine sees as ``reports(voxel, study)``.
 
 11.2 Filtering by Study Category
 ----------------------------------
@@ -954,8 +975,8 @@ voxels those studies report.
 
 .. code-block:: squall
 
-    define as Auditory_voxel every Voxel ?v
-        that an Auditory_study ?s reports.
+    define as Auditory_voxel every Voxel
+        that an Auditory_study reports.
 
 .. code-block:: squall
 
@@ -1002,7 +1023,7 @@ label syntax binds all three columns at once.
 .. code-block:: squall
 
     define as Activation every Voxel (?x; ?y; ?z)
-        that a Study ?s focus_reported.
+        that a Study focus_reported.
 
 .. code-block:: squall
 
@@ -1142,7 +1163,7 @@ Transitive verbs and binary predicates
     >>> nl.add_tuple_set([("jazz",)], name="genre")
     >>> nl.add_tuple_set([("alice", "jazz")], name="sings")
     >>> nl.execute_squall_program(
-    ...     "define as Performer every person ?x that a Genre ?y ~sings."
+    ...     "define as Performer every person that sings a Genre."
     ... )
     >>> sorted(nl.solve_all()["performer"].as_pandas_dataframe().iloc[:, 0].tolist())
     ['alice']
