@@ -38,6 +38,6 @@ jobs:
         with:
           deploy_key: ${{ secrets.NEUROLANG_GITHUB_IO_DEPLOY_KEY }}
           external_repository: neurolang/neurolang.github.io
-          publish_branch: develop
+          publish_branch: master
           publish_dir: ./doc/_build/html
           force_orphan: true
