@@ -4,3 +4,7 @@ engines:
     enabled: true
     args:
       - "--skip=B101"
+  prospector:
+    enabled: true
+    exclude_paths:
+      - "examples/"

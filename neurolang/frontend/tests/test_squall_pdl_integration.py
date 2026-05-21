@@ -171,17 +171,7 @@ def nl_author():
 
 
 def test_execute_squall_tilde_inversion_end_to_end(nl_author):
-    """
-    ~author inverts the default SQUALL argument order.
-
-    In standard SQUALL, 'a Person author' would resolve to author(person, paper)
-    (the existential subject is arg[0]). The tilde flips this to author(paper,
-    person), matching the EDB column order [paper, person] stored in the fixture.
-
-    'obtain every Paper that a Person ~author.' therefore asks:
-      for each paper p, there exists a person x such that author(p, x).
-    Expected: all three papers are returned.
-    """
+    """~author inverts the default SQUALL argument order (paper, person) to (person, paper)."""
     result = nl_author.execute_squall_program(
         "obtain every Paper that a Person ~author."
     )

@@ -1,5 +1,4 @@
-"""
-Logic simplifier for SQUALL parsed expressions.
+"""Logic simplifier for SQUALL parsed expressions.
 
 Collapses nested conjunctions, removes trivial operations,
 and normalizes quantifier expressions produced by the SQUALL parser.
@@ -23,7 +22,6 @@ from ...logic.transformations import (
 
 
 class InvertedFunctionApplication(FunctionApplication):
-
     """
     Intermediate IR node for transitive verbs prefixed with ``~``.
 
@@ -43,7 +41,6 @@ class InvertedFunctionApplication(FunctionApplication):
 
 
 class ResolveInvertedFunctionApplicationMixin(PatternWalker):
-
     """
     Rewrites ``InvertedFunctionApplication(f, (a, b, …))`` to ``f(…, b, a)`` at walk time.
 

@@ -420,7 +420,6 @@ class UnexpectedCharactersError(ParserError):
 
 
 class SquallSemanticError(NeuroLangException):
-
     """
     Semantic error in a SQUALL program — parse succeeded but semantics invalid.
 

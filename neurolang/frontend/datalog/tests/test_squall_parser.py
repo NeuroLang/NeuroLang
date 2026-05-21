@@ -1,6 +1,6 @@
 from inspect import signature
 from itertools import product
-from operator import eq, truediv
+from operator import eq
 import logging
 
 import pytest
@@ -532,11 +532,7 @@ def test_squall_rel_ng2_whose_with_object():
 
 
 def test_squall_aggregation_ir():
-    """Test: aggregation IR structure for 'every Max of the Quantity where ?i item_count per ?i'.
-
-    Verifies that the result is an Implication with AggregationApplication(max, (q,))
-    in the consequent and item_count(i, q) in the antecedent.
-    """
+    """Test aggregation IR structure for 'every Max of the Quantity where ?i item_count per ?i'."""
     from neurolang.datalog.aggregation import AggregationApplication as AA
     code = (
         "define as max_items for every Item ?i ; "
@@ -610,10 +606,7 @@ def test_inverted_function_application_ir_node():
 
 
 def test_squall_transitive_inv_argument_order():
-    """
-    Tilde-verb in a relative clause resolves to plain FunctionApplication with
-    reversed argument order (done by the parser simplifier).
-    """
+    """Tilde-verb in a relative clause resolves to FunctionApplication with reversed argument order."""
     result = parser(
         "define as authored every Paper ?p that a Person ~author ?p."
     )

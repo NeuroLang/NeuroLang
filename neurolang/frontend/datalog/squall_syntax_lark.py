@@ -1,5 +1,4 @@
-r"""
-SQUALL (Semantically controlled Query-Answerable Logical Language) parser.
+r"""SQUALL (Semantically controlled Query-Answerable Logical Language) parser.
 
 Translates controlled English sentences into NeuroLang logical expressions
 using a Lark grammar and Transformer. Uses Continuation-Passing Style (CPS)
@@ -89,7 +88,6 @@ from .squall import InvertedFunctionApplication
 
 
 class SquallProgram(Union):
-
     """
     Container returned when a SQUALL program contains ``obtain`` queries.
 
@@ -106,7 +104,8 @@ class SquallProgram(Union):
         query_names: dict = None,
         commands: list = None,
     ):
-        """Initialise with rules, queries, optional query_names and commands."""
+        """
+        Initialise with rules, queries, optional query_names and commands."""
         super().__init__(tuple(rules) + tuple(queries))
         self.query_names = dict(query_names) if query_names is not None else {}
         self.commands = list(commands) if commands is not None else []
@@ -121,8 +120,8 @@ class SquallProgram(Union):
 
 
 class _AnonymousVar:
-
-    """Sentinel for a ``_`` wildcard in a tuple label.
+    """
+    Sentinel for a ``_`` wildcard in a tuple label.
 
     When encountered in a tuple label ``(?i; ?j; _)``, this placeholder
     causes the corresponding argument position to be bound to a fresh
@@ -177,7 +176,6 @@ _AGG_FUNC_MAP = {
 
 
 class _InverseVerbSymbol:
-
     """
     Thin callable wrapper that reverses argument order via InvertedFunctionApplication.
 
@@ -197,7 +195,8 @@ class _InverseVerbSymbol:
 
 
 def _resolve_var_info(var_info):
-    """Return (body_args, head_args) from a _var_info value.
+    """
+    Return (body_args, head_args) from a _var_info value.
 
     ``body_args`` is the tuple of all symbols (including fresh symbols for
     anonymous ``_`` wildcards) used to build the rule *body* predicate.
@@ -235,7 +234,6 @@ def _resolve_var_info(var_info):
 
 
 class SquallTransformer(Transformer):
-
     """
     Transforms a SQUALL parse tree into NeuroLang logical expressions.
 
@@ -245,7 +243,8 @@ class SquallTransformer(Transformer):
     """
 
     def __init__(self, source_lines=None):
-        """Initialise the transformer with optional source lines for error reporting."""
+        """
+        Initialise the transformer with optional source lines for error reporting."""
         super().__init__()
         self._symbol_scope = {}
         self._source_lines = source_lines or []
@@ -371,7 +370,8 @@ class SquallTransformer(Transformer):
         return Implication(ProbabilisticFact(prob_val, head), body_formula)
 
     def rule_op_marg(self, args):
-        """Build a MARG query from ``define as verb with probability rule_body1_cond``.
+        """
+        Build a MARG query from ``define as verb with probability rule_body1_cond``.
 
         Emits:
             Implication(
@@ -402,7 +402,8 @@ class SquallTransformer(Transformer):
         return Implication(head, body_formula)
 
     def rule_op_prob_agg(self, args):
-        """Build a probabilistic aggregation rule.
+        """
+        Build a probabilistic aggregation rule.
 
         Grammar: ``define as verb1 WITH A PROBABILITY OF np``
 
@@ -484,7 +485,8 @@ class SquallTransformer(Transformer):
         return Implication(ProbabilisticFact(agg_expr, head), bare_body)
 
     def rule_opnn(self, args):
-        """Build an n-ary Datalog rule from ``define as verbn rule_body1 ops``.
+        """
+        Build an n-ary Datalog rule from ``define as verbn rule_body1 ops``.
 
         ``rule_body1`` supplies the primary subject variable(s) and body
         formula.  ``ops`` is a CPS noun phrase for the object position(s);
@@ -553,7 +555,8 @@ class SquallTransformer(Transformer):
         return Implication(ProbabilisticFact(fresh_prob, consequent), full_body)
 
     def rule_opnn_compound(self, args):
-        """Build an n-ary Datalog rule from compound quantifiers.
+        """
+        Build an n-ary Datalog rule from compound quantifiers.
 
         Grammar: `define as verbn rule_body2`
         """
@@ -574,7 +577,8 @@ class SquallTransformer(Transformer):
         return Implication(consequent, body_formula)
 
     def rule_opnn_prob(self, args):
-        """Handle `define as verbn with probability np rule_body2`."""
+        """
+        Handle `define as verbn with probability np rule_body2`."""
         self._clear_scope()
         items = [a for a in args if a is not None]
         verb = items[0]
@@ -598,7 +602,8 @@ class SquallTransformer(Transformer):
         return Implication(ProbabilisticFact(prob_val, head), body_formula)
 
     def rule_opnn_marg(self, args):
-        """Handle `define as verbn with inferred probability rule_body2`."""
+        """
+        Handle `define as verbn with inferred probability rule_body2`."""
         self._clear_scope()
         items = [a for a in args if a is not None]
         verb = items[0]
@@ -617,7 +622,8 @@ class SquallTransformer(Transformer):
         return Implication(head, body_formula)
 
     def rule_opnn_per_compound(self, args):
-        """Handle `define as probably verbn rule_body2`."""
+        """
+        Handle `define as probably verbn rule_body2`."""
         self._clear_scope()
         items = [a for a in args if a is not None and not (isinstance(a, str) and a.lower() in ('probably', 'conditioned'))]
         verb = items[0]
@@ -725,7 +731,8 @@ class SquallTransformer(Transformer):
         return ('_rule_body', (head_args, body_formula))
 
     def quant_clause_ng1(self, args):
-        """Handle `for every Region [?r]` in a compound quantifier list.
+        """
+        Handle `for every Region [?r]` in a compound quantifier list.
 
         Returns `('_quant_clause', (var, type_predicate))`.
         """
@@ -758,7 +765,8 @@ class SquallTransformer(Transformer):
         return prev_list + [new_clause]
 
     def rule_body2_where(self, args):
-        """Handle `for every X and for every Y where ...`.
+        """
+        Handle `for every X and for every Y where ...`.
 
         Returns `('_rule_body2', (head_vars, body_formula))`.
         """
@@ -878,7 +886,8 @@ class SquallTransformer(Transformer):
         return args[0]
 
     def det_every(self, args):
-        """Return the universal-quantifier CPS determinant function.
+        """
+        Return the universal-quantifier CPS determinant function.
 
         When the ng1 carries ``_agg_info`` (set by ``ng1_agg_npc``), a
         specialised path builds ``AggregationApplication`` in the head and
@@ -1203,7 +1212,8 @@ class SquallTransformer(Transformer):
         return ng
 
     def ng1_agg_npc(self, args):
-        """Handle ``noun1 OF npc [dims] [rel]`` aggregation noun groups.
+        """
+        Handle ``noun1 OF npc [dims] [rel]`` aggregation noun groups.
 
         When ``noun1`` is an aggregation function name (count, sum, max, min,
         average) **and** an npc is present, the returned ng1 function carries
@@ -1344,7 +1354,8 @@ class SquallTransformer(Transformer):
         return ('_rel', rel)
 
     def rel_ng2(self, args):
-        """Handle ``whose NG2 VP`` possessive relative clauses.
+        """
+        Handle ``whose NG2 VP`` possessive relative clauses.
 
         Semantics: given binary noun ``ng2`` and verb phrase ``vp``,
         produces ``∃y. ng2(x, y) ∧ vp(y)`` — the subject ``x`` possesses
@@ -1374,7 +1385,8 @@ class SquallTransformer(Transformer):
         return ('_rel', rel)
 
     def rel_fun_call(self, args):
-        """Handle ``identifier(label, label, ...)`` as a body predicate atom.
+        """
+        Handle ``identifier(label, label, ...)`` as a body predicate atom.
 
         Each argument position may be a **label** (``?x``, ``_``, or tuple
         label) or a **literal** (string constant ``'prefix'`` or numeric
@@ -1416,7 +1428,8 @@ class SquallTransformer(Transformer):
             return ('_rel', rel)
 
     def rel_tuple_noun(self, args):
-        """Handle 'where (?i; ?j; ?k) is a Noun' → Noun(i, j, k) in rule body.
+        """
+        Handle 'where (?i; ?j; ?k) is a Noun' → Noun(i, j, k) in rule body.
 
         args[0] : CPS label lambda (from `label` handler) or Symbol
         args[1] : Symbol from `noun1` handler (already lowercased)
@@ -1701,7 +1714,8 @@ class SquallTransformer(Transformer):
         return FunctionApplication(func, tuple(func_args))
 
     def expr_atom_fun_upper(self, args):
-        """Handle UPPERCASE_NAME(...) function calls, preserving the original case.
+        """
+        Handle UPPERCASE_NAME(...) function calls, preserving the original case.
 
         Unlike ``expr_atom_fun`` (which uses ``identifier`` → ``Symbol(name.lower())``),
         this handler is triggered by the ``UPPER_NAME(...)`` grammar alternative and
@@ -1834,7 +1848,8 @@ class SquallTransformer(Transformer):
         return Symbol(args[0].value)
 
     def label_tuple_item(self, args):
-        """Handle a single item in a tuple label: ?var or _ (anonymous)."""
+        """
+        Handle a single item in a tuple label: ?var or _ (anonymous)."""
         if len(args) == 1:
             item = args[0]
             if isinstance(item, Symbol):
@@ -1941,7 +1956,8 @@ class SquallTransformer(Transformer):
         return ('_query', _cps_formula_to_query(formula))
 
     def query_as(self, args):
-        """Handle 'obtain ops as Name'.
+        """
+        Handle 'obtain ops as Name'.
 
         Builds Implication(name_sym(*free_vars), body) as an IDB rule,
         then returns ('_query_as', (impl, query)) so squall() can
@@ -1956,7 +1972,8 @@ class SquallTransformer(Transformer):
         captured_vars = []
 
         def capturing_d(*var_args):
-            """Continuation that records head variables and returns a sentinel."""
+            """
+            Continuation that records head variables and returns a sentinel."""
             if len(var_args) == 1:
                 captured_vars.append(var_args[0])
             else:
@@ -2035,7 +2052,8 @@ class SquallTransformer(Transformer):
         return ('_per', groupby_var)
 
     def dim_npc_list(self, args):
-        """Handle 'per ?i, ?j, ?k' — multiple per-variables under one 'per' keyword.
+        """
+        Handle 'per ?i, ?j, ?k' — multiple per-variables under one 'per' keyword.
 
         Returns a plain list of ('_per', sym) tuples so that dims_base / dims_rec
         can flatten it into the _dims list without any change to ng1_agg_npc.
@@ -2108,7 +2126,8 @@ class SquallTransformer(Transformer):
 
 
 def _unwrap_label(val):
-    """Materialise a CPS label lambda to a plain Symbol / expression.
+    """
+    Materialise a CPS label lambda to a plain Symbol / expression.
 
     When a label variable (``?x``) appears as an argument inside an
     arithmetic expression or function call, the transformer produces a CPS
@@ -2121,7 +2140,8 @@ def _unwrap_label(val):
 
 
 def _extract_datalog_body(cps_np, head_args):
-    """Extract body predicates from a CPS NP for use in Datalog rules.
+    """
+    Extract body predicates from a CPS NP for use in Datalog rules.
 
     Calls ``cps_np`` with a ``collect_scope`` continuation that appends each
     bound variable to ``head_args`` (side-effect) and returns
@@ -2160,7 +2180,8 @@ def _extract_datalog_body(cps_np, head_args):
 
 
 def _flatten_to_datalog(expr):
-    """Flatten quantified expressions into a flat list of Datalog body atoms.
+    """
+    Flatten quantified expressions into a flat list of Datalog body atoms.
 
     Strips ``ExistentialPredicate`` and ``UniversalPredicate`` wrappers,
     unpacks ``Conjunction`` formulas recursively, and extracts both sides of
@@ -2211,7 +2232,8 @@ def _apply_to_vars(d, syms):
 
 
 def _conj_flat(a, b):
-    """Flatten nested conjunctions into a single Conjunction."""
+    """
+    Flatten nested conjunctions into a single Conjunction."""
     formulas = []
     if isinstance(a, Conjunction):
         formulas.extend(a.formulas)
@@ -2225,7 +2247,8 @@ def _conj_flat(a, b):
 
 
 def _apply_ops(ops, verb, subject):
-    """Apply operation arguments to a transitive verb."""
+    """
+    Apply operation arguments to a transitive verb."""
     # When verb is an _InverseVerbSymbol (from the ``~`` prefix), the
     # ResolveInvertedFunctionApplicationMixin walker will reverse the
     # argument tuple.  In relative-clause context the caller already
@@ -2249,7 +2272,8 @@ def _apply_ops(ops, verb, subject):
 
 
 def _cps_formula_to_query(formula):
-    """Convert a CPS-produced quantified formula into a Query expression.
+    """
+    Convert a CPS-produced quantified formula into a Query expression.
 
     The CPS NP for an "obtain" clause produces a universally or existentially
     quantified formula.  Extract the bound variable and restriction body so we

@@ -104,7 +104,6 @@ def nqm_mock(mock_engine):
 
 
 class TornadoV2TestCase(tornado.testing.AsyncHTTPTestCase):
-
     """Reusable Tornado test case for v2 endpoint tests."""
 
     def __init__(self, nqm) -> None:
@@ -221,10 +220,7 @@ class TestV2SchemaHandler:
         assert "docstring" in func_entry
 
     def test_schema_probabilistic_grouped_separately(self):
-        """
-        When an engine has probabilistic symbols, they appear under
-        the 'probabilistic' key.
-        """
+        """Probabilistic symbols appear under the 'probabilistic' key."""
         engine = _make_engine(prob_symbols={"SelectedStudy"})
         # add a relation for SelectedStudy
         sel_sym = MagicMock()
