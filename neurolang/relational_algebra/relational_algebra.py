@@ -498,17 +498,16 @@ class FunctionApplicationListMember(Definition):
     Notes
     -----
     In the case of an extended projection operation, as described in [1]_,
-    a function application list member can either be:
-
-    - a single attribute (column) name in the relation, resulting in a
-      normal non-extended projection,
-    - an expression `x -> y` where `x` and `y` are both attribute (column)
-      names, `x` effectively being rename as `y`,
-    - or an expression `E -> z` where `E` is an expression involving
-      attributes of the relation, arithmetic operators, and string
-      operators, and `z` is a new name for the attribute that results from
-      the calculation implied by `E`. For example, `a + b -> x` represents
-      the sum of the attributes `a` and `b`, renamed `x`.
+    a function application list member can either be
+        - a single attribute (column) name in the relation, resulting in a
+          normal non-extended projection,
+        - an expression `x -> y` where `x` and `y` are both attribute (column)
+          names, `x` effectively being rename as `y`,
+        - or an expression `E -> z` where `E` is an expression involving
+          attributes of the relation, arithmetic operators, and string
+          operators, and `z` is a new name for the attribute that results from
+          the calculation implied by `E`. For example, `a + b -> x` represents
+          the sum of the attributes `a` and `b`, renamed `x`.
 
     .. [1] Garcia-Molina, Hector, Jeffrey D. Ullman, and Jennifer Widom.
        "Database systems: the complete book." (2009).

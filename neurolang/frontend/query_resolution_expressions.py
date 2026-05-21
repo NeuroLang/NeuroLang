@@ -58,7 +58,7 @@ class Expression(object):
         Expression
             FrontEnd expression
 
-        Examples
+        Example
         -------
         >>> nl = NeurolangDL()
         >>> from neurolang import expressions as ir
@@ -91,7 +91,7 @@ class Expression(object):
         Operation
             FunctionApplication of self to *args
 
-        Examples
+        Example
         -------
         >>> nl = NeurolangDL()
         >>> A = nl.new_symbol(name="A")
@@ -139,7 +139,7 @@ class Expression(object):
         and an Expression value. self[key] will be
         interpreted as self(*key) (see __call__ method)
 
-        Warnings
+        Warning
         -------
         If logic programming is not enabled by the builder,
         will set item in the general Python sense !
@@ -152,7 +152,7 @@ class Expression(object):
             If not a frontend expression, will be cast as
             one with a Constant value
 
-        Examples
+        Example
         -------
         >>> nl = NeurolangDL()
         >>> A = nl.new_symbol(name="A")
@@ -181,7 +181,7 @@ class Expression(object):
             a- self(*key) if key is a tuple
             b- self(key) if not
 
-        Warnings
+        Warning
         -------
         If logic programming is not enabled by the builder,
         will get item in the general Python sense !
@@ -196,7 +196,7 @@ class Expression(object):
         Union["Expression", Any]
             see description
 
-        Examples
+        Example
         -------
         >>> nl = NeurolangDL()
         >>> A = nl.new_symbol(name="A")
@@ -223,7 +223,7 @@ class Expression(object):
         str
             representation of expression
 
-        Examples
+        Example
         -------
         >>> nl = NeurolangDL()
         >>> A = nl.new_symbol(name="nameA")
@@ -398,7 +398,7 @@ class Operation(Expression):
     An Operation is an Expression representing the
     application of an operator to a tuple of arguments
 
-    Examples
+    Example
     -------
     >>> nl = NeurolangDL()
     >>> A = nl.new_symbol(name="A")
@@ -482,7 +482,7 @@ class Symbol(Expression):
     A Symbol represents an atomic Expression. Its is
     the most recurrent element of queries
 
-    Examples
+    Example
     -------
     >>> nl = NeurolangDL()
     >>> A = nl.new_symbol(name="nameA")

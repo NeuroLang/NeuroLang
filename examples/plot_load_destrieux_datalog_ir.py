@@ -46,7 +46,7 @@ image_data = image.get_fdata().astype(int)
 ##################################################
 # Load the regions into Voxel-style regions
 region_dict = {}
-for label, name in enumerate(atlas_destrieux['labels']):
+for label, name in atlas_destrieux['labels']:
     if label == 0:
         continue
 

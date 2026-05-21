@@ -564,7 +564,7 @@ class ProvenanceExtendedProjectionMixin(PatternWalker):
     sets for which the semantics are not modified.
 
     An extended projection on a provenance set is allowed if all the
-    non-provenance columns `c` are projected as-is (i.e. `c -> c`), which
+    non-provenance columns `c` are projected _as is_ (i.e. `c -> c`), which
     ensures the number of tuples is going to be exactly the same in the
     resulting provenance set, and the provenance label is still going to be
     semantically valid. This is useful in particular for projecting a constant

@@ -228,3 +228,18 @@ cov.xml
 
 # worktrees
 .worktrees/
+
+# internal dev artifacts (not for PR)
+.sisyphus/
+AGENTS.md
+ANALYSIS_SUMMARY.md
+PROBABILISTIC_FACTS_INDEX.md
+PROBABILISTIC_FACTS_QUICK_REFERENCE.md
+PROBABILISTIC_FACTS_TEST_EXAMPLES.md
+VAL-PROB-contracts.md
+WEIGHTED_PROBABILISTIC_FACTS_REPORT.md
+doc/SQUALL_REVIEW.md
+doc/sg_execution_times.rst
+docs/superpowers/
+neurolang/_version_scm.py
+neurolang/utils/server/neurolang-sparklis/

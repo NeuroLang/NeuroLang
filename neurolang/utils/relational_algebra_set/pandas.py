@@ -286,9 +286,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         Examples
         --------
         Select the elements where col0 == col1 and col1 == col2
-
         >>> ras = RelationalAlgebraFrozenSet(
-        ...     [(i % 2, i, i * 2) for i in range(5)])
+                [(i % 2, i, i * 2) for i in range(5)])
         >>> ras.selection_columns({0:1, 1: 2})
            0  1  2
         0  0  0  0
