@@ -339,14 +339,12 @@ def _format_result(
     """Format a query result for display."""
     if result is None:
         return ""
-
     if isinstance(result, bool):
         return "true" if result else "false"
 
     import pandas as pd
 
-    def _maybe_rename_columns(df):
-        """Rename unnamed columns when variable names are available."""
+    def _rename_unnamed_columns(df):
         if column_names is not None and len(column_names) == len(df.columns):
             unnamed = all(
                 isinstance(c, int) or (isinstance(c, str) and c.startswith("c"))
@@ -356,42 +354,34 @@ def _format_result(
                 df.columns = column_names
         return df
 
+    def _emit(df):
+        if df.empty:
+            return "(empty)"
+        if fmt == "csv":
+            return df.to_csv(index=False)
+        if fmt == "json":
+            return df.to_json(orient="records", indent=2)
+        return df.to_string(index=False)
+
     try:
+        # Unwrap Constant → concrete set when the chase produced a wrapped result
         if hasattr(result, "value") and hasattr(result.value, "unwrap"):
             inner = result.value.unwrap()
             if hasattr(inner, "as_pandas_dataframe"):
-                df = _maybe_rename_columns(inner.as_pandas_dataframe())
-                if df.empty:
-                    return "(empty)"
-                if fmt == "csv":
-                    return df.to_csv(index=False)
-                elif fmt == "json":
-                    return df.to_json(orient="records", indent=2)
-                return df.to_string(index=False)
-            else:
-                result = inner
+                return _emit(_rename_unnamed_columns(inner.as_pandas_dataframe()))
+            result = inner
 
+        # Get a DataFrame from the bare set (named or unnamed columns)
         if hasattr(result, "columns") and len(result.columns) > 0:
-            df = _maybe_rename_columns(
-                pd.DataFrame(iter(result), columns=result.columns)
-            )
+            df = pd.DataFrame(iter(result), columns=result.columns)
         else:
             rows = list(iter(result))
             if not rows:
                 return "(empty)"
             arity = result.arity if hasattr(result, "arity") else len(rows[0])
-            df = _maybe_rename_columns(
-                pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
-            )
+            df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
 
-        if df.empty:
-            return "(empty)"
-
-        if fmt == "csv":
-            return df.to_csv(index=False)
-        elif fmt == "json":
-            return df.to_json(orient="records", indent=2)
-        return df.to_string(index=False)
+        return _emit(_rename_unnamed_columns(df))
     except Exception:
         return str(result)
 
@@ -496,33 +486,27 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
 
     q = queries[0]
 
-    # Extract column names from the query head (the Datalog variable names).
-    # The parsed head is FunctionApplication(functor, args…) where args are
-    # Symbol nodes whose .name carries the variable name.
+    # Extract both the head predicate name and the argument variable names
+    # from the parsed query head.  The head is always a FunctionApplication
+    # whose functor is a Symbol (simple) or a Lambda wrapping a Symbol (parser
+    # sugar), and whose args are Symbol nodes whose .name carries the Datalog
+    # variable name.
     if isinstance(q.head, ir.FunctionApplication):
         column_names = [a.name for a in q.head.args]
+        functor = (
+            q.head.functor.body
+            if isinstance(q.head.functor, ir.Lambda)
+            else q.head.functor
+        )
     else:
         column_names = None
+        functor = q.head
+
+    pred_name = functor.name if isinstance(functor, ir.Symbol) else str(functor)
 
     # Query → Implication so the DatalogProgram walker registers it as IDB
     rule = Implication(q.head, q.body)
     nl.program_ir.walk(rule)
-
-    # Determine the predicate name from the query head.
-    # The parsed head is FunctionApplication(Lambda, args).
-    if isinstance(q.head, ir.FunctionApplication):
-        if isinstance(q.head.functor, ir.Lambda):
-            pred_symbol = q.head.functor.body
-        else:
-            pred_symbol = q.head.functor
-    else:
-        pred_symbol = q.head
-
-    pred_name = (
-        pred_symbol.name
-        if isinstance(pred_symbol, ir.Symbol)
-        else str(pred_symbol)
-    )
 
     chase = Chase(nl.program_ir)
     solution = chase.build_chase_solution()
@@ -534,6 +518,22 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
     return None
 
 
+def _list_predicates(nl: NeurolangPDL, engine_name: str) -> None:
+    """Print the available EDB symbols for the given engine."""
+    print(f"\nEngine: {engine_name}")
+    print("Available predicates (EDB symbols):")
+    print("─" * 40)
+    for sym in nl.symbol_table:
+        name = sym.name
+        if name.startswith("_"):
+            continue
+        val = nl.symbol_table[sym]
+        val_repr = repr(val)
+        if len(val_repr) > 80:
+            val_repr = val_repr[:77] + "..."
+        print(f"  {name}: {val_repr}")
+
+
 def main(argv: Optional[list] = None) -> None:
     """CLI entry point: parse arguments, build engine, run query."""
     parser = _build_parser()
@@ -542,18 +542,7 @@ def main(argv: Optional[list] = None) -> None:
     nl = _build_engine(args.engine, args.data_dir, args.resolution)
 
     if args.list_predicates:
-        print(f"\nEngine: {args.engine}")
-        print("Available predicates (EDB symbols):")
-        print("─" * 40)
-        for sym in nl.symbol_table:
-            name = sym.name
-            if name.startswith("_"):
-                continue
-            val = nl.symbol_table[sym]
-            val_repr = repr(val)
-            if len(val_repr) > 80:
-                val_repr = val_repr[:77] + "..."
-            print(f"  {name}: {val_repr}")
+        _list_predicates(nl, args.engine)
         return
 
     program = _read_query(args)
