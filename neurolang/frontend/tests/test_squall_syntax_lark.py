@@ -10,7 +10,6 @@ def nl_setup():
 
 def _normalize_fresh(expr):
     """Replace fresh symbol names with canonical placeholders for structural comparison."""
-    import re
     from neurolang.expressions import Symbol, Constant, FunctionApplication
     from neurolang.logic import Conjunction, ExistentialPredicate
 

@@ -2,5 +2,5 @@
 engines:
   bandit:
     enabled: true
-    exclude_patterns:
-      - "B101"
+    args:
+      - "--skip=B101"

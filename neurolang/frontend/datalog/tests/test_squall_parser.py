@@ -1,6 +1,6 @@
 from inspect import signature
 from itertools import product
-from operator import eq, sub, truediv
+from operator import eq, truediv
 import logging
 
 import pytest
@@ -254,7 +254,7 @@ def noun_phrase_quantified_2(noun_phrase_2, nouns):
 
 def det_ng2_composition(det, ng2):
     return lambda x: lambda d: (  # pylint: disable=W0108
-        det(lambda y: ng2(x)(y))(d)
+        det(lambda y: ng2(x)(y))(d)  # pylint: disable=W0108
     )
 
 
