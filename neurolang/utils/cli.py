@@ -371,7 +371,7 @@ def _format_result(
             else:
                 result = inner
 
-        if hasattr(result, "columns") and result.columns:
+        if hasattr(result, "columns") and len(result.columns) > 0:
             df = _maybe_rename_columns(
                 pd.DataFrame(iter(result), columns=result.columns)
             )
