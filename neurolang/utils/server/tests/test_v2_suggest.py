@@ -112,6 +112,7 @@ def nqm_mock(mock_engine):
 
 
 class TornadoSuggestTestCase(tornado.testing.AsyncHTTPTestCase):
+
     """Reusable Tornado test case for suggest endpoint tests."""
 
     def __init__(self, nqm) -> None:

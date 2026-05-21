@@ -420,8 +420,8 @@ class UnexpectedCharactersError(ParserError):
 
 
 class SquallSemanticError(NeuroLangException):
-    """
-    Semantic error in a SQUALL program — parse succeeded but semantics invalid.
+
+    """Semantic error in a SQUALL program — parse succeeded but semantics invalid.
 
     Raised when the SQUALL transformer encounters a valid parse tree that
     represents a logically invalid or unsupported construction, such as:

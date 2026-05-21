@@ -7,6 +7,7 @@ from pygments.token import (
 
 
 class SquallLexer(RegexLexer):
+
     """Simple lexer for SQUALL (Semantics with QUantifiers and ALgebra of Logic)."""
 
     name = "squall"

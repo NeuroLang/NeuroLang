@@ -813,10 +813,7 @@ def test_rule_body2_cond_parses():
 
 
 def test_rel_body_function_call_parses():
-    """
-    'every Person that euclidean(?x, ?y) holds' should parse to a body atom
-    that includes the subject (noun-head) variable alongside the two labels.
-    """
+    """Euclidean body atom includes the subject variable alongside the two labels."""
     from ..squall_syntax_lark import parser
     from ....datalog import Implication
     from ....logic.expression_processing import extract_logic_free_variables

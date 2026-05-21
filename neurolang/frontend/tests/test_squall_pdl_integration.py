@@ -180,14 +180,7 @@ def test_execute_squall_tilde_inversion_end_to_end(nl_author):
 
 
 def test_execute_squall_marg_query_walks_without_error():
-    """
-    'with probability … conditioned to …' walks into the engine without raising.
-
-    Smoke test confirming the MARG syntax is parsed and the IR
-    (Implication with Condition body and ProbabilisticQuery head arg) is
-    accepted by the solver's walk(). Full probabilistic solving is not
-    asserted — that requires a complete CPLogic dataset.
-    """
+    """Smoke test: MARG syntax parses and IR is accepted by the solver walk."""
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
