@@ -725,10 +725,9 @@ class SquallTransformer(Transformer):
 
         var_info = app if app is not None else getattr(ng1, '_var_info', None)
         if var_info is not None:
-            body_args, head_args = _resolve_var_info(var_info)
+            body_args, _ = _resolve_var_info(var_info)
             if body_args is None:
                 body_args = Symbol.fresh()
-                head_args = [body_args]
         else:
             body_args = Symbol.fresh()
 
@@ -1259,16 +1258,16 @@ class SquallTransformer(Transformer):
                 else (Symbol(noun_name) if noun_name else None)
             )
             if agg_func is not None:
-                def ng_agg(x):
+                def ng_agg_fallback(x):
                     # Fallback body — only used if det_every does not intercept _agg_info.
                     q = Symbol.fresh()
                     npc(lambda v: Constant(True))
                     return _AggApp(agg_func, (q,))
 
-                ng_agg._agg_info = (agg_func, npc, list(per_vars), extra_rel)
+                ng_agg_fallback._agg_info = (agg_func, npc, list(per_vars), extra_rel)
                 if app is not None:
-                    ng_agg._var_info = app
-                return ng_agg
+                    ng_agg_fallback._var_info = app
+                return ng_agg_fallback
 
         if agg_specs:
             agg_func_const, agg_npc = agg_specs[0]
@@ -1592,7 +1591,6 @@ class SquallTransformer(Transformer):
 
     def ops_rec(self, args):
         prev = args[0]
-        prep = args[1] if len(args) > 2 else None
         new_op = args[-1]
         if callable(prev) and callable(new_op):
             def combined(f):
@@ -1604,7 +1602,6 @@ class SquallTransformer(Transformer):
         return new_op
 
     def pp_np(self, args):
-        prep = args[0]
         np = args[1]
         return np
 

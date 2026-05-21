@@ -6,7 +6,7 @@ and normalizes quantifier expressions produced by the SQUALL parser.
 """
 from ...datalog.expressions import AggregationApplication as _AggApp
 from ...expression_walker import ExpressionWalker, PatternWalker, add_match
-from ...expressions import Constant, FunctionApplication, Query, Symbol
+from ...expressions import Constant, FunctionApplication, Query
 from ...logic import (
     Conjunction,
     ExistentialPredicate,
@@ -18,7 +18,7 @@ from ...logic.transformations import (
     CollapseConjunctionsMixin,
     RemoveTrivialOperationsMixin,
 )
-from ...probabilistic.expressions import ProbabilisticFact
+
 
 
 
