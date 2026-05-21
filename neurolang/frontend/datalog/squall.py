@@ -38,14 +38,14 @@ class InvertedFunctionApplication(FunctionApplication):
     Mixin resolves to:  ``reports(voxel, study)``
 
     Resolved by ResolveInvertedFunctionApplicationMixin.
+
     """
 
 
 class ResolveInvertedFunctionApplicationMixin(PatternWalker):
 
     """
-    Rewrites ``InvertedFunctionApplication(f, (a, b, …))`` to
-    ``f(…, b, a)`` (fully reversed argument tuple) at walk time.
+    Rewrites ``InvertedFunctionApplication(f, (a, b, …))`` to ``f(…, b, a)`` at walk time.
 
     Must appear before ``LogicSimplifier`` and ``ExpressionBasicEvaluator``
     in any walker/solver MRO that processes SQUALL output containing ``~``

@@ -117,8 +117,10 @@ use_parentheses = true
 line_length = 79
 combine_as_imports = true
 
-[tool.codespell]
-ignore-words-list = "anc"
+[tool.pydocstyle]
+# D211 conflicts with D203; D212 conflicts with D213 — suppress the unwanted variants
+ignore = ["D211", "D212"]
+
 
 [dependency-groups]
 dev = [

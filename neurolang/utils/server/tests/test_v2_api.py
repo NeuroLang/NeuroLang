@@ -82,10 +82,7 @@ def mock_engine():
 
 @pytest.fixture
 def nqm_mock(mock_engine):
-    """
-    A MagicMock NeurolangQueryManager whose configs expose two engine keys
-    and whose engines dict is pre-populated.
-    """
+    """Mock NeurolangQueryManager with two engine keys and a pre-populated engines dict."""
     mock_nqm = MagicMock(spec=NeurolangQueryManager)
 
     # configs (used to list engines in V2EnginesHandler)

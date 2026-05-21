@@ -54,6 +54,7 @@ References
 ----------
 S. Ferré, "SQUALL: The expressiveness of SPARQL 1.1 made available
 as a controlled natural language", Data & Knowledge Engineering, 2014.
+
 """
 import os
 
@@ -2316,6 +2317,7 @@ def parser(code, local_vars=None, global_vars=None):
     SquallSemanticError
         The input parsed successfully but represents an invalid or
         unsupported construction (empty body, unresolved anaphora, etc.).
+
     """
     source_code = code.strip()
     try:
