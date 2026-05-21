@@ -20,7 +20,7 @@ class BoundAggregationApplicationError(InvalidMagicSetError):
     Magic Sets algorithm does not work if an argument which is an aggregate
     function is bound.
 
-    Example
+    Examples
     -------
     Q(x, count(y)) :- P(x, y)
     ans(x) :- Q(x, 3)
