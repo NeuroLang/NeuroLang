@@ -53,8 +53,9 @@ computation using ``with nl.environment as e:``.
 
     obtain every Activation_map (?i; ?j; ?k; ?p) as Image.
 
-The result is returned as a relation with columns ``i``, ``j``, ``k``, ``p``
-(probability).  We then assemble the brain overlay in Python using the
+The result from ``obtain … as`` is a
+:class:`~neurolang.utils.relational_algebra_set.NamedRelationalAlgebraFrozenSet`.
+We convert to a pandas DataFrame and assemble the brain overlay using the
 :func:`~neurolang.frontend.ExplicitVBROverlay` helper — see ``brain_image``
 below.
 """
@@ -213,13 +214,14 @@ obtain every Activation_map (?i; ?j; ?k; ?p) as Image.
 with nl.scope:
     result = nl.execute_squall_program(squall_program)
 
-    # The obtain … as query returns rows (i, j, k, probability).
-    # Assemble them into a brain overlay for visualisation.
-    image = brain_image(
-        result["i"], result["j"], result["k"], result["p"]
-    )
-    print("Brain image assembled — shape:", image.shape)
-    print(f"Non-zero voxels: {np.count_nonzero(image)}")
+    # The obtain … as query returns a NamedRelationalAlgebraFrozenSet.
+    # Convert to a pandas DataFrame for column access, then assemble the
+    # brain overlay.
+    df = result.as_pandas_dataframe()
+    image = brain_image(df["i"], df["j"], df["k"], df["p"])
+    spatial_img = image.spatial_image()
+    print("Brain image assembled — shape:", spatial_img.shape)
+    print(f"Non-zero voxels: {np.count_nonzero(spatial_img.get_fdata())}")
     print(f"Rules defined: {len(nl.current_program)}")
     for r in nl.current_program:
         print(f"  - {r.expression.consequent.functor}")
