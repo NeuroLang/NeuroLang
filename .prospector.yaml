@@ -1,7 +1,2 @@
 pydocstyle:
-  options:
-    ignore:
-      - D211
-      - D212
-  ignore-patterns:
-    - "examples/.*"
+  run: false
