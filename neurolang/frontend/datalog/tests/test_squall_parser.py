@@ -7,7 +7,6 @@ import pytest
 
 from .... import config
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
-from ....datalog.aggregation import AggregationApplication
 from ....expression_pattern_matching import add_match
 from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ....expressions import Constant, FunctionApplication, Query, Symbol
@@ -17,10 +16,8 @@ from ....logic import (
     NaryLogicOperator,
     UniversalPredicate
 )
-from ....probabilistic.expressions import ProbabilisticPredicate
-from ..squall import InvertedFunctionApplication, LogicSimplifier
+from ..squall import LogicSimplifier
 from ..squall_syntax_lark import parser, SquallProgram
-from ..standard_syntax import ExternalSymbol
 from ...probabilistic_frontend import RegionFrontendCPLogicSolver, Chase
 
 
@@ -281,7 +278,7 @@ def verb_phrases(verbs, verb_phrases_do_op):
 
 @pytest.fixture(scope="module")
 def noun_phrases(nouns, noun_phrase_quantified_1, noun_phrase_quantified_2):
-    return nouns + noun_phrase_quantified_1 + noun_phrase_quantified_2 
+    return nouns + noun_phrase_quantified_1 + noun_phrase_quantified_2
 
 
 @pytest.fixture(scope="module")
@@ -514,12 +511,11 @@ def test_squall_obtain_executes_against_engine(datalog_simple):
     assert result == {('a',), ('b',), ('c',)}
 
 
-    """'whose NG2 VP' must include the binary noun predicate in the body.
-
-    'define as published every person whose writer plays' should produce:
-    published(x) :- person(x), ∃y. writer(x, y) ∧ plays(y)
-    i.e. the 'writer' relation must appear in the output.
-    """
+    # 'whose NG2 VP' must include the binary noun predicate in the body.
+    #
+    # 'define as published every person whose writer plays' should produce:
+    # published(x) :- person(x), ∃y. writer(x, y) ∧ plays(y)
+    # i.e. the 'writer' relation must appear in the output.
     res = parser("define as published every person whose writer plays.")
     assert "writer" in repr(res), (
         f"rel_ng2: binary noun 'writer' missing from output: {repr(res)}"
