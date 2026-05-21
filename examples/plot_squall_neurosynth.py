@@ -128,8 +128,9 @@ nl.load_neurosynth_term_study_associations(
 # * ``obtain every Activation_given_term_image (?x)`` — runs only this query
 #
 # Note: ``?tfidf`` binds the TF-IDF weight column but is absent from the rule
-# head (projected away); SQUALL requires every argument in a tuple label to be
-# a named variable — anonymous wildcards are not supported in that position.
+# head (projected away).  Anonymous wildcards are supported in tuple labels
+# (e.g. ``(?i; ?j; ?k; _)`` on lines below — each ``_`` creates a fresh
+# variable that is matched but dropped from the rule head).
 
 squall_program = """
 define as Activation every Peak_reported (?i; ?j; ?k; ?s)

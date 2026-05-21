@@ -204,8 +204,8 @@ def test_execute_squall_marg_query_walks_without_error():
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
-    _ = engine.add_tuple_set([("v1",), ("v2",)], name="voxel")
-    _ = engine.add_tuple_set([("s1",), ("s2",)], name="study")
+    engine.add_tuple_set([("v1",), ("v2",)], name="voxel")
+    engine.add_tuple_set([("s1",), ("s2",)], name="study")
 
     try:
         engine.execute_squall_program(
@@ -233,7 +233,7 @@ def test_execute_squall_arbitrary_aggregation():
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
-    _ = engine.add_tuple_set(
+    engine.add_tuple_set(
         [("a",), ("b",), ("c",)], name="item"
     )
 
@@ -272,8 +272,8 @@ def test_execute_squall_conditioned_rule_produces_implication_with_condition():
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException
 
     engine = NeurolangPDL()
-    _ = engine.add_tuple_set([("v1",), ("v2",)], name="voxel")
-    _ = engine.add_tuple_set([("s1",), ("s2",)], name="study")
+    engine.add_tuple_set([("v1",), ("v2",)], name="voxel")
+    engine.add_tuple_set([("s1",), ("s2",)], name="study")
 
     # The sentence reaches rewrite_conditional_query which raises
     # Fol2DatalogTranslationException because the toy head variables are not

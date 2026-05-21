@@ -4,7 +4,6 @@ Logic simplifier for SQUALL parsed expressions.
 Collapses nested conjunctions, removes trivial operations,
 and normalizes quantifier expressions produced by the SQUALL parser.
 """
-from ...datalog.aggregation import AggregationApplication
 from ...datalog.expressions import AggregationApplication as _AggApp
 from ...expression_walker import ExpressionWalker, PatternWalker, add_match
 from ...expressions import Constant, FunctionApplication, Query, Symbol

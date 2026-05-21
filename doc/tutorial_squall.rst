@@ -1097,10 +1097,10 @@ Registering facts and running a simple rule
 --------------------------------------------
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("alice",), ("bob",), ("carol",)], name="person"
     ... )
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("alice",), ("carol",)], name="plays"
     ... )
     >>> nl.execute_squall_program(
@@ -1138,9 +1138,9 @@ Transitive verbs and binary predicates
 ---------------------------------------
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("jazz",)], name="genre")
-    >>> _ = nl.add_tuple_set([("alice", "jazz")], name="sings")
+    >>> nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> nl.add_tuple_set([("jazz",)], name="genre")
+    >>> nl.add_tuple_set([("alice", "jazz")], name="sings")
     >>> nl.execute_squall_program(
     ...     "define as Performer every person ?x that a Genre ?y ~sings."
     ... )
@@ -1154,8 +1154,8 @@ Quantifiers: every, a, no
 **Every**
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> nl.add_tuple_set([("alice",)], name="plays")
     >>> nl.execute_squall_program("define as Active every person that plays.")
     >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
     ['alice']
@@ -1163,8 +1163,8 @@ Quantifiers: every, a, no
 **A / an / some**
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
-    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
+    >>> nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
+    >>> nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
     >>> result = nl.execute_squall_program(
     ...     "obtain every item ?i that has an item_count ?c."
     ... )
@@ -1174,8 +1174,8 @@ Quantifiers: every, a, no
 **No**
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
-    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
+    >>> nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
+    >>> nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
     >>> result = nl.execute_squall_program(
     ...     "obtain every item ?i that has no item_count ?c."
     ... )
@@ -1187,8 +1187,8 @@ Relative clauses and negation
 ------------------------------
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> nl.add_tuple_set([("alice",)], name="plays")
     >>> nl.execute_squall_program(
     ...     "define as NotPlaying every person that does not plays."
     ... )
@@ -1200,7 +1200,7 @@ Tuple (multi-dimensional) subjects
 -----------------------------------
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("v1", 0, 0, 1), ("v2", 1, 2, 3)], name="voxel"
     ... )
     >>> nl.execute_squall_program(
@@ -1213,7 +1213,7 @@ Tuple (multi-dimensional) subjects
 Anonymous wildcard ``_``::
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
     ... )
     >>> nl.execute_squall_program(
@@ -1228,11 +1228,11 @@ Compound quantifiers and anaphora
 ----------------------------------
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
-    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
-    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="selected_study")
-    >>> _ = nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
-    >>> _ = nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
+    >>> nl.add_tuple_set([("A",), ("B",)], name="region")
+    >>> nl.add_tuple_set([("x",), ("y",)], name="term")
+    >>> nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="selected_study")
+    >>> nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
+    >>> nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
     >>> nl.execute_squall_program(
     ...     "define as Cooccurrence "
     ...     "for every Region and for every Term "
@@ -1249,9 +1249,9 @@ Probabilistic n-ary rules
 --------------------------
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
-    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set([("A",), ("B",)], name="region")
+    >>> nl.add_tuple_set([("x",), ("y",)], name="term")
+    >>> nl.add_tuple_set(
     ...     [("A", "x"), ("A", "y"), ("B", "x")], name="cooccurs"
     ... )
     >>> result = nl.execute_squall_program(
@@ -1270,10 +1270,10 @@ Filtering with comparisons
 ---------------------------
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("a",), ("b",), ("c",), ("d",)], name="item"
     ... )
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
     ... )
     >>> nl.execute_squall_program(
@@ -1288,13 +1288,13 @@ Aggregations
 -------------
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("a",), ("b",), ("c",), ("d",)], name="item"
     ... )
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
     ... )
-    >>> _ = nl.add_tuple_set([(i,) for i in range(5)], name="quantity")
+    >>> nl.add_tuple_set([(i,) for i in range(5)], name="quantity")
     >>> nl.execute_squall_program(
     ...     "define as max_items for every Item ?i ;"
     ...     " where every Max of the Quantity where ?i item_count per ?i."
@@ -1313,9 +1313,9 @@ Boolean connectives
 **Conjunction (and)**
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="runs")
+    >>> nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> nl.add_tuple_set([("alice",), ("carol",)], name="plays")
+    >>> nl.add_tuple_set([("alice",), ("bob",)], name="runs")
     >>> nl.execute_squall_program(
     ...     "define as Player every person that plays. "
     ...     "define as PlayAndRun every Player that runs."
@@ -1326,9 +1326,9 @@ Boolean connectives
 **Disjunction (or)**
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
-    >>> _ = nl.add_tuple_set([("bob",)], name="runs")
+    >>> nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> nl.add_tuple_set([("alice",)], name="plays")
+    >>> nl.add_tuple_set([("bob",)], name="runs")
     >>> nl.execute_squall_program(
     ...     "define as PlayOrRun every person that plays or runs."
     ... )
@@ -1342,13 +1342,13 @@ Neuroimaging domain examples
 **Activated voxels**
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("s1",), ("s2",), ("s3",)], name="study"
     ... )
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("v1",), ("v2",), ("v3",)], name="voxel"
     ... )
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("s1", "v1"), ("s2", "v1"), ("s2", "v2")], name="reports"
     ... )
     >>> nl.execute_squall_program(
@@ -1360,13 +1360,13 @@ Neuroimaging domain examples
 **Multi-variable activation (tuple subject)**
 
     >>> nl = NeurolangPDL()
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("s1",), ("s2",)], name="study"
     ... )
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [(0, 1, 2), (3, 4, 5), (6, 7, 8)], name="voxel"
     ... )
-    >>> _ = nl.add_tuple_set(
+    >>> nl.add_tuple_set(
     ...     [("s1", 0, 1, 2), ("s2", 3, 4, 5)], name="focus_reported"
     ... )
     >>> nl.execute_squall_program(

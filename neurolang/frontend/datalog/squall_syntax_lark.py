@@ -66,7 +66,6 @@ from lark.exceptions import (
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
-from ...datalog.aggregation import AggregationApplication
 from ...datalog.expressions import AggregationApplication as _AggApp
 from ...exceptions import (
     NeuroLangException,
@@ -732,7 +731,6 @@ class SquallTransformer(Transformer):
                 head_args = [body_args]
         else:
             body_args = Symbol.fresh()
-            head_args = [body_args]
 
         # Register noun name in scope for anaphora
         noun_name = getattr(ng1, '_noun_name', None)
@@ -772,7 +770,7 @@ class SquallTransformer(Transformer):
     def rule_body1_cond_prior(self, args):
         # Grammar: det ng1 _CONDITIONED _TO s
         # args = [det, ng1, s]
-        det, ng1, s = args[0], args[1], args[2]
+        _, ng1, s = args[0], args[1], args[2]
         var_info = getattr(ng1, '_var_info', None)
         body_args, head_args = _resolve_var_info(var_info)
         if body_args is None:
@@ -784,7 +782,7 @@ class SquallTransformer(Transformer):
     def rule_body1_cond_posterior(self, args):
         # Grammar: s _CONDITIONED _TO det ng1
         # args = [s, det, ng1]
-        s, det, ng1 = args[0], args[1], args[2]
+        s, _, ng1 = args[0], args[1], args[2]
         var_info = getattr(ng1, '_var_info', None)
         body_args, head_args = _resolve_var_info(var_info)
         if body_args is None:
