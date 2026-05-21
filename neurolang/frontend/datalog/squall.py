@@ -23,15 +23,16 @@ from ...logic.transformations import (
 
 
 class InvertedFunctionApplication(FunctionApplication):
+
     """
-    Intermediate IR node emitted by the SQUALL transformer for transitive
-    verbs prefixed with '~'.  Carries the same functor and args as a
-    FunctionApplication built with the *surface* argument order
-    (subject first, object(s) after), but signals that the order must be
-    reversed before the rule enters the engine.
+    Intermediate IR node for transitive verbs prefixed with ``~``.
+
+    Carries the same functor and args as a FunctionApplication built with
+    the *surface* argument order (subject first, object(s) after), but
+    signals that the order must be reversed before the rule enters the engine.
 
     Examples
-    -------
+    --------
     SQUALL: ``every study ~reports a voxel``
     Transformer emits: ``InvertedFunctionApplication(reports, (study, voxel))``
     Mixin resolves to:  ``reports(voxel, study)``
@@ -41,6 +42,7 @@ class InvertedFunctionApplication(FunctionApplication):
 
 
 class ResolveInvertedFunctionApplicationMixin(PatternWalker):
+
     """
     Rewrites ``InvertedFunctionApplication(f, (a, b, …))`` to
     ``f(…, b, a)`` (fully reversed argument tuple) at walk time.
@@ -61,6 +63,7 @@ class LogicSimplifier(
     RemoveTrivialOperationsMixin,
     ExpressionWalker,
 ):
+
     """
     Simplifies logical expressions produced by the SQUALL transformer.
 

@@ -1,7 +1,7 @@
 """Tests for v2 API endpoints: V2EnginesHandler, V2SchemaHandler, V2AtlasHandler."""
 import json
 from typing import AbstractSet, Callable, Iterable, Tuple
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import nibabel as nib
 import numpy as np
@@ -18,10 +18,7 @@ from ..queries import NeurolangQueryManager
 
 
 def _make_engine(prob_symbols=None):
-    """
-    Create a minimal mock NeurolangPDL engine with enough surface to satisfy
-    the v2 schema handler.
-    """
+    """Create a minimal mock NeurolangPDL engine for v2 schema handler tests."""
     engine = MagicMock()
 
     # Symbols on the engine – mimic what the real engine exposes
@@ -110,6 +107,7 @@ def nqm_mock(mock_engine):
 
 
 class TornadoV2TestCase(tornado.testing.AsyncHTTPTestCase):
+
     """Reusable Tornado test case for v2 endpoint tests."""
 
     def __init__(self, nqm) -> None:

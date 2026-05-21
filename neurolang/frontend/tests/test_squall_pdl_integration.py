@@ -751,7 +751,7 @@ def test_execute_squall_compound_probabilistic_rule_smoke():
 
 def test_execute_squall_cbma_spatial_prior_ir():
     """
-    CBMA-style spatial prior rule with EUCLIDEAN and proximity_indicator
+    CBMA-style spatial prior rule with EUCLIDEAN and proximity_indicator.
 
     Verifies that a ``rule_op_prob_agg`` rule with ``EUCLIDEAN(…)`` distance
     filter, ``for each`` groupby, and a registered ``proximity_indicator``

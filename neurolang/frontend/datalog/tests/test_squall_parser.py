@@ -1,12 +1,12 @@
 from inspect import signature
 from itertools import product
-from operator import add, eq, mul, sub, truediv
+from operator import eq, mul, sub, truediv
 import logging
 
 import pytest
 
 from .... import config
-from ....datalog import Conjunction, Fact, Implication, Negation, Union
+from ....datalog import Conjunction, Implication, Negation, Union
 from ....expression_pattern_matching import add_match
 from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ....expressions import Constant, FunctionApplication, Symbol
@@ -532,10 +532,10 @@ def test_squall_rel_ng2_whose_with_object():
 
 
 def test_squall_aggregation_ir():
-    """
-    'every Max of the Quantity where ?i item_count per ?i' produces
-    Implication with AggregationApplication(max, (q,)) in the consequent
-    and item_count(i, q) in the antecedent.
+    """Test: aggregation IR structure for 'every Max of the Quantity where ?i item_count per ?i'.
+
+    Verifies that the result is an Implication with AggregationApplication(max, (q,))
+    in the consequent and item_count(i, q) in the antecedent.
     """
     from neurolang.datalog.aggregation import AggregationApplication as AA
     code = (
@@ -614,7 +614,6 @@ def test_squall_transitive_inv_argument_order():
     Tilde-verb in a relative clause resolves to plain FunctionApplication with
     reversed argument order (done by the parser simplifier).
     """
-
     result = parser(
         "define as authored every Paper ?p that a Person ~author ?p."
     )
@@ -780,7 +779,7 @@ def test_ng1_agg_npc_arbitrary_functor():
 
 def test_det_every_agg_free_var_fallback():
     """Global aggregation: agg args are all free vars in npc body, not just one var."""
-    from neurolang.expressions import Symbol, FunctionApplication
+    from neurolang.expressions import FunctionApplication
     from neurolang.datalog.expressions import AggregationApplication
 
     # Prob_map is a binary relation (x, p) — both should be agg args
@@ -805,7 +804,7 @@ def test_det_every_agg_free_var_fallback():
 
 def test_rule_body2_cond_parses():
     """Test: define as … with probability every A conditioned to every B should parse."""
-    from ....probabilistic.expressions import Condition, ProbabilisticQuery, PROB
+    from ....probabilistic.expressions import Condition, ProbabilisticQuery
 
     result = parser(
         "define as spread with probability every virus conditioned to every study."

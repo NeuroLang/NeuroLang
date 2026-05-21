@@ -24,7 +24,7 @@
   padding: 0 1.5rem;
   height: 56px;
   background-color: #1a1a2e;
-  color: #ffffff;
+  color: #fff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
 }
@@ -55,7 +55,7 @@
 }
 
 .nav-link:hover {
-  color: #ffffff;
+  color: #fff;
 }
 
 /* Main layout */
@@ -69,7 +69,7 @@
 .sidebar {
   width: 250px;
   min-width: 250px;
-  background-color: #ffffff;
+  background-color: #fff;
   border-right: 1px solid #e0e0e8;
   overflow-y: auto;
   overflow-x: hidden;
@@ -205,13 +205,13 @@
 
 .engine-item--active {
   background-color: #1a1a2e;
-  color: #ffffff;
+  color: #fff;
   font-weight: 600;
 }
 
 .engine-item--active:hover {
   background-color: #2d2d4a;
-  color: #ffffff;
+  color: #fff;
 }
 
 .engine-selector-loading,
@@ -263,7 +263,7 @@
 
 .predicate-search:focus {
   border-color: #6b7280;
-  background-color: #ffffff;
+  background-color: #fff;
 }
 
 .predicate-group {
@@ -529,7 +529,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  background: #ffffff;
+  background: #fff;
   border: 1px solid #e0e0e8;
   border-radius: 8px;
   padding: 1rem 1.25rem;
@@ -768,7 +768,7 @@
 .suggestions-panel {
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: #fff;
   border: 1px solid #e0e0e8;
   border-radius: 8px;
   overflow: hidden;
@@ -923,7 +923,7 @@
 .code-editor-panel {
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: #fff;
   border: 1px solid #e0e0e8;
   border-radius: 8px;
   overflow: hidden;
@@ -1013,7 +1013,7 @@
 
 .run-query-btn--run {
   background-color: #1d4ed8;
-  color: #ffffff;
+  color: #fff;
 }
 
 .run-query-btn--run:hover:not(:disabled) {
@@ -1032,13 +1032,13 @@
 
 .run-query-btn--running {
   background-color: #6b7280;
-  color: #ffffff;
+  color: #fff;
   cursor: default;
 }
 
 .run-query-btn--cancel {
   background-color: #ef4444;
-  color: #ffffff;
+  color: #fff;
 }
 
 .run-query-btn--cancel:hover {
@@ -1055,7 +1055,7 @@
   width: 0.85rem;
   height: 0.85rem;
   border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #ffffff;
+  border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -1137,7 +1137,7 @@
  * ---------------------------------------------------------------------- */
 
 .results-panel {
-  background-color: #ffffff;
+  background-color: #fff;
   border: 1px solid #e0e0e8;
   border-radius: 6px;
   overflow: hidden;
@@ -1167,7 +1167,7 @@
   font-size: 0.875rem;
   border: 1px solid #d1d5db;
   border-radius: 4px;
-  background-color: #ffffff;
+  background-color: #fff;
   color: #374151;
   cursor: pointer;
   outline: none;
@@ -1217,7 +1217,7 @@
   font-size: 0.8125rem;
   font-weight: 500;
   color: #374151;
-  background-color: #ffffff;
+  background-color: #fff;
   border: 1px solid #d1d5db;
   border-radius: 4px;
   cursor: pointer;
@@ -1366,7 +1366,7 @@
   font-size: 0.8125rem;
   font-weight: 500;
   color: #374151;
-  background-color: #ffffff;
+  background-color: #fff;
   border: 1px solid #d1d5db;
   border-radius: 4px;
   cursor: pointer;

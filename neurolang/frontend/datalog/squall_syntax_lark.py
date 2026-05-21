@@ -1,4 +1,4 @@
-"""
+r"""
 SQUALL (Semantically controlled Query-Answerable Logical Language) parser.
 
 Translates controlled English sentences into NeuroLang logical expressions
@@ -88,6 +88,7 @@ from .squall import InvertedFunctionApplication
 
 
 class SquallProgram(Union):
+
     """
     Container returned when a SQUALL program contains ``obtain`` queries.
 
@@ -104,6 +105,7 @@ class SquallProgram(Union):
         query_names: dict = None,
         commands: list = None,
     ):
+        """Initialise with rules, queries, optional query_names and commands."""
         super().__init__(tuple(rules) + tuple(queries))
         self.query_names = dict(query_names) if query_names is not None else {}
         self.commands = list(commands) if commands is not None else []
@@ -118,6 +120,7 @@ class SquallProgram(Union):
 
 
 class _AnonymousVar:
+
     """Sentinel for a ``_`` wildcard in a tuple label.
 
     When encountered in a tuple label ``(?i; ?j; _)``, this placeholder
@@ -173,8 +176,11 @@ _AGG_FUNC_MAP = {
 
 
 class _InverseVerbSymbol:
+
     """
-    Thin callable wrapper returned by ``transitive_inv`` /
+    Thin callable wrapper that reverses argument order via InvertedFunctionApplication.
+
+    Returned by ``transitive_inv`` /
     ``transitive_multiple_inv``.  Calling it with ``(subject, *objects)``
     produces an :class:`InvertedFunctionApplication` so that
     :class:`ResolveInvertedFunctionApplicationMixin` can reverse the argument
@@ -208,6 +214,7 @@ def _resolve_var_info(var_info):
         The argument tuple / symbol for calling ``ng(body_args)``.
     head_args : list
         The list of head variables (no anonymous vars).
+
     """
     if var_info is None:
         return None, []
@@ -227,6 +234,7 @@ def _resolve_var_info(var_info):
 
 
 class SquallTransformer(Transformer):
+
     """
     Transforms a SQUALL parse tree into NeuroLang logical expressions.
 
@@ -236,6 +244,7 @@ class SquallTransformer(Transformer):
     """
 
     def __init__(self, source_lines=None):
+        """Initialise the transformer with optional source lines for error reporting."""
         super().__init__()
         self._symbol_scope = {}
         self._source_lines = source_lines or []
@@ -564,7 +573,7 @@ class SquallTransformer(Transformer):
         return Implication(consequent, body_formula)
 
     def rule_opnn_prob(self, args):
-        """`define as verbn with probability np rule_body2`"""
+        """Handle `define as verbn with probability np rule_body2`."""
         self._clear_scope()
         items = [a for a in args if a is not None]
         verb = items[0]
@@ -588,7 +597,7 @@ class SquallTransformer(Transformer):
         return Implication(ProbabilisticFact(prob_val, head), body_formula)
 
     def rule_opnn_marg(self, args):
-        """`define as verbn with inferred probability rule_body2`"""
+        """Handle `define as verbn with inferred probability rule_body2`."""
         self._clear_scope()
         items = [a for a in args if a is not None]
         verb = items[0]
@@ -607,7 +616,7 @@ class SquallTransformer(Transformer):
         return Implication(head, body_formula)
 
     def rule_opnn_per_compound(self, args):
-        """`define as probably verbn rule_body2`"""
+        """Handle `define as probably verbn rule_body2`."""
         self._clear_scope()
         items = [a for a in args if a is not None and not (isinstance(a, str) and a.lower() in ('probably', 'conditioned'))]
         verb = items[0]
@@ -2130,6 +2139,7 @@ def _extract_datalog_body(cps_np, head_args):
     list
         Flat list of body predicate expressions (``FunctionApplication``
         and similar) with no ``Constant(True)`` entries.
+
     """
     body_parts = []
 
@@ -2161,6 +2171,7 @@ def _flatten_to_datalog(expr):
     list
         Flat list of atomic expressions (``FunctionApplication`` instances
         and similar) ready to be used as Datalog body literals.
+
     """
     if isinstance(expr, ExistentialPredicate):
         return _flatten_to_datalog(expr.body)
@@ -2255,6 +2266,7 @@ def _cps_formula_to_query(formula):
     -------
     Query
         A NeuroLang Query expression ready to be walked into an engine.
+
     """
     from .squall import LogicSimplifier
 
@@ -2285,6 +2297,10 @@ def parser(code, local_vars=None, global_vars=None):
     ----------
     code : str
         SQUALL code to parse.
+    local_vars : dict, optional
+        Mapping of local variable names to symbols; injected into scope.
+    global_vars : dict, optional
+        Mapping of global variable names to symbols; injected into scope.
 
     Returns
     -------
