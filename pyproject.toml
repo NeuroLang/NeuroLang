@@ -42,6 +42,9 @@ dependencies = [
     "sqlalchemy>=1.4",
 ]
 
+[project.scripts]
+neurolang-query = "neurolang.utils.cli:main"
+
 [project.urls]
 Homepage = "https://neurolang.github.io"
 "Bug Tracker" = "https://github.com/neurolang/neurolang/issues"
