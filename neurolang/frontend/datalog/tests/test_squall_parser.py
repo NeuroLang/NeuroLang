@@ -1,12 +1,12 @@
 from inspect import signature
 from itertools import product
-from operator import eq, mul, sub, truediv
+from operator import eq, sub, truediv
 import logging
 
 import pytest
 
 from .... import config
-from ....datalog import Conjunction, Implication, Negation, Union
+from ....datalog import Conjunction, Implication, Negation
 from ....expression_pattern_matching import add_match
 from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ....expressions import Constant, FunctionApplication, Symbol
@@ -123,7 +123,7 @@ def verbs(verb1, verb2):
 
 
 def op_application(np):
-    return lambda d: np(lambda y: d(y))
+    return lambda d: np(lambda y: d(y))  # pylint: disable=W0108
 
 
 @pytest.fixture(scope="module")
