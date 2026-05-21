@@ -225,3 +225,6 @@ neurolang_data/neurosynth/database.txt
 neurolang_data/neurosynth/features.txt
 uv.lock
 cov.xml
+
+# worktrees
+.worktrees/

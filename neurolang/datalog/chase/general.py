@@ -13,6 +13,7 @@ from ...logic.unification import (apply_substitution,
 from ...type_system import (NeuroLangTypeException, Unknown, get_args,
                             is_leq_informative, unify_types)
 from ...utils import OrderedSet, log_performance
+from ...config import config
 from ..expression_processing import (extract_logic_free_variables,
                                      extract_logic_predicates, is_linear_rule,
                                      dependency_matrix, program_has_loops, stratify)
@@ -40,6 +41,7 @@ class ChaseGeneral():
     def __init__(self, datalog_program, rules=None):
         self.datalog_program = datalog_program
         self._set_rules(rules)
+        self.max_iterations = config.get_chase_max_iterations()
 
         self.builtins = datalog_program.builtins()
         self.idb_edb_symbols = set(
@@ -150,6 +152,9 @@ class ChaseGeneral():
                 )
                 predicates_to_evaluate += unresolved_predicates
                 unresolved_predicates = []
+
+            if len(substitutions) == 0:
+                return []
 
         if len(unresolved_predicates) == 0:
             return substitutions
@@ -326,6 +331,18 @@ class ChaseGeneral():
             else:
                 return ([], [], [])
 
+        def _get_predicate_size(p):
+            pred_value = p[1]
+            if hasattr(pred_value, '__len__') and not isinstance(pred_value, Constant):
+                try:
+                    return len(pred_value)
+                except Exception:
+                    return 0
+            return 0
+
+        restricted_predicates.sort(key=_get_predicate_size)
+        nonrestricted_predicates.sort(key=_get_predicate_size)
+
         return (
             restricted_predicates, nonrestricted_predicates, builtin_predicates
         )
@@ -466,13 +483,21 @@ class ChaseNaive:
     """Chase implementation using the naive algorithm.
     """
     def execute_chase(self, rules, instance_update, instance):
+        iteration = 0
         while not instance_update.is_empty():
+            iteration += 1
+            if iteration > self.max_iterations:
+                raise NeuroLangException(
+                    f"Chase did not converge within {self.max_iterations} iterations. "
+                    "This can happen with cyclic or very deep recursive data. "
+                    "Consider adding a depth bound or increasing max_iterations in config.ini."
+                )
             instance = instance | instance_update
             new_update = MapInstance()
             for rule in rules:
                 with log_performance(LOG, 'Evaluating rule %s', (rule,)):
                     upd = self.chase_step(
-                        instance | instance_update, rule,
+                        instance, rule,
                     )
                 new_update = new_update | upd
             instance_update = new_update
@@ -486,7 +511,15 @@ class ChaseSemiNaive:
 
     def execute_chase(self, rules, instance_update, instance):
         continue_chase = not instance_update.is_empty()
+        iteration = 0
         while continue_chase:
+            iteration += 1
+            if iteration > self.max_iterations:
+                raise NeuroLangException(
+                    f"Chase did not converge within {self.max_iterations} iterations. "
+                    "This can happen with cyclic or very deep recursive data. "
+                    "Consider adding a depth bound or increasing max_iterations in config.ini."
+                )
             instance = instance | instance_update
             instance_update = MapInstance()
             continue_chase = False
