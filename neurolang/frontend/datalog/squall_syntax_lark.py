@@ -1371,7 +1371,7 @@ class SquallTransformer(Transformer):
         return ('_rel', rel)
 
     def rel_fun_call(self, args):
-        """Handle ``identifier(label, label, ...)`` as a body predicate atom.
+        """Handle ``identifier(label, label, ...) holds`` as a body predicate atom.
 
         Each argument position may be a **label** (``?x``, ``_``, or tuple
         label) or a **literal** (string constant ``'prefix'`` or numeric
