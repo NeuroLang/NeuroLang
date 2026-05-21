@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 r"""
-NeuroSynth Query in SQUALL Controlled English
+NeuroSynth Query in SQUALL Controlled English.
 =============================================
 
 Reproduces the NeuroSynth forward model — P(Activation | Term = 'auditory') —

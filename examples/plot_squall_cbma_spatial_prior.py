@@ -17,7 +17,7 @@
 
 # %%
 r"""
-CBMA Spatial Prior in SQUALL Controlled English
+CBMA Spatial Prior in SQUALL Controlled English.
 ================================================
 
 Reproduces the coordinate-based meta-analysis spatial decay prior — each

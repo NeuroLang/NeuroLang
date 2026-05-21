@@ -1,6 +1,6 @@
 from inspect import signature
 from itertools import product
-from operator import add, eq, mul, pow, sub, truediv
+from operator import add, eq, mul, sub, truediv
 import logging
 
 import pytest
@@ -9,7 +9,7 @@ from .... import config
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....expression_pattern_matching import add_match
 from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
-from ....expressions import Constant, FunctionApplication, Query, Symbol
+from ....expressions import Constant, FunctionApplication, Symbol
 from ....logic import (
     ExistentialPredicate,
     LogicOperator,
@@ -95,15 +95,15 @@ def weak_logic_eq(left, right):
 @pytest.fixture(scope="module")
 def nouns():
     return [
-        ("'marseillaise'", lambda x: x(Constant('marseillaise'))),
-        ("?x", lambda x:x(Symbol('x')))
+        ("'marseillaise'", lambda x: x(Constant('marseillaise'))),  # pylint: disable=W0108
+        ("?x", lambda x:x(Symbol('x')))  # pylint: disable=W0108
     ]
 
 
 @pytest.fixture(scope="module")
 def verb1():
     return [
-        ("plays", lambda x: Symbol("plays")(x)),
+        ("plays", lambda x: Symbol("plays")(x)),  # pylint: disable=W0108
     ]
 
 
@@ -113,7 +113,7 @@ def verb2():
     # _apply_ops pre-swaps inverse-verb args before the resolver reverses
     # them back, so the final IR has normal subject-first order.
     return [
-        ("~sings", lambda x, y: Symbol("sings")(x, y))
+        ("~sings", lambda x, y: Symbol("sings")(x, y))  # pylint: disable=W0108
     ]
 
 
@@ -166,7 +166,7 @@ def nouns_2():
 
 
 def lambda_simple(arg):
-    return lambda x: arg(x)
+    return lambda x: arg(x)  # pylint: disable=W0108
 
 
 def lambda_conjunction(*args):
@@ -200,7 +200,7 @@ def noun_groups_2(nouns_2):
 def det():
     res = []
 
-    fresh = lambda: Symbol.fresh()
+    fresh = Symbol.fresh
     res.append((
         "every",
         lambda d1: lambda d2: (
@@ -253,7 +253,7 @@ def noun_phrase_quantified_2(noun_phrase_2, nouns):
 
 
 def det_ng2_composition(det, ng2):
-    return lambda x: lambda d: (
+    return lambda x: lambda d: (  # pylint: disable=W0108
         det(lambda y: ng2(x)(y))(d)
     )
 
@@ -532,9 +532,11 @@ def test_squall_rel_ng2_whose_with_object():
 
 
 def test_squall_aggregation_ir():
-    """'every Max of the Quantity where ?i item_count per ?i' produces
+    """
+    'every Max of the Quantity where ?i item_count per ?i' produces
     Implication with AggregationApplication(max, (q,)) in the consequent
-    and item_count(i, q) in the antecedent."""
+    and item_count(i, q) in the antecedent.
+    """
     from neurolang.datalog.aggregation import AggregationApplication as AA
     code = (
         "define as max_items for every Item ?i ; "
@@ -580,7 +582,7 @@ def test_lark_semantics_aggregation(datalog_simple):
 
 
 def test_inverted_function_application_ir_node():
-    """InvertedFunctionApplication reverses args when walked through mixin."""
+    """Test: InvertedFunctionApplication reverses args when walked through mixin."""
     from neurolang.frontend.datalog.squall import (
         InvertedFunctionApplication,
         ResolveInvertedFunctionApplicationMixin,
@@ -608,8 +610,10 @@ def test_inverted_function_application_ir_node():
 
 
 def test_squall_transitive_inv_argument_order():
-    """~verb in a relative clause resolves to plain FunctionApplication with
-    reversed argument order (done by the parser simplifier)."""
+    """
+    Tilde-verb in a relative clause resolves to plain FunctionApplication with
+    reversed argument order (done by the parser simplifier).
+    """
 
     result = parser(
         "define as authored every Paper ?p that a Person ~author ?p."
@@ -800,7 +804,7 @@ def test_det_every_agg_free_var_fallback():
 
 
 def test_rule_body2_cond_parses():
-    """define as … with probability every A conditioned to every B should parse."""
+    """Test: define as … with probability every A conditioned to every B should parse."""
     from ....probabilistic.expressions import Condition, ProbabilisticQuery, PROB
 
     result = parser(
@@ -817,8 +821,10 @@ def test_rule_body2_cond_parses():
 
 
 def test_rel_body_function_call_parses():
-    """'every Person that euclidean(?x, ?y) holds' should parse to a body atom
-    that includes the subject (noun-head) variable alongside the two labels."""
+    """
+    'every Person that euclidean(?x, ?y) holds' should parse to a body atom
+    that includes the subject (noun-head) variable alongside the two labels.
+    """
     from ..squall_syntax_lark import parser
     from ....datalog import Implication
     from ....logic.expression_processing import extract_logic_free_variables
@@ -918,7 +924,8 @@ def test_vpdo_explicit_prob_v1_accepts_variable():
 
 
 def test_rel_fun_call_tuple_subject_no_prepend():
-    """rel_fun_call with a tuple-subject noun must NOT prepend the tuple as first arg.
+    """
+    rel_fun_call with a tuple-subject noun must NOT prepend the tuple as first arg.
 
     'every Focus_reported (?i2;?j2;?k2;?s) that is_near(?i1,?j1,?k1,?i2,?j2,?k2) holds'
     should emit is_near(i1,j1,k1,i2,j2,k2) — the six explicit labels, nothing extra.
@@ -1117,7 +1124,8 @@ def test_obtain_unnamed_with_tuple_label_parses():
 
 
 def test_probably_prefix_in_wlq_head_is_preserved():
-    """Regression: probably_X in a rule head must not be stripped to X.
+    """
+    Regression: probably_X in a rule head must not be stripped to X.
 
     Before the fix, terminal handlers unconditionally stripped the
     ``probably_`` prefix from all identifiers, including rule-head verbs.
@@ -1163,7 +1171,8 @@ def test_probably_prefix_in_wlq_head_is_preserved():
 
 
 def test_full_squall_program_ir_structure():
-    """The full 6-rule SQUALL program from the Datalog→SQUALL translation
+    """
+    The full 6-rule SQUALL program from the Datalog→SQUALL translation
     produces the correct IR structure for every rule type:
 
     1. rule_op_prob_agg (CBMA-style) — AggregationApplication + ProbabilisticFact
@@ -1266,7 +1275,8 @@ obtain every Activation_given_term_image (?result).
 
 
 def test_rel_fun_call_with_string_literal():
-    """rel_fun_call with a string literal argument parses correctly.
+    """
+    rel_fun_call with a string literal argument parses correctly.
 
     ``every Atlas_label ?label that startswith('L ') holds`` should emit
     a body atom ``startswith(label, 'L ')`` with the constant ``'L '``

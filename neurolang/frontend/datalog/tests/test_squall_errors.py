@@ -5,7 +5,6 @@ from ..squall_syntax_lark import (
     parser,
     SquallSemanticError,
     UnexpectedCharactersError,
-    UnexpectedTokenError,
 )
 
 config.disable_expression_type_printing()

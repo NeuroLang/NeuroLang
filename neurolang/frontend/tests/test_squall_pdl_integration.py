@@ -1,9 +1,4 @@
-"""
-Tests for NeurolangPDL.execute_squall_program.
-
-These tests exercise the high-level API that mirrors execute_datalog_program
-but accepts SQUALL controlled-English programs.
-"""
+"""Tests for NeurolangPDL.execute_squall_program."""
 import pytest
 
 from neurolang.exceptions import ForbiddenDisjunctionError
@@ -26,7 +21,7 @@ def nl():
 
 @pytest.fixture
 def nl_counts():
-    """NeurolangPDL instance with item / item_count / quantity facts."""
+    """Fixture: NeurolangPDL instance with item / item_count / quantity facts."""
     engine = NeurolangPDL()
     engine.add_tuple_set(
         [("a",), ("b",), ("c",), ("d",)], name="item"
@@ -79,7 +74,7 @@ def test_execute_squall_single_obtain_returns_relation(nl):
 
 
 def test_execute_squall_single_obtain_correct_rows(nl):
-    """obtain every Person that plays returns alice and carol."""
+    """Test: obtain every Person that plays returns alice and carol."""
     result = nl.execute_squall_program("obtain every Person that plays.")
     rows = set(result.as_pandas_dataframe().iloc[:, 0].tolist())
     assert rows == {"alice", "carol"}
@@ -159,7 +154,7 @@ def test_execute_squall_aggregation(nl_counts):
 
 @pytest.fixture
 def nl_author():
-    """NeurolangPDL with paper/author facts stored as author(paper, person)."""
+    """Fixture: NeurolangPDL with paper/author facts stored as author(paper, person)."""
     engine = NeurolangPDL()
     engine.add_tuple_set(
         [("p1",), ("p2",), ("p3",)], name="paper"
@@ -176,7 +171,8 @@ def nl_author():
 
 
 def test_execute_squall_tilde_inversion_end_to_end(nl_author):
-    """~author inverts the default SQUALL argument order.
+    """
+    ~author inverts the default SQUALL argument order.
 
     In standard SQUALL, 'a Person author' would resolve to author(person, paper)
     (the existential subject is arg[0]). The tilde flips this to author(paper,
@@ -194,7 +190,8 @@ def test_execute_squall_tilde_inversion_end_to_end(nl_author):
 
 
 def test_execute_squall_marg_query_walks_without_error():
-    """'with probability … conditioned to …' walks into the engine without raising.
+    """
+    'with probability … conditioned to …' walks into the engine without raising.
 
     Smoke test confirming the MARG syntax is parsed and the IR
     (Implication with Condition body and ProbabilisticQuery head arg) is
@@ -224,7 +221,8 @@ def test_execute_squall_marg_query_walks_without_error():
 
 
 def test_execute_squall_arbitrary_aggregation():
-    """'every Custom_func of the relation' aggregates over all free vars.
+    """
+    'every Custom_func of the relation' aggregates over all free vars.
 
     Registers a Python function as an aggregation over a 1-column
     relation, verifies the rule walks without error.
@@ -257,7 +255,8 @@ def test_execute_squall_arbitrary_aggregation():
 
 
 def test_execute_squall_conditioned_rule_produces_implication_with_condition():
-    """Conditioned SQUALL rule reaches rewrite_conditional_query inside the engine.
+    """
+    Conditioned SQUALL rule reaches rewrite_conditional_query inside the engine.
 
     This is an integration boundary test: the SQUALL parser correctly produces
     an Implication with a Condition antecedent, and the walker reaches
@@ -344,7 +343,8 @@ def test_execute_squall_variable_probability_fact():
 
 
 def test_execute_squall_inline_expr_comparison():
-    """'such that EUCLIDEAN(a,b) is lower than 5' works without a relay variable.
+    """
+    'such that EUCLIDEAN(a,b) is lower than 5' works without a relay variable.
 
     This path: rel_s -> s_np_vp -> vpbe_rel -> rel_comp already exists.
     The test confirms the function-call expression is correctly used as the
@@ -352,7 +352,7 @@ def test_execute_squall_inline_expr_comparison():
     """
     import operator
     from neurolang.expressions import Constant, FunctionApplication, Symbol
-    from neurolang.logic import Conjunction, Implication
+    from neurolang.logic import Conjunction
 
     engine = NeurolangPDL()
 
@@ -403,7 +403,8 @@ def test_execute_squall_inline_expr_comparison():
 
 
 def test_execute_squall_compact_per_list():
-    """'per ?i, ?j, ?k and per ?s' produces same head args as four separate per dims.
+    """
+    'per ?i, ?j, ?k and per ?s' produces same head args as four separate per dims.
 
     Compact form: per ?i1, ?j1, ?k1 and per ?s
     Verbose form: per ?i1 and per ?j1 and per ?k1 and per ?s
@@ -440,12 +441,13 @@ def test_execute_squall_compact_per_list():
 
 
 def test_execute_squall_where_tuple_is_noun():
-    """'where (?i; ?j; ?k) is a Noun' expands to Noun(i, j, k) in rule body.
+    """
+    'where (?i; ?j; ?k) is a Noun' expands to Noun(i, j, k) in rule body.
 
     The clause is semantically equivalent to 'that noun(?i, ?j, ?k) holds'.
     We verify that the rule body contains a FunctionApplication of voxel with 3 args.
     """
-    from neurolang.expressions import Constant, FunctionApplication, Symbol
+    from neurolang.expressions import FunctionApplication, Symbol
     from neurolang.logic import Conjunction
 
     engine = NeurolangPDL()
@@ -512,7 +514,8 @@ def test_extension_e_where_integration(tmp_path):
 
 
 def test_extension_f_given_integration(tmp_path):
-    """'given every X' parses to identical IR as 'conditioned to every X'.
+    """
+    'given every X' parses to identical IR as 'conditioned to every X'.
 
     Approach:
     1. Parse both sentence variants with the SQUALL parser and compare the
@@ -708,7 +711,8 @@ def test_execute_squall_compound_rule():
 
 
 def test_execute_squall_compound_probabilistic_rule_smoke():
-    """Compound quantifier MARG rule parses and reaches translate_implication.
+    """
+    Compound quantifier MARG rule parses and reaches translate_implication.
 
     Smoke test — full probabilistic solving is blocked by a pre-existing
     limitation (fol_query_to_datalog_program does not support ProbabilisticQuery
@@ -746,7 +750,8 @@ def test_execute_squall_compound_probabilistic_rule_smoke():
 
 
 def test_execute_squall_cbma_spatial_prior_ir():
-    """CBMA-style spatial prior rule with EUCLIDEAN and proximity_indicator
+    """
+    CBMA-style spatial prior rule with EUCLIDEAN and proximity_indicator
 
     Verifies that a ``rule_op_prob_agg`` rule with ``EUCLIDEAN(…)`` distance
     filter, ``for each`` groupby, and a registered ``proximity_indicator``
@@ -783,7 +788,7 @@ def test_execute_squall_cbma_spatial_prior_ir():
     assert len(idb) > 0, "Expected at least one IDB rule after walking"
 
     found = False
-    for pred_symb, union in idb.items():
+    for _, union in idb.items():
         for rule in union.formulas:
             if "voxel_reported" in rule.consequent.functor.name:
                 found = True

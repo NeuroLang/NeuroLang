@@ -17,7 +17,7 @@
 
 # %%
 r"""
-Bayes Factor Decoding of the Right Fusiform Gyrus in SQUALL Controlled English
+Bayes Factor Decoding of the Right Fusiform Gyrus in SQUALL Controlled English.
 ===============================================================================
 
 Performs reverse-inference decoding of the right fusiform gyrus from the
@@ -445,7 +445,7 @@ ax.axvline(
     color="tomato",
     linestyle="--",
     linewidth=1.2,
-    label=rf"BF = $\sqrt{{10}}$ ≈ 3.16",
+    label=r"BF = $\sqrt{10}$ ≈ 3.16",
 )
 ax.set_xlabel("Bayes Factor")
 ax.set_title(

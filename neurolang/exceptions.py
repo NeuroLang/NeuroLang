@@ -420,7 +420,9 @@ class UnexpectedCharactersError(ParserError):
 
 
 class SquallSemanticError(NeuroLangException):
-    """Semantic error in a SQUALL program — parse succeeded but semantics invalid.
+
+    """
+    Semantic error in a SQUALL program — parse succeeded but semantics invalid.
 
     Raised when the SQUALL transformer encounters a valid parse tree that
     represents a logically invalid or unsupported construction, such as:
@@ -439,9 +441,11 @@ class SquallSemanticError(NeuroLangException):
         1-based source column number where the error was detected.
     source_line : str, optional
         The full source line text for context display.
+
     """
 
     def __init__(self, message, *, line=None, column=None, source_line=None):
+        """Initialise with message and optional source location."""
         self.message = message
         self.line = line
         self.column = column

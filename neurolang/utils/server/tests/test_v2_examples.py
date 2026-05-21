@@ -1,6 +1,4 @@
-"""
-Tests for V2ExamplesHandler: GET /v2/examples/:engine
-"""
+"""Tests for V2ExamplesHandler: GET /v2/examples/:engine."""
 import json
 from unittest.mock import MagicMock, patch
 
@@ -59,9 +57,11 @@ def _make_nqm_mock():
 
 
 class TornadoExamplesTestCase(tornado.testing.AsyncHTTPTestCase):
+
     """Reusable Tornado test case for V2ExamplesHandler tests."""
 
     def __init__(self, nqm) -> None:
+        """Initialise with a NeurolangQueryManager instance."""
         super().__init__()
         self._nqm = nqm
 

@@ -63,7 +63,7 @@ from lark.exceptions import (
     LarkError, UnexpectedCharacters, UnexpectedToken,
     VisitError,
 )
-from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
+from operator import add, eq, ge, gt, le, lt, mul, ne, pow as op_pow, sub, truediv
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.expressions import AggregationApplication as _AggApp
@@ -361,7 +361,6 @@ class SquallTransformer(Transformer):
         return Implication(ProbabilisticFact(prob_val, head), body_formula)
 
     def rule_op_marg(self, args):
-        self._clear_scope()
         """Build a MARG query from ``define as verb with probability rule_body1_cond``.
 
         Emits:
@@ -374,6 +373,7 @@ class SquallTransformer(Transformer):
         this into the standard three-rule conditional probability form, adding
         the probability as the last column of the output relation.
         """
+        self._clear_scope()
         items = [a for a in args if a is not None]
         verb = items[0]
         body_result = items[1]
@@ -392,7 +392,6 @@ class SquallTransformer(Transformer):
         return Implication(head, body_formula)
 
     def rule_op_prob_agg(self, args):
-        self._clear_scope()
         """Build a probabilistic aggregation rule.
 
         Grammar: ``define as verb1 WITH A PROBABILITY OF np``
@@ -415,6 +414,7 @@ class SquallTransformer(Transformer):
         arguments.  The aggregation variable(s) inside ``AggApp`` are the
         non-``per`` free variables of the body.
         """
+        self._clear_scope()
         items = [a for a in args if a is not None]
         verb = items[0]      # Symbol — head predicate name
         np_cps = items[1]    # CPS NP carrying ng1._agg_info
@@ -423,7 +423,7 @@ class SquallTransformer(Transformer):
         # AggApp expression produced by det_every / det_the for agg_info NPs.
         captured = []
 
-        def capturing_cont(v, *extra, _cap=captured):
+        def capturing_cont(v, *extra, _cap=captured):  # pylint: disable=W0102
             if extra:
                 _cap.append((v,) + extra)
             else:
@@ -474,7 +474,6 @@ class SquallTransformer(Transformer):
         return Implication(ProbabilisticFact(agg_expr, head), bare_body)
 
     def rule_opnn(self, args):
-        self._clear_scope()
         """Build an n-ary Datalog rule from ``define as verbn rule_body1 ops``.
 
         ``rule_body1`` supplies the primary subject variable(s) and body
@@ -482,6 +481,7 @@ class SquallTransformer(Transformer):
         ``_extract_datalog_body`` is called to append the object variable(s)
         to ``head_args`` and any restriction predicates to the body.
         """
+        self._clear_scope()
         items = [a for a in args if a is not None]
         verb = items[0]  # Symbol for the head predicate
         body_result = items[1]  # from rule_body1: ('_rule_body', (args, formula))
@@ -658,10 +658,10 @@ class SquallTransformer(Transformer):
         # Handle aggregation ng1 (e.g. "every Create_overlay of the Prob_map")
         agg_info = getattr(ng1, '_agg_info', None)
         if agg_info is not None:
-            agg_func_const, npc_cps, per_vars, extra_rel = agg_info
+            agg_func_const, npc_cps, _, extra_rel = agg_info
             captured = []
 
-            def capturing_cont(v, *extra, _cap=captured):
+            def capturing_cont(v, *extra, _cap=captured):  # pylint: disable=W0102
                 # multi-arg call when _apply_to_vars expands a tuple label
                 if extra:
                     _cap.append((v,) + extra)
@@ -886,7 +886,7 @@ class SquallTransformer(Transformer):
                     # Build the npc body formula to discover free variables.
                     captured = []
 
-                    def capturing_cont(v, *extra, _cap=captured):
+                    def capturing_cont(v, *extra, _cap=captured):  # pylint: disable=W0102
                         # Called with (v,) for scalar npc or (v, *rest) when
                         # _apply_to_vars expands a tuple label: d(*syms).
                         if extra:
@@ -996,7 +996,7 @@ class SquallTransformer(Transformer):
 
                     captured = []
 
-                    def capturing_cont(v, *extra, _cap=captured):
+                    def capturing_cont(v, *extra, _cap=captured):  # pylint: disable=W0102
                         if extra:
                             _cap.append((v,) + extra)
                         else:
@@ -1399,7 +1399,7 @@ class SquallTransformer(Transformer):
             # When the enclosing noun binds a tuple (e.g. Foo (?a;?b;?c)),
             # the labels already cover every argument position and the
             # tuple must NOT be prepended — it would produce wrong arity.
-            def rel(x, _vars=materialised):
+            def rel(x, _vars=materialised):  # pylint: disable=W0102
                 if isinstance(x, Symbol):
                     return func_sym(x, *_vars)
                 return func_sym(*_vars)
@@ -1677,7 +1677,7 @@ class SquallTransformer(Transformer):
     def expr_pow(self, args):
         if len(args) == 1:
             return args[0]
-        return Constant(pow)(_unwrap_label(args[0]), _unwrap_label(args[1]))
+        return Constant(op_pow)(_unwrap_label(args[0]), _unwrap_label(args[1]))
 
     def expr_atom_par(self, args):
         return args[0]
@@ -1931,13 +1931,13 @@ class SquallTransformer(Transformer):
         return ('_query', _cps_formula_to_query(formula))
 
     def query_as(self, args):
-        self._clear_scope()
         """Handle 'obtain ops as Name'.
 
         Builds Implication(name_sym(*free_vars), body) as an IDB rule,
         then returns ('_query_as', (impl, query)) so squall() can
         register both the rule and the query.
         """
+        self._clear_scope()
         ops, name_sym = args[0], args[1]   # ops: CPS NP; name_sym: Symbol
 
         # Use a capturing continuation to harvest the head variables and the
@@ -2277,7 +2277,7 @@ def _cps_formula_to_query(formula):
     return LogicSimplifier().walk(raw)
 
 
-def parser(code, locals=None, globals=None):
+def parser(code, local_vars=None, global_vars=None):
     """
     Parse SQUALL controlled English and return a Union of logical expressions.
 

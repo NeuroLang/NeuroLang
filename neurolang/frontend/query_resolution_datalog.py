@@ -7,7 +7,7 @@ as well as Region and Neurosynth capabilities
 from collections import defaultdict
 from neurolang.datalog.magic_sets import magic_rewrite
 from neurolang.exceptions import (
-    ForbiddenDisjunctionError, UnsupportedProgramError,
+    ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
 )
 from typing import (
     AbstractSet,

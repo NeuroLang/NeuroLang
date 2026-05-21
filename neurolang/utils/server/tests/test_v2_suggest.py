@@ -1,6 +1,4 @@
-"""
-Tests for the V2SuggestHandler (POST /v2/suggest/:engine).
-"""
+"""Tests for the V2SuggestHandler (POST /v2/suggest/:engine)."""
 import json
 from contextlib import contextmanager
 from typing import AbstractSet, Callable, Iterable, Tuple
@@ -81,7 +79,6 @@ def _make_engine(autocomplete_result=None):
 
 def _make_engine_set(engine):
     """Return a context-manager-compatible NeurolangEngineSet mock."""
-
     engine_set = MagicMock()
 
     @contextmanager
@@ -99,7 +96,7 @@ def mock_engine():
 
 @pytest.fixture
 def nqm_mock(mock_engine):
-    """NeurolangQueryManager mock with one engine (neurosynth)."""
+    """Mock NeurolangQueryManager with one engine (neurosynth)."""
     mock_nqm = MagicMock(spec=NeurolangQueryManager)
 
     config_ns = MagicMock()
@@ -115,9 +112,11 @@ def nqm_mock(mock_engine):
 
 
 class TornadoSuggestTestCase(tornado.testing.AsyncHTTPTestCase):
+
     """Reusable Tornado test case for suggest endpoint tests."""
 
     def __init__(self, nqm) -> None:
+        """Initialise with a NeurolangQueryManager instance."""
         super().__init__()
         self._nqm = nqm
 

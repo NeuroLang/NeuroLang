@@ -569,14 +569,14 @@
   line-height: 1.4;
 }
 
-.vqb-btn:hover:not(:disabled) {
-  background-color: #e5e7eb;
-  border-color: #9ca3af;
-}
-
 .vqb-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.vqb-btn:hover:not(:disabled) {
+  background-color: #e5e7eb;
+  border-color: #9ca3af;
 }
 
 /* Desynchronized state indicator */
@@ -653,6 +653,7 @@
 
 .vqb-var-token--shared {
   font-weight: 600;
+
   /* Color/border overridden via inline style from the colour palette */
 }
 
@@ -681,6 +682,7 @@
 
 .vqb-var-input--shared {
   font-weight: 600;
+
   /* Color/border overridden via inline style */
 }
 
@@ -1371,14 +1373,14 @@
   transition: background-color 0.15s, border-color 0.15s;
 }
 
-.pagination-btn:hover:not(:disabled) {
-  background-color: #f3f4f6;
-  border-color: #9ca3af;
-}
-
 .pagination-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
 }
 
 .pagination-info {

@@ -1,6 +1,4 @@
-"""
-Unit tests for the SQUALL syntax lark parser.
-"""
+"""Unit tests for the SQUALL syntax lark parser."""
 import pytest
 
 
@@ -86,7 +84,7 @@ def test_extension_e_where_inline_expr(nl_setup):
 
 
 def test_extension_e_rel_tuple_noun_not_shadowed(nl_setup):
-    """where (?i;?j;?k) is a Voxel still parses as rel_tuple_noun after Extension E."""
+    """Test: where (?i;?j;?k) is a Voxel still parses as rel_tuple_noun after Extension E."""
     from neurolang.frontend.datalog.squall_syntax_lark import parser
     from neurolang.logic import Implication
 
@@ -174,8 +172,6 @@ def test_extension_d_for_each_alias_per(nl_setup):
 def test_extension_g_query_as_produces_squall_program(nl_setup):
     """'obtain ops as Name' returns a SquallProgram with a named IDB rule and query."""
     from neurolang.frontend.datalog.squall_syntax_lark import parser, SquallProgram
-    from neurolang.expressions import Symbol
-    from neurolang.logic import Implication
 
     result = parser(
         "define as Active_voxel every Reported_voxel (?i; ?j; ?k; ?s) "

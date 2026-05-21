@@ -1,12 +1,7 @@
-"""
-Tests for v2 API endpoints: V2EnginesHandler, V2SchemaHandler,
-V2AtlasHandler.
-"""
-import inspect
+"""Tests for v2 API endpoints: V2EnginesHandler, V2SchemaHandler, V2AtlasHandler."""
 import json
-from concurrent.futures import Future
 from typing import AbstractSet, Callable, Iterable, Tuple
-from unittest.mock import MagicMock, create_autospec, patch
+from unittest.mock import MagicMock, patch
 
 import nibabel as nib
 import numpy as np
@@ -43,7 +38,7 @@ def _make_engine(prob_symbols=None):
 
     def _fake_func(x: Iterable, y: Iterable, z: Iterable):
         """Aggregate function docstring."""
-        pass
+        ...
 
     func_sym.value.__wrapped__ = _fake_func
 
@@ -118,6 +113,7 @@ class TornadoV2TestCase(tornado.testing.AsyncHTTPTestCase):
     """Reusable Tornado test case for v2 endpoint tests."""
 
     def __init__(self, nqm) -> None:
+        """Initialise with a NeurolangQueryManager instance."""
         super().__init__()
         self._nqm = nqm
 
