@@ -2,7 +2,6 @@
 Tests for the neurolang-query CLI module.
 """
 
-import pandas as pd
 import pytest
 
 from neurolang.utils.cli import (
@@ -11,10 +10,10 @@ from neurolang.utils.cli import (
     _format_result,
 )
 
-
 # ---------------------------------------------------------------------------
 # _build_parser
 # ---------------------------------------------------------------------------
+
 
 class TestBuildParser:
     def test_defaults(self):
@@ -91,6 +90,7 @@ class TestBuildParser:
 # ---------------------------------------------------------------------------
 # _format_result
 # ---------------------------------------------------------------------------
+
 
 class TestFormatResult:
     def test_none(self):
@@ -211,9 +211,7 @@ class TestFormatResult:
             NamedRelationalAlgebraFrozenSet,
         )
 
-        nras = NamedRelationalAlgebraFrozenSet(
-            columns=("x",), iterable=[(1,)]
-        )
+        nras = NamedRelationalAlgebraFrozenSet(columns=("x",), iterable=[(1,)])
         result = _format_result(nras, column_names=["y"])
         # Existing name 'x' is preserved
         assert "x" in result
@@ -224,6 +222,7 @@ class TestFormatResult:
 # _execute_program
 # ---------------------------------------------------------------------------
 
+
 class TestExecuteProgram:
     """Integration tests with a real NeurolangPDL engine and tiny data."""
 
@@ -233,12 +232,8 @@ class TestExecuteProgram:
         from neurolang.frontend import NeurolangPDL
 
         nl = NeurolangPDL()
-        nl.add_tuple_set(
-            [(1, "a"), (2, "b"), (3, "c")], name="R"
-        )
-        nl.add_tuple_set(
-            [(1, 10.0), (2, 20.0), (3, 30.0)], name="S"
-        )
+        nl.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="R")
+        nl.add_tuple_set([(1, 10.0), (2, 20.0), (3, 30.0)], name="S")
         return nl
 
     def test_no_query(self, nl):
@@ -280,9 +275,7 @@ class TestExecuteProgram:
 
     def test_multiple_queries_raises(self, nl):
         with pytest.raises(ValueError, match="single query"):
-            _execute_program(
-                nl, "ans(x) :- R(x, y)\nans(z) :- S(z, w)"
-            )
+            _execute_program(nl, "ans(x) :- R(x, y)\nans(z) :- S(z, w)")
 
     def test_result_column_names_preserved(self, nl):
         """column_names match the Datalog variable names in the query."""
@@ -303,9 +296,7 @@ class TestExecuteProgram:
         assert "30.0" in output
 
     def test_csv_output_has_header(self, nl):
-        result, col_names = _execute_program(
-            nl, "ans(v) :- R(x, y) & S(x, v)"
-        )
+        result, col_names = _execute_program(nl, "ans(v) :- R(x, y) & S(x, v)")
         output = _format_result(result, fmt="csv", column_names=col_names)
         lines = output.strip().split("\n")
         assert lines[0] == "v"

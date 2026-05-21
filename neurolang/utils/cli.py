@@ -10,13 +10,13 @@ Usage
 ::
 
     # Inline query
-    neurolang-query "ans(term) :- TermInStudyTFIDF(term, tfidf, study_id)"
+    neurolang-query "ans(t) :- TermInStudyTFIDF(t, w, s)"
 
     # Query from file
     neurolang-query -f query.dl
 
     # Query from stdin
-    echo "ans(term) :- TermInStudyTFIDF(term, tfidf, study_id)" | neurolang-query
+    echo "ans(t) :- TermInStudyTFIDF(t, f, s)" | neurolang-query
 
     # Destrieux atlas engine
     neurolang-query --engine destrieux "ans(name) :- destrieux(name, region)"
@@ -31,6 +31,8 @@ from typing import Callable, Iterable, Optional
 import nibabel as nib
 import numpy as np
 from nilearn import datasets, image
+
+import pandas as pd
 
 try:
     from nilearn.datasets.utils import _fetch_files
@@ -178,8 +180,6 @@ def _load_neurosynth_data(
 
 
 def _read_ns_database(path: str) -> "pd.DataFrame":
-    import pandas as pd
-
     activations = pd.read_csv(path, sep="\t")
     activations["id"] = activations["id"].apply(StudyID)
     return activations
@@ -189,8 +189,6 @@ def _process_peaks(
     activations: "pd.DataFrame", mni_mask: nib.Nifti1Image
 ) -> "pd.DataFrame":
     """Convert MNI / Talairach peak coordinates to voxel indices."""
-    import pandas as pd
-
     mni_peaks = activations.loc[activations.space == "MNI"][
         ["x", "y", "z", "id"]
     ].rename(columns={"id": "study_id"})
@@ -241,8 +239,6 @@ def _process_peaks(
 
 
 def _read_ns_features(path: str) -> "pd.DataFrame":
-    import pandas as pd
-
     features = pd.read_csv(path, sep="\t")
     features.rename(columns={"pmid": "study_id"}, inplace=True)
     return features
@@ -263,9 +259,7 @@ def _load_destrieux_atlas(data_dir: Path, nl: NeurolangPDL) -> None:
         destrieux_set.add(
             (
                 v.decode("utf8").replace("-", " ").replace("_", " "),
-                ExplicitVBR.from_spatial_image_label(
-                    destrieux_atlas_image, k
-                ),
+                ExplicitVBR.from_spatial_image_label(destrieux_atlas_image, k),
             )
         )
     nl.add_tuple_set(destrieux_set, name="destrieux")
@@ -342,12 +336,11 @@ def _format_result(
     if isinstance(result, bool):
         return "true" if result else "false"
 
-    import pandas as pd
-
     def _rename_unnamed_columns(df):
         if column_names is not None and len(column_names) == len(df.columns):
             unnamed = all(
-                isinstance(c, int) or (isinstance(c, str) and c.startswith("c"))
+                isinstance(c, int)
+                or (isinstance(c, str) and c.startswith("c"))
                 for c in df.columns
             )
             if unnamed:
@@ -364,11 +357,13 @@ def _format_result(
         return df.to_string(index=False)
 
     try:
-        # Unwrap Constant → concrete set when the chase produced a wrapped result
+        # Unwrap Constant -> concrete set when chase produced wrapped result
         if hasattr(result, "value") and hasattr(result.value, "unwrap"):
             inner = result.value.unwrap()
             if hasattr(inner, "as_pandas_dataframe"):
-                return _emit(_rename_unnamed_columns(inner.as_pandas_dataframe()))
+                return _emit(
+                    _rename_unnamed_columns(inner.as_pandas_dataframe())
+                )
             result = inner
 
         # Get a DataFrame from the bare set (named or unnamed columns)
@@ -420,7 +415,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "-d",
         metavar="DIR",
         default="neurolang_data",
-        help="Directory for cached dataset downloads (default: neurolang_data).",
+        help="Directory for cached data downloads (default: neurolang_data).",
     )
     parser.add_argument(
         "--resolution",
@@ -467,7 +462,9 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
     -------
     ``None``, ``bool``, or a relational algebra set.
     """
-    from neurolang.frontend.datalog.standard_syntax import parser as datalog_parser
+    from neurolang.frontend.datalog.standard_syntax import (
+        parser as datalog_parser,
+    )
 
     ir_prog = datalog_parser(program_text)
 
@@ -502,7 +499,9 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
         column_names = None
         functor = q.head
 
-    pred_name = functor.name if isinstance(functor, ir.Symbol) else str(functor)
+    pred_name = (
+        functor.name if isinstance(functor, ir.Symbol) else str(functor)
+    )
 
     # Query → Implication so the DatalogProgram walker registers it as IDB
     rule = Implication(q.head, q.body)
