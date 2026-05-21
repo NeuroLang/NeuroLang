@@ -52,7 +52,7 @@ Homepage = "https://neurolang.github.io"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=9.0.3",
+    "pytest>=7.0",
     "pytest-benchmark",
     "pytest-cov",
     "problog"
@@ -65,14 +65,6 @@ doc = [
     "sphinx-gallery",
     "numpydoc"
 ]
-
-server = [
-    "tornado>=6.5.5",
-    "pyyaml>=6.0.3"
-]
-
-[project.scripts]
-neuro-server = "neurolang.utils.server.app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["neurolang"]
@@ -123,9 +115,3 @@ ignore = ["D211", "D212"]
 
 [tool.bandit]
 skips = ["B101"]
-
-
-[dependency-groups]
-dev = [
-    "ipykernel>=7.2.0",
-]
