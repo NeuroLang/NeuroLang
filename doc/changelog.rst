@@ -29,6 +29,14 @@ Unreleased
 * ``neurolang-query --list-predicates`` no longer requires downloading data;
   predicate metadata is read from the YAML engine config.
 
+* **Datalog init** — engines can declare inline Datalog rules that run after
+  the Python init via the ``datalog_init`` YAML field.  Derived predicates can
+  be defined without writing Python.
+
+* **CSV/TSV relations** — engines can load tabular data files as extensional
+  predicates with the ``relations`` YAML field.  Supported formats:
+  ``.csv``, ``.tsv``, ``.csv.gz``, ``.tsv.gz``.
+
 
 v0.0.1 (Alpha)
 --------------

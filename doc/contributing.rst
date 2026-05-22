@@ -120,11 +120,19 @@ dataset backends.  To add a new engine:
         description: "Short description of the dataset"
         requires_mni_mask: false
         python_init: "neurolang.utils.engines.my_dataset.init"
+        datalog_init: |
+          derived_pred(X) :- base_pred(X)
+        relations:
+          base_pred: "my_dataset/base_data.csv"
         predicates:
           my_predicate:
             arity: 2
             columns: [name, value]
             description: "What this predicate represents"
+
+   The optional fields ``datalog_init`` (inline Datalog rules) and
+   ``relations`` (CSV/TSV files loaded as predicates) run after the
+   Python init.  See :ref:`concepts` for details.
 
 2. Create the init module at
    ``neurolang/utils/engines/my_dataset/init.py`` that exports:

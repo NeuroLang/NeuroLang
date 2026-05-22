@@ -116,6 +116,10 @@ Engines are declared declaratively in :file:`engines/engines.yaml`:
        description: "Neurosynth database — forward and reverse inference"
        requires_mni_mask: true
        python_init: "neurolang.utils.engines.neurosynth.init"
+       datalog_init: |
+         study_with_peaks(S) :- peak_reported(I, J, K, S)
+       relations:
+         extra_data: "shared/my_data.csv"
        predicates:
          peak_reported:
            arity: 4
@@ -127,6 +131,38 @@ Each engine references a Python module that exports
 ``init_engine(nl, mask, data_dir)``.  The :mod:`neurolang.utils.engine_registry`
 module handles YAML loading, MNI mask retrieval, and delegating to the
 engine's init script.
+
+**Init phases.**  When :func:`~neurolang.utils.engine_registry.build_engine`
+builds an engine, it runs three phases in order:
+
+#. **Python init** (``python_init``) — imports the module and calls
+   ``init_engine(nl, mask, data_dir)``.  Use this for downloading data,
+   registering complex symbols, or loading neuroimaging atlases.
+
+#. **Datalog init** (``datalog_init``) — an optional YAML multiline string
+   of Datalog rules.  These are evaluated after the Python init so they can
+   reference any predicate registered there.  This is the simplest way to
+   define derived predicates without writing Python::
+
+       datalog_init: |
+         left_region(N, R) :- destrieux(N, R), startswith('lh', N)
+         right_region(N, R) :- destrieux(N, R), startswith('rh', N)
+
+#. **Relations** (``relations``) — loads CSV/TSV files as extensional
+   predicates.  Each entry maps a relation name to a file path relative to
+   the :file:`engines/` directory::
+
+       relations:
+         my_table: "my_engine/data.csv"
+         extra_refs: "shared/references.tsv"
+
+   Supported formats: ``.csv``, ``.tsv``, ``.csv.gz``, ``.tsv.gz``.  The
+   file is read with ``pandas.read_csv`` and registered via
+   :meth:`~neurolang.frontend.query_resolution_datalog.QueryBuilderDatalog.add_tuple_set`.
+   Because relations are loaded after the Datalog init, your derived rules
+   can already reference them.
+
+All three phases are optional — include only what your engine needs.
 
 To add a new engine, create a YAML entry and a corresponding
 :mod:`init` module under :file:`neurolang/utils/engines/`.  See
