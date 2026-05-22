@@ -148,6 +148,38 @@ class TestEngineRegistry:
                     f"datalog_init for engine {name!r} is empty"
                 )
 
+    def test_relations_csv_tsv(self):
+        """CSV and TSV relations are loaded as extensional predicates."""
+        from neurolang.utils.cli import _execute_program, _format_result
+
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="csv_rel")
+        nl.add_tuple_set([(4, "d"), (5, "e")], name="tsv_rel")
+
+        # Query CSV relation — _execute_program bypasses the probabilistic
+        # frontend query path (which doesn't handle EDB-only queries).
+        result, col_names = _execute_program(
+            nl, "ans(x, y) :- csv_rel(x, y)"
+        )
+        assert col_names == ["x", "y"]
+        assert result is not None
+        output = _format_result(result, column_names=col_names)
+        assert "a" in output
+        assert "b" in output
+        assert "c" in output
+
+        # Query TSV relation
+        result, col_names = _execute_program(
+            nl, "ans(x, y) :- tsv_rel(x, y)"
+        )
+        assert col_names == ["x", "y"]
+        assert result is not None
+        output = _format_result(result, column_names=col_names)
+        assert "d" in output
+        assert "e" in output
+
 
 # ---------------------------------------------------------------------------
 # _format_result

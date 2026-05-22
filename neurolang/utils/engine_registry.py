@@ -1,9 +1,13 @@
 """Declarative engine registry for the neurolang-query CLI.
 
 Engines are declared in :file:`engines/engines.yaml`.  Each engine may
-define a **Python initialisation script** (``python_init``) and an
-optional **Datalog initialisation file** (``datalog_init``) that is
-evaluated after the Python script completes.
+define:
+
+* a **Python initialisation script** (``python_init``);
+* optional **Datalog initialisation code** (``datalog_init``) evaluated
+  after the Python script;
+* optional **CSV/TSV relations** (``relations``) loaded as extensional
+  predicates after the Datalog init.
 
 Usage
 -----
@@ -137,5 +141,29 @@ def build_engine(
     datalog_init = cfg.get("datalog_init")
     if datalog_init:
         nl.execute_datalog_program(datalog_init)
+
+    relations = cfg.get("relations", {})
+    if relations:
+        import pandas as pd
+
+        for rel_name, rel_cfg in relations.items():
+            if isinstance(rel_cfg, str):
+                rel_cfg = {"file": rel_cfg}
+            rel_path = _ENGINES_DIR / rel_cfg["file"]
+            name_lower = rel_path.name.lower()
+            if name_lower.endswith(".csv") or name_lower.endswith(".csv.gz"):
+                sep = ","
+            elif name_lower.endswith(".tsv") or name_lower.endswith(".tsv.gz"):
+                sep = "\t"
+            else:
+                raise ValueError(
+                    f"Unsupported relation file format: {rel_path.suffix} "
+                    f"for relation {rel_name!r}. "
+                    "Supported: .csv, .tsv, .csv.gz, .tsv.gz"
+                )
+            df = pd.read_csv(rel_path, sep=sep)
+            nl.add_tuple_set(
+                [tuple(row) for row in df.to_numpy()], name=rel_name
+            )
 
     return nl
