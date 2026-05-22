@@ -1,5 +1,5 @@
 SQUALL: Controlled English for NeuroLang
-========================================
+=========================================
 
 SQUALL (*Semantically controlled Query-Answerable Logical Language*) lets you
 write NeuroLang queries and rules in plain English sentences instead of
@@ -7,1145 +7,25 @@ symbolic Datalog notation.  Under the hood, each sentence is translated to a
 NeuroLang logical expression using Montague semantics in
 Continuation-Passing Style.
 
-This tutorial is a **SQUALL language reference** — each section shows SQUALL
-programs as standalone text.  All examples are validated with doctests
-(run with ``pytest --doctest-glob=doc/tutorial_squall.rst``).
+This tutorial is built around a single real-world neuroimaging problem:
+**Bayes Factor decoding of the right fusiform gyrus**.  Each section
+introduces exactly the SQUALL feature needed for the next step, so by
+the end you will understand every line of a complete probabilistic
+SQUALL program.
 
-.. contents:: Contents
-   :local:
-   :depth: 2
+The full program we will build:
 
-
-Part 1: Getting Started
-========================
-
-1.1 Setup
-----------
-
-All examples assume the ``NeurolangPDL`` frontend is imported:
-
-    >>> from neurolang.frontend import NeurolangPDL
-
-1.2 Your First Query
----------------------
-
-The simplest SQUALL sentence consists of a **subject** (a variable or
-literal) and a **verb** (a unary predicate).
-
-.. code-block:: squall
-
-    obtain every plays.
-
-Result: all entities in the ``plays`` relation.
-
-1.3 Running from Python
-------------------------
-
-The general workflow is:
-
-1. Create a ``NeurolangPDL`` engine.
-2. Register EDB facts with ``add_tuple_set``.
-3. Execute a SQUALL program string with ``execute_squall_program``.
-4. Inspect results with ``solve_all()`` or via the direct return from
-   ``obtain`` queries.
-
-Full Python API details are in `appendix-a`_.
-
-
-Part 2: Nouns and Quantification
-==================================
-
-2.1 Determiners
-----------------
-
-SQUALL supports four determiners: ``every``, ``a``/``an``/``some``, ``no``,
-and ``the``.
-
-**Universal — every**
-
-``every person plays`` means *for all x: if person(x) then plays(x)*.
-
-.. code-block:: squall
-
-    define as Active every person that plays.
-
-.. code-block:: squall
-
-    obtain every Active.
-
-Result: ``active`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
-and ``plays`` contains ``("alice",)``.
-
-**Existential — a / an / some**
-
-``a person plays`` asserts existence.  In a query, only items with an
-associated count are returned.
-
-.. code-block:: squall
-
-    obtain every item ?i that has an item_count ?c.
-
-Result: the query returns ``a`` and ``b`` if ``item`` contains ``a, b, c`` and
-``item_count`` maps ``a→1``, ``b→2``.
-
-**Negative — no**
-
-``no`` inside a relative clause expresses negation-as-failure.
-
-.. code-block:: squall
-
-    obtain every item ?i that has no item_count ?c.
-
-Result: the query returns ``c`` if ``item`` contains ``a, b, c`` and
-``item_count`` maps ``a→1``, ``b→2``.
-
-2.2 Named Variables — ``?label``
----------------------------------
-
-Variables can be named explicitly using ``?name`` labels directly after the
-noun.  The label binds the variable so it can be reused elsewhere in the
-sentence.
-
-.. code-block:: squall
-
-    define as Active every person ?p that plays.
-
-.. code-block:: squall
-
-    obtain every Active.
-
-Result: ``active`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
-and ``plays`` contains ``("alice",)``.
-
-2.3 Tuple Subjects and Wildcard ``_``
---------------------------------------
-
-When a noun denotes a multi-dimensional entity, a parenthesised tuple of
-labels can follow the noun.  The variables bind to the respective columns.
-
-.. code-block:: squall
-
-    define as active every voxel (?v; ?x; ?y; ?z).
-
-.. code-block:: squall
-
-    obtain every active.
-
-Result: ``active`` contains ``("v1", 0, 0, 1)`` and ``("v2", 1, 2, 3)`` if
-``voxel`` contains those tuples.
-
-Use ``_`` inside a tuple label to match a column without projecting it into
-the rule head.  Each ``_`` creates a distinct fresh variable.
-
-.. code-block:: squall
-
-    define as Activation every Peak_reported (?i; ?j; ?k; _).
-
-.. code-block:: squall
-
-    obtain every Activation.
-
-Result: ``activation`` contains ``(10, 20, 30)`` and ``(11, 21, 31)`` if
-``peak_reported`` contains ``(10, 20, 30, "s1")`` and ``(11, 21, 31, "s2")``.
-
-2.4 Possessive NP — ``NP2 of NP``
------------------------------------
-
-A binary noun (``noun2``) can be turned into a full noun phrase with
-``DET noun2 of NP``.  The possessor is the outer NP; the possession is
-quantified by the determiner.
-
-.. code-block:: squall
-
-    define as AuthoredPaper every paper that a writer of every author writes.
-
-.. code-block:: squall
-
-    obtain every AuthoredPaper.
-
-Result: ``authoredpaper`` contains ``p1`` if ``paper`` contains ``p1``,
-``author`` contains ``alice``, and ``writer`` contains
-``("alice", "p1")``.
-
-2.5 Dimensional Annotation — ``in ND``
----------------------------------------
-
-A noun phrase can be annotated with ``in ND`` (e.g. ``in 3D``) to
-document that the relation is *N*-dimensional.  The annotation is
-syntactically accepted but carries no additional semantic content —
-it serves as human-readable documentation.
-
-.. code-block:: squall
-
-    define as ActiveVoxel every Voxel in 3D that a Study reports.
-
-.. code-block:: squall
-
-    obtain every ActiveVoxel.
-
-Result: ``activevoxel`` contains every voxel reported by at least one study.
-The ``in 3D`` annotation is ignored by the engine.
-
-2.6 Reserved Words and Quoting
---------------------------------
-
-SQUALL reserves many common English words as keywords (``every``, ``a``,
-``the``, ``that``, ``is``, ``has``, ``not``, ``and``, ``or``, ``where``,
-``who``, ``which``, etc.).  If a predicate or entity name coincides with a
-reserved word, wrap it in backticks.
-
-.. code-block:: squall
-
-    obtain every `from`.
-
-Result: ``from`` contains ``alice`` if the EDB relation ``from`` contains
-``("alice",)``.
-
-Variable names use the ``?`` prefix and may contain letters, digits, and
-underscores.
-
-.. code-block:: squall
-
-    obtain every study ?study_id.
-
-Result: the query returns ``s001`` and ``s002`` if ``study`` contains those
-tuples.
-
-String literals use single quotes and may contain spaces.
-
-.. code-block:: squall
-
-    obtain every study that is 'neuro study'.
-
-Result: the query returns ``neuro study`` if ``study`` contains
-``("neuro study",)`` and ``("other",)``.
-
-
-Part 3: Verbs
-==============
-
-3.1 Intransitive Verbs
------------------------
-
-The simplest verb is an **intransitive** predicate: one argument (the subject).
-
-.. code-block:: squall
-
-    define as PlayerPerson every person that plays.
-
-.. code-block:: squall
-
-    obtain every PlayerPerson.
-
-Result: ``playerperson`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
-and ``plays`` contains ``("alice",)``.
-
-.. _part-3-verb-args:
-
-3.2 Transitive Verbs
---------------------
-
-A **transitive** verb takes an object noun phrase following it, just as in
-English.  The verb applies to its subject (the head noun) and its object
-(the noun phrase after the verb) in natural subject-verb-object order.
-
-.. code-block:: squall
-
-    define as Performer every person that sings a Genre.
-
-.. code-block:: squall
-
-    obtain every Performer.
-
-Result: ``performer`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
-``genre`` contains ``("jazz",)``, and ``sings`` contains ``("alice", "jazz")``.
-
-The rule reads: *"every person that sings a genre"* — ``sings(person, genre)``
-maps the subject (``person``) to the first argument and the object (``genre``)
-to the second argument of the binary ``sings`` predicate.
-
-.. note::
-
-   When the EDB predicate stores its arguments in the **reverse** order
-   (e.g. ``reports`` stores ``(study, voxel)`` and you want to query from
-   the voxel's perspective), use the ``~`` prefix to invert the argument
-   order::
-
-       every Voxel that a Study ~reports.
-
-   reads as *"a study reports a voxel"* in English, but maps to
-   ``reports(voxel, study)`` — the ``~`` swaps the arguments so the
-   subject (``Voxel``) becomes the second argument and the object
-   (``Study``) becomes the first.
-
-.. _3-3-auxiliaries:
-
-3.3 Auxiliaries — ``does`` / ``is`` / ``has``
-----------------------------------------------
-
-``does not VP`` expresses negation-as-failure on a unary predicate.
-
-.. code-block:: squall
-
-    define as NotPlaying every person that does not plays.
-
-.. code-block:: squall
-
-    obtain every NotPlaying.
-
-Result: ``notplaying`` contains ``bob`` if ``person`` contains ``alice`` and ``bob``,
-and ``plays`` contains ``("alice",)``.
-
-3.4 Possessive VP — ``has NP2``
----------------------------------
-
-``has DET noun2`` expresses a possessive verb phrase.  The subject *has* a
-thing related to it by the binary noun ``noun2``.
-
-.. code-block:: squall
-
-    define as Author every person that has a publication.
-
-.. code-block:: squall
-
-    obtain every Author.
-
-Result: ``author`` contains ``alice`` if ``person`` contains ``alice``
-and ``bob``, and ``publication`` (a binary relation) contains
-``("alice", "paper1")``.
-
-With an optional relative clause on the possessed noun:
-
-.. code-block:: squall
-
-    define as ProlificAuthor every person
-        that has a publication that is highly_cited.
-
-Result: persons for whom at least one entry in ``publication`` has a
-related ``highly_cited`` fact.
-
-3.5 Existential — ``there is NP``
------------------------------------
-
-``there is NP`` / ``there are NP`` asserts that at least one entity
-matching the noun phrase exists.  The sentence is true whenever the NP is
-non-empty.
-
-.. code-block:: squall
-
-    define as HasPlayer every Game that there is a Player.
-
-.. code-block:: squall
-
-    obtain every HasPlayer.
-
-Result: ``hasplayer`` contains ``chess`` if ``game`` contains ``chess``
-and ``go``, ``player`` contains ``("alice", "chess")``, but ``go`` has
-no players.
-
-3.7 Arithmetic Expressions
-----------------------------
-
-A ``?label is <expression>`` clause can assign the result of an arithmetic
-expression to a variable.  The expression supports ``+``, ``-``, ``*``, ``/``
-with standard operator precedence; parentheses are supported for grouping.
-
-.. code-block:: squall
-
-    define as Bayes_factor (?r; ?t; ?bf)
-        where Joint_probability (?r, ?t, ?p_rt)
-        and Region_probability (?r, ?p_r)
-        and Term_probability (?t, ?p_t)
-        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
-
-Result: ``bayes_factor`` contains ``("region_A", "term_x", 6.5)`` if the
-joint probability is 0.6, the region probability is 0.3, and the term
-probability is 0.8.
-
-The ``is`` clause translates to an ``eq`` builtin with the arithmetic
-expression tree as the second argument.  The expression is evaluated during
-the chase using Python's ``operator`` module functions (``truediv``,
-``sub``, etc.).
-
-A full runnable example is in
-``examples/plot_squall_bayes_factor_decoding.py``.
-
-.. note::
-
-    Arithmetic expressions currently support **numeric types only**.
-    Non-numeric ``?label is 'string'`` is handled as a constant equality
-    (see section 3.6 above).  The two uses share the same ``is`` keyword
-    but produce different internal representations.
-
-3.6 Inline Type Guard — ``where ?x is a Noun``
-------------------------------------------------
-
-Inside a relative clause, ``where (?i; ?j; ?k) is a Noun`` asserts that
-the tuple belongs to the relation named by ``Noun``.
-
-.. code-block:: squall
-
-    define as SelectedPeak every Peak_reported (?i; ?j; ?k; ?s)
-        where (?i; ?j; ?k; ?s) is a Activation.
-
-.. code-block:: squall
-
-    obtain every SelectedPeak.
-
-Result: ``selectedpeak`` contains every tuple ``(i, j, k, s)`` that
-appears in both ``peak_reported`` and ``activation``.
-
-The scalar form works too: ``where ?s is a Selected_study`` asserts
-that ``s`` belongs to ``selected_study``.
-
-
-Part 4: Relative Clauses
-==========================
-
-Relative clauses restrict the noun they modify.  They are introduced by
-``that``, ``which``, ``who``, or ``where``.
-
-4.1 Intransitive VP
---------------------
-
-``every person that plays`` — for every x: person(x) and plays(x).
-
-.. code-block:: squall
-
-    define as PlayerPerson every person that plays.
-
-.. code-block:: squall
-
-    obtain every PlayerPerson.
-
-4.2 Transitive VP
-------------------
-
-A transitive verb takes an object NP after it in natural order (see
-:ref:`part-3-verb-args`).  The rule below collects (study, voxel) pairs
-via an explicit multi-variable head.
-
-.. code-block:: squall
-
-    define as reported for every Study ?s ; with every Voxel ?v that ?s reports.
-
-.. code-block:: squall
-
-    obtain every reported.
-
-Result: ``reported`` contains ``("s1", "v1")`` and ``("s2", "v2")`` if
-``voxel`` contains ``v1, v2, v3``, ``study`` contains ``s1, s2``, and
-``reports`` contains ``("s1", "v1")`` and ``("s2", "v2")``.
-
-4.3 Negative — ``does not VP``
---------------------------------
-
-.. code-block:: squall
-
-    define as NotPlaying every person that does not plays.
-
-.. code-block:: squall
-
-    obtain every NotPlaying.
-
-Result: ``notplaying`` contains ``bob`` if ``person`` contains ``alice`` and ``bob``
-and ``plays`` contains ``("alice",)``.
-
-4.4 Possessive — ``whose NG2 VP`` and ``NP2 of which VP``
------------------------------------------------------------
-
-**whose NG2 VP**
-
-``every person whose writer plays`` means: for every person x, there exists
-a y such that writer(x, y) and plays(y).
-
-.. code-block:: squall
-
-    define as published every person whose writer plays.
-
-.. code-block:: squall
-
-    obtain every published.
-
-Result: ``published`` contains ``alice`` if ``person`` contains ``alice`` and ``bob``,
-``writer`` contains ``("alice", "carol")`` and ``("bob", "dave")``, and
-``plays`` contains ``("carol",)``.
-
-**NP2 of which VP**
-
-``NP2 of which VP`` is the *relative* form of possessive NPs.  It attaches to a
-head noun and reads: *"whose NP2 VP"*.
-
-.. code-block:: squall
-
-    define as ActiveGame every game, a player of which plays.
-
-.. code-block:: squall
-
-    obtain every ActiveGame.
-
-Result: ``activegame`` contains ``chess`` if ``game`` contains ``chess``
-and ``go``, ``player`` contains ``("chess", "alice")``, and
-``plays`` contains ``("alice",)``.
-
-4.5 Adjective — ``that is ADJ``
----------------------------------
-
-An identifier used in adjective position (after ``that is``) acts as a unary
-predicate.
-
-.. code-block:: squall
-
-    define as ActivePerson every person that is active.
-
-.. code-block:: squall
-
-    obtain every ActivePerson.
-
-Result: ``activeperson`` contains ``alice`` if ``person`` contains
-``alice`` and ``bob``, and ``active`` contains ``("alice",)``.
-
-4.6 Function-Call Guard — ``func(?x, ?y) holds``
---------------------------------------------------
-
-An arbitrary relation can be invoked in a relative clause with explicit
-label arguments using ``identifier(?label, ...) holds``.
-
-.. code-block:: squall
-
-    define as Close every Pair ?p that euclidean(?x, ?y) holds.
-
-.. code-block:: squall
-
-    obtain every Close.
-
-Result: ``close`` contains all pairs ``p`` for which
-``euclidean(x, y)`` holds in the EDB.
-
-4.7 Nested Relative Clauses
------------------------------
-
-Relative clauses can be nested by using an intermediate IDB predicate as the
-noun.
-
-.. code-block:: squall
-
-    define as PlayingSelected every selected that plays.
-
-.. code-block:: squall
-
-    obtain every PlayingSelected.
-
-Result: ``playingselected`` contains ``alice`` if ``person`` contains ``alice``,
-``bob``, and ``carol``; ``plays`` contains ``alice`` and ``carol``; and
-``selected`` contains ``alice``.
-
-4.8 Comparisons
-----------------
-
-Relative clauses can include comparison predicates using the keywords
-``greater``, ``lower``, ``equal``, combined with optional ``equal`` and
-``not``, followed by ``than`` or ``to`` and an operand.
-
-Comparison keywords:
-
-* ``greater than``
-* ``greater equal than``
-* ``lower than``
-* ``lower equal than``
-* ``equal to``
-* ``not equal to``
-
-The following rule selects items whose ``item_count`` is at least 2.
-
-.. code-block:: squall
-
-    define as Large every Item that has an item_count greater equal than 2.
-
-.. code-block:: squall
-
-    obtain every Large.
-
-Result: ``large`` contains ``b`` and ``c`` if ``item`` contains ``a, b, c, d``
-and ``item_count`` maps ``a→0,1``, ``b→2``, ``c→3``.
-
-
-Part 5: Connectives
-====================
-
-5.1 Conjunction — ``and``
---------------------------
-
-With conjunction, two predicates are combined with ``and``.  A two-step
-approach: define an intermediate predicate and constrain further.
-
-.. code-block:: squall
-
-    define as Player every person that plays.
-    define as PlayAndRun every Player that runs.
-
-.. code-block:: squall
-
-    obtain every PlayAndRun.
-
-Result: ``playandrun`` contains ``alice`` if ``person`` contains ``alice``,
-``bob``, and ``carol``; ``plays`` contains ``alice`` and ``carol``; and
-``runs`` contains ``alice`` and ``bob``.
-
-5.2 Disjunction — ``or``
---------------------------
-
-With ``or``, the individual must satisfy at least one of the conditions.
-
-.. code-block:: squall
-
-    define as PlayOrRun every person that plays or runs.
-
-.. code-block:: squall
-
-    obtain every PlayOrRun.
-
-Result: ``playorrun`` contains ``alice`` and ``bob`` if ``person`` contains
-``alice``, ``bob``, and ``carol``; ``plays`` contains ``("alice",)``; and
-``runs`` contains ``("bob",)``.
-
-5.3 Negation — ``not``
------------------------
-
-``does not VP`` expresses negation-as-failure.  See `3-3-auxiliaries`_ for
-details and examples.
-
-
-Part 6: Rules
-==============
-
-6.1 Simple Unary Rules
------------------------
-
-The ``define as`` prefix turns a sentence into a Datalog **rule definition**.
-
-.. code-block:: squall
-
-    define as Active every person that plays.
-
-.. code-block:: squall
-
-    obtain every Active.
-
-Result: ``active`` contains ``alice`` and ``carol`` if ``person`` contains
-``alice``, ``bob``, and ``carol``, and ``plays`` contains ``alice`` and ``carol``.
-
-6.2 Multi-Variable Rules
--------------------------
-
-N-ary rules use ``for every NOUN ; with every NOUN`` (or other prepositions)
-to bind multiple variables into the head.
-
-.. code-block:: squall
-
-    define as merge for every Item ?i ; with every Quantity that ?i item_count.
-
-.. code-block:: squall
-
-    obtain every merge.
-
-Result: ``merge`` contains ``("a", 0)``, ``("a", 1)``, ``("b", 2)``, and
-``("c", 3)`` if ``item`` contains ``a, b, c``, ``item_count`` contains those
-tuples, and ``quantity`` contains ``0`` through ``4``.
-
-**Compound quantifiers**
-
-When a rule head needs more than one variable, the **compound quantifier**
-syntax chains ``for every`` clauses with ``and``, followed by a ``where``
-sentence.
-
-.. code-block:: squall
-
-    define as Cooccurrence for every Region ?r and for every Term ?t
-        where a Selected_study ?s activates ?r and mentions ?t.
-
-.. code-block:: squall
-
-    obtain every Cooccurrence.
-
-Result: ``cooccurrence`` contains ``("A", "x")``, ``("A", "y")``, and ``("B", "x")``
-when ``region`` contains ``A`` and ``B``, ``term`` contains ``x`` and ``y``,
-``selected_study`` contains ``s1``, ``s2``, ``s3``, ``activates`` contains
-``("s1", "A")``, ``("s2", "A")``, ``("s3", "B")``, and ``mentions`` contains
-``("s1", "x")``, ``("s2", "y")``, ``("s3", "x")``.
-
-6.3 Anaphora — ``the Noun``
------------------------------
-
-Inside the ``where`` sentence, ``the Noun`` can refer back to the variable
-introduced by a preceding ``for every Noun``.  This is called **anaphora**
-resolution.
-
-.. code-block:: squall
-
-    define as Cooccurrence
-        for every Region and for every Term
-        where a Selected_study activates the Region and mentions the Term.
-
-.. code-block:: squall
-
-    obtain every Cooccurrence.
-
-Result: same as the compound quantifier example above — ``cooccurrence`` contains
-``("A", "x")``, ``("A", "y")``, and ``("B", "x")``.
-
-.. note::
-
-   Anaphora works within a single rule or query only — there is no
-   inter-sentence scope yet.
-
-6.4 Fork Quantification — ``for NP , S``
------------------------------------------
-
-The ``for NP , S`` (fork) construction places a noun phrase as an
-**outer sentence-level quantifier** over an otherwise independent
-sentence ``S``.
-
-.. code-block:: squall
-
-    for every Person ?p, ?p plays.
-
-This reads: *"for every person p, p plays"*.
-
-The fork form is especially useful when ``S`` is a complex sentence
-that is awkward to embed inside a relative clause.
-
-.. code-block:: squall
-
-    define as Reported
-        for every Study ?s,
-            a Voxel ?v that ?s reports.
-
-.. code-block:: squall
-
-    obtain every Reported.
-
-Result: ``reported`` contains ``("s1", "v1")`` and ``("s2", "v2")`` if
-``study`` contains ``s1`` and ``s2``, ``voxel`` contains ``v1``, ``v2``,
-``v3``, and ``reports`` contains ``("s1", "v1")`` and ``("s2", "v2")``.
-
-6.5 Multiple Rules in One Program
------------------------------------
-
-Separate rules with a full stop.  The parser processes each rule and walks
-them all into the engine.
-
-.. code-block:: squall
-
-    define as Active every person that plays.
-    define as Fast every person that runs.
-
-.. code-block:: squall
-
-    obtain every Active.
-    obtain every Fast.
-
-Result: ``active`` contains ``alice`` and ``fast`` contains ``bob`` if
-``person`` contains ``alice`` and ``bob``, ``plays`` contains ``("alice",)``,
-and ``runs`` contains ``("bob",)``.
-
-6.6 Bare Predicate Calls in Rule Bodies
------------------------------------------
-
-A rule body can call any predicate (EDB or IDB) directly using the syntax
-``PredicateName (?arg1, ?arg2, ...)`` — no verb, no relative clause, no
-anaphora.  This is useful when a rule needs to join several predicates with
-explicit variable bindings, especially for arithmetic expressions that
-reference the variables.
-
-.. code-block:: squall
-
-    define as Bayes_factor (?r; ?t; ?bf)
-        where Joint_probability (?r, ?t, ?p_rt)
-        and Region_probability (?r, ?p_r)
-        and Term_probability (?t, ?p_t)
-        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
-
-Here ``Joint_probability (?r, ?t, ?p_rt)`` is a bare predicate call —
-it binds ``?p_rt`` to the probability column of the ``joint_probability``
-relation for the given region ``?r`` and term ``?t``.  The predicate name
-matches the rule name defined elsewhere in the program (case-insensitive).
-
-The arguments use **comma** separators ``(a, b, c)``, matching the
-convention for rule head variables.
-
-.. note::
-
-    Bare predicate calls complement the compound quantifier and anaphora
-    patterns (sections 6.2–6.3).  Use bare calls when you need explicit
-    variable bindings across multiple predicates, and anaphora when you
-    want the join to be implicit through natural language.
-
-
-Part 7: Queries
-================
-
-7.1 Simple ``obtain``
-----------------------
-
-The ``obtain`` keyword introduces a **query** rather than a rule.
-``execute_squall_program`` returns a ``NamedRelationalAlgebraFrozenSet``
-directly.
-
-.. code-block:: squall
-
-    obtain every Item that has an item_count.
-
-Result: the query returns ``a``, ``b``, and ``c`` if ``item`` contains
-``a, b, c, d`` and ``item_count`` maps ``a→0,1``, ``b→2``, ``c→3``.
-
-7.2 ``obtain … as Name``
--------------------------
-
-An ``obtain`` result can be renamed with ``as Name``.
-
-.. code-block:: squall
-
-    obtain every Joint_prob (?r; ?t; ?p) as P.
-
-Result: the result relation is named ``P``.
-
-7.3 Mixing Rules and Queries
------------------------------
-
-A single program can contain both ``define as`` rules and an ``obtain``
-clause.
-
-.. code-block:: squall
-
-    define as Active every person that plays.
-    obtain every Active.
-
-Result: the query returns ``alice`` if ``person`` contains ``alice`` and ``bob``
-and ``plays`` contains ``("alice",)``.
-
-
-Part 8: Probabilistic Rules
-=============================
-
-8.1 Probabilistic Facts — ``probably``
-----------------------------------------
-
-The ``probably`` keyword creates a probabilistic fact with a fresh
-probability variable.
-
-.. code-block:: squall
-
-    define as probably activates every study.
-
-Result: ``activates`` is a probabilistic predicate; the probability is
-inferred at query time.
-
-8.2 Explicit Probability — ``with probability NP``
-----------------------------------------------------
-
-``with probability`` followed by a conditioned/conditioning noun-phrase pair
-defines a *marginal* (MARG) conditional probability relation.
-
-.. code-block:: squall
-
-    define as Activation_given_term with probability
-        every Activation (?i; ?j; ?k; _)
-        conditioned to every Term_association (?s; ?t; _) such that ?t is 'auditory'.
-
-The relation ``activation_given_term`` will have columns
-``(i, j, k, probability)`` where the last column is
-``P(activation(i,j,k) | term_association(s,t) ∧ t = 'auditory')``.
-
-The keyword ``given`` is a synonym for ``conditioned to``, and is often
-more natural for spatial-prior and atlas-filtering patterns:
-
-.. code-block:: squall
-
-    define as Activation_map with inferred probability every Active_voxel (?i; ?j; ?k; _)
-        given every Study_term (_; ?t) where ?t is 'emotion'.
-
-This reads: *"the inferred probability of activation at (i, j, k) given
-the study term is 'emotion'"*.  The ``_`` in each tuple label drops the
-study-id column from the respective side.
-
-.. note::
-
-   When using MARG with tuple-labeled relations, the arity of the conditioned
-   and conditioning noun-phrases must exactly match the corresponding relation
-   arities.  Use ``_`` for columns that exist in the body relation but should
-   not appear in the head.
-
-8.3 Inferred Probability — ``with inferred probability``
----------------------------------------------------------
-
-``with inferred probability`` on a compound-quantifier head generates a
-marginal probability over the joint distribution.
-
-.. code-block:: squall
-
-    define as Joint_prob with inferred probability
-        for every Region and for every Term
-        where the Region cooccurs the Term.
-
-    obtain every Joint_prob (?r; ?t; ?p).
-
-Result: ``joint_prob`` contains ``("A", "x", 1.0)``, ``("A", "y", 1.0)``,
-and ``("B", "x", 1.0)`` when ``region`` contains ``A`` and ``B``, ``term``
-contains ``x`` and ``y``, and ``cooccurs`` contains ``("A", "x")``,
-``("A", "y")``, and ``("B", "x")``.
-
-8.4 Probabilistic N-ary Rules
--------------------------------
-
-The ``probably`` keyword can prefix n-ary (multi-argument) head rules
-using the semicolon body form.  This generates an
-``Implication(ProbabilisticFact(p, head), body)`` where ``p`` is a
-fresh probability variable inferred at query time.
-
-.. code-block:: squall
-
-    define as probably Cooccurrence for every Study ?s ; with every Term ?t
-        that ?s mentions.
-
-.. code-block:: squall
-
-    obtain every Cooccurrence.
-
-Result: ``cooccurrence`` contains probabilistic ``(s, t)`` pairs for
-every study that mentions a term.  The probability column is added
-automatically.
-
-8.5 Caveats — Existentials in Bodies
---------------------------------------
-
-When the body contains existentials (e.g. ``a Selected_study``), use an
-intermediate deterministic rule to flatten the body first, then define the
-probabilistic rule over the intermediate relation.  This pattern is shown
-in `part-11`_.
-
-
-Part 9: Aggregations
-=====================
-
-Aggregations summarise a set of values into a single result per group.
-The syntax follows the pattern::
-
-    define as RESULT for every SUBJECT ;
-        where every AGG_FUNC of the MEASURE where CONDITION per SUBJECT.
-
-Supported aggregation functions: ``count``, ``sum``, ``max``, ``min``,
-``average``.
-
-9.1 Grouped — ``per GROUPBY``
--------------------------------
-
-The following rule computes the maximum ``item_count`` value per item.
-
-.. code-block:: squall
-
-    define as max_items for every Item ?i ;
-        where every Max of the Quantity where ?i item_count per ?i.
-
-.. code-block:: squall
-
-    obtain every max_items.
-
-Result: ``max_items`` contains ``("a", 1)``, ``("b", 2)``, and ``("c", 3)``
-if ``item`` contains ``a, b, c, d``, ``quantity`` contains ``0`` through ``4``,
-and ``item_count`` maps ``a→0,1``, ``b→2``, ``c→3``.
-
-9.2 Global — No Groupby
-------------------------
-
-When no ``per`` clause is given, the aggregation function receives *all free
-variables* of the source relation.  Any callable registered in the engine's
-symbol table can be used as the aggregation functor.
-
-.. code-block:: squall
-
-    define as Result every Collect_all of the Item.
-
-Result: ``result`` contains the collected output of ``collect_all`` applied over
-all tuples from ``item``. This requires ``collect_all`` to be registered as an
-aggregation functor in the engine's symbol table.
-
-
-Part 10: Program-Level Features
-=================================
-
-10.1 Directives — ``#name(args).``
-------------------------------------
-
-A SQUALL program may include directive lines of the form
-``#name(arg, ...)`` to pass structured metadata or configuration to the
-engine.  Directives are parsed as ``FunctionApplication(name, args)``
-and processed by ``execute_squall_program`` before rule walking.
-
-The following directive is currently supported:
-
-``#set_backend('backend')``
-    Switch the relational algebra backend before walking the rules.
-    ``backend`` may be ``'pandas'``, ``'dask'``, or ``'duckdb'``.
-
-.. code-block:: squall
-
-    #set_backend('pandas').
-    define as Active every person that plays.
-    obtain every Active.
-
-Directives are written with a leading ``#``, a lowercase name, and a
-parenthesised argument list using the same term syntax as the rest of
-SQUALL (labels, literals, or identifiers).  The trailing ``.`` follows
-the normal sentence rule.  Unknown directives are silently ignored.
-
-
-.. _part-11:
-
-Part 11: Neuroimaging Domain Examples
-=======================================
-
-This section mirrors the patterns used in the actual NeuroLang examples
-(``examples/squall_examples.py``, ``examples/plot_neurosynth_implementation.py``)
-and shows how the same queries are expressed in SQUALL.
-
-11.1 Activated Voxels
-----------------------
-
-Each study in NeuroSynth reports ``(study, voxel)`` pairs.  We want to
-collect every voxel that at least one study has reported as activated.
-
-.. code-block:: squall
-
-    define as Activated every Voxel that a Study reports.
-
-.. code-block:: squall
-
-    obtain every Activated.
-
-Result: ``activated`` contains ``v1`` and ``v2`` if ``study`` contains
-``s1, s2, s3``, ``voxel`` contains ``v1, v2, v3``, and ``reports`` contains
-``("s1", "v1")``, ``("s2", "v1")``, and ``("s2", "v2")``.
-
-.. note::
-
-    The tilde (``~``) *reverses* argument order (see :ref:`part-3-verb-args`).
-    Use it when the EDB stores ``(voxel, study)`` so that ``?v ~reports ?s``
-    maps to ``reports(v, s)`` which the engine sees as ``reports(voxel, study)``.
-
-11.2 Filtering by Study Category
-----------------------------------
-
-Select a subset of studies by a category predicate, then collect the
-voxels those studies report.
-
-.. code-block:: squall
-
-    define as Auditory_voxel every Voxel
-        that an Auditory_study reports.
-
-.. code-block:: squall
-
-    obtain every Auditory_voxel.
-
-Result: ``auditory_voxel`` contains ``v1``, ``v2``, and ``v3`` if
-``auditory_study`` contains ``s1`` and ``s2``, ``voxel`` contains ``v1, v2, v3``,
-and ``reports`` contains ``("s1", "v1")``, ``("s2", "v2")``, and
-``("s2", "v3")``.
-
-The two-rule chain pattern is the SQUALL equivalent of:
-
-.. code-block:: text
-
-   auditory_voxel(v) :- voxel(v), auditory_study(s), reports(s, v).
-
-11.3 Atlas Region Filtering
------------------------------
-
-Custom predicates registered in the engine's symbol table can be used in
-SQUALL body positions.
-
-.. code-block:: squall
-
-    define as Left_label every Atlas_label ?label that startswith 'L '.
-
-.. code-block:: squall
-
-    obtain every Left_label.
-
-Result: ``left_label`` contains ``"L S_temporal_sup"`` and ``"L G_frontal_sup"``
-if ``atlas_label`` contains ``("L S_temporal_sup",)``, ``("R S_temporal_sup",)``,
-and ``("L G_frontal_sup",)`` and ``startswith`` is registered as a binary
-predicate.
-
-
-
-11.4 Multi-Variable Brain Activation
---------------------------------------
-
-When voxels are stored as ``(x, y, z)`` coordinate triples, the tuple
-label syntax binds all three columns at once.
-
-.. code-block:: squall
-
-    define as Activation every Voxel (?x; ?y; ?z)
-        that a Study focus_reported.
-
-.. code-block:: squall
-
-    obtain every Activation.
-
-Result: ``activation`` contains ``(0, 1, 2)`` and ``(3, 4, 5)`` if ``study``
-contains ``s1`` and ``s2``, ``voxel`` contains ``(0, 1, 2)``, ``(3, 4, 5)``,
-and ``(6, 7, 8)``, and ``focus_reported`` contains ``("s1", 0, 1, 2)`` and
-``("s2", 3, 4, 5)``.
-
-11.5 Conditional Probability (Full Pattern)
---------------------------------------------
-
-The MARG form computes the conditional probability that a voxel is activated
-given a conditioning predicate.  The full NeuroSynth forward-model pattern
-(see ``examples/plot_squall_neurosynth.py``) is:
-
 .. code-block:: squall
-
-    define as Activation every Peak_reported (?i; ?j; ?k; ?s)
-        such that ?s is a Selected_study.
 
-    define as Term_association every Term_in_study_tfidf (?s; ?t; ?tfidf)
-        such that ?s is a Selected_study.
+    define as Active_region every Region that a Selected_study activates.
 
-    define as Activation_given_term with probability
-        every Activation (?i; ?j; ?k; _)
-        conditioned to every Term_association (?s; ?t; _) such that ?t is 'auditory'.
+    define as Region_probability with inferred probability
+        every Active_region.
 
-    define as Activation_given_term_image
-        every Agg_create_region_overlay of the Activation_given_term (?i; ?j; ?k; ?p).
+    define as Mentioned_term every Term that a Selected_study mentions.
 
-    obtain every Activation_given_term_image (?x).
-
-Key points:
-
-* ``(?i; ?j; ?k; _)`` on the conditioned side — the ``_`` drops the
-  study-id column so the MARG head is ``(i, j, k, PROB(i,j,k))``.
-* ``(?s; ?t; _)`` on the conditioning side — the ``_`` drops the
-  ``tfidf`` weight column.
-* The ``obtain`` clause causes ``execute_squall_program`` to return
-  the query result directly as a ``NamedRelationalAlgebraFrozenSet``.
-
-.. note::
-
-   A full probabilistic solve requires a CPLogic-compatible EDB loaded via
-   ``add_uniform_probabilistic_choice_over_set``.  See
-   ``examples/plot_squall_neurosynth.py`` for the complete runnable example.
-
-11.6 Compound Quantifier and Anaphora
----------------------------------------
-
-The following pattern uses compound quantifiers and anaphora to express a
-ternary join in plain English with zero explicit variables.
-
-.. code-block:: squall
+    define as Term_probability with inferred probability
+        every Mentioned_term.
 
     define as Cooccurrence
         for every Region and for every Term
@@ -1154,31 +34,977 @@ ternary join in plain English with zero explicit variables.
     define as Joint_probability with inferred probability
         every Cooccurrence (?r; ?t).
 
-* ``for every Region and for every Term`` binds both variables into the head.
-* ``the Region`` and ``the Term`` are resolved anaphorically.
-* ``activates the Region`` maps to ``activates(s, r)`` and ``mentions the Term``
-  maps to ``mentions(s, t)``; the study variable ``s`` is introduced by
-  ``a Selected_study`` and exists only in the body.
-* The intermediate ``cooccurrence`` rule has a flat head, so it can be queried
-  with the standard probabilistic solver.
+    define as Bayes_factor (?r; ?t; ?bf)
+        where Joint_probability (?r, ?t, ?p_rt)
+        and Region_probability (?r, ?p_r)
+        and Term_probability (?t, ?p_t)
+        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+
+    obtain every Bayes_factor (?r; ?t; ?bf)
+        where ?r is 'right fusiform gyrus' as BF.
+
+.. contents:: Contents
+   :local:
+   :depth: 2
 
 
-.. _appendix-a:
+Part 1: The Bayes Factor Problem
+==================================
+
+1.1 What We Are Computing
+--------------------------
+
+Given a set of brain-imaging studies, each reporting activation peaks in some
+anatomical region and associated with cognitive terms, we want to find which
+terms are specifically associated with the **right fusiform gyrus**.
+
+The Bayes Factor quantifies the evidence:
+
+.. math::
+
+   \mathrm{BF}(r, t) =
+   \frac{P(T{=}t \mid R{=}r)}{P(T{=}t \mid R{\neq}r)}
+   =
+   \frac{P(R,T)/P(R)}{(P(T) - P(R,T))/(1 - P(R))}
+
+where :math:`P(R,T)` is the joint probability that a randomly chosen study
+activates region :math:`R` and mentions term :math:`T`,
+:math:`P(R)` is the marginal probability of activating :math:`R`, and
+:math:`P(T)` of mentioning :math:`T`.
+
+We will compute all three probability distributions as SQUALL rules, then
+combine them with arithmetic to produce :math:`\mathrm{BF}` — all inside
+NeuroLang with zero post-hoc pandas computation.
+
+1.2 The Data
+-------------
+
+The SQUALL program works with five relations:
+
+``activates(study_id, region)``
+    Activation foci from Neurosynth peaks, mapped to anatomical regions via
+    the Julich-Brain atlas.
+``mentions(study_id, term)``
+    TF-IDF term associations from Neurosynth.
+``region(region)``
+    The set of all anatomical region names.
+``term(term)``
+    The set of all cognitive term names.
+``selected_study(study_id)``
+    A probabilistic uniform choice over all studies.
+
+These are registered in Python before running SQUALL (see Appendix A for the
+full API):
+
+    >>> from neurolang.frontend import NeurolangPDL
+    >>> nl = NeurolangPDL()
+    >>> nl.add_tuple_set(study_activates_df, name="activates")
+    >>> nl.add_tuple_set(study_mentions_df, name="mentions")
+    >>> nl.add_tuple_set(region_df, name="region")
+    >>> nl.add_tuple_set(term_df, name="term")
+    >>> nl.add_uniform_probabilistic_choice_over_set(
+    ...     study_ids_df, name="selected_study"
+    ... )
+
+A complete working example is in
+``examples/plot_squall_bayes_factor_decoding.py``.
+
+1.3 Running a SQUALL Program
+------------------------------
+
+All SQUALL code is passed as a string to ``execute_squall_program``:
+
+    >>> result = nl.execute_squall_program("""
+    ...     define as Active_region every Region
+    ...         that a Selected_study activates.
+    ...     define as Region_probability with inferred probability
+    ...         every Active_region.
+    ...     ...
+    ...     obtain every Bayes_factor (?r; ?t; ?bf)
+    ...         where ?r is 'right fusiform gyrus' as BF.
+    ... """)
+    >>> bf_df = result.as_pandas_dataframe()
+
+When the program contains exactly one ``obtain`` clause, the method returns a
+``NamedRelationalAlgebraFrozenSet`` directly.  For multiple ``obtain`` clauses
+it returns a ``dict`` keyed by name.
+
+Now let's build this program step by step, starting from the simplest
+building blocks.
+
+
+Part 2: Nouns and Basic Queries
+=================================
+
+2.1 Nouns as Relations
+-----------------------
+
+A noun in SQUALL names a relation.  ``Region`` refers to the ``region`` EDB,
+``Term`` to ``term``, ``Selected_study`` to ``selected_study``.
+
+The simplest query asks for all entities in a relation:
+
+.. code-block:: squall
+
+    obtain every Region.
+
+Result: all anatomical regions in the data set.
+
+The ``obtain`` keyword introduces a query.  ``every`` is a **determiner**
+that asks for all values.  The sentence reads like plain English.
+
+2.2 Determiners
+-----------------
+
+SQUALL supports four determiners:
+
+======= ============ ==========================================
+Keyword Meaning      Example
+======= ============ ==========================================
+``every`` Universal   ``every Region`` — all regions
+``a``    Existential  ``a Selected_study`` — at least one study
+``no``   Negative     ``no Term`` — no matching terms
+``the``  Anaphoric    ``the Region`` — refers back to an
+                      earlier ``every Region`` (section 5.3)
+======= ============ ==========================================
+
+In the Bayes Factor program, ``a Selected_study`` is the existential choice
+that quantifies over studies — it introduces a study variable without binding
+it in the rule head.
+
+2.3 Named Variables — ``?label``
+---------------------------------
+
+Variables can be named with ``?name`` labels, which bind the variable so it
+can be reused in the same rule:
+
+.. code-block:: squall
+
+    obtain every Joint_probability (?r; ?t; ?p).
+
+Here ``?r``, ``?t``, and ``?p`` are bound to the three columns of the
+``joint_probability`` relation.
+
+2.4 Tuple Subjects and Wildcards
+---------------------------------
+
+When a noun denotes a multi-column relation, a parenthesised tuple of labels
+follows the noun:
+
+.. code-block:: squall
+
+    define as Selected_peak every Peak_reported (?i; ?j; ?k; ?s).
+
+The ``;`` separator matches the column structure.  Use ``_`` for columns you
+want to match but not project into the rule head:
+
+.. code-block:: squall
+
+    define as Activation every Peak_reported (?i; ?j; ?k; _).
+
+Each ``_`` creates a distinct fresh variable that exists in the query body
+but is dropped from the head.
+
+2.5 String Literals
+--------------------
+
+String literals use single quotes:
+
+.. code-block:: squall
+
+    obtain every study that is 'neuro study'.
+
+This is the syntax we will later use to select the target region:
+
+.. code-block:: squall
+
+    obtain every Bayes_factor (?r; ?t; ?bf)
+        where ?r is 'right fusiform gyrus' as BF.
+
+The ``where ?r is '...'`` clause filters ``?r`` to a fixed constant string.
+
+2.6 Reserved Words and Backtick Quoting
+-----------------------------------------
+
+SQUALL reserves many common English words (``every``, ``a``, ``the``,
+``that``, ``is``, ``has``, ``not``, ``and``, ``or``, ``where``, ``who``,
+``which``, etc.).  If a relation name coincides with a reserved word, wrap it
+in backticks:
+
+.. code-block:: squall
+
+    obtain every `from`.
+
+Variable names use the ``?`` prefix and may contain letters, digits, and
+underscores.  They cannot clash with reserved words because of the prefix.
+
+
+Part 3: Verbs and Relations
+=============================
+
+Now we add verbs to connect nouns into sentences.
+
+3.1 Transitive Verbs — The Bayes Factor Relations
+---------------------------------------------------
+
+The Bayes Factor problem needs two binary relations:
+``activates(study, region)`` and ``mentions(study, term)``.
+
+In SQUALL, a transitive verb maps subject→first argument, object→second
+argument, in natural English order:
+
+.. code-block:: squall
+
+    every Region that a Selected_study activates
+
+Reads as *"for every region r, there exists a selected study s such that
+activates(s, r)"* — the study (subject) activates the region (object).
+
+Similarly:
+
+.. code-block:: squall
+
+    every Term that a Selected_study mentions
+
+Reads as *"for every term t, there exists a selected study s such that
+mentions(s, t)"*.
+
+3.2 Argument Order and the ``~`` Inverse
+------------------------------------------
+
+When the EDB relation stores its arguments in the **reverse** order — for
+instance ``reports`` stores ``(study, voxel)`` but you want to query from
+the voxel's perspective — use the ``~`` prefix to swap them:
+
+.. code-block:: squall
+
+    every Voxel that a Study ~reports.
+
+This maps to ``reports(voxel, study)`` — the ``~`` inverts the arguments
+so the subject is matched to the second column and the object to the first.
+
+Our Bayes Factor data stores ``activates(study, region)`` in natural order
+(study first, region second), so no ``~`` is needed.
+
+3.3 Intransitive Verbs
+-----------------------
+
+An intransitive verb takes only a subject:
+
+.. code-block:: squall
+
+    define as PlayerPerson every person that plays.
+
+Result: all persons who play.
+
+3.4 Possessive VP — ``has NP2``
+---------------------------------
+
+``has DET noun2`` expresses a possessive verb phrase — the subject has a
+thing related to it by the binary noun ``noun2``:
+
+.. code-block:: squall
+
+    define as Author every person that has a publication.
+
+Result: persons for whom a matching entry in the binary ``publication``
+relation exists.
+
+With an optional restrictive relative clause on the possessed noun:
+
+.. code-block:: squall
+
+    define as ProlificAuthor every person
+        that has a publication that is highly_cited.
+
+3.5 Existential — ``there is NP``
+-----------------------------------
+
+``there is NP`` / ``there are NP`` asserts that at least one entity matching
+the noun phrase exists:
+
+.. code-block:: squall
+
+    define as HasPlayer every Game that there is a Player.
+
+Useful when the body needs a purely existential check without introducing a
+join variable.
+
+3.6 Auxiliaries — ``does`` / ``is`` / ``has``
+-----------------------------------------------
+
+``does not VP`` expresses negation-as-failure:
+
+.. code-block:: squall
+
+    define as NotPlaying every person that does not plays.
+
+Result: persons who do not appear in the ``plays`` relation.
+
+3.7 Function-Call Guard — ``Predicate(?x, ?y) holds``
+-------------------------------------------------------
+
+An arbitrary relation can be invoked in a relative clause with explicit
+arguments:
+
+.. code-block:: squall
+
+    define as Close every Pair ?p that euclidean(?x, ?y) holds.
+
+This calls ``euclidean(x, y)`` as a guard in the body.  We will see a more
+general form of this in section 7.1.
+
+.. -- 3.8 Bare Predicate Calls --
+
+.. note::
+
+    Section 7.1 introduces a closely related pattern — **bare predicate
+    calls** with the syntax ``PredicateName (?a, ?b, ?c)`` without a verb —
+    which is used in the Bayes Factor rule body.
+
+
+Part 4: Defining Rules
+========================
+
+Now we move from queries to rule definitions, building the intermediate
+predicates that the Bayes Factor program needs.
+
+4.1 Simple Unary Rules
+-----------------------
+
+The ``define as`` prefix turns a sentence into a Datalog rule:
+
+.. code-block:: squall
+
+    define as Active_region every Region that a Selected_study activates.
+
+This creates a new predicate ``active_region(region)``.  In Datalog notation:
+
+.. code-block:: text
+
+    active_region(r) :- region(r), selected_study(s), activates(s, r).
+
+The rule says: *r is an active region if there exists a selected study s
+that activates r*.
+
+The Bayes Factor program defines four such intermediate rules:
+
+.. code-block:: squall
+
+    define as Active_region every Region that a Selected_study activates.
+    define as Mentioned_term every Term that a Selected_study mentions.
+
+These two create unary predicates ``active_region(region)`` and
+``mentioned_term(term)``.  They are the building blocks for the marginal
+probabilities.
+
+4.2 Multi-Variable Rules — Compound Quantifiers
+-------------------------------------------------
+
+To build the joint distribution we need a **ternary** relation:
+``cooccurrence(region, term)`` linking each study's region and term.
+
+The compound quantifier syntax chains ``for every`` clauses:
+
+.. code-block:: squall
+
+    define as Cooccurrence
+        for every Region and for every Term
+        where a Selected_study activates the Region and mentions the Term.
+
+This creates:
+
+.. code-block:: text
+
+    cooccurrence(r, t) :-
+        region(r), term(t), selected_study(s),
+        activates(s, r), mentions(s, t).
+
+The ``and`` between quantifiers binds both ``Region`` and ``Term`` into the
+rule head, producing a binary predicate.
+
+4.3 Anaphora — ``the Noun``
+-----------------------------
+
+Inside the ``where`` clause, ``the Region`` and ``the Term`` refer back to
+the variables introduced by ``for every Region`` and ``for every Term``.
+This is called **anaphora** resolution — the reader (human or machine)
+understands which variable is meant from context.
+
+.. code-block:: squall
+
+    define as Cooccurrence
+        for every Region and for every Term
+        where a Selected_study activates the Region and mentions the Term.
+
+Without anaphora you would need explicit variables:
+
+.. code-block:: squall
+
+    define as Cooccurrence
+        for every Region and for every Term
+        where a Selected_study ?s activates ?r and mentions ?t.
+
+The anaphoric form is more natural and is what the Bayes Factor program uses.
+
+.. note::
+
+   Anaphora works within a single rule only — there is no inter-sentence
+   scope yet.  Each rule resolves ``the X`` from the ``for every X`` in its
+   own head.
+
+4.4 The ``;`` Separator for Multi-Variable Heads
+---------------------------------------------------
+
+An alternative to compound quantifiers uses a ``;``-separated tuple after
+``define as``:
+
+.. code-block:: squall
+
+    define as reported for every Study ?s ; with every Voxel ?v that ?s reports.
+
+This is equivalent but reads less naturally than the compound quantifier
+with anaphora.
+
+4.5 Multiple Rules in One Program
+-----------------------------------
+
+Rules are separated by a full stop.  All the Bayes Factor ``define``
+sentences are passed as a single program string:
+
+.. code-block:: squall
+
+    define as Active_region every Region that a Selected_study activates.
+    define as Mentioned_term every Term that a Selected_study mentions.
+    define as Cooccurrence
+        for every Region and for every Term
+        where a Selected_study activates the Region and mentions the Term.
+    ...
+
+    obtain every Bayes_factor (?r; ?t; ?bf)
+        where ?r is 'right fusiform gyrus' as BF.
+
+4.6 Fork Quantification — ``for NP , S``
+------------------------------------------
+
+The ``for NP , S`` (fork) construction places a noun phrase as an
+**outer sentence-level quantifier** over an otherwise independent
+sentence ``S``:
+
+.. code-block:: squall
+
+    for every Person ?p, ?p plays.
+
+This reads: *"for every person p, p plays"*.
+
+The fork form is useful when ``S`` is too complex to embed inside a relative
+clause.
+
+.. code-block:: squall
+
+    define as Reported
+        for every Study ?s,
+            a Voxel ?v that ?s reports.
+
+Here the fork binds ``?s`` in the outer scope so it can be referenced by the
+inner sentence.
+
+4.7 Comparisons
+----------------
+
+Relative clauses can include comparisons using the keywords ``greater``,
+``lower``, ``equal``, optionally combined with ``equal`` and ``not``,
+followed by ``than`` or ``to`` and an operand:
+
+.. code-block:: squall
+
+    define as Large every Item that has an item_count greater equal than 2.
+
+Supported forms:
+* ``greater than``
+* ``greater equal than``
+* ``lower than``
+* ``lower equal than``
+* ``equal to``
+* ``not equal to``
+
+
+Part 5: Probabilistic Rules
+=============================
+
+Now we introduce probability — the core of the Bayes Factor computation.
+
+5.1 Probabilistic Facts — ``probably``
+---------------------------------------
+
+The ``probably`` keyword creates a probabilistic fact with a fresh
+probability variable:
+
+.. code-block:: squall
+
+    define as probably activates every study.
+
+The ``activates`` predicate is now probabilistic; the probability is inferred
+at query time.
+
+5.2 Inferred Probability — ``with inferred probability``
+---------------------------------------------------------
+
+``with inferred probability`` on a rule head generates a marginal probability
+over the joint distribution.  This is the key construct for the Bayes Factor:
+
+.. code-block:: squall
+
+    define as Region_probability with inferred probability
+        every Active_region.
+
+    define as Term_probability with inferred probability
+        every Mentioned_term.
+
+    define as Joint_probability with inferred probability
+        every Cooccurrence (?r; ?t).
+
+Each produces a predicate with an added probability column:
+
+* ``region_probability(region, PROB(region))`` — marginal :math:`P(R)`
+* ``term_probability(term, PROB(term))`` — marginal :math:`P(T)`
+* ``joint_probability(region, term, PROB(region, term))`` — joint :math:`P(R,T)`
+
+The probability is the fraction of studies that satisfy the body given the
+probabilistic ``Selected_study`` choice.  The tuple ``(?r; ?t)`` in the
+``Cooccurrence`` head tells the solver which variables to keep after
+marginalising over studies — the study variable introduced by
+``a Selected_study`` in the body is quantified away.
+
+.. note::
+
+   The body of each ``with inferred probability`` rule must be a
+   **deterministic** predicate.  The probabilistic solver combines it with
+   the ``selected_study`` choice automatically.  This is why we create
+   ``Active_region``, ``Mentioned_term``, and ``Cooccurrence`` as separate
+   deterministic rules first — they flatten the existential study variable
+   before the probabilistic step.
+
+5.3 Conditional Probability — ``with probability … conditioned to``
+---------------------------------------------------------------------
+
+The MARG form computes a conditional probability:
+
+.. code-block:: squall
+
+    define as Activation_given_term with probability
+        every Activation (?i; ?j; ?k; _)
+        conditioned to every Term_association (?s; ?t; _) such that ?t is 'auditory'.
+
+Here ``_`` drops the study-id column from the conditioned side and the
+TF-IDF weight from the conditioning side.  The result has columns
+``(i, j, k, probability)`` where the last column is
+``P(activation(i,j,k) | term_association(s,t) ∧ t = 'auditory')``.
+
+The keyword ``given`` is a synonym for ``conditioned to``:
+
+.. code-block:: squall
+
+    define as Activation_map with inferred probability every Active_voxel (?i; ?j; ?k; _)
+        given every Study_term (_; ?t) where ?t is 'emotion'.
+
+This reads: *"the inferred probability of activation at (i, j, k) given
+the study term is 'emotion'"*.
+
+.. note::
+
+   When using MARG with tuple-labeled relations, the arity of the conditioned
+   and conditioning noun-phrases must exactly match the corresponding
+   relation arities.  Use ``_`` for columns that exist in the body relation
+   but should not appear in the head.
+
+5.4 Explicit Probability — ``with probability NP``
+----------------------------------------------------
+
+``with probability`` followed by a conditioned/conditioning noun-phrase pair
+also supports explicit naming:
+
+.. code-block:: squall
+
+    define as Activation_given_term with probability
+        every Activation (?i; ?j; ?k; _)
+        conditioned to every Term_association (?s; ?t; _) such that ?t is 'auditory'.
+
+5.5 Caveats — Existentials in Body
+------------------------------------
+
+When the body contains existentials (e.g. ``a Selected_study``), create an
+intermediate deterministic rule first, then define the probabilistic rule
+over it.  This is exactly the pattern used in the Bayes Factor program:
+
+1. ``Active_region`` — deterministic, flattens the existential
+2. ``Region_probability with inferred probability every Active_region`` —
+   probabilistic, adds the probability column
+
+
+Part 6: Connectives
+=====================
+
+6.1 Conjunction — ``and``
+---------------------------
+
+Multiple conditions in a rule body are joined with ``and``:
+
+.. code-block:: squall
+
+    define as Cooccurrence
+        for every Region and for every Term
+        where a Selected_study activates the Region and mentions the Term.
+
+The ``activates the Region and mentions the Term`` is a conjunction of two
+verb phrases sharing the same subject (the study).
+
+When predicates are split across separate rules, chain them with an
+intermediate:
+
+.. code-block:: squall
+
+    define as Player every person that plays.
+    define as PlayAndRun every Player that runs.
+
+6.2 Disjunction — ``or``
+--------------------------
+
+With ``or``, the subject must satisfy at least one condition:
+
+.. code-block:: squall
+
+    define as PlayOrRun every person that plays or runs.
+
+6.3 Negation — ``not``
+-----------------------
+
+``does not VP`` expresses negation-as-failure (see section 3.6):
+
+.. code-block:: squall
+
+    define as NotPlaying every person that does not plays.
+
+
+Part 7: The Bayes Factor Formula
+==================================
+
+Now we reach the heart of the program — computing the Bayes Factor from the
+three probability distributions.
+
+7.1 Bare Predicate Calls
+--------------------------
+
+To reference ``Joint_probability``, ``Region_probability``, and
+``Term_probability`` inside a rule body, we use the **bare predicate call**
+syntax — the predicate name followed by parenthesised arguments, no verb:
+
+.. code-block:: squall
+
+    define as Bayes_factor (?r; ?t; ?bf)
+        where Joint_probability (?r, ?t, ?p_rt)
+        and Region_probability (?r, ?p_r)
+        and Term_probability (?t, ?p_t)
+        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+
+``Joint_probability (?r, ?t, ?p_rt)`` calls the ``joint_probability``
+predicate with arguments ``?r``, ``?t``, binding ``?p_rt`` to the
+probability column.  The arguments use **comma** separators ``(a, b, c)``.
+The predicate name matches the rule name defined elsewhere in the program
+(case-insensitive).
+
+This form is the multi-predicate equivalent of the function-call guard in
+section 3.7, but without the ``holds`` keyword — it is used in rule bodies
+to join several predicates with explicit variable bindings.
+
+7.2 Arithmetic Expressions
+---------------------------
+
+The last conjunct in the rule assigns the result of an arithmetic expression
+to ``?bf``:
+
+.. code-block:: squall
+
+    ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r))
+
+This is the Bayes Factor formula from section 1.1, expressed directly in
+SQUALL.  The expression supports ``+``, ``-``, ``*``, ``/`` with standard
+operator precedence; parentheses are supported for grouping.
+
+The ``is`` clause translates to an ``eq`` builtin with the arithmetic
+expression tree as the second argument.  The expression is evaluated during
+the chase using Python's ``operator`` module functions (``truediv``,
+``sub``, etc.).
+
+.. note::
+
+    Arithmetic expressions currently support **numeric types only**.
+    Non-numeric ``?label is 'string'`` is handled as a constant equality
+    (see section 2.5).  The two uses share the same ``is`` keyword but
+    produce different internal representations.
+
+7.3 The Complete Bayes Factor Rule
+------------------------------------
+
+.. code-block:: squall
+
+    define as Bayes_factor (?r; ?t; ?bf)
+        where Joint_probability (?r, ?t, ?p_rt)
+        and Region_probability (?r, ?p_r)
+        and Term_probability (?t, ?p_t)
+        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+
+In Datalog notation:
+
+.. code-block:: text
+
+    bayes_factor(r, t, bf) :-
+        joint_probability(r, t, p_rt),
+        region_probability(r, p_r),
+        term_probability(t, p_t),
+        eq(bf, truediv(truediv(p_rt, p_r), truediv(sub(p_t, p_rt), sub(1.0, p_r)))).
+
+
+Part 8: Querying and Optimization
+===================================
+
+8.1 The ``obtain`` Clause
+--------------------------
+
+The ``obtain`` clause executes a query and returns results.  Unlike
+``define as``, which creates a rule for later use, ``obtain`` immediately
+solves the query and makes the result available to Python.
+
+.. code-block:: squall
+
+    obtain every Bayes_factor (?r; ?t; ?bf)
+        where ?r is 'right fusiform gyrus' as BF.
+
+This asks for all ``(r, t, bf)`` triples where ``r`` is the target region.
+
+8.2 Named Results — ``as Name``
+---------------------------------
+
+The ``as BF`` suffix names the result relation:
+
+    >>> result = nl.execute_squall_program(squall_program_with_obtain)
+    >>> bf_df = result.as_pandas_dataframe()
+    >>> bf_df.columns = ["region", "term", "bf"]
+    >>> bf_df.sort_values("bf", ascending=False).head()
+
+When there is exactly one ``obtain`` clause, ``execute_squall_program``
+returns the ``NamedRelationalAlgebraFrozenSet`` directly.  When there are
+multiple, it returns a ``dict`` keyed by name.
+
+8.3 Magic-Sets Optimization
+-----------------------------
+
+The ``where ?r is 'right fusiform gyrus'`` filter does more than just
+post-filter — NeuroLang's **magic-sets** optimisation pushes the constant
+backwards through all the rules in the chain:
+
+1. The ``InlineEqualityConstantsMixin`` inlines ``eq(r, Constant('rfg'))``
+   into the ``bayes_factor`` call before the SIPS (Sideways Information
+   Passing Strategy) sees it.
+2. The SIPS creates an adorned predicate
+   ``bayes_factor^bff_0(Constant('rfg'), t, bf)`` where ``bf`` means the
+   first argument is bound.
+3. A magic init ``magic_bayes_factor^bff_0(Constant('rfg'))`` seeds the
+   propagation.
+4. Magic rules propagate the bound argument down the dependency chain:
+   ``magic_joint_probability^bff_0(r)``,
+   ``magic_region_probability^bf_0(r)``,
+   ``magic_cooccurrence^bf_0(r)``,
+   ``magic_active_region^b_0(r)``.
+5. Each adorned rule now filters its body with a magic predicate, so the
+   computation for the ``cooccurrence`` join, the marginal probabilities, and
+   the final Bayes Factor all only see rows where ``r = 'right fusiform
+   gyrus'``.
+
+The result: with 12 000+ studies and 1 million term-study pairs, the query
+completes in approximately 30 seconds because only 4 298 studies activating
+the right fusiform gyrus are evaluated.
+
+.. note::
+
+    Magic-sets works when the constant appears on an **IDB** (rule-defined)
+    predicate, as it does here (``Bayes_factor`` is defined by a rule).  For
+    EDB queries the SIPS returns early and the optimisation does not apply.
+
+
+Part 9: The Complete Program
+==============================
+
+Putting it all together:
+
+.. code-block:: squall
+
+    define as Active_region every Region that a Selected_study activates.
+    define as Region_probability with inferred probability every Active_region.
+
+    define as Mentioned_term every Term that a Selected_study mentions.
+    define as Term_probability with inferred probability every Mentioned_term.
+
+    define as Cooccurrence
+        for every Region and for every Term
+        where a Selected_study activates the Region and mentions the Term.
+    define as Joint_probability with inferred probability every Cooccurrence (?r; ?t).
+
+    define as Bayes_factor (?r; ?t; ?bf)
+        where Joint_probability (?r, ?t, ?p_rt)
+        and Region_probability (?r, ?p_r)
+        and Term_probability (?t, ?p_t)
+        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+
+    obtain every Bayes_factor (?r; ?t; ?bf)
+        where ?r is 'right fusiform gyrus' as BF.
+
+Running this on real Neurosynth data (see
+``examples/plot_squall_bayes_factor_decoding.py``) produces:
+
+.. list-table:: Top terms by Bayes Factor for the right fusiform gyrus
+   :header-rows: 1
+
+   * - Term
+     - Bayes Factor
+   * - ffa
+     - 11.69
+   * - face ffa
+     - 11.06
+   * - fusiform face
+     - 11.02
+   * - fusiform gyri
+     - 7.04
+   * - fusiform
+     - 6.43
+   * - fusiform gyrus
+     - 6.39
+   * - word form
+     - 6.20
+   * - visual word
+     - 5.99
+   * - occipito temporal
+     - 5.87
+   * - orthographic
+     - 5.43
+   * - occipitotemporal cortex
+     - 5.32
+   * - visual stream
+     - 5.22
+   * - inferior occipital
+     - 5.03
+   * - ventral visual
+     - 4.88
+   * - occipito
+     - 4.31
+   * - occipitotemporal
+     - 4.22
+   * - extrastriate
+     - 3.69
+   * - identity
+     - 3.40
+   * - characters
+     - 3.38
+   * - face recognition
+     - 3.26
+
+All 20 terms exceed the Jeffreys "substantial evidence" threshold of
+:math:`\sqrt{10} \approx 3.16`.  The top cluster — FFA, face, fusiform
+face — is exactly what the right fusiform gyrus is known for.
+
+
+Part 10: Additional SQUALL Syntax
+===================================
+
+This section documents features not used directly in the Bayes Factor
+example but available in the language.
+
+10.1 Aggregations
+------------------
+
+Aggregations summarise a set of values into a single result per group:
+
+.. code-block:: text
+
+    define as RESULT for every SUBJECT ;
+        where every AGG_FUNC of the MEASURE where CONDITION per SUBJECT.
+
+Supported functions: ``count``, ``sum``, ``max``, ``min``, ``average``.
+
+Example — maximum ``item_count`` per item:
+
+.. code-block:: squall
+
+    define as max_items for every Item ?i ;
+        where every Max of the Quantity where ?i item_count per ?i.
+
+Global aggregation (no ``per`` clause):
+
+.. code-block:: squall
+
+    define as Result every Collect_all of the Item.
+
+This requires ``collect_all`` to be registered as an aggregation functor in
+the engine's symbol table.
+
+10.2 Program-Level Directives — ``#name(args).``
+--------------------------------------------------
+
+A SQUALL program may include directive lines of the form ``#name(arg, ...)``
+to pass configuration to the engine.  Directives are processed before rule
+walking.
+
+Currently supported:
+
+``#set_backend('backend')``
+    Switch the relational algebra backend.  ``backend`` may be ``'pandas'``,
+    ``'dask'``, or ``'duckdb'``.
+
+.. code-block:: squall
+
+    #set_backend('pandas').
+    define as Active every person that plays.
+    obtain every Active.
+
+Unknown directives are silently ignored.
+
+10.3 Inline Type Guards
+-------------------------
+
+Inside a relative clause, ``where (?i; ?j; ?k) is a Noun`` asserts that the
+tuple belongs to the relation named by ``Noun``:
+
+.. code-block:: squall
+
+    define as SelectedPeak every Peak_reported (?i; ?j; ?k; ?s)
+        where (?i; ?j; ?k; ?s) is a Activation.
+
+The scalar form works too: ``where ?s is a Selected_study``.
+
+10.4 Nested Relative Clauses
+-----------------------------
+
+Relative clauses can be nested by using an intermediate IDB predicate as the
+noun:
+
+.. code-block:: squall
+
+    define as PlayingSelected every selected that plays.
+
+
+.. _part-9-appendix-a:
 
 Appendix A: Running SQUALL from Python
-========================================
+=========================================
 
-All of the SQUALL snippets shown in the previous sections can be executed
-from Python using the ``NeurolangPDL`` frontend.  The general workflow is:
+All of the SQUALL syntax shown in this tutorial can be executed from Python
+using the ``NeurolangPDL`` frontend.  The general workflow is:
 
 1. Create a ``NeurolangPDL`` engine.
 2. Register EDB facts with ``add_tuple_set``.
 3. Execute a SQUALL program string with ``execute_squall_program``.
-4. Inspect results with ``solve_all()`` or via the direct return from
-   ``obtain`` queries.
-
-The subsections below demonstrate each pattern.
-
+4. Inspect results via the direct return from ``obtain`` queries or with
+   ``solve_all()``.
 
 Registering facts and running a simple rule
 --------------------------------------------
@@ -1423,60 +1249,16 @@ Boolean connectives
     ['alice', 'bob']
 
 
-Neuroimaging domain examples
------------------------------
-
-**Activated voxels**
-
-    >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(
-    ...     [("s1",), ("s2",), ("s3",)], name="study"
-    ... )
-    >>> nl.add_tuple_set(
-    ...     [("v1",), ("v2",), ("v3",)], name="voxel"
-    ... )
-    >>> nl.add_tuple_set(
-    ...     [("s1", "v1"), ("s2", "v1"), ("s2", "v2")], name="reports"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as Activated every Voxel ?v that a Study ?s reports."
-    ... )
-    >>> sorted(nl.solve_all()["activated"].as_pandas_dataframe().iloc[:, 0].tolist())
-    ['v1', 'v2']
-
-**Multi-variable activation (tuple subject)**
-
-    >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(
-    ...     [("s1",), ("s2",)], name="study"
-    ... )
-    >>> nl.add_tuple_set(
-    ...     [(0, 1, 2), (3, 4, 5), (6, 7, 8)], name="voxel"
-    ... )
-    >>> nl.add_tuple_set(
-    ...     [("s1", 0, 1, 2), ("s2", 3, 4, 5)], name="focus_reported"
-    ... )
-    >>> nl.execute_squall_program(
-    ...     "define as Activation every Voxel (?x; ?y; ?z) "
-    ...     "that a Study ?s focus_reported."
-    ... )
-    >>> sorted(
-    ...     nl.solve_all()["activation"]
-    ...     .as_pandas_dataframe().apply(tuple, axis=1).tolist()
-    ... )
-    [(0, 1, 2), (3, 4, 5)]
-
+.. _appendix-b:
 
 Appendix B: IR Builder Cheat-Sheet
-=====================================
+====================================
 
-Every SQUALL sentence is compiled into NeuroLang's intermediate representation
-(IR).  You can also write IR directly using the **environment context manager**.
-This is useful when:
-
-- a pattern has no SQUALL syntax yet;
-- you need to mix Python logic with declarative rules;
-- you want to inspect or reuse the IR objects from a rule.
+Every SQUALL sentence is compiled into NeuroLang's intermediate
+representation (IR).  You can also write IR directly using the
+**environment context manager**.  This is useful when a pattern has no
+SQUALL syntax yet, or when you need to mix Python logic with declarative
+rules.
 
 **Scope vs Environment**
 
@@ -1585,13 +1367,15 @@ IR builder:
         )
 
 
+.. _appendix-c:
+
 Appendix C: Gap Report
 ========================
 
 The following Datalog / IR patterns appear in codebase examples with their
 current status:
 
-.. list-table:: SQUALL gap report (updated 2026-05-21)
+.. list-table:: SQUALL gap report (updated 2026-05-22)
    :header-rows: 1
    :widths: 40 15 45
 
@@ -1600,7 +1384,8 @@ current status:
      - Notes
    * - ``rule_body2_cond`` two-sided conditioned NP
      - ✅ Fixed
-     - ``define as X with probability every A conditioned to every B`` now routes to ``rule_op_marg``
+     - ``define as X with probability every A conditioned to every B``
+       now routes to ``rule_op_marg``
    * - Function calls in rule body (e.g. ``euclidean(?x,?y)``)
      - ✅ Fixed
      - Use ``rel_fun_call``: ``every A that euclidean(?x,?y) holds``
@@ -1609,43 +1394,63 @@ current status:
      - Use ``rel_comp`` with a label in the RHS ``op`` position
    * - Anonymous wildcard ``_`` in tuple labels (``(?i; ?j; ?k; _)``)
      - ✅ Fixed
-     - Each ``_`` creates a distinct fresh variable matched in the body but dropped from the head; works in both conditioned and conditioning NPs of MARG rules
+     - Each ``_`` creates a distinct fresh variable matched in the body but
+       dropped from the head; works in both conditioned and conditioning NPs
+       of MARG rules
    * - Variable/expression as explicit probability (``with probability ?p``)
      - ✅ Fixed
      - ``vpdo_explicit_prob_v1/vn`` now accept any NP including labels
    * - ``obtain`` clause returning results directly
      - ✅ Fixed
-     - ``execute_squall_program`` returns a ``NamedRelationalAlgebraFrozenSet`` when a single ``obtain`` is present
+     - ``execute_squall_program`` returns a
+       ``NamedRelationalAlgebraFrozenSet`` when a single ``obtain`` is
+       present
    * - ``obtain … as Name``
      - ✅ Fixed
      - ``query_as`` transformer; result named by user
    * - Compound quantifiers (``for every X and for every Y where …``)
      - ✅ Fixed
-     - Added ``rule_body2``, ``quant_list``, ``quant_clause`` grammar; ``rule_opnn_compound`` transformer
+     - Added ``rule_body2``, ``quant_list``, ``quant_clause`` grammar;
+       ``rule_opnn_compound`` transformer
    * - Anaphoric definite references (``the Noun`` → bound variable)
      - ✅ Fixed
-     - ``_symbol_scope`` tracks noun-to-variable mapping per rule; ``det_the`` resolves from scope
-   * - Probabilistic n-ary predicates (``with inferred probability`` on n-ary heads)
+     - ``_symbol_scope`` tracks noun-to-variable mapping per rule;
+       ``det_the`` resolves from scope
+   * - Probabilistic n-ary predicates (``with inferred probability`` on
+       n-ary heads)
      - ✅ Fixed
-     - ``rule_opnn_prob``, ``rule_opnn_marg``, ``rule_opnn_per_compound`` handlers; no engine changes needed
-   * - String / numeric literals in body predicates (``startswith('L ')``)
+     - ``rule_opnn_prob``, ``rule_opnn_marg``, ``rule_opnn_per_compound``
+       handlers; no engine changes needed
+   * - String / numeric literals in body predicates
+       (``startswith('L ')``)
      - ✅ Fixed
-     - ``rel_fun_call`` grammar accepts ``literal`` arguments; parsed as ``Constant`` values
+     - ``rel_fun_call`` grammar accepts ``literal`` arguments; parsed as
+       ``Constant`` values
    * - ``#set_backend`` directive in SQUALL programs
      - ✅ Fixed
-     - ``command()`` transformer builds ``FunctionApplication``; ``execute_squall_program`` calls ``config.set_query_backend()``
-   * - ``given`` keyword as MARG conditioner (``… given every X …``)
+     - ``command()`` transformer builds ``FunctionApplication``;
+       ``execute_squall_program`` calls ``config.set_query_backend()``
+   * - ``given`` keyword as MARG conditioner
+       (``… given every X …``)
      - ✅ Fixed
-     - ``rule_op_marg`` and ``rule_body1_cond`` accept ``given`` as synonym for ``conditioned to``
+     - ``rule_op_marg`` and ``rule_body1_cond`` accept ``given`` as synonym
+       for ``conditioned to``
    * - Rules + queries mixed in a single ``execute_squall_program`` call
      - ✅ Fixed
-     - Probabilistic rules walked once in a shared scope; ``ForbiddenDisjunctionError`` from re-walk caught silently
-    * - Arithmetic expressions in rule bodies (``?x is (a / b) - c``)
-      - ✅ Fixed
-      - ``s_label_is_expr`` grammar, ``rule_op_predicate_body`` transformer; arithmetic operators ``+``, ``-``, ``*``, ``/`` with standard precedence; parentheses supported
-    * - Bare predicate calls in rule body (``Predicate (?a, ?b, ?c)``)
-      - ✅ Fixed
-      - ``s_predicate_call`` / ``s_predicate_call_upper`` grammar rules; ``rel_pred_body_call`` / ``rel_pred_body_call_upper`` transformers; arguments use comma separator
-    * - Skolem-like functional terms in rule head
-      - ❌ Not supported
-      - Requires IR changes beyond transformer scope
+     - Probabilistic rules walked once in a shared scope;
+       ``ForbiddenDisjunctionError`` from re-walk caught silently
+   * - Arithmetic expressions in rule bodies
+       (``?x is (a / b) - c``)
+     - ✅ Fixed
+     - ``s_label_is_expr`` grammar, ``rule_op_predicate_body`` transformer;
+       arithmetic operators ``+``, ``-``, ``*``, ``/`` with standard
+       precedence; parentheses supported
+   * - Bare predicate calls in rule body
+       (``Predicate (?a, ?b, ?c)``)
+     - ✅ Fixed
+     - ``s_predicate_call`` / ``s_predicate_call_upper`` grammar rules;
+       ``rel_pred_body_call`` / ``rel_pred_body_call_upper`` transformers;
+       arguments use comma separator
+   * - Skolem-like functional terms in rule head
+     - ❌ Not supported
+     - Requires IR changes beyond transformer scope
