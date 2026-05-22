@@ -1376,85 +1376,8 @@ IR builder:
 Appendix C: Gap Report
 ========================
 
-The following Datalog / IR patterns appear in codebase examples with their
-current status:
+All features described in this tutorial are fully supported.  The only pattern
+from the codebase that has no SQUALL syntax yet is:
 
-.. list-table:: SQUALL gap report (updated 2026-05-22)
-   :header-rows: 1
-   :widths: 40 15 45
-
-   * - Feature
-     - Status
-     - Notes
-   * - ``rule_body2_cond`` two-sided conditioned NP
-     - ✅ Fixed
-     - ``define as X with probability every A conditioned to every B``
-       now routes to ``rule_op_marg``
-   * - Function calls in rule body (e.g. ``euclidean(?x,?y)``)
-     - ✅ Fixed
-     - Use ``rel_fun_call``: ``every A that euclidean(?x,?y) holds``
-   * - Comparison against computed variable (``?w greater than ?threshold``)
-     - ✅ Confirmed working
-     - Use ``rel_comp`` with a label in the RHS ``op`` position
-   * - Anonymous wildcard ``_`` in tuple labels (``(?i; ?j; ?k; _)``)
-     - ✅ Fixed
-     - Each ``_`` creates a distinct fresh variable matched in the body but
-       dropped from the head; works in both conditioned and conditioning NPs
-       of MARG rules
-   * - Variable/expression as explicit probability (``with probability ?p``)
-     - ✅ Fixed
-     - ``vpdo_explicit_prob_v1/vn`` now accept any NP including labels
-   * - ``obtain`` clause returning results directly
-     - ✅ Fixed
-     - ``execute_squall_program`` returns a
-       ``NamedRelationalAlgebraFrozenSet`` when a single ``obtain`` is
-       present
-   * - ``obtain … as Name``
-     - ✅ Fixed
-     - ``query_as`` transformer; result named by user
-   * - Compound quantifiers (``for every X and for every Y where …``)
-     - ✅ Fixed
-     - Added ``rule_body2``, ``quant_list``, ``quant_clause`` grammar;
-       ``rule_opnn_compound`` transformer
-   * - Anaphoric definite references (``the Noun`` → bound variable)
-     - ✅ Fixed
-     - ``_symbol_scope`` tracks noun-to-variable mapping per rule;
-       ``det_the`` resolves from scope
-   * - Probabilistic n-ary predicates (``with inferred probability`` on
-       n-ary heads)
-     - ✅ Fixed
-     - ``rule_opnn_prob``, ``rule_opnn_marg``, ``rule_opnn_per_compound``
-       handlers; no engine changes needed
-   * - String / numeric literals in body predicates
-       (``startswith('L ')``)
-     - ✅ Fixed
-     - ``rel_fun_call`` grammar accepts ``literal`` arguments; parsed as
-       ``Constant`` values
-   * - ``#set_backend`` directive in SQUALL programs
-     - ✅ Fixed
-     - ``command()`` transformer builds ``FunctionApplication``;
-       ``execute_squall_program`` calls ``config.set_query_backend()``
-   * - ``given`` keyword as MARG conditioner
-       (``… given every X …``)
-     - ✅ Fixed
-     - ``rule_op_marg`` and ``rule_body1_cond`` accept ``given`` as synonym
-       for ``conditioned to``
-   * - Rules + queries mixed in a single ``execute_squall_program`` call
-     - ✅ Fixed
-     - Probabilistic rules walked once in a shared scope;
-       ``ForbiddenDisjunctionError`` from re-walk caught silently
-   * - Arithmetic expressions in rule bodies
-       (``?x is (a / b) - c``)
-     - ✅ Fixed
-     - ``s_label_is_expr`` grammar, ``rule_op_predicate_body`` transformer;
-       arithmetic operators ``+``, ``-``, ``*``, ``/`` with standard
-       precedence; parentheses supported
-   * - Bare predicate calls in rule body
-       (``Predicate (?a, ?b, ?c)``)
-     - ✅ Fixed
-     - ``s_predicate_call`` / ``s_predicate_call_upper`` grammar rules;
-       ``rel_pred_body_call`` / ``rel_pred_body_call_upper`` transformers;
-       arguments use comma separator
-   * - Skolem-like functional terms in rule head
-     - ❌ Not supported
-     - Requires IR changes beyond transformer scope
+- **Skolem-like functional terms in rule head** — ❌ Not supported.
+  Requires IR changes beyond the grammar transformer scope.
