@@ -1,0 +1,42 @@
+engines:
+  neurosynth:
+    description: >
+      Neurosynth database — forward and reverse inference over
+      reported activation peaks, TF-IDF term frequencies, and a
+      probabilistic choice over studies.
+    requires_mni_mask: true
+    python_init: "neurolang.utils.engines.neurosynth.init"
+    predicates:
+      peak_reported:
+        arity: 4
+        columns: [i, j, k, study_id]
+        description: "Reported activation peaks in voxel coordinates"
+      study:
+        arity: 1
+        columns: [study_id]
+        description: "All study identifiers"
+      term_in_study_tfidf:
+        arity: 3
+        columns: [term, tfidf, study_id]
+        description: "Term frequency–inverse document frequency values"
+      selected_study:
+        arity: 1
+        columns: [study_id]
+        description: "Uniform probabilistic choice over studies"
+      voxel:
+        arity: 3
+        columns: [i, j, k]
+        description: "Every voxel inside the MNI mask"
+
+  destrieux:
+    description: >
+      Destrieux 2009 cortical atlas — region definitions for the
+      Destrieux cortical parcellation, each mapped to a volumetric
+      brain region (ExplicitVBR).
+    requires_mni_mask: true
+    python_init: "neurolang.utils.engines.destrieux.init"
+    predicates:
+      destrieux:
+        arity: 2
+        columns: [name, region]
+        description: "Cortical region name and ExplicitVBR geometry"
