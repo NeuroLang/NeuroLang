@@ -38,6 +38,7 @@ extensions = [
     "numpydoc.numpydoc",
     "sphinx_gallery.gen_gallery",
     "sphinx_design",
+    "squall_lexer",
 ]
 
 templates_path = ["_templates"]

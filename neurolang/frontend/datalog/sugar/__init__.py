@@ -464,9 +464,10 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         right = impl.antecedent.conditioning
 
         head_args = extract_logic_free_variables(impl.consequent)
+        num_head = ir.Symbol.fresh()(*impl.consequent.args)
         new_num = self.walk(
             Implication(
-                ir.Symbol.fresh()(*impl.consequent.args),
+                num_head,
                 conjunct_formulas(left, right),
             )
         )
@@ -474,8 +475,9 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         new_denum_args = extract_logic_free_variables(right) & head_args
         new_denum_prob_arg = ProbabilisticQuery(PROB, tuple(new_denum_args))
         new_denum_args.add(new_denum_prob_arg)
+        denum_head = ir.Symbol.fresh()(*new_denum_args)
         new_denum = self.walk(
-            Implication(ir.Symbol.fresh()(*new_denum_args), right)
+            Implication(denum_head, right)
         )
 
         p = Symbol.fresh()
@@ -487,10 +489,10 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
                 Conjunction(
                     (
                         self._replace_prob_query_arg_by_var(
-                            new_num.consequent, p1
+                            num_head, p1
                         ),
                         self._replace_prob_query_arg_by_var(
-                            new_denum.consequent, p2
+                            denum_head, p2
                         ),
                         EQ(
                             p,
