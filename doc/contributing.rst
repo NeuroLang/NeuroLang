@@ -106,6 +106,56 @@ NumPy-style docstrings. Run ``flake8`` before committing:
    flake8 neurolang/
 
 
+Adding a New Dataset Engine
+----------------------------
+
+The ``neurolang-query`` CLI uses a declarative engine registry to manage
+dataset backends.  To add a new engine:
+
+1. Write a YAML entry in ``neurolang/utils/engines/engines.yaml``:
+
+   .. code-block:: yaml
+
+      my_dataset:
+        description: "Short description of the dataset"
+        requires_mni_mask: false
+        python_init: "neurolang.utils.engines.my_dataset.init"
+        predicates:
+          my_predicate:
+            arity: 2
+            columns: [name, value]
+            description: "What this predicate represents"
+
+2. Create the init module at
+   ``neurolang/utils/engines/my_dataset/init.py`` that exports:
+
+   .. code-block:: python
+
+      from pathlib import Path
+      import nibabel as nib
+      from neurolang.frontend import NeurolangPDL
+
+      def init_engine(
+          nl: NeurolangPDL,
+          mask: nib.Nifti1Image | None,
+          data_dir: Path
+      ) -> None:
+          \"\"\"Register symbols and load data into *nl*.\"\"\"
+          # Register predicates with nl.add_tuple_set, etc.
+
+   If your engine needs the common neuroimaging symbols (``exp``, ``log``,
+   ``agg_count``, ``agg_create_region``, etc.), call
+   ``neurolang.utils.engines.base.init_base_engine(nl, mask)``
+   from within ``init_engine``.
+
+3. Add unit tests in ``neurolang/utils/tests/test_cli.py``, specifically
+   in the ``TestEngineRegistry`` class to verify that your engine is
+   discoverable and its config loads correctly.
+
+4. Run ``pytest neurolang/utils/tests/test_cli.py`` to confirm everything
+   passes.
+
+
 Reporting Bugs
 --------------
 

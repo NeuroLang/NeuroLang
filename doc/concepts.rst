@@ -86,6 +86,52 @@ such as :meth:`add_tuple_set` and :meth:`add_atlas_set` to load these
 data sources.
 
 
+Declarative Engine Registry & CLI
+----------------------------------
+
+NeuroLang ships a command-line interface, ``neurolang-query``, that provides
+a quick way to run Datalog queries against pre-configured datasets without
+writing Python:
+
+.. code-block:: bash
+
+   # List available dataset engines
+   neurolang-query --list-engines
+
+   # List predicates for the NeuroSynth engine
+   neurolang-query --engine neurosynth --list-predicates
+
+   # Run a Datalog query
+   neurolang-query "ans(t) :- term_in_study_tfidf(t, w, s)"
+
+   # Use the Destrieux atlas engine
+   neurolang-query --engine destrieux "ans(name) :- destrieux(name, region)"
+
+Engines are declared declaratively in :file:`engines/engines.yaml`:
+
+.. code-block:: yaml
+
+   engines:
+     neurosynth:
+       description: "Neurosynth database — forward and reverse inference"
+       requires_mni_mask: true
+       python_init: "neurolang.utils.engines.neurosynth.init"
+       predicates:
+         peak_reported:
+           arity: 4
+           columns: [i, j, k, study_id]
+           description: "Reported activation peaks in voxel coordinates"
+         ...
+
+Each engine references a Python module that exports
+``init_engine(nl, mask, data_dir)``.  The :mod:`neurolang.utils.engine_registry`
+module handles YAML loading, MNI mask retrieval, and delegating to the
+engine's init script.
+
+To add a new engine, create a YAML entry and a corresponding
+:mod:`init` module under :file:`neurolang/utils/engines/`.  See
+:mod:`neurolang.utils.engines.neurosynth.init` for a complete example.
+
 Architecture
 -------------
 
