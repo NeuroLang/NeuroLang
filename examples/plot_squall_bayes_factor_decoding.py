@@ -368,7 +368,7 @@ result = nl.execute_squall_program(squall_program)
 # ``Bayes_factor`` rule — the ``obtain … as BF`` clause returns the
 # ranked per-term BF values without any post-hoc pandas computation.
 
-bf_df = result["bf"].as_pandas_dataframe()
+bf_df = result.as_pandas_dataframe()
 bf_df.columns = ["region", "term", "bf"]
 
 top_terms = (
