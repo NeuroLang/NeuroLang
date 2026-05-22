@@ -10,16 +10,21 @@ Usage
 ::
 
     # Inline query
-    neurolang-query "ans(t) :- TermInStudyTFIDF(t, w, s)"
+    neurolang-query "ans(t) :- term_in_study_tfidf(t, w, s)"
 
     # Query from file
     neurolang-query -f query.dl
 
     # Query from stdin
-    echo "ans(t) :- TermInStudyTFIDF(t, f, s)" | neurolang-query
+    echo "ans(t) :- term_in_study_tfidf(t, f, s)" | neurolang-query
 
     # Destrieux atlas engine
     neurolang-query --engine destrieux "ans(name) :- destrieux(name, region)"
+
+    # Squall (controlled English) query (note: predicate names are lowercase
+    # to match SQUALL's case-folding convention)
+    neurolang-query --squall "obtain every peak_reported."
+    neurolang-query --squall -f query.squall
 """
 
 import argparse
@@ -121,16 +126,19 @@ def _load_neurosynth_data(
 ) -> None:
     """Download (if needed) and load the NeuroSynth dataset into the engine.
 
+    Predicate names are lowercase to match SQUALL's case-folding convention
+    (see ``intransitive`` in ``squall_syntax_lark.py``).
+
     Registers the following predicates:
 
-    * ``PeakReported(study_id, i, j, k)`` — reported activation peaks
+    * ``peak_reported(i, j, k, study_id)`` — reported activation peaks
       converted to voxel coordinates.
-    * ``Study(study_id)`` — all study identifiers.
-    * ``TermInStudyTFIDF(term, tfidf, study_id)`` — term frequency–inverse
+    * ``study(study_id)`` — all study identifiers.
+    * ``term_in_study_tfidf(term, tfidf, study_id)`` — term frequency–inverse
       document frequency values.
-    * ``SelectedStudy(study_id)`` — uniform probabilistic choice over
+    * ``selected_study(study_id)`` — uniform probabilistic choice over
       studies.
-    * ``Voxel(i, j, k)`` — every voxel inside the MNI mask.
+    * ``voxel(i, j, k)`` — every voxel inside the MNI mask.
     """
     ns_database_fn, ns_features_fn = _fetch_files(
         str(data_dir / "neurosynth"),
@@ -160,11 +168,11 @@ def _load_neurosynth_data(
     ).query("tfidf > 1e-3")[["term", "tfidf", "study_id"]]
     term_data["study_id"] = term_data["study_id"].apply(StudyID)
 
-    nl.add_tuple_set(peak_data, name="PeakReported")
-    nl.add_tuple_set(study_ids, name="Study")
-    nl.add_tuple_set(term_data, name="TermInStudyTFIDF")
+    nl.add_tuple_set(peak_data, name="peak_reported")
+    nl.add_tuple_set(study_ids, name="study")
+    nl.add_tuple_set(term_data, name="term_in_study_tfidf")
     nl.add_uniform_probabilistic_choice_over_set(
-        study_ids, name="SelectedStudy"
+        study_ids, name="selected_study"
     )
     nl.add_tuple_set(
         np.hstack(
@@ -175,7 +183,7 @@ def _load_neurosynth_data(
         .swapaxes(0, 1)
         .reshape(3, -1)
         .T,
-        name="Voxel",
+        name="voxel",
     )
 
 
@@ -438,6 +446,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Instead of running a query, list the available predicates "
         "(extensional database symbols) for the engine and exit.",
     )
+    parser.add_argument(
+        "--squall",
+        "-s",
+        action="store_true",
+        help="Interpret the input as a SQUALL (controlled English) program "
+        "instead of classical Datalog syntax.  Supports ``define as`` "
+        "rule definitions and ``obtain`` queries.",
+    )
 
     return parser
 
@@ -517,6 +533,33 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
     return None
 
 
+def _execute_squall_program(
+    nl: NeurolangPDL, program_text: str
+):
+    """Execute a SQUALL (controlled English) program.
+
+    Delegates to :meth:`NeurolangPDL.execute_squall_program`, which
+    handles ``define as …`` rules and ``obtain …`` queries.
+
+    Parameters
+    ----------
+    nl :
+        Initialised engine.
+    program_text :
+        SQUALL program text.
+
+    Returns
+    -------
+    None
+        When there are no ``obtain`` queries.
+    NamedRelationalAlgebraFrozenSet
+        When there is exactly one ``obtain`` query.
+    Dict[str, NamedRelationalAlgebraFrozenSet]
+        When there are multiple ``obtain`` queries.
+    """
+    return nl.execute_squall_program(program_text)
+
+
 def _list_predicates(nl: NeurolangPDL, engine_name: str) -> None:
     """Print the available EDB symbols for the given engine."""
     print(f"\nEngine: {engine_name}")
@@ -550,18 +593,37 @@ def main(argv: Optional[list] = None) -> None:
         sys.exit(1)
 
     t0 = time.perf_counter()
-    result = _execute_program(nl, program)
-    elapsed = time.perf_counter() - t0
 
-    if isinstance(result, tuple):
-        result, column_names = result
+    if args.squall:
+        result = _execute_squall_program(nl, program)
+        if isinstance(result, dict):
+            for key, sub_result in result.items():
+                output = _format_result(
+                    sub_result, fmt=args.format, column_names=None
+                )
+                if output:
+                    print(f"── {key} ──")
+                    print(output)
+                    print()
+        else:
+            output = _format_result(
+                result, fmt=args.format, column_names=None
+            )
+            if output:
+                print(output)
     else:
-        column_names = None
+        result = _execute_program(nl, program)
+        if isinstance(result, tuple):
+            result, column_names = result
+        else:
+            column_names = None
+        output = _format_result(
+            result, fmt=args.format, column_names=column_names
+        )
+        if output:
+            print(output)
 
-    output = _format_result(result, fmt=args.format, column_names=column_names)
-    if output:
-        print(output)
-
+    elapsed = time.perf_counter() - t0
     print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)
 
 
