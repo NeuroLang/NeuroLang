@@ -17,6 +17,8 @@ The full program we will build:
 
 .. code-block:: squall
 
+    # Selected_study — uniform probabilistic choice over studies,
+    # registered via add_uniform_probabilistic_choice_over_set in Python.
     define as Active_region every Region that a Selected_study activates.
 
     define as Region_probability with inferred probability
@@ -158,15 +160,15 @@ that asks for all values.  The sentence reads like plain English.
 
 SQUALL supports four determiners:
 
-======= ============ ==========================================
-Keyword Meaning      Example
-======= ============ ==========================================
-``every`` Universal   ``every Region`` — all regions
-``a``    Existential  ``a Selected_study`` — at least one study
-``no``   Negative     ``no Term`` — no matching terms
-``the``  Anaphoric    ``the Region`` — refers back to an
-                      earlier ``every Region`` (section 5.3)
-======= ============ ==========================================
+=========== ============ ==========================================
+Keyword     Meaning      Example
+=========== ============ ==========================================
+``every``   Universal    ``every Region`` — all regions
+``a``       Existential  ``a Selected_study`` — at least one study
+``no``      Negative     ``no Term`` — no matching terms
+``the``     Anaphoric    ``the Region`` — refers back to an
+                         earlier ``every Region`` (section 5.3)
+=========== ============ ==========================================
 
 In the Bayes Factor program, ``a Selected_study`` is the existential choice
 that quantifies over studies — it introduces a study variable without binding
@@ -839,6 +841,8 @@ Putting it all together:
 
 .. code-block:: squall
 
+    # Selected_study — uniform probabilistic choice over studies,
+    # registered via add_uniform_probabilistic_choice_over_set.
     define as Active_region every Region that a Selected_study activates.
     define as Region_probability with inferred probability every Active_region.
 
