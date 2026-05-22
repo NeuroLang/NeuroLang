@@ -343,6 +343,40 @@ Result: ``hasplayer`` contains ``chess`` if ``game`` contains ``chess``
 and ``go``, ``player`` contains ``("alice", "chess")``, but ``go`` has
 no players.
 
+3.7 Arithmetic Expressions
+----------------------------
+
+A ``?label is <expression>`` clause can assign the result of an arithmetic
+expression to a variable.  The expression supports ``+``, ``-``, ``*``, ``/``
+with standard operator precedence; parentheses are supported for grouping.
+
+.. code-block:: squall
+
+    define as Bayes_factor (?r; ?t; ?bf)
+        where Joint_probability (?r, ?t, ?p_rt)
+        and Region_probability (?r, ?p_r)
+        and Term_probability (?t, ?p_t)
+        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+
+Result: ``bayes_factor`` contains ``("region_A", "term_x", 6.5)`` if the
+joint probability is 0.6, the region probability is 0.3, and the term
+probability is 0.8.
+
+The ``is`` clause translates to an ``eq`` builtin with the arithmetic
+expression tree as the second argument.  The expression is evaluated during
+the chase using Python's ``operator`` module functions (``truediv``,
+``sub``, etc.).
+
+A full runnable example is in
+``examples/plot_squall_bayes_factor_decoding.py``.
+
+.. note::
+
+    Arithmetic expressions currently support **numeric types only**.
+    Non-numeric ``?label is 'string'`` is handled as a constant equality
+    (see section 3.6 above).  The two uses share the same ``is`` keyword
+    but produce different internal representations.
+
 3.6 Inline Type Guard — ``where ?x is a Noun``
 ------------------------------------------------
 
@@ -714,6 +748,38 @@ them all into the engine.
 Result: ``active`` contains ``alice`` and ``fast`` contains ``bob`` if
 ``person`` contains ``alice`` and ``bob``, ``plays`` contains ``("alice",)``,
 and ``runs`` contains ``("bob",)``.
+
+6.6 Bare Predicate Calls in Rule Bodies
+-----------------------------------------
+
+A rule body can call any predicate (EDB or IDB) directly using the syntax
+``PredicateName (?arg1, ?arg2, ...)`` — no verb, no relative clause, no
+anaphora.  This is useful when a rule needs to join several predicates with
+explicit variable bindings, especially for arithmetic expressions that
+reference the variables.
+
+.. code-block:: squall
+
+    define as Bayes_factor (?r; ?t; ?bf)
+        where Joint_probability (?r, ?t, ?p_rt)
+        and Region_probability (?r, ?p_r)
+        and Term_probability (?t, ?p_t)
+        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+
+Here ``Joint_probability (?r, ?t, ?p_rt)`` is a bare predicate call —
+it binds ``?p_rt`` to the probability column of the ``joint_probability``
+relation for the given region ``?r`` and term ``?t``.  The predicate name
+matches the rule name defined elsewhere in the program (case-insensitive).
+
+The arguments use **comma** separators ``(a, b, c)``, matching the
+convention for rule head variables.
+
+.. note::
+
+    Bare predicate calls complement the compound quantifier and anaphora
+    patterns (sections 6.2–6.3).  Use bare calls when you need explicit
+    variable bindings across multiple predicates, and anaphora when you
+    want the join to be implicit through natural language.
 
 
 Part 7: Queries
@@ -1574,6 +1640,12 @@ current status:
    * - Rules + queries mixed in a single ``execute_squall_program`` call
      - ✅ Fixed
      - Probabilistic rules walked once in a shared scope; ``ForbiddenDisjunctionError`` from re-walk caught silently
-   * - Skolem-like functional terms in rule head
-     - ❌ Not supported
-     - Requires IR changes beyond transformer scope
+    * - Arithmetic expressions in rule bodies (``?x is (a / b) - c``)
+      - ✅ Fixed
+      - ``s_label_is_expr`` grammar, ``rule_op_predicate_body`` transformer; arithmetic operators ``+``, ``-``, ``*``, ``/`` with standard precedence; parentheses supported
+    * - Bare predicate calls in rule body (``Predicate (?a, ?b, ?c)``)
+      - ✅ Fixed
+      - ``s_predicate_call`` / ``s_predicate_call_upper`` grammar rules; ``rel_pred_body_call`` / ``rel_pred_body_call_upper`` transformers; arguments use comma separator
+    * - Skolem-like functional terms in rule head
+      - ❌ Not supported
+      - Requires IR changes beyond transformer scope
