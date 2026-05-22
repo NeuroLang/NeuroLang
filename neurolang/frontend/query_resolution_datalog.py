@@ -35,7 +35,12 @@ from ..datalog.expression_processing import (
 )
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
-from .datalog.squall_syntax_lark import parser as squall_parser, SquallProgram
+from .datalog.squall_syntax_lark import (
+    parser as squall_parser,
+    EquiprobableChoiceDef,
+    SquallProgram,
+    WeightedChoiceDef,
+)
 from .datalog.standard_syntax import parser as datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
@@ -350,20 +355,41 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         # Rules-only (no obtain) — backward-compat: returns Union/Implication
         if not isinstance(parsed, SquallProgram):
-            try:
-                self.program_ir.walk(parsed)
-            except Fol2DatalogTranslationException as e:
-                raise _wrap_fol_error_for_squall(e) from e
+            if isinstance(parsed, EquiprobableChoiceDef):
+                self._handle_equiprobable_choice(parsed)
+            elif isinstance(parsed, WeightedChoiceDef):
+                self._handle_weighted_choice(parsed)
+            elif isinstance(parsed, Union):
+                for r in parsed.formulas:
+                    if isinstance(r, EquiprobableChoiceDef):
+                        self._handle_equiprobable_choice(r)
+                    elif isinstance(r, WeightedChoiceDef):
+                        self._handle_weighted_choice(r)
+                    else:
+                        try:
+                            self.program_ir.walk(r)
+                        except Fol2DatalogTranslationException as e:
+                            raise _wrap_fol_error_for_squall(e) from e
+            else:
+                try:
+                    self.program_ir.walk(parsed)
+                except Fol2DatalogTranslationException as e:
+                    raise _wrap_fol_error_for_squall(e) from e
             return None
 
         # Walk all rule definitions into the engine (global scope).
         # This makes the rules available to solve_all() and any code
         # that inspects the global symbol table after the call returns.
-        for rule in parsed.rules:
-            try:
-                self.program_ir.walk(rule)
-            except Fol2DatalogTranslationException as e:
-                raise _wrap_fol_error_for_squall(e) from e
+        for rule in parsed.rules_and_choice_defs:
+            if isinstance(rule, EquiprobableChoiceDef):
+                self._handle_equiprobable_choice(rule)
+            elif isinstance(rule, WeightedChoiceDef):
+                self._handle_weighted_choice(rule)
+            else:
+                try:
+                    self.program_ir.walk(rule)
+                except Fol2DatalogTranslationException as e:
+                    raise _wrap_fol_error_for_squall(e) from e
 
         if not parsed.queries:
             return None
@@ -395,11 +421,16 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
             self.program_ir.push_scope()
             try:
-                for rule in parsed.rules:
-                    try:
-                        self.program_ir.walk(rule)
-                    except ForbiddenDisjunctionError:
+                for rule in parsed.rules_and_choice_defs:
+                    if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
+                        # Choice defs are already registered in the global scope;
+                        # skip them in the scoped re-walk.
                         pass
+                    else:
+                        try:
+                            self.program_ir.walk(rule)
+                        except ForbiddenDisjunctionError:
+                            pass
                 self.program_ir.walk(query_impl)
                 fe_pred = fe.Expression(self, h(*head_vars))
                 fe_head = tuple(
@@ -475,6 +506,69 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.program_ir.walk(intermediate_representation)
         res = self.datalog_parser(autocompletion_code, None, None, True)
         return res
+
+    def _handle_equiprobable_choice(self, choice_def):
+        """Register a SQUALL equiprobable choice in the program IR.
+
+        Looks up the source EDB set in the symbol table, computes uniform
+        probabilities (1 / N) for each tuple, and calls
+        ``add_probabilistic_choice_from_tuples``.
+        """
+        body_formula = choice_def.body_formula
+
+        # Extract the source predicate symbol from the body formula.
+        if isinstance(body_formula, logic.Conjunction):
+            # Filtered source — extract first predicate as the base source.
+            source_pred_sym = body_formula.formulas[0].functor
+        elif isinstance(body_formula, ir.FunctionApplication):
+            source_pred_sym = body_formula.functor
+        else:
+            raise NeuroLangException(
+                f"Cannot extract source predicate from body formula: "
+                f"{body_formula}"
+            )
+
+        # Look up the source EDB set in the program symbol table.
+        if source_pred_sym not in self.program_ir.symbol_table:
+            raise NeuroLangException(
+                f"Source predicate '{source_pred_sym.name}' not found in the "
+                f"program. Make sure the data is loaded before defining the "
+                f"probabilistic choice."
+            )
+        source_rel = self.program_ir.symbol_table[source_pred_sym]
+        if not isinstance(source_rel, ir.Constant):
+            raise NeuroLangException(
+                f"Source predicate '{source_pred_sym.name}' is not a "
+                f"concrete set. Equiprobable choices currently require an "
+                f"extensional (ground) source predicate."
+            )
+
+        # Build choice tuples with uniform probability.
+        # source_rel.value is a WrappedRelationalAlgebraSet — use itervalues
+        # to get raw Python tuples for each row.
+        source_rows = list(source_rel.value.itervalues())
+        n = len(source_rows)
+        if n == 0:
+            prob = 1.0
+        else:
+            prob = 1.0 / n
+        choice_tuples = [(prob,) + row for row in source_rows]
+
+        self.program_ir.add_probabilistic_choice_from_tuples(
+            choice_def.head_symbol, choice_tuples
+        )
+
+    def _handle_weighted_choice(self, choice_def):
+        """Register a SQUALL weighted probabilistic choice in the program IR.
+
+        Evaluates the probability expression per tuple from the source set,
+        normalises to sum to 1, and calls ``add_probabilistic_choice_from_tuples``.
+        """
+        raise NeuroLangException(
+            "Weighted probabilistic choices (with explicit probability "
+            "expressions) are not yet implemented. "
+            "Use 'define as X as an equiprobable choice over every Y' for now."
+        )
 
     def query(
         self, *args

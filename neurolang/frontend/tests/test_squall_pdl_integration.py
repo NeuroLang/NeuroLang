@@ -2,6 +2,7 @@
 import pytest
 
 from neurolang.exceptions import ForbiddenDisjunctionError
+from neurolang.expressions import Symbol as ir_Symbol
 
 from ..probabilistic_frontend import NeurolangPDL
 
@@ -825,3 +826,71 @@ def test_execute_squall_where_label_is_constant_multiple_predicates(nl):
     assert pdf.iloc[0, 0] == "alice", (
         f"Expected 'alice', got {pdf.iloc[0, 0]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Probabilistic choice syntax
+# ---------------------------------------------------------------------------
+
+def test_execute_equiprobable_choice_basic():
+    """define as X as an equiprobable choice over Y creates a uniform choice."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    nl.execute_squall_program(
+        "define as Selected_study as an equiprobable choice over every Study."
+    )
+    sym = ir_Symbol("selected_study")
+    assert sym in nl.program_ir.pchoice_pred_symbs, (
+        "selected_study should be registered as a probabilistic choice"
+    )
+    assert sym in nl.program_ir.symbol_table, (
+        "selected_study should be in the symbol table"
+    )
+    choice_set = nl.program_ir.symbol_table[sym]
+    rows = list(choice_set.value.itervalues())
+    assert len(rows) == 3, f"Expected 3 rows, got {len(rows)}"
+    # Each row has (probability, study_id)
+    assert abs(rows[0][0] - 1.0 / 3) < 1e-9, (
+        f"Expected probability 1/3, got {rows[0][0]}"
+    )
+
+
+def test_execute_equiprobable_choice_rules_only():
+    """define as equiprobable choice without obtain returns None."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("s1",), ("s2",)], name="study")
+    result = nl.execute_squall_program(
+        "define as Selected_study as an equiprobable choice over every Study."
+    )
+    assert result is None
+    sym = ir_Symbol("selected_study")
+    assert sym in nl.program_ir.pchoice_pred_symbs
+
+
+def test_execute_equiprobable_choice_single_element():
+    """A single-element source produces a choice with probability 1."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("only_one",)], name="singleton")
+    nl.execute_squall_program(
+        "define as Choice as an equiprobable choice over every Singleton."
+    )
+    sym = ir_Symbol("choice")
+    choice_set = nl.program_ir.symbol_table[sym]
+    rows = list(choice_set.value.itervalues())
+    assert len(rows) == 1
+    assert abs(rows[0][0] - 1.0) < 1e-9
+
+
+def test_execute_equiprobable_choice_multi_column():
+    """Multi-column source — each tuple is a choice alternative."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("s1", 1), ("s2", 2)], name="study_info")
+    nl.execute_squall_program(
+        "define as Selected as an equiprobable choice over every Study_info."
+    )
+    sym = ir_Symbol("selected")
+    choice_set = nl.program_ir.symbol_table[sym]
+    rows = list(choice_set.value.itervalues())
+    assert len(rows) == 2
+    assert abs(rows[0][0] - 0.5) < 1e-9
+    assert abs(rows[1][0] - 0.5) < 1e-9
