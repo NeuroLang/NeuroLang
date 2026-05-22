@@ -544,7 +544,7 @@ def test_neurolang_dl_datalog_code_statement_autocompletion():
     """
     )
     expected = {'Signs': {'values': {'@', '∃', '('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists'}}, 'Boleans': {'values': {'False', '⊤', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'PROB'}}, 'Boleans': {'values': {'False', '⊤', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
 

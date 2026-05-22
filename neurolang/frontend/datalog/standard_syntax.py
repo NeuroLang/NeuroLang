@@ -7,6 +7,7 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
+from ...datalog.expressions import AggregationApplication
 from ...exceptions import UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException
 from ...expressions import (
     Command,
@@ -22,9 +23,12 @@ from ...logic import ExistentialPredicate
 from ...probabilistic.expressions import (
     PROB,
     Condition,
-    ProbabilisticFact
+    ProbabilisticFact,
 )
 from ...utils.interactive_parsing import LarkCompleter
+
+# Aggregation function names recognised in rule head arguments.
+AGGREGATION_FUNCS = frozenset({"count", "sum", "max", "min", "mean", "avg", "std"})
 
 
 GRAMMAR = u"""
@@ -36,6 +40,7 @@ expressions : (expression)+
             | fact
             | probabilistic_rule
             | probabilistic_fact
+            | prob_head_rule
             | statement
             | statement_function
             | command
@@ -44,6 +49,10 @@ probabilistic_rule : head PROBA_OP arithmetic_operation IMPLICATION (condition |
 
 rule : (head | query) IMPLICATION (condition | body)
 IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}"
+
+// PROB[pred] :- body  —  declare a probabilistic rule
+prob_head_rule : "PROB" "[" predicate "]" IMPLICATION (condition | body)
+               | "PROB" "[" predicate CONDITION_OP body "]" IMPLICATION (condition | body)
 
 query : "ans" "(" [ arguments ] ")"
 
@@ -74,6 +83,11 @@ predicate : id_application
           | existential_predicate
           | "(" comparison ")"
           | logical_constant
+          | prob_body_predicate
+
+// PROB[pred] = var  or  PROB[pred | cond] = var  —  probability query inside a rule body
+prob_body_predicate : "PROB" "[" predicate "]" "=" argument
+                    | "PROB" "[" predicate CONDITION_OP body "]" "=" argument
 
 id_application : int_ext_identifier "(" [ arguments ] ")"
 
@@ -227,12 +241,129 @@ class DatalogTransformer(Transformer):
             body,
         )
 
+    def prob_head_rule(self, ast):
+        # PROB[pred] :- body        → [pred, IMPLICATION_token, body]
+        # PROB[pred | cond] :- body → [pred, COND_OP_token, cond, IMPLICATION_token, body]
+        if len(ast) >= 4:
+            # Conditional form: PROB[pred | cond] :- body
+            pred = ast[0]
+            cond_body = ast[2]
+            body = ast[4] if len(ast) > 4 else ast[3]
+            return Implication(pred, Condition(pred, cond_body))
+        else:
+            # Simple form: PROB[pred] :- body
+            pred = ast[0]
+            body = ast[2]
+            return Implication(pred, body)
+
+    @staticmethod
+    def _extract_special_body_atoms(conjunction):
+        """Separate __PROB__ marker atoms from regular atoms in a conjunction.
+
+        Returns (regular_formulas, prob_specs) where each prob_spec is
+        a tuple (inner_predicate, cond_body, result_var) or
+        (inner_predicate, result_var).
+        """
+        formulas = list(conjunction.formulas)
+        regular = []
+        prob_specs = []
+        for f in formulas:
+            if (isinstance(f, FunctionApplication)
+                    and isinstance(f.functor, Symbol)
+                    and f.functor.name == "__PROB__"):
+                prob_specs.append(f.args)
+            else:
+                regular.append(f)
+        return regular, prob_specs
+
     def rule(self, ast):
         head = ast[0]
+        body_or_cond = ast[2]
+
+        if isinstance(body_or_cond, Conjunction):
+            regular, prob_specs = self._extract_special_body_atoms(
+                body_or_cond
+            )
+            if prob_specs:
+                new_body = Conjunction(regular) if regular else Constant(True)
+                return self._build_prob_rule(head, prob_specs, new_body)
+
         if isinstance(head, Expression) and head.functor == Symbol("ans"):
-            return Query(ast[0], ast[2])
+            return Query(ast[0], body_or_cond)
         else:
-            return Implication(ast[0], ast[2])
+            return Implication(ast[0], body_or_cond)
+
+    def _build_prob_rule(self, head, prob_specs, body):
+        """Build a rule from __PROB__ markers in the body.
+
+        For PROB[pred] = var, the result variable stays in the head
+        (it is the probability column), and pred becomes part of the
+        filter body wrapped with PROB for the query engine.
+        """
+        head_args = list(head.args) if head.args else []
+        body_formulas = (
+            list(body.formulas) if isinstance(body, Conjunction) else []
+        )
+
+        for spec in prob_specs:
+            if len(spec) == 3:
+                pred, cond_body, result_var = spec
+            else:
+                pred, result_var = spec
+                cond_body = None
+
+            # Build PROB expression: PROB(vars) in the head
+            if isinstance(pred, FunctionApplication):
+                prob_vars = pred.args
+                # Add the predicate call to body formulas
+                body_formulas.append(pred.functor(*prob_vars))
+            else:
+                prob_vars = (pred,)
+                body_formulas.append(pred)
+
+            if cond_body is not None:
+                body_formulas.append(cond_body)
+
+            # The result var stays in head - it's the probability column
+            # PROB is added as a head argument to mark the query
+            if result_var is not None and result_var not in head_args:
+                head_args.append(result_var)
+
+        if isinstance(head, Query) or (isinstance(head, Expression)
+                and hasattr(head, 'functor')
+                and head.functor == Symbol("ans")):
+            new_head = head.functor(*head_args)
+        elif hasattr(head, 'functor'):
+            new_head = head.functor(*head_args)
+        else:
+            new_head = head
+
+        new_body = Conjunction(tuple(body_formulas)) if body_formulas else body
+        return Query(new_head, new_body)
+
+    def prob_body_predicate(self, ast):
+        # ast = [predicate, argument]   (PROB[pred] = var)
+        # or   = [predicate, cond_body, argument]   (PROB[pred | cond] = var)
+        if len(ast) == 3:
+            pred = ast[0]
+            cond_body = ast[1]
+            result_var = ast[2]
+            return FunctionApplication(
+                Symbol("__PROB__"),
+                (pred, cond_body, result_var)
+            )
+        else:
+            pred = ast[0]
+            result_var = ast[1]
+            return FunctionApplication(
+                Symbol("__PROB__"),
+                (pred, result_var)
+            )
+
+    def cond_prob_predicate(self, ast):
+        left = ast[0]
+        right = ast[2]
+        return Condition(left, right)
 
     def condition(self, ast):
         conditioned = ast[0]
@@ -282,9 +413,33 @@ class DatalogTransformer(Transformer):
                     ast = ast[0](*ast[1])
         return ast
 
+    @staticmethod
+    def _wrap_aggregation_args(arguments):
+        """Replace FunctionApplication nodes whose functor is an
+        aggregation function name with AggregationApplication."""
+        result = []
+        for arg in arguments:
+            if (isinstance(arg, FunctionApplication)
+                    and isinstance(arg.functor, Symbol)
+                    and arg.functor.name in AGGREGATION_FUNCS):
+                result.append(
+                    AggregationApplication(arg.functor, arg.args)
+                )
+            elif (isinstance(arg, FunctionApplication)
+                    and isinstance(arg.functor, FunctionApplication)
+                    and isinstance(arg.functor.functor, Symbol)
+                    and arg.functor.functor.name in AGGREGATION_FUNCS):
+                result.append(
+                    AggregationApplication(arg.functor, arg.args)
+                )
+            else:
+                result.append(arg)
+        return result
+
     def head_predicate(self, ast):
-        if ast[1] != None:
+        if ast[1] is not None:
             arguments = list(ast[1])
+            arguments = self._wrap_aggregation_args(arguments)
 
             if PROB in arguments:
                 ix_prob = arguments.index(PROB)
@@ -305,13 +460,14 @@ class DatalogTransformer(Transformer):
         return ast
 
     def query(self, ast):
-        ast = ast[0]
-        if ast != None:
-            if isinstance(ast, tuple):
-                arguments = ast
+        arguments_raw = ast[0]
+        if arguments_raw is not None:
+            if isinstance(arguments_raw, tuple):
+                arguments = list(arguments_raw)
             else:
-                arguments = tuple(ast)
+                arguments = list(arguments_raw) if arguments_raw else []
 
+            arguments = self._wrap_aggregation_args(arguments)
             return Symbol("ans")(*arguments)
         else:
             return Symbol("ans")()
