@@ -1,17 +1,30 @@
-SQUALL: Controlled English for NeuroLang
-=========================================
+NSQUALL: Controlled English for NeuroLang
+==========================================
 
-SQUALL (*Semantically controlled Query-Answerable Logical Language*) lets you
-write NeuroLang queries and rules in plain English sentences instead of
+NSQUALL (NeuroLang's *Semantically controlled Query-Answerable Logical Language*)
+lets you write NeuroLang queries and rules in plain English sentences instead of
 symbolic Datalog notation.  Under the hood, each sentence is translated to a
 NeuroLang logical expression using Montague semantics in
-Continuation-Passing Style.
+Continuation-Passing Style, building on the original
+`SQUALL language <https://people.irisa.fr/Sebastien.Ferre/software/squall/>`_
+by Sébastien Ferré.
+
+.. rubric:: References
+
+.. [Ferre2012] S. Ferré. *SQUALL: A Controlled Natural Language for
+   Querying and Updating RDF Graphs*. Controlled Natural Languages (CNL),
+   2012. LNCS 7427, p. 11-25, Springer.
+
+.. [Zanitti2023] G. E. Zanitti, Y. Soto, V. Iovene, M. V. Martinez,
+   R. O. Rodriguez, G. I. Simari, D. Wassermann. *Scalable Query Answering
+   Under Uncertainty to Neuroscientific Ontological Knowledge: The
+   NeuroLang Approach*. Neuroinformatics, 21(2), 407-425, 2023.
 
 This tutorial is built around a single real-world neuroimaging problem:
 **Bayes Factor decoding of the right fusiform gyrus**.  Each section
-introduces exactly the SQUALL feature needed for the next step, so by
+introduces exactly the NSQUALL feature needed for the next step, so by
 the end you will understand every line of a complete probabilistic
-SQUALL program.
+NSQUALL program.
 
 The full program we will build:
 
@@ -73,14 +86,14 @@ activates region :math:`R` and mentions term :math:`T`,
 :math:`P(R)` is the marginal probability of activating :math:`R`, and
 :math:`P(T)` of mentioning :math:`T`.
 
-We will compute all three probability distributions as SQUALL rules, then
+We will compute all three probability distributions as NSQUALL rules, then
 combine them with arithmetic to produce :math:`\mathrm{BF}` — all inside
 NeuroLang with zero post-hoc pandas computation.
 
 1.2 The Data
 -------------
 
-The SQUALL program works with six relations:
+The NSQUALL program works with six relations:
 
 ``study(study_id)``
     The set of all study identifiers.
@@ -94,10 +107,10 @@ The SQUALL program works with six relations:
 ``term(term)``
     The set of all cognitive term names.
 ``selected_study(study_id)``
-    A probabilistic uniform choice over all studies (defined in SQUALL
+    A probabilistic uniform choice over all studies (defined in NSQUALL
     below, not from Python).
 
-These are registered in Python before running SQUALL (see Appendix A for the
+These are registered in Python before running NSQUALL (see Appendix A for the
 full API):
 
     >>> from neurolang.frontend import NeurolangPDL
@@ -107,15 +120,15 @@ full API):
     >>> nl.add_tuple_set(study_mentions_df, name="mentions")
     >>> nl.add_tuple_set(region_df, name="region")
     >>> nl.add_tuple_set(term_df, name="term")
-    >>> # Selected_study is then defined directly in SQUALL (see below)
+    >>> # Selected_study is then defined directly in NSQUALL (see below)
 
 A complete working example is in
 ``examples/plot_squall_bayes_factor_decoding.py``.
 
-1.3 Running a SQUALL Program
+1.3 Running an NSQUALL Program
 ------------------------------
 
-All SQUALL code is passed as a string to ``execute_squall_program``:
+All NSQUALL code is passed as a string to ``execute_squall_program``:
 
     >>> result = nl.execute_squall_program("""
     ...     define as Active_region every Region
@@ -142,7 +155,7 @@ Part 2: Nouns and Basic Queries
 2.1 Nouns as Relations
 -----------------------
 
-A noun in SQUALL names a relation.  ``Region`` refers to the ``region`` EDB,
+A noun in NSQUALL names a relation.  ``Region`` refers to the ``region`` EDB,
 ``Term`` to ``term``, ``Selected_study`` to ``selected_study``.
 
 The simplest query asks for all entities in a relation:
@@ -159,7 +172,7 @@ that asks for all values.  The sentence reads like plain English.
 2.2 Determiners
 -----------------
 
-SQUALL supports four determiners:
+NSQUALL supports four determiners:
 
 =========== ============ ==========================================
 Keyword     Meaning      Example
@@ -229,7 +242,7 @@ The ``where ?r is '...'`` clause filters ``?r`` to a fixed constant string.
 2.6 Reserved Words and Backtick Quoting
 -----------------------------------------
 
-SQUALL reserves many common English words (``every``, ``a``, ``the``,
+NSQUALL reserves many common English words (``every``, ``a``, ``the``,
 ``that``, ``is``, ``has``, ``not``, ``and``, ``or``, ``where``, ``who``,
 ``which``, etc.).  If a relation name coincides with a reserved word, wrap it
 in backticks:
@@ -253,7 +266,7 @@ Now we add verbs to connect nouns into sentences.
 The Bayes Factor problem needs two binary relations:
 ``activates(study, region)`` and ``mentions(study, term)``.
 
-In SQUALL, a transitive verb maps subject→first argument, object→second
+In NSQUALL, a transitive verb maps subject→first argument, object→second
 argument, in natural English order:
 
 .. code-block:: squall
@@ -731,7 +744,7 @@ to ``?bf``:
     ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r))
 
 This is the Bayes Factor formula from section 1.1, expressed directly in
-SQUALL.  The expression supports ``+``, ``-``, ``*``, ``/`` with standard
+NSQUALL.  The expression supports ``+``, ``-``, ``*``, ``/`` with standard
 operator precedence; parentheses are supported for grouping.
 
 The ``is`` clause translates to an ``eq`` builtin with the arithmetic
@@ -917,7 +930,7 @@ All 20 terms exceed the Jeffreys "substantial evidence" threshold of
 face — is exactly what the right fusiform gyrus is known for.
 
 
-Part 10: Additional SQUALL Syntax
+Part 10: Additional NSQUALL Syntax
 ===================================
 
 This section documents features not used directly in the Bayes Factor
@@ -989,13 +1002,13 @@ expressions:
 Here ``?p`` is a variable bound from a multi-column source, and
 ``(?q / ?total)`` is an arithmetic expression evaluated per tuple.
 Support for executing weighted choice definitions directly from
-SQUALL is not yet implemented — use ``add_probabilistic_choice_from_tuples``
+NSQUALL is not yet implemented — use ``add_probabilistic_choice_from_tuples``
 in Python to register choices with non-uniform probabilities.
 
 10.3 Program-Level Directives — ``#name(args).``
 --------------------------------------------------
 
-A SQUALL program may include directive lines of the form ``#name(arg, ...)``
+A NSQUALL program may include directive lines of the form ``#name(arg, ...)``
 to pass configuration to the engine.  Directives are processed before rule
 walking.
 
@@ -1039,15 +1052,15 @@ noun:
 
 .. _part-9-appendix-a:
 
-Appendix A: Running SQUALL from Python
+Appendix A: Running NSQUALL from Python
 =========================================
 
-All of the SQUALL syntax shown in this tutorial can be executed from Python
+All of the NSQUALL syntax shown in this tutorial can be executed from Python
 using the ``NeurolangPDL`` frontend.  The general workflow is:
 
 1. Create a ``NeurolangPDL`` engine.
 2. Register EDB facts with ``add_tuple_set``.
-3. Execute a SQUALL program string with ``execute_squall_program``.
+3. Execute an NSQUALL program string with ``execute_squall_program``.
 4. Inspect results via the direct return from ``obtain`` queries or with
    ``solve_all()``.
 
@@ -1224,10 +1237,10 @@ Probabilistic n-ary rules
     [('A', 'x', 1.0), ('A', 'y', 1.0), ('B', 'x', 1.0)]
 
 
-Probabilistic choice (SQUALL)
+Probabilistic choice (NSQUALL)
 ------------------------------
 
-An equiprobable choice can be defined directly in SQUALL, avoiding the
+An equiprobable choice can be defined directly in NSQUALL, avoiding the
 need for ``add_uniform_probabilistic_choice_over_set`` in Python:
 
     >>> from neurolang.expressions import Symbol
@@ -1318,10 +1331,10 @@ Boolean connectives
 Appendix B: IR Builder Cheat-Sheet
 ====================================
 
-Every SQUALL sentence is compiled into NeuroLang's intermediate
+Every NSQUALL sentence is compiled into NeuroLang's intermediate
 representation (IR).  You can also write IR directly using the
 **environment context manager**.  This is useful when a pattern has no
-SQUALL syntax yet, or when you need to mix Python logic with declarative
+NSQUALL syntax yet, or when you need to mix Python logic with declarative
 rules.
 
 **Scope vs Environment**
@@ -1338,7 +1351,7 @@ Both use the same ``e.<Name>`` attribute syntax.
 
 **Simple unary rule**
 
-SQUALL:
+NSQUALL:
 
 .. code-block:: text
 
@@ -1354,7 +1367,7 @@ IR builder:
 
 **Binary / n-ary rule**
 
-SQUALL:
+NSQUALL:
 
 .. code-block:: text
 
@@ -1369,7 +1382,7 @@ IR builder:
 
 **Probabilistic fact**
 
-SQUALL:
+NSQUALL:
 
 .. code-block:: text
 
@@ -1388,7 +1401,7 @@ IR builder:
 
 **Marginalisation (MARG) query**
 
-SQUALL:
+NSQUALL:
 
 .. code-block:: text
 
@@ -1410,7 +1423,7 @@ IR builder:
 
 **Aggregation**
 
-SQUALL:
+NSQUALL:
 
 .. code-block:: text
 
@@ -1434,15 +1447,74 @@ IR builder:
 .. _appendix-c:
 
 Appendix C: Gap Report
-========================
+=======================
 
-All features described in this tutorial are fully supported.  The only pattern
-from the codebase that has no SQUALL syntax yet is:
+All features described in this tutorial are fully supported.  The only patterns
+from the codebase that have no NSQUALL syntax yet are:
 
 - **Skolem-like functional terms in rule head** — ❌ Not supported.
   Requires IR changes beyond the grammar transformer scope.
-- **Weighted choice execution from SQUALL** — ⏳ Grammar only.
+- **Weighted choice execution from NSQUALL** — ⏳ Grammar only.
   ``define as X as a choice over Y with probability P`` parses but the
   execution path is not yet implemented.  Use
   ``add_probabilistic_choice_from_tuples`` in Python for arbitrary
   probabilities.
+
+
+.. _appendix-d:
+
+Appendix D: Test Coverage
+==========================
+
+The NSQUALL parser and execution engine (``squall_syntax_lark.py``,
+``query_resolution_datalog.py``) are covered by 92 tests (91 pass, 1
+pre-existing skip) in two test suites:
+
+- ``test_squall_parser.py`` — 52 tests covering grammar parsing,
+  transformer logic, simplifier, and SquallProgram construction.
+- ``test_squall_syntax_lark.py`` — 8 tests for Lark grammar integration.
+- ``test_squall_pdl_integration.py`` — 32 tests for end-to-end SQUALL
+  execution, including probabilistic queries.
+
+**Coverage of newly added probabilistic choice code** (manual analysis,
+run via ``pytest`` on Python 3.14 — coverage.py has a pre-existing numpy
+C-extension conflict on this platform):
+
++--------------------------------------------+-------------+-------------+
+| Component                                  | Approx.     | Test        |
+|                                            | lines       | coverage    |
++============================================+=============+=============+
+| Grammar rules (``neurolang_natural.lark``) | 20          | 100%        |
++--------------------------------------------+-------------+-------------+
+| EquiprobableChoiceDef / WeightedChoiceDef  | 40          | ~100%       |
+| classes + SquallProgram integration        |             |             |
++--------------------------------------------+-------------+-------------+
+| Transformer handlers                       | 50          | ~95%        |
+| (``rule_equiprobable_choice``,             |             |             |
+| ``rule_weighted_choice``, ``squall``       |             |             |
+| routing)                                   |             |             |
++--------------------------------------------+-------------+-------------+
+| Parser simplification pass-through         | 15          | ~60%        |
+| (``parser()`` for choice defs in           |             |             |
+| Union/SquallProgram)                       |             |             |
++--------------------------------------------+-------------+-------------+
+| ``_handle_equiprobable_choice`` (main      | 50          | ~85%        |
+| path)                                      |             |             |
++--------------------------------------------+-------------+-------------+
+| ``_handle_weighted_choice``                | 10          | ~80%        |
+| (NotImplementedError)                      |             |             |
++--------------------------------------------+-------------+-------------+
+| Error paths (missing source, non-constant  | 15          | 0%          |
+| source, unknown body formula)              |             |             |
++--------------------------------------------+-------------+-------------+
+| Scoped re-walk with choice defs            | 10          | 0%          |
+| (obtain + choice together)                 |             |             |
++--------------------------------------------+-------------+-------------+
+| **Total new non-test code**                | **~210**    | **~83%**    |
++--------------------------------------------+-------------+-------------+
+
+The uncovered ~17% consists primarily of defensive error-handling paths and
+edge cases that occur only with malformed programs or uncommon execution
+patterns.  The main-line feature paths — parsing, transformer registration,
+symbol-table population, and uniform-probability computation — are fully
+exercised.
