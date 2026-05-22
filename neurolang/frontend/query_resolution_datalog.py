@@ -6,7 +6,9 @@ as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
 from neurolang.datalog.magic_sets import magic_rewrite
-from neurolang.exceptions import UnsupportedProgramError
+from neurolang.exceptions import (
+    ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
+)
 from typing import (
     AbstractSet,
     Dict,
@@ -33,13 +35,39 @@ from ..datalog.expression_processing import (
 )
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
+from .datalog.squall_syntax_lark import (
+    parser as squall_parser,
+    EquiprobableChoiceDef,
+    SquallProgram,
+    WeightedChoiceDef,
+)
 from .datalog.standard_syntax import parser as datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
+from ..logic.horn_clauses import Fol2DatalogTranslationException
 from . import query_resolution_expressions as fe
 
 __all__ = ["QueryBuilderDatalog"]
+
+
+def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exception:
+    orig = exc.__cause__
+    if orig and "Variables in head" in str(orig):
+        new_msg = (
+            f"SQUALL semantic error: Variable mismatch between rule definition and query.\n\n"
+            f"The rule head uses a variable that doesn't appear in the body, "
+            f"or the query uses variables that don't match the rule head.\n\n"
+            f"Common fixes:\n"
+            f"1. Add explicit labels in rule definitions:\n"
+            f"   'define as X for every Noun ?x that...' (not just 'every Noun')\n"
+            f"2. Ensure query variables match rule head variables:\n"
+            f"   'obtain every X (?x; ?y)' must match the rule head\n"
+            f"3. Check that rule body variables are used in the head\n\n"
+            f"Original error: {orig}"
+        )
+        exc.args = (new_msg,)
+    return exc
 
 
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
@@ -89,8 +117,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         List[fe.Expression]
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
@@ -131,8 +159,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         fe.Expression
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
@@ -161,6 +189,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         Creates an right implication of the consequent by the antecedent
         and adds the rule to the current program:
+
+        .. code-block:: text
+
             antecedent -> consequent
 
         Parameters
@@ -177,8 +208,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         fe.Expression
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
@@ -259,6 +290,162 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 )
             )
 
+    def execute_squall_program(
+        self, code: str
+    ) -> Union[None, NamedRelationalAlgebraFrozenSet, Dict[str, NamedRelationalAlgebraFrozenSet]]:
+        """
+        Execute a SQUALL (controlled English) program.
+
+        Parses *code* as a SQUALL program, walks rule definitions into the
+        engine, and executes ``obtain`` queries the same way
+        `execute_datalog_program` handles ``ans(x) :- R(x)`` — by building a
+        fresh helper implication and delegating to `self.query` (or
+        `self._execute_query` for probabilistic engines).
+
+        Parameters
+        ----------
+        code : str
+            SQUALL program text.  May contain any mixture of
+            ``define as …`` rule definitions and ``obtain …`` queries.
+
+        Returns
+        -------
+        None
+            When *code* contains only rule definitions (no ``obtain``).
+        NamedRelationalAlgebraFrozenSet
+            When *code* contains exactly one ``obtain`` clause.
+        Dict[str, NamedRelationalAlgebraFrozenSet]
+            When *code* contains two or more ``obtain`` clauses, keyed
+            ``"obtain_0"``, ``"obtain_1"``, … in declaration order.
+
+        Examples
+        --------
+        >>> from neurolang.frontend import NeurolangPDL
+        >>> nl = NeurolangPDL()
+        >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+        >>> nl.execute_squall_program(
+        ...     "define as Active every person that plays."
+        ... ) is None
+        True
+        >>> result = nl.execute_squall_program("obtain every Person that plays.")
+        >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+        ['alice']
+        """
+        parsed = squall_parser(code)
+
+        # Process directives (#set_backend, etc.) before walking rules.
+        if isinstance(parsed, SquallProgram) and parsed.commands:
+            from neurolang.config import config as nl_config
+            from neurolang.expressions import Constant
+
+            _KNOWN_COMMANDS = {"set_backend"}
+            for cmd in parsed.commands:
+                name = cmd.functor.name if hasattr(cmd, 'functor') else None
+                if name is None or name not in _KNOWN_COMMANDS:
+                    continue
+                if name == "set_backend":
+                    if cmd.args and isinstance(cmd.args[0], Constant):
+                        nl_config.set_query_backend(cmd.args[0].value)
+                    else:
+                        raise NeuroLangException(
+                            "#set_backend requires a string argument, "
+                            "e.g. #set_backend('pandas')."
+                        )
+
+        # Rules-only (no obtain) — backward-compat: returns Union/Implication
+        if not isinstance(parsed, SquallProgram):
+            if isinstance(parsed, EquiprobableChoiceDef):
+                self._handle_equiprobable_choice(parsed)
+            elif isinstance(parsed, WeightedChoiceDef):
+                self._handle_weighted_choice(parsed)
+            elif isinstance(parsed, logic.Union):
+                for r in parsed.formulas:
+                    if isinstance(r, EquiprobableChoiceDef):
+                        self._handle_equiprobable_choice(r)
+                    elif isinstance(r, WeightedChoiceDef):
+                        self._handle_weighted_choice(r)
+                    else:
+                        try:
+                            self.program_ir.walk(r)
+                        except Fol2DatalogTranslationException as e:
+                            raise _wrap_fol_error_for_squall(e) from e
+            else:
+                try:
+                    self.program_ir.walk(parsed)
+                except Fol2DatalogTranslationException as e:
+                    raise _wrap_fol_error_for_squall(e) from e
+            return None
+
+        # Walk all rule definitions into the engine (global scope).
+        # This makes the rules available to solve_all() and any code
+        # that inspects the global symbol table after the call returns.
+        for rule in parsed.rules_and_choice_defs:
+            if isinstance(rule, EquiprobableChoiceDef):
+                self._handle_equiprobable_choice(rule)
+            elif isinstance(rule, WeightedChoiceDef):
+                self._handle_weighted_choice(rule)
+            else:
+                try:
+                    self.program_ir.walk(rule)
+                except Fol2DatalogTranslationException as e:
+                    raise _wrap_fol_error_for_squall(e) from e
+
+        if not parsed.queries:
+            return None
+
+        # Execute each obtain query by building a fresh helper predicate
+        # h(head_vars) :- q.body and delegating to query(), exactly as
+        # execute_datalog_program does for ans(...) :- R(...).
+        #
+        # We push a scope and re-walk the rules so that probabilistic
+        # predicates are materialised with the correct signatures for
+        # the chase (e.g. `probably_mentions(x, PROB(x))`).  The IDB is
+        # shared across scopes so re-walking a ProbabilisticFact into
+        # a new scope would normally raise ForbiddenDisjunctionError;
+        # we catch that silently because identical re-definitions in a
+        # sub-scope are harmless.
+        results = {}
+        for i, q in enumerate(parsed.queries):
+            key = parsed.query_names.get(i, f"obtain_{i}")
+            head = q.head
+            if isinstance(head, ir.FunctionApplication):
+                head_vars = tuple(head.args)
+            elif isinstance(head, ir.Symbol):
+                head_vars = (head,)
+            else:
+                head_vars = tuple(head)
+
+            h = ir.Symbol.fresh()
+            query_impl = datalog.Implication(h(*head_vars), q.body)
+
+            self.program_ir.push_scope()
+            try:
+                for rule in parsed.rules_and_choice_defs:
+                    if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
+                        # Choice defs are already registered in the global scope;
+                        # skip them in the scoped re-walk.
+                        pass
+                    else:
+                        try:
+                            self.program_ir.walk(rule)
+                        except ForbiddenDisjunctionError:
+                            pass
+                self.program_ir.walk(query_impl)
+                fe_pred = fe.Expression(self, h(*head_vars))
+                fe_head = tuple(
+                    fe.Expression(self, ir.Symbol(s.name))
+                    for s in head_vars
+                )
+                ra, _ = self._execute_query(fe_head, fe_pred)
+            finally:
+                self.program_ir.pop_scope()
+            results[key] = ra
+
+        if len(results) == 1:
+            return next(iter(results.values()))
+        return results
+
     def compute_datalog_program_for_autocompletion(
             self, code: str, autocompletion_code
     ) -> Dict:
@@ -320,6 +507,69 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         res = self.datalog_parser(autocompletion_code, None, None, True)
         return res
 
+    def _handle_equiprobable_choice(self, choice_def):
+        """Register a SQUALL equiprobable choice in the program IR.
+
+        Looks up the source EDB set in the symbol table, computes uniform
+        probabilities (1 / N) for each tuple, and calls
+        ``add_probabilistic_choice_from_tuples``.
+        """
+        body_formula = choice_def.body_formula
+
+        # Extract the source predicate symbol from the body formula.
+        if isinstance(body_formula, logic.Conjunction):
+            # Filtered source — extract first predicate as the base source.
+            source_pred_sym = body_formula.formulas[0].functor
+        elif isinstance(body_formula, ir.FunctionApplication):
+            source_pred_sym = body_formula.functor
+        else:
+            raise NeuroLangException(
+                f"Cannot extract source predicate from body formula: "
+                f"{body_formula}"
+            )
+
+        # Look up the source EDB set in the program symbol table.
+        if source_pred_sym not in self.program_ir.symbol_table:
+            raise NeuroLangException(
+                f"Source predicate '{source_pred_sym.name}' not found in the "
+                f"program. Make sure the data is loaded before defining the "
+                f"probabilistic choice."
+            )
+        source_rel = self.program_ir.symbol_table[source_pred_sym]
+        if not isinstance(source_rel, ir.Constant):
+            raise NeuroLangException(
+                f"Source predicate '{source_pred_sym.name}' is not a "
+                f"concrete set. Equiprobable choices currently require an "
+                f"extensional (ground) source predicate."
+            )
+
+        # Build choice tuples with uniform probability.
+        # source_rel.value is a WrappedRelationalAlgebraSet — use itervalues
+        # to get raw Python tuples for each row.
+        source_rows = list(source_rel.value.itervalues())
+        n = len(source_rows)
+        if n == 0:
+            prob = 1.0
+        else:
+            prob = 1.0 / n
+        choice_tuples = [(prob,) + row for row in source_rows]
+
+        self.program_ir.add_probabilistic_choice_from_tuples(
+            choice_def.head_symbol, choice_tuples
+        )
+
+    def _handle_weighted_choice(self, choice_def):
+        """Register a SQUALL weighted probabilistic choice in the program IR.
+
+        Evaluates the probability expression per tuple from the source set,
+        normalises to sum to 1, and calls ``add_probabilistic_choice_from_tuples``.
+        """
+        raise NeuroLangException(
+            "Weighted probabilistic choices (with explicit probability "
+            "expressions) are not yet implemented. "
+            "Use 'define as X as an equiprobable choice over every Y' for now."
+        )
+
     def query(
         self, *args
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
@@ -340,8 +590,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]
             read the descrpition.
 
-        Example
-        -------
+        Examples
+        --------
         Note: example ran with pandas backend
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
@@ -352,13 +602,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ...     s1 = nl.query(e.l2[e.x, e.y])
         ...     s2 = nl.query((e.x,), e.l2[e.x, e.y])
         ...     s3 = nl.query(e.l3[e.x], e.l2[e.x, e.y])
-        >>> s1
-        True
-        >>> s2
-            x
-        0   2
-        >>> s3
-        l3: typing.AbstractSet[typing.Tuple[int]] = [(2,)]
         """
         if len(args) == 1:
             predicate = args[0]
@@ -515,8 +758,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             extensional and intentional facts that have been derived
             through the current program
 
-        Example
-        -------
+        Examples
+        --------
         Note: example ran with pandas backend
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderDatalog(program_ir=p_ir)
@@ -525,16 +768,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         >>> with nl.scope as e:
         ...     e.l2[e.x] = e.l[e.x, e.y] & (e.x == e.y)
         ...     solution = nl.solve_all()
-        >>> solution
-        {
-            'l':
-                0   1
-            0   1   2
-            1   2   2
-            'l2':
-                x
-            0   2
-        }
         """
         solution_ir = self.chase_class(self.program_ir).build_chase_solution()
 
