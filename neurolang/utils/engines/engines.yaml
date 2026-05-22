@@ -6,6 +6,9 @@ engines:
       probabilistic choice over studies.
     requires_mni_mask: true
     python_init: "neurolang.utils.engines.neurosynth.init"
+    datalog_init: |
+      study_with_peaks(S) :- peak_reported(I, J, K, S)
+      origin_peak(I, J, K, S) :- peak_reported(I, J, K, S), I == 0
     predicates:
       peak_reported:
         arity: 4
@@ -35,6 +38,9 @@ engines:
       brain region (ExplicitVBR).
     requires_mni_mask: true
     python_init: "neurolang.utils.engines.destrieux.init"
+    datalog_init: |
+      left_region(N, R) :- destrieux(N, R), startswith('lh', N)
+      right_region(N, R) :- destrieux(N, R), startswith('rh', N)
     predicates:
       destrieux:
         arity: 2

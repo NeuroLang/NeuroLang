@@ -1,7 +1,9 @@
 """Declarative engine registry for the neurolang-query CLI.
 
-Engines are declared in :file:`engines/engines.yaml`.  Each engine has a
-Python initialisation script that is called by :func:`build_engine`.
+Engines are declared in :file:`engines/engines.yaml`.  Each engine may
+define a **Python initialisation script** (``python_init``) and an
+optional **Datalog initialisation file** (``datalog_init``) that is
+evaluated after the Python script completes.
 
 Usage
 -----
@@ -131,5 +133,9 @@ def build_engine(
 
         mod = importlib.import_module(py_init)
         mod.init_engine(nl, mask, data_dir)
+
+    datalog_init = cfg.get("datalog_init")
+    if datalog_init:
+        nl.execute_datalog_program(datalog_init)
 
     return nl

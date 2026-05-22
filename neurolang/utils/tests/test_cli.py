@@ -12,6 +12,7 @@ from neurolang.utils.cli import (
 )
 
 from neurolang.utils import engine_registry
+from neurolang.utils.engine_registry import _ENGINES_DIR
 
 # ---------------------------------------------------------------------------
 # _build_parser
@@ -129,6 +130,23 @@ class TestEngineRegistry:
     def test_unknown_engine_raises(self):
         with pytest.raises(ValueError, match="Unknown engine"):
             engine_registry.get_engine_config("nonexistent")
+
+    def test_datalog_init_in_config(self):
+        """Every engine with python_init should have inline datalog_init."""
+        for name in engine_registry.list_engine_names():
+            cfg = engine_registry.get_engine_config(name)
+            if "python_init" in cfg:
+                code = cfg.get("datalog_init")
+                assert code, (
+                    f"Engine {name!r} has python_init but no datalog_init"
+                )
+                assert isinstance(code, str), (
+                    f"datalog_init for engine {name!r} must be a string, "
+                    f"got {type(code).__name__}"
+                )
+                assert len(code.strip()) > 0, (
+                    f"datalog_init for engine {name!r} is empty"
+                )
 
 
 # ---------------------------------------------------------------------------
