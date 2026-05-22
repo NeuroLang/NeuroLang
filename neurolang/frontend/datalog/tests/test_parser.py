@@ -476,3 +476,149 @@ def test_command_syntax():
         )
     )
     assert res == expected
+
+
+# ── New syntax: Aggregation in rule head ─────────────────────────────────────
+
+from ....datalog.expressions import AggregationApplication
+
+
+def test_head_aggregation_in_query():
+    """ans(x, count(y)):-body(x, y) → Query with AggregationApplication."""
+    res = parser("ans(x, count(y)):-body(x, y)")
+    ans = Symbol("ans")
+    body = Symbol("body")
+    x = Symbol("x")
+    y = Symbol("y")
+
+    expected = Union((
+        Query(
+            ans(x, AggregationApplication(Symbol("count"), (y,))),
+            Conjunction((body(x, y),)),
+        ),
+    ))
+    assert res == expected
+
+
+def test_head_aggregation_in_rule():
+    """Non-ans head with aggregation → Implication with AggregationApplication."""
+    res = parser("result(x, count(y)):-body(x, y)")
+    result = Symbol("result")
+    body = Symbol("body")
+    x = Symbol("x")
+    y = Symbol("y")
+
+    expected = Union((
+        Implication(
+            result(x, AggregationApplication(Symbol("count"), (y,))),
+            Conjunction((body(x, y),)),
+        ),
+    ))
+    assert res == expected
+
+
+def test_head_aggregation_multiple():
+    """Multiple aggregation functions in head args."""
+    res = parser("ans(x, count(y), sum(z)):-body(x, y, z)")
+    ans = Symbol("ans")
+    body = Symbol("body")
+    x = Symbol("x")
+    y = Symbol("y")
+    z = Symbol("z")
+
+    expected = Union((
+        Query(
+            ans(
+                x,
+                AggregationApplication(Symbol("count"), (y,)),
+                AggregationApplication(Symbol("sum"), (z,)),
+            ),
+            Conjunction((body(x, y, z),)),
+        ),
+    ))
+    assert res == expected
+
+
+def test_head_aggregation_mean_std():
+    """Mean and std aggregation functions are recognised."""
+    res = parser("ans(x, mean(y), std(z)):-body(x, y, z)")
+
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    args = q.head.args
+    assert isinstance(args[1], AggregationApplication)
+    assert args[1].functor == Symbol("mean")
+    assert isinstance(args[2], AggregationApplication)
+    assert args[2].functor == Symbol("std")
+
+
+# ── New syntax: PROB head rule ───────────────────────────────────────────────
+
+def test_prob_head_rule_simple():
+    """PROB[pred(x)]:-body(x) → Implication with pred as head."""
+    res = parser("PROB[p(x)]:-body(x)")
+    p = Symbol("p")
+    body = Symbol("body")
+    x = Symbol("x")
+
+    expected = Union((
+        Implication(
+            p(x),
+            Conjunction((body(x),)),
+        ),
+    ))
+    assert res == expected
+
+
+def test_prob_head_rule_conditional():
+    """PROB[pred(x)]:-body(x)//cond(x) → Implication with Condition."""
+    res = parser("PROB[p(x)]:-a(x) // b(x)")
+    p = Symbol("p")
+    a = Symbol("a")
+    b = Symbol("b")
+    x = Symbol("x")
+
+    expected = Union((
+        Implication(
+            p(x),
+            Condition(a(x), b(x)),
+        ),
+    ))
+    assert res == expected
+
+
+# ── New syntax: PROB body predicate ──────────────────────────────────────────
+
+def test_prob_body_simple():
+    """ans(x, p):-PROB[pred(x)]=p → Query extracting pred and p."""
+    res = parser("ans(x, p):-PROB[pred(x)]=p")
+    pred = Symbol("pred")
+    x = Symbol("x")
+
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    assert q.head.functor == Symbol("ans")
+    body_formulas = q.body.formulas if hasattr(q.body, 'formulas') else (q.body,)
+    assert any(
+        isinstance(f, FunctionApplication) and f.functor == pred and f.args == (x,)
+        for f in body_formulas
+    )
+
+
+def test_prob_body_with_filter():
+    """ans(x, p):-filter(x) & PROB[pred(x)]=p → mixed query."""
+    res = parser("ans(x, p):-filter(x) & PROB[pred(x)]=p")
+
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    assert q.head.functor == Symbol("ans")
+    body = q.body
+    assert isinstance(body, Conjunction)
+    body_atoms = list(body.formulas)
+    assert len(body_atoms) == 2
+    functors = {
+        f.functor.name if hasattr(f, 'functor') and hasattr(f.functor, 'name')
+        else None for f in body_atoms
+    }
+    assert "filter" in functors
+    assert "pred" in functors
