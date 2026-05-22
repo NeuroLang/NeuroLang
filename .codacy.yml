@@ -1,0 +1,11 @@
+---
+engines:
+  bandit:
+    enabled: true
+    args:
+      - "--skip=B101"
+  prospector:
+    enabled: true
+    exclude_paths:
+      - "examples/"
+# codacy analysis config
