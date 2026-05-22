@@ -1349,3 +1349,161 @@ def test_command_parses_and_preserves_in_squall_program():
     cmd = result.commands[0]
     assert isinstance(cmd, FunctionApplication), f"Expected FunctionApplication, got {type(cmd)}"
     assert cmd.functor.name == "set_backend", f"Expected 'set_backend', got {cmd.functor.name}"
+
+
+def test_squall_predicate_call():
+    """Bare predicate call (``Predicate (?x, ?y, ?z)``) in a ``define … where`` body."""
+    from ....datalog import Implication
+    from ....expressions import Constant, FunctionApplication, Symbol
+
+    result = parser(
+        "define as Bayes_factor (?x; ?y; ?bf)\n"
+        "    where Joint_probability (?x, ?y, ?p_rt)\n"
+        "    and Region_probability (?x, ?p_r)."
+    )
+    assert isinstance(result, Implication), f"Expected Implication, got {type(result)}"
+    head = result.consequent
+    assert head.functor == Symbol("bayes_factor"), f"Expected 'bayes_factor', got {head.functor}"
+    assert len(head.args) == 3, f"Expected 3 head args, got {len(head.args)}: {head.args}"
+    body = result.antecedent
+    assert isinstance(body, Conjunction), f"Expected Conjunction body, got {type(body)}"
+    fa_list = [f for f in body.formulas if isinstance(f, FunctionApplication)]
+    assert len(fa_list) == 2, f"Expected 2 function applications in body, got {len(fa_list)}"
+    pred_names = {f.functor.name for f in fa_list}
+    assert pred_names == {"joint_probability", "region_probability"}, (
+        f"Expected joint_probability and region_probability, got {pred_names}"
+    )
+
+
+def test_squall_predicate_call_with_literal():
+    """Bare predicate call with a string literal argument."""
+    from ....expressions import Constant, FunctionApplication, Symbol
+
+    result = parser(
+        "define as Filtered (?x)\n"
+        "    where Region_probability (?x, ?p_r)\n"
+        "    and ?x is 'target_region'."
+    )
+    assert isinstance(result, Implication)
+    body = result.antecedent
+    assert isinstance(body, Conjunction)
+    atoms = [f for f in body.formulas if isinstance(f, FunctionApplication)]
+    eq_atoms = [a for a in atoms if a.functor == EQ]
+    assert eq_atoms, f"Expected equality atom in body, got {atoms}"
+    eq_atom = eq_atoms[0]
+    assert eq_atom.args[1] == Constant("target_region"), (
+        f"Expected 'target_region' constant, got {eq_atom.args[1]}"
+    )
+
+
+def test_squall_arithmetic_assign():
+    """Arithmetic expression (``?bf = expression``) in a rule body."""
+    from ....datalog import Implication
+    from ....expressions import Constant, FunctionApplication, Symbol
+    from operator import truediv
+
+    code = """
+    define as Bayes_factor (?x; ?y; ?bf)
+        where Joint_probability (?x, ?y, ?p_rt)
+        and Region_probability (?x, ?p_r)
+        and Term_probability (?y, ?p_t)
+        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+    """
+    result = parser(code)
+    assert isinstance(result, Implication), f"Expected Implication, got {type(result)}"
+    head = result.consequent
+    assert head.functor == Symbol("bayes_factor"), f"Expected 'bayes_factor', got {head.functor}"
+    assert len(head.args) == 3, f"Expected 3 head args, got {len(head.args)}"
+    # Body must contain an equality atom with truediv/sub arithmetic.
+    body = result.antecedent
+    assert isinstance(body, Conjunction), f"Expected Conjunction body, got {type(body)}"
+    eq_atoms = [f for f in body.formulas
+                if isinstance(f, FunctionApplication) and f.functor == EQ]
+    assert eq_atoms, f"Expected at least one equality atom (assignment), got {body.formulas}"
+    eq_atom = eq_atoms[0]
+    rhs = eq_atom.args[1]
+    assert isinstance(rhs, FunctionApplication), (
+        f"Expected FunctionApplication RHS, got {type(rhs)}: {rhs}"
+    )
+    assert rhs.functor == Constant(truediv), (
+        f"Expected truediv at outermost level of RHS, got {rhs.functor}"
+    )
+    assert isinstance(eq_atom.args[0], Symbol), f"Expected Symbol LHS, got {type(eq_atom.args[0])}"
+    assert eq_atom.args[0].name.startswith("bf"), f"Expected 'bf' variable, got {eq_atom.args[0].name}"
+    inner_ops = set()
+    stack = [rhs]
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication):
+            inner_ops.add(expr.functor)
+            stack.extend(expr.args)
+    assert Constant(truediv) in inner_ops, f"Expected truediv operator in {inner_ops}"
+
+
+def test_squall_predicate_and_arithmetic_roundtrip():
+    """End-to-end: define a rule with predicate calls + arithmetic, then execute against engine."""
+    from ....datalog import Implication
+    from ....expressions import Constant, FunctionApplication, Symbol
+    from ....datalog import Conjunction
+    from ....datalog.expressions import Fact
+    from ....frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, 10.0)], name="joint_probability")
+    nl.add_tuple_set([(1, 5.0)], name="region_probability")
+    nl.add_tuple_set([(1, 2.0)], name="term_probability")
+
+    squall_code = """
+    define as Bayes_factor (?x; ?y; ?bf)
+        where Joint_probability (?x, ?y, ?p_rt)
+        and Region_probability (?x, ?p_r)
+        and Term_probability (?y, ?p_t)
+        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+    obtain every Bayes_factor (?x; ?y; ?bf) as BF.
+    """
+    # Parse and simplify
+    parsed = parser(squall_code)
+    assert isinstance(parsed, SquallProgram), f"Expected SquallProgram, got {type(parsed)}"
+    # The define rule (bayes_factor) plus the obtain-as projection rule (bf)
+    define_rules = [
+        r for r in parsed.rules
+        if r.consequent.functor.name == "bayes_factor"
+    ]
+    assert len(define_rules) == 1, (
+        f"Expected 1 bayes_factor define rule, got {len(define_rules)}"
+    )
+    rule = define_rules[0]
+    assert isinstance(rule, Implication), f"Expected Implication, got {type(rule)}"
+    head = rule.consequent
+    assert len(head.args) == 3, f"Expected 3 head args, got {len(head.args)}"
+    body = rule.antecedent
+    assert isinstance(body, Conjunction), f"Expected Conjunction, got {type(body)}"
+    assert len(body.formulas) >= 4, (
+        f"Expected at least 4 body formulas (3 pred + 1 eq), got {len(body.formulas)}"
+    )
+
+
+def test_squall_where_label_is_expr_does_not_conflict_with_where_s():
+    """Existing ``?x is 'string'`` pattern (via s_np_vp) should not break."""
+    from ....expressions import Constant, FunctionApplication
+
+    result = parser(
+        "obtain every Item (?r; ?x) where ?r is 'target' as Items."
+    )
+    assert isinstance(result, SquallProgram)
+    q = result.queries[0]
+    body = q.body
+    eq_atoms = []
+    stack = [body]
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication) and expr.functor == EQ:
+            eq_atoms.append(expr)
+        elif hasattr(expr, 'formulas'):
+            stack.extend(expr.formulas)
+        elif hasattr(expr, 'body'):
+            stack.append(expr.body)
+    assert eq_atoms, f"Expected equality atoms in body, got {body}"
+    assert any(a.args[1] == Constant("target") for a in eq_atoms), (
+        f"Expected 'target' constant in equality, got {[str(a) for a in eq_atoms]}"
+    )

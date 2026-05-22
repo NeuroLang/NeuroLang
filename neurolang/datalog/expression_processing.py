@@ -1047,3 +1047,79 @@ class EqualitySymbolLeftHandSideNormaliseMixin(PatternWalker):
         return Constant[new_type](operator.eq, auto_infer_type=False)(
             *reversed(equality.args)
         )
+
+
+def is_inlineable_equality(formula):
+    """Check if *formula* is ``eq(Symbol, Constant)``.
+
+    This pattern appears in SQUALL queries such as
+    ``?x is 'value'`` which the frontend translates to
+    ``eq(x, Constant('value'))``.
+    """
+    try:
+        is_eq_functor = formula.functor == Constant(operator.eq)
+    except (ValueError, AttributeError):
+        return False
+    return (
+        is_eq_functor
+        and isinstance(formula.args[0], Symbol)
+        and isinstance(formula.args[1], Constant)
+    )
+
+
+class InlineEqualityConstantsMixin(PatternWalker):
+    """Rewrite ``eq(var, Constant)`` atoms in query rules by inlining the
+    constant into IDB predicate arguments.
+
+    Magic-sets (SIPS) skips builtin predicates (those whose functor is a
+    ``Constant``), so ``eq`` atoms with a constant argument never propagate
+    bindings.  This walker transforms::
+
+        h(x, y) :- p(x, y), eq(x, Constant('a'))
+
+    into::
+
+        h(Constant('a'), y) :- p(Constant('a'), y)
+
+    so that magic-sets sees the bound argument in a non-builtin predicate and
+    propagates the ``'b'`` adornment.
+
+    Must run *after* `EqualitySymbolLeftHandSideNormaliseMixin` so that all
+    equality atoms have the Symbol as the first argument.
+    """
+
+    @add_match(
+        Implication(FunctionApplication, Conjunction),
+        lambda implication: any(
+            is_inlineable_equality(conjunct)
+            for conjunct in extract_logic_atoms(implication.antecedent)
+        ),
+    )
+    def inline_equality_constants(self, implication):
+        eq_map = {}
+        other_formulas = []
+        for f in implication.antecedent.formulas:
+            if is_inlineable_equality(f):
+                eq_map[f.args[0]] = f.args[1]
+            else:
+                other_formulas.append(f)
+        inlined_formulas = []
+        for f in other_formulas:
+            if isinstance(f, FunctionApplication) and not isinstance(
+                f.functor, Constant
+            ):
+                new_args = tuple(eq_map.get(arg, arg) for arg in f.args)
+                if new_args != f.args:
+                    f = f.functor(*new_args)
+            inlined_formulas.append(f)
+        new_body = (
+            Conjunction(tuple(inlined_formulas))
+            if len(inlined_formulas) > 1
+            else inlined_formulas[0]
+        )
+        new_head_args = tuple(
+            eq_map.get(arg, arg) for arg in implication.consequent.args
+        )
+        new_head = implication.consequent.functor(*new_head_args)
+        new_implication = Implication(new_head, new_body)
+        return self.walk(new_implication)

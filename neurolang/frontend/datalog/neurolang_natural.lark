@@ -30,6 +30,7 @@ rule_op : _rule_start [ PROBABLY ] verb1 rule_body1
         | _rule_start verb1 _WITH _INFERRED? _PROBABILITY rule_body1_cond -> rule_op_marg
         | _rule_start verb1 _WITH _INFERRED? _PROBABILITY rule_body2_cond -> rule_op_marg
         | _rule_start verb1 _WITH _A _PROBABILITY _OF np -> rule_op_prob_agg
+        | _rule_start verbn label _WHERE s              -> rule_op_predicate_body
 
 ?rulen : _rule_start verbn rule_body2               -> rule_opnn_compound
        | _rule_start verbn rule_body1 _BREAK? ops   -> rule_opnn
@@ -59,6 +60,9 @@ _BREAK : "," | ";"
 ?s_b : np [ "," ]  vp          -> s_np_vp
       | _FOR np ","  s  -> s_for
       | _THERE be np   -> s_be
+      | identifier "(" (label | literal) ("," (label | literal))* ")"  -> s_predicate_call
+      | UPPER_NAME "(" (label | literal) ("," (label | literal))* ")"  -> s_predicate_call_upper
+      | label _IS expr{label}  -> s_label_is_expr
 
 _CONSEQUENCE : /define[s]{0,1}/
 

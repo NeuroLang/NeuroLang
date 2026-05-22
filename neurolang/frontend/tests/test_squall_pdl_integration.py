@@ -795,3 +795,33 @@ def test_set_backend_directive_in_squall_program(nl):
     # Single obtain returns the relation directly
     rows = list(result)
     assert len(rows) > 0, "Expected at least one row"
+
+
+def test_execute_squall_where_label_is_constant_inlines_eq(nl):
+    """?x is 'value' inlines the constant into IDB args so magic-sets can
+    propagate it, without changing the semantics of the query.
+
+    Before this fix, ``?r is 'target'`` produced ``eq(r, 'target')`` in the
+    body. Magic-sets skipped builtin predicates (Constant functor) and never
+    propagated the constant.  After inlining, the query rule becomes
+    ``p('value', …) :- body`` and magic-sets sees the bound argument.
+    """
+    result = nl.execute_squall_program(
+        "obtain every Person (?p) where ?p is 'alice'."
+    )
+    rows = list(result)
+    assert len(rows) == 1, f"Expected 1 row, got {len(rows)}"
+    assert rows[0][0] == "alice", f"Expected 'alice', got {rows[0][0]}"
+
+
+def test_execute_squall_where_label_is_constant_multiple_predicates(nl):
+    """The inlining also works when the body already contains multiple atoms."""
+    result = nl.execute_squall_program(
+        "obtain every Person (?p) where ?p is 'alice' "
+        "and ?p plays."
+    )
+    pdf = result.as_pandas_dataframe()
+    assert len(pdf) == 1, f"Expected 1 row, got {len(pdf)}"
+    assert pdf.iloc[0, 0] == "alice", (
+        f"Expected 'alice', got {pdf.iloc[0, 0]}"
+    )

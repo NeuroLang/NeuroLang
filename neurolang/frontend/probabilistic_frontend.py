@@ -38,6 +38,7 @@ from ..datalog.exceptions import InvalidMagicSetError
 from ..exceptions import SymbolNotFoundError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
+    InlineEqualityConstantsMixin,
     extract_logic_atoms,
     is_aggregation_rule,
 )
@@ -100,6 +101,7 @@ from .query_resolution_datalog import QueryBuilderDatalog
 
 class RegionFrontendCPLogicSolver(
     EqualitySymbolLeftHandSideNormaliseMixin,
+    InlineEqualityConstantsMixin,
     TranslateProbabilisticQueryMixin,
     ResolveInvertedFunctionApplicationMixin,
     TranslateToLogicWithAggregation,

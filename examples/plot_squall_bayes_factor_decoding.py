@@ -73,11 +73,14 @@ into a single ``'right fusiform gyrus'`` label for the decoding analysis.
     define as Joint_probability with inferred probability
         every Cooccurrence (?r; ?t).
 
-    obtain every Joint_probability (?r; ?t; ?p)
-        where ?r is 'right fusiform gyrus' as P_rt.
-    obtain every Region_probability (?r; ?p)
-        where ?r is 'right fusiform gyrus' as P_r.
-    obtain every Term_probability (?t; ?p) as P_t.
+    define as Bayes_factor (?r; ?t; ?bf)
+        where Joint_probability (?r, ?t, ?p_rt)
+        and Region_probability (?r, ?p_r)
+        and Term_probability (?t, ?p_t)
+        and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+
+    obtain every Bayes_factor (?r; ?t; ?bf)
+        where ?r is 'right fusiform gyrus' as BF.
 
 The first two pairs of ``define`` sentences use natural-language
 relative clauses (``every Region that a Selected_study activates``) to
@@ -90,11 +93,13 @@ the Region and mentions the Term`` — so the join is done by the NeuroLang
 solver with no ``~`` inverse-verb prefix and no explicit labels.
 The three ``with inferred probability`` rules then ask the solver for
 the marginalised probabilities — study is quantified away so only region
-and/or term remain in the rule heads.  The ``obtain … as`` clauses return
-the results directly; the ``where ?r is '…'`` filter triggers magic-sets
-optimisation, pushing the region constant backwards
-and limiting computation to the fusiform gyrus.  The Bayes Factor is
-then evaluated in Python from the three probability tables.
+and/or term remain in the rule heads.
+A new ``define as Bayes_factor`` rule computes the Bayes Factor formula
+directly in SQUALL using **arithmetic expressions** (``+``, ``-``, ``*``,
+``/``) and **bare predicate calls** (``Joint_probability (?r, ?t, ?p_rt)``)
+in the rule body — the formula :math:`\mathrm{BF}= \frac{P(R,T)/P(R)}
+{(P(T)-P(R,T))/(1-P(R))}` is expressed inline with ``?bf is``.
+The ``obtain … as`` clause returns the ranked results directly.
 """
 
 # %%
@@ -313,10 +318,10 @@ print(
 # the solver for the marginalised probabilities — study is quantified away
 # so only region and/or term remain in the rule heads.
 #
-# The ``obtain … as`` clauses return the results directly (no ``solve_all``).
-# The ``where ?r is 'right fusiform gyrus'`` filter triggers magic-sets
-# optimisation, pushing the constant backwards and limiting computation to
-# the target region.
+# The Bayes Factor rule uses the new **arithmetic expressions** and **bare
+# predicate calls** to compute :math:`\mathrm{BF}= \frac{P(R,T)/P(R)}
+# {(P(T)-P(R,T))/(1-P(R))}` directly in SQUALL, avoiding post-hoc pandas
+# computation.  The ``obtain … as`` clause returns the ranked results.
 
 squall_program = """
 define as Active_region every Region that a Selected_study activates.
@@ -336,11 +341,14 @@ define as Cooccurrence
 define as Joint_probability with inferred probability
     every Cooccurrence (?r; ?t).
 
-obtain every Joint_probability (?r; ?t; ?p)
-    where ?r is 'right fusiform gyrus' as P_rt.
-obtain every Region_probability (?r; ?p)
-    where ?r is 'right fusiform gyrus' as P_r.
-obtain every Term_probability (?t; ?p) as P_t.
+define as Bayes_factor (?r; ?t; ?bf)
+    where Joint_probability (?r, ?t, ?p_rt)
+    and Region_probability (?r, ?p_r)
+    and Term_probability (?t, ?p_t)
+    and ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r)).
+
+obtain every Bayes_factor (?r; ?t; ?bf)
+    where ?r is 'right fusiform gyrus' as BF.
 """
 
 # %%
@@ -352,30 +360,16 @@ obtain every Term_probability (?t; ?p) as P_t.
 result = nl.execute_squall_program(squall_program)
 
 # %%
-# Compute Bayes Factor
+# Bayes Factor results
 # --------------------
-# BF(r, t) = [P(R,T)/P(R)] / [(P(T) - P(R,T)) / (1 - P(R))]
-#
-# The three probability tables are retrieved from the NeuroLang solver;
-# the BF formula is evaluated in pandas from the marginalised values.
+# The Bayes Factor formula :math:`\mathrm{BF}= \frac{P(R,T)/P(R)}
+# {(P(T)-P(R,T))/(1-P(R))}` was computed directly inside the SQUALL
+# program via arithmetic expressions and bare predicate calls in the
+# ``Bayes_factor`` rule — the ``obtain … as BF`` clause returns the
+# ranked per-term BF values without any post-hoc pandas computation.
 
-p_rt_df = result["p_rt"].as_pandas_dataframe()
-p_rt_df.columns = ["region", "term", "p_rt"]
-p_r_df = result["p_r"].as_pandas_dataframe()
-p_r_df.columns = ["region", "p_r"]
-p_t_df = result["p_t"].as_pandas_dataframe()
-p_t_df.columns = ["term", "p_t"]
-
-bf_df = (
-    p_rt_df[p_rt_df["region"] == TARGET_LABEL]
-    .merge(p_r_df[p_r_df["region"] == TARGET_LABEL], on="region")
-    .merge(p_t_df, on="term")
-)
-
-bf_df["bf"] = (
-    (bf_df["p_rt"] / bf_df["p_r"])
-    / ((bf_df["p_t"] - bf_df["p_rt"]) / (1.0 - bf_df["p_r"]))
-)
+bf_df = result["bf"].as_pandas_dataframe()
+bf_df.columns = ["region", "term", "bf"]
 
 top_terms = (
     bf_df[bf_df["bf"] > BF_THRESHOLD]

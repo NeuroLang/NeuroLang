@@ -398,6 +398,39 @@ class SquallTransformer(Transformer):
 
         return Implication(head, body_formula)
 
+    def rule_op_predicate_body(self, args):
+        """Build a Datalog rule from ``define as Verb (?x; ?y; ?z) where predicate1 and predicate2 …``.
+
+        The label tuple ``(?x; ?y; ?z)`` provides the head predicate arguments.
+        The ``where s`` clause provides the body formula as a conjunction of
+        bare predicate calls (``Predicate (?a, ?b, ?c)``), arithmetic assignments
+        (``?z = expression``), and/or existing SQUALL sentences, all joined by
+        ``and`` / ``or`` via the ``bool`` template.
+
+        Grammar: ``_rule_start verbn label _WHERE s -> rule_op_predicate_body``
+        """
+        self._clear_scope()
+        items = [a for a in args if a is not None]
+        verb = items[0]
+        label_cps = items[1]
+        body_formula = items[2]
+
+        # Materialise the label tuple to recover head variables.
+        if callable(label_cps) and not isinstance(label_cps, (Symbol, Constant)):
+            head_vars = label_cps(lambda v: v)
+        else:
+            head_vars = label_cps
+
+        if isinstance(head_vars, Symbol):
+            head_vars = [head_vars]
+        elif isinstance(head_vars, tuple):
+            head_vars = list(head_vars)
+        else:
+            head_vars = []
+
+        consequent = verb(*head_vars) if head_vars else verb()
+        return Implication(consequent, body_formula)
+
     def rule_op_prob_agg(self, args):
         """Build a probabilistic aggregation rule.
 
@@ -832,6 +865,61 @@ class SquallTransformer(Transformer):
     def s_be(self, args):
         np = args[0]
         return np(lambda x: Constant(True))
+
+    def s_predicate_call(self, args):
+        """Handle a bare predicate call like ``Predicate (?a, ?b, ?c)`` as a sentence.
+
+        The predicate name is lowercased to match SQUALL's convention
+        (``Joint_probability`` → ``joint_probability``).  Arguments may be
+        labels (``?var``) or literals (``'string'``, ``42``, ``3.14``).
+
+        Grammar: ``identifier '(' (label | literal) (',' (label | literal))* ')'``
+        """
+        token = args[0]
+        name = token.value.lower() if hasattr(token, 'value') else str(token).lower()
+        func = Symbol(name)
+
+        arg_values = []
+        for a in args[1:]:
+            if isinstance(a, Constant):
+                arg_values.append(a)
+            elif callable(a) and not isinstance(a, (Symbol, Constant)):
+                val = a(lambda v: v)
+                if isinstance(val, tuple):
+                    arg_values.extend(val)
+                else:
+                    arg_values.append(val)
+            elif isinstance(a, (Symbol, Constant)):
+                arg_values.append(a)
+            else:
+                arg_values.append(Symbol.fresh())
+
+        if not arg_values:
+            return func()
+        return func(*arg_values)
+
+    def s_predicate_call_upper(self, args):
+        """Handle ``UPPERCASE_NAME (args)`` as a bare predicate call."""
+        return self.s_predicate_call(args)
+
+    def s_label_is_expr(self, args):
+        """Handle ``?var = arithmetic_expression`` as an assignment sentence.
+
+        Produces ``Constant(eq)(label, expression)`` which the chase engine
+        evaluates as a builtin equality — binding ``label`` to the result of
+        ``expression`` when all variables in the expression are ground.
+
+        Grammar: ``label _IS expr{label}``
+        """
+        label_cps = args[0]
+        expr_val = args[1]
+
+        if callable(label_cps) and not isinstance(label_cps, (Symbol, Constant)):
+            label = label_cps(lambda v: v)
+        else:
+            label = label_cps
+
+        return Constant(eq)(label, expr_val)
 
     # ---- Noun Phrases ----
 
