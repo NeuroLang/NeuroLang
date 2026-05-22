@@ -359,7 +359,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 self._handle_equiprobable_choice(parsed)
             elif isinstance(parsed, WeightedChoiceDef):
                 self._handle_weighted_choice(parsed)
-            elif isinstance(parsed, Union):
+            elif isinstance(parsed, logic.Union):
                 for r in parsed.formulas:
                     if isinstance(r, EquiprobableChoiceDef):
                         self._handle_equiprobable_choice(r)
