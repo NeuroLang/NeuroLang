@@ -17,8 +17,7 @@ The full program we will build:
 
 .. code-block:: squall
 
-    # Selected_study — uniform probabilistic choice over studies,
-    # registered via add_uniform_probabilistic_choice_over_set in Python.
+    define as Selected_study as an equiprobable choice over every Study.
     define as Active_region every Region that a Selected_study activates.
 
     define as Region_probability with inferred probability
@@ -81,8 +80,10 @@ NeuroLang with zero post-hoc pandas computation.
 1.2 The Data
 -------------
 
-The SQUALL program works with five relations:
+The SQUALL program works with six relations:
 
+``study(study_id)``
+    The set of all study identifiers.
 ``activates(study_id, region)``
     Activation foci from Neurosynth peaks, mapped to anatomical regions via
     the Julich-Brain atlas.
@@ -93,20 +94,20 @@ The SQUALL program works with five relations:
 ``term(term)``
     The set of all cognitive term names.
 ``selected_study(study_id)``
-    A probabilistic uniform choice over all studies.
+    A probabilistic uniform choice over all studies (defined in SQUALL
+    below, not from Python).
 
 These are registered in Python before running SQUALL (see Appendix A for the
 full API):
 
     >>> from neurolang.frontend import NeurolangPDL
     >>> nl = NeurolangPDL()
+    >>> nl.add_tuple_set(study_ids_df, name="study")
     >>> nl.add_tuple_set(study_activates_df, name="activates")
     >>> nl.add_tuple_set(study_mentions_df, name="mentions")
     >>> nl.add_tuple_set(region_df, name="region")
     >>> nl.add_tuple_set(term_df, name="term")
-    >>> nl.add_uniform_probabilistic_choice_over_set(
-    ...     study_ids_df, name="selected_study"
-    ... )
+    >>> # Selected_study is then defined directly in SQUALL (see below)
 
 A complete working example is in
 ``examples/plot_squall_bayes_factor_decoding.py``.
@@ -841,8 +842,7 @@ Putting it all together:
 
 .. code-block:: squall
 
-    # Selected_study — uniform probabilistic choice over studies,
-    # registered via add_uniform_probabilistic_choice_over_set.
+    define as Selected_study as an equiprobable choice over every Study.
     define as Active_region every Region that a Selected_study activates.
     define as Region_probability with inferred probability every Active_region.
 
@@ -951,7 +951,48 @@ Global aggregation (no ``per`` clause):
 This requires ``collect_all`` to be registered as an aggregation functor in
 the engine's symbol table.
 
-10.2 Program-Level Directives — ``#name(args).``
+10.2 Probabilistic Choice Definitions
+--------------------------------------
+
+A probabilistic choice creates a predicate whose tuples are mutually exclusive
+alternatives, each assigned a probability.  The simplest form creates a
+uniform choice:
+
+.. code-block:: squall
+
+    define as Selected_study as an equiprobable choice over every Study.
+
+This registers ``selected_study`` as a probabilistic choice predicate where
+every study in the ``study`` EDB has equal probability ``1/N``.  The source
+noun phrase (``Study`` in this example) must refer to a single-column EDB
+relation registered in advance with ``add_tuple_set``.
+
+Unlike ``define as`` rules, a choice definition does not produce an IDB
+predicate — it registers a probabilistic choice in the engine's symbol table
+that later probabilistic rules (Part 5) can reference via
+``a Selected_study`` (existential quantifier).
+
+The equivalent Python API is ``add_uniform_probabilistic_choice_over_set``;
+the general ``add_probabilistic_choice_from_tuples`` supports arbitrary
+user-specified probabilities.
+
+**Weighted choice** — the grammar also accepts explicit probability
+expressions:
+
+.. code-block:: squall
+
+    define as Selected_study as a choice over every Study with probability ?p.
+
+    define as Selected_study as a choice over every Study (?s; ?q)
+        with probability (?q / ?total).
+
+Here ``?p`` is a variable bound from a multi-column source, and
+``(?q / ?total)`` is an arithmetic expression evaluated per tuple.
+Support for executing weighted choice definitions directly from
+SQUALL is not yet implemented — use ``add_probabilistic_choice_from_tuples``
+in Python to register choices with non-uniform probabilities.
+
+10.3 Program-Level Directives — ``#name(args).``
 --------------------------------------------------
 
 A SQUALL program may include directive lines of the form ``#name(arg, ...)``
@@ -972,7 +1013,7 @@ Currently supported:
 
 Unknown directives are silently ignored.
 
-10.3 Inline Type Guards
+10.4 Inline Type Guards
 -------------------------
 
 Inside a relative clause, ``where (?i; ?j; ?k) is a Noun`` asserts that the
@@ -985,7 +1026,7 @@ tuple belongs to the relation named by ``Noun``:
 
 The scalar form works too: ``where ?s is a Selected_study``.
 
-10.4 Nested Relative Clauses
+10.5 Nested Relative Clauses
 -----------------------------
 
 Relative clauses can be nested by using an intermediate IDB predicate as the
@@ -1181,6 +1222,25 @@ Probabilistic n-ary rules
     >>> df.columns = ["r", "t", "p"]
     >>> sorted(df.itertuples(index=False, name=None))
     [('A', 'x', 1.0), ('A', 'y', 1.0), ('B', 'x', 1.0)]
+
+
+Probabilistic choice (SQUALL)
+------------------------------
+
+An equiprobable choice can be defined directly in SQUALL, avoiding the
+need for ``add_uniform_probabilistic_choice_over_set`` in Python:
+
+    >>> from neurolang.expressions import Symbol
+    >>>
+    >>> nl = NeurolangPDL()
+    >>> nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    >>> nl.execute_squall_program(
+    ...     "define as Selected_study "
+    ...     "as an equiprobable choice over every Study."
+    ... )
+    >>> sym = Symbol("selected_study")
+    >>> sym in nl.program_ir.pchoice_pred_symbs
+    True
 
 
 Filtering with comparisons
@@ -1381,3 +1441,8 @@ from the codebase that has no SQUALL syntax yet is:
 
 - **Skolem-like functional terms in rule head** — ❌ Not supported.
   Requires IR changes beyond the grammar transformer scope.
+- **Weighted choice execution from SQUALL** — ⏳ Grammar only.
+  ``define as X as a choice over Y with probability P`` parses but the
+  execution path is not yet implemented.  Use
+  ``add_probabilistic_choice_from_tuples`` in Python for arbitrary
+  probabilities.
