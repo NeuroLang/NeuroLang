@@ -7,8 +7,11 @@ import pytest
 from neurolang.utils.cli import (
     _build_parser,
     _execute_program,
+    _execute_squall_program,
     _format_result,
 )
+
+from neurolang.utils import engine_registry
 
 # ---------------------------------------------------------------------------
 # _build_parser
@@ -44,10 +47,12 @@ class TestBuildParser:
         args = parser.parse_args(["--engine", "destrieux"])
         assert args.engine == "destrieux"
 
-    def test_invalid_engine(self):
-        parser = _build_parser()
+    def test_invalid_engine_in_main(self):
+        """Validation now lives in main(), not the parser."""
+        from neurolang.utils.cli import main
+
         with pytest.raises(SystemExit):
-            parser.parse_args(["--engine", "unknown"])
+            main(["--engine", "unknown", "ans(x) :- R(x)"])
 
     def test_format(self):
         parser = _build_parser()
@@ -85,6 +90,45 @@ class TestBuildParser:
         assert args.engine == "destrieux"
         assert args.file == "/tmp/q.dl"
         assert args.list_predicates is True
+
+    def test_list_engines_flag(self):
+        parser = _build_parser()
+        args = parser.parse_args(["--list-engines"])
+        assert args.list_engines is True
+
+    def test_engine_not_rejected_by_parser_anymore(self):
+        """The parser no longer validates engine names; main() does."""
+        parser = _build_parser()
+        args = parser.parse_args(["--engine", "unknown"])
+        assert args.engine == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Engine registry
+# ---------------------------------------------------------------------------
+
+
+class TestEngineRegistry:
+    def test_list_engine_names(self):
+        names = engine_registry.list_engine_names()
+        assert "neurosynth" in names
+        assert "destrieux" in names
+
+    def test_get_engine_config(self):
+        cfg = engine_registry.get_engine_config("neurosynth")
+        assert "python_init" in cfg
+        assert cfg["requires_mni_mask"] is True
+        assert "predicates" in cfg
+        assert "peak_reported" in cfg["predicates"]
+
+    def test_get_predicates(self):
+        preds = engine_registry.get_predicates("destrieux")
+        assert "destrieux" in preds
+        assert preds["destrieux"]["arity"] == 2
+
+    def test_unknown_engine_raises(self):
+        with pytest.raises(ValueError, match="Unknown engine"):
+            engine_registry.get_engine_config("nonexistent")
 
 
 # ---------------------------------------------------------------------------
@@ -300,3 +344,95 @@ class TestExecuteProgram:
         output = _format_result(result, fmt="csv", column_names=col_names)
         lines = output.strip().split("\n")
         assert lines[0] == "v"
+
+
+# ---------------------------------------------------------------------------
+# --squall flag
+# ---------------------------------------------------------------------------
+
+
+class TestSquallFlag:
+    def test_squall_defaults_to_false(self):
+        parser = _build_parser()
+        args = parser.parse_args([])
+        assert args.squall is False
+
+    def test_squall_flag_long(self):
+        parser = _build_parser()
+        args = parser.parse_args(["--squall", "obtain every Person."])
+        assert args.squall is True
+        assert args.query == "obtain every Person."
+
+    def test_squall_flag_short(self):
+        parser = _build_parser()
+        args = parser.parse_args(["-s", "obtain every Person."])
+        assert args.squall is True
+        assert args.query == "obtain every Person."
+
+    def test_squall_with_file(self):
+        parser = _build_parser()
+        args = parser.parse_args(["-s", "-f", "/tmp/q.squall"])
+        assert args.squall is True
+        assert args.file == "/tmp/q.squall"
+
+
+# ---------------------------------------------------------------------------
+# _execute_squall_program
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteSquallProgram:
+    """Integration tests with a real NeurolangPDL engine and squall queries."""
+
+    @pytest.fixture
+    def nl(self):
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        nl.add_tuple_set([("alice",)], name="plays")
+        return nl
+
+    def test_single_obtain_returns_set(self, nl):
+        result = _execute_squall_program(
+            nl, "obtain every Person that plays."
+        )
+        df = result.as_pandas_dataframe()
+        assert len(df) == 1
+        assert df.iloc[0, 0] == "alice"
+
+    def test_rules_only_returns_none(self, nl):
+        result = _execute_squall_program(
+            nl, "define as Active every person that plays."
+        )
+        assert result is None
+
+    def test_multiple_obtains_returns_dict(self, nl):
+        result = _execute_squall_program(
+            nl,
+            "obtain every Person that plays.\n"
+            "obtain every Person.",
+        )
+        assert isinstance(result, dict)
+        assert "obtain_0" in result
+        assert "obtain_1" in result
+
+    def test_single_obtain_formatting_has_columns(self, nl):
+        result = _execute_squall_program(
+            nl, "obtain every Person that plays."
+        )
+        output = _format_result(result)
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        assert isinstance(result, NamedRelationalAlgebraFrozenSet)
+        # Named columns should appear in the table output
+        assert any(
+            c in output for c in result.columns
+        ), f"Column names {result.columns} not found in output:\n{output}"
+
+    def test_squall_format_result_none(self, nl):
+        result = _execute_squall_program(
+            nl, "define as Active every person that plays."
+        )
+        assert _format_result(result) == ""
