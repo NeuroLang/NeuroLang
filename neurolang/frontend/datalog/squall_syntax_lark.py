@@ -96,17 +96,23 @@ class SquallProgram(Union):
     ``Implication``/``Fact`` rules and ``Query`` expressions.  This lets
     ``DatalogProgram.walk`` and ``ExpressionWalker``s handle it just like the
     output of ``standard_syntax``.
+
+    Probabilistic choice definitions (EquiprobableChoiceDef,
+    WeightedChoiceDef) are stored separately in ``self.choice_defs`` — they
+    are not Expression subclasses and cannot be part of the Union.
     """
 
     def __init__(
         self,
         rules,
         queries,
+        choice_defs=None,
         query_names: dict = None,
         commands: list = None,
     ):
-        """Initialise with rules, queries, optional query_names and commands."""
+        """Initialise with rules, queries, optional choice defs, query_names and commands."""
         super().__init__(tuple(rules) + tuple(queries))
+        self.choice_defs = list(choice_defs) if choice_defs is not None else []
         self.query_names = dict(query_names) if query_names is not None else {}
         self.commands = list(commands) if commands is not None else []
 
@@ -115,8 +121,54 @@ class SquallProgram(Union):
         return [f for f in self.formulas if isinstance(f, (Implication, Fact))]
 
     @property
+    def rules_and_choice_defs(self):
+        """Return all rules including probabilistic choice definitions."""
+        return list(self.rules) + list(self.choice_defs)
+
+    @property
     def queries(self):
         return [f for f in self.formulas if isinstance(f, Query)]
+
+
+class EquiprobableChoiceDef:
+    """Marker returned by the SQUALL transformer for ``define as X as an equiprobable choice over Y``.
+
+    Attributes
+    ----------
+    head_symbol : Symbol
+        The head predicate symbol (e.g. ``Symbol('selected_study')``).
+    body_formula : Expression
+        The body formula from parsing the source NP (e.g. ``study(?s)``).
+    head_vars : list
+        The head variable(s) extracted from the source NP.
+    """
+
+    def __init__(self, head_symbol, body_formula, head_vars):
+        self.head_symbol = head_symbol
+        self.body_formula = body_formula
+        self.head_vars = head_vars
+
+
+class WeightedChoiceDef:
+    """Marker returned by the SQUALL transformer for ``define as X as a choice over Y with probability Z``.
+
+    Attributes
+    ----------
+    head_symbol : Symbol
+        The head predicate symbol.
+    body_formula : Expression
+        The body formula from the source NP.
+    head_vars : list
+        The head variable(s).
+    prob_cps : callable
+        CPS noun phrase for the probability expression.
+    """
+
+    def __init__(self, head_symbol, body_formula, head_vars, prob_cps):
+        self.head_symbol = head_symbol
+        self.body_formula = body_formula
+        self.head_vars = head_vars
+        self.prob_cps = prob_cps
 
 
 class _AnonymousVar:
@@ -276,6 +328,7 @@ class SquallTransformer(Transformer):
 
     def squall(self, args):
         rules = []
+        choice_defs = []
         queries = []
         commands = []
         query_names = {}  # index → name for 'obtain … as Name' clauses
@@ -291,18 +344,27 @@ class SquallTransformer(Transformer):
                 queries.append(q)
             elif isinstance(a, tuple) and len(a) == 2 and a[0] == '_command':
                 commands.append(a[1])
+            elif isinstance(a, (EquiprobableChoiceDef, WeightedChoiceDef)):
+                choice_defs.append(a)
             else:
                 rules.append(a)
 
         if queries or commands:
             return SquallProgram(
-                rules=rules, queries=queries, query_names=query_names,
-                commands=commands,
+                rules=rules, queries=queries, choice_defs=choice_defs,
+                query_names=query_names, commands=commands,
             )
 
         # Backward compat: no queries → return Union or single rule
-        if len(rules) == 1:
+        if len(rules) == 0 and len(choice_defs) == 1:
+            return choice_defs[0]
+        if len(rules) == 1 and not choice_defs:
             return rules[0]
+        if choice_defs:
+            # Mix of rules and choice defs — can't represent as Union.
+            return SquallProgram(
+                rules=rules, queries=[], choice_defs=choice_defs,
+            )
         return Union(tuple(rules))
 
     def sentence(self, args):
@@ -512,6 +574,52 @@ class SquallTransformer(Transformer):
 
         head = verb(*per_vars) if per_vars else verb()
         return Implication(ProbabilisticFact(agg_expr, head), bare_body)
+
+    def rule_equiprobable_choice(self, args):
+        """Handle ``define as X as an equiprobable choice over every Y``.
+
+        Returns an ``EquiprobableChoiceDef`` marker that
+        ``execute_squall_program`` resolves by looking up the source EDB set
+        and calling ``add_probabilistic_choice_from_tuples`` with uniform
+        probabilities.
+        """
+        self._clear_scope()
+        items = [a for a in args if a is not None]
+        head_sym = items[0]
+        body_result = items[1]
+
+        if isinstance(body_result, tuple) and body_result[0] == '_rule_body':
+            head_vars, body_formula = body_result[1]
+        else:
+            raise self._make_error(
+                "Expected a noun phrase after 'over' in equiprobable choice "
+                "definition."
+            )
+
+        return EquiprobableChoiceDef(head_sym, body_formula, head_vars)
+
+    def rule_weighted_choice(self, args):
+        """Handle ``define as X as a choice over Y with probability Z``.
+
+        Returns a ``WeightedChoiceDef`` marker that
+        ``execute_squall_program`` resolves by evaluating the probability
+        expression per tuple and calling ``add_probabilistic_choice_from_tuples``.
+        """
+        self._clear_scope()
+        items = [a for a in args if a is not None]
+        head_sym = items[0]
+        body_result = items[1]
+        prob_cps = items[2]
+
+        if isinstance(body_result, tuple) and body_result[0] == '_rule_body':
+            head_vars, body_formula = body_result[1]
+        else:
+            raise self._make_error(
+                "Expected a noun phrase after 'over' in weighted choice "
+                "definition."
+            )
+
+        return WeightedChoiceDef(head_sym, body_formula, head_vars, prob_cps)
 
     def rule_opnn(self, args):
         """Build an n-ary Datalog rule from ``define as verbn rule_body1 ops``.
@@ -2439,14 +2547,28 @@ def parser(code, local_vars=None, global_vars=None):
 
     simplifier = _SquallSimplifier()
     if isinstance(result, SquallProgram):
+        simplified_rules = []
+        for r in result.rules:
+            simplified_rules.append(simplifier.walk(r))
+        # Choice defs are markers, already stored in result.choice_defs.
         result = SquallProgram(
-            rules=[simplifier.walk(r) for r in result.rules],
+            rules=simplified_rules,
             queries=result.queries,
+            choice_defs=result.choice_defs,
             query_names=result.query_names,
             commands=result.commands,
         )
     elif isinstance(result, Union):
-        result = Union(tuple(simplifier.walk(f) for f in result.formulas))
+        simplified = []
+        for f in result.formulas:
+            if isinstance(f, (EquiprobableChoiceDef, WeightedChoiceDef)):
+                simplified.append(f)
+            else:
+                simplified.append(simplifier.walk(f))
+        result = Union(tuple(simplified))
     else:
-        result = simplifier.walk(result)
+        if isinstance(result, (EquiprobableChoiceDef, WeightedChoiceDef)):
+            pass  # Choice defs are markers, not walkable expressions.
+        else:
+            result = simplifier.walk(result)
     return result

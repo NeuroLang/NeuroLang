@@ -17,7 +17,12 @@ from ....logic import (
     UniversalPredicate
 )
 from ..squall import LogicSimplifier
-from ..squall_syntax_lark import parser, SquallProgram
+from ..squall_syntax_lark import (
+    parser,
+    EquiprobableChoiceDef,
+    SquallProgram,
+    WeightedChoiceDef,
+)
 from ...probabilistic_frontend import RegionFrontendCPLogicSolver, Chase
 
 
@@ -1507,3 +1512,67 @@ def test_squall_where_label_is_expr_does_not_conflict_with_where_s():
     assert any(a.args[1] == Constant("target") for a in eq_atoms), (
         f"Expected 'target' constant in equality, got {[str(a) for a in eq_atoms]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Probabilistic choice syntax
+# ---------------------------------------------------------------------------
+
+def test_parse_equiprobable_choice_basic():
+    code = (
+        "define as Selected_study as an equiprobable choice over "
+        "every Study."
+    )
+    result = parser(code)
+    assert isinstance(result, EquiprobableChoiceDef)
+    assert result.head_symbol.name == "selected_study"
+    # body_formula should be a single predicate application: study(?s)
+    assert isinstance(result.body_formula, FunctionApplication)
+    assert result.body_formula.functor.name == "study"
+
+
+def test_parse_equiprobable_choice_filtered():
+    code = (
+        "define as Selected_study as an equiprobable choice over "
+        "every Study that has_data."
+    )
+    result = parser(code)
+    assert isinstance(result, EquiprobableChoiceDef)
+    # Filtered source produces a Conjunction
+    assert isinstance(result.body_formula, Conjunction)
+    assert len(result.body_formula.formulas) == 2
+
+
+def test_parse_equiprobable_choice_in_squall_program():
+    code = (
+        "define as Selected_study as an equiprobable choice over "
+        "every Study. "
+        "obtain every Selected_study as Result."
+    )
+    result = parser(code)
+    assert isinstance(result, SquallProgram)
+    assert len(result.choice_defs) == 1
+    assert isinstance(result.choice_defs[0], EquiprobableChoiceDef)
+    assert result.choice_defs[0].head_symbol.name == "selected_study"
+
+
+def test_parse_weighted_choice_basic():
+    code = (
+        "define as Selected_study as a choice over "
+        "every Study (?s; ?q) with probability (?q / ?total)."
+    )
+    result = parser(code)
+    assert isinstance(result, WeightedChoiceDef)
+    assert result.head_symbol.name == "selected_study"
+    assert isinstance(result.body_formula, FunctionApplication)
+    assert result.body_formula.functor.name == "study"
+
+
+def test_parse_weighted_choice_simple_prob():
+    code = (
+        "define as Selected_study as a choice over "
+        "every Study with probability ?p."
+    )
+    result = parser(code)
+    assert isinstance(result, WeightedChoiceDef)
+    assert result.head_symbol.name == "selected_study"
