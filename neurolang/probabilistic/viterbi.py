@@ -17,13 +17,12 @@ def compute_backpointers(
     cpl_program,
     prev_symbol,
     transition_symbol,
-    result_symbol=None,
 ):
     """Build and solve a backpointer query for a transition step.
 
-    Constructs *bp(z, y) :- prev(y), trans(y, z)*, solves with
-    MaxProductSemiring, and returns one row per result state with
-    the argmax previous state.
+    Walks *bp(z, y) :- prev(y), trans(y, z)* into the program then
+    solves it with MaxProductSemiring, returning one row per result
+    state with the argmax previous state.
     """
     z = Symbol("z")
     y = Symbol("y")
