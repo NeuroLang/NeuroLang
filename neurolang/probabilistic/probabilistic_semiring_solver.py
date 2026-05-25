@@ -26,6 +26,7 @@ from .probabilistic_ra_utils import (
     ProbabilisticChoiceSet,
     ProbabilisticFactSet
 )
+from .semiring import ProbabilitySemiring
 
 
 class ProbSemiringSolverMixin(
@@ -33,7 +34,8 @@ class ProbSemiringSolverMixin(
     RelationalAlgebraProvenanceCountingSolverMixin,
     PatternWalker
 ):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, semiring=None, **kwargs):
+        self.semiring = semiring if semiring is not None else ProbabilitySemiring()
         super().__init__(*args, **kwargs)
         self.translated_probfact_sets = dict()
 
