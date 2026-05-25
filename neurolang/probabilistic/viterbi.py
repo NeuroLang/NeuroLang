@@ -38,11 +38,14 @@ def compute_backpointers(
         query, cpl_program, semiring=MaxProductSemiring()
     )
 
+    columns = raw.relation.value.columns
+    z_idx = columns.index("z")
+    y_idx = columns.index("y")
     best = {}
     for row in raw.relation.value:
         score = float(row[0])
-        state = str(row[1])
-        prev = str(row[2]) if len(row) > 2 else None
+        state = str(row[z_idx])
+        prev = str(row[y_idx])
         if state not in best or score > best[state][0]:
             best[state] = (score, prev)
 
