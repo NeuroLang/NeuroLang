@@ -131,7 +131,9 @@ fact : constant_predicate
 constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
 
-?literal : number | text
+?literal : number | text | tuple_literal
+
+tuple_literal : "(" argument ("," argument)+ ")"
 
 ext_identifier : "@" identifier
 identifier : cmd_identifier | identifier_regexp
@@ -526,6 +528,15 @@ class DatalogTransformer(Transformer):
 
     def text(self, ast):
         return Constant((ast[0].replace("'", "")).replace('"', ''))
+
+    def tuple_literal(self, ast):
+        from neurolang.expressions import Constant as ConstantExpr
+        values = tuple(a for a in ast if not isinstance(a, str))
+        result = ConstantExpr(values)
+        for v in values:
+            if isinstance(v, Symbol):
+                result._symbols.add(v)
+        return result
 
     def pos_int(self, ast):
         return Constant(int((ast[0]).value))
