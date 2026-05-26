@@ -7,7 +7,9 @@ define:
 * optional **Datalog initialisation code** (``datalog_init``) evaluated
   after the Python script;
 * optional **CSV/TSV relations** (``relations``) loaded as extensional
-  predicates after the Datalog init.
+  predicates after the Datalog init.  Each relation entry may carry
+  optional ``name`` and ``description`` fields for predicate metadata
+  used by the ``--list-predicates`` command.
 
 Usage
 -----
@@ -73,10 +75,24 @@ def get_engine_config(name: str) -> Dict[str, Any]:
 def get_predicates(name: str) -> Dict[str, Dict[str, Any]]:
     """Return the predicate metadata dict for an engine from its YAML config.
 
-    Returns an empty dict if the engine has no predicates declared.
+    Combines the ``predicates`` section with metadata harvested from the
+    ``relations`` section (each relation entry may carry ``name`` and
+    ``description`` fields).
     """
     cfg = get_engine_config(name)
-    return dict(cfg.get("predicates", {}))
+    predicates = dict(cfg.get("predicates", {}))
+
+    for rel_key, rel_cfg in cfg.get("relations", {}).items():
+        if isinstance(rel_cfg, str):
+            continue
+        name = rel_cfg.get("name", rel_key)
+        desc = rel_cfg.get("description", "")
+        if name not in predicates:
+            predicates[name] = {"description": desc, "columns": []}
+        elif desc and not predicates[name].get("description"):
+            predicates[name]["description"] = desc
+
+    return predicates
 
 
 def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:

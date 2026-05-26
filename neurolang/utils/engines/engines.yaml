@@ -9,6 +9,10 @@ engines:
     datalog_init: |
       study_with_peaks(S) :- peak_reported(I, J, K, S)
       origin_peak(I, J, K, S) :- peak_reported(I, J, K, S), I == 0
+    # relations:
+    #   study:
+    #     file: studies.csv
+    #     description: "All study identifiers"
     predicates:
       peak_reported:
         arity: 4
