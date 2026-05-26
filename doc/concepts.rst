@@ -156,6 +156,14 @@ builds an engine, it runs three phases in order:
          my_table: "my_engine/data.csv"
          extra_refs: "shared/references.tsv"
 
+   For richer metadata that appears in ``--list-predicates`` output, use a
+   dict with an optional ``description`` field::
+
+       relations:
+         my_table:
+           file: "my_engine/data.csv"
+           description: "Experiment metadata loaded from CSV"
+
    Supported formats: ``.csv``, ``.tsv``, ``.csv.gz``, ``.tsv.gz``.  The
    file is read with ``pandas.read_csv`` and registered via
    :meth:`~neurolang.frontend.query_resolution_datalog.QueryBuilderDatalog.add_tuple_set`.

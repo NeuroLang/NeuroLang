@@ -36,6 +36,8 @@ Unreleased
 * **CSV/TSV relations** — engines can load tabular data files as extensional
   predicates with the ``relations`` YAML field.  Supported formats:
   ``.csv``, ``.tsv``, ``.csv.gz``, ``.tsv.gz``.
+  Relation entries may include an optional ``description`` field for
+  predicate metadata shown by ``--list-predicates``.
 
 
 v0.0.1 (Alpha)
