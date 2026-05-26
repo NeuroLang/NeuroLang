@@ -169,8 +169,21 @@ builds an engine, it runs up to seven phases in order:
            threshold: 0.5
            predicate_name: difumo_64
 
+   For probabilistic atlases (``difumo``) a second predicate is registered
+   automatically — ``{name}_prob(component, i, j, k, prob)`` — with the raw
+   probability value at each voxel for each component (filtered by
+   ``prob_threshold``, default 0.01)::
+
+       atlases:
+         difumo:
+           dimension: 64
+           threshold: 0.5
+           prob_threshold: 0.01
+           predicate_name: difumo_64
+           prob_predicate_name: difumo_64_prob
+
    Supported atlases: ``destrieux`` (deterministic), ``schaefer``
-   (deterministic), ``difumo`` (probabilistic, thresholded).
+   (deterministic), ``difumo`` (probabilistic).
 
 #. **Datalog init** (``datalog_init``) — an optional YAML multiline string
    of Datalog rules.  These are evaluated after the atlases so they can

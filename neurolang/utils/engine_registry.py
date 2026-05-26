@@ -171,6 +171,20 @@ def get_predicates(name: str) -> Dict[str, Dict[str, Any]]:
             predicates[pred_name] = {"description": desc, "columns": []}
         elif not predicates[pred_name].get("description"):
             predicates[pred_name]["description"] = desc
+        # Probabilistic atlases also register a probability predicate
+        if _ATLAS_REGISTRY.get(atl_name, {}).get("probabilistic"):
+            prob_name = atl_params.get(
+                "prob_predicate_name", f"{pred_name}_prob"
+            )
+            prob_desc = atl_params.get(
+                "prob_description",
+                f"Raw probabilities for {atl_name} atlas components",
+            )
+            if prob_name not in predicates:
+                predicates[prob_name] = {
+                    "description": prob_desc,
+                    "columns": [],
+                }
 
     return predicates
 
@@ -258,8 +272,13 @@ def _load_probabilistic_atlas(
 ) -> None:
     """Load a probabilistic atlas (e.g. DiFuMo) as engine predicates.
 
-    Each probability map is thresholded (default 0.5) to create a binary
-    :class:`~neurolang.regions.ExplicitVBR`.
+    Registers two predicates:
+
+    * ``{predicate_name}(component, region)`` — binary regions obtained by
+      thresholding each probability map (default threshold 0.5).
+    * ``{prob_predicate_name}(component, i, j, k, prob)`` — the raw
+      probability value at each voxel for each component (filtered by
+      ``prob_threshold``, default 0.01, to keep the set size manageable).
     """
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {k: v for k, v in params.items() if k != "predicate_name"}
@@ -272,9 +291,14 @@ def _load_probabilistic_atlas(
     data = img.get_fdata()
     labels = list(atl_data["labels"])
     threshold = float(params.get("threshold", 0.5))
+    prob_threshold = float(params.get("prob_threshold", 0.01))
     pred_name = params.get("predicate_name", atlas_name)
+    prob_pred_name = params.get(
+        "prob_predicate_name", f"{pred_name}_prob"
+    )
 
-    rows = []
+    # ── Binary region predicate (thresholded) ──
+    region_rows = []
     for i in range(data.shape[-1]):
         mask = data[..., i] > threshold
         if not mask.any():
@@ -282,9 +306,24 @@ def _load_probabilistic_atlas(
         voxels = np.argwhere(mask)
         region = ExplicitVBR(voxels, img.affine, image_dim=img.shape[:3])
         label = _label_name(labels[i] if i < len(labels) else f"component_{i}")
-        rows.append((label, region))
+        region_rows.append((label, region))
 
-    nl.add_tuple_set(rows, name=pred_name)
+    nl.add_tuple_set(region_rows, name=pred_name)
+
+    # ── Probability predicate (component, i, j, k, prob) ──
+    prob_rows = []
+    for i in range(data.shape[-1]):
+        prob_map = data[..., i]
+        mask = prob_map > prob_threshold
+        if not mask.any():
+            continue
+        indices = np.argwhere(mask)
+        values = prob_map[mask]
+        label = _label_name(labels[i] if i < len(labels) else f"component_{i}")
+        for (j_idx, k_idx, l_idx), prob in zip(indices, values):
+            prob_rows.append((label, int(j_idx), int(k_idx), int(l_idx), float(prob)))
+
+    nl.add_tuple_set(prob_rows, name=prob_pred_name)
 
 
 def _load_atlas(
