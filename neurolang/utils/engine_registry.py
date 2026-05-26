@@ -65,7 +65,13 @@ _BUILTIN_SYMBOLS: Dict[str, object] = {
 
 
 def _download_url(url: str, dest: Path) -> Path:
-    """Download *url* to *dest* (a file path) and return *dest*."""
+    """Download *url* to *dest* (a file path) and return *dest*.
+
+    If *dest* already exists the download is skipped (simple file-level
+    cache based on presence, not checksums).
+    """
+    if dest.exists():
+        return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     urllib.request.urlretrieve(url, dest)
     return dest
