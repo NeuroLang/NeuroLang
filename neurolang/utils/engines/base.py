@@ -21,9 +21,6 @@ def init_base_engine(
     mask :
         MNI template image for voxel-space coordinate mapping.
     """
-    nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
-    nl.add_symbol(np.log, name="log", type_=Callable[[float], float])
-
     @nl.add_symbol
     def agg_count(i: Iterable) -> np.int64:
         return np.int64(len(i))
@@ -45,10 +42,6 @@ def init_base_engine(
         return ExplicitVBROverlay(
             voxels, mask.affine, p, image_dim=mask.shape
         )
-
-    @nl.add_symbol
-    def startswith(prefix: str, s: str) -> bool:
-        return s.startswith(prefix)
 
     @nl.add_symbol
     def principal_direction(

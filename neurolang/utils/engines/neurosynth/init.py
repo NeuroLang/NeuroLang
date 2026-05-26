@@ -78,9 +78,6 @@ def init_engine(
     nl.add_tuple_set(peak_data, name="peak_reported")
     nl.add_tuple_set(study_ids, name="study")
     nl.add_tuple_set(term_data, name="term_in_study_tfidf")
-    nl.add_uniform_probabilistic_choice_over_set(
-        study_ids, name="selected_study"
-    )
     nl.add_tuple_set(
         np.hstack(
             np.meshgrid(

@@ -37,7 +37,26 @@ Unreleased
   predicates with the ``relations`` YAML field.  Supported formats:
   ``.csv``, ``.tsv``, ``.csv.gz``, ``.tsv.gz``.
   Relation entries may include an optional ``description`` field for
-  predicate metadata shown by ``--list-predicates``.
+  predicate metadata shown by ``--list-predicates``.  The ``file`` value
+  may be a URL for automatic download.
+
+* **Builtins** — engines can declare ``builtins: [exp, log, startswith]``
+  in YAML to register known functions as callable symbols without Python.
+
+* **Downloads** — the ``downloads`` section fetches files from URLs
+  (with optional archive extraction) before other init phases.
+
+* **Probabilistic choices** — engines can declare uniform probabilistic
+  choices declaratively with ``probabilistic_choice:`` instead of calling
+  ``add_uniform_probabilistic_choice_over_set`` in Python.
+
+* **Ontology loading** — the ``ontologies`` section loads OWL/RDF
+  ontologies from URLs or local paths.
+
+* **Declarative migration** — ``exp``, ``log``, ``startswith`` symbols
+  now come from YAML ``builtins`` rather than ``base.py``; the
+  ``selected_study`` choice for the neurosynth engine is now declared
+  in the engine YAML instead of Python init code.
 
 
 v0.0.1 (Alpha)

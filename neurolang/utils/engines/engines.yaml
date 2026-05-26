@@ -5,14 +5,15 @@ engines:
       reported activation peaks, TF-IDF term frequencies, and a
       probabilistic choice over studies.
     requires_mni_mask: true
+    builtins: [exp, log, startswith]
     python_init: "neurolang.utils.engines.neurosynth.init"
     datalog_init: |
       study_with_peaks(S) :- peak_reported(I, J, K, S)
       origin_peak(I, J, K, S) :- peak_reported(I, J, K, S), I == 0
-    # relations:
-    #   study:
-    #     file: studies.csv
-    #     description: "All study identifiers"
+    probabilistic_choice:
+      selected_study:
+        source: study
+        description: "Uniform probabilistic choice over studies"
     predicates:
       peak_reported:
         arity: 4
@@ -41,6 +42,7 @@ engines:
       Destrieux cortical parcellation, each mapped to a volumetric
       brain region (ExplicitVBR).
     requires_mni_mask: true
+    builtins: [exp, log, startswith]
     python_init: "neurolang.utils.engines.destrieux.init"
     datalog_init: |
       left_region(N, R) :- destrieux(N, R), startswith('lh', N)

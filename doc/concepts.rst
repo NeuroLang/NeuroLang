@@ -133,11 +133,24 @@ module handles YAML loading, MNI mask retrieval, and delegating to the
 engine's init script.
 
 **Init phases.**  When :func:`~neurolang.utils.engine_registry.build_engine`
-builds an engine, it runs three phases in order:
+builds an engine, it runs up to seven phases in order:
+
+#. **Builtins** (``builtins``) — registers known functions (``exp``,
+   ``log``, ``startswith``) as callable symbols.  Simple list in YAML::
+
+       builtins: [exp, log, startswith]
 
 #. **Python init** (``python_init``) — imports the module and calls
    ``init_engine(nl, mask, data_dir)``.  Use this for downloading data,
    registering complex symbols, or loading neuroimaging atlases.
+
+#. **Downloads** (``downloads``) — fetches files from URLs before the
+   other phases.  Supports archive extraction::
+
+       downloads:
+         - url: "https://example.com/data.tar.gz"
+           dest: my_engine/
+           extract: true
 
 #. **Datalog init** (``datalog_init``) — an optional YAML multiline string
    of Datalog rules.  These are evaluated after the Python init so they can
@@ -150,7 +163,8 @@ builds an engine, it runs three phases in order:
 
 #. **Relations** (``relations``) — loads CSV/TSV files as extensional
    predicates.  Each entry maps a relation name to a file path relative to
-   the :file:`engines/` directory::
+   the :file:`engines/` directory.  The ``file`` value may be a URL for
+   automatic download::
 
        relations:
          my_table: "my_engine/data.csv"
@@ -161,7 +175,7 @@ builds an engine, it runs three phases in order:
 
        relations:
          my_table:
-           file: "my_engine/data.csv"
+           file: "https://example.com/data.csv"
            description: "Experiment metadata loaded from CSV"
 
    Supported formats: ``.csv``, ``.tsv``, ``.csv.gz``, ``.tsv.gz``.  The
@@ -170,7 +184,21 @@ builds an engine, it runs three phases in order:
    Because relations are loaded after the Datalog init, your derived rules
    can already reference them.
 
-All three phases are optional — include only what your engine needs.
+#. **Probabilistic choices** (``probabilistic_choice``) — declares uniform
+   probabilistic choices over existing predicates::
+
+       probabilistic_choice:
+         selected_study:
+           source: study
+           description: "Uniform choice over studies"
+
+#. **Ontologies** (``ontologies``) — loads OWL/RDF ontologies from URLs
+   or local paths::
+
+       ontologies:
+         - url: "https://example.com/ontology.owl"
+
+All phases are optional — include only what your engine needs.
 
 To add a new engine, create a YAML entry and a corresponding
 :mod:`init` module under :file:`neurolang/utils/engines/`.  See
