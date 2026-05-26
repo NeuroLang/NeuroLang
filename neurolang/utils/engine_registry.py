@@ -35,9 +35,6 @@ Usage
 
 from __future__ import annotations
 
-import shutil
-import tarfile
-import urllib.request
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -46,11 +43,17 @@ import numpy as np
 import yaml
 from nilearn import datasets, image
 
+try:
+    from nilearn.datasets.utils import _fetch_files
+except ImportError:
+    from nilearn.datasets._utils import fetch_files as _fetch_files
+
 if TYPE_CHECKING:
     from neurolang.frontend import NeurolangPDL
 
 _ENGINES_DIR = Path(__file__).parent / "engines"
 _ENGINES_YAML = _ENGINES_DIR / "engines.yaml"
+
 
 def _builtin_startswith(prefix: str, s: str) -> bool:
     """Return True if *s* starts with *prefix*."""
@@ -64,64 +67,40 @@ _BUILTIN_SYMBOLS: Dict[str, object] = {
 }
 
 
-def _download_url(url: str, dest: Path) -> Path:
-    """Download *url* to *dest* (a file path) and return *dest*.
-
-    If *dest* already exists the download is skipped (simple file-level
-    cache based on presence, not checksums).
-    """
-    if dest.exists():
-        return dest
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(url, dest)
-    return dest
-
-
-def _extract_archive(path: Path, dest_dir: Path) -> None:
-    """Extract a tar or tar.gz archive into *dest_dir*."""
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    if path.name.endswith((".tar.gz", ".tgz")):
-        mode = "r:gz"
-    elif path.name.endswith(".tar"):
-        mode = "r:"
-    else:
-        shutil.unpack_archive(str(path), str(dest_dir))
-        return
-    with tarfile.open(path, mode) as tf:
-        tf.extractall(path=dest_dir)
-
-
 def _resolve_relation_file(
     rel_cfg: dict, engine_name: str, data_dir: Path
 ) -> Path:
     """Return a local path for a relation entry's ``file`` field.
 
-    If the ``file`` value is a URL it is downloaded to
-    ``{data_dir}/{engine_name}/`` first.  If ``extract: true`` and the
-    downloaded file is an archive, it is extracted and *extract* (or the
-    first member) is used.
+    If the ``file`` value is a URL it is downloaded via nilearn's
+    ``_fetch_files`` (with caching and optional archive extraction)
+    to ``{data_dir}/{engine_name}/``.
     """
     raw = rel_cfg["file"]
     extract_member = rel_cfg.get("extract")
 
     if raw.startswith(("http://", "https://")):
-        local = data_dir / engine_name / Path(raw).name
-        _download_url(raw, local)
-        resolved = local
+        dl_dir = str(data_dir / engine_name)
+        name = Path(raw).name
+        opts = {}
+        if extract_member:
+            opts["uncompress"] = True
+            # If extract specifies a member name, use that as the target file
+            if isinstance(extract_member, list):
+                name = extract_member[0]
+            elif extract_member is not True:
+                name = extract_member
+        result = _fetch_files(dl_dir, [(name, raw, opts)], verbose=0)
+        return Path(result[0])
     else:
         resolved = _ENGINES_DIR / raw
-
-    if extract_member:
-        extracted_dir = resolved.parent / resolved.stem
-        _extract_archive(resolved, extracted_dir)
-        if isinstance(extract_member, list):
-            return extracted_dir / extract_member[0]
-        members = sorted(extracted_dir.iterdir())
-        if members:
-            return members[0]
-        return extracted_dir
-
-    return resolved
+        if extract_member:
+            dl_dir = str(resolved.parent)
+            name = resolved.name
+            opts = {"uncompress": True}
+            result = _fetch_files(dl_dir, [(name, str(resolved), opts)], verbose=0)
+            return Path(result[0])
+        return resolved
 
 
 def _load_config() -> dict:
@@ -252,12 +231,20 @@ def build_engine(
     # ── Phase 2: downloads ─────────────────────────────────────────
     for dl_entry in cfg.get("downloads", []):
         url = dl_entry["url"]
-        dl_dest = data_dir / dl_entry.get("dest", name)
-        dl_dest.mkdir(parents=True, exist_ok=True)
-        local = dl_dest / Path(url).name
-        _download_url(url, local)
-        if dl_entry.get("extract", False):
-            _extract_archive(local, dl_dest)
+        dl_dest = str(data_dir / dl_entry.get("dest", name))
+        extract_members = dl_entry.get("extract", [])
+        if isinstance(extract_members, bool):
+            # extract: true → download the archive and extract all
+            archive_name = Path(url).name
+            _fetch_files(dl_dest, [(archive_name, url, {"uncompress": True})], verbose=1)
+        elif extract_members:
+            # extract: [member1, member2] → download archive, extract specific files
+            files = [(m, url, {"uncompress": True}) for m in extract_members]
+            _fetch_files(dl_dest, files, verbose=1)
+        else:
+            # plain file download
+            file_name = Path(url).name
+            _fetch_files(dl_dest, [(file_name, url, {})], verbose=1)
 
     # ── Phase 3: Datalog init ──────────────────────────────────────
     datalog_init = cfg.get("datalog_init")
@@ -304,10 +291,9 @@ def build_engine(
     # ── Phase 6: ontologies ────────────────────────────────────────
     for onto_cfg in cfg.get("ontologies", []):
         url = onto_cfg["url"]
-        onto_path = _download_url(
-            url,
-            data_dir / name / Path(url).name,
-        )
-        nl.load_ontology(str(onto_path))
+        onto_dir = str(data_dir / name)
+        onto_file = Path(url).name
+        result = _fetch_files(onto_dir, [(onto_file, url, {})], verbose=1)
+        nl.load_ontology(result[0])
 
     return nl
