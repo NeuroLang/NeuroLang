@@ -12,6 +12,21 @@ define:
   used by the ``--list-predicates`` command.  The ``file`` value may be
   a URL (``http://`` / ``https://``) for automatic download;
 * ``downloads`` — files to fetch (with optional archive extraction);
+* ``templates`` — neuroimaging templates (brain masks, anatomical
+  templates) downloaded via **nilearn** or **TemplateFlow** (if the
+  ``templateflow`` package is installed).  Each template may optionally
+  register a ``voxel(i, j, k)`` predicate from its non-zero mask::
+
+      templates:
+        mni_brain:
+          source: nilearn
+          variant: brain_mask
+          predicate: voxel
+        t1_ref:
+          source: templateflow
+          template: MNI152NLin2009cAsym
+          resolution: 1
+
 * ``ontologies`` — OWL/RDF ontologies to load from URLs or local paths;
 * ``builtins`` — list of known function names (``exp``, ``log``,
   ``startswith``, etc.) to register as callable symbols;
@@ -27,14 +42,26 @@ Usage
 -----
 ::
 
+    from pathlib import Path
     from neurolang.utils.engine_registry import (
         build_engine,
+        show_engines,
         list_engine_names,
         get_engine_config,
     )
 
+    # Load engine from the built-in YAML
     nl = build_engine("neurosynth", data_dir=Path("data"))
-    for name in list_engine_names():
+
+    # Load engine from a custom YAML file
+    nl = build_engine("my_engine", yaml_path=Path("my_engines.yaml"),
+                      data_dir=Path("data"))
+
+    # Print available engines with descriptions
+    show_engines()
+
+    # List engine names from a custom YAML
+    for name in list_engine_names(yaml_path=Path("my_engines.yaml")):
         print(name)
 """
 
@@ -72,14 +99,50 @@ _BUILTIN_SYMBOLS: Dict[str, object] = {
 }
 
 
+def _merge_predicate_metadata(
+    predicates: Dict[str, Dict[str, Any]],
+    name: str,
+    description: str = "",
+    default_desc: str = "",
+) -> None:
+    """Insert or update a predicate entry's description in *predicates*.
+
+    If *name* is not yet in *predicates*, a new ``{"description": ...,
+    "columns": []}`` entry is added.  If it already exists and has no
+    description, *description* (falling back to *default_desc*) is set.
+    """
+    if name not in predicates:
+        predicates[name] = {
+            "description": description or default_desc,
+            "columns": [],
+        }
+    elif description and not predicates[name].get("description"):
+        predicates[name]["description"] = description
+
+
+def _load_yaml_config(yaml_path: Optional[Path] = None) -> dict:
+    """Load engine YAML from *yaml_path* or the built-in engines file."""
+    if yaml_path is not None:
+        with open(yaml_path) as f:
+            return yaml.safe_load(f)
+    with open(_ENGINES_YAML) as f:
+        return yaml.safe_load(f)
+
+
 def _resolve_relation_file(
-    rel_cfg: dict, engine_name: str, data_dir: Path
+    rel_cfg: dict,
+    engine_name: str,
+    data_dir: Path,
+    base_dir: Optional[Path] = None,
 ) -> Path:
     """Return a local path for a relation entry's ``file`` field.
 
     If the ``file`` value is a URL it is downloaded via nilearn's
     ``_fetch_files`` (with caching and optional archive extraction)
     to ``{data_dir}/{engine_name}/``.
+
+    Local paths are resolved relative to *base_dir* (defaults to the
+    built-in ``engines/`` directory).
     """
     raw = rel_cfg["file"]
     extract_member = rel_cfg.get("extract")
@@ -98,7 +161,7 @@ def _resolve_relation_file(
         result = _fetch_files(dl_dir, [(name, raw, opts)], verbose=0)
         return Path(result[0])
     else:
-        resolved = _ENGINES_DIR / raw
+        resolved = (base_dir or _ENGINES_DIR) / raw
         if extract_member:
             dl_dir = str(resolved.parent)
             name = resolved.name
@@ -108,26 +171,38 @@ def _resolve_relation_file(
         return resolved
 
 
-def _load_config() -> dict:
-    with open(_ENGINES_YAML) as f:
-        return yaml.safe_load(f)
+def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
+    """Return the names of all registered engines.
 
-
-def list_engine_names() -> List[str]:
-    """Return the names of all registered engines."""
-    config = _load_config()
+    Parameters
+    ----------
+    yaml_path :
+        Path to an engine YAML file.  Defaults to the built-in
+        ``engines/engines.yaml``.
+    """
+    config = _load_yaml_config(yaml_path)
     return sorted(config.get("engines", {}).keys())
 
 
-def get_engine_config(name: str) -> Dict[str, Any]:
+def get_engine_config(
+    name: str, yaml_path: Optional[Path] = None
+) -> Dict[str, Any]:
     """Return the YAML configuration dict for a single engine.
+
+    Parameters
+    ----------
+    name :
+        Engine name (key in the YAML ``engines`` dict).
+    yaml_path :
+        Path to an engine YAML file.  Defaults to the built-in
+        ``engines/engines.yaml``.
 
     Raises
     ------
     ValueError
         If *name* is not a registered engine.
     """
-    config = _load_config()
+    config = _load_yaml_config(yaml_path)
     engines = config.get("engines", {})
     if name not in engines:
         available = ", ".join(engines.keys())
@@ -137,40 +212,70 @@ def get_engine_config(name: str) -> Dict[str, Any]:
     return dict(engines[name])
 
 
-def get_predicates(name: str) -> Dict[str, Dict[str, Any]]:
+def show_engines(yaml_path: Optional[Path] = None) -> None:
+    """Print a formatted description of all available engines.
+
+    Parameters
+    ----------
+    yaml_path :
+        Path to an engine YAML file.  Defaults to the built-in
+        ``engines/engines.yaml``.
+    """
+    config = _load_yaml_config(yaml_path)
+    engines = config.get("engines", {})
+    print("Available engines:\n")
+    for name in sorted(engines):
+        desc = engines[name].get("description", "").replace("\n", " ").strip()
+        print(f"  {name}")
+        if desc:
+            print(f"      {desc}")
+        print()
+
+
+def get_predicates(
+    name: str, yaml_path: Optional[Path] = None
+) -> Dict[str, Dict[str, Any]]:
     """Return the predicate metadata dict for an engine from its YAML config.
 
     Combines the ``predicates`` section with metadata harvested from the
     ``relations`` section (each relation entry may carry ``name`` and
     ``description`` fields).
+
+    Parameters
+    ----------
+    name :
+        Engine name.
+    yaml_path :
+        Path to an engine YAML file.  Defaults to the built-in
+        ``engines/engines.yaml``.
     """
-    cfg = get_engine_config(name)
+    cfg = get_engine_config(name, yaml_path)
     predicates = dict(cfg.get("predicates", {}))
 
     for rel_key, rel_cfg in cfg.get("relations", {}).items():
         if isinstance(rel_cfg, str):
             continue
-        name = rel_cfg.get("name", rel_key)
-        desc = rel_cfg.get("description", "")
-        if name not in predicates:
-            predicates[name] = {"description": desc, "columns": []}
-        elif desc and not predicates[name].get("description"):
-            predicates[name]["description"] = desc
+        _merge_predicate_metadata(
+            predicates,
+            rel_cfg.get("name", rel_key),
+            rel_cfg.get("description", ""),
+        )
 
     for ch_name, ch_cfg in cfg.get("probabilistic_choice", {}).items():
-        desc = ch_cfg.get("description", "")
-        if ch_name not in predicates:
-            predicates[ch_name] = {"description": desc, "columns": []}
-        elif desc and not predicates[ch_name].get("description"):
-            predicates[ch_name]["description"] = desc
+        _merge_predicate_metadata(
+            predicates,
+            ch_name,
+            ch_cfg.get("description", ""),
+        )
 
     for atl_name, atl_params in cfg.get("atlases", {}).items():
         pred_name = atl_params.get("predicate_name", atl_name)
-        desc = atl_params.get("description", f"{atl_name} atlas regions")
-        if pred_name not in predicates:
-            predicates[pred_name] = {"description": desc, "columns": []}
-        elif not predicates[pred_name].get("description"):
-            predicates[pred_name]["description"] = desc
+        _merge_predicate_metadata(
+            predicates,
+            pred_name,
+            atl_params.get("description", ""),
+            default_desc=f"{atl_name} atlas regions",
+        )
         # Probabilistic atlases also register a probability predicate
         if _ATLAS_REGISTRY.get(atl_name, {}).get("probabilistic"):
             prob_name = atl_params.get(
@@ -180,13 +285,173 @@ def get_predicates(name: str) -> Dict[str, Dict[str, Any]]:
                 "prob_description",
                 f"Raw probabilities for {atl_name} atlas components",
             )
-            if prob_name not in predicates:
-                predicates[prob_name] = {
-                    "description": prob_desc,
-                    "columns": [],
-                }
+            _merge_predicate_metadata(predicates, prob_name, prob_desc)
+
+    for tpl_name, tpl_params in cfg.get("templates", {}).items():
+        pred_name = tpl_params.get("predicate")
+        if pred_name:
+            _merge_predicate_metadata(
+                predicates,
+                pred_name,
+                tpl_params.get("description", ""),
+                default_desc=f"Voxels inside the {tpl_name} template mask",
+            )
 
     return predicates
+
+
+# ---------------------------------------------------------------------------
+# Template loading
+# ---------------------------------------------------------------------------
+
+_NILEARN_TEMPLATES: Dict[str, Dict[str, Any]] = {
+    "brain_mask": {
+        "func": datasets.load_mni152_brain_mask,
+        "kind": "mask",
+    },
+    "gm_mask": {
+        "func": datasets.load_mni152_gm_mask,
+        "kind": "mask",
+    },
+    "wm_mask": {
+        "func": datasets.load_mni152_wm_mask,
+        "kind": "mask",
+    },
+    "template": {
+        "func": datasets.load_mni152_template,
+        "kind": "anatomical",
+    },
+    "gm_template": {
+        "func": datasets.load_mni152_gm_template,
+        "kind": "anatomical",
+    },
+    "wm_template": {
+        "func": datasets.load_mni152_wm_template,
+        "kind": "anatomical",
+    },
+}
+
+
+def _register_template_predicate(nl, img, pred_name):
+    """Register ``pred_name(i, j, k)`` from all non-zero voxels of *img*."""
+    data = np.asanyarray(img.dataobj)
+    mask = data > 0
+    if not mask.any():
+        mask = data > data.min()  # fallback for masks with negative values
+    coords = np.argwhere(mask)
+    nl.add_tuple_set(coords, name=pred_name)
+
+
+def _fetch_nilearn_template(
+    nl, tpl_name: str, params: dict, data_dir: Path
+) -> None:
+    """Download a template via nilearn and optionally register a voxel predicate.
+
+    Parameters
+    ----------
+    nl :
+        Engine instance.
+    tpl_name :
+        YAML key for this template entry.
+    params :
+        Template config with keys:
+
+        * ``variant`` — one of the keys in ``_NILEARN_TEMPLATES``
+        * ``resolution`` — mm resolution (1 or 2, default 2; only for
+          anatomical variants)
+        * ``predicate`` — optional name for a ``(i, j, k)`` voxel set
+          from non-zero mask voxels
+    data_dir :
+        Data cache directory.  Note that nilearn's ``load_mni152_*``
+        functions use their own global cache (``~/nilearn_data``) rather
+        than this path.
+    """
+    variant = params.get("variant", "brain_mask")
+    info = _NILEARN_TEMPLATES.get(variant)
+    if info is None:
+        raise ValueError(
+            f"Unknown nilearn template variant {variant!r}. "
+            f"Available: {', '.join(sorted(_NILEARN_TEMPLATES))}"
+        )
+
+    kwargs: Dict[str, Any] = {}
+    if info["kind"] == "anatomical":
+        kwargs["resolution"] = params.get("resolution", 2)
+    elif variant in ("brain_mask", "gm_mask", "wm_mask"):
+        kwargs["resolution"] = params.get("resolution")
+
+    img = info["func"](**kwargs)
+
+    pred_name = params.get("predicate")
+    if pred_name:
+        _register_template_predicate(nl, img, pred_name)
+
+
+def _fetch_templateflow_template(
+    nl, tpl_name: str, params: dict
+) -> None:
+    """Download a template via TemplateFlow and optionally register a voxel
+    predicate.
+
+    Requires the ``templateflow`` Python package (``pip install templateflow``).
+    """
+    try:
+        from templateflow import api as tflow
+    except ImportError:
+        raise ImportError(
+            "The 'templateflow' source requires the `templateflow` package. "
+            "Install it with: pip install templateflow"
+        )
+
+    tpl_id = params.get("template")
+    if not tpl_id:
+        raise ValueError(
+            f"TemplateFlow entry {tpl_name!r} is missing the required "
+            f"'template' field (e.g. 'MNI152NLin2009cAsym')."
+        )
+
+    resolution = params.get("resolution")
+    suffix = params.get("suffix", "T1w")
+
+    kwargs: Dict[str, Any] = dict(suffix=suffix)
+    if resolution is not None:
+        kwargs["resolution"] = resolution
+
+    # templateflow.api.get() returns a Path to the downloaded file
+    tpl_path = tflow.get(tpl_id, **kwargs)
+    if tpl_path is None:
+        raise FileNotFoundError(
+            f"TemplateFlow template {tpl_id!r} (suffix={suffix}, "
+            f"resolution={resolution}) could not be resolved."
+        )
+
+    pred_name = params.get("predicate")
+    if pred_name:
+        import nibabel as nib
+
+        img = nib.load(str(tpl_path))
+        _register_template_predicate(nl, img, pred_name)
+
+
+def _load_template(
+    nl, tpl_name: str, params: dict, data_dir: Path
+) -> None:
+    """Download a neuroimaging template and optionally register a voxel
+    predicate.
+
+    Dispatches to the backend named by *params['source']* (``nilearn`` or
+    ``templateflow``).
+    """
+    source = params.get("source", "nilearn")
+    if source == "nilearn":
+        _fetch_nilearn_template(nl, tpl_name, params, data_dir)
+    elif source == "templateflow":
+        _fetch_templateflow_template(nl, tpl_name, params)
+    else:
+        raise ValueError(
+            f"Unknown template source {source!r}. "
+            f"Supported: 'nilearn', 'templateflow'."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -350,10 +615,120 @@ def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
     )
 
 
+def _resolve_mask(
+    cfg: dict, data_dir: Path, resolution: Optional[float] = None
+) -> Optional[nib.Nifti1Image]:
+    """Download the MNI mask if required by the engine config."""
+    if not cfg.get("requires_mni_mask", False):
+        return None
+    mask = _get_mni_mask(data_dir)
+    if resolution is not None:
+        mask = image.resample_img(mask, np.eye(4) * resolution)
+    return mask
+
+
+def _phase_builtins(nl, cfg):
+    for sym_name in cfg.get("builtins", []):
+        func = _BUILTIN_SYMBOLS.get(sym_name)
+        if func is not None:
+            nl.add_symbol(func, name=sym_name)
+
+
+def _phase_python_init(nl, cfg, mask, data_dir):
+    py_init = cfg.get("python_init")
+    if not py_init:
+        return
+    import importlib
+
+    mod = importlib.import_module(py_init)
+    mod.init_engine(nl, mask, data_dir)
+
+
+def _phase_downloads(cfg, data_dir, engine_name):
+    for dl_entry in cfg.get("downloads", []):
+        url = dl_entry["url"]
+        dl_dest = str(data_dir / dl_entry.get("dest", engine_name))
+        extract_members = dl_entry.get("extract", [])
+        if isinstance(extract_members, bool):
+            archive_name = Path(url).name
+            _fetch_files(dl_dest, [(archive_name, url, {"uncompress": True})], verbose=1)
+        elif extract_members:
+            files = [(m, url, {"uncompress": True}) for m in extract_members]
+            _fetch_files(dl_dest, files, verbose=1)
+        else:
+            file_name = Path(url).name
+            _fetch_files(dl_dest, [(file_name, url, {})], verbose=1)
+
+
+def _phase_templates(nl, cfg, data_dir, engine_name):
+    for tpl_name, tpl_params in cfg.get("templates", {}).items():
+        _load_template(nl, tpl_name, tpl_params, data_dir / engine_name)
+
+
+def _phase_atlases(nl, cfg, data_dir, engine_name):
+    for atl_name, atl_params in cfg.get("atlases", {}).items():
+        _load_atlas(nl, atl_name, atl_params, data_dir / engine_name)
+
+
+def _phase_datalog_init(nl, cfg):
+    datalog_init = cfg.get("datalog_init")
+    if datalog_init:
+        nl.execute_datalog_program(datalog_init)
+
+
+def _phase_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
+    relations = cfg.get("relations", {})
+    if not relations:
+        return
+    import pandas as pd
+
+    for rel_name, rel_cfg in relations.items():
+        if isinstance(rel_cfg, str):
+            rel_cfg = {"file": rel_cfg}
+        rel_path = _resolve_relation_file(
+            rel_cfg, engine_name, data_dir, base_dir=rel_base_dir
+        )
+        name_lower = rel_path.name.lower()
+        if name_lower.endswith(".csv") or name_lower.endswith(".csv.gz"):
+            sep = ","
+        elif name_lower.endswith(".tsv") or name_lower.endswith(".tsv.gz"):
+            sep = "\t"
+        else:
+            raise ValueError(
+                f"Unsupported relation file format: {rel_path.suffix} "
+                f"for relation {rel_name!r}. "
+                "Supported: .csv, .tsv, .csv.gz, .tsv.gz"
+            )
+        df = pd.read_csv(rel_path, sep=sep)
+        nl.add_tuple_set(
+            [tuple(row) for row in df.to_numpy()], name=rel_name
+        )
+
+
+def _phase_probabilistic_choices(nl, cfg):
+    for ch_name, ch_cfg in cfg.get("probabilistic_choice", {}).items():
+        source_val = nl.symbols[ch_cfg["source"]]
+        if hasattr(source_val, "value"):
+            source_val = source_val.value
+        nl.add_uniform_probabilistic_choice_over_set(
+            source_val, name=ch_name
+        )
+
+
+def _phase_ontologies(nl, cfg, data_dir, engine_name):
+    for onto_cfg in cfg.get("ontologies", []):
+        url = onto_cfg["url"]
+        onto_dir = str(data_dir / engine_name)
+        onto_file = Path(url).name
+        result = _fetch_files(onto_dir, [(onto_file, url, {})], verbose=1)
+        nl.load_ontology(result[0])
+
+
 def build_engine(
     name: str,
     data_dir: Path,
     resolution: Optional[float] = None,
+    yaml_path: Optional[Path] = None,
 ) -> "NeurolangPDL":
     """Create and populate a :class:`NeurolangPDL` engine from its
     declarative YAML config.
@@ -366,6 +741,9 @@ def build_engine(
         Directory under which downloaded data is cached.
     resolution :
         If set, resample the MNI mask to the given isotropic resolution (mm).
+    yaml_path :
+        Path to an engine YAML file.  Defaults to the built-in
+        ``engines/engines.yaml``.
 
     Returns
     -------
@@ -381,103 +759,21 @@ def build_engine(
     """
     from neurolang.frontend import NeurolangPDL
 
-    cfg = get_engine_config(name)
+    cfg = get_engine_config(name, yaml_path)
     data_dir = Path(data_dir)
-
-    mask = None
-    if cfg.get("requires_mni_mask", False):
-        mask = _get_mni_mask(data_dir)
-        if resolution is not None:
-            mask = image.resample_img(
-                mask, np.eye(4) * resolution
-            )
+    rel_base_dir = (Path(yaml_path).parent if yaml_path else None)
+    mask = _resolve_mask(cfg, data_dir, resolution)
 
     nl = NeurolangPDL()
 
-    # ── Phase 0: builtins ──────────────────────────────────────────
-    for sym_name in cfg.get("builtins", []):
-        func = _BUILTIN_SYMBOLS.get(sym_name)
-        if func is not None:
-            nl.add_symbol(func, name=sym_name)
-
-    # ── Phase 1: Python init ───────────────────────────────────────
-    py_init = cfg.get("python_init")
-    if py_init:
-        import importlib
-
-        mod = importlib.import_module(py_init)
-        mod.init_engine(nl, mask, data_dir)
-
-    # ── Phase 2: downloads ─────────────────────────────────────────
-    for dl_entry in cfg.get("downloads", []):
-        url = dl_entry["url"]
-        dl_dest = str(data_dir / dl_entry.get("dest", name))
-        extract_members = dl_entry.get("extract", [])
-        if isinstance(extract_members, bool):
-            # extract: true → download the archive and extract all
-            archive_name = Path(url).name
-            _fetch_files(dl_dest, [(archive_name, url, {"uncompress": True})], verbose=1)
-        elif extract_members:
-            # extract: [member1, member2] → download archive, extract specific files
-            files = [(m, url, {"uncompress": True}) for m in extract_members]
-            _fetch_files(dl_dest, files, verbose=1)
-        else:
-            # plain file download
-            file_name = Path(url).name
-            _fetch_files(dl_dest, [(file_name, url, {})], verbose=1)
-
-    # ── Phase 3: atlases ───────────────────────────────────────────
-    for atl_name, atl_params in cfg.get("atlases", {}).items():
-        _load_atlas(nl, atl_name, atl_params, data_dir / name)
-
-    # ── Phase 4: Datalog init ──────────────────────────────────────
-    datalog_init = cfg.get("datalog_init")
-    if datalog_init:
-        nl.execute_datalog_program(datalog_init)
-
-    # ── Phase 5: relations (CSV/TSV, local or URL) ─────────────────
-    relations = cfg.get("relations", {})
-    if relations:
-        import pandas as pd
-
-        for rel_name, rel_cfg in relations.items():
-            if isinstance(rel_cfg, str):
-                rel_cfg = {"file": rel_cfg}
-            rel_path = _resolve_relation_file(
-                rel_cfg, name, data_dir
-            )
-            name_lower = rel_path.name.lower()
-            if name_lower.endswith(".csv") or name_lower.endswith(".csv.gz"):
-                sep = ","
-            elif name_lower.endswith(".tsv") or name_lower.endswith(".tsv.gz"):
-                sep = "\t"
-            else:
-                raise ValueError(
-                    f"Unsupported relation file format: {rel_path.suffix} "
-                    f"for relation {rel_name!r}. "
-                    "Supported: .csv, .tsv, .csv.gz, .tsv.gz"
-                )
-            df = pd.read_csv(rel_path, sep=sep)
-            nl.add_tuple_set(
-                [tuple(row) for row in df.to_numpy()], name=rel_name
-            )
-
-    # ── Phase 5: probabilistic choices ─────────────────────────────
-    for ch_name, ch_cfg in cfg.get("probabilistic_choice", {}).items():
-        source_val = nl.symbols[ch_cfg["source"]]
-        # Unwrap Symbol → its value (DataFrame or RelationalAlgebraFrozenSet)
-        if hasattr(source_val, "value"):
-            source_val = source_val.value
-        nl.add_uniform_probabilistic_choice_over_set(
-            source_val, name=ch_name
-        )
-
-    # ── Phase 6: ontologies ────────────────────────────────────────
-    for onto_cfg in cfg.get("ontologies", []):
-        url = onto_cfg["url"]
-        onto_dir = str(data_dir / name)
-        onto_file = Path(url).name
-        result = _fetch_files(onto_dir, [(onto_file, url, {})], verbose=1)
-        nl.load_ontology(result[0])
+    _phase_builtins(nl, cfg)
+    _phase_python_init(nl, cfg, mask, data_dir)
+    _phase_downloads(cfg, data_dir, name)
+    _phase_templates(nl, cfg, data_dir, name)
+    _phase_atlases(nl, cfg, data_dir, name)
+    _phase_datalog_init(nl, cfg)
+    _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
+    _phase_probabilistic_choices(nl, cfg)
+    _phase_ontologies(nl, cfg, data_dir, name)
 
     return nl

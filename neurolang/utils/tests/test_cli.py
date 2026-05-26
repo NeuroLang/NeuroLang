@@ -12,7 +12,6 @@ from neurolang.utils.cli import (
 )
 
 from neurolang.utils import engine_registry
-from neurolang.utils.engine_registry import _ENGINES_DIR
 
 # ---------------------------------------------------------------------------
 # _build_parser
@@ -148,8 +147,46 @@ class TestEngineRegistry:
                     f"datalog_init for engine {name!r} is empty"
                 )
 
-    def test_relations_csv_tsv(self):
-        """CSV and TSV relations are loaded as extensional predicates."""
+    def test_show_engines(self, capsys):
+        """show_engines prints all engine names with descriptions."""
+        engine_registry.show_engines()
+        captured = capsys.readouterr()
+        assert "neurosynth" in captured.out
+        assert "destrieux" in captured.out
+        assert "Available engines" in captured.out
+
+    def test_get_engine_config_with_yaml_path(self, tmp_path):
+        """get_engine_config accepts a custom YAML path."""
+        custom_yaml = tmp_path / "engines.yaml"
+        custom_yaml.write_text("""
+engines:
+  mini:
+    description: "Mini test"
+    builtins: []
+""")
+        cfg = engine_registry.get_engine_config("mini", yaml_path=custom_yaml)
+        assert cfg["description"] == "Mini test"
+
+    def test_get_predicates_with_yaml_path(self, tmp_path):
+        """get_predicates works with a custom YAML file."""
+        custom_yaml = tmp_path / "engines.yaml"
+        custom_yaml.write_text("""
+engines:
+  mini:
+    description: "Mini"
+    builtins: []
+    predicates:
+      p:
+        arity: 1
+        columns: [x]
+        description: "Test predicate"
+""")
+        preds = engine_registry.get_predicates("mini", yaml_path=custom_yaml)
+        assert "p" in preds
+        assert preds["p"]["arity"] == 1
+
+    def test_edb_program_roundtrip(self):
+        """In-memory EDB relations can be queried and formatted."""
         from neurolang.utils.cli import _execute_program, _format_result
 
         from neurolang.frontend import NeurolangPDL

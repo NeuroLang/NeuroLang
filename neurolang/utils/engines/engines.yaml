@@ -56,3 +56,27 @@ engines:
         arity: 2
         columns: [name, region]
         description: "Cortical region name and ExplicitVBR geometry"
+
+  # Example template usage (commented out — uncomment to enable):
+  #
+  #   template_demo:
+  #     description: "Demonstrates declarative template loading"
+  #     requires_mni_mask: false
+  #     builtins: [exp, log, startswith]
+  #     templates:
+  #       # Nilearn brain mask → voxel(i, j, k) predicate
+  #       mni_brain:
+  #         source: nilearn
+  #         variant: brain_mask
+  #         predicate: voxel
+  #       # Nilearn T1 template (2mm) — just download, no predicate
+  #       mni_t1:
+  #         source: nilearn
+  #         variant: template
+  #         resolution: 2
+  #       # TemplateFlow T1 template at 1mm — requires ``pip install templateflow``
+  #       t1_highres:
+  #         source: templateflow
+  #         template: MNI152NLin2009cAsym
+  #         resolution: 1
+  #         suffix: T1w
