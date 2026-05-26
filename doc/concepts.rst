@@ -133,7 +133,7 @@ module handles YAML loading, MNI mask retrieval, and delegating to the
 engine's init script.
 
 **Init phases.**  When :func:`~neurolang.utils.engine_registry.build_engine`
-builds an engine, it runs up to seven phases in order:
+builds an engine, it runs up to eight phases in order:
 
 #. **Builtins** (``builtins``) — registers known functions (``exp``,
    ``log``, ``startswith``) as callable symbols.  Simple list in YAML::
@@ -151,6 +151,50 @@ builds an engine, it runs up to seven phases in order:
          - url: "https://example.com/data.tar.gz"
            dest: my_engine/
            extract: true
+
+#. **Templates** (``templates``) — downloads neuroimaging templates via
+   **nilearn** or **TemplateFlow** (if the ``templateflow`` package is
+   installed).  Each template can optionally register a
+   ``voxel(i, j, k)`` predicate from its non-zero mask::
+
+       templates:
+         # Nilearn brain mask → voxel(i, j, k) predicate
+         mni_brain:
+           source: nilearn
+           variant: brain_mask
+           predicate: voxel
+         # Nilearn T1 template (2 mm) — just download, no predicate
+         mni_t1:
+           source: nilearn
+           variant: template
+           resolution: 2
+         # TemplateFlow T1 template at 1 mm
+         t1_highres:
+           source: templateflow
+           template: MNI152NLin2009cAsym
+           resolution: 1
+           suffix: T1w
+
+   Supported **nilearn** variants:
+
+   * ``brain_mask`` — MNI152 brain mask (``load_mni152_brain_mask``)
+   * ``gm_mask`` — grey-matter mask (``load_mni152_gm_mask``)
+   * ``wm_mask`` — white-matter mask (``load_mni152_wm_mask``)
+   * ``template`` — MNI152 T1 template (``load_mni152_template``;
+     pass ``resolution: 1`` or ``resolution: 2``)
+   * ``gm_template`` — grey-matter template
+   * ``wm_template`` — white-matter template
+
+   **TemplateFlow** templates require ``pip install templateflow`` and
+   are identified by a ``template`` name from the
+   `TemplateFlow repository <https://www.templateflow.org/>`_
+   (e.g. ``MNI152NLin2009cAsym``, ``MNIInfant``).  The ``suffix``
+   and ``resolution`` fields select the specific image variant.
+
+   When ``predicate`` is set, the template is loaded as a NIfTI image
+   and all non-zero voxels are registered as a
+   ``predicate(i, j, k)`` tuple set — useful as a coordinate-space
+   reference in Datalog queries.
 
 #. **Atlases** (``atlases``) — downloads brain atlases via nilearn and
    registers each region as a predicate with
@@ -186,8 +230,9 @@ builds an engine, it runs up to seven phases in order:
    (deterministic), ``difumo`` (probabilistic).
 
 #. **Datalog init** (``datalog_init``) — an optional YAML multiline string
-   of Datalog rules.  These are evaluated after the atlases so they can
-   reference atlas predicates::
+   of Datalog rules.  These are evaluated after templates and atlases
+   so they can reference template-derived voxel predicates and atlas
+   predicates::
 
        datalog_init: |
          left_region(N, R) :- destrieux(N, R), startswith('lh', N)
