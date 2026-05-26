@@ -53,10 +53,15 @@ Unreleased
 * **Ontology loading** — the ``ontologies`` section loads OWL/RDF
   ontologies from URLs or local paths.
 
+* **Atlases** — engines can declare ``atlases:`` with nilearn atlas names
+  (``destrieux``, ``schaefer``, ``difumo``) and parameters.  Atlas regions
+  are loaded as ``ExplicitVBR`` predicates before Datalog init rules.
+
 * **Declarative migration** — ``exp``, ``log``, ``startswith`` symbols
   now come from YAML ``builtins`` rather than ``base.py``; the
   ``selected_study`` choice for the neurosynth engine is now declared
-  in the engine YAML instead of Python init code.
+  in the engine YAML instead of Python init code; the ``destrieux``
+  predicate is now declared in the YAML ``atlases:`` section.
 
 
 v0.0.1 (Alpha)

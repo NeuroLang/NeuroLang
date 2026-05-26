@@ -17,6 +17,11 @@ define:
   ``startswith``, etc.) to register as callable symbols;
 * ``probabilistic_choice`` — uniform probabilistic choices declared as
   ``name: {source: other_predicate}``.
+* ``atlases`` — brain atlases downloaded via nilearn (e.g. ``destrieux``,
+  ``schaefer``, ``difumo``) and registered as predicates with
+  :class:`~neurolang.regions.ExplicitVBR` regions.  Deterministic atlases
+  use ``ExplicitVBR.from_spatial_image_label``; probabilistic atlases
+  are thresholded (default 0.5) to create binary region masks.
 
 Usage
 -----
@@ -159,7 +164,143 @@ def get_predicates(name: str) -> Dict[str, Dict[str, Any]]:
         elif desc and not predicates[ch_name].get("description"):
             predicates[ch_name]["description"] = desc
 
+    for atl_name, atl_params in cfg.get("atlases", {}).items():
+        pred_name = atl_params.get("predicate_name", atl_name)
+        desc = atl_params.get("description", f"{atl_name} atlas regions")
+        if pred_name not in predicates:
+            predicates[pred_name] = {"description": desc, "columns": []}
+        elif not predicates[pred_name].get("description"):
+            predicates[pred_name]["description"] = desc
+
     return predicates
+
+
+# ---------------------------------------------------------------------------
+# Atlas helpers
+# ---------------------------------------------------------------------------
+
+def _fetch_atlas_destrieux(**kwargs):
+    return datasets.fetch_atlas_destrieux_2009(**kwargs)
+
+
+def _fetch_atlas_schaefer(**kwargs):
+    return datasets.fetch_atlas_schaefer_2018(**kwargs)
+
+
+def _fetch_atlas_difumo(**kwargs):
+    return datasets.fetch_atlas_difumo(**kwargs)
+
+
+_ATLAS_REGISTRY = {
+    "destrieux": {
+        "fetch": _fetch_atlas_destrieux,
+        "probabilistic": False,
+    },
+    "schaefer": {
+        "fetch": _fetch_atlas_schaefer,
+        "probabilistic": False,
+    },
+    "difumo": {
+        "fetch": _fetch_atlas_difumo,
+        "probabilistic": True,
+    },
+}
+
+
+def _parse_labels(raw_labels):
+    """Yield ``(index, name)`` pairs from a nilearn labels value.
+
+    Handles the three formats returned by different nilearn versions:
+    ``dict``, ``list``, and numpy structured array.
+    """
+    if isinstance(raw_labels, dict):
+        yield from raw_labels.items()
+    elif isinstance(raw_labels, list):
+        yield from enumerate(raw_labels)
+    else:
+        # numpy structured array with two columns
+        yield from raw_labels
+
+
+def _label_name(val: Any) -> str:
+    """Normalise a label value to a clean string."""
+    if isinstance(val, bytes):
+        val = val.decode("utf8")
+    name = str(val).replace("-", " ").replace("_", " ")
+    return name
+
+
+def _load_deterministic_atlas(
+    nl, atlas_name: str, params: dict, data_dir: Path
+) -> None:
+    """Load a deterministic atlas (e.g. Destrieux, Schaefer) as engine predicates."""
+    info = _ATLAS_REGISTRY[atlas_name]
+    fetch_kw = {k: v for k, v in params.items() if k != "predicate_name"}
+    fetch_kw["data_dir"] = str(data_dir)
+    atl_data = info["fetch"](**fetch_kw)
+
+    from neurolang.regions import ExplicitVBR
+
+    img = nib.load(atl_data["maps"])
+    pred_name = params.get("predicate_name", atlas_name)
+    rows = []
+    for k, v in _parse_labels(atl_data["labels"]):
+        if k == 0:
+            continue
+        name = _label_name(v)
+        rows.append((name, ExplicitVBR.from_spatial_image_label(img, k)))
+
+    nl.add_tuple_set(rows, name=pred_name)
+
+
+def _load_probabilistic_atlas(
+    nl, atlas_name: str, params: dict, data_dir: Path
+) -> None:
+    """Load a probabilistic atlas (e.g. DiFuMo) as engine predicates.
+
+    Each probability map is thresholded (default 0.5) to create a binary
+    :class:`~neurolang.regions.ExplicitVBR`.
+    """
+    info = _ATLAS_REGISTRY[atlas_name]
+    fetch_kw = {k: v for k, v in params.items() if k != "predicate_name"}
+    fetch_kw["data_dir"] = str(data_dir)
+    atl_data = info["fetch"](**fetch_kw)
+
+    from neurolang.regions import ExplicitVBR
+
+    img = nib.load(atl_data["maps"])
+    data = img.get_fdata()
+    labels = list(atl_data["labels"])
+    threshold = float(params.get("threshold", 0.5))
+    pred_name = params.get("predicate_name", atlas_name)
+
+    rows = []
+    for i in range(data.shape[-1]):
+        mask = data[..., i] > threshold
+        if not mask.any():
+            continue
+        voxels = np.argwhere(mask)
+        region = ExplicitVBR(voxels, img.affine, image_dim=img.shape[:3])
+        label = _label_name(labels[i] if i < len(labels) else f"component_{i}")
+        rows.append((label, region))
+
+    nl.add_tuple_set(rows, name=pred_name)
+
+
+def _load_atlas(
+    nl, atlas_name: str, params: dict, data_dir: Path
+) -> None:
+    """Download a brain atlas via nilearn and register it as a predicate."""
+    info = _ATLAS_REGISTRY.get(atlas_name)
+    if info is None:
+        raise ValueError(
+            f"Unknown atlas {atlas_name!r}. "
+            f"Available: {', '.join(sorted(_ATLAS_REGISTRY))}"
+        )
+    if info["probabilistic"]:
+        _load_probabilistic_atlas(nl, atlas_name, params, data_dir)
+    else:
+        _load_deterministic_atlas(nl, atlas_name, params, data_dir)
 
 
 def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
@@ -246,12 +387,16 @@ def build_engine(
             file_name = Path(url).name
             _fetch_files(dl_dest, [(file_name, url, {})], verbose=1)
 
-    # ── Phase 3: Datalog init ──────────────────────────────────────
+    # ── Phase 3: atlases ───────────────────────────────────────────
+    for atl_name, atl_params in cfg.get("atlases", {}).items():
+        _load_atlas(nl, atl_name, atl_params, data_dir / name)
+
+    # ── Phase 4: Datalog init ──────────────────────────────────────
     datalog_init = cfg.get("datalog_init")
     if datalog_init:
         nl.execute_datalog_program(datalog_init)
 
-    # ── Phase 4: relations (CSV/TSV, local or URL) ─────────────────
+    # ── Phase 5: relations (CSV/TSV, local or URL) ─────────────────
     relations = cfg.get("relations", {})
     if relations:
         import pandas as pd

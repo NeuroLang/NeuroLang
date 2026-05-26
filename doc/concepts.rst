@@ -152,10 +152,29 @@ builds an engine, it runs up to seven phases in order:
            dest: my_engine/
            extract: true
 
+#. **Atlases** (``atlases``) — downloads brain atlases via nilearn and
+   registers each region as a predicate with
+   :class:`~neurolang.regions.ExplicitVBR` geometry::
+
+       atlases:
+         destrieux:
+           predicate_name: destrieux
+         schaefer:
+           n_rois: 400
+           yeo_networks: 7
+           resolution_mm: 2
+           predicate_name: schaefer_400
+         difumo:
+           dimension: 64
+           threshold: 0.5
+           predicate_name: difumo_64
+
+   Supported atlases: ``destrieux`` (deterministic), ``schaefer``
+   (deterministic), ``difumo`` (probabilistic, thresholded).
+
 #. **Datalog init** (``datalog_init``) — an optional YAML multiline string
-   of Datalog rules.  These are evaluated after the Python init so they can
-   reference any predicate registered there.  This is the simplest way to
-   define derived predicates without writing Python::
+   of Datalog rules.  These are evaluated after the atlases so they can
+   reference atlas predicates::
 
        datalog_init: |
          left_region(N, R) :- destrieux(N, R), startswith('lh', N)

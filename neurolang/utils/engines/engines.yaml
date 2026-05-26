@@ -44,6 +44,10 @@ engines:
     requires_mni_mask: true
     builtins: [exp, log, startswith]
     python_init: "neurolang.utils.engines.destrieux.init"
+    atlases:
+      destrieux:
+        predicate_name: destrieux
+        description: "Cortical region name and ExplicitVBR geometry"
     datalog_init: |
       left_region(N, R) :- destrieux(N, R), startswith('lh', N)
       right_region(N, R) :- destrieux(N, R), startswith('rh', N)
