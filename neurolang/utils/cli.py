@@ -64,6 +64,30 @@ def _read_query(args) -> str:
     sys.exit(1)
 
 
+def _rename_unnamed_columns(df, column_names):
+    """Replace auto-generated column names with *column_names* when safe."""
+    if column_names is not None and len(column_names) == len(df.columns):
+        unnamed = all(
+            isinstance(c, int)
+            or (isinstance(c, str) and c.startswith("c"))
+            for c in df.columns
+        )
+        if unnamed:
+            df.columns = column_names
+    return df
+
+
+def _emit(df, fmt):
+    """Format a DataFrame in *fmt* mode (table, csv, or json)."""
+    if df.empty:
+        return "(empty)"
+    if fmt == "csv":
+        return df.to_csv(index=False)
+    if fmt == "json":
+        return df.to_json(orient="records", indent=2)
+    return df.to_string(index=False)
+
+
 def _format_result(
     result, fmt: str = "table", column_names: Optional[list[str]] = None
 ) -> str:
@@ -73,33 +97,14 @@ def _format_result(
     if isinstance(result, bool):
         return "true" if result else "false"
 
-    def _rename_unnamed_columns(df):
-        if column_names is not None and len(column_names) == len(df.columns):
-            unnamed = all(
-                isinstance(c, int)
-                or (isinstance(c, str) and c.startswith("c"))
-                for c in df.columns
-            )
-            if unnamed:
-                df.columns = column_names
-        return df
-
-    def _emit(df):
-        if df.empty:
-            return "(empty)"
-        if fmt == "csv":
-            return df.to_csv(index=False)
-        if fmt == "json":
-            return df.to_json(orient="records", indent=2)
-        return df.to_string(index=False)
-
     try:
         # Unwrap Constant -> concrete set when chase produced wrapped result
         if hasattr(result, "value") and hasattr(result.value, "unwrap"):
             inner = result.value.unwrap()
             if hasattr(inner, "as_pandas_dataframe"):
                 return _emit(
-                    _rename_unnamed_columns(inner.as_pandas_dataframe())
+                    _rename_unnamed_columns(inner.as_pandas_dataframe(), column_names),
+                    fmt,
                 )
             result = inner
 
@@ -113,8 +118,11 @@ def _format_result(
             arity = result.arity if hasattr(result, "arity") else len(rows[0])
             df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
 
-        return _emit(_rename_unnamed_columns(df))
-    except Exception:
+        return _emit(_rename_unnamed_columns(df, column_names), fmt)
+    except Exception as exc:
+        import sys
+
+        print(f"Warning: result formatting failed: {exc}", file=sys.stderr)
         return str(result)
 
 
@@ -305,7 +313,7 @@ def _list_predicates(engine_name: str) -> None:
     cfg = engine_registry.get_engine_config(engine_name)
     print(f"\nEngine: {engine_name}")
     print(f"  {cfg.get('description', '')}")
-    predicates = cfg.get("predicates", {})
+    predicates = engine_registry.get_predicates(engine_name)
     if not predicates:
         print("\n  (no predicate metadata declared)")
         return
@@ -371,13 +379,7 @@ def main(argv: Optional[list] = None) -> None:
     args = parser.parse_args(argv)
 
     if args.list_engines:
-        print("Available engines:\n")
-        for name in engine_registry.list_engine_names():
-            cfg = engine_registry.get_engine_config(name)
-            desc = cfg.get("description", "").replace("\n", " ").strip()
-            print(f"  {name}")
-            print(f"      {desc}")
-            print()
+        engine_registry.show_engines()
         return
 
     if args.engine not in engine_registry.list_engine_names():
