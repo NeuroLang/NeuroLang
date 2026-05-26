@@ -15,6 +15,9 @@ Usage
     # List predicates for an engine
     neurolang-query --engine neurosynth --list-predicates
 
+    # List RA sets for an engine
+    neurolang-query --engine neurosynth --list-sets
+
     # Inline query
     neurolang-query "ans(t) :- term_in_study_tfidf(t, w, s)"
 
@@ -43,6 +46,7 @@ import pandas as pd
 from neurolang import expressions as ir
 from neurolang.datalog.chase import Chase
 from neurolang.datalog.expressions import Implication
+from neurolang.datalog import WrappedRelationalAlgebraSet
 from neurolang.frontend import NeurolangPDL
 from neurolang.utils import engine_registry
 
@@ -170,6 +174,12 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Instead of running a query, list the available predicates "
         "for the engine and exit.",
+    )
+    parser.add_argument(
+        "--list-sets",
+        action="store_true",
+        help="Instead of running a query, list the available Relational "
+        "Algebra sets (EDB relations) for the engine and exit.",
     )
     parser.add_argument(
         "--list-engines",
@@ -308,6 +318,53 @@ def _list_predicates(engine_name: str) -> None:
             print(f"    {desc}")
 
 
+def _list_sets(nl: NeurolangPDL) -> None:
+    """Print the actual Relational Algebra sets registered in the engine.
+
+    Iterates over the engine's symbol table and displays every entry backed
+    by a :class:`~neurolang.datalog.WrappedRelationalAlgebraSet` — i.e.,
+    concrete extensional (EDB) relations loaded from CSV/TSV files or added
+    via the Python API.
+    """
+    print()
+    st = nl.program_ir.symbol_table
+    sets_found = []
+
+    for sym_name, sym_val in st.items():
+        val = getattr(sym_val, "value", sym_val)
+        if not isinstance(val, WrappedRelationalAlgebraSet):
+            continue
+        ra_set = val.unwrap()
+        arity = ra_set.arity
+        columns = list(ra_set.columns)
+        try:
+            size = len(ra_set)
+        except Exception:
+            size = "?"
+        clean_name = getattr(sym_name, "name", str(sym_name))
+        sets_found.append((clean_name, columns, size, arity))
+
+    if not sets_found:
+        print("  (no RA sets registered)")
+        return
+
+    name_w = max(len(s) for s, _, _, _ in sets_found) + 2
+    cols_w = max(len(str(c)) for _, c, _, _ in sets_found) + 2
+    size_w = max(len(str(s)) for _, _, s, _ in sets_found) + 2
+
+    header = (
+        f"  {'Set':<{name_w}}  {'Columns':<{cols_w}}  {'Rows':>{size_w}}  Arity"
+    )
+    print(header)
+    print(f"  {'-' * name_w}  {'-' * cols_w}  {'-' * size_w}  -----")
+    for name, columns, size, arity in sorted(sets_found, key=lambda x: x[0]):
+        cols_str = str(columns)
+        print(
+            f"  {name:<{name_w}}  {cols_str:<{cols_w}}  {str(size):>{size_w}}  {arity}"
+        )
+    print(f"\n  Total RA sets: {len(sets_found)}")
+
+
 def main(argv: Optional[list] = None) -> None:
     """CLI entry point: parse arguments, build engine, run query."""
     parser = _build_parser()
@@ -338,6 +395,10 @@ def main(argv: Optional[list] = None) -> None:
 
     if args.list_predicates:
         _list_predicates(args.engine)
+        return
+
+    if args.list_sets:
+        _list_sets(nl)
         return
 
     program = _read_query(args)
