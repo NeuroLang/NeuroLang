@@ -20,6 +20,7 @@ from .datalog.sugar import (
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities
 )
+from .datalog.sugar.spatial import TranslateRegionContains
 from ..commands import CommandsMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
@@ -72,6 +73,7 @@ class RegionFrontendDatalogSolver(
     TranslateSSugarToSelectByColumn,
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities,
+    TranslateRegionContains,
     Fol2DatalogMixin,
     RegionSolver,
     CommandsMixin,

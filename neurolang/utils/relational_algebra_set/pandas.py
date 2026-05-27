@@ -720,37 +720,23 @@ class NamedRelationalAlgebraFrozenSet(
         if self._container is None:
             return self.copy()
 
-        # Convert column values with a voxels attribute (e.g. ExplicitVBR)
-        # into iterable tuples so pandas .explode() can flatten them.
-        container = self._container
-        if len(container) > 0:
-            col = container[src_column]
-            first = col.iloc[0]
-            if hasattr(first, 'voxels') and not isinstance(first, (str, bytes)):
-                container = container.copy()
-                container[src_column] = col.apply(
-                    lambda v: tuple(map(tuple, getattr(v, 'voxels', ())))
-                )
-
         if dst_columns == src_column:
             # 1. replace original column by exploded one
-            new_container = container.explode(
+            new_container = self._container.explode(
                 src_column, ignore_index=True
             )
             new_columns = self.columns
         elif not isinstance(dst_columns, tuple):
             # 2. add new column with exploded values
-            new_container = container.assign(
-                **{dst_columns: container[src_column]}
+            new_container = self._container.assign(
+                **{dst_columns: self._container[src_column]}
             ).explode(dst_columns, ignore_index=True)
             new_columns = self.columns + (dst_columns,)
         else:
             # 3. explode values into multiple columns
-            new_container = container.assign(
-                **{dst_columns[-1]: container[src_column]}
+            new_container = self._container.assign(
+                **{dst_columns[-1]: self._container[src_column]}
             ).explode(dst_columns[-1], ignore_index=True)
-            # Drop rows where the explode produced NaN (empty source values)
-            new_container = new_container.dropna(subset=[dst_columns[-1]])
             for c, v in zip(dst_columns, zip(*new_container[dst_columns[-1]])):
                 new_container[c] = v
             new_columns = self.columns + dst_columns

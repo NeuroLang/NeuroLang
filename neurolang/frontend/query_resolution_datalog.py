@@ -6,8 +6,8 @@ as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
 import operator
-from neurolang.datalog.magic_sets import magic_rewrite
-from neurolang.exceptions import (
+from ..datalog.magic_sets import magic_rewrite
+from ..exceptions import (
     ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
 )
 from typing import (
@@ -106,7 +106,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
         self.datalog_parser = datalog_parser
-        self.add_symbol(operator.contains, name="contains")
 
     @property
     def current_program(self) -> List[fe.Expression]:

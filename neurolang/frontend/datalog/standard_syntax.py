@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Tuple
 
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedToken, UnexpectedCharacters, LarkError
@@ -24,6 +25,7 @@ from ...probabilistic.expressions import (
     Condition,
     ProbabilisticFact
 )
+from ...type_system import Unknown
 from ...utils.interactive_parsing import LarkCompleter
 
 
@@ -530,9 +532,16 @@ class DatalogTransformer(Transformer):
         return Constant((ast[0].replace("'", "")).replace('"', ''))
 
     def tuple_literal(self, ast):
-        from neurolang.expressions import Constant as ConstantExpr
+        # Filter out Lark terminal tokens (commas, parens) which are str/Token
+        # instances. Actual values are already transformed to Constant/Symbol
+        # by other grammar rules, so no string value slips through here.
         values = tuple(a for a in ast if not isinstance(a, str))
-        result = ConstantExpr(values)
+        # Explicitly mark each element's type as Unknown since at parse time
+        # we cannot determine the concrete types of tuple elements.
+        value_types = tuple(Unknown for _ in values)
+        result = Constant[Tuple[value_types]](
+            values, auto_infer_type=False, verify_type=False
+        )
         for v in values:
             if isinstance(v, Symbol):
                 result._symbols.add(v)

@@ -12,7 +12,7 @@ from ....datalog.expression_processing import (
 )
 from ....exceptions import UnsupportedProgramError
 from ....expression_pattern_matching import add_match
-from ....expression_walker import IdentityWalker, PatternWalker
+from ....expression_walker import ExpressionWalker, IdentityWalker, PatternWalker
 from ....expressions import Constant, Expression, FunctionApplication, Symbol
 from ....logic import Conjunction, Implication
 from ....relational_algebra import RelationalAlgebraSet
@@ -276,3 +276,99 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
             args_as_str.index(coord_arg.name) for coord_arg in coord_args
         )
         return ra_set.projection(*proj_cols)
+
+
+class TranslateRegionContains(PatternWalker):
+    """
+    Syntactic sugar for rules using contains/Destroy with
+    ExplicitVBR region columns.
+
+    ExplicitVBR values aren't iterable (no ``__iter__`` to avoid breaking
+    Constant type inference), so the contains/Destroy pipeline can't
+    explode them. This walker pre-converts ExplicitVBR values in EDB
+    columns to tuples of voxels before the chase processes the rule.
+    """
+
+    @add_match(
+        Implication,
+        lambda imp: (
+            isinstance(imp.antecedent, Conjunction)
+            and any(
+                isinstance(a.functor, Constant)
+                and a.functor.value is operator.contains
+                and len(a.args) >= 1
+                and isinstance(a.args[0], Symbol)
+                for a in extract_logic_atoms(imp.antecedent)
+            )
+        )
+    )
+    def region_contains(self, implication):
+        atoms = extract_logic_atoms(implication.antecedent)
+        for atom in list(atoms):
+            if not self._is_contains_atom(atom):
+                continue
+            region_var = atom.args[0]
+            self._convert_region_edb_column(atoms, region_var)
+        return implication
+
+    @staticmethod
+    def _is_contains_atom(atom):
+        return (
+            isinstance(atom.functor, Constant)
+            and atom.functor.value is operator.contains
+            and len(atom.args) >= 1
+            and isinstance(atom.args[0], Symbol)
+        )
+
+    def _convert_region_edb_column(self, formulas, region_var):
+        for formula in formulas:
+            if (
+                not isinstance(formula.functor, Symbol)
+                or region_var not in formula.args
+            ):
+                continue
+            pred_value = self._resolve_edb(formula.functor)
+            if pred_value is None:
+                continue
+            ras = pred_value.value
+            if not hasattr(ras, "columns"):
+                continue
+            col_idx = formula.args.index(region_var)
+            col_name = ras.columns[col_idx]
+            self._explode_voxel_column(ras, col_name)
+            return
+
+    def _resolve_edb(self, symbol):
+        try:
+            val = self.symbol_table.get(symbol)
+        except Exception:
+            return None
+        if isinstance(val, Constant):
+            return val
+        return None
+
+    @staticmethod
+    def _explode_voxel_column(ras, col_name):
+        container = ras._container
+        if len(container) == 0:
+            return
+        first_val = container[col_name].iloc[0]
+        if not hasattr(first_val, 'voxels') or isinstance(
+            first_val, (str, bytes)
+        ):
+            return
+        new_vals = []
+        keep_mask = []
+        for v in container[col_name]:
+            if hasattr(v, 'voxels') and len(v.voxels) > 0:
+                new_vals.append(
+                    tuple(
+                        tuple(int(c) for c in row)
+                        for row in v.voxels
+                    )
+                )
+                keep_mask.append(True)
+            else:
+                keep_mask.append(False)
+        ras._container = container.loc[keep_mask].copy()
+        ras._container[col_name] = new_vals
