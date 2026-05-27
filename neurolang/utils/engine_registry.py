@@ -1,4 +1,5 @@
-"""Declarative engine registry for the neurolang-query CLI.
+"""
+Declarative engine registry for the neurolang-query CLI.
 
 Engines are declared in :file:`engines/engines.yaml`.  Each engine may
 define:
@@ -105,7 +106,8 @@ def _merge_predicate_metadata(
     description: str = "",
     default_desc: str = "",
 ) -> None:
-    """Insert or update a predicate entry's description in *predicates*.
+    """
+    Insert or update a predicate entry's description in *predicates*.
 
     If *name* is not yet in *predicates*, a new ``{"description": ...,
     "columns": []}`` entry is added.  If it already exists and has no
@@ -135,7 +137,8 @@ def _resolve_relation_file(
     data_dir: Path,
     base_dir: Optional[Path] = None,
 ) -> Path:
-    """Return a local path for a relation entry's ``file`` field.
+    """
+    Return a local path for a relation entry's ``file`` field.
 
     If the ``file`` value is a URL it is downloaded via nilearn's
     ``_fetch_files`` (with caching and optional archive extraction)
@@ -172,13 +175,15 @@ def _resolve_relation_file(
 
 
 def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
-    """Return the names of all registered engines.
+    """
+    Return the names of all registered engines.
 
     Parameters
     ----------
     yaml_path :
         Path to an engine YAML file.  Defaults to the built-in
         ``engines/engines.yaml``.
+
     """
     config = _load_yaml_config(yaml_path)
     return sorted(config.get("engines", {}).keys())
@@ -187,7 +192,8 @@ def list_engine_names(yaml_path: Optional[Path] = None) -> List[str]:
 def get_engine_config(
     name: str, yaml_path: Optional[Path] = None
 ) -> Dict[str, Any]:
-    """Return the YAML configuration dict for a single engine.
+    """
+    Return the YAML configuration dict for a single engine.
 
     Parameters
     ----------
@@ -201,6 +207,7 @@ def get_engine_config(
     ------
     ValueError
         If *name* is not a registered engine.
+
     """
     config = _load_yaml_config(yaml_path)
     engines = config.get("engines", {})
@@ -213,13 +220,15 @@ def get_engine_config(
 
 
 def show_engines(yaml_path: Optional[Path] = None) -> None:
-    """Print a formatted description of all available engines.
+    """
+    Print a formatted description of all available engines.
 
     Parameters
     ----------
     yaml_path :
         Path to an engine YAML file.  Defaults to the built-in
         ``engines/engines.yaml``.
+
     """
     config = _load_yaml_config(yaml_path)
     engines = config.get("engines", {})
@@ -235,7 +244,8 @@ def show_engines(yaml_path: Optional[Path] = None) -> None:
 def get_predicates(
     name: str, yaml_path: Optional[Path] = None
 ) -> Dict[str, Dict[str, Any]]:
-    """Return the predicate metadata dict for an engine from its YAML config.
+    """
+    Return the predicate metadata dict for an engine from its YAML config.
 
     Combines the ``predicates`` section with metadata harvested from the
     ``relations`` section (each relation entry may carry ``name`` and
@@ -248,6 +258,7 @@ def get_predicates(
     yaml_path :
         Path to an engine YAML file.  Defaults to the built-in
         ``engines/engines.yaml``.
+
     """
     cfg = get_engine_config(name, yaml_path)
     predicates = dict(cfg.get("predicates", {}))
@@ -345,7 +356,8 @@ def _register_template_predicate(nl, img, pred_name):
 def _fetch_nilearn_template(
     nl, tpl_name: str, params: dict, data_dir: Path
 ) -> None:
-    """Download a template via nilearn and optionally register a voxel predicate.
+    """
+    Download a template via nilearn and optionally register a voxel predicate.
 
     Parameters
     ----------
@@ -390,10 +402,12 @@ def _fetch_nilearn_template(
 def _fetch_templateflow_template(
     nl, tpl_name: str, params: dict
 ) -> None:
-    """Download a template via TemplateFlow and optionally register a voxel
-    predicate.
+    """
+    Download a template via TemplateFlow.
 
-    Requires the ``templateflow`` Python package (``pip install templateflow``).
+    Optionally registers a voxel predicate.
+    Requires the ``templateflow`` Python package.
+
     """
     try:
         from templateflow import api as tflow
@@ -427,8 +441,6 @@ def _fetch_templateflow_template(
 
     pred_name = params.get("predicate")
     if pred_name:
-        import nibabel as nib
-
         img = nib.load(str(tpl_path))
         _register_template_predicate(nl, img, pred_name)
 
@@ -436,11 +448,12 @@ def _fetch_templateflow_template(
 def _load_template(
     nl, tpl_name: str, params: dict, data_dir: Path
 ) -> None:
-    """Download a neuroimaging template and optionally register a voxel
-    predicate.
+    """
+    Download a neuroimaging template and optionally register a voxel predicate.
 
     Dispatches to the backend named by *params['source']* (``nilearn`` or
     ``templateflow``).
+
     """
     source = params.get("source", "nilearn")
     if source == "nilearn":
@@ -487,10 +500,12 @@ _ATLAS_REGISTRY = {
 
 
 def _parse_labels(raw_labels):
-    """Yield ``(index, name)`` pairs from a nilearn labels value.
+    """
+    Yield ``(index, name)`` pairs from a nilearn labels value.
 
     Handles the three formats returned by different nilearn versions:
     ``dict``, ``list``, and numpy structured array.
+
     """
     if isinstance(raw_labels, dict):
         yield from raw_labels.items()
@@ -535,7 +550,8 @@ def _load_deterministic_atlas(
 def _load_probabilistic_atlas(
     nl, atlas_name: str, params: dict, data_dir: Path
 ) -> None:
-    """Load a probabilistic atlas (e.g. DiFuMo) as engine predicates.
+    """
+    Load a probabilistic atlas (e.g. DiFuMo) as engine predicates.
 
     Registers two predicates:
 
@@ -544,6 +560,7 @@ def _load_probabilistic_atlas(
     * ``{prob_predicate_name}(component, i, j, k, prob)`` — the raw
       probability value at each voxel for each component (filtered by
       ``prob_threshold``, default 0.01, to keep the set size manageable).
+
     """
     info = _ATLAS_REGISTRY[atlas_name]
     fetch_kw = {k: v for k, v in params.items() if k != "predicate_name"}
@@ -738,7 +755,8 @@ def build_engine(
     resolution: Optional[float] = None,
     yaml_path: Optional[Path] = None,
 ) -> "NeurolangPDL":
-    """Create and populate a :class:`NeurolangPDL` engine from its
+    """
+    Create and populate a :class:`NeurolangPDL` engine from its
     declarative YAML config.
 
     Parameters
@@ -764,6 +782,7 @@ def build_engine(
         If *name* is not a registered engine.
     ImportError
         If the engine's Python init module cannot be loaded.
+
     """
     from neurolang.frontend import NeurolangPDL
 
