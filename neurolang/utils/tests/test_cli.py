@@ -1,6 +1,4 @@
-"""
-Tests for the neurolang-query CLI module.
-"""
+"""Tests for the neurolang-query CLI module."""
 
 import pytest
 
@@ -36,10 +34,11 @@ class TestBuildParser:
         assert args.query == "ans(x) :- R(x)"
         assert args.file is None
 
-    def test_file_arg(self):
+    def test_file_arg(self, tmp_path):
         parser = _build_parser()
-        args = parser.parse_args(["--file", "/tmp/q.dl"])
-        assert args.file == "/tmp/q.dl"
+        fp = tmp_path / "q.dl"
+        args = parser.parse_args(["--file", str(fp)])
+        assert args.file == str(fp)
         assert args.query is None
 
     def test_engine(self):
@@ -79,16 +78,17 @@ class TestBuildParser:
         args = parser.parse_args(["--data-dir", "/custom/path"])
         assert args.data_dir == "/custom/path"
 
-    def test_mutually_exclusive_query_and_file(self):
+    def test_mutually_exclusive_query_and_file(self, tmp_path):
         parser = _build_parser()
         with pytest.raises(SystemExit):
-            parser.parse_args(["ans(x) :- R(x)", "--file", "/tmp/q.dl"])
+            parser.parse_args(["ans(x) :- R(x)", "--file", str(tmp_path / "q.dl")])
 
-    def test_short_flags(self):
+    def test_short_flags(self, tmp_path):
         parser = _build_parser()
-        args = parser.parse_args(["-e", "destrieux", "-f", "/tmp/q.dl", "-l"])
+        fp = tmp_path / "q.dl"
+        args = parser.parse_args(["-e", "destrieux", "-f", str(fp), "-l"])
         assert args.engine == "destrieux"
-        assert args.file == "/tmp/q.dl"
+        assert args.file == str(fp)
         assert args.list_predicates is True
 
     def test_list_engines_flag(self):
@@ -187,8 +187,6 @@ engines:
 
     def test_edb_program_roundtrip(self):
         """In-memory EDB relations can be queried and formatted."""
-        from neurolang.utils.cli import _execute_program, _format_result
-
         from neurolang.frontend import NeurolangPDL
 
         nl = NeurolangPDL()
@@ -355,6 +353,7 @@ class TestFormatResult:
 
 
 class TestExecuteProgram:
+
     """Integration tests with a real NeurolangPDL engine and tiny data."""
 
     @pytest.fixture
@@ -456,11 +455,12 @@ class TestSquallFlag:
         assert args.squall is True
         assert args.query == "obtain every Person."
 
-    def test_squall_with_file(self):
+    def test_squall_with_file(self, tmp_path):
         parser = _build_parser()
-        args = parser.parse_args(["-s", "-f", "/tmp/q.squall"])
+        fp = tmp_path / "q.squall"
+        args = parser.parse_args(["-s", "-f", str(fp)])
         assert args.squall is True
-        assert args.file == "/tmp/q.squall"
+        assert args.file == str(fp)
 
 
 # ---------------------------------------------------------------------------
@@ -469,6 +469,7 @@ class TestSquallFlag:
 
 
 class TestExecuteSquallProgram:
+
     """Integration tests with a real NeurolangPDL engine and squall queries."""
 
     @pytest.fixture

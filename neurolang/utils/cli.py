@@ -120,8 +120,6 @@ def _format_result(
 
         return _emit(_rename_unnamed_columns(df, column_names), fmt)
     except Exception as exc:
-        import sys
-
         print(f"Warning: result formatting failed: {exc}", file=sys.stderr)
         return str(result)
 
@@ -207,7 +205,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _execute_program(nl: NeurolangPDL, program_text: str):
-    """Execute a Datalog program using direct chase evaluation.
+    """
+    Execute a Datalog program using direct chase evaluation.
 
     This bypasses :meth:`NeurolangPDL._execute_query` which does not support
     query bodies that are conjunctions, comparisons, or EDB-only predicates.
@@ -225,6 +224,7 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
     Returns
     -------
     ``None``, ``bool``, or a relational algebra set.
+
     """
     from neurolang.frontend.datalog.standard_syntax import (
         parser as datalog_parser,
@@ -284,7 +284,8 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
 def _execute_squall_program(
     nl: NeurolangPDL, program_text: str
 ):
-    """Execute a SQUALL (controlled English) program.
+    """
+    Execute a SQUALL (controlled English) program.
 
     Delegates to :meth:`NeurolangPDL.execute_squall_program`, which
     handles ``define as …`` rules and ``obtain …`` queries.
@@ -304,6 +305,7 @@ def _execute_squall_program(
         When there is exactly one ``obtain`` query.
     Dict[str, NamedRelationalAlgebraFrozenSet]
         When there are multiple ``obtain`` queries.
+
     """
     return nl.execute_squall_program(program_text)
 
@@ -327,12 +329,14 @@ def _list_predicates(engine_name: str) -> None:
 
 
 def _list_sets(nl: NeurolangPDL) -> None:
-    """Print the actual Relational Algebra sets registered in the engine.
+    """
+    Print the actual Relational Algebra sets registered in the engine.
 
     Iterates over the engine's symbol table and displays every entry backed
     by a :class:`~neurolang.datalog.WrappedRelationalAlgebraSet` — i.e.,
     concrete extensional (EDB) relations loaded from CSV/TSV files or added
     via the Python API.
+
     """
     print()
     st = nl.program_ir.symbol_table
