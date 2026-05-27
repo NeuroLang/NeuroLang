@@ -1,0 +1,83 @@
+engines:
+  neurosynth:
+    description: >
+      Neurosynth database — forward and reverse inference over
+      reported activation peaks, TF-IDF term frequencies, and a
+      probabilistic choice over studies.
+    requires_mni_mask: true
+    use_base_symbols: true
+    builtins: [exp, log, startswith]
+    python_init: "neurolang.utils.engines.neurosynth.init"
+    datalog_init: |
+      study_with_peaks(S) :- peak_reported(I, J, K, S)
+      origin_peak(I, J, K, S) :- peak_reported(I, J, K, S), I == 0
+    probabilistic_choice:
+      selected_study:
+        source: study
+        description: "Uniform probabilistic choice over studies"
+    predicates:
+      peak_reported:
+        arity: 4
+        columns: [i, j, k, study_id]
+        description: "Reported activation peaks in voxel coordinates"
+      study:
+        arity: 1
+        columns: [study_id]
+        description: "All study identifiers"
+      term_in_study_tfidf:
+        arity: 3
+        columns: [term, tfidf, study_id]
+        description: "Term frequency–inverse document frequency values"
+      selected_study:
+        arity: 1
+        columns: [study_id]
+        description: "Uniform probabilistic choice over studies"
+      voxel:
+        arity: 3
+        columns: [i, j, k]
+        description: "Every voxel inside the MNI mask"
+
+  destrieux:
+    description: >
+      Destrieux 2009 cortical atlas — region definitions for the
+      Destrieux cortical parcellation, each mapped to a volumetric
+      brain region (ExplicitVBR).
+    requires_mni_mask: true
+    use_base_symbols: true
+    builtins: [exp, log, startswith]
+    atlases:
+      destrieux:
+        predicate_name: destrieux
+        description: "Cortical region name and ExplicitVBR geometry"
+    datalog_init: |
+      left_region(N, R) :- destrieux(N, R), startswith('lh', N)
+      right_region(N, R) :- destrieux(N, R), startswith('rh', N)
+    predicates:
+      destrieux:
+        arity: 2
+        columns: [name, region]
+        description: "Cortical region name and ExplicitVBR geometry"
+
+  # Example template usage (commented out — uncomment to enable):
+  #
+  #   template_demo:
+  #     description: "Demonstrates declarative template loading"
+  #     requires_mni_mask: false
+  #     builtins: [exp, log, startswith]
+  #     templates:
+  #       # Nilearn brain mask → voxel(i, j, k) predicate
+  #       mni_brain:
+  #         source: nilearn
+  #         variant: brain_mask
+  #         predicate: voxel
+  #       # Nilearn T1 template (2mm) — just download, no predicate
+  #       mni_t1:
+  #         source: nilearn
+  #         variant: template
+  #         resolution: 2
+  #       # TemplateFlow T1 template at 1mm — requires ``pip install templateflow``
+  #       t1_highres:
+  #         source: templateflow
+  #         template: MNI152NLin2009cAsym
+  #         resolution: 1
+  #         suffix: T1w

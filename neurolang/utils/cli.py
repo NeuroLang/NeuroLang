@@ -1,0 +1,451 @@
+"""
+Command-line interface for NeuroLang query execution.
+
+Provides a ``neurolang-query`` command that initializes a NeuroLang engine
+from the :ref:`engine registry <neurolang.utils.engine_registry>` and
+executes Datalog queries from arguments, files, or standard input.
+
+Usage
+-----
+::
+
+    # List available engines
+    neurolang-query --list-engines
+
+    # List predicates for an engine
+    neurolang-query --engine neurosynth --list-predicates
+
+    # List RA sets for an engine
+    neurolang-query --engine neurosynth --list-sets
+
+    # Inline query
+    neurolang-query "ans(t) :- term_in_study_tfidf(t, w, s)"
+
+    # Query from file
+    neurolang-query -f query.dl
+
+    # Query from stdin
+    echo "ans(t) :- term_in_study_tfidf(t, f, s)" | neurolang-query
+
+    # Destrieux atlas engine
+    neurolang-query --engine destrieux "ans(name) :- destrieux(name, region)"
+
+    # Squall (controlled English) query
+    neurolang-query --squall "obtain every peak_reported."
+    neurolang-query --squall -f query.squall
+"""
+
+import argparse
+import sys
+import time
+from pathlib import Path
+from typing import Optional
+
+import pandas as pd
+
+from neurolang import expressions as ir
+from neurolang.datalog.chase import Chase
+from neurolang.datalog.expressions import Implication
+from neurolang.datalog import WrappedRelationalAlgebraSet
+from neurolang.frontend import NeurolangPDL
+from neurolang.utils import engine_registry
+
+
+def _read_query(args) -> str:
+    """Obtain the Datalog program from the CLI arguments."""
+    if args.file:
+        return Path(args.file).read_text(encoding="utf-8")
+    if args.query:
+        return args.query
+    if not sys.stdin.isatty():
+        return sys.stdin.read()
+    parser = _build_parser()
+    parser.print_help()
+    sys.exit(1)
+
+
+def _rename_unnamed_columns(df, column_names):
+    """Replace auto-generated column names with *column_names* when safe."""
+    if column_names is not None and len(column_names) == len(df.columns):
+        unnamed = all(
+            isinstance(c, int)
+            or (isinstance(c, str) and c.startswith("c"))
+            for c in df.columns
+        )
+        if unnamed:
+            df.columns = column_names
+    return df
+
+
+def _emit(df, fmt):
+    """Format a DataFrame in *fmt* mode (table, csv, or json)."""
+    if df.empty:
+        return "(empty)"
+    if fmt == "csv":
+        return df.to_csv(index=False)
+    if fmt == "json":
+        return df.to_json(orient="records", indent=2)
+    return df.to_string(index=False)
+
+
+def _format_result(
+    result, fmt: str = "table", column_names: Optional[list[str]] = None
+) -> str:
+    """Format a query result for display."""
+    if result is None:
+        return ""
+    if isinstance(result, bool):
+        return "true" if result else "false"
+
+    try:
+        # Unwrap Constant -> concrete set when chase produced wrapped result
+        if hasattr(result, "value") and hasattr(result.value, "unwrap"):
+            inner = result.value.unwrap()
+            if hasattr(inner, "as_pandas_dataframe"):
+                return _emit(
+                    _rename_unnamed_columns(inner.as_pandas_dataframe(), column_names),
+                    fmt,
+                )
+            result = inner
+
+        # Get a DataFrame from the bare set (named or unnamed columns)
+        if hasattr(result, "columns") and len(result.columns) > 0:
+            df = pd.DataFrame(iter(result), columns=result.columns)
+        else:
+            rows = list(iter(result))
+            if not rows:
+                return "(empty)"
+            arity = result.arity if hasattr(result, "arity") else len(rows[0])
+            df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
+
+        return _emit(_rename_unnamed_columns(df, column_names), fmt)
+    except Exception as exc:
+        print(f"Warning: result formatting failed: {exc}", file=sys.stderr)
+        return str(result)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="neurolang-query",
+        description="Run a Datalog query against a NeuroLang dataset engine.",
+    )
+
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
+        "query",
+        nargs="?",
+        default=None,
+        help="Datalog program string (e.g. 'ans(x) :- P(x)'). "
+        "If omitted and stdin is a pipe, read from stdin.",
+    )
+    source.add_argument(
+        "--file",
+        "-f",
+        metavar="PATH",
+        default=None,
+        help="Read the Datalog program from a file.",
+    )
+
+    parser.add_argument(
+        "--engine",
+        "-e",
+        default="neurosynth",
+        help="Dataset engine to use (default: neurosynth).  "
+        "Use --list-engines to see all available engines.",
+    )
+    parser.add_argument(
+        "--data-dir",
+        "-d",
+        metavar="DIR",
+        default="neurolang_data",
+        help="Directory for cached data downloads (default: neurolang_data).",
+    )
+    parser.add_argument(
+        "--resolution",
+        "-r",
+        type=float,
+        default=None,
+        metavar="MM",
+        help="Isotropic MNI resolution in mm (default: native).",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("table", "csv", "json"),
+        default="table",
+        help="Output format (default: table).",
+    )
+    parser.add_argument(
+        "--list-predicates",
+        "-l",
+        action="store_true",
+        help="Instead of running a query, list the available predicates "
+        "for the engine and exit.",
+    )
+    parser.add_argument(
+        "--list-sets",
+        action="store_true",
+        help="Instead of running a query, list the available Relational "
+        "Algebra sets (EDB relations) for the engine and exit.",
+    )
+    parser.add_argument(
+        "--list-engines",
+        action="store_true",
+        help="List available dataset engines and exit.",
+    )
+    parser.add_argument(
+        "--squall",
+        "-s",
+        action="store_true",
+        help="Interpret the input as a SQUALL (controlled English) program "
+        "instead of classical Datalog syntax.  Supports ``define as`` "
+        "rule definitions and ``obtain`` queries.",
+    )
+
+    return parser
+
+
+def _execute_program(nl: NeurolangPDL, program_text: str):
+    """
+    Execute a Datalog program using direct chase evaluation.
+
+    This bypasses :meth:`NeurolangPDL._execute_query` which does not support
+    query bodies that are conjunctions, comparisons, or EDB-only predicates.
+    Instead it converts every ``Query`` into an ``Implication`` rule, adds it
+    to the program's IDB, and runs the deterministic chase — the same strategy
+    used by the base :class:`~neurolang.frontend.QueryBuilderDatalog`.
+
+    Parameters
+    ----------
+    nl :
+        Initialised engine (``NeurolangPDL`` or ``NeurolangDL``).
+    program_text :
+        Datalog program, possibly containing one ``Query`` rule.
+
+    Returns
+    -------
+    ``None``, ``bool``, or a relational algebra set.
+
+    """
+    from neurolang.frontend.datalog.standard_syntax import (
+        parser as datalog_parser,
+    )
+
+    ir_prog = datalog_parser(program_text)
+
+    formulas = list(ir_prog.formulas)
+    queries = [f for f in formulas if isinstance(f, ir.Query)]
+    others = [f for f in formulas if not isinstance(f, ir.Query)]
+
+    for f in others:
+        nl.program_ir.walk(f)
+
+    if len(queries) == 0:
+        return None
+
+    if len(queries) > 1:
+        raise ValueError("Only a single query per program is supported.")
+
+    q = queries[0]
+
+    # Extract both the head predicate name and the argument variable names
+    # from the parsed query head.  The head is always a FunctionApplication
+    # whose functor is a Symbol (simple) or a Lambda wrapping a Symbol (parser
+    # sugar), and whose args are Symbol nodes whose .name carries the Datalog
+    # variable name.
+    if isinstance(q.head, ir.FunctionApplication):
+        column_names = [a.name for a in q.head.args]
+        functor = (
+            q.head.functor.body
+            if isinstance(q.head.functor, ir.Lambda)
+            else q.head.functor
+        )
+    else:
+        column_names = None
+        functor = q.head
+
+    pred_name = (
+        functor.name if isinstance(functor, ir.Symbol) else str(functor)
+    )
+
+    # Query → Implication so the DatalogProgram walker registers it as IDB
+    rule = Implication(q.head, q.body)
+    nl.program_ir.walk(rule)
+
+    chase = Chase(nl.program_ir)
+    solution = chase.build_chase_solution()
+
+    for sym, val in solution.items():
+        if sym.name == pred_name:
+            return val, column_names
+
+    return None
+
+
+def _execute_squall_program(
+    nl: NeurolangPDL, program_text: str
+):
+    """
+    Execute a SQUALL (controlled English) program.
+
+    Delegates to :meth:`NeurolangPDL.execute_squall_program`, which
+    handles ``define as …`` rules and ``obtain …`` queries.
+
+    Parameters
+    ----------
+    nl :
+        Initialised engine.
+    program_text :
+        SQUALL program text.
+
+    Returns
+    -------
+    None
+        When there are no ``obtain`` queries.
+    NamedRelationalAlgebraFrozenSet
+        When there is exactly one ``obtain`` query.
+    Dict[str, NamedRelationalAlgebraFrozenSet]
+        When there are multiple ``obtain`` queries.
+
+    """
+    return nl.execute_squall_program(program_text)
+
+
+def _list_predicates(engine_name: str) -> None:
+    """Print predicate metadata from the YAML engine config."""
+    cfg = engine_registry.get_engine_config(engine_name)
+    print(f"\nEngine: {engine_name}")
+    print(f"  {cfg.get('description', '')}")
+    predicates = engine_registry.get_predicates(engine_name)
+    if not predicates:
+        print("\n  (no predicate metadata declared)")
+        return
+    print("\nAvailable predicates:")
+    for pname, info in predicates.items():
+        cols = ", ".join(info.get("columns", []))
+        desc = info.get("description", "")
+        print(f"\n  {pname}({cols})")
+        if desc:
+            print(f"    {desc}")
+
+
+def _list_sets(nl: NeurolangPDL) -> None:
+    """
+    Print the actual Relational Algebra sets registered in the engine.
+
+    Iterates over the engine's symbol table and displays every entry backed
+    by a :class:`~neurolang.datalog.WrappedRelationalAlgebraSet` — i.e.,
+    concrete extensional (EDB) relations loaded from CSV/TSV files or added
+    via the Python API.
+
+    """
+    print()
+    st = nl.program_ir.symbol_table
+    sets_found = []
+
+    for sym_name, sym_val in st.items():
+        val = getattr(sym_val, "value", sym_val)
+        if not isinstance(val, WrappedRelationalAlgebraSet):
+            continue
+        ra_set = val.unwrap()
+        arity = ra_set.arity
+        columns = list(ra_set.columns)
+        try:
+            size = len(ra_set)
+        except Exception:
+            size = "?"
+        clean_name = getattr(sym_name, "name", str(sym_name))
+        sets_found.append((clean_name, columns, size, arity))
+
+    if not sets_found:
+        print("  (no RA sets registered)")
+        return
+
+    name_w = max(len(s) for s, _, _, _ in sets_found) + 2
+    cols_w = max(len(str(c)) for _, c, _, _ in sets_found) + 2
+    size_w = max(len(str(s)) for _, _, s, _ in sets_found) + 2
+
+    header = (
+        f"  {'Set':<{name_w}}  {'Columns':<{cols_w}}  {'Rows':>{size_w}}  Arity"
+    )
+    print(header)
+    print(f"  {'-' * name_w}  {'-' * cols_w}  {'-' * size_w}  -----")
+    for name, columns, size, arity in sorted(sets_found, key=lambda x: x[0]):
+        cols_str = str(columns)
+        print(
+            f"  {name:<{name_w}}  {cols_str:<{cols_w}}  {str(size):>{size_w}}  {arity}"
+        )
+    print(f"\n  Total RA sets: {len(sets_found)}")
+
+
+def main(argv: Optional[list] = None) -> None:
+    """CLI entry point: parse arguments, build engine, run query."""
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    if args.list_engines:
+        engine_registry.show_engines()
+        return
+
+    if args.engine not in engine_registry.list_engine_names():
+        available = ", ".join(engine_registry.list_engine_names())
+        print(
+            f"Error: unknown engine {args.engine!r}. "
+            f"Available engines: {available}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution
+    )
+
+    if args.list_predicates:
+        _list_predicates(args.engine)
+        return
+
+    if args.list_sets:
+        _list_sets(nl)
+        return
+
+    program = _read_query(args)
+    if not program or not program.strip():
+        print("Error: no query provided.", file=sys.stderr)
+        sys.exit(1)
+
+    t0 = time.perf_counter()
+
+    if args.squall:
+        result = _execute_squall_program(nl, program)
+        if isinstance(result, dict):
+            for key, sub_result in result.items():
+                output = _format_result(
+                    sub_result, fmt=args.format, column_names=None
+                )
+                if output:
+                    print(f"── {key} ──")
+                    print(output)
+                    print()
+        else:
+            output = _format_result(
+                result, fmt=args.format, column_names=None
+            )
+            if output:
+                print(output)
+    else:
+        result = _execute_program(nl, program)
+        if isinstance(result, tuple):
+            result, column_names = result
+        else:
+            column_names = None
+        output = _format_result(
+            result, fmt=args.format, column_names=column_names
+        )
+        if output:
+            print(output)
+
+    elapsed = time.perf_counter() - t0
+    print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)
+
+
+if __name__ == "__main__":
+    main()

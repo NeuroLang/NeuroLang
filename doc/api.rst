@@ -44,6 +44,17 @@ Intermediate Language Representations
    relational_algebra_provenance 
 
 
+Command-line Interface & Engine Registry
+-----------------------------------------
+
+.. autosummary::
+   :toctree: gen_api
+
+   neurolang.utils.cli
+   neurolang.utils.engine_registry
+   neurolang.utils.engines.base
+
+
 Indices and tables
 ------------------
 * :ref:`genindex`
