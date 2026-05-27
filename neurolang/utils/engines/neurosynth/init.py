@@ -23,7 +23,6 @@ import pandas as pd
 
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.neurosynth_utils import StudyID
-from neurolang.utils.engines.base import init_base_engine
 
 try:
     from nilearn.datasets.utils import _fetch_files
@@ -45,8 +44,6 @@ def init_engine(
     data_dir :
         Directory under which downloaded data is cached.
     """
-    init_base_engine(nl, mask)
-
     ns_database_fn, ns_features_fn = _fetch_files(
         str(data_dir / "neurosynth"),
         [

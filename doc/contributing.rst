@@ -134,8 +134,9 @@ dataset backends.  To add a new engine:
    ``relations`` (CSV/TSV files loaded as predicates) run after the
    Python init.  See :ref:`concepts` for details.
 
-2. Create the init module at
-   ``neurolang/utils/engines/my_dataset/init.py`` that exports:
+ 2. If your engine needs custom Python logic (data downloads, non-trivial
+    processing), create the init module at
+    ``neurolang/utils/engines/my_dataset/init.py`` that exports:
 
    .. code-block:: python
 
@@ -151,10 +152,37 @@ dataset backends.  To add a new engine:
           \"\"\"Register symbols and load data into *nl*.\"\"\"
           # Register predicates with nl.add_tuple_set, etc.
 
-   If your engine needs the common neuroimaging symbols (``exp``, ``log``,
-   ``agg_count``, ``agg_create_region``, etc.), call
-   ``neurolang.utils.engines.base.init_base_engine(nl, mask)``
-   from within ``init_engine``.
+    If your engine needs the common neuroimaging symbols (``agg_count``,
+    ``agg_create_region``, ``agg_create_region_overlay``,
+    ``principal_direction``, ``region_union``), set
+    ``use_base_symbols: true`` in the YAML entry instead of calling
+    ``init_base_engine()`` from Python::
+
+        my_dataset:
+          description: "..."
+          requires_mni_mask: true
+          use_base_symbols: true
+          builtins: [exp, log, startswith]
+          ...
+
+    This replaces the need for a Python init script when your engine
+    only needs the standard neuroimaging symbols plus declarative YAML
+    fields (``atlases``, ``relations``, ``datalog_init``, etc.).  See the
+    ``destrieux`` engine entry for a complete example of a YAML-only engine.
+
+    For engines that require custom data processing (like NeuroSynth's
+    peak coordinate conversion), you still write a Python init module.
+    In that case, import and call ``init_base_engine`` if you need the
+    base symbols::
+
+        from neurolang.utils.engines.base import init_base_engine
+
+        def init_engine(nl, mask, data_dir):
+            init_base_engine(nl, mask)
+            # ... custom logic ...
+
+    If using ``use_base_symbols: true`` in the YAML, do **not** also call
+    ``init_base_engine`` from Python — the registry handles it for you.
 
 3. Add unit tests in ``neurolang/utils/tests/test_cli.py``, specifically
    in the ``TestEngineRegistry`` class to verify that your engine is

@@ -5,6 +5,7 @@ engines:
       reported activation peaks, TF-IDF term frequencies, and a
       probabilistic choice over studies.
     requires_mni_mask: true
+    use_base_symbols: true
     builtins: [exp, log, startswith]
     python_init: "neurolang.utils.engines.neurosynth.init"
     datalog_init: |
@@ -42,8 +43,8 @@ engines:
       Destrieux cortical parcellation, each mapped to a volumetric
       brain region (ExplicitVBR).
     requires_mni_mask: true
+    use_base_symbols: true
     builtins: [exp, log, startswith]
-    python_init: "neurolang.utils.engines.destrieux.init"
     atlases:
       destrieux:
         predicate_name: destrieux

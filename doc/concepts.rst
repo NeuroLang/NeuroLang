@@ -133,16 +133,28 @@ module handles YAML loading, MNI mask retrieval, and delegating to the
 engine's init script.
 
 **Init phases.**  When :func:`~neurolang.utils.engine_registry.build_engine`
-builds an engine, it runs up to eight phases in order:
+builds an engine, it runs up to nine phases in order:
 
 #. **Builtins** (``builtins``) — registers known functions (``exp``,
    ``log``, ``startswith``) as callable symbols.  Simple list in YAML::
 
        builtins: [exp, log, startswith]
 
+#. **Base symbols** (``use_base_symbols``) — when ``use_base_symbols: true``
+   is set (and ``requires_mni_mask`` is also true), the engine registry
+   automatically registers common neuroimaging symbols (``agg_count``,
+   ``agg_create_region``, ``agg_create_region_overlay``,
+   ``principal_direction``, ``region_union``) without needing a custom
+   Python init script.  This replaces calling
+   ``init_base_engine()`` from within a Python init module::
+
+       use_base_symbols: true
+
 #. **Python init** (``python_init``) — imports the module and calls
    ``init_engine(nl, mask, data_dir)``.  Use this for downloading data,
-   registering complex symbols, or loading neuroimaging atlases.
+   registering complex symbols, or loading neuroimaging atlases.  If
+   ``use_base_symbols`` already covers your needs, this phase can be
+   omitted entirely — see the ``destrieux`` engine entry for an example.
 
 #. **Downloads** (``downloads``) — fetches files from URLs before the
    other phases.  Supports archive extraction::
@@ -276,10 +288,17 @@ builds an engine, it runs up to eight phases in order:
          - url: "https://example.com/ontology.owl"
 
 All phases are optional — include only what your engine needs.
+If ``use_base_symbols`` and the declarative YAML fields (``atlases``,
+``templates``, ``relations``, ``datalog_init``, ``probabilistic_choice``)
+cover your engine, you can omit ``python_init`` entirely — the
+``destrieux`` engine is a complete example of this pattern.
 
-To add a new engine, create a YAML entry and a corresponding
-:mod:`init` module under :file:`neurolang/utils/engines/`.  See
-:mod:`neurolang.utils.engines.neurosynth.init` for a complete example.
+To add a new engine, create a YAML entry.  If you need a custom Python
+init script, add a corresponding :mod:`init` module under
+:file:`neurolang/utils/engines/`.  See
+:mod:`neurolang.utils.engines.neurosynth.init` for a complete Python init
+example, and the ``destrieux`` engine entry for a purely YAML-driven
+example.
 
 Architecture
 -------------

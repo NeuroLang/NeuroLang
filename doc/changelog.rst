@@ -63,6 +63,19 @@ Unreleased
   in the engine YAML instead of Python init code; the ``destrieux``
   predicate is now declared in the YAML ``atlases:`` section.
 
+* **Base symbols** — engines can set ``use_base_symbols: true`` in YAML
+  to register common neuroimaging symbols (``agg_count``,
+  ``agg_create_region``, ``agg_create_region_overlay``,
+  ``principal_direction``, ``region_union``) automatically, without a
+  Python init script.  ``region_union`` was moved into
+  :func:`~neurolang.utils.engines.base.init_base_engine` as part of this
+  change.
+
+* **YAML-only engines** — the ``destrieux`` engine no longer needs a
+  ``python_init`` module.  It is now fully declarative, using
+  ``use_base_symbols`` and the ``atlases:`` section.  The
+  :file:`neurolang/utils/engines/destrieux/init.py` module was removed.
+
 
 v0.0.1 (Alpha)
 --------------

@@ -6,7 +6,7 @@ import nibabel as nib
 import numpy as np
 
 from neurolang.frontend import NeurolangPDL
-from neurolang.regions import ExplicitVBR, ExplicitVBROverlay
+from neurolang.regions import ExplicitVBR, ExplicitVBROverlay, region_union
 
 
 def init_base_engine(
@@ -67,3 +67,9 @@ def init_base_engine(
         return (direction == main_dir) or (
             direction[::-1] == main_dir
         )
+
+    nl.add_symbol(
+        region_union,
+        name="region_union",
+        type_=Callable[[Iterable[ExplicitVBR]], ExplicitVBR],
+    )

@@ -634,6 +634,14 @@ def _phase_builtins(nl, cfg):
             nl.add_symbol(func, name=sym_name)
 
 
+def _phase_base_symbols(nl, cfg, mask):
+    """Register common neuroimaging symbols when ``use_base_symbols`` is set."""
+    if cfg.get("use_base_symbols", False) and mask is not None:
+        from neurolang.utils.engines.base import init_base_engine
+
+        init_base_engine(nl, mask)
+
+
 def _phase_python_init(nl, cfg, mask, data_dir):
     py_init = cfg.get("python_init")
     if not py_init:
@@ -767,6 +775,7 @@ def build_engine(
     nl = NeurolangPDL()
 
     _phase_builtins(nl, cfg)
+    _phase_base_symbols(nl, cfg, mask)
     _phase_python_init(nl, cfg, mask, data_dir)
     _phase_downloads(cfg, data_dir, name)
     _phase_templates(nl, cfg, data_dir, name)
