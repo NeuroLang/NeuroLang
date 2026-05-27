@@ -101,8 +101,7 @@ from .query_resolution_datalog import QueryBuilderDatalog
 
 
 def instance_lru_cache(key_fn, maxsize=128):
-    """
-    LRU cache decorator for instance methods with non-hashable arguments.
+    """LRU cache decorator for instance methods with non-hashable arguments.
 
     key_fn(*args, **kwargs) must return a hashable cache key.
     The cache is stored per-instance to avoid cross-instance sharing.
@@ -666,8 +665,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         maxsize=32,
     )
     def _rewrite_det_idb(self, det_idb):
-        """
-        Xrewrite det_idb against ontology constraints, LRU-cached per instance.
+        """Xrewrite det_idb against ontology constraints, LRU-cached per instance.
 
         Only the Xrewrite step is cached. The connector_rules scan that follows
         in _solve_deterministic_stratum accesses live program_ir and is NOT
