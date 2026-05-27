@@ -1,4 +1,5 @@
-"""NeuroSynth engine initialization.
+"""
+NeuroSynth engine initialization.
 
 Registers the following predicates:
 
@@ -43,6 +44,7 @@ def init_engine(
         MNI template image for voxel-space coordinate mapping.
     data_dir :
         Directory under which downloaded data is cached.
+
     """
     ns_database_fn, ns_features_fn = _fetch_files(
         str(data_dir / "neurosynth"),

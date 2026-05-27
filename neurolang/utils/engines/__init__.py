@@ -1,5 +1,4 @@
-"""
-Declarative engine definitions for the Neurolang-query CLI.
+"""Declarative engine definitions for the Neurolang-query CLI.
 
 Engines are declared in ``engines.yaml``, which provides metadata
 (description, predicates) and points to Python initialization scripts.

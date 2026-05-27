@@ -20,6 +20,7 @@ def init_base_engine(
         Fresh :class:`~neurolang.frontend.NeurolangPDL` instance.
     mask :
         MNI template image for voxel-space coordinate mapping.
+
     """
     @nl.add_symbol
     def agg_count(i: Iterable) -> np.int64:
