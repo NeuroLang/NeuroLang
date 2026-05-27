@@ -19,18 +19,21 @@ from ....logic import Conjunction
 from ....type_system import Unknown
 from ....utils import NamedRelationalAlgebraFrozenSet
 
+
 def _dummy_fn(a: int, b: float) -> bool:
     return a > b
 
 
+class _TypeResolutionSolver(TypeResolutionMixin, DatalogProgram):
+    """Combined solver so that self.walk(expression) flows through
+    to DatalogProgram.statement_intensional after type resolution."""
+
+
 @pytest.fixture
 def solver():
-    """Create a TypeResolutionMixin wired to a fresh DatalogProgram's
-    symbol table, with no EDB predicates loaded."""
-    program = DatalogProgram()
-    mixin = TypeResolutionMixin()
-    mixin.symbol_table = program.symbol_table
-    return mixin, program
+    """Create a _TypeResolutionSolver with no EDB predicates loaded."""
+    s = _TypeResolutionSolver()
+    return s, s
 
 
 def _typed_symbol(name, type_):
@@ -42,8 +45,6 @@ def _typed_symbol(name, type_):
 
 class TestTypeResolutionMixin:
     def test_edb_predicate_body_resolves_variable_types(self, solver):
-        """A single EDB predicate in the body provides column types
-        for the rule variables."""
         mixin, program = solver
 
         R = Symbol("R")
@@ -67,8 +68,6 @@ class TestTypeResolutionMixin:
         assert y.type is float or issubclass(y.type, float)
 
     def test_conjunctive_body_resolves_variables(self, solver):
-        """When the body is a Conjunction with an EDB predicate,
-        variable types are still resolved."""
         mixin, program = solver
 
         R = Symbol("R")
@@ -78,7 +77,6 @@ class TestTypeResolutionMixin:
 
         x = Symbol("x")
         y = Symbol("y")
-        t = Symbol("t")
         Q = Symbol("Q")
 
         conj = Conjunction((R(x, y),))
@@ -88,9 +86,7 @@ class TestTypeResolutionMixin:
         assert x.type is not Unknown
         assert y.type is not Unknown
 
-    def test_skipped_when_no_types_available(self, solver):
-        """When no body predicate has a known type in the symbol table,
-        the implication is returned unchanged."""
+    def test_rule_passes_through_when_no_types_available(self, solver):
         mixin, program = solver
 
         R = Symbol("R")
@@ -101,12 +97,9 @@ class TestTypeResolutionMixin:
         result = mixin.walk(rule)
 
         assert x.type is Unknown
-        assert result is rule
+        assert isinstance(result, type(rule))
 
     def test_partial_resolution_mixed_predicates(self, solver):
-        """When some body predicates have known types and others don't,
-        variables that appear in the typed predicate get their types
-        resolved."""
         mixin, program = solver
 
         R = Symbol("R")
@@ -125,8 +118,6 @@ class TestTypeResolutionMixin:
         assert y.type is Unknown
 
     def test_builtin_callable_body_resolves_arg_types(self, solver):
-        """A body predicate whose functor is a builtin Callable
-        provides parameter types."""
         mixin, program = solver
 
         fn_sym = Symbol("fn")
@@ -145,8 +136,6 @@ class TestTypeResolutionMixin:
         assert y.type is not Unknown
 
     def test_constant_arguments_do_not_block_typed_predicates(self, solver):
-        """Constant arguments in body predicates don't block type
-        inference from the predicate's column types."""
         mixin, program = solver
 
         R = Symbol("R")
