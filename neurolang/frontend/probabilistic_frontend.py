@@ -21,7 +21,6 @@ from typing import (
 )
 from uuid import uuid1
 
-import numpy as np
 import pandas as pd
 from neurolang.type_system import (
     get_args,
@@ -897,97 +896,3 @@ class NeurolangPDL(QueryBuilderDatalog):
             ra_set.projection_to_unnamed(*projections.keys())
         )
         return fe.Symbol(self, name)
-
-    def k_fold_assign(
-        self,
-        iterable: Iterable[Tuple[Any, ...]],
-        k: int = 10,
-        shuffle: bool = True,
-        seed: Optional[int] = None,
-        name: Optional[str] = None,
-    ) -> Tuple[fe.Symbol, fe.Symbol]:
-        """
-        Generate K-fold cross-validation assignments as a deterministic relation.
-
-        Each item in the iterable is assigned to one of k folds. The method
-        creates two relations:
-        - ``{name}_assign`` with columns ``(item_cols..., fold_id)`` mapping each
-          item to its fold.
-        - ``{name}_fold_id`` with column ``(fold_id,)`` enumerating all fold IDs.
-
-        The intended usage pattern within a Datalog query is:
-
-        .. code-block:: python
-
-            fold_assign, fold_set = nl.k_fold_assign(items, k=10, name="cv")
-
-            with nl.scope as e:
-                # training items per fold via negation over fold assignments
-                e.train_set[e.fold_id, e.item_id] = (
-                    fold_set[e.fold_id] &
-                    all_items[e.item_id] &
-                    ~fold_assign[e.item_id, e.fold_id]
-                )
-
-        The fold dimension becomes just another column in joins.  All standard
-        Datalog operators (negation, aggregation, projection) work across folds
-        without looping.
-
-        Parameters
-        ----------
-        iterable : Iterable[Tuple[Any, ...]]
-            Iterable of tuples to assign to folds.  Each tuple becomes one row
-            in the resulting relation, with an extra ``fold_id`` column appended.
-        k : int, optional
-            Number of folds, by default 10.
-        shuffle : bool, optional
-            Whether to shuffle items before assigning folds, by default True.
-        seed : Optional[int], optional
-            Random seed for reproducible fold assignments, by default None.
-        name : Optional[str], optional
-            Prefix for the output symbol names.  If None, a UUID is generated.
-
-        Returns
-        -------
-        Tuple[fe.Symbol, fe.Symbol]
-            ``(fold_assignment_symbol, fold_id_symbol)``.
-            - ``fold_assignment`` has columns ``(item_columns..., fold_id)``.
-            - ``fold_id_set`` has a single column ``(fold_id,)``.
-        """
-        if name is None:
-            name = str(uuid1())
-
-        if isinstance(iterable, pd.DataFrame):
-            iterable = iterable.rename(
-                columns={n: i for i, n in enumerate(iterable.columns)}
-            )
-
-        items = list(iterable)
-        n = len(items)
-
-        if shuffle:
-            rng = np.random.default_rng(seed)
-            rng.shuffle(items)
-
-        fold_ids_for_items = np.arange(n) % k
-
-        fold_assign_tuples = []
-        for item, fid in zip(items, fold_ids_for_items):
-            if isinstance(item, tuple):
-                item_tuple = item
-            elif isinstance(item, list):
-                item_tuple = tuple(item)
-            else:
-                item_tuple = (item,)
-            fold_assign_tuples.append(item_tuple + (int(fid),))
-
-        fold_id_tuples = [(i,) for i in range(k)]
-
-        assign_sym = self.add_tuple_set(
-            fold_assign_tuples, name=f"{name}_assign"
-        )
-        fold_sym = self.add_tuple_set(
-            fold_id_tuples, name=f"{name}_fold_id"
-        )
-
-        return assign_sym, fold_sym
