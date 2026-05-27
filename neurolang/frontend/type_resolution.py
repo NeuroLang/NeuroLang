@@ -1,10 +1,11 @@
-"""Type resolution mixin for RegionFrontendDatalogSolver.
+"""
+Type resolution mixin for RegionFrontendDatalogSolver.
 
 Propagates type information across Datalog rule predicates and variables
 using Unknown as a marker for unprocessed types.  Extracts types from
-extensional database (EDB) predicates (which carry concrete
-AbstractSet[Tuple[...]] types) and from builtin functions (which carry
-Callable types) and propagates them to variable symbols.
+extensional database (EDB) predicates which carry concrete
+AbstractSet[Tuple[...]] types and from builtin functions which carry
+Callable types and propagates them to variable symbols.
 
 Matches Implication nodes with a FunctionApplication or Conjunction
 body and resolves variable types before the expression continues through
@@ -22,24 +23,25 @@ from ..datalog.expressions import Implication
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction
 from ..type_system import (
     NeuroLangTypeException,
     Unknown,
     get_args,
-    infer_type,
     is_leq_informative,
     unify_types,
 )
 
 
 def _implication_has_untyped_body_predicates(expression):
-    """Guard: True when the expression has not yet been processed
-    and any body-predicate argument symbol has Unknown type.
+    """
+    Guard that allows matching when the expression still needs type
+    resolution.
 
-    The handler sets _nl_type_resolved on the expression after the first
-    pass, so subsequent match attempts through self.walk() skip this
-    pattern and fall through to downstream handlers.
+    Returns True when the expression has not yet been processed and any
+    body-predicate argument symbol has Unknown type. The handler sets
+    _nl_type_resolved on the expression after the first pass, so
+    subsequent match attempts through self.walk() skip this pattern and
+    fall through to downstream handlers.
     """
     if getattr(expression, '_nl_type_resolved', False):
         return False
@@ -55,7 +57,8 @@ def _implication_has_untyped_body_predicates(expression):
 
 
 class TypeResolutionMixin(PatternWalker):
-    """PatternWalker mixin that infers and propagates types in Datalog rules.
+    """
+    PatternWalker mixin that infers and propagates types in Datalog rules.
 
     Intercepts Implication nodes to resolve variable types from body-predicate
     functor lookups in the symbol table.  Returns self.walk(expression) to

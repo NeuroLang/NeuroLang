@@ -1,23 +1,21 @@
-"""Tests for TypeResolutionMixin.
+"""
+Tests for TypeResolutionMixin.
 
 Validates that types from EDB predicates and builtin functions are
 propagated to variable symbols in Datalog rules, and that rules with
 no resolvable type information are passed through unchanged.
 """
 
-from typing import AbstractSet, Callable, Tuple
+from typing import Callable
 
 import pytest
 
-from .... import expressions as ir
 from ....datalog.basic_representation import DatalogProgram
 from ....datalog.expressions import Implication
-from ....datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
-from ....expressions import Constant, FunctionApplication, Symbol
+from ....expressions import Constant, Symbol
 from ....frontend.type_resolution import TypeResolutionMixin
 from ....logic import Conjunction
 from ....type_system import Unknown
-from ....utils import NamedRelationalAlgebraFrozenSet
 
 
 def _dummy_fn(a: int, b: float) -> bool:
@@ -25,8 +23,10 @@ def _dummy_fn(a: int, b: float) -> bool:
 
 
 class _TypeResolutionSolver(TypeResolutionMixin, DatalogProgram):
-    """Combined solver so that self.walk(expression) flows through
-    to DatalogProgram.statement_intensional after type resolution."""
+    """
+    Combined solver so that self.walk(expression) flows through
+    to DatalogProgram.statement_intensional after type resolution.
+    """
 
 
 @pytest.fixture
@@ -34,13 +34,6 @@ def solver():
     """Create a _TypeResolutionSolver with no EDB predicates loaded."""
     s = _TypeResolutionSolver()
     return s, s
-
-
-def _typed_symbol(name, type_):
-    """Helper to create a Symbol with a specific type annotation."""
-    s = Symbol(name)
-    s.type = type_
-    return s
 
 
 class TestTypeResolutionMixin:
@@ -87,7 +80,7 @@ class TestTypeResolutionMixin:
         assert y.type is not Unknown
 
     def test_rule_passes_through_when_no_types_available(self, solver):
-        mixin, program = solver
+        mixin, _ = solver
 
         R = Symbol("R")
         x = Symbol("x")
