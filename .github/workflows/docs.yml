@@ -32,6 +32,25 @@ jobs:
       - name: Build HTML documentation
         run: make -C doc html SPHINXOPTS="--keep-going"
 
+      - name: Upload built docs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-docs
+          path: ./doc/_build/html
+
+      - name: Print artifact download link to job log
+        run: |
+          echo "### 📖 Documentation preview" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Download the built HTML docs from the **Artifacts** section at the top of this job page:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Link | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| [📦 Download artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) | Built HTML documentation (\`built-docs\` artifact) |" >> $GITHUB_STEP_SUMMARY
+          echo "| [👁️ Workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) | This workflow run page |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To preview locally, download and extract the archive, then open \`index.html\`." >> $GITHUB_STEP_SUMMARY
+
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: peaceiris/actions-gh-pages@v3
