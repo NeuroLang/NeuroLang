@@ -4,11 +4,13 @@ Query Builder Datalog
 Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
+import sys
 from collections import defaultdict
 from ..datalog.magic_sets import magic_rewrite
 from ..exceptions import (
     ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
 )
+from neurolang.utils.error_enrichment import enrich_exception
 from typing import (
     AbstractSet,
     Dict,
@@ -18,6 +20,7 @@ from typing import (
     Tuple,
     Type,
     Union,
+    cast,
 )
 from uuid import uuid1
 
@@ -338,42 +341,52 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         >>> q
         ... q: typing.AbstractSet[typing.Tuple[int]] = [(2,)]
         """
-        intermediate_representation = self.datalog_parser(code)
-        queries = [
-            rule
-            for rule in intermediate_representation.formulas
-            if isinstance(rule, ir.Query)
-        ]
-        if len(queries) == 0:
-            self.program_ir.walk(intermediate_representation)
-            return
-        elif len(queries) == 1:
-            query = self.frontend_translator.walk(queries[0])
-            program = logic.Union(
-                [
-                    rule
-                    for rule in intermediate_representation.formulas
-                    if not isinstance(rule, ir.Query)
-                ]
-            )
-            self.program_ir.walk(program)
-            return self.query(
-                query.head.arguments, query.body,
-                show_rewritten=show_rewritten, dry_run=dry_run,
-            )
-        else:
-            raise UnsupportedProgramError(
-                "Only one query, in the form of ans(...) :- R(...) is "
-                "supported. Datalog program has more than one query rule: "
-                "{}".format(
-                    "\n".join(
-                        [
-                            str(self.frontend_translator.walk(q))
-                            for q in queries
-                        ]
+        try:
+            intermediate_representation = self.datalog_parser(code)
+            queries = [
+                rule
+                for rule in intermediate_representation.formulas
+                if isinstance(rule, ir.Query)
+            ]
+            if len(queries) == 0:
+                self.program_ir.walk(intermediate_representation)
+                return
+            elif len(queries) == 1:
+                query = self.frontend_translator.walk(queries[0])
+                program = logic.Union(
+                    [
+                        rule
+                        for rule in intermediate_representation.formulas
+                        if not isinstance(rule, ir.Query)
+                    ]
+                )
+                self.program_ir.walk(program)
+                return self.query(
+                    query.head.arguments, query.body,
+                    show_rewritten=show_rewritten, dry_run=dry_run,
+                )
+            else:
+                raise UnsupportedProgramError(
+                    "Only one query, in the form of ans(...) :- R(...) is "
+                    "supported. Datalog program has more than one query rule: "
+                    "{}".format(
+                        "\n".join(
+                            [
+                                str(self.frontend_translator.walk(q))
+                                for q in queries
+                            ]
+                        )
                     )
                 )
-            )
+        except Exception:
+            _exc_type, exc, tb = sys.exc_info()
+            if exc is not None:
+                enrich_exception(
+                    cast(Exception, exc),
+                    query_text=code, engine_type="datalog",
+                )
+                raise cast(Exception, exc).with_traceback(tb)
+            raise
 
     @staticmethod
     def _process_squall_commands(parsed):
@@ -513,37 +526,47 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
         ['alice']
         """
-        parsed = squall_parser(code)
+        try:
+            parsed = squall_parser(code)
 
-        self._process_squall_commands(parsed)
+            self._process_squall_commands(parsed)
 
-        # Rules-only (no obtain) — backward-compat: returns Union/Implication
-        if not isinstance(parsed, SquallProgram):
+            # Rules-only (no obtain) — backward-compat: returns Union/Implication
+            if not isinstance(parsed, SquallProgram):
+                self._walk_squall_rules(parsed)
+                return None
+
+            # Walk all rule definitions into the engine (global scope).
             self._walk_squall_rules(parsed)
-            return None
 
-        # Walk all rule definitions into the engine (global scope).
-        self._walk_squall_rules(parsed)
+            if not parsed.queries:
+                return None
 
-        if not parsed.queries:
-            return None
+            # Execute each obtain query
+            results = {}
+            for i, q in enumerate(parsed.queries):
+                key = parsed.query_names.get(i, f"obtain_{i}")
+                ra = self._execute_single_squall_query(
+                    q, parsed.rules_and_choice_defs,
+                    show_rewritten=show_rewritten, dry_run=dry_run,
+                )
+                if not dry_run:
+                    results[key] = ra
 
-        # Execute each obtain query
-        results = {}
-        for i, q in enumerate(parsed.queries):
-            key = parsed.query_names.get(i, f"obtain_{i}")
-            ra = self._execute_single_squall_query(
-                q, parsed.rules_and_choice_defs,
-                show_rewritten=show_rewritten, dry_run=dry_run,
-            )
-            if not dry_run:
-                results[key] = ra
-
-        if dry_run:
-            return None
-        if len(results) == 1:
-            return next(iter(results.values()))
-        return results
+            if dry_run:
+                return None
+            if len(results) == 1:
+                return next(iter(results.values()))
+            return results
+        except Exception:
+            _exc_type, exc, tb = sys.exc_info()
+            if exc is not None:
+                enrich_exception(
+                    cast(Exception, exc),
+                    query_text=code, engine_type="squall",
+                )
+                raise cast(Exception, exc).with_traceback(tb)
+            raise
 
     def compute_datalog_program_for_autocompletion(
             self, code: str, autocompletion_code
