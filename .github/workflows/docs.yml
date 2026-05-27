@@ -48,12 +48,3 @@ jobs:
           publish_branch: master
           publish_dir: ./doc/_build/html
           force_orphan: true
-
-      - name: Deploy PR preview to fork Pages
-        if: github.event_name == 'pull_request'
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./doc/_build/html
-          destination_dir: pr-${{ github.event.number }}
-          publish_branch: gh-pages
