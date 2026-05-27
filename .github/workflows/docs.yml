@@ -32,7 +32,7 @@ jobs:
       - name: Build HTML documentation
         run: make -C doc html SPHINXOPTS="--keep-going"
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (production)
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -41,3 +41,12 @@ jobs:
           publish_branch: master
           publish_dir: ./doc/_build/html
           force_orphan: true
+
+      - name: Deploy PR preview to fork Pages
+        if: github.event_name == 'pull_request'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./doc/_build/html
+          destination_dir: pr-${{ github.event.number }}
+          publish_branch: gh-pages
