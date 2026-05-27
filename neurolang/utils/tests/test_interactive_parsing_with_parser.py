@@ -49,7 +49,7 @@ def test_interactive_facts():
     assert res == expected
 
     res = parser('A("x",', interactive=True)
-    expected = {'Signs': {'values': {'@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
+    expected = {'Signs': {'values': {'(', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
                 'Operators': {'values': {'-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>'}}}
     assert res == expected
 
@@ -59,7 +59,7 @@ def test_interactive_facts():
     assert res == expected
 
     res = parser("A('x', 3,", interactive=True)
-    expected = {'Signs': {'values': {'@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
+    expected = {'Signs': {'values': {'(', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
                 'Operators': {'values': {'-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>'}}}
     assert res == expected
 
@@ -271,7 +271,7 @@ def test_interactive_probabilistic_fact():
     assert res == expected
 
     res = parser('p::A(', interactive=True)
-    expected = {'Signs': {'values': {'@', ')'}}, 'Numbers': {'values': {'<float>', '<integer>'}},
+    expected = {'Signs': {'values': {'(', ')', '@'}}, 'Numbers': {'values': {'<float>', '<integer>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>'}}}
     assert res == expected
 
@@ -286,7 +286,7 @@ def test_interactive_probabilistic_fact():
     assert res == expected
 
     res = parser('0.8::A("a b",', interactive=True)
-    expected = {'Signs': {'values': {'@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
+    expected = {'Signs': {'values': {'(', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
                 'Operators': {'values': {'-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>'}}}
     assert res == expected
 
@@ -564,7 +564,7 @@ def test_interactive_lambda_application():
     assert res == expected
 
     res = parser('c := (lambda x: x', interactive=True)
-    expected = {'Signs': {'values': {'(', ')'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
+    expected = {'Signs': {'values': {'(', ')', ','}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
                 'Operators': {'values': {'*', '-', '+', '**', '/'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
 
