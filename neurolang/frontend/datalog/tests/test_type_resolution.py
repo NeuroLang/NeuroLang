@@ -269,6 +269,41 @@ class TestTypeResolutionMixin:
     # Coverage gap: callable with Ellipsis / variadic args (line 109)
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Coverage gap: type unification failure via exception (lines 92-95)
+    # ------------------------------------------------------------------
+
+    def test_type_unification_with_incompatible_types(self, solver):
+        """When two EDBs share a join variable with incompatible types
+        (here int vs str), unify_types raises NeuroLangTypeException.
+        The exception is caught and the predicate is skipped.
+        Covers lines 92-95 (except/continue in unification path)."""
+        mixin, program = solver
+
+        R = Symbol("R")
+        program.add_extensional_predicate_from_tuples(R, [(1, "a")])
+        S = Symbol("S")
+        program.add_extensional_predicate_from_tuples(S, [("x", 2.5)])
+
+        x = Symbol("x")
+        y = Symbol("y")
+        z = Symbol("z")
+        Q = Symbol("Q")
+
+        # R(x, y) sets x.type = int, y.type = str
+        # S(x, z) has row_type Tuple[str, float], would infer x.type = str
+        # int vs str are incompatible → unify_types raises → continue
+        conj = Conjunction((R(x, y), S(x, z)))
+        rule = Implication(Q(x, y, z), conj)
+        mixin.walk(rule)
+
+        # x still has its type from R (the continue only skips the
+        # current arg in the for loop, not the whole predicate)
+        assert x.type is int
+        assert y.type is str
+        # z gets float from S independently
+        assert z.type is float
+
     def test_callable_with_variadic_args(self, solver):
         """A builtin with variadic Callable[..., bool] type has no
         parameter types to extract — _column_types_from_entry returns
@@ -529,16 +564,22 @@ class TestTypeResolutionIntegration:
         """
         Predicate symbol in the program's symbol table has its type
         set (from the EDB or builtin entry), not left as Unknown.
+        Variable types across diverse column types are resolved.
         """
         from ....frontend.deterministic_frontend import NeurolangDL
         from .... import expressions as ir
         from ....type_system import Unknown
 
         nl = NeurolangDL()
-        nl.add_tuple_set([(1, 2.5)], name="R")
+        nl.add_tuple_set([(1, "hello", 2.5)], name="R")
 
         with nl.scope as e:
-            e.Q[e.x, e.y] = e.R[e.x, e.y]
+            e.Q[e.x, e.y, e.z] = e.R[e.x, e.y, e.z]
+            impl = self._get_stored_implication(nl)
+            atoms = self._get_body_atoms(impl)
+            assert atoms[0].args[0].type is int
+            assert atoms[0].args[1].type is str
+            assert atoms[0].args[2].type is float
 
         r_entry = nl.program_ir.symbol_table.get(ir.Symbol("R"))
         assert r_entry is not None
@@ -557,16 +598,20 @@ class TestTypeResolutionIntegration:
         from ....expressions import Symbol
 
         solver = RegionFrontendDatalogSolver()
-        R, x, y, Q = Symbol("R"), Symbol("x"), Symbol("y"), Symbol("Q")
+        R, x, y, z, Q = (
+            Symbol("R"), Symbol("x"), Symbol("y"),
+            Symbol("z"), Symbol("Q"),
+        )
         solver.add_extensional_predicate_from_tuples(
-            R, [(1, 2.5), (3, 4.5)]
+            R, [(1, "hello", 2.5), (3, "world", 4.5)]
         )
 
-        rule = Implication(Q(x, y), R(x, y))
+        rule = Implication(Q(x, y, z), R(x, y, z))
         result = solver.walk(rule)
 
         assert x.type is int
-        assert y.type is float
+        assert y.type is str
+        assert z.type is float
         assert result.consequent.type is bool
 
     # ------------------------------------------------------------------
