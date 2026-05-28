@@ -7,24 +7,17 @@ extensional database (EDB) predicates which carry concrete
 AbstractSet[Tuple[...]] types and from builtin functions which carry
 Callable types and propagates them to variable symbols.
 
-Matches FunctionApplication nodes during the walker's recursive traversal,
-leaving Implication handling to downstream MRO handlers such as
-DatalogProgramMixin.statement_intensional.  A catch-all rule walks children
-for all non-Implication expressions so the mixin works with PatternWalker's
-non-recursive walk.
+Matches FunctionApplication nodes during the walker's recursive traversal.
+Tree recursion is handled by ExpressionWalker in the downstream MRO, so this
+mixin needs no catch-all — only the specific FunctionApplication pattern is
+registered.
 """
 
 from typing_inspect import is_callable_type
 
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ..expression_walker import PatternWalker, add_match
-from ..datalog.expressions import Implication
-from ..expressions import (
-    Constant,
-    Expression,
-    FunctionApplication,
-    Symbol,
-)
+from ..expressions import Constant, FunctionApplication, Symbol
 from ..type_system import (
     NeuroLangTypeException,
     Unknown,
@@ -43,9 +36,9 @@ class TypeResolutionMixin(PatternWalker):
     types are propagated to argument symbols.  For builtin functions with
     Callable types, parameter types are propagated similarly.
 
-    A catch-all rule recursively walks children of all expressions except
-    Implication, which is left to downstream handlers such as
-    statement_intensional.
+    Because ExpressionWalker (further down the MRO chain) provides the
+    recursive child-walking, this mixin only registers a single specific
+    pattern — no catch-all is needed.
     """
 
     @add_match(FunctionApplication(Symbol, ...))
@@ -76,41 +69,6 @@ class TypeResolutionMixin(PatternWalker):
                     arg.__dict__['type'] = unified
 
         return expression
-
-    @add_match(Expression, lambda e: not isinstance(e, Implication))
-    def walk_children(self, expression):
-        """
-        Recursively walk children for non-Implication expressions.
-
-        Downstream MRO handlers such as statement_intensional handle
-        Implication separately, so this catch-all skips it.
-        """
-        args = expression.unapply()
-        new_args = tuple()
-        changed = False
-        for arg in args:
-            if isinstance(arg, Expression):
-                new_arg = self.walk(arg)
-                changed |= new_arg is not arg
-            elif isinstance(arg, tuple) and len(arg) > 0 and isinstance(arg[0], Expression):
-                new_arg, arg_changed = self._walk_tuple(arg)
-                changed |= arg_changed
-            else:
-                new_arg = arg
-            new_args += (new_arg,)
-
-        if changed:
-            return self.walk(expression.apply(*new_args))
-        return expression
-
-    def _walk_tuple(self, arg):
-        changed = False
-        result = list()
-        for sub in arg:
-            walked = self.walk(sub)
-            result.append(walked)
-            changed |= walked is not sub
-        return type(arg)(result), changed
 
     def _column_types_from_entry(self, entry):
         if isinstance(entry.value, WrappedRelationalAlgebraSet):
