@@ -12,6 +12,7 @@ import pytest
 
 from ....datalog.basic_representation import DatalogProgram
 from ....datalog.expressions import Implication
+from ....datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ....expressions import Constant, Symbol
 from ....frontend.type_resolution import TypeResolutionMixin
 from ....logic import Conjunction
@@ -152,6 +153,231 @@ class TestTypeResolutionMixin:
         assert x.type is int
         entry = program.symbol_table[R]
         assert entry.type is not Unknown
+
+    # ------------------------------------------------------------------
+    # Coverage gap: body atom with non-Symbol functor (line 76)
+    # ------------------------------------------------------------------
+
+    def test_constant_functor_body_atom(self, solver):
+        """Body atom with Constant (non-Symbol) functor is skipped
+        without error. Covers line 76 (not isinstance(pred.functor, Symbol))."""
+        from operator import eq
+
+        mixin, _ = solver
+
+        eq_const = Constant(eq)
+        x = Symbol("x")
+        Q = Symbol("Q")
+
+        rule = Implication(Q(x), eq_const(x, Constant[int](5)))
+        result = mixin.walk(rule)
+
+        # x stays Unknown — Constant functor has no symbol-table entry
+        assert x.type is Unknown
+        assert isinstance(result, Implication)
+        assert result.consequent.type is bool
+
+    # ------------------------------------------------------------------
+    # Coverage gap: row_type is None for an EDB with no rows (line 103)
+    # ------------------------------------------------------------------
+
+    def test_edb_with_no_rows(self, solver):
+        """An EDB registered with no tuples has no row_type,
+        so _column_types_from_entry returns None and the predicate
+        contributes no type information. Covers line 103."""
+        mixin, program = solver
+
+        R = Symbol("R")
+        program.add_extensional_predicate_from_tuples(R, [])
+
+        x = Symbol("x")
+        Q = Symbol("Q")
+
+        rule = Implication(Q(x), R(x))
+        mixin.walk(rule)
+
+        # No row type info means no type propagation
+        assert x.type is Unknown
+        assert rule.consequent.type is bool
+
+    # ------------------------------------------------------------------
+    # Coverage gap: column types can be Unknown (line 88)
+    # ------------------------------------------------------------------
+
+    def test_unknown_column_type_skipped(self, solver):
+        """When a predicate has a column type of Unknown, the type
+        resolution skips that column. Covers line 88
+        (if inferred is Unknown: continue)."""
+        mixin, program = solver
+
+        from typing import Tuple
+
+        R = Symbol("R")
+        # Create a WRAS with explicit row_type where one column is Unknown
+        wras = WrappedRelationalAlgebraSet(
+            iterable=[(1, 2.5)],
+            row_type=Tuple[int, Unknown],
+            verify_row_type=False,
+        )
+        program.symbol_table[R] = Constant[AbstractSet[Tuple[int, Unknown]]](
+            wras, auto_infer_type=False, verify_type=False
+        )
+
+        x = Symbol("x")
+        y = Symbol("y")
+        Q = Symbol("Q")
+
+        rule = Implication(Q(x, y), R(x, y))
+        mixin.walk(rule)
+
+        # First column (int) propagates to x
+        assert x.type is int
+        # Second column (Unknown) is skipped — y stays Unknown
+        assert y.type is Unknown
+        assert rule.consequent.type is bool
+
+    # ------------------------------------------------------------------
+    # Coverage gap: type unification with compatible types (lines 91-97)
+    # ------------------------------------------------------------------
+
+    def test_type_unification_compatible_types(self, solver):
+        """When two EDBs share a join variable with compatible but
+        different types (e.g. int vs int64), the types are unified.
+        Covers lines 91-97 (unify_types branch)."""
+        mixin, program = solver
+
+        R = Symbol("R")
+        program.add_extensional_predicate_from_tuples(R, [(1, 2.5)])
+        S = Symbol("S")
+        program.add_extensional_predicate_from_tuples(S, [(1, 10)])
+
+        x = Symbol("x")
+        y = Symbol("y")
+        z = Symbol("z")
+        Q = Symbol("Q")
+
+        conj = Conjunction((R(x, y), S(x, z)))
+        rule = Implication(Q(x, y, z), conj)
+        mixin.walk(rule)
+
+        # x is shared between R and S, both have int
+        assert x.type is int
+        assert y.type is float
+        assert z.type is int
+
+    # ------------------------------------------------------------------
+    # Coverage gap: callable with Ellipsis / variadic args (line 109)
+    # ------------------------------------------------------------------
+
+    def test_callable_with_variadic_args(self, solver):
+        """A builtin with variadic Callable[..., bool] type has no
+        parameter types to extract — _column_types_from_entry returns
+        None via the Ellipsis check. Covers line 109."""
+        mixin, program = solver
+
+        fn_sym = Symbol("fn")
+        program.symbol_table[fn_sym] = Constant[Callable[..., bool]](
+            lambda x: True, auto_infer_type=False, verify_type=False
+        )
+
+        x = Symbol("x")
+        Q = Symbol("Q")
+
+        rule = Implication(Q(x), fn_sym(x))
+        mixin.walk(rule)
+
+        # Variadic callable has no resolved parameter types
+        assert x.type is Unknown
+        assert rule.consequent.type is bool
+
+    # ------------------------------------------------------------------
+    # Coverage gap: entry is neither EDB nor callable (line 112)
+    # ------------------------------------------------------------------
+
+    def test_non_edb_non_callable_entry(self, solver):
+        """A symbol-table entry whose value is neither a
+        WrappedRelationalAlgebraSet nor a callable causes
+        _column_types_from_entry to return None.
+        Covers lines 82 and 112."""
+        mixin, program = solver
+
+        R = Symbol("R")
+        program.symbol_table[R] = Constant[int](42)
+
+        x = Symbol("x")
+        Q = Symbol("Q")
+
+        rule = Implication(Q(x), R(x))
+        mixin.walk(rule)
+
+        # No type info from a plain int constant
+        assert x.type is Unknown
+        assert rule.consequent.type is bool
+
+
+
+    # ------------------------------------------------------------------
+    # User requested: several elements in conjunction
+    # ------------------------------------------------------------------
+
+    def test_several_conjunctive_elements(self, solver):
+        """Rule with a 3-way conjunctive body resolves all variable
+        types correctly."""
+        mixin, program = solver
+
+        R = Symbol("R")
+        program.add_extensional_predicate_from_tuples(R, [(1, 2)])
+        S = Symbol("S")
+        program.add_extensional_predicate_from_tuples(S, [(2, 3)])
+        T = Symbol("T")
+        program.add_extensional_predicate_from_tuples(T, [(3, 4)])
+
+        x = Symbol("x")
+        y = Symbol("y")
+        z = Symbol("z")
+        w = Symbol("w")
+        Q = Symbol("Q")
+
+        conj = Conjunction((R(x, y), S(y, z), T(z, w)))
+        rule = Implication(Q(x, y, z, w), conj)
+        mixin.walk(rule)
+
+        assert x.type is int
+        assert y.type is int
+        assert z.type is int
+        assert w.type is int
+        assert rule.consequent.type is bool
+
+    # ------------------------------------------------------------------
+    # User requested: predicates with equalities
+    # ------------------------------------------------------------------
+
+    def test_equality_predicate_in_body(self, solver):
+        """Rule body with an equality atom (Constant functor like
+        operator.eq from 'y == 5') does not block type resolution
+        on shared variables that also appear in an EDB predicate."""
+        mixin, program = solver
+
+        from operator import eq
+
+        R = Symbol("R")
+        program.add_extensional_predicate_from_tuples(R, [(1, 2.5)])
+
+        eq_sym = Symbol("eq")
+        eq_const = Constant(eq)  # functor used by parsed "y == 5"
+
+        x = Symbol("x")
+        y = Symbol("y")
+        Q = Symbol("Q")
+
+        body = Conjunction((R(x, y), eq_const(y, Constant[float](2.5))))
+        rule = Implication(Q(x, y), body)
+        mixin.walk(rule)
+
+        # x and y get types from R (the EDB), not from the equality atom
+        assert x.type is int
+        assert y.type is float
+        assert rule.consequent.type is bool
 
 
 class TestTypeResolutionIntegration:
@@ -342,3 +568,90 @@ class TestTypeResolutionIntegration:
         assert x.type is int
         assert y.type is float
         assert result.consequent.type is bool
+
+    # ------------------------------------------------------------------
+    # User requested: negation in body via full solver
+    # ------------------------------------------------------------------
+
+    def test_negation_in_body_type_propagation(self):
+        """Negation in the rule body does not block type resolution
+        on the positive EDB predicate. Uses the full solver with
+        negation support."""
+        from ....frontend.deterministic_frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(1, 2), (2, 3)], name="R")
+        nl.add_tuple_set([(1,)], name="S")
+
+        with nl.scope as e:
+            e.Q[e.x, e.y] = e.R[e.x, e.y] & ~e.S[e.x]
+            impl = self._get_stored_implication(nl)
+            atoms = self._get_body_atoms(impl)
+            # x and y get their types from R
+            assert atoms[0].args[0].type is int
+            assert atoms[0].args[1].type is int
+            res = nl.query((e.x, e.y), e.Q[e.x, e.y])
+
+        assert len(res) == 1
+        assert set(res) == {(2, 3)}
+
+    # ------------------------------------------------------------------
+    # User requested: several elements in conjunction via full solver
+    # ------------------------------------------------------------------
+
+    def test_several_conjunctive_elements_type_propagation(self):
+        """A 3-way conjunctive body resolves all shared variable
+        types correctly in the full solver."""
+        from ....frontend.deterministic_frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(1, 2), (3, 4)], name="R")
+        nl.add_tuple_set([(2, 3), (4, 5)], name="S")
+        nl.add_tuple_set([(3, 10), (5, 20)], name="T")
+
+        with nl.scope as e:
+            e.Q[e.x, e.y, e.z, e.w] = e.R[e.x, e.y] & e.S[e.y, e.z] & e.T[e.z, e.w]
+            impl = self._get_stored_implication(nl)
+            atoms = self._get_body_atoms(impl)
+            assert atoms[0].args[0].type is int
+            assert atoms[0].args[1].type is int
+            assert atoms[1].args[0].type is int
+            assert atoms[1].args[1].type is int
+            assert atoms[2].args[0].type is int
+            assert atoms[2].args[1].type is int
+            res = nl.query((e.x, e.y, e.z, e.w), e.Q[e.x, e.y, e.z, e.w])
+
+        assert len(res) == 2
+        assert set(res) == {(1, 2, 3, 10), (3, 4, 5, 20)}
+
+    # ------------------------------------------------------------------
+    # User requested: equality predicate in body via full solver
+    # ------------------------------------------------------------------
+
+    def test_equality_predicate_type_propagation(self):
+        """An equality atom in the rule body (parsed from 'y == 5')
+        does not interrupt type resolution on variables shared with
+        EDB predicates. Uses text-based Datalog to express equality."""
+        from ....frontend.deterministic_frontend import NeurolangDL
+        from .... import expressions as ir
+
+        nl = NeurolangDL()
+        nl.execute_datalog_program(
+            """
+        R(1, 3)
+        R(2, 5)
+        R(3, 7)
+        Q(x) :- R(x, y), (y == 5)
+        """
+        )
+
+        idb = nl.program_ir.intensional_database()
+        q_union = idb[ir.Symbol("Q")]
+        impl = q_union.formulas[0]
+        atoms = self._get_body_atoms(impl)
+        # First body atom is R(x, y) — x and y get types from R
+        r_atom = atoms[0]
+        assert r_atom.args[0].type is int
+        assert r_atom.args[1].type is int
+        # Second body atom is y == 5 (Constant functor) — skipped
+        assert impl.consequent.type is bool
