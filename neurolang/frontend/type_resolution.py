@@ -7,22 +7,24 @@ extensional database (EDB) predicates which carry concrete
 AbstractSet[Tuple[...]] types and from builtin functions which carry
 Callable types and propagates them to variable symbols.
 
-Matches Implication nodes with a FunctionApplication or Conjunction
-body and resolves variable types before the expression continues through
-the MRO to handlers such as DatalogProgramMixin.statement_intensional.
-
-Uses a guard to prevent re-processing already-resolved rules.
+Matches FunctionApplication nodes during the walker's recursive traversal,
+leaving Implication handling to downstream MRO handlers such as
+DatalogProgramMixin.statement_intensional.  A catch-all rule walks children
+for all non-Implication expressions so the mixin works with PatternWalker's
+non-recursive walk.
 """
-
-from typing import AbstractSet
 
 from typing_inspect import is_callable_type
 
-from ..datalog.expression_processing import extract_logic_atoms
-from ..datalog.expressions import Implication
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ..expression_walker import PatternWalker, add_match
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..datalog.expressions import Implication
+from ..expressions import (
+    Constant,
+    Expression,
+    FunctionApplication,
+    Symbol,
+)
 from ..type_system import (
     NeuroLangTypeException,
     Unknown,
@@ -32,67 +34,32 @@ from ..type_system import (
 )
 
 
-def _implication_has_untyped_body_predicates(expression):
-    """
-    Guard that allows matching when the expression still needs type
-    resolution.
-
-    Returns True when the expression has not yet been processed and any
-    body-predicate argument symbol has Unknown type. The handler sets
-    _nl_type_resolved on the expression after the first pass, so
-    subsequent match attempts through self.walk() skip this pattern and
-    fall through to downstream handlers.
-    """
-    if getattr(expression, '_nl_type_resolved', False):
-        return False
-    body = expression.antecedent
-    predicates = list(extract_logic_atoms(body))
-    for pred in predicates:
-        if not isinstance(pred, FunctionApplication):
-            continue
-        if any(isinstance(arg, Symbol) and arg.type is Unknown
-               for arg in pred.args):
-            return True
-    return False
-
-
 class TypeResolutionMixin(PatternWalker):
     """
     PatternWalker mixin that infers and propagates types in Datalog rules.
 
-    Intercepts Implication nodes to resolve variable types from body-predicate
-    functor lookups in the symbol table.  Returns self.walk(expression) to
-    re-enter the processing cycle so downstream handlers
-    (e.g. statement_intensional) receive the typed rule.
+    Each FunctionApplication whose functor is a Symbol is checked against
+    the symbol table.  If the functor maps to an EDB relation, column
+    types are propagated to argument symbols.  For builtin functions with
+    Callable types, parameter types are propagated similarly.
+
+    A catch-all rule recursively walks children of all expressions except
+    Implication, which is left to downstream handlers such as
+    statement_intensional.
     """
 
-    @add_match(
-        Implication,
-        _implication_has_untyped_body_predicates,
-    )
-    def resolve_types(self, expression):
-        self._resolve_types_from_body(expression)
-        expression._nl_type_resolved = True
-        return self.walk(expression)
+    @add_match(FunctionApplication(Symbol, ...))
+    def resolve_predicate_types(self, expression):
+        functor = expression.functor
+        entry = self.symbol_table.get(functor)
+        if entry is None or not isinstance(entry, Constant):
+            return expression
 
-    def _resolve_types_from_body(self, expression):
-        predicates = list(extract_logic_atoms(expression.antecedent))
-        for pred in predicates:
-            if not isinstance(pred, FunctionApplication):
-                continue
-            functor = pred.functor
-            if not isinstance(functor, Symbol):
-                continue
-            entry = self.symbol_table.get(functor)
-            if entry is None or not isinstance(entry, Constant):
-                continue
-            col_types = self._column_types_from_entry(entry)
-            if col_types is None:
-                continue
-            self._apply_column_types(pred, col_types)
+        col_types = self._column_types_from_entry(entry)
+        if col_types is None:
+            return expression
 
-    def _apply_column_types(self, predicate, col_types):
-        for i, arg in enumerate(predicate.args):
+        for i, arg in enumerate(expression.args):
             if not isinstance(arg, Symbol) or i >= len(col_types):
                 continue
             inferred = col_types[i]
@@ -108,13 +75,48 @@ class TypeResolutionMixin(PatternWalker):
                 if unified is not arg.type:
                     arg.__dict__['type'] = unified
 
+        return expression
+
+    @add_match(Expression, lambda e: not isinstance(e, Implication))
+    def walk_children(self, expression):
+        """
+        Recursively walk children for non-Implication expressions.
+
+        Downstream MRO handlers such as statement_intensional handle
+        Implication separately, so this catch-all skips it.
+        """
+        args = expression.unapply()
+        new_args = tuple()
+        changed = False
+        for arg in args:
+            if isinstance(arg, Expression):
+                new_arg = self.walk(arg)
+                changed |= new_arg is not arg
+            elif isinstance(arg, tuple) and len(arg) > 0 and isinstance(arg[0], Expression):
+                new_arg, arg_changed = self._walk_tuple(arg)
+                changed |= arg_changed
+            else:
+                new_arg = arg
+            new_args += (new_arg,)
+
+        if changed:
+            return self.walk(expression.apply(*new_args))
+        return expression
+
+    def _walk_tuple(self, arg):
+        changed = False
+        result = list()
+        for sub in arg:
+            walked = self.walk(sub)
+            result.append(walked)
+            changed |= walked is not sub
+        return type(arg)(result), changed
+
     def _column_types_from_entry(self, entry):
         if isinstance(entry.value, WrappedRelationalAlgebraSet):
-            if entry.type is Unknown:
+            row_type = entry.value.row_type
+            if row_type is None:
                 return None
-            if not is_leq_informative(entry.type, AbstractSet):
-                return None
-            row_type = get_args(entry.type)[0]
             return get_args(row_type)
 
         if is_callable_type(entry.type):
