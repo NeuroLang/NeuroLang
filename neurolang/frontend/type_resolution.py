@@ -18,15 +18,14 @@ from typing_inspect import is_callable_type
 
 from ..datalog.expression_processing import extract_logic_atoms
 from ..datalog.expressions import Implication
+from ..datalog.negation import is_conjunctive_negation
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import (
     Constant,
-    Expression,
     FunctionApplication,
     Symbol,
 )
-from ..logic import Conjunction
 from ..type_system import (
     NeuroLangTypeException,
     Unknown,
@@ -49,8 +48,8 @@ class TypeResolutionMixin(PatternWalker):
     """
 
     @add_match(
-        Implication(FunctionApplication[Unknown](Symbol, ...), Expression),
-        lambda e: isinstance(e.antecedent, (FunctionApplication, Conjunction)),
+        Implication(FunctionApplication[Unknown](Symbol, ...), ...),
+        lambda e: is_conjunctive_negation(e.antecedent),
     )
     def resolve_types(self, expression):
         head = expression.consequent
@@ -60,8 +59,10 @@ class TypeResolutionMixin(PatternWalker):
 
         # Change the head FA class to FunctionApplication[bool] so the
         # FunctionApplication[Unknown] pattern no longer matches on
-        # re-entry via self.walk().
+        # re-entry via self.walk(). Also clear any instance 'type'
+        # attribute that would shadow the class-level type.
         head.change_type(bool)
+        head.__dict__.pop("type", None)
 
         return self.walk(expression)
 

@@ -6,7 +6,7 @@ propagated to variable symbols in Datalog rules, and that rules with
 no resolvable type information are passed through unchanged.
 """
 
-from typing import Callable
+from typing import AbstractSet, Callable
 
 import pytest
 
@@ -57,6 +57,9 @@ class TestTypeResolutionMixin:
 
         assert x.type is int
         assert y.type is float
+        # Predicate symbol type propagated from EDB entry
+        entry = program.symbol_table[R]
+        assert entry.type is not Unknown
 
     def test_conjunctive_body_resolves_variables(self, solver):
         mixin, program = solver
@@ -76,6 +79,8 @@ class TestTypeResolutionMixin:
 
         assert x.type is int
         assert y.type is str
+        entry = program.symbol_table[R]
+        assert entry.type is not Unknown
 
     def test_rule_passes_through_when_no_types_available(self, solver):
         mixin, _ = solver
@@ -109,6 +114,8 @@ class TestTypeResolutionMixin:
 
         assert x.type is int
         assert y.type is Unknown
+        entry = program.symbol_table[R]
+        assert entry.type is not Unknown
 
     def test_builtin_callable_body_resolves_arg_types(self, solver):
         mixin, program = solver
@@ -143,3 +150,49 @@ class TestTypeResolutionMixin:
         mixin.walk(rule)
 
         assert x.type is int
+        entry = program.symbol_table[R]
+        assert entry.type is not Unknown
+
+
+class TestTypeResolutionIntegration:
+    """Integration tests using the full NeurolangDL solver stack."""
+
+    def test_edb_propagates_types_through_full_solver(self):
+        from ....frontend.deterministic_frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(10, "hello"), (20, "world")], name="R")
+
+        with nl.scope as e:
+            e.Q[e.x, e.y] = e.R[e.x, e.y]
+            res = nl.query((e.x, e.y), e.Q[e.x, e.y])
+
+        assert len(res) == 2
+        assert set(res) == {(10, "hello"), (20, "world")}
+
+    def test_partial_type_resolution_with_mixed_predicates(self):
+        from ....frontend.deterministic_frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(1, 2.5), (3, 4.5)], name="R")
+
+        with nl.scope as e:
+            e.Q[e.x, e.y] = e.R[e.x, e.y]
+            res = nl.query((e.x, e.y), e.Q[e.x, e.y])
+
+        assert len(res) == 2
+        assert set(res) == {(1, 2.5), (3, 4.5)}
+
+    def test_conjunctive_body_rule_in_full_solver(self):
+        from ....frontend.deterministic_frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(1, "a"), (2, "b")], name="R")
+        nl.add_tuple_set([(1, 10), (2, 20)], name="S")
+
+        with nl.scope as e:
+            e.Q[e.x, e.y, e.z] = e.R[e.x, e.y] & e.S[e.x, e.z]
+            res = nl.query((e.x, e.y, e.z), e.Q[e.x, e.y, e.z])
+
+        assert len(res) == 2
+        assert set(res) == {(1, "a", 10), (2, "b", 20)}
