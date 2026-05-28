@@ -26,6 +26,7 @@ from ..expressions import (
     FunctionApplication,
     Symbol,
 )
+from ..logic import Conjunction
 from ..type_system import (
     NeuroLangTypeException,
     Unknown,
@@ -48,8 +49,8 @@ class TypeResolutionMixin(PatternWalker):
     """
 
     @add_match(
-        Implication(FunctionApplication(Symbol, ...), Expression),
-        lambda e: e.consequent.type is Unknown,
+        Implication(FunctionApplication[Unknown](Symbol, ...), Expression),
+        lambda e: isinstance(e.antecedent, (FunctionApplication, Conjunction)),
     )
     def resolve_types(self, expression):
         head = expression.consequent
@@ -57,9 +58,10 @@ class TypeResolutionMixin(PatternWalker):
 
         self._resolve_body_types(body)
 
-        # Set the head FA type to bool to prevent re-matching on the
-        # guard (which checks e.consequent.type is Unknown).
-        head.__dict__["type"] = bool
+        # Change the head FA class to FunctionApplication[bool] so the
+        # FunctionApplication[Unknown] pattern no longer matches on
+        # re-entry via self.walk().
+        head.change_type(bool)
 
         return self.walk(expression)
 

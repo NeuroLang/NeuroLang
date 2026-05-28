@@ -55,10 +55,8 @@ class TestTypeResolutionMixin:
         rule = Implication(Q(x, y), R(x, y))
         mixin.walk(rule)
 
-        assert x.type is not Unknown
-        assert y.type is not Unknown
-        assert x.type is int or issubclass(x.type, int)
-        assert y.type is float or issubclass(y.type, float)
+        assert x.type is int
+        assert y.type is float
 
     def test_conjunctive_body_resolves_variables(self, solver):
         mixin, program = solver
@@ -76,8 +74,8 @@ class TestTypeResolutionMixin:
         rule = Implication(Q(x, y), conj)
         mixin.walk(rule)
 
-        assert x.type is not Unknown
-        assert y.type is not Unknown
+        assert x.type is int
+        assert y.type is str
 
     def test_rule_passes_through_when_no_types_available(self, solver):
         mixin, _ = solver
@@ -91,6 +89,8 @@ class TestTypeResolutionMixin:
 
         assert x.type is Unknown
         assert isinstance(result, type(rule))
+        # Head FA type set to bool prevents infinite re-matching
+        assert rule.consequent.type is bool
 
     def test_partial_resolution_mixed_predicates(self, solver):
         mixin, program = solver
@@ -107,7 +107,7 @@ class TestTypeResolutionMixin:
         rule = Implication(Q(x, y), conj)
         mixin.walk(rule)
 
-        assert x.type is not Unknown
+        assert x.type is int
         assert y.type is Unknown
 
     def test_builtin_callable_body_resolves_arg_types(self, solver):
@@ -125,8 +125,8 @@ class TestTypeResolutionMixin:
         rule = Implication(Q(x, y), fn_sym(x, y))
         mixin.walk(rule)
 
-        assert x.type is not Unknown
-        assert y.type is not Unknown
+        assert x.type is int
+        assert y.type is float
 
     def test_constant_arguments_do_not_block_typed_predicates(self, solver):
         mixin, program = solver
@@ -142,4 +142,4 @@ class TestTypeResolutionMixin:
         rule = Implication(Q(x), R(x, Constant[int](3)))
         mixin.walk(rule)
 
-        assert x.type is not Unknown
+        assert x.type is int
