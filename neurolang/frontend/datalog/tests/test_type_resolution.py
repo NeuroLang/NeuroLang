@@ -155,9 +155,28 @@ class TestTypeResolutionMixin:
 
 
 class TestTypeResolutionIntegration:
-    """Integration tests using the full NeurolangDL solver stack."""
+    """
+    Integration tests using the full solver stack.
 
-    def test_edb_propagates_types_through_full_solver(self):
+    Type assertions inspect the stored Implication's body atoms directly
+    (inside the scope block before scope exit discards symbols).
+    """
+
+    def _get_body_atoms(self, impl):
+        from ....datalog.expression_processing import extract_logic_atoms
+        return list(extract_logic_atoms(impl.antecedent))
+
+    def _get_stored_implication(self, nl):
+        """Retrieve the single Implication for head symbol Q from the
+        program's IDB while still inside the active scope."""
+        from .... import expressions as ir
+        idb = nl.program_ir.intensional_database()
+        q_sym = ir.Symbol("Q")
+        q_union = idb[q_sym]
+        return q_union.formulas[0]
+
+    def test_edb_body_atom_types(self):
+        """Simple EDB rule: body-predicate args have resolved types."""
         from ....frontend.deterministic_frontend import NeurolangDL
 
         nl = NeurolangDL()
@@ -165,25 +184,57 @@ class TestTypeResolutionIntegration:
 
         with nl.scope as e:
             e.Q[e.x, e.y] = e.R[e.x, e.y]
+            impl = self._get_stored_implication(nl)
+            atoms = self._get_body_atoms(impl)
+            assert atoms[0].args[0].type is int
+            assert atoms[0].args[1].type is str
             res = nl.query((e.x, e.y), e.Q[e.x, e.y])
 
         assert len(res) == 2
         assert set(res) == {(10, "hello"), (20, "world")}
 
-    def test_partial_type_resolution_with_mixed_predicates(self):
+    def test_multi_column_body_atom_types(self):
+        """Three-column EDB: all column types resolved."""
         from ....frontend.deterministic_frontend import NeurolangDL
 
         nl = NeurolangDL()
-        nl.add_tuple_set([(1, 2.5), (3, 4.5)], name="R")
+        nl.add_tuple_set(
+            [(1, 2.5, "a"), (3, 4.5, "b")], name="R"
+        )
 
         with nl.scope as e:
-            e.Q[e.x, e.y] = e.R[e.x, e.y]
-            res = nl.query((e.x, e.y), e.Q[e.x, e.y])
+            e.Q[e.x, e.y, e.z] = e.R[e.x, e.y, e.z]
+            impl = self._get_stored_implication(nl)
+            atoms = self._get_body_atoms(impl)
+            assert atoms[0].args[0].type is int
+            assert atoms[0].args[1].type is float
+            assert atoms[0].args[2].type is str
+            res = nl.query((e.x, e.y, e.z), e.Q[e.x, e.y, e.z])
 
         assert len(res) == 2
-        assert set(res) == {(1, 2.5), (3, 4.5)}
+        assert set(res) == {(1, 2.5, "a"), (3, 4.5, "b")}
 
-    def test_conjunctive_body_rule_in_full_solver(self):
+    def test_type_unification_in_join_body_atoms(self):
+        """Join variable in conjunctive body has unified type."""
+        from ....frontend.deterministic_frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(1, 2), (3, 4)], name="R")
+        nl.add_tuple_set([(1, 10), (3, 30)], name="S")
+
+        with nl.scope as e:
+            e.Q[e.x, e.y, e.z] = e.R[e.x, e.y] & e.S[e.x, e.z]
+            impl = self._get_stored_implication(nl)
+            atoms = self._get_body_atoms(impl)
+            assert atoms[0].args[0].type is int
+            assert atoms[1].args[0].type is int
+            res = nl.query((e.x, e.y, e.z), e.Q[e.x, e.y, e.z])
+
+        assert len(res) == 2
+        assert set(res) == {(1, 2, 10), (3, 4, 30)}
+
+    def test_conjunctive_body_rule_query_result(self):
+        """Conjunctive body query produces correct results."""
         from ....frontend.deterministic_frontend import NeurolangDL
 
         nl = NeurolangDL()
@@ -196,3 +247,98 @@ class TestTypeResolutionIntegration:
 
         assert len(res) == 2
         assert set(res) == {(1, "a", 10), (2, "b", 20)}
+
+    def test_partial_type_resolution_body_atoms(self):
+        """
+        Mixed typed/untyped EDBs: only known column types resolved,
+        untyped variables remain Unknown.
+        """
+        from ....frontend.deterministic_frontend import NeurolangDL
+        from ....type_system import Unknown
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(1,)], name="R")
+
+        with nl.scope as e:
+            e.Q[e.x, e.y] = e.R[e.x] & e.S[e.y]
+            impl = self._get_stored_implication(nl)
+            atoms = self._get_body_atoms(impl)
+            assert atoms[0].args[0].type is int
+            assert atoms[1].args[0].type is Unknown
+
+    def test_head_predicate_type_is_bool(self):
+        """
+        After resolution the head FunctionApplication type is bool,
+        preventing re-matching by FunctionApplication[Unknown].
+        """
+        from ....frontend.deterministic_frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(1, 2.5)], name="R")
+
+        with nl.scope as e:
+            e.Q[e.x, e.y] = e.R[e.x, e.y]
+            impl = self._get_stored_implication(nl)
+            assert impl.consequent.type is bool
+
+    def test_constant_argument_body_atom_types(self):
+        """EDB with constant argument: variable arg still resolved."""
+        from ....frontend.deterministic_frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(1, 3), (3, 4)], name="R")
+
+        with nl.scope as e:
+            e.Q[e.x] = e.R[e.x, 3]
+            impl = self._get_stored_implication(nl)
+            atoms = self._get_body_atoms(impl)
+            assert atoms[0].args[0].type is int
+            # The constant 3 is not a Symbol, so its type is irrelevant
+            res = nl.query((e.x,), e.Q[e.x])
+
+        assert len(res) == 1
+        assert set(res) == {(1,)}
+
+    def test_predicate_symbol_type_in_symbol_table(self):
+        """
+        Predicate symbol in the program's symbol table has its type
+        set (from the EDB or builtin entry), not left as Unknown.
+        """
+        from ....frontend.deterministic_frontend import NeurolangDL
+        from .... import expressions as ir
+        from ....type_system import Unknown
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(1, 2.5)], name="R")
+
+        with nl.scope as e:
+            e.Q[e.x, e.y] = e.R[e.x, e.y]
+
+        r_entry = nl.program_ir.symbol_table.get(ir.Symbol("R"))
+        assert r_entry is not None
+        assert r_entry.type is not Unknown
+
+    def test_region_frontend_solver_direct_type_resolution(self):
+        """
+        Using RegionFrontendDatalogSolver directly (the class where
+        TypeResolutionMixin is wired into MRO) resolves IR Symbol types
+        identically to the minimal _TypeResolutionSolver used in unit tests.
+        """
+        from ....frontend.deterministic_frontend import (
+            RegionFrontendDatalogSolver,
+        )
+        from ....datalog.expressions import Implication
+        from ....expressions import Symbol
+
+        solver = RegionFrontendDatalogSolver()
+        R, x, y, Q = Symbol("R"), Symbol("x"), Symbol("y"), Symbol("Q")
+        solver.add_extensional_predicate_from_tuples(
+            R, [(1, 2.5), (3, 4.5)]
+        )
+
+        rule = Implication(Q(x, y), R(x, y))
+        result = solver.walk(rule)
+
+        assert x.type is int
+        assert y.type is float
+        assert result.consequent.type is bool
