@@ -155,3 +155,6 @@ doc/sg_execution_times.rst
 docs/superpowers/
 neurolang/_version_scm.py
 neurolang/utils/server/neurolang-sparklis/
+
+# uv package manager
+uv.lock

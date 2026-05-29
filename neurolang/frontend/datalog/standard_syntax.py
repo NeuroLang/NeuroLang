@@ -237,7 +237,13 @@ class DatalogTransformer(Transformer):
 
     def expressions(self, ast):
         if isinstance(ast[0], Expression):
-            return Union(ast)
+            all_formulas = []
+            for item in ast:
+                if isinstance(item, Union):
+                    all_formulas.extend(item.formulas)
+                elif isinstance(item, Expression):
+                    all_formulas.append(item)
+            return Union(tuple(all_formulas))
         else:
             ast = ast[0]
         return Union(ast)
@@ -304,16 +310,19 @@ class DatalogTransformer(Transformer):
             return Implication(ast[0], body_or_cond)
 
     def _build_prob_rule(self, head, prob_specs, body):
-        """Build a rule from __PROB__ markers in the body.
+        """Build rules from __PROB__ markers in the body.
 
-        For PROB[pred] = var, the result variable stays in the head
-        (it is the probability column), and pred becomes part of the
-        filter body wrapped with PROB for the query engine.
+        Each PROB[pred(x)]=p in the body desugars into a fresh predicate rule:
+            fresh(x, PROB(x)) :- pred(x)
+        and the main query uses the fresh predicate to extract the probability:
+            ans(x, p) :- fresh(x, p)
         """
         head_args = list(head.args) if head.args else []
         body_formulas = (
             list(body.formulas) if isinstance(body, Conjunction) else []
         )
+        fresh_rules = []
+        query_body_atoms = []
 
         for spec in prob_specs:
             if len(spec) == 3:
@@ -322,24 +331,59 @@ class DatalogTransformer(Transformer):
                 pred, result_var = spec
                 cond_body = None
 
-            # Build PROB expression: PROB(vars) in the head
+            fresh_pred = Symbol.fresh()
+
             if isinstance(pred, FunctionApplication):
                 prob_vars = pred.args
-                # Add the predicate call to body formulas
-                body_formulas.append(pred.functor(*prob_vars))
+                fresh_body_atoms = [pred.functor(*prob_vars)]
+                if cond_body is not None:
+                    fresh_body_atoms.append(cond_body)
+                fresh_body = Conjunction(tuple(fresh_body_atoms))
+                fresh_head = fresh_pred(
+                    *prob_vars, FunctionApplication(PROB, prob_vars)
+                )
+                fresh_rules.append(Implication(fresh_head, fresh_body))
+
+                if result_var is not None:
+                    query_body_atoms.append(
+                        fresh_pred(*prob_vars, result_var)
+                    )
+                else:
+                    query_body_atoms.append(fresh_pred(*prob_vars))
+
             elif isinstance(pred, Conjunction):
-                # e.g. MARG[pred1(X) & pred2(Y)] = P — flatten into body
-                for f in pred.formulas:
-                    body_formulas.append(f)
+                fresh_body_atoms = list(pred.formulas)
+                if cond_body is not None:
+                    fresh_body_atoms.append(cond_body)
+                fresh_body = Conjunction(tuple(fresh_body_atoms))
+                fresh_head = fresh_pred(FunctionApplication(PROB, (pred,)))
+                fresh_rules.append(Implication(fresh_head, fresh_body))
+
+                query_body_atoms.append(
+                    fresh_pred(result_var)
+                    if result_var is not None
+                    else fresh_pred()
+                )
+
             else:
                 prob_vars = (pred,)
-                body_formulas.append(pred)
+                fresh_body_atoms = [pred]
+                if cond_body is not None:
+                    fresh_body_atoms.append(cond_body)
+                fresh_body = Conjunction(tuple(fresh_body_atoms))
+                fresh_head = fresh_pred(
+                    *prob_vars, FunctionApplication(PROB, prob_vars)
+                )
+                fresh_rules.append(Implication(fresh_head, fresh_body))
 
-            if cond_body is not None:
-                body_formulas.append(cond_body)
+                if result_var is not None:
+                    query_body_atoms.append(
+                        fresh_pred(*prob_vars, result_var)
+                    )
+                else:
+                    query_body_atoms.append(fresh_pred(*prob_vars))
 
-            # The result var stays in head - it's the probability column
-            # PROB is added as a head argument to mark the query
+            # result var stays in head as the probability column
             if result_var is not None and result_var not in head_args:
                 head_args.append(result_var)
 
@@ -352,8 +396,14 @@ class DatalogTransformer(Transformer):
         else:
             new_head = head
 
-        new_body = Conjunction(tuple(body_formulas)) if body_formulas else body
-        return Query(new_head, new_body)
+        all_body_atoms = body_formulas + query_body_atoms
+        if all_body_atoms:
+            new_body = Conjunction(tuple(all_body_atoms))
+        else:
+            new_body = Constant(True)
+
+        main_fml = Query(new_head, new_body)
+        return Union(tuple(fresh_rules + [main_fml]))
 
     def prob_body_predicate(self, ast):
         # ast = [predicate, argument]   (PROB[pred] = var)

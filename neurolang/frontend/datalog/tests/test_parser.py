@@ -590,36 +590,73 @@ def test_prob_head_rule_conditional():
 # ── New syntax: PROB body predicate ──────────────────────────────────────────
 
 def test_prob_body_simple():
-    """ans(x, p):-PROB[pred(x)]=p → Query with pred in body and p in head."""
+    """ans(x, p):-PROB[pred(x)]=p desugars to fresh(x, PROB(x)):-pred(x), ans(x,p):-fresh(x,p)."""
     ans = Symbol("ans")
     pred = Symbol("pred")
     x = Symbol("x")
     p = Symbol("p")
     res = parser("ans(x, p):-PROB[pred(x)]=p")
-    expected = Union((
-        Query(
-            ans(x, p),
-            Conjunction((pred(x),)),
-        ),
-    ))
-    assert res == expected
+
+    assert isinstance(res, Union)
+    assert len(res.formulas) == 2
+
+    # Formula 0: Implication fresh(x, PROB(x)) :- pred(x)
+    impl = res.formulas[0]
+    assert isinstance(impl, Implication)
+    fresh_head = impl.consequent
+    assert isinstance(fresh_head, FunctionApplication)
+    assert isinstance(fresh_head.functor, Symbol)
+    assert fresh_head.functor.name.startswith("fresh_")
+    assert fresh_head.args == (x, FunctionApplication(PROB, (x,)))
+    assert impl.antecedent == Conjunction((pred(x),))
+
+    # Formula 1: Query ans(x, p) :- fresh(x, p)
+    qry = res.formulas[1]
+    assert isinstance(qry, Query)
+    assert qry.head == ans(x, p)
+    assert isinstance(qry.body, Conjunction)
+    body_formulas = list(qry.body.formulas)
+    assert len(body_formulas) == 1
+    fresh_body_call = body_formulas[0]
+    assert isinstance(fresh_body_call, FunctionApplication)
+    assert fresh_body_call.functor == fresh_head.functor
+    assert fresh_body_call.args == (x, p)
 
 
 def test_prob_body_with_filter():
-    """ans(x, p):-filter(x) & PROB[pred(x)]=p → mixed query."""
+    """ans(x, p):-filter(x) & PROB[pred(x)]=p → fresh rule + query with filter."""
     ans = Symbol("ans")
     filter_ = Symbol("filter")
     pred = Symbol("pred")
     x = Symbol("x")
     p = Symbol("p")
     res = parser("ans(x, p):-filter(x) & PROB[pred(x)]=p")
-    expected = Union((
-        Query(
-            ans(x, p),
-            Conjunction((filter_(x), pred(x))),
-        ),
-    ))
-    assert res == expected
+
+    assert isinstance(res, Union)
+    assert len(res.formulas) == 2
+
+    # Formula 0: Implication fresh(x, PROB(x)) :- pred(x)
+    impl = res.formulas[0]
+    assert isinstance(impl, Implication)
+    fresh_head = impl.consequent
+    assert isinstance(fresh_head, FunctionApplication)
+    assert isinstance(fresh_head.functor, Symbol)
+    assert fresh_head.functor.name.startswith("fresh_")
+    assert fresh_head.args == (x, FunctionApplication(PROB, (x,)))
+    assert impl.antecedent == Conjunction((pred(x),))
+
+    # Formula 1: Query ans(x, p) :- filter(x) & fresh(x, p)
+    qry = res.formulas[1]
+    assert isinstance(qry, Query)
+    assert qry.head == ans(x, p)
+    assert isinstance(qry.body, Conjunction)
+    body_formulas = list(qry.body.formulas)
+    assert len(body_formulas) == 2
+    assert body_formulas[0] == filter_(x)
+    fresh_body_call = body_formulas[1]
+    assert isinstance(fresh_body_call, FunctionApplication)
+    assert fresh_body_call.functor == fresh_head.functor
+    assert fresh_body_call.args == (x, p)
 
 
 # ── New syntax: MARG body predicate ──────────────────────────────────────────
@@ -631,17 +668,41 @@ def test_marg_body_simple():
     x = Symbol("x")
     p = Symbol("p")
     res = parser("ans(x, p):-MARG[pred(x)]=p")
-    expected = Union((
-        Query(
-            ans(x, p),
-            Conjunction((pred(x),)),
-        ),
-    ))
-    assert res == expected
+
+    assert isinstance(res, Union)
+    assert len(res.formulas) == 2
+
+    impl = res.formulas[0]
+    assert isinstance(impl, Implication)
+    fresh_head = impl.consequent
+    assert isinstance(fresh_head, FunctionApplication)
+    assert isinstance(fresh_head.functor, Symbol)
+    assert fresh_head.functor.name.startswith("fresh_")
+    # MARG uses conjunction grammar so pred gets wrapped in Conjunction
+    assert len(fresh_head.args) == 1
+    prob_wrapper = fresh_head.args[0]
+    assert isinstance(prob_wrapper, FunctionApplication)
+    assert prob_wrapper.functor == PROB
+    inner_conj = prob_wrapper.args[0]
+    assert isinstance(inner_conj, Conjunction)
+    assert list(inner_conj.formulas) == [pred(x)]
+    assert impl.antecedent == Conjunction((pred(x),))
+
+    qry = res.formulas[1]
+    assert isinstance(qry, Query)
+    assert qry.head == ans(x, p)
+    assert isinstance(qry.body, Conjunction)
+    body_formulas = list(qry.body.formulas)
+    assert len(body_formulas) == 1
+    fresh_body_call = body_formulas[0]
+    assert isinstance(fresh_body_call, FunctionApplication)
+    assert fresh_body_call.functor == fresh_head.functor
+    # MARG conjunction case only passes result_var to fresh predicate
+    assert fresh_body_call.args == (p,)
 
 
 def test_marg_body_conjunction():
-    """ans(x, y, p):-MARG[pred1(x) & pred2(y)]=p → multiple atoms in body."""
+    """ans(x, y, p):-MARG[pred1(x) & pred2(y)]=p → fresh wraps conjunction as single arg."""
     ans = Symbol("ans")
     pred1 = Symbol("pred1")
     pred2 = Symbol("pred2")
@@ -649,30 +710,77 @@ def test_marg_body_conjunction():
     y = Symbol("y")
     p = Symbol("p")
     res = parser("ans(x, y, p):-MARG[pred1(x) & pred2(y)]=p")
-    expected = Union((
-        Query(
-            ans(x, y, p),
-            Conjunction((pred1(x), pred2(y))),
-        ),
-    ))
-    assert res == expected
+
+    assert isinstance(res, Union)
+    assert len(res.formulas) == 2
+
+    # Formula 0: fresh(PROB(Conjunction(...))) :- pred1(x) & pred2(y)
+    impl = res.formulas[0]
+    assert isinstance(impl, Implication)
+    fresh_head = impl.consequent
+    assert isinstance(fresh_head, FunctionApplication)
+    assert isinstance(fresh_head.functor, Symbol)
+    assert fresh_head.functor.name.startswith("fresh_")
+    assert len(fresh_head.args) == 1
+    prob_wrapper = fresh_head.args[0]
+    assert isinstance(prob_wrapper, FunctionApplication)
+    assert prob_wrapper.functor == PROB
+    inner_conj = prob_wrapper.args[0]
+    assert isinstance(inner_conj, Conjunction)
+    assert list(inner_conj.formulas) == [pred1(x), pred2(y)]
+    assert impl.antecedent == Conjunction((pred1(x), pred2(y)))
+
+    # Formula 1: Query with fresh(p) in body
+    qry = res.formulas[1]
+    assert isinstance(qry, Query)
+    assert qry.head == ans(x, y, p)
+    assert isinstance(qry.body, Conjunction)
+    body_formulas = list(qry.body.formulas)
+    assert len(body_formulas) == 1
+    fresh_call = body_formulas[0]
+    assert isinstance(fresh_call, FunctionApplication)
+    assert fresh_call.functor == fresh_head.functor
+    assert fresh_call.args == (p,)
 
 
 def test_marg_body_with_filter():
-    """ans(x, p):-filter(x) & MARG[pred(x)]=p → mixed query."""
+    """ans(x, p):-filter(x) & MARG[pred(x)]=p → mixed query with fresh rule."""
     ans = Symbol("ans")
     filter_ = Symbol("filter")
     pred = Symbol("pred")
     x = Symbol("x")
     p = Symbol("p")
     res = parser("ans(x, p):-filter(x) & MARG[pred(x)]=p")
-    expected = Union((
-        Query(
-            ans(x, p),
-            Conjunction((filter_(x), pred(x))),
-        ),
-    ))
-    assert res == expected
+
+    assert isinstance(res, Union)
+    assert len(res.formulas) == 2
+
+    impl = res.formulas[0]
+    assert isinstance(impl, Implication)
+    fresh_head = impl.consequent
+    assert isinstance(fresh_head, FunctionApplication)
+    assert isinstance(fresh_head.functor, Symbol)
+    assert fresh_head.functor.name.startswith("fresh_")
+    assert len(fresh_head.args) == 1
+    prob_wrapper = fresh_head.args[0]
+    assert isinstance(prob_wrapper, FunctionApplication)
+    assert prob_wrapper.functor == PROB
+    inner_conj = prob_wrapper.args[0]
+    assert isinstance(inner_conj, Conjunction)
+    assert list(inner_conj.formulas) == [pred(x)]
+    assert impl.antecedent == Conjunction((pred(x),))
+
+    qry = res.formulas[1]
+    assert isinstance(qry, Query)
+    assert qry.head == ans(x, p)
+    assert isinstance(qry.body, Conjunction)
+    body_formulas = list(qry.body.formulas)
+    assert len(body_formulas) == 2
+    assert body_formulas[0] == filter_(x)
+    fresh_body_call = body_formulas[1]
+    assert isinstance(fresh_body_call, FunctionApplication)
+    assert fresh_body_call.functor == fresh_head.functor
+    assert fresh_body_call.args == (p,)
 
 
 # ── New syntax: SUCC body predicate (no-op) ──────────────────────────────────
