@@ -36,7 +36,6 @@ from ..type_system import (
     NeuroLangTypeException,
     Unknown,
     get_args,
-    is_leq_informative,
     unify_types,
 )
 
@@ -128,20 +127,18 @@ class TypeResolutionMixin(PatternWalker):
                 self._set_or_unify_type(arg, col_types[i])
 
     def _set_or_unify_type(self, symbol, inferred):
-        """Set a Symbol's type to inferred, or unify with an existing
-        type if both are informative and incompatible.
+        """Set a Symbol's type to inferred, unifying with its existing
+        type if needed.  Delegates to unify_types which already
+        handles Unknown correctly.
         """
         if inferred is Unknown:
             return
-        if symbol.type is Unknown:
-            symbol.__dict__["type"] = inferred
-        elif not is_leq_informative(symbol.type, inferred):
-            try:
-                unified = unify_types(symbol.type, inferred)
-            except NeuroLangTypeException:
-                return
-            if unified is not symbol.type:
-                symbol.__dict__["type"] = unified
+        try:
+            unified = unify_types(symbol.type, inferred)
+        except NeuroLangTypeException:
+            return
+        if unified is not symbol.type:
+            symbol.__dict__["type"] = unified
 
     def _propagate_types_to_head(self, head, body):
         """Copy type information from body Symbols to matching head
@@ -216,14 +213,9 @@ class TypeResolutionMixin(PatternWalker):
             else:
                 unified = []
                 for t1, t2 in zip(col_types, arg_types):
-                    if t1 is Unknown:
-                        unified.append(t2)
-                    elif t2 is Unknown:
+                    try:
+                        unified.append(unify_types(t1, t2))
+                    except NeuroLangTypeException:
                         unified.append(t1)
-                    else:
-                        try:
-                            unified.append(unify_types(t1, t2))
-                        except NeuroLangTypeException:
-                            unified.append(t1)
                 col_types = tuple(unified)
         return col_types
