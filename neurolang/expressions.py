@@ -90,6 +90,7 @@ class ParametricTypeClassMeta(type):
     @lru_cache(maxsize=None)
     def __getitem__(self, type_):
         d = dict(self.__dict__)
+        d['_nl_class_type'] = type_
         d['type'] = type_
         d['__generic_class__'] = self
         d['__no_explicit_type__'] = False
@@ -108,11 +109,11 @@ class ParametricTypeClassMeta(type):
 
     def __repr__(self):
         r = self.__name__
-        if hasattr(self, 'type'):
-            if isinstance(self.type, type):
-                c = self.type.__name__
+        if hasattr(self, '_nl_class_type'):
+            if isinstance(self._nl_class_type, type):
+                c = self._nl_class_type.__name__
             else:
-                c = repr(self.type)
+                c = repr(self._nl_class_type)
             r += '[{}]'.format(c)
         return r
 
@@ -133,7 +134,9 @@ class ParametricTypeClassMeta(type):
             return issubclass(
                 other.__generic_class__,
                 self.__generic_class__
-            ) and is_leq_informative(other.type, self.type)
+            ) and is_leq_informative(
+                other._nl_class_type, self._nl_class_type
+            )
         else:
             return issubclass(
                 other.__generic_class__, self
@@ -182,11 +185,11 @@ class ExpressionMeta(ParametricTypeClassMeta):
     """
 
     def __new__(cls, *args, **kwargs):
-        __no_explicit_type__ = 'type' not in args[2]
+        __no_explicit_type__ = '_nl_class_type' not in args[2]
         obj = super().__new__(cls, *args, **kwargs)
         obj.__no_explicit_type__ = __no_explicit_type__
         if obj.__no_explicit_type__:
-            obj.type = typing.Any
+            obj._nl_class_type = typing.Any
         orig_init = obj.__init__
         obj.__children__ = [
             name for name, parameter
@@ -257,6 +260,36 @@ class Expression(metaclass=ExpressionMeta):
         '__code__', '__defaults__', '__kwdefaults__', '__no_type_check__'
     )
 
+    @property
+    def type(self):
+        """Get the expression's type.
+
+        For parameterized classes (e.g., FunctionApplication[bool]), the
+        type is stored as a class attribute under _nl_class_type. For
+        non-parameterized classes, it is stored as an instance attribute
+        under _type, defaulting to Unknown.  Class-level access (e.g.,
+        PM.type for a class PM that inherits from PatternMatcher[int])
+        also works by reading _nl_class_type from the class hierarchy.
+
+        This property avoids instance-attribute shadowing: calling
+        self.type = X in __init__ stores via the setter under _type,
+        and change_type (which changes __class__ to a parameterized class)
+        makes the type available from the class attribute — no need to
+        pop anything from __dict__.
+        """
+        if isinstance(self, ParametricTypeClassMeta):
+            return getattr(self, '_nl_class_type', Unknown)
+        cls = self.__class__
+        if cls.__parameterized__:
+            cls_type = cls._nl_class_type
+            if cls_type is not Unknown and cls_type is not typing.Any:
+                return cls_type
+        return self.__dict__.get('_type', Unknown)
+
+    @type.setter
+    def type(self, value):
+        self.__dict__['_type'] = value
+
     def __init__(self, *args, **kwargs):
         raise TypeError("Expression can not be instantiated")
 
@@ -309,7 +342,6 @@ class Expression(metaclass=ExpressionMeta):
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
-        self.__dict__.pop("type", None)
 
     def cast(self, type_):
         if type_ == self.type:
@@ -486,8 +518,8 @@ class Symbol(NonConstant):
         if not hasattr(Symbol, '_fresh_generator_'):
             Symbol._fresh_generator_ = Symbol._fresh_generator()
         new_symbol = cls(next(Symbol._fresh_generator_))
-        if cls.type is not typing.Any:
-            new_symbol = new_symbol.cast(cls.type)
+        if cls._nl_class_type is not typing.Any:
+            new_symbol = new_symbol.cast(cls._nl_class_type)
         new_symbol.is_fresh = True
         return new_symbol
 
@@ -618,7 +650,6 @@ class Constant(Expression):
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
-        self.__dict__.pop("type", None)
         if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %

@@ -138,7 +138,7 @@ class TypeResolutionMixin(PatternWalker):
         except NeuroLangTypeException:
             return
         if unified is not symbol.type:
-            symbol.__dict__["type"] = unified
+            symbol.type = unified
 
     def _propagate_types_to_head(self, head, body):
         """Copy type information from body Symbols to matching head

@@ -377,16 +377,12 @@ def test_change_type_clears_instance_attribute():
     x = Symbol("x")
     fa = FunctionApplication(f, (x,))
 
-    assert "type" in fa.__dict__, (
-        "FunctionApplication.__init__ should have set an instance "
-        "'type' attribute (via the metaclass or _verify_and_set_type)"
+    assert fa.type is Unknown, (
+        "FunctionApplication with no explicit type should default to Unknown"
     )
-    old_type = fa.__dict__["type"]
 
     fa.change_type(bool)
 
-    assert "type" not in fa.__dict__, (
-        f"Stale instance 'type' ({old_type!r}) was not cleared "
-        f"by change_type(bool). fa.__dict__ still has it."
+    assert fa.type is bool, (
+        f"After change_type(bool), fa.type should be bool, got {fa.type}"
     )
-    assert fa.type is bool
