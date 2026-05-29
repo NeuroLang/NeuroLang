@@ -406,23 +406,24 @@ class DatalogTransformer(Transformer):
         return Union(tuple(fresh_rules + [main_fml]))
 
     def prob_body_predicate(self, ast):
-        # ast = [predicate, argument]   (PROB[pred] = var)
-        # or   = [predicate, cond_body, argument]   (PROB[pred | cond] = var)
-        if len(ast) == 3:
+        # PROB[pred] = var          → ast = [predicate, argument] (2 elements)
+        # PROB[pred // body] = var  → ast = [predicate, //_token, body, argument] (4 elements)
+        if len(ast) == 4:
+            pred = ast[0]
+            cond_body = ast[2]   # ast[1] is the CONDITION_OP token
+            result_var = ast[3]
+        elif len(ast) == 3:
             pred = ast[0]
             cond_body = ast[1]
             result_var = ast[2]
-            return FunctionApplication(
-                Symbol("__PROB__"),
-                (pred, cond_body, result_var)
-            )
         else:
             pred = ast[0]
+            cond_body = None
             result_var = ast[1]
-            return FunctionApplication(
-                Symbol("__PROB__"),
-                (pred, result_var)
-            )
+        return FunctionApplication(
+            Symbol("__PROB__"),
+            (pred, cond_body, result_var)
+        )
 
     def marg_body_predicate(self, ast):
         # MARG[pred] = var → same semantics as PROB body predicate
