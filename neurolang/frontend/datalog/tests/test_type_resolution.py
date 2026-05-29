@@ -453,9 +453,14 @@ class TestTypeResolutionMixin:
         assert a.type is int
         assert b.type is str
 
+    # ------------------------------------------------------------------
+    # Warning behavior for missing symbol table entries
+    # ------------------------------------------------------------------
+
     def test_warning_for_missing_symbol_table_entry(self, solver):
         """A warning is issued when a body predicate has no entry
-        in the symbol table."""
+        in the symbol table, with the exact predicate name in the
+        message."""
         import warnings
 
         mixin, _ = solver
@@ -470,10 +475,148 @@ class TestTypeResolutionMixin:
             warnings.simplefilter("always")
             mixin.walk(rule)
 
-        assert any(
-            "no entry" in str(warning.message).lower()
-            for warning in w
-        ), "Expected a warning about missing symbol table entry"
+        assert len(w) == 1, (
+            f"Expected exactly 1 warning, got {len(w)}: "
+            f"{[str(msg.message) for msg in w]}"
+        )
+        assert issubclass(w[0].category, UserWarning)
+        msg = str(w[0].message)
+        assert "Z" in msg, f"Warning should mention predicate name Z: {msg}"
+        assert "no entry" in msg.lower(), (
+            f"Warning should explain the predicate has no entry: {msg}"
+        )
+
+    def test_warning_for_multiple_missing_predicates(self, solver):
+        """Separate warnings are issued for each body predicate
+        missing from the symbol table."""
+        import warnings
+
+        mixin, _ = solver
+
+        Z = Symbol("Z")
+        W = Symbol("W")
+        x = Symbol("x")
+        y = Symbol("y")
+        Q = Symbol("Q")
+
+        from ....datalog.expressions import Conjunction
+        body = Conjunction((Z(x), W(y)))
+        rule = Implication(Q(x, y), body)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            mixin.walk(rule)
+
+        assert len(w) == 2, (
+            f"Expected 2 warnings (one per missing predicate), "
+            f"got {len(w)}: {[str(msg.message) for msg in w]}"
+        )
+        predicate_names = set()
+        for warning in w:
+            predicate_names.update(
+                word for word in str(warning.message).split()
+                if word in {"Z", "W"}
+            )
+        assert predicate_names == {"Z", "W"}, (
+            f"Warnings should mention both Z and W, "
+            f"got names: {predicate_names}"
+        )
+
+    def test_partial_resolution_with_warning(self, solver):
+        """When one body predicate is in the symbol table and another
+        is missing, a warning fires for the missing predicate but types
+        are still resolved from the known predicate."""
+        import warnings
+
+        mixin, program = solver
+
+        R = Symbol("R")
+        program.add_extensional_predicate_from_tuples(R, [(1, 2.5)])
+
+        Z = Symbol("Z")
+        x = Symbol("x")
+        y = Symbol("y")
+        Q = Symbol("Q")
+
+        from ....datalog.expressions import Conjunction
+        body = Conjunction((R(x, y), Z(y)))
+        rule = Implication(Q(x, y), body)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            mixin.walk(rule)
+
+        # Warning for Z but not for R
+        assert len(w) == 1, (
+            f"Expected 1 warning (for Z only), "
+            f"got {len(w)}: {[str(msg.message) for msg in w]}"
+        )
+        assert "Z" in str(w[0].message)
+
+        # Types from the known EDB predicate still resolved
+        assert x.type is int
+        assert y.type is float
+
+    def test_no_warning_for_edb_predicate(self, solver):
+        """No warning when a body predicate's functor is registered
+        as an EDB in the symbol table."""
+        import warnings
+
+        mixin, program = solver
+
+        R = Symbol("R")
+        program.add_extensional_predicate_from_tuples(R, [(1, 2.5)])
+
+        x = Symbol("x")
+        y = Symbol("y")
+        Q = Symbol("Q")
+
+        rule = Implication(Q(x, y), R(x, y))
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            mixin.walk(rule)
+
+        warnings_for_R = [
+            msg for msg in w
+            if "R" in str(msg.message)
+        ]
+        assert len(warnings_for_R) == 0, (
+            f"Expected no warnings for EDB predicate R, "
+            f"got: {[str(msg.message) for msg in warnings_for_R]}"
+        )
+
+    def test_no_warning_for_non_symbol_functor(self, solver):
+        """No warning when a body atom uses a non-Symbol functor
+        (e.g. a Constant functor from an equality predicate)
+        — the code skips these without warning."""
+        import warnings
+
+        from ....expressions import Constant, FunctionApplication
+
+        mixin, _ = solver
+
+        x = Symbol("x")
+        Q = Symbol("Q")
+
+        # A body atom with a Constant functor (like an equality
+        # predicate eq(x, 5) where the functor is the operator).
+        # The code skips non-Symbol functors without warning.
+        eq_body = FunctionApplication(
+            Constant(Callable[..., bool])(lambda a: a == 5),
+            (x,),
+        )
+
+        rule = Implication(Q(x), eq_body)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            mixin.walk(rule)
+
+        assert len(w) == 0, (
+            f"Expected no warnings for Constant-functor body atom, "
+            f"got: {[str(msg.message) for msg in w]}"
+        )
 
     # ------------------------------------------------------------------
     # Magic-sets AdornedSymbol guards
