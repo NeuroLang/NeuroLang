@@ -21,6 +21,7 @@ from .datalog.sugar import (
     TranslateHeadConstantsToEqualities
 )
 from .datalog.sugar.spatial import TranslateRegionContains
+from .type_resolution import TypeResolutionMixin
 from ..commands import CommandsMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
@@ -74,6 +75,7 @@ class RegionFrontendDatalogSolver(
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities,
     TranslateRegionContains,
+    TypeResolutionMixin,
     Fol2DatalogMixin,
     RegionSolver,
     CommandsMixin,
