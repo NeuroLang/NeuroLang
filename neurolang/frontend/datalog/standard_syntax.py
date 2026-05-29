@@ -84,10 +84,20 @@ predicate : id_application
           | "(" comparison ")"
           | logical_constant
           | prob_body_predicate
+          | marg_body_predicate
+          | succ_body_predicate
 
 // PROB[pred] = var  or  PROB[pred | cond] = var  —  probability query inside a rule body
 prob_body_predicate : "PROB" "[" predicate "]" "=" argument
                     | "PROB" "[" predicate CONDITION_OP body "]" "=" argument
+
+// MARG[pred] = var  —  marginal probability query inside a rule body
+// MARG[pred1, pred2] = var  —  conjunction inside MARG (same semantics as PROB)
+marg_body_predicate : "MARG" "[" conjunction "]" "=" argument
+
+// SUCC[...] = var  —  success probability query (skipped in execution)
+succ_body_predicate : "SUCC" "[" SUCC_INNER "]" "=" argument
+SUCC_INNER : /[^]]+/
 
 id_application : int_ext_identifier "(" [ arguments ] ")"
 
@@ -317,6 +327,10 @@ class DatalogTransformer(Transformer):
                 prob_vars = pred.args
                 # Add the predicate call to body formulas
                 body_formulas.append(pred.functor(*prob_vars))
+            elif isinstance(pred, Conjunction):
+                # e.g. MARG[pred1(X) & pred2(Y)] = P — flatten into body
+                for f in pred.formulas:
+                    body_formulas.append(f)
             else:
                 prob_vars = (pred,)
                 body_formulas.append(pred)
@@ -360,6 +374,24 @@ class DatalogTransformer(Transformer):
                 (pred, result_var)
             )
 
+    def marg_body_predicate(self, ast):
+        # MARG[pred] = var → same semantics as PROB body predicate
+        # ast = [conjunction, argument]
+        pred = ast[0]
+        result_var = ast[1]
+        return FunctionApplication(
+            Symbol("__PROB__"),
+            (pred, result_var)
+        )
+
+    def succ_body_predicate(self, ast):
+        # SUCC[...] = var → skipped (no-op in execution)
+        # Return a __SUCC__ marker that _extract_special_body_atoms discards
+        return FunctionApplication(
+            Symbol("__SUCC__"),
+            (ast[1],)
+        )
+
     def cond_prob_predicate(self, ast):
         left = ast[0]
         right = ast[2]
@@ -377,7 +409,14 @@ class DatalogTransformer(Transformer):
         conj = []
         for c in ast:
             if isinstance(c, Expression):
+                if (isinstance(c, FunctionApplication)
+                        and isinstance(c.functor, Symbol)
+                        and c.functor.name == "__SUCC__"):
+                    # SUCC markers are no-ops — discard at conjunction level
+                    continue
                 conj.append(c)
+        if len(conj) == 0:
+            return Constant(True)
         return Conjunction(conj)
 
     def existential_predicate(self, ast):
@@ -554,6 +593,8 @@ class DatalogTransformer(Transformer):
     def argument(self, ast):
         ast = ast[0]
         if isinstance(ast, Expression):
+            if isinstance(ast, Symbol) and ast.name == "_":
+                return Symbol.fresh()
             return ast
         else:
             return Symbol.fresh()
@@ -699,6 +740,36 @@ class DatalogTransformer(Transformer):
         return ast
 
 
+def _preprocess(code):
+    """Strip % comments and trailing Prolog-style dots before Lark parsing.
+
+    LLMs sometimes emit Prolog-style trailing dots (``.``) and ``%``
+    line comments.  Lark would choke on both.
+    """
+    lines = code.split('\n')
+    processed = []
+    for line in lines:
+        # Strip % comments (not inside strings)
+        in_single = False
+        in_double = False
+        for i, c in enumerate(line):
+            if c == "'" and not in_double:
+                in_single = not in_single
+            elif c == '"' and not in_single:
+                in_double = not in_double
+            elif c == '%' and not in_single and not in_double:
+                line = line[:i]
+                break
+        # Strip trailing Prolog-style dot
+        stripped = line.rstrip()
+        if stripped.endswith('.') and stripped != '.':
+            line = stripped[:-1]
+        else:
+            line = stripped
+        processed.append(line)
+    return '\n'.join(processed)
+
+
 def parser(code, locals=None, globals=None, interactive=False):
 
     try:
@@ -707,6 +778,7 @@ def parser(code, locals=None, globals=None, interactive=False):
             res = completer.complete(code.strip())
             return res.token_options
         else:
+            code = _preprocess(code)
             jp = COMPILED_GRAMMAR.parse(code.strip())
             return DatalogTransformer().transform(jp)
     except UnexpectedToken as e:

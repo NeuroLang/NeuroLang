@@ -622,3 +622,133 @@ def test_prob_body_with_filter():
     }
     assert "filter" in functors
     assert "pred" in functors
+
+
+# ── New syntax: MARG body predicate ──────────────────────────────────────────
+
+def test_marg_body_simple():
+    """ans(x, p):-MARG[pred(x)]=p → same as PROB body predicate."""
+    res = parser("ans(x, p):-MARG[pred(x)]=p")
+    pred = Symbol("pred")
+    x = Symbol("x")
+
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    assert q.head.functor == Symbol("ans")
+    body_formulas = q.body.formulas if hasattr(q.body, 'formulas') else (q.body,)
+    assert any(
+        isinstance(f, FunctionApplication) and f.functor == pred and f.args == (x,)
+        for f in body_formulas
+    )
+
+
+def test_marg_body_conjunction():
+    """ans(x, y, p):-MARG[pred1(x) & pred2(y)]=p → multiple atoms in body."""
+    res = parser("ans(x, y, p):-MARG[pred1(x) & pred2(y)]=p")
+
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    assert q.head.functor == Symbol("ans")
+    body = q.body
+    assert isinstance(body, Conjunction)
+    body_atoms = list(body.formulas)
+    assert len(body_atoms) == 2
+    functors = {
+        f.functor.name if hasattr(f, 'functor') and hasattr(f.functor, 'name')
+        else None for f in body_atoms
+    }
+    assert "pred1" in functors
+    assert "pred2" in functors
+
+
+def test_marg_body_with_filter():
+    """ans(x, p):-filter(x) & MARG[pred(x)]=p → mixed query."""
+    res = parser("ans(x, p):-filter(x) & MARG[pred(x)]=p")
+
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    assert q.head.functor == Symbol("ans")
+    body = q.body
+    assert isinstance(body, Conjunction)
+    body_atoms = list(body.formulas)
+    assert len(body_atoms) == 2
+    functors = {
+        f.functor.name if hasattr(f, 'functor') and hasattr(f.functor, 'name')
+        else None for f in body_atoms
+    }
+    assert "filter" in functors
+    assert "pred" in functors
+
+
+# ── New syntax: SUCC body predicate (no-op) ──────────────────────────────────
+
+def test_succ_body_noop():
+    """SUCC[...]=p is treated as a no-op (removed from body)."""
+    res = parser("ans(x):-SUCC[anything]=p")
+
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    assert q.head.functor == Symbol("ans")
+    # Body should be Constant(True) — SUCC is filtered out
+    assert isinstance(q.body, Constant) and q.body.value is True
+
+
+def test_succ_body_with_filter():
+    """SUCC with other atoms: SUCC is removed, rest stays."""
+    res = parser("ans(x, p):-filter(x) & SUCC[anything]=p")
+
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    assert q.head.functor == Symbol("ans")
+    body = q.body
+    assert isinstance(body, Conjunction)
+    body_atoms = list(body.formulas)
+    assert len(body_atoms) == 1
+    assert body_atoms[0].functor == Symbol("filter")
+
+
+# ── Preprocessing: % comments ────────────────────────────────────────────────
+
+def test_percent_comment_stripping():
+    """% comments are stripped before parsing."""
+    res = parser("ans(x):-body(x) % this is a comment")
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    assert q.head.functor == Symbol("ans")
+    assert any(
+        isinstance(f, FunctionApplication) and f.functor == Symbol("body")
+        for f in (q.body.formulas if hasattr(q.body, 'formulas') else (q.body,))
+    )
+
+
+def test_percent_comment_full_line():
+    """Full-line % comments are stripped."""
+    res = parser("% full line comment\nans(x):-body(x)")
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    assert q.head.functor == Symbol("ans")
+
+
+# ── Preprocessing: trailing dots ─────────────────────────────────────────────
+
+def test_trailing_dot_stripping():
+    """Prolog-style trailing dots are stripped before parsing."""
+    res = parser("ans(x):-body(x).")
+    q = res.formulas[0]
+    assert isinstance(q, Query)
+    assert q.head.functor == Symbol("ans")
+
+
+# ── Wildcard: _ ──────────────────────────────────────────────────────────────
+
+def test_underscore_wildcard():
+    """_ is treated as an anonymous wildcard (fresh Symbol like ...)."""
+    res = parser("A(x):-B(x, _)")
+    fresh_arg = res.formulas[0].antecedent.formulas[0].args[1]
+    assert isinstance(fresh_arg, Symbol)
+    assert res == Union((
+        Implication(
+            Symbol("A")(Symbol("x")),
+            Conjunction((Symbol("B")(Symbol("x"), fresh_arg),)),
+        ),
+    ))
