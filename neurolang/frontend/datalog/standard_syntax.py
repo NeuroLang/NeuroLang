@@ -339,12 +339,41 @@ class DatalogTransformer(Transformer):
         else:
             return Implication(ast[0], body_or_cond)
 
-    def _build_prob_rule(self, head, prob_specs, body):
-        """Build rules from __PROB__ markers in the body.
+    @staticmethod
+    def _classify_prob_predicate(pred):
+        """Extract (prob_vars, subject, is_marg) from a PROB/MARG spec predicate.
 
-        Each PROB[pred(x)]=p in the body desugars into a fresh predicate rule:
+        Returns a tuple ``(prob_vars, subject, is_marg)`` or *None* for
+        unsupported predicate types (which are silently skipped).
+        """
+        if isinstance(pred, FunctionApplication):
+            return pred.args, pred, False
+        elif isinstance(pred, Conjunction):
+            return (), pred, True
+        elif isinstance(pred, Negation):
+            inner = pred.formula
+            if isinstance(inner, FunctionApplication):
+                return inner.args, pred, False
+            return None
+        elif isinstance(pred, ExistentialPredicate):
+            body = getattr(pred, 'body', None)
+            if isinstance(body, FunctionApplication):
+                prob_vars = tuple(
+                    v for v in body.args if v != pred.head
+                )
+                return prob_vars, pred, False
+            return None
+        return None
+
+    def _build_prob_rule(self, head, prob_specs, body):
+        """Build rules from PROB/MARG markers in the body.
+
+        Each PROB[pred(x)]=p in the body desugars into a fresh predicate rule::
+
             fresh(x, PROB(x)) :- pred(x)
-        and the main query uses the fresh predicate to extract the probability:
+
+        and the main query uses the fresh predicate to extract the probability::
+
             ans(x, p) :- fresh(x, p)
         """
         head_args = list(head.args) if head.args else []
@@ -361,88 +390,31 @@ class DatalogTransformer(Transformer):
                 pred, result_var = spec
                 cond_body = None
 
+            classified = self._classify_prob_predicate(pred)
+            if classified is None:
+                continue
+
+            prob_vars, subject, is_marg = classified
             fresh_pred = Symbol.fresh()
 
-            if isinstance(pred, FunctionApplication):
-                prob_vars = pred.args
-                if cond_body is not None:
-                    # Conditional: PROB[pred // cond] = p  →  fresh(X, PROB(X)) :- pred(X) // cond
-                    fresh_body = Condition(
-                        pred.functor(*prob_vars), cond_body
-                    )
-                else:
-                    fresh_body_atoms = [pred.functor(*prob_vars)]
-                    fresh_body = Conjunction(tuple(fresh_body_atoms))
+            if cond_body is not None:
+                fresh_body = Condition(subject, cond_body)
+            elif is_marg:
+                fresh_body = Conjunction(tuple(subject.formulas))
+            else:
+                fresh_body = Conjunction((subject,))
+
+            if is_marg:
+                fresh_head = fresh_pred(FunctionApplication(PROB, (subject,)))
+                query_body_atoms.append(fresh_pred(result_var))
+            else:
                 fresh_head = fresh_pred(
                     *prob_vars, FunctionApplication(PROB, prob_vars)
                 )
-                fresh_rules.append(Implication(fresh_head, fresh_body))
+                query_body_atoms.append(fresh_pred(*prob_vars, result_var))
 
-                query_body_atoms.append(
-                    fresh_pred(*prob_vars, result_var)
-                )
+            fresh_rules.append(Implication(fresh_head, fresh_body))
 
-            elif isinstance(pred, Conjunction):
-                if cond_body is not None:
-                    # Conditional: MARG[pred // cond] = p  →  fresh(PROB(pred)) :- pred // cond
-                    fresh_body = Condition(pred, cond_body)
-                else:
-                    fresh_body = Conjunction(tuple(pred.formulas))
-                fresh_head = fresh_pred(FunctionApplication(PROB, (pred,)))
-                fresh_rules.append(Implication(fresh_head, fresh_body))
-
-                query_body_atoms.append(
-                    fresh_pred(result_var)
-                )
-
-            elif isinstance(pred, Negation):
-                neg_inner = pred.formula
-                if isinstance(neg_inner, FunctionApplication):
-                    prob_vars = neg_inner.args
-                    if cond_body is not None:
-                        fresh_body = Condition(
-                            pred, cond_body
-                        )
-                    else:
-                        fresh_body = Conjunction((pred,))
-                    fresh_head = fresh_pred(
-                        *prob_vars, FunctionApplication(PROB, prob_vars)
-                    )
-                    fresh_rules.append(Implication(fresh_head, fresh_body))
-                    query_body_atoms.append(
-                        fresh_pred(*prob_vars, result_var)
-                    )
-                else:
-                    # Complex negation — skip this spec
-                    continue
-
-            elif isinstance(pred, ExistentialPredicate):
-                if (hasattr(pred, 'body')
-                        and isinstance(pred.body, FunctionApplication)):
-                    inner = pred.body
-                    # prob_vars = free variables (non-quantified)
-                    prob_vars = tuple(
-                        v for v in inner.args
-                        if v != pred.head
-                    )
-                    if cond_body is not None:
-                        fresh_body = Condition(
-                            pred, cond_body
-                        )
-                    else:
-                        fresh_body = Conjunction((pred,))
-                    fresh_head = fresh_pred(
-                        *prob_vars, FunctionApplication(PROB, prob_vars)
-                    )
-                    fresh_rules.append(Implication(fresh_head, fresh_body))
-                    query_body_atoms.append(
-                        fresh_pred(*prob_vars, result_var)
-                    )
-                else:
-                    # Complex existential — skip this spec
-                    continue
-
-            # result var stays in head as the probability column
             if result_var not in head_args:
                 head_args.append(result_var)
 
