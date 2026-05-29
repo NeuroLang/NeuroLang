@@ -33,7 +33,7 @@ TERMINALS_TO_CATEGORIES = {
     'COLON': CATEGORIES[0],
     'COMMA': CATEGORIES[0],
     'COMPARISON_OPERATOR': CATEGORIES[3],
-    'CONDITION_OP': CATEGORIES[3],
+    'PROB_SEP': CATEGORIES[3],
     'CONJUNCTION_SYMBOL': CATEGORIES[0],
     'DOT': CATEGORIES[9],
     'DOTS': CATEGORIES[0],
@@ -147,6 +147,8 @@ class LarkCompleter:
                 accepted_tokens['commands'] = {"values": set()}
             elif (t_name == 'FLOAT'):
                 t_pattern = '<float>'
+            elif (t_name == 'PROB_SEP'):
+                t_pattern = '//'
             elif (t_name == 'IDENTIFIER_REGEXP'):
                 # t_pattern = '<identifier regular expression>'
                 t_pattern = '<identifier_regexp>'
