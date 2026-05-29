@@ -590,153 +590,167 @@ def test_prob_head_rule_conditional():
 # ── New syntax: PROB body predicate ──────────────────────────────────────────
 
 def test_prob_body_simple():
-    """ans(x, p):-PROB[pred(x)]=p → Query extracting pred and p."""
-    res = parser("ans(x, p):-PROB[pred(x)]=p")
+    """ans(x, p):-PROB[pred(x)]=p → Query with pred in body and p in head."""
+    ans = Symbol("ans")
     pred = Symbol("pred")
     x = Symbol("x")
-
-    q = res.formulas[0]
-    assert isinstance(q, Query)
-    assert q.head.functor == Symbol("ans")
-    body_formulas = q.body.formulas if hasattr(q.body, 'formulas') else (q.body,)
-    assert any(
-        isinstance(f, FunctionApplication) and f.functor == pred and f.args == (x,)
-        for f in body_formulas
-    )
+    p = Symbol("p")
+    res = parser("ans(x, p):-PROB[pred(x)]=p")
+    expected = Union((
+        Query(
+            ans(x, p),
+            Conjunction((pred(x),)),
+        ),
+    ))
+    assert res == expected
 
 
 def test_prob_body_with_filter():
     """ans(x, p):-filter(x) & PROB[pred(x)]=p → mixed query."""
+    ans = Symbol("ans")
+    filter_ = Symbol("filter")
+    pred = Symbol("pred")
+    x = Symbol("x")
+    p = Symbol("p")
     res = parser("ans(x, p):-filter(x) & PROB[pred(x)]=p")
-
-    q = res.formulas[0]
-    assert isinstance(q, Query)
-    assert q.head.functor == Symbol("ans")
-    body = q.body
-    assert isinstance(body, Conjunction)
-    body_atoms = list(body.formulas)
-    assert len(body_atoms) == 2
-    functors = {
-        f.functor.name if hasattr(f, 'functor') and hasattr(f.functor, 'name')
-        else None for f in body_atoms
-    }
-    assert "filter" in functors
-    assert "pred" in functors
+    expected = Union((
+        Query(
+            ans(x, p),
+            Conjunction((filter_(x), pred(x))),
+        ),
+    ))
+    assert res == expected
 
 
 # ── New syntax: MARG body predicate ──────────────────────────────────────────
 
 def test_marg_body_simple():
-    """ans(x, p):-MARG[pred(x)]=p → same as PROB body predicate."""
-    res = parser("ans(x, p):-MARG[pred(x)]=p")
+    """ans(x, p):-MARG[pred(x)]=p → same IR as PROB body predicate."""
+    ans = Symbol("ans")
     pred = Symbol("pred")
     x = Symbol("x")
-
-    q = res.formulas[0]
-    assert isinstance(q, Query)
-    assert q.head.functor == Symbol("ans")
-    body_formulas = q.body.formulas if hasattr(q.body, 'formulas') else (q.body,)
-    assert any(
-        isinstance(f, FunctionApplication) and f.functor == pred and f.args == (x,)
-        for f in body_formulas
-    )
+    p = Symbol("p")
+    res = parser("ans(x, p):-MARG[pred(x)]=p")
+    expected = Union((
+        Query(
+            ans(x, p),
+            Conjunction((pred(x),)),
+        ),
+    ))
+    assert res == expected
 
 
 def test_marg_body_conjunction():
     """ans(x, y, p):-MARG[pred1(x) & pred2(y)]=p → multiple atoms in body."""
+    ans = Symbol("ans")
+    pred1 = Symbol("pred1")
+    pred2 = Symbol("pred2")
+    x = Symbol("x")
+    y = Symbol("y")
+    p = Symbol("p")
     res = parser("ans(x, y, p):-MARG[pred1(x) & pred2(y)]=p")
-
-    q = res.formulas[0]
-    assert isinstance(q, Query)
-    assert q.head.functor == Symbol("ans")
-    body = q.body
-    assert isinstance(body, Conjunction)
-    body_atoms = list(body.formulas)
-    assert len(body_atoms) == 2
-    functors = {
-        f.functor.name if hasattr(f, 'functor') and hasattr(f.functor, 'name')
-        else None for f in body_atoms
-    }
-    assert "pred1" in functors
-    assert "pred2" in functors
+    expected = Union((
+        Query(
+            ans(x, y, p),
+            Conjunction((pred1(x), pred2(y))),
+        ),
+    ))
+    assert res == expected
 
 
 def test_marg_body_with_filter():
     """ans(x, p):-filter(x) & MARG[pred(x)]=p → mixed query."""
+    ans = Symbol("ans")
+    filter_ = Symbol("filter")
+    pred = Symbol("pred")
+    x = Symbol("x")
+    p = Symbol("p")
     res = parser("ans(x, p):-filter(x) & MARG[pred(x)]=p")
-
-    q = res.formulas[0]
-    assert isinstance(q, Query)
-    assert q.head.functor == Symbol("ans")
-    body = q.body
-    assert isinstance(body, Conjunction)
-    body_atoms = list(body.formulas)
-    assert len(body_atoms) == 2
-    functors = {
-        f.functor.name if hasattr(f, 'functor') and hasattr(f.functor, 'name')
-        else None for f in body_atoms
-    }
-    assert "filter" in functors
-    assert "pred" in functors
+    expected = Union((
+        Query(
+            ans(x, p),
+            Conjunction((filter_(x), pred(x))),
+        ),
+    ))
+    assert res == expected
 
 
 # ── New syntax: SUCC body predicate (no-op) ──────────────────────────────────
 
 def test_succ_body_noop():
     """SUCC[...]=p is treated as a no-op (removed from body)."""
+    ans = Symbol("ans")
+    x = Symbol("x")
     res = parser("ans(x):-SUCC[anything]=p")
-
-    q = res.formulas[0]
-    assert isinstance(q, Query)
-    assert q.head.functor == Symbol("ans")
-    # Body should be Constant(True) — SUCC is filtered out
-    assert isinstance(q.body, Constant) and q.body.value is True
+    expected = Union((
+        Query(ans(x), Constant(True)),
+    ))
+    assert res == expected
 
 
 def test_succ_body_with_filter():
     """SUCC with other atoms: SUCC is removed, rest stays."""
+    ans = Symbol("ans")
+    filter_ = Symbol("filter")
+    x = Symbol("x")
+    p = Symbol("p")
     res = parser("ans(x, p):-filter(x) & SUCC[anything]=p")
-
-    q = res.formulas[0]
-    assert isinstance(q, Query)
-    assert q.head.functor == Symbol("ans")
-    body = q.body
-    assert isinstance(body, Conjunction)
-    body_atoms = list(body.formulas)
-    assert len(body_atoms) == 1
-    assert body_atoms[0].functor == Symbol("filter")
+    expected = Union((
+        Query(
+            ans(x, p),
+            Conjunction((filter_(x),)),
+        ),
+    ))
+    assert res == expected
 
 
 # ── Preprocessing: % comments ────────────────────────────────────────────────
 
 def test_percent_comment_stripping():
     """% comments are stripped before parsing."""
+    ans = Symbol("ans")
+    body = Symbol("body")
+    x = Symbol("x")
     res = parser("ans(x):-body(x) % this is a comment")
-    q = res.formulas[0]
-    assert isinstance(q, Query)
-    assert q.head.functor == Symbol("ans")
-    assert any(
-        isinstance(f, FunctionApplication) and f.functor == Symbol("body")
-        for f in (q.body.formulas if hasattr(q.body, 'formulas') else (q.body,))
-    )
+    expected = Union((
+        Query(
+            ans(x),
+            Conjunction((body(x),)),
+        ),
+    ))
+    assert res == expected
 
 
 def test_percent_comment_full_line():
     """Full-line % comments are stripped."""
+    ans = Symbol("ans")
+    body = Symbol("body")
+    x = Symbol("x")
     res = parser("% full line comment\nans(x):-body(x)")
-    q = res.formulas[0]
-    assert isinstance(q, Query)
-    assert q.head.functor == Symbol("ans")
+    expected = Union((
+        Query(
+            ans(x),
+            Conjunction((body(x),)),
+        ),
+    ))
+    assert res == expected
 
 
 # ── Preprocessing: trailing dots ─────────────────────────────────────────────
 
 def test_trailing_dot_stripping():
     """Prolog-style trailing dots are stripped before parsing."""
+    ans = Symbol("ans")
+    body = Symbol("body")
+    x = Symbol("x")
     res = parser("ans(x):-body(x).")
-    q = res.formulas[0]
-    assert isinstance(q, Query)
-    assert q.head.functor == Symbol("ans")
+    expected = Union((
+        Query(
+            ans(x),
+            Conjunction((body(x),)),
+        ),
+    ))
+    assert res == expected
 
 
 # ── Wildcard: _ ──────────────────────────────────────────────────────────────
