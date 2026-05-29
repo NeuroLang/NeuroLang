@@ -41,6 +41,8 @@ expressions : (expression)+
             | probabilistic_rule
             | probabilistic_fact
             | prob_head_rule
+            | marg_head_rule
+            | succ_head_rule
             | statement
             | statement_function
             | command
@@ -52,12 +54,11 @@ IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}"
 
 // PROB[pred] :- body  —  declare a probabilistic rule
 prob_head_rule : "PROB" "[" predicate "]" IMPLICATION (condition | body)
-               | "PROB" "[" predicate CONDITION_OP body "]" IMPLICATION (condition | body)
+               | "PROB" "[" predicate PROB_SEP body "]" IMPLICATION (condition | body)
 
 query : "ans" "(" [ arguments ] ")"
 
-condition : composite_predicate CONDITION_OP composite_predicate
-CONDITION_OP : "//"
+condition : composite_predicate PROB_SEP composite_predicate
 ?composite_predicate : "(" conjunction ")"
                         | predicate
 
@@ -87,18 +88,28 @@ predicate : id_application
           | marg_body_predicate
           | succ_body_predicate
 
-// PROB[pred] = var  or  PROB[pred | cond] = var  —  probability query inside a rule body
+// PROB[pred] = var  or  PROB[pred // cond] = var  —  probability query inside a rule body
 prob_body_predicate : "PROB" "[" predicate "]" "=" argument
-                    | "PROB" "[" predicate CONDITION_OP body "]" "=" argument
+                    | "PROB" "[" predicate PROB_SEP body "]" "=" argument
 
 // MARG[pred] = var  —  marginal probability query inside a rule body
 // MARG[pred1, pred2] = var  —  conjunction inside MARG (same semantics as PROB)
 marg_body_predicate : "MARG" "[" conjunction "]" "=" argument
-                    | "MARG" "[" conjunction CONDITION_OP body "]" "=" argument
+                    | "MARG" "[" conjunction PROB_SEP body "]" "=" argument
 
 // SUCC[...] = var  —  success probability query (skipped in execution)
 succ_body_predicate : "SUCC" "[" SUCC_INNER "]" "=" argument
-SUCC_INNER : /[^]]+/
+SUCC_INNER : /[a-zA-Z_*+.,()&@\/ \t-]+/
+
+// Separator inside PROB/MARG for the conditional form: accepts both // and |
+PROB_SEP : "//" | "|"
+
+// MARG head rule  —  declare a marginal probability rule
+marg_head_rule : "MARG" "[" conjunction "]" IMPLICATION (condition | body)
+               | "MARG" "[" conjunction PROB_SEP body "]" IMPLICATION (condition | body)
+
+// SUCC head rule  —  success probability rule (skipped in execution)
+succ_head_rule : "SUCC" "[" SUCC_INNER "]" IMPLICATION (condition | body)
 
 id_application : int_ext_identifier "(" [ arguments ] ")"
 
@@ -259,10 +270,11 @@ class DatalogTransformer(Transformer):
         )
 
     def prob_head_rule(self, ast):
-        # PROB[pred] :- body        → [pred, IMPLICATION_token, body]
-        # PROB[pred | cond] :- body → [pred, COND_OP_token, cond, IMPLICATION_token, body]
+        # PROB[pred] :- body              → [pred, IMPLICATION_token, body]
+        # PROB[pred // cond] :- body      → [pred, SEP_token, cond, IMPLICATION_token, body]
+        # PROB[pred | cond] :- body       → same ast shape
         if len(ast) >= 4:
-            # Conditional form: PROB[pred | cond] :- body
+            # Conditional form: PROB[pred // cond] :- body
             pred = ast[0]
             cond_body = ast[2]
             body = ast[4] if len(ast) > 4 else ast[3]
@@ -272,6 +284,23 @@ class DatalogTransformer(Transformer):
             pred = ast[0]
             body = ast[2]
             return Implication(pred, body)
+
+    def marg_head_rule(self, ast):
+        # MARG[pred] :- body         → [conjunction, IMPLICATION_token, body]
+        # MARG[pred // cond] :- body → [conjunction, SEP_token, cond, IMPLICATION_token, body]
+        if len(ast) >= 4:
+            pred = ast[0]
+            cond_body = ast[2]
+            body = ast[4] if len(ast) > 4 else ast[3]
+            return Implication(pred, Condition(pred, cond_body))
+        else:
+            pred = ast[0]
+            body = ast[2]
+            return Implication(pred, body)
+
+    def succ_head_rule(self, ast):
+        # SUCC[...] :- body → skipped (no-op)
+        return Constant(True)
 
     @staticmethod
     def _extract_special_body_atoms(conjunction):
@@ -336,10 +365,14 @@ class DatalogTransformer(Transformer):
 
             if isinstance(pred, FunctionApplication):
                 prob_vars = pred.args
-                fresh_body_atoms = [pred.functor(*prob_vars)]
                 if cond_body is not None:
-                    fresh_body_atoms.append(cond_body)
-                fresh_body = Conjunction(tuple(fresh_body_atoms))
+                    # Conditional: PROB[pred // cond] = p  →  fresh(X, PROB(X)) :- pred(X) // cond
+                    fresh_body = Condition(
+                        pred.functor(*prob_vars), cond_body
+                    )
+                else:
+                    fresh_body_atoms = [pred.functor(*prob_vars)]
+                    fresh_body = Conjunction(tuple(fresh_body_atoms))
                 fresh_head = fresh_pred(
                     *prob_vars, FunctionApplication(PROB, prob_vars)
                 )
@@ -350,16 +383,64 @@ class DatalogTransformer(Transformer):
                 )
 
             elif isinstance(pred, Conjunction):
-                fresh_body_atoms = list(pred.formulas)
                 if cond_body is not None:
-                    fresh_body_atoms.append(cond_body)
-                fresh_body = Conjunction(tuple(fresh_body_atoms))
+                    # Conditional: MARG[pred // cond] = p  →  fresh(PROB(pred)) :- pred // cond
+                    fresh_body = Condition(pred, cond_body)
+                else:
+                    fresh_body = Conjunction(tuple(pred.formulas))
                 fresh_head = fresh_pred(FunctionApplication(PROB, (pred,)))
                 fresh_rules.append(Implication(fresh_head, fresh_body))
 
                 query_body_atoms.append(
                     fresh_pred(result_var)
                 )
+
+            elif isinstance(pred, Negation):
+                neg_inner = pred.formula
+                if isinstance(neg_inner, FunctionApplication):
+                    prob_vars = neg_inner.args
+                    if cond_body is not None:
+                        fresh_body = Condition(
+                            pred, cond_body
+                        )
+                    else:
+                        fresh_body = Conjunction((pred,))
+                    fresh_head = fresh_pred(
+                        *prob_vars, FunctionApplication(PROB, prob_vars)
+                    )
+                    fresh_rules.append(Implication(fresh_head, fresh_body))
+                    query_body_atoms.append(
+                        fresh_pred(*prob_vars, result_var)
+                    )
+                else:
+                    # Complex negation — skip this spec
+                    continue
+
+            elif isinstance(pred, ExistentialPredicate):
+                if (hasattr(pred, 'body')
+                        and isinstance(pred.body, FunctionApplication)):
+                    inner = pred.body
+                    # prob_vars = free variables (non-quantified)
+                    prob_vars = tuple(
+                        v for v in inner.args
+                        if v != pred.head
+                    )
+                    if cond_body is not None:
+                        fresh_body = Condition(
+                            pred, cond_body
+                        )
+                    else:
+                        fresh_body = Conjunction((pred,))
+                    fresh_head = fresh_pred(
+                        *prob_vars, FunctionApplication(PROB, prob_vars)
+                    )
+                    fresh_rules.append(Implication(fresh_head, fresh_body))
+                    query_body_atoms.append(
+                        fresh_pred(*prob_vars, result_var)
+                    )
+                else:
+                    # Complex existential — skip this spec
+                    continue
 
             # result var stays in head as the probability column
             if result_var not in head_args:
@@ -384,11 +465,12 @@ class DatalogTransformer(Transformer):
         return Union(tuple(fresh_rules + [main_fml]))
 
     def prob_body_predicate(self, ast):
-        # PROB[pred] = var          → ast = [predicate, argument] (2 elements)
-        # PROB[pred // body] = var  → ast = [predicate, //_token, body, argument] (4 elements)
+        # PROB[pred] = var              → ast = [predicate, argument] (2 elements)
+        # PROB[pred // body] = var      → ast = [predicate, SEP_token, body, argument] (4)
+        # PROB[pred | body] = var       → same 4-element shape
         if len(ast) == 4:
             pred = ast[0]
-            cond_body = ast[2]   # ast[1] is the CONDITION_OP token
+            cond_body = ast[2]   # ast[1] is the separator token
             result_var = ast[3]
         else:
             pred = ast[0]
@@ -400,8 +482,9 @@ class DatalogTransformer(Transformer):
         )
 
     def marg_body_predicate(self, ast):
-        # MARG[pred] = var          → ast = [conjunction, argument]
-        # MARG[pred // body] = var  → ast = [conjunction, //_token, body, argument]
+        # MARG[pred] = var              → ast = [conjunction, argument] (2 elements)
+        # MARG[pred // body] = var      → ast = [conjunction, SEP_token, body, argument] (4)
+        # MARG[pred | body] = var       → same 4-element shape
         if len(ast) == 4:
             pred = ast[0]
             cond_body = ast[2]

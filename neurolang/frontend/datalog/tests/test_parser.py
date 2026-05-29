@@ -653,7 +653,7 @@ def test_prob_body_conditional():
     expected = Union((
         Implication(
             fresh(x, FunctionApplication(PROB, (x,))),
-            Conjunction((pred(x), Conjunction((cond(x),)))),
+            Condition(pred(x), Conjunction((cond(x),))),
         ),
         Query(
             ans(x, p),
@@ -679,7 +679,7 @@ def test_prob_body_conditional_with_filter():
     expected = Union((
         Implication(
             fresh(x, FunctionApplication(PROB, (x,))),
-            Conjunction((pred(x), Conjunction((cond(x),)))),
+            Condition(pred(x), Conjunction((cond(x),))),
         ),
         Query(
             ans(x, p),
@@ -781,7 +781,7 @@ def test_marg_body_conditional():
     expected = Union((
         Implication(
             fresh(FunctionApplication(PROB, (Conjunction((pred(x),)),))),
-            Conjunction((pred(x), Conjunction((cond(x),)))),
+            Condition(Conjunction((pred(x),)), Conjunction((cond(x),))),
         ),
         Query(
             ans(x, p),
@@ -807,7 +807,7 @@ def test_marg_body_conditional_with_filter():
     expected = Union((
         Implication(
             fresh(FunctionApplication(PROB, (Conjunction((pred(x),)),))),
-            Conjunction((pred(x), Conjunction((cond(x),)))),
+            Condition(Conjunction((pred(x),)), Conjunction((cond(x),))),
         ),
         Query(
             ans(x, p),
@@ -815,6 +815,161 @@ def test_marg_body_conditional_with_filter():
         ),
     ))
     assert res == expected
+
+
+# ── | separator (alias for //) ────────────────────────────────────────────────
+
+def test_prob_body_conditional_pipe():
+    """PROB[pred | cond] parses to same IR as PROB[pred // cond] (modulo fresh names)."""
+    # Both must parse, both produce Condition antecedents
+    res_pipe = parser("ans(x, p):-PROB[pred(x) | cond(x)]=p")
+    res_slash = parser("ans(x, p):-PROB[pred(x) // cond(x)]=p")
+
+    for res in (res_pipe, res_slash):
+        fml = res.formulas[0]
+        assert isinstance(fml, Implication)
+        assert isinstance(fml.antecedent, Condition)
+        assert isinstance(fml.antecedent.conditioned, FunctionApplication)
+        assert isinstance(fml.antecedent.conditioning, Conjunction)
+
+
+def test_marg_body_conditional_pipe():
+    """MARG[pred | cond] parses to same IR as MARG[pred // cond] (modulo fresh names)."""
+    res_pipe = parser("ans(x, p):-MARG[pred(x) | cond(x)]=p")
+    res_slash = parser("ans(x, p):-MARG[pred(x) // cond(x)]=p")
+
+    for res in (res_pipe, res_slash):
+        fml = res.formulas[0]
+        assert isinstance(fml, Implication)
+        assert isinstance(fml.antecedent, Condition)
+        assert isinstance(fml.antecedent.conditioned, Conjunction)
+        assert isinstance(fml.antecedent.conditioning, Conjunction)
+
+
+# ── MARG head rule ────────────────────────────────────────────────────────────
+
+def test_marg_head_rule_simple():
+    """MARG[pred(x)] :- body(x) — MARG wraps head in Conjunction."""
+    pred = Symbol("pred")
+    body = Symbol("body")
+    x = Symbol("x")
+    res = parser("MARG[pred(x)] :- body(x)")
+    expected = Union((
+        Implication(
+            Conjunction((pred(x),)),
+            Conjunction((body(x),)),
+        ),
+    ))
+    assert res == expected
+
+
+def test_marg_head_rule_conditional():
+    """MARG[pred(x) // cond(x)] :- body(x) — conditional marginal rule."""
+    pred = Symbol("pred")
+    cond = Symbol("cond")
+    body = Symbol("body")
+    x = Symbol("x")
+    res = parser("MARG[pred(x) // cond(x)] :- body(x)")
+    expected = Union((
+        Implication(
+            Conjunction((pred(x),)),
+            Condition(
+                Conjunction((pred(x),)),
+                Conjunction((cond(x),)),
+            ),
+        ),
+    ))
+    assert res == expected
+
+
+# ── SUCC head rule (no-op) ────────────────────────────────────────────────────
+
+def test_succ_head_rule():
+    """SUCC[...] :- body is a no-op — returns Constant(True)."""
+    res = parser("SUCC[anything] :- body(x)")
+    expected = Union((
+        Constant(True),
+    ))
+    assert res == expected
+
+
+# ── Negation and Existential inside PROB body ─────────────────────────────────
+
+def test_prob_body_negation():
+    """ans(x, p):-PROB[~pred(x)]=p — Negation inside PROB body."""
+    ans = Symbol("ans")
+    pred = Symbol("pred")
+    x = Symbol("x")
+    p = Symbol("p")
+    res = parser("ans(x, p):-PROB[~pred(x)]=p")
+
+    fresh = res.formulas[0].consequent.functor
+    assert fresh.is_fresh
+
+    expected = Union((
+        Implication(
+            fresh(x, FunctionApplication(PROB, (x,))),
+            Conjunction((Negation(pred(x)),)),
+        ),
+        Query(
+            ans(x, p),
+            Conjunction((fresh(x, p),)),
+        ),
+    ))
+    assert res == expected
+
+
+def test_prob_body_negation_conditional():
+    """ans(x, p):-PROB[~pred(x) // cond(x)]=p — Negation with conditioning."""
+    ans = Symbol("ans")
+    pred = Symbol("pred")
+    cond = Symbol("cond")
+    x = Symbol("x")
+    p = Symbol("p")
+    res = parser("ans(x, p):-PROB[~pred(x) // cond(x)]=p")
+
+    fresh = res.formulas[0].consequent.functor
+    assert fresh.is_fresh
+
+    expected = Union((
+        Implication(
+            fresh(x, FunctionApplication(PROB, (x,))),
+            Condition(Negation(pred(x)), Conjunction((cond(x),))),
+        ),
+        Query(
+            ans(x, p),
+            Conjunction((fresh(x, p),)),
+        ),
+    ))
+    assert res == expected
+
+
+def test_prob_body_existential():
+    """ans(x, p):-PROB[exists(Y; pred(x, Y))]=p — Existential inside PROB body."""
+    ans = Symbol("ans")
+    pred = Symbol("pred")
+    x = Symbol("x")
+    p = Symbol("p")
+    res = parser("ans(x, p):-PROB[exists(Y; pred(x, Y))]=p")
+
+    fresh = res.formulas[0].consequent.functor
+    assert fresh.is_fresh
+
+    # ExistentialPredicate(head=Y, body=pred(x, Y))
+    expected = Union((
+        Implication(
+            fresh(x, FunctionApplication(PROB, (x,))),
+            Conjunction((
+                ExistentialPredicate(Symbol("Y"), pred(x, Symbol("Y"))),
+            )),
+        ),
+        Query(
+            ans(x, p),
+            Conjunction((fresh(x, p),)),
+        ),
+    ))
+    assert res == expected
+
 
 
 # ── New syntax: SUCC body predicate (no-op) ──────────────────────────────────
