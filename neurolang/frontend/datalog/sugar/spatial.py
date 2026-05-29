@@ -278,7 +278,7 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         return ra_set.projection(*proj_cols)
 
 
-class TranslateRegionContains(PatternWalker):
+class TranslateRegionDestroy(PatternWalker):
     """
     Syntactic sugar for rules using contains/Destroy with
     ExplicitVBR region columns.
@@ -294,31 +294,37 @@ class TranslateRegionContains(PatternWalker):
         lambda imp: (
             isinstance(imp.antecedent, Conjunction)
             and any(
-                isinstance(a.functor, Constant)
-                and a.functor.value is operator.contains
+                (
+                    isinstance(a.functor, Constant)
+                    and a.functor.value is operator.contains
+                    or isinstance(a.functor, Symbol)
+                    and a.functor.name == "contains"
+                )
                 and len(a.args) >= 1
                 and isinstance(a.args[0], Symbol)
                 for a in extract_logic_atoms(imp.antecedent)
             )
-        )
+        ),
     )
-    def region_contains(self, implication):
+    def region_destroy(self, implication):
+        """Pre-explode ExplicitVBR column before Destroy processing."""
         atoms = extract_logic_atoms(implication.antecedent)
         for atom in list(atoms):
             if not self._is_contains_atom(atom):
                 continue
             region_var = atom.args[0]
             self._convert_region_edb_column(atoms, region_var)
-        return implication
+        return self._delegate_to_next_match(implication)
 
     @staticmethod
     def _is_contains_atom(atom):
-        return (
+        is_contains = (
             isinstance(atom.functor, Constant)
             and atom.functor.value is operator.contains
-            and len(atom.args) >= 1
-            and isinstance(atom.args[0], Symbol)
+            or isinstance(atom.functor, Symbol)
+            and atom.functor.name == "contains"
         )
+        return is_contains and len(atom.args) >= 1 and isinstance(atom.args[0], Symbol)
 
     def _convert_region_edb_column(self, formulas, region_var):
         for formula in formulas:
@@ -335,8 +341,8 @@ class TranslateRegionContains(PatternWalker):
                 continue
             col_idx = formula.args.index(region_var)
             col_name = ras.columns[col_idx]
-            self._explode_voxel_column(ras, col_name)
-            return
+            return self._explode_voxel_column(ras, col_name)
+        return False
 
     def _resolve_edb(self, symbol):
         try:
@@ -351,24 +357,36 @@ class TranslateRegionContains(PatternWalker):
     def _explode_voxel_column(ras, col_name):
         container = ras._container
         if len(container) == 0:
-            return
+            return False
         first_val = container[col_name].iloc[0]
         if not hasattr(first_val, 'voxels') or isinstance(
             first_val, (str, bytes)
         ):
-            return
-        new_vals = []
-        keep_mask = []
-        for v in container[col_name]:
+            return False
+
+        def _convert_to_tuples(v):
             if hasattr(v, 'voxels') and len(v.voxels) > 0:
-                new_vals.append(
-                    tuple(
-                        tuple(int(c) for c in row)
-                        for row in v.voxels
-                    )
+                return tuple(
+                    tuple(int(c) for c in row)
+                    for row in v.voxels
                 )
-                keep_mask.append(True)
-            else:
-                keep_mask.append(False)
-        ras._container = container.loc[keep_mask].copy()
-        ras._container[col_name] = new_vals
+            return None
+
+        new_col = container[col_name].apply(_convert_to_tuples)
+        mask = new_col.notna()
+        ras._container = container.loc[mask].copy()
+        ras._container[col_name] = new_col.loc[mask]
+        return True
+
+    def _delegate_to_next_match(self, expression):
+        skip = type(self).region_destroy
+        for pattern, guard, action in self.patterns:
+            if action is skip:
+                continue
+            if self.pattern_match(pattern, expression) and (
+                guard is None or guard(expression)
+            ):
+                return action(self, expression)
+        raise NeuroLangPatternMatchingNoMatch(
+            f"No match for {expression}"
+        )

@@ -798,6 +798,34 @@ def test_neurolang_dl_set_destroy():
     assert set(q) == {(0,), (1,), (2,)}
 
 
+def test_neurolang_dl_region_destroy():
+    neurolang = frontend.NeurolangDL()
+    contains_ = neurolang.add_symbol(contains)
+
+    voxels1 = np.array([[1, 0, 0], [1, 1, 0]])
+    voxels2 = np.array([[2, 0, 0]])
+
+    region1 = ExplicitVBR(voxels1, np.eye(4))
+    region2 = ExplicitVBR(voxels2, np.eye(4))
+
+    regions = neurolang.add_tuple_set(
+        [(region1,), (region2,)], name="regions"
+    )
+
+    with neurolang.scope as e:
+        e.ans[e.v] = regions[e.r] & contains_(e.r, e.v)
+        res = neurolang.solve_all()
+
+    ans = res["ans"].to_unnamed()
+    assert len(ans) == 3
+    expected = {
+        ((1, 0, 0),),
+        ((1, 1, 0),),
+        ((2, 0, 0),),
+    }
+    assert set(ans) == expected
+
+
 @pytest.mark.skip
 @patch(
     "neurolang.frontend.neurosynth_utils."
