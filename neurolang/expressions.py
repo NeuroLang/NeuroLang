@@ -309,6 +309,7 @@ class Expression(metaclass=ExpressionMeta):
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
+        self.__dict__.pop("type", None)
 
     def cast(self, type_):
         if type_ == self.type:
@@ -617,6 +618,7 @@ class Constant(Expression):
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
+        self.__dict__.pop("type", None)
         if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %
