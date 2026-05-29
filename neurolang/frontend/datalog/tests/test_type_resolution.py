@@ -12,6 +12,7 @@ import pytest
 
 from ....datalog.basic_representation import DatalogProgram
 from ....datalog.expressions import Implication
+from ....datalog.magic_sets import AdornedSymbol
 from ....datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ....expressions import Constant, Symbol
 from ....frontend.type_resolution import TypeResolutionMixin
@@ -414,6 +415,105 @@ class TestTypeResolutionMixin:
         assert y.type is float
         assert rule.consequent.type is bool
 
+    # ------------------------------------------------------------------
+    # IDB-to-IDB type propagation
+    # ------------------------------------------------------------------
+
+    def test_idb_predicate_type_propagation(self, solver):
+        """Types propagate from an IDB predicate's resolved head args
+        to body variables in a dependent rule."""
+        mixin, program = solver
+
+        R = Symbol("R")
+        program.add_extensional_predicate_from_tuples(
+            R, [(10, "hello")]
+        )
+
+        # Define Q in terms of R — the type resolver processes this
+        # and DatalogProgram.statement_intensional registers Q in
+        # the symbol table as a Union of Implications.
+        x = Symbol("x")
+        y = Symbol("y")
+        Q = Symbol("Q")
+        rule_q = Implication(Q(x, y), R(x, y))
+        mixin.walk(rule_q)
+
+        assert x.type is int
+        assert y.type is str
+
+        # Now define P in terms of Q — Q's head args have their types
+        # set after rule_q was processed, so the IDB entry for Q
+        # carries type information.
+        a = Symbol("a")
+        b = Symbol("b")
+        P = Symbol("P")
+        rule_p = Implication(P(a, b), Q(a, b))
+        mixin.walk(rule_p)
+
+        assert a.type is int
+        assert b.type is str
+
+    def test_warning_for_missing_symbol_table_entry(self, solver):
+        """A warning is issued when a body predicate has no entry
+        in the symbol table."""
+        import warnings
+
+        mixin, _ = solver
+
+        Z = Symbol("Z")
+        x = Symbol("x")
+        Q = Symbol("Q")
+
+        rule = Implication(Q(x), Z(x))
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            mixin.walk(rule)
+
+        assert any(
+            "no entry" in str(warning.message).lower()
+            for warning in w
+        ), "Expected a warning about missing symbol table entry"
+
+    # ------------------------------------------------------------------
+    # Magic-sets AdornedSymbol guards
+    # ------------------------------------------------------------------
+
+    def test_adorned_symbol_skips_type_resolution(self, solver):
+        """When the head functor is an AdornedSymbol (as produced by
+        magic-sets rewriting), type resolution is skipped entirely
+        — no warnings for missing body predicates, no type
+        propagation to body Symbols, and the head is still marked
+        as bool to prevent re-matching."""
+        import warnings
+
+        mixin, _ = solver
+
+        Z = Symbol("Z")
+        x = Symbol("x")
+        Q = Symbol("Q")
+
+        # AdornedSymbol mimics what the magic-sets layer produces:
+        # an adorned copy of the original rule's head functor.
+        q_adorned = AdornedSymbol(Q, "bf", 0)
+        rule = Implication(q_adorned(x), Z(x))
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            mixin.walk(rule)
+
+        # No warning despite Z having no symbol-table entry
+        assert len(w) == 0, (
+            f"Expected no warnings for adorned rules, "
+            f"got: {[str(msg.message) for msg in w]}"
+        )
+
+        # Body symbols were NOT resolved
+        assert x.type is Unknown, "Body symbols should not be resolved"
+
+        # Head FA type is set to bool (prevents re-matching on re-entry)
+        assert rule.consequent.type is bool
+
 
 class TestTypeResolutionIntegration:
     """
@@ -540,7 +640,31 @@ class TestTypeResolutionIntegration:
         with nl.scope as e:
             e.Q[e.x, e.y] = e.R[e.x, e.y]
             impl = self._get_stored_implication(nl)
-            assert impl.consequent.type is bool
+        assert impl.consequent.type is bool
+
+    # ------------------------------------------------------------------
+    # IDB-to-IDB type propagation via full solver
+    # ------------------------------------------------------------------
+
+    def test_idb_type_propagation_integration(self):
+        """Types from an IDB predicate propagate to dependent rules
+        through the full solver stack."""
+        from ....frontend.deterministic_frontend import NeurolangDL
+        from .... import expressions as ir
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([(10, "hello")], name="R")
+
+        with nl.scope as e:
+            e.Q[e.x, e.y] = e.R[e.x, e.y]
+            e.P[e.a, e.b] = e.Q[e.a, e.b]
+
+            idb = nl.program_ir.intensional_database()
+            p_union = idb[ir.Symbol("P")]
+            p_impl = p_union.formulas[0]
+            atoms = self._get_body_atoms(p_impl)
+            assert atoms[0].args[0].type is int
+            assert atoms[0].args[1].type is str
 
     def test_constant_argument_body_atom_types(self):
         """EDB with constant argument: variable arg still resolved."""
