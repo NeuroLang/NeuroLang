@@ -345,12 +345,9 @@ class DatalogTransformer(Transformer):
                 )
                 fresh_rules.append(Implication(fresh_head, fresh_body))
 
-                if result_var is not None:
-                    query_body_atoms.append(
-                        fresh_pred(*prob_vars, result_var)
-                    )
-                else:
-                    query_body_atoms.append(fresh_pred(*prob_vars))
+                query_body_atoms.append(
+                    fresh_pred(*prob_vars, result_var)
+                )
 
             elif isinstance(pred, Conjunction):
                 fresh_body_atoms = list(pred.formulas)
@@ -362,30 +359,10 @@ class DatalogTransformer(Transformer):
 
                 query_body_atoms.append(
                     fresh_pred(result_var)
-                    if result_var is not None
-                    else fresh_pred()
                 )
-
-            else:
-                prob_vars = (pred,)
-                fresh_body_atoms = [pred]
-                if cond_body is not None:
-                    fresh_body_atoms.append(cond_body)
-                fresh_body = Conjunction(tuple(fresh_body_atoms))
-                fresh_head = fresh_pred(
-                    *prob_vars, FunctionApplication(PROB, prob_vars)
-                )
-                fresh_rules.append(Implication(fresh_head, fresh_body))
-
-                if result_var is not None:
-                    query_body_atoms.append(
-                        fresh_pred(*prob_vars, result_var)
-                    )
-                else:
-                    query_body_atoms.append(fresh_pred(*prob_vars))
 
             # result var stays in head as the probability column
-            if result_var is not None and result_var not in head_args:
+            if result_var not in head_args:
                 head_args.append(result_var)
 
         if isinstance(head, Query) or (isinstance(head, Expression)
@@ -413,10 +390,6 @@ class DatalogTransformer(Transformer):
             pred = ast[0]
             cond_body = ast[2]   # ast[1] is the CONDITION_OP token
             result_var = ast[3]
-        elif len(ast) == 3:
-            pred = ast[0]
-            cond_body = ast[1]
-            result_var = ast[2]
         else:
             pred = ast[0]
             cond_body = None
