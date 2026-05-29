@@ -766,6 +766,57 @@ def test_marg_body_with_filter():
     assert res == expected
 
 
+def test_marg_body_conditional():
+    """ans(x, p):-MARG[pred(x) // cond(x)]=p → cond_body added to fresh rule body."""
+    ans = Symbol("ans")
+    pred = Symbol("pred")
+    cond = Symbol("cond")
+    x = Symbol("x")
+    p = Symbol("p")
+    res = parser("ans(x, p):-MARG[pred(x) // cond(x)]=p")
+
+    fresh = res.formulas[0].consequent.functor
+    assert fresh.is_fresh
+
+    expected = Union((
+        Implication(
+            fresh(FunctionApplication(PROB, (Conjunction((pred(x),)),))),
+            Conjunction((pred(x), Conjunction((cond(x),)))),
+        ),
+        Query(
+            ans(x, p),
+            Conjunction((fresh(p),)),
+        ),
+    ))
+    assert res == expected
+
+
+def test_marg_body_conditional_with_filter():
+    """ans(x, p):-filter(x) & MARG[pred(x) // cond(x)]=p → filter + conditional MARG."""
+    ans = Symbol("ans")
+    filter_ = Symbol("filter")
+    pred = Symbol("pred")
+    cond = Symbol("cond")
+    x = Symbol("x")
+    p = Symbol("p")
+    res = parser("ans(x, p):-filter(x) & MARG[pred(x) // cond(x)]=p")
+
+    fresh = res.formulas[0].consequent.functor
+    assert fresh.is_fresh
+
+    expected = Union((
+        Implication(
+            fresh(FunctionApplication(PROB, (Conjunction((pred(x),)),))),
+            Conjunction((pred(x), Conjunction((cond(x),)))),
+        ),
+        Query(
+            ans(x, p),
+            Conjunction((filter_(x), fresh(p))),
+        ),
+    ))
+    assert res == expected
+
+
 # ── New syntax: SUCC body predicate (no-op) ──────────────────────────────────
 
 def test_succ_body_noop():

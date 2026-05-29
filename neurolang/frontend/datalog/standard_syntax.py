@@ -94,6 +94,7 @@ prob_body_predicate : "PROB" "[" predicate "]" "=" argument
 // MARG[pred] = var  —  marginal probability query inside a rule body
 // MARG[pred1, pred2] = var  —  conjunction inside MARG (same semantics as PROB)
 marg_body_predicate : "MARG" "[" conjunction "]" "=" argument
+                    | "MARG" "[" conjunction CONDITION_OP body "]" "=" argument
 
 // SUCC[...] = var  —  success probability query (skipped in execution)
 succ_body_predicate : "SUCC" "[" SUCC_INNER "]" "=" argument
@@ -426,8 +427,16 @@ class DatalogTransformer(Transformer):
         )
 
     def marg_body_predicate(self, ast):
-        # MARG[pred] = var → same semantics as PROB body predicate
-        # ast = [conjunction, argument]
+        # MARG[pred] = var          → ast = [conjunction, argument]
+        # MARG[pred // body] = var  → ast = [conjunction, //_token, body, argument]
+        if len(ast) == 4:
+            pred = ast[0]
+            cond_body = ast[2]
+            result_var = ast[3]
+            return FunctionApplication(
+                Symbol("__PROB__"),
+                (pred, cond_body, result_var)
+            )
         pred = ast[0]
         result_var = ast[1]
         return FunctionApplication(
