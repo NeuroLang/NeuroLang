@@ -31,6 +31,8 @@ keywords = [
 dependencies = [
     "numpy",
     "scipy",
+    "polars>=1.0",
+    "pyarrow",
     "nibabel>=5.0.0",
     "nilearn>=0.10.0",
     "pandas>=1.5",
@@ -46,20 +48,17 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
-[project.scripts]
-neurolang-query = "neurolang.utils.cli:main"
-
-[project.urls]
-Homepage = "https://neurolang.github.io"
-"Bug Tracker" = "https://github.com/neurolang/neurolang/issues"
-"Source Code" = "https://github.com/neurolang/neurolang"
-
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-benchmark",
     "pytest-cov",
     "problog"
+]
+
+ras-polars = [
+    "polars>=1.0",
+    "pyarrow",
 ]
 
 doc = [
