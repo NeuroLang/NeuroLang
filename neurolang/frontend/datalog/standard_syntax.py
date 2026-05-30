@@ -17,7 +17,7 @@ from ...expressions import (
     Lambda,
     Query,
     Statement,
-    Symbol
+    Symbol,
 )
 from ...logic import ExistentialPredicate
 from ...probabilistic.expressions import (
@@ -47,9 +47,17 @@ expressions : (expression)+
             | statement_function
             | command
 
+agg_assign : "AGGREGATE" "[" agg_group_vars "]" "(" conjunction "@" agg_fn_call ")" "=" argument -> agg_assign_vars
+           | "AGGREGATE" "[" "(" ")" "]" "(" conjunction "@" agg_fn_call ")" "=" argument -> agg_assign_empty
+           | "AGGREGATE" "[" "]" "(" conjunction "@" agg_fn_call ")" "=" argument -> agg_assign_empty
+
+agg_group_vars : cmd_identifier ("," cmd_identifier)*
+
+agg_fn_call : cmd_identifier "(" argument ")"
+
 probabilistic_rule : head PROBA_OP arithmetic_operation IMPLICATION (condition | body)
 
-rule : (head | query) IMPLICATION (condition | body)
+rule : (head | query) IMPLICATION (condition | body | agg_assign)
 IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}"
 
 // PROB[pred] :- body  —  declare a probabilistic rule
@@ -89,8 +97,8 @@ predicate : id_application
           | succ_body_predicate
 
 // PROB[pred] = var  or  PROB[pred // cond] = var  —  probability query inside a rule body
-prob_body_predicate : "PROB" "[" predicate "]" "=" argument
-                    | "PROB" "[" predicate PROB_SEP body "]" "=" argument
+prob_body_predicate : "PROB" "[" conjunction "]" "=" argument
+                    | "PROB" "[" conjunction PROB_SEP body "]" "=" argument
 
 // MARG[pred] = var  —  marginal probability query inside a rule body
 // MARG[pred1, pred2] = var  —  conjunction inside MARG (same semantics as PROB)
@@ -174,7 +182,7 @@ identifier : cmd_identifier | identifier_regexp
 identifier_regexp : IDENTIFIER_REGEXP
 IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\\/#%._:-]+/ "`"
 cmd_identifier : CMD_IDENTIFIER
-CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
+CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)(?!\\bAGGREGATE\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
 
 exists : EXISTS_WORD | EXISTS_SYMBOL
 EXISTS_WORD : "exists" | "EXISTS"
@@ -302,13 +310,37 @@ class DatalogTransformer(Transformer):
         # SUCC[...] :- body → skipped (no-op)
         return Constant(True)
 
+    def agg_assign_vars(self, ast):
+        # "AGGREGATE" "[" agg_group_vars "]" "(" conjunction "@" agg_fn_call ")" "=" argument
+        # Children: [group_vars, conjunction, agg_fn_call, argument]
+        group_vars, conjunction, agg_fn_call, result_var = ast
+        return (group_vars, conjunction, agg_fn_call, result_var)
+
+    def agg_assign_empty(self, ast):
+        # "AGGREGATE" "[" ("(" ")")? "]" "(" conjunction "@" agg_fn_call ")" "=" argument
+        # Children: [conjunction, agg_fn_call, argument] (no group_vars)
+        conjunction, agg_fn_call, result_var = ast
+        return ((), conjunction, agg_fn_call, result_var)
+
+    def agg_group_vars(self, ast):
+        # CMD_IDENTIFIER ("," CMD_IDENTIFIER)*
+        # Children are the Symbol tokens from each CMD_IDENTIFIER
+        # Return them as a tuple
+        return tuple(ast)
+
+    def agg_fn_call(self, ast):
+        # CMD_IDENTIFIER "(" argument ")"
+        # Children: [cmd_identifier_symbol, argument_expression]
+        fn_sym = ast[0]     # Symbol, e.g. Symbol("count")
+        arg_expr = ast[1]   # argument expression, e.g. Symbol("s")
+        return fn_sym(arg_expr)
+
     @staticmethod
     def _extract_special_body_atoms(conjunction):
-        """Separate __PROB__ marker atoms from regular atoms in a conjunction.
+        """Separate __PROB__ and __MARG__ marker atoms from regular atoms.
 
         Returns (regular_formulas, prob_specs) where each prob_spec is
-        a tuple (inner_predicate, cond_body, result_var) or
-        (inner_predicate, result_var).
+        a tuple of (marker_name, args).
         """
         formulas = list(conjunction.formulas)
         regular = []
@@ -316,8 +348,8 @@ class DatalogTransformer(Transformer):
         for f in formulas:
             if (isinstance(f, FunctionApplication)
                     and isinstance(f.functor, Symbol)
-                    and f.functor.name == "__PROB__"):
-                prob_specs.append(f.args)
+                    and f.functor.name in ("__PROB__", "__MARG__")):
+                prob_specs.append((f.functor.name, f.args))
             else:
                 regular.append(f)
         return regular, prob_specs
@@ -325,6 +357,10 @@ class DatalogTransformer(Transformer):
     def rule(self, ast):
         head = ast[0]
         body_or_cond = ast[2]
+
+        if isinstance(body_or_cond, tuple):
+            group_vars, conjunction, agg_fn_call, result_var = body_or_cond
+            return self._build_aggregate_rule(head, group_vars, conjunction, agg_fn_call, result_var)
 
         if isinstance(body_or_cond, Conjunction):
             regular, prob_specs = self._extract_special_body_atoms(
@@ -384,30 +420,67 @@ class DatalogTransformer(Transformer):
         query_body_atoms = []
 
         for spec in prob_specs:
-            if len(spec) == 3:
-                pred, cond_body, result_var = spec
+            if isinstance(spec, tuple) and len(spec) == 2 and isinstance(spec[0], str):
+                marker_name, args = spec
+                if len(args) == 3:
+                    pred, cond_body, result_var = args
+                else:
+                    pred, result_var = args
+                    cond_body = None
             else:
-                pred, result_var = spec
-                cond_body = None
+                marker_name = "__PROB__"
+                if len(spec) == 3:
+                    pred, cond_body, result_var = spec
+                else:
+                    pred, result_var = spec
+                    cond_body = None
 
-            classified = self._classify_prob_predicate(pred)
+            # Unwrap single-formula conjunctions: PROB[p] queries parse as
+            # a Conjunction wrapping a single predicate when the grammar uses
+            # the conjunction rule (instead of predicate) for the inner part.
+            inner = pred
+            if isinstance(pred, Conjunction) and len(pred.formulas) == 1:
+                inner = pred.formulas[0]
+            classified = self._classify_prob_predicate(inner)
             if classified is None:
                 continue
 
-            prob_vars, subject, is_marg = classified
+            prob_vars, subject, _ = classified
+            is_marg = marker_name == "__MARG__"
             fresh_pred = Symbol.fresh()
 
             if cond_body is not None:
                 fresh_body = Condition(subject, cond_body)
+                fresh_head = fresh_pred(
+                    *prob_vars, FunctionApplication(PROB, prob_vars)
+                )
+                query_body_atoms.append(fresh_pred(*prob_vars, result_var))
+            elif is_marg and isinstance(subject, Conjunction) and len(subject.formulas) > 1:
+                # MARG with conjunction (e.g. MARG[p1(x, y) & p2(y)] = p).
+                # Extract the union of all variables from the conjunction and
+                # use them as PROB arguments instead of passing the whole
+                # Conjunction expression (which fails validation because
+                # PROB(...) requires all args to be Symbol instances).
+                all_vars: list[Expression] = []
+                seen: set[Expression] = set()
+                for f in subject.formulas:
+                    if isinstance(f, FunctionApplication):
+                        for arg in f.args:
+                            if isinstance(arg, Symbol) and arg not in seen:
+                                seen.add(arg)
+                                all_vars.append(arg)
+                prob_vars = tuple(all_vars)
+                fresh_body = subject
+                fresh_head = fresh_pred(
+                    *prob_vars, FunctionApplication(PROB, prob_vars)
+                )
+                query_body_atoms.append(fresh_pred(*prob_vars, result_var))
             elif is_marg:
                 fresh_body = Conjunction(tuple(subject.formulas))
-            else:
-                fresh_body = Conjunction((subject,))
-
-            if is_marg:
                 fresh_head = fresh_pred(FunctionApplication(PROB, (subject,)))
                 query_body_atoms.append(fresh_pred(result_var))
             else:
+                fresh_body = Conjunction((subject,))
                 fresh_head = fresh_pred(
                     *prob_vars, FunctionApplication(PROB, prob_vars)
                 )
@@ -436,6 +509,23 @@ class DatalogTransformer(Transformer):
         main_fml = Query(new_head, new_body)
         return Union(tuple(fresh_rules + [main_fml]))
 
+    def _build_aggregate_rule(self, head, group_vars, conjunction, agg_fn_call, result_var):
+        agg_functor = agg_fn_call.functor
+        agg_args = agg_fn_call.args
+        aggregation = AggregationApplication(agg_functor, agg_args)
+        head_args = list(head.args) if hasattr(head, 'args') and head.args else []
+        new_args = []
+        for arg in head_args:
+            if isinstance(arg, Symbol) and result_var is not None and isinstance(result_var, Symbol) and arg.name == result_var.name:
+                continue
+            if isinstance(arg, Symbol) and arg in group_vars:
+                new_args.append(arg)
+            else:
+                new_args.append(arg)
+        new_args.append(aggregation)
+        new_head = head.functor(*new_args)
+        return Implication(new_head, conjunction)
+
     def prob_body_predicate(self, ast):
         # PROB[pred] = var              → ast = [predicate, argument] (2 elements)
         # PROB[pred // body] = var      → ast = [predicate, SEP_token, body, argument] (4)
@@ -462,13 +552,13 @@ class DatalogTransformer(Transformer):
             cond_body = ast[2]
             result_var = ast[3]
             return FunctionApplication(
-                Symbol("__PROB__"),
+                Symbol("__MARG__"),
                 (pred, cond_body, result_var)
             )
         pred = ast[0]
         result_var = ast[1]
         return FunctionApplication(
-            Symbol("__PROB__"),
+            Symbol("__MARG__"),
             (pred, result_var)
         )
 

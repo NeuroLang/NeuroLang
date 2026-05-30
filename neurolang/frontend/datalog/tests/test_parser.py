@@ -19,7 +19,8 @@ from ....exceptions import UnexpectedTokenError
 from ....probabilistic.expressions import (
     PROB,
     Condition,
-    ProbabilisticFact
+    ProbabilisticChoice,
+    ProbabilisticFact,
 )
 from ..standard_syntax import ExternalSymbol, parser
 
@@ -1063,3 +1064,114 @@ def test_underscore_wildcard():
             Conjunction((Symbol("B")(Symbol("x"), fresh_arg),)),
         ),
     ))
+
+
+# ── AGGREGATE body syntax ──────────────────────────────────────────────────────
+
+def test_agg_body_simple():
+    """
+    AGGREGATE[group](body @ count(var)) = result
+    → Implication with AggregationApplication appended to head args.
+    """
+    res = parser(
+        "study_count(r, c) :-"
+        " AGGREGATE[r](reported_activation(s, x, y, z)"
+        " & voxel_in_region(x, y, z, r) @ count(s)) = c"
+    )
+    fml = res.formulas[0]
+    assert isinstance(fml, Implication)
+    # Head should include group var + AggregationApplication
+    head_args = fml.consequent.args
+    assert len(head_args) == 2
+    assert head_args[0] == Symbol("r")
+    assert isinstance(head_args[1], AggregationApplication)
+    assert head_args[1].functor == Symbol("count")
+    assert head_args[1].args == (Symbol("s"),)
+    # Body should be conjunction of both atoms
+    assert isinstance(fml.antecedent, Conjunction)
+    assert len(fml.antecedent.formulas) == 2
+
+
+def test_agg_body_empty_group():
+    """AGGREGATE[()] — empty group produces only AggregationApplication in head."""
+    res = parser("avg_w(m) :- AGGREGATE[()](weights(w) @ mean(w)) = m")
+    fml = res.formulas[0]
+    assert isinstance(fml, Implication)
+    head_args = fml.consequent.args
+    assert len(head_args) == 1
+    assert isinstance(head_args[0], AggregationApplication)
+    assert head_args[0].functor == Symbol("mean")
+
+
+def test_agg_body_single_predicate():
+    """AGGREGATE with a single body atom (no conjunction)."""
+    res = parser("max_v(m) :- AGGREGATE[()](value(v) @ max(v)) = m")
+    fml = res.formulas[0]
+    assert isinstance(fml, Implication)
+    head_args = fml.consequent.args
+    assert len(head_args) == 1
+    assert isinstance(head_args[0], AggregationApplication)
+    assert head_args[0].functor == Symbol("max")
+    # Single-atom body produces a Conjunction with one element
+    assert isinstance(fml.antecedent, Conjunction)
+    assert len(fml.antecedent.formulas) == 1
+
+
+def test_agg_body_mixed_disjunction_refused():
+    """AGGREGATE body does NOT support disjunction (;) —parser-level restriction."""
+    with pytest.raises(Exception):
+        parser(
+            "bad(r, c) :-"
+            " AGGREGATE[r](p(r) ; q(r) @ count(s)) = c"
+        )
+
+
+# ── CHOICE statement ────────────────────────────────────────────────────────────
+
+def test_choice_simple():
+    """
+    choice(x) { prob :: p(x) }
+    → Implication(ProbabilisticChoice(pred, prob), body)
+    """
+    res = parser("choice(x) { 0.5 :: q(x) }")
+    fml = res.formulas[0]
+    assert isinstance(fml, Implication)
+    assert isinstance(fml.consequent, ProbabilisticChoice)
+    assert fml.consequent.probability == Constant(0.5)
+    assert fml.consequent.body == Symbol("choice")(Symbol("x"))
+    assert isinstance(fml.antecedent, Conjunction)
+    assert len(fml.antecedent.formulas) == 1
+    assert fml.antecedent.formulas[0] == Symbol("q")(Symbol("x"))
+
+
+def test_choice_explicit_prob():
+    """choice with a variable probability."""
+    p = Symbol("p")
+    res = parser("choice(x) { p :: q(x) }")
+    fml = res.formulas[0]
+    assert isinstance(fml, Implication)
+    assert isinstance(fml.consequent, ProbabilisticChoice)
+    assert fml.consequent.probability == p
+
+
+def test_choice_conjunction_body():
+    """choice with body containing multiple predicates."""
+    res = parser("choice(x) { 0.8 :: p(x) & q(x) }")
+    fml = res.formulas[0]
+    assert isinstance(fml.consequent, ProbabilisticChoice)
+    assert isinstance(fml.antecedent, Conjunction)
+    assert len(fml.antecedent.formulas) == 2
+
+
+def test_choice_fractional_prob():
+    """choice probability can be an arithmetic expression (division handled by argument parser)."""
+    res = parser("choice(x) { 0.3 :: p(x) }")
+    fml = res.formulas[0]
+    assert isinstance(fml, Implication)
+    assert isinstance(fml.consequent, ProbabilisticChoice)
+    assert fml.consequent.probability == Constant(0.3)
+    # Division expressions work via argument-level arithmetic
+    res2 = parser("choice(x) { 0.5 / 2 :: p(x) }")
+    fml2 = res2.formulas[0]
+    assert isinstance(fml2, Implication)
+    assert isinstance(fml2.consequent, ProbabilisticChoice)
