@@ -278,6 +278,17 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         return ra_set.projection(*proj_cols)
 
 
+def _is_contains_atom(atom):
+    """Check whether *atom* is a contains/Destroy atom."""
+    is_contains = (
+        isinstance(atom.functor, Constant)
+        and atom.functor.value is operator.contains
+        or isinstance(atom.functor, Symbol)
+        and atom.functor.name == "contains"
+    )
+    return is_contains and len(atom.args) >= 1 and isinstance(atom.args[0], Symbol)
+
+
 class TranslateRegionDestroy(PatternWalker):
     """
     Syntactic sugar for rules using contains/Destroy with
@@ -294,14 +305,7 @@ class TranslateRegionDestroy(PatternWalker):
         lambda imp: (
             isinstance(imp.antecedent, Conjunction)
             and any(
-                (
-                    isinstance(a.functor, Constant)
-                    and a.functor.value is operator.contains
-                    or isinstance(a.functor, Symbol)
-                    and a.functor.name == "contains"
-                )
-                and len(a.args) >= 1
-                and isinstance(a.args[0], Symbol)
+                _is_contains_atom(a)
                 for a in extract_logic_atoms(imp.antecedent)
             )
         ),
@@ -310,21 +314,11 @@ class TranslateRegionDestroy(PatternWalker):
         """Pre-explode ExplicitVBR column before Destroy processing."""
         atoms = extract_logic_atoms(implication.antecedent)
         for atom in list(atoms):
-            if not self._is_contains_atom(atom):
+            if not _is_contains_atom(atom):
                 continue
             region_var = atom.args[0]
             self._convert_region_edb_column(atoms, region_var)
         return self._delegate_to_next_match(implication)
-
-    @staticmethod
-    def _is_contains_atom(atom):
-        is_contains = (
-            isinstance(atom.functor, Constant)
-            and atom.functor.value is operator.contains
-            or isinstance(atom.functor, Symbol)
-            and atom.functor.name == "contains"
-        )
-        return is_contains and len(atom.args) >= 1 and isinstance(atom.args[0], Symbol)
 
     def _convert_region_edb_column(self, formulas, region_var):
         for formula in formulas:
@@ -366,10 +360,7 @@ class TranslateRegionDestroy(PatternWalker):
 
         def _convert_to_tuples(v):
             if hasattr(v, 'voxels') and len(v.voxels) > 0:
-                return tuple(
-                    tuple(int(c) for c in row)
-                    for row in v.voxels
-                )
+                return tuple(map(tuple, v.voxels.tolist()))
             return None
 
         new_col = container[col_name].apply(_convert_to_tuples)
