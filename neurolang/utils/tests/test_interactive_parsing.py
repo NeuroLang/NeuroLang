@@ -96,7 +96,7 @@ def test_interactive_rules():
 
     res = completer.complete('A(x):-').token_options
     expected = {'Signs': {'values': {'(', '∃', '@'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'MARG', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', 'False', '⊤', '⊥'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'EXISTS', 'exists', 'MARG', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', 'False', '⊤', '⊥'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = completer.complete('A(x):-B').token_options
@@ -255,7 +255,7 @@ def test_interactive_uri():
 
     res = completer.complete(f'`{str(label.name)}`(x):-').token_options
     expected = {'Signs': {'values': {'@', '(', '∃'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'False', '⊥', 'True', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'exists', 'EXISTS', 'MARG', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'False', '⊥', 'True', '⊤'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = completer.complete(f'`{str(label.name)}`(x):-`{str(regional_part.name)}`').token_options
@@ -453,7 +453,7 @@ def test_interactive_query():
 
     res = completer.complete('ans(x) :-').token_options
     expected = {'Signs': {'values': {'∃', '@', '('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'MARG', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'True', '⊤', 'False'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'¬', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'exists', 'EXISTS', 'MARG', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'True', '⊤', 'False'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<identifier_regexp>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = completer.complete('ans(x) :- B(x, y), C(3, y)').token_options

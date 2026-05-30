@@ -476,8 +476,17 @@ class DatalogTransformer(Transformer):
                 )
                 query_body_atoms.append(fresh_pred(*prob_vars, result_var))
             elif is_marg:
-                fresh_body = Conjunction(tuple(subject.formulas))
-                fresh_head = fresh_pred(FunctionApplication(PROB, (subject,)))
+                # Subject may be a bare Expression (FunctionApplication) due to
+                # ?conjunction inlining, or a Conjunction when there are multiple
+                # predicates. Normalize to Conjunction for the PROB wrapping.
+                if isinstance(subject, Conjunction):
+                    formulas = subject.formulas
+                else:
+                    formulas = (subject,)
+                fresh_body = Conjunction(formulas)
+                fresh_head = fresh_pred(
+                    FunctionApplication(PROB, (Conjunction(formulas),))
+                )
                 query_body_atoms.append(fresh_pred(result_var))
             else:
                 fresh_body = Conjunction((subject,))

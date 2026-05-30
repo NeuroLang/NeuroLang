@@ -25,6 +25,7 @@ CATEGORIES = [
 
 # Dictionary for the correspondence between the NeuroLang grammar rules and the frontend categories.
 TERMINALS_TO_CATEGORIES = {
+    'AGGREGATE': CATEGORIES[7],
     'AMPERSAND': CATEGORIES[0],
     'AND_SYMBOL': CATEGORIES[0],
     'ANS': CATEGORIES[7],
