@@ -392,6 +392,13 @@ class ExplicitVBR(VolumetricBrainRegion):
     def __hash__(self):
         return hash((self.voxels.tobytes(), self.affine.tobytes()))
 
+    def __contains__(self, voxel):
+        """Return True if *voxel* is one of this region's voxels."""
+        voxel = np.asanyarray(voxel)
+        if voxel.ndim == 1:
+            return any(np.all(self.voxels == voxel, axis=1))
+        return all(any(np.all(self.voxels == v, axis=1)) for v in voxel)
+
 
 class ExplicitVBROverlay(ExplicitVBR):
     def __init__(

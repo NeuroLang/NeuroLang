@@ -53,7 +53,7 @@ def test_interactive_facts():
     assert res == expected
 
     res = completer.complete('A("x",').token_options
-    expected = {'Signs': {'values': {'@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
+    expected = {'Signs': {'values': {'(', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
                 'Operators': {'values': {'-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>'}}}
     assert res == expected
 
@@ -63,7 +63,7 @@ def test_interactive_facts():
     assert res == expected
 
     res = completer.complete("A('x', 3,").token_options
-    expected = {'Signs': {'values': {'@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
+    expected = {'Signs': {'values': {'(', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
                 'Operators': {'values': {'-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>'}}}
     assert res == expected
 
@@ -283,7 +283,7 @@ def test_interactive_probabilistic_fact():
     assert res == expected
 
     res = completer.complete('p::A(').token_options
-    expected = {'Signs': {'values': {'@', ')'}}, 'Numbers': {'values': {'<float>', '<integer>'}},
+    expected = {'Signs': {'values': {'(', ')', '@'}}, 'Numbers': {'values': {'<float>', '<integer>'}},
                 'Text': {'values': set()}, 'Operators': {'values': {'-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>'}}}
     assert res == expected
 
@@ -298,7 +298,7 @@ def test_interactive_probabilistic_fact():
     assert res == expected
 
     res = completer.complete('0.8::A("a b",').token_options
-    expected = {'Signs': {'values': {'@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
+    expected = {'Signs': {'values': {'(', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}}, 'Text': {'values': set()},
                 'Operators': {'values': {'-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>'}}}
     assert res == expected
 
@@ -592,7 +592,7 @@ def test_interactive_lambda_application():
     assert res == expected
 
     res = completer.complete('c := (lambda x: x').token_options
-    expected = {'Signs': {'values': {'(', ')'}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
+    expected = {'Signs': {'values': {'(', ')', ','}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
                 'Operators': {'values': {'*', '-', '+', '**', '/'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
 

@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Tuple
 
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedToken, UnexpectedCharacters, LarkError
@@ -24,6 +25,7 @@ from ...probabilistic.expressions import (
     Condition,
     ProbabilisticFact
 )
+from ...type_system import Unknown
 from ...utils.interactive_parsing import LarkCompleter
 
 
@@ -131,7 +133,9 @@ fact : constant_predicate
 constant_predicate : identifier "(" (literal | ext_identifier) ("," (literal | ext_identifier))* ")"
                    | identifier "(" ")"
 
-?literal : number | text
+?literal : number | text | tuple_literal
+
+tuple_literal : "(" argument ("," argument)+ ")"
 
 ext_identifier : "@" identifier
 identifier : cmd_identifier | identifier_regexp
@@ -526,6 +530,22 @@ class DatalogTransformer(Transformer):
 
     def text(self, ast):
         return Constant((ast[0].replace("'", "")).replace('"', ''))
+
+    def tuple_literal(self, ast):
+        # Filter out Lark terminal tokens (commas, parens) which are str/Token
+        # instances. Actual values are already transformed to Constant/Symbol
+        # by other grammar rules, so no string value slips through here.
+        values = tuple(a for a in ast if not isinstance(a, str))
+        # Explicitly mark each element's type as Unknown since at parse time
+        # we cannot determine the concrete types of tuple elements.
+        value_types = tuple(Unknown for _ in values)
+        result = Constant[Tuple[value_types]](
+            values, auto_infer_type=False, verify_type=False
+        )
+        for v in values:
+            if isinstance(v, Symbol):
+                result._symbols.add(v)
+        return result
 
     def pos_int(self, ast):
         return Constant(int((ast[0]).value))

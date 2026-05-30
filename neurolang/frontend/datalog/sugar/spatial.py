@@ -12,11 +12,14 @@ from ....datalog.expression_processing import (
 )
 from ....exceptions import UnsupportedProgramError
 from ....expression_pattern_matching import add_match
-from ....expression_walker import IdentityWalker, PatternWalker
+from ....expression_walker import ExpressionWalker, IdentityWalker, PatternWalker
 from ....expressions import Constant, Expression, FunctionApplication, Symbol
 from ....logic import Conjunction, Implication
 from ....relational_algebra import RelationalAlgebraSet
 from ....utils import log_performance
+from ....utils.various import FrozenNDArray
+from ....type_system import is_leq_informative
+from ....regions import ExplicitVBR
 
 EUCLIDEAN = Symbol("EUCLIDEAN")
 
@@ -276,3 +279,109 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
             args_as_str.index(coord_arg.name) for coord_arg in coord_args
         )
         return ra_set.projection(*proj_cols)
+
+
+def _is_contains_atom(atom):
+    is_contains = (
+        isinstance(atom.functor, Constant)
+        and atom.functor.value is operator.contains
+        or isinstance(atom.functor, Symbol)
+        and atom.functor.name == "contains"
+    )
+    if not (is_contains and len(atom.args) >= 1 and isinstance(atom.args[0], Symbol)):
+        return False
+    return is_leq_informative(atom.args[0].type, ExplicitVBR)
+
+
+class TranslateRegionDestroy(PatternWalker):
+    """
+    Syntactic sugar for rules using contains/Destroy with
+    ExplicitVBR region columns.
+
+    ExplicitVBR values aren't iterable (no ``__iter__`` to avoid breaking
+    Constant type inference), so the contains/Destroy pipeline can't
+    explode them. This walker pre-converts ExplicitVBR values in EDB
+    columns to tuples of voxels before the chase processes the rule.
+    """
+
+    @add_match(
+        Implication,
+        lambda imp: (
+            isinstance(imp.antecedent, Conjunction)
+            and any(
+                _is_contains_atom(a)
+                for a in extract_logic_atoms(imp.antecedent)
+            )
+        ),
+    )
+    def region_destroy(self, implication):
+        """Pre-explode ExplicitVBR column before Destroy processing."""
+        atoms = extract_logic_atoms(implication.antecedent)
+        for atom in list(atoms):
+            if not _is_contains_atom(atom):
+                continue
+            region_var = atom.args[0]
+            self._convert_region_edb_column(atoms, region_var)
+        return self._delegate_to_next_match(implication)
+
+    def _convert_region_edb_column(self, formulas, region_var):
+        for formula in formulas:
+            if (
+                not isinstance(formula.functor, Symbol)
+                or region_var not in formula.args
+            ):
+                continue
+            pred_value = self._resolve_edb(formula.functor)
+            if pred_value is None:
+                continue
+            ras = pred_value.value
+            if not hasattr(ras, "columns"):
+                continue
+            col_idx = formula.args.index(region_var)
+            col_name = ras.columns[col_idx]
+            return self._explode_voxel_column(ras, col_name)
+        return False
+
+    def _resolve_edb(self, symbol):
+        try:
+            val = self.symbol_table.get(symbol)
+        except Exception:
+            return None
+        if isinstance(val, Constant):
+            return val
+        return None
+
+    @staticmethod
+    def _explode_voxel_column(ras, col_name):
+        container = ras._container
+        if len(container) == 0:
+            return False
+        first_val = container[col_name].iloc[0]
+        if not hasattr(first_val, 'voxels') or isinstance(
+            first_val, (str, bytes)
+        ):
+            return False
+
+        def _convert_to_frozen_arrays(v):
+            if hasattr(v, 'voxels') and len(v.voxels) > 0:
+                return [FrozenNDArray(row) for row in v.voxels]
+            return None
+
+        new_col = container[col_name].apply(_convert_to_frozen_arrays)
+        mask = new_col.notna()
+        ras._container = container.loc[mask].copy()
+        ras._container[col_name] = new_col.loc[mask]
+        return True
+
+    def _delegate_to_next_match(self, expression):
+        skip = type(self).region_destroy
+        for pattern, guard, action in self.patterns:
+            if action is skip:
+                continue
+            if self.pattern_match(pattern, expression) and (
+                guard is None or guard(expression)
+            ):
+                return action(self, expression)
+        raise NeuroLangPatternMatchingNoMatch(
+            f"No match for {expression}"
+        )
