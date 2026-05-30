@@ -383,7 +383,21 @@ class NeurolangPDL(QueryBuilderDatalog):
             raise UnsupportedQueryError(
                 "Queries on probabilistic predicates are not supported"
             )
-        query = self.program_ir.symbol_table[query_pred_symb].formulas[0]
+
+        # The probabilistic query path (below) assumes the predicate functor
+        # maps to a rule entry (Union.formulas) in the program_ir symbol
+        # table.  This holds when querying an IDB predicate defined by a
+        # rule, but fails for:
+        #   1. EDB predicates — symbol entry is a Constant (no .formulas).
+        #   2. Conjunction queries (p(x), q(y)) — functor is `and_`, which
+        #      is not in the symbol table at all.
+        # In both cases fall through to the base QueryBuilderDatalog
+        # implementation which creates a fresh query rule and runs chase.
+        symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
+        if symbol_entry is None or isinstance(symbol_entry, ir.Constant):
+            return super()._execute_query(head, predicate)
+
+        query = symbol_entry.formulas[0]
 
         try:
             with self.scope:

@@ -8,6 +8,7 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
+from ...datalog.expressions import AggregationApplication
 from ...exceptions import UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException
 from ...expressions import (
     Command,
@@ -17,16 +18,19 @@ from ...expressions import (
     Lambda,
     Query,
     Statement,
-    Symbol
+    Symbol,
 )
 from ...logic import ExistentialPredicate
 from ...probabilistic.expressions import (
     PROB,
     Condition,
-    ProbabilisticFact
+    ProbabilisticFact,
 )
 from ...type_system import Unknown
 from ...utils.interactive_parsing import LarkCompleter
+
+# Aggregation function names recognised in rule head arguments.
+AGGREGATION_FUNCS = frozenset({"count", "sum", "max", "min", "mean", "avg", "std"})
 
 
 GRAMMAR = u"""
@@ -38,19 +42,33 @@ expressions : (expression)+
             | fact
             | probabilistic_rule
             | probabilistic_fact
+            | prob_head_rule
+            | marg_head_rule
+            | succ_head_rule
             | statement
             | statement_function
             | command
 
+agg_assign : "AGGREGATE" "[" agg_group_vars "]" "(" conjunction "@" agg_fn_call ")" "=" argument -> agg_assign_vars
+           | "AGGREGATE" "[" "(" ")" "]" "(" conjunction "@" agg_fn_call ")" "=" argument -> agg_assign_empty
+           | "AGGREGATE" "[" "]" "(" conjunction "@" agg_fn_call ")" "=" argument -> agg_assign_empty
+
+agg_group_vars : cmd_identifier ("," cmd_identifier)*
+
+agg_fn_call : cmd_identifier "(" argument ")"
+
 probabilistic_rule : head PROBA_OP arithmetic_operation IMPLICATION (condition | body)
 
-rule : (head | query) IMPLICATION (condition | body)
+rule : (head | query) IMPLICATION (condition | body | agg_assign)
 IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}"
+
+// PROB[pred] :- body  —  declare a probabilistic rule
+prob_head_rule : "PROB" "[" predicate "]" IMPLICATION (condition | body)
+               | "PROB" "[" predicate PROB_SEP body "]" IMPLICATION (condition | body)
 
 query : "ans" "(" [ arguments ] ")"
 
-condition : composite_predicate CONDITION_OP composite_predicate
-CONDITION_OP : "//"
+condition : composite_predicate PROB_SEP composite_predicate
 ?composite_predicate : "(" conjunction ")"
                         | predicate
 
@@ -76,6 +94,32 @@ predicate : id_application
           | existential_predicate
           | "(" comparison ")"
           | logical_constant
+          | prob_body_predicate
+          | marg_body_predicate
+          | succ_body_predicate
+
+// PROB[pred] = var  or  PROB[pred // cond] = var  —  probability query inside a rule body
+prob_body_predicate : "PROB" "[" conjunction "]" "=" argument
+                    | "PROB" "[" conjunction PROB_SEP body "]" "=" argument
+
+// MARG[pred] = var  —  marginal probability query inside a rule body
+// MARG[pred1, pred2] = var  —  conjunction inside MARG (same semantics as PROB)
+marg_body_predicate : "MARG" "[" conjunction "]" "=" argument
+                    | "MARG" "[" conjunction PROB_SEP body "]" "=" argument
+
+// SUCC[...] = var  —  success probability query (skipped in execution)
+succ_body_predicate : "SUCC" "[" SUCC_INNER "]" "=" argument
+SUCC_INNER : /[a-zA-Z_*+.,()&@\/ \t-]+/
+
+// Separator inside PROB/MARG for the conditional form: accepts both // and |
+PROB_SEP : "//" | "|"
+
+// MARG head rule  —  declare a marginal probability rule
+marg_head_rule : "MARG" "[" conjunction "]" IMPLICATION (condition | body)
+               | "MARG" "[" conjunction PROB_SEP body "]" IMPLICATION (condition | body)
+
+// SUCC head rule  —  success probability rule (skipped in execution)
+succ_head_rule : "SUCC" "[" SUCC_INNER "]" IMPLICATION (condition | body)
 
 id_application : int_ext_identifier "(" [ arguments ] ")"
 
@@ -142,7 +186,7 @@ identifier : cmd_identifier | identifier_regexp
 identifier_regexp : IDENTIFIER_REGEXP
 IDENTIFIER_REGEXP : "`" /[0-9a-zA-Z\\/#%._:-]+/ "`"
 cmd_identifier : CMD_IDENTIFIER
-CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
+CMD_IDENTIFIER : /\\b(?!\\bexists\\b)(?!\\b\\u2203\\b)(?!\\bEXISTS\\b)(?!\\bst\\b)(?!\\bans\\b)(?!\\bAGGREGATE\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b/
 
 exists : EXISTS_WORD | EXISTS_SYMBOL
 EXISTS_WORD : "exists" | "EXISTS"
@@ -217,7 +261,13 @@ class DatalogTransformer(Transformer):
 
     def expressions(self, ast):
         if isinstance(ast[0], Expression):
-            return Union(ast)
+            all_formulas = []
+            for item in ast:
+                if isinstance(item, Union):
+                    all_formulas.extend(item.formulas)
+                elif isinstance(item, Expression):
+                    all_formulas.append(item)
+            return Union(tuple(all_formulas))
         else:
             ast = ast[0]
         return Union(ast)
@@ -231,12 +281,312 @@ class DatalogTransformer(Transformer):
             body,
         )
 
+    def prob_head_rule(self, ast):
+        # PROB[pred] :- body              → [pred, IMPLICATION_token, body]
+        # PROB[pred // cond] :- body      → [pred, SEP_token, cond, IMPLICATION_token, body]
+        # PROB[pred | cond] :- body       → same ast shape
+        if len(ast) >= 4:
+            # Conditional form: PROB[pred // cond] :- body
+            pred = ast[0]
+            cond_body = ast[2]
+            body = ast[4] if len(ast) > 4 else ast[3]
+            return Implication(pred, Condition(pred, cond_body))
+        else:
+            # Simple form: PROB[pred] :- body
+            pred = ast[0]
+            body = ast[2]
+            return Implication(pred, body)
+
+    def marg_head_rule(self, ast):
+        # MARG[pred] :- body         → [conjunction, IMPLICATION_token, body]
+        # MARG[pred // cond] :- body → [conjunction, SEP_token, cond, IMPLICATION_token, body]
+        if len(ast) >= 4:
+            pred = ast[0]
+            cond_body = ast[2]
+            body = ast[4] if len(ast) > 4 else ast[3]
+            return Implication(pred, Condition(pred, cond_body))
+        else:
+            pred = ast[0]
+            body = ast[2]
+            return Implication(pred, body)
+
+    def succ_head_rule(self, ast):
+        # SUCC[...] :- body → skipped (no-op)
+        return Constant(True)
+
+    def agg_assign_vars(self, ast):
+        # "AGGREGATE" "[" agg_group_vars "]" "(" conjunction "@" agg_fn_call ")" "=" argument
+        # Children: [group_vars, conjunction, agg_fn_call, argument]
+        group_vars, conjunction, agg_fn_call, result_var = ast
+        return (group_vars, conjunction, agg_fn_call, result_var)
+
+    def agg_assign_empty(self, ast):
+        # "AGGREGATE" "[" ("(" ")")? "]" "(" conjunction "@" agg_fn_call ")" "=" argument
+        # Children: [conjunction, agg_fn_call, argument] (no group_vars)
+        conjunction, agg_fn_call, result_var = ast
+        return ((), conjunction, agg_fn_call, result_var)
+
+    def agg_group_vars(self, ast):
+        # CMD_IDENTIFIER ("," CMD_IDENTIFIER)*
+        # Children are the Symbol tokens from each CMD_IDENTIFIER
+        # Return them as a tuple
+        return tuple(ast)
+
+    def agg_fn_call(self, ast):
+        # CMD_IDENTIFIER "(" argument ")"
+        # Children: [cmd_identifier_symbol, argument_expression]
+        fn_sym = ast[0]     # Symbol, e.g. Symbol("count")
+        arg_expr = ast[1]   # argument expression, e.g. Symbol("s")
+        return fn_sym(arg_expr)
+
+    @staticmethod
+    def _extract_special_body_atoms(conjunction):
+        """Separate __PROB__ and __MARG__ marker atoms from regular atoms.
+
+        Returns (regular_formulas, prob_specs) where each prob_spec is
+        a tuple of (marker_name, args).
+        """
+        formulas = list(conjunction.formulas)
+        regular = []
+        prob_specs = []
+        for f in formulas:
+            if (isinstance(f, FunctionApplication)
+                    and isinstance(f.functor, Symbol)
+                    and f.functor.name in ("__PROB__", "__MARG__")):
+                prob_specs.append((f.functor.name, f.args))
+            else:
+                regular.append(f)
+        return regular, prob_specs
+
     def rule(self, ast):
         head = ast[0]
+        body_or_cond = ast[2]
+
+        if isinstance(body_or_cond, tuple):
+            group_vars, conjunction, agg_fn_call, result_var = body_or_cond
+            return self._build_aggregate_rule(head, group_vars, conjunction, agg_fn_call, result_var)
+
+        if isinstance(body_or_cond, Conjunction):
+            regular, prob_specs = self._extract_special_body_atoms(
+                body_or_cond
+            )
+            if prob_specs:
+                new_body = Conjunction(regular) if regular else Constant(True)
+                return self._build_prob_rule(head, prob_specs, new_body)
+
         if isinstance(head, Expression) and head.functor == Symbol("ans"):
-            return Query(ast[0], ast[2])
+            return Query(ast[0], body_or_cond)
         else:
-            return Implication(ast[0], ast[2])
+            return Implication(ast[0], body_or_cond)
+
+    @staticmethod
+    def _classify_prob_predicate(pred):
+        """Extract (prob_vars, subject, is_marg) from a PROB/MARG spec predicate.
+
+        Returns a tuple ``(prob_vars, subject, is_marg)`` or *None* for
+        unsupported predicate types (which are silently skipped).
+        """
+        if isinstance(pred, FunctionApplication):
+            return pred.args, pred, False
+        elif isinstance(pred, Conjunction):
+            return (), pred, True
+        elif isinstance(pred, Negation):
+            inner = pred.formula
+            if isinstance(inner, FunctionApplication):
+                return inner.args, pred, False
+            return None
+        elif isinstance(pred, ExistentialPredicate):
+            body = getattr(pred, 'body', None)
+            if isinstance(body, FunctionApplication):
+                prob_vars = tuple(
+                    v for v in body.args if v != pred.head
+                )
+                return prob_vars, pred, False
+            return None
+        return None
+
+    def _build_prob_rule(self, head, prob_specs, body):
+        """Build rules from PROB/MARG markers in the body.
+
+        Each PROB[pred(x)]=p in the body desugars into a fresh predicate rule::
+
+            fresh(x, PROB(x)) :- pred(x)
+
+        and the main query uses the fresh predicate to extract the probability::
+
+            ans(x, p) :- fresh(x, p)
+        """
+        head_args = list(head.args) if head.args else []
+        body_formulas = (
+            list(body.formulas) if isinstance(body, Conjunction) else []
+        )
+        fresh_rules = []
+        query_body_atoms = []
+
+        for spec in prob_specs:
+            if isinstance(spec, tuple) and len(spec) == 2 and isinstance(spec[0], str):
+                marker_name, args = spec
+                if len(args) == 3:
+                    pred, cond_body, result_var = args
+                else:
+                    pred, result_var = args
+                    cond_body = None
+            else:
+                marker_name = "__PROB__"
+                if len(spec) == 3:
+                    pred, cond_body, result_var = spec
+                else:
+                    pred, result_var = spec
+                    cond_body = None
+
+            # Unwrap single-formula conjunctions: PROB[p] queries parse as
+            # a Conjunction wrapping a single predicate when the grammar uses
+            # the conjunction rule (instead of predicate) for the inner part.
+            inner = pred
+            if isinstance(pred, Conjunction) and len(pred.formulas) == 1:
+                inner = pred.formulas[0]
+            classified = self._classify_prob_predicate(inner)
+            if classified is None:
+                continue
+
+            prob_vars, subject, _ = classified
+            is_marg = marker_name == "__MARG__"
+            fresh_pred = Symbol.fresh()
+
+            if cond_body is not None:
+                fresh_body = Condition(subject, cond_body)
+                fresh_head = fresh_pred(
+                    *prob_vars, FunctionApplication(PROB, prob_vars)
+                )
+                query_body_atoms.append(fresh_pred(*prob_vars, result_var))
+            elif is_marg and isinstance(subject, Conjunction) and len(subject.formulas) > 1:
+                # MARG with conjunction (e.g. MARG[p1(x, y) & p2(y)] = p).
+                # Extract the union of all variables from the conjunction and
+                # use them as PROB arguments instead of passing the whole
+                # Conjunction expression (which fails validation because
+                # PROB(...) requires all args to be Symbol instances).
+                all_vars: list[Expression] = []
+                seen: set[Expression] = set()
+                for f in subject.formulas:
+                    if isinstance(f, FunctionApplication):
+                        for arg in f.args:
+                            if isinstance(arg, Symbol) and arg not in seen:
+                                seen.add(arg)
+                                all_vars.append(arg)
+                prob_vars = tuple(all_vars)
+                fresh_body = subject
+                fresh_head = fresh_pred(
+                    *prob_vars, FunctionApplication(PROB, prob_vars)
+                )
+                query_body_atoms.append(fresh_pred(*prob_vars, result_var))
+            elif is_marg:
+                # Subject may be a bare Expression (FunctionApplication) due to
+                # ?conjunction inlining, or a Conjunction when there are multiple
+                # predicates. Normalize to Conjunction for the PROB wrapping.
+                if isinstance(subject, Conjunction):
+                    formulas = subject.formulas
+                else:
+                    formulas = (subject,)
+                fresh_body = Conjunction(formulas)
+                fresh_head = fresh_pred(
+                    FunctionApplication(PROB, (Conjunction(formulas),))
+                )
+                query_body_atoms.append(fresh_pred(result_var))
+            else:
+                fresh_body = Conjunction((subject,))
+                fresh_head = fresh_pred(
+                    *prob_vars, FunctionApplication(PROB, prob_vars)
+                )
+                query_body_atoms.append(fresh_pred(*prob_vars, result_var))
+
+            fresh_rules.append(Implication(fresh_head, fresh_body))
+
+            if result_var not in head_args:
+                head_args.append(result_var)
+
+        if isinstance(head, Query) or (isinstance(head, Expression)
+                and hasattr(head, 'functor')
+                and head.functor == Symbol("ans")):
+            new_head = head.functor(*head_args)
+        elif hasattr(head, 'functor'):
+            new_head = head.functor(*head_args)
+        else:
+            new_head = head
+
+        all_body_atoms = body_formulas + query_body_atoms
+        if all_body_atoms:
+            new_body = Conjunction(tuple(all_body_atoms))
+        else:
+            new_body = Constant(True)
+
+        main_fml = Query(new_head, new_body)
+        return Union(tuple(fresh_rules + [main_fml]))
+
+    def _build_aggregate_rule(self, head, group_vars, conjunction, agg_fn_call, result_var):
+        agg_functor = agg_fn_call.functor
+        agg_args = agg_fn_call.args
+        aggregation = AggregationApplication(agg_functor, agg_args)
+        head_args = list(head.args) if hasattr(head, 'args') and head.args else []
+        new_args = []
+        for arg in head_args:
+            if isinstance(arg, Symbol) and result_var is not None and isinstance(result_var, Symbol) and arg.name == result_var.name:
+                continue
+            if isinstance(arg, Symbol) and arg in group_vars:
+                new_args.append(arg)
+            else:
+                new_args.append(arg)
+        new_args.append(aggregation)
+        new_head = head.functor(*new_args)
+        return Implication(new_head, conjunction)
+
+    def prob_body_predicate(self, ast):
+        # PROB[pred] = var              → ast = [predicate, argument] (2 elements)
+        # PROB[pred // body] = var      → ast = [predicate, SEP_token, body, argument] (4)
+        # PROB[pred | body] = var       → same 4-element shape
+        if len(ast) == 4:
+            pred = ast[0]
+            cond_body = ast[2]   # ast[1] is the separator token
+            result_var = ast[3]
+        else:
+            pred = ast[0]
+            cond_body = None
+            result_var = ast[1]
+        return FunctionApplication(
+            Symbol("__PROB__"),
+            (pred, cond_body, result_var)
+        )
+
+    def marg_body_predicate(self, ast):
+        # MARG[pred] = var              → ast = [conjunction, argument] (2 elements)
+        # MARG[pred // body] = var      → ast = [conjunction, SEP_token, body, argument] (4)
+        # MARG[pred | body] = var       → same 4-element shape
+        if len(ast) == 4:
+            pred = ast[0]
+            cond_body = ast[2]
+            result_var = ast[3]
+            return FunctionApplication(
+                Symbol("__MARG__"),
+                (pred, cond_body, result_var)
+            )
+        pred = ast[0]
+        result_var = ast[1]
+        return FunctionApplication(
+            Symbol("__MARG__"),
+            (pred, result_var)
+        )
+
+    def succ_body_predicate(self, ast):
+        # SUCC[...] = var → skipped (no-op in execution)
+        # Return a __SUCC__ marker that _extract_special_body_atoms discards
+        return FunctionApplication(
+            Symbol("__SUCC__"),
+            (ast[1],)
+        )
+
+    def cond_prob_predicate(self, ast):
+        left = ast[0]
+        right = ast[2]
+        return Condition(left, right)
 
     def condition(self, ast):
         conditioned = ast[0]
@@ -250,7 +600,14 @@ class DatalogTransformer(Transformer):
         conj = []
         for c in ast:
             if isinstance(c, Expression):
+                if (isinstance(c, FunctionApplication)
+                        and isinstance(c.functor, Symbol)
+                        and c.functor.name == "__SUCC__"):
+                    # SUCC markers are no-ops — discard at conjunction level
+                    continue
                 conj.append(c)
+        if len(conj) == 0:
+            return Constant(True)
         return Conjunction(conj)
 
     def existential_predicate(self, ast):
@@ -286,9 +643,33 @@ class DatalogTransformer(Transformer):
                     ast = ast[0](*ast[1])
         return ast
 
+    @staticmethod
+    def _wrap_aggregation_args(arguments):
+        """Replace FunctionApplication nodes whose functor is an
+        aggregation function name with AggregationApplication."""
+        result = []
+        for arg in arguments:
+            if (isinstance(arg, FunctionApplication)
+                    and isinstance(arg.functor, Symbol)
+                    and arg.functor.name in AGGREGATION_FUNCS):
+                result.append(
+                    AggregationApplication(arg.functor, arg.args)
+                )
+            elif (isinstance(arg, FunctionApplication)
+                    and isinstance(arg.functor, FunctionApplication)
+                    and isinstance(arg.functor.functor, Symbol)
+                    and arg.functor.functor.name in AGGREGATION_FUNCS):
+                result.append(
+                    AggregationApplication(arg.functor, arg.args)
+                )
+            else:
+                result.append(arg)
+        return result
+
     def head_predicate(self, ast):
-        if ast[1] != None:
+        if ast[1] is not None:
             arguments = list(ast[1])
+            arguments = self._wrap_aggregation_args(arguments)
 
             if PROB in arguments:
                 ix_prob = arguments.index(PROB)
@@ -309,13 +690,14 @@ class DatalogTransformer(Transformer):
         return ast
 
     def query(self, ast):
-        ast = ast[0]
-        if ast != None:
-            if isinstance(ast, tuple):
-                arguments = ast
+        arguments_raw = ast[0]
+        if arguments_raw is not None:
+            if isinstance(arguments_raw, tuple):
+                arguments = list(arguments_raw)
             else:
-                arguments = tuple(ast)
+                arguments = list(arguments_raw) if arguments_raw else []
 
+            arguments = self._wrap_aggregation_args(arguments)
             return Symbol("ans")(*arguments)
         else:
             return Symbol("ans")()
@@ -402,6 +784,8 @@ class DatalogTransformer(Transformer):
     def argument(self, ast):
         ast = ast[0]
         if isinstance(ast, Expression):
+            if isinstance(ast, Symbol) and ast.name == "_":
+                return Symbol.fresh()
             return ast
         else:
             return Symbol.fresh()
@@ -563,6 +947,36 @@ class DatalogTransformer(Transformer):
         return ast
 
 
+def _preprocess(code):
+    """Strip % comments and trailing Prolog-style dots before Lark parsing.
+
+    LLMs sometimes emit Prolog-style trailing dots (``.``) and ``%``
+    line comments.  Lark would choke on both.
+    """
+    lines = code.split('\n')
+    processed = []
+    for line in lines:
+        # Strip % comments (not inside strings)
+        in_single = False
+        in_double = False
+        for i, c in enumerate(line):
+            if c == "'" and not in_double:
+                in_single = not in_single
+            elif c == '"' and not in_single:
+                in_double = not in_double
+            elif c == '%' and not in_single and not in_double:
+                line = line[:i]
+                break
+        # Strip trailing Prolog-style dot
+        stripped = line.rstrip()
+        if stripped.endswith('.') and stripped != '.':
+            line = stripped[:-1]
+        else:
+            line = stripped
+        processed.append(line)
+    return '\n'.join(processed)
+
+
 def parser(code, locals=None, globals=None, interactive=False):
 
     try:
@@ -571,6 +985,7 @@ def parser(code, locals=None, globals=None, interactive=False):
             res = completer.complete(code.strip())
             return res.token_options
         else:
+            code = _preprocess(code)
             jp = COMPILED_GRAMMAR.parse(code.strip())
             return DatalogTransformer().transform(jp)
     except UnexpectedToken as e:
