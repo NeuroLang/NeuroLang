@@ -31,8 +31,6 @@ keywords = [
 dependencies = [
     "numpy",
     "scipy",
-    "polars>=1.0",
-    "pyarrow",
     "nibabel>=5.0.0",
     "nilearn>=0.10.0",
     "pandas>=1.5",
