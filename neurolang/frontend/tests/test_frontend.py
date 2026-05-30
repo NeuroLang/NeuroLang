@@ -844,6 +844,28 @@ def test_neurolang_dl_region_destroy_non_region_ignored():
     assert set(ans) == expected
 
 
+def test_neurolang_dl_region_destroy_tuple_edb_column():
+    neurolang = frontend.NeurolangDL()
+    contains_ = neurolang.add_symbol(contains)
+
+    numbers = neurolang.add_tuple_set(
+        [("a", (1, 2, 3))], name="numbers"
+    )
+
+    with neurolang.scope as e:
+        e.ans[e.l, e.v] = numbers[e.l, e.t] & contains_(e.t, e.v)
+        res = neurolang.solve_all()
+
+    ans = res["ans"].to_unnamed()
+    assert len(ans) == 3
+    expected = {
+        ("a", 1),
+        ("a", 2),
+        ("a", 3),
+    }
+    assert set(ans) == expected
+
+
 def test_neurolang_dl_region_destroy_multicolumn():
     neurolang = frontend.NeurolangDL()
     contains_ = neurolang.add_symbol(contains)
