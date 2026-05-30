@@ -823,6 +823,24 @@ def test_neurolang_dl_region_destroy():
         ((1, 1, 0),),
         ((2, 0, 0),),
     }
+    assert {tuple(tuple(v) for v in row) for row in ans} == expected
+
+
+def test_neurolang_dl_region_destroy_non_region_ignored():
+    neurolang = frontend.NeurolangDL()
+    contains_ = neurolang.add_symbol(contains)
+
+    numbers = neurolang.add_tuple_set(
+        [(1,), (2,), (3,)], name="numbers"
+    )
+
+    with neurolang.scope as e:
+        e.ans[e.v] = numbers[e.n] & contains_(e.n, e.v)
+        res = neurolang.solve_all()
+
+    ans = res["ans"].to_unnamed()
+    assert len(ans) == 3
+    expected = {(1,), (2,), (3,)}
     assert set(ans) == expected
 
 
@@ -851,7 +869,9 @@ def test_neurolang_dl_region_destroy_multicolumn():
         ("A", (1, 1, 0)),
         ("B", (2, 0, 0)),
     }
-    assert set(ans) == expected
+    assert {
+        (row[0], tuple(row[1])) for row in ans
+    } == expected
 
 
 @pytest.mark.skip
