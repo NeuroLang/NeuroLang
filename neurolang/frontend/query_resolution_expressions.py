@@ -127,6 +127,9 @@ class Expression(object):
     def _build_tuple_constant(self, new_tuple):
         types = tuple(a.type for a in new_tuple)
         new_tuple = ir.Constant[Tuple[types]](new_tuple, verify_type=False)
+        for v in new_tuple.value:
+            if isinstance(v, ir.Symbol):
+                new_tuple._symbols.add(v)
         return new_tuple
 
     def __setitem__(

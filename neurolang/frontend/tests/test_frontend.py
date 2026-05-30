@@ -874,6 +874,34 @@ def test_neurolang_dl_region_destroy_multicolumn():
     } == expected
 
 
+def test_neurolang_dl_region_destroy_tuple_coords():
+    neurolang = frontend.NeurolangDL()
+    contains_ = neurolang.add_symbol(contains)
+
+    voxels1 = np.array([[1, 0, 0], [1, 1, 0]])
+    voxels2 = np.array([[2, 0, 0]])
+
+    region1 = ExplicitVBR(voxels1, np.eye(4))
+    region2 = ExplicitVBR(voxels2, np.eye(4))
+
+    regions = neurolang.add_tuple_set(
+        [("A", region1), ("B", region2)], name="regions"
+    )
+
+    with neurolang.scope as e:
+        e.ans[e.l, e.x, e.y, e.z] = regions[e.l, e.r] & contains_(e.r, (e.x, e.y, e.z))
+        res = neurolang.solve_all()
+
+    ans = res["ans"].to_unnamed()
+    assert len(ans) == 3
+    expected = {
+        ("A", 1, 0, 0),
+        ("A", 1, 1, 0),
+        ("B", 2, 0, 0),
+    }
+    assert set(ans) == expected
+
+
 @pytest.mark.skip
 @patch(
     "neurolang.frontend.neurosynth_utils."
