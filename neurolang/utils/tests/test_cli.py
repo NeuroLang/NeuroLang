@@ -7,6 +7,7 @@ from neurolang.utils.cli import (
     _execute_program,
     _execute_squall_program,
     _format_result,
+    _show_squall_datalog,
 )
 
 from neurolang.utils import engine_registry
@@ -461,6 +462,48 @@ class TestSquallFlag:
         args = parser.parse_args(["-s", "-f", str(fp)])
         assert args.squall is True
         assert args.file == str(fp)
+
+
+# ---------------------------------------------------------------------------
+# --show-datalog flag
+# ---------------------------------------------------------------------------
+
+
+class TestShowDatalogFlag:
+    def test_show_datalog_defaults_to_false(self):
+        parser = _build_parser()
+        args = parser.parse_args([])
+        assert args.show_datalog is False
+
+    def test_show_datalog_flag_long(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["--squall", "--show-datalog", "obtain every Person."]
+        )
+        assert args.show_datalog is True
+        assert args.squall is True
+
+    def test_show_datalog_flag_short(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["-s", "-D", "obtain every Person."]
+        )
+        assert args.show_datalog is True
+        assert args.squall is True
+
+    def test_show_datalog_requires_squall(self):
+        from neurolang.utils.cli import main
+
+        with pytest.raises(SystemExit):
+            main(["--show-datalog", "ans(x) :- R(x)"])
+
+    def test_show_datalog_prints_ir(self, capsys):
+        from neurolang.utils.cli import _show_squall_datalog
+
+        _show_squall_datalog("obtain every Person that plays.")
+        captured = capsys.readouterr()
+        assert "query" in captured.out
+        assert "person" in captured.out
 
 
 # ---------------------------------------------------------------------------

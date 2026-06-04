@@ -33,6 +33,9 @@ Usage
     # Squall (controlled English) query
     neurolang-query --squall "obtain every peak_reported."
     neurolang-query --squall -f query.squall
+
+    # Show the Datalog IR for a SQUALL query (no execution)
+    neurolang-query --squall --show-datalog "obtain every Voxel in 3D that a Study reported."
 """
 
 import argparse
@@ -200,6 +203,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "instead of classical Datalog syntax.  Supports ``define as`` "
         "rule definitions and ``obtain`` queries.",
     )
+    parser.add_argument(
+        "--show-datalog",
+        "-D",
+        action="store_true",
+        help="When used with --squall, print the Datalog IR (rules and "
+        "queries) that the SQUALL program compiles to, then exit.  "
+        "Useful for debugging and understanding the translation.",
+    )
 
     return parser
 
@@ -310,6 +321,48 @@ def _execute_squall_program(
     return nl.execute_squall_program(program_text)
 
 
+def _show_squall_datalog(program_text: str) -> None:
+    """Parse a SQUALL program and print the Datalog IR to stdout.
+
+    This is the backend for ``neurolang-query --squall --show-datalog``.
+    It parses the SQUALL text, then prints every rule and query in the
+    resulting :class:`SquallProgram` (or :class:`Union` / single
+    :class:`Implication` for rule-only programs) using NeuroLang's
+    ``repr``, which includes argument names and quantifier structure.
+
+    Parameters
+    ----------
+    program_text :
+        SQUALL program text.
+    """
+    from neurolang.frontend.datalog.squall_syntax_lark import (
+        parser as squall_parser,
+        SquallProgram,
+    )
+    from neurolang.datalog import Union as DatalogUnion, Implication
+    from neurolang.logic import Union as LogicUnion
+
+    parsed = squall_parser(program_text)
+
+    if isinstance(parsed, SquallProgram):
+        if parsed.queries:
+            for i, q in enumerate(parsed.queries):
+                label = parsed.query_names.get(i, f"obtain_{i}")
+                print(f"── query ({label}) ──")
+                print(repr(q))
+                print()
+        for rule in parsed.rules:
+            print("── rule ──")
+            print(repr(rule))
+            print()
+    elif isinstance(parsed, (DatalogUnion, LogicUnion)):
+        for f in parsed.formulas:
+            print(repr(f))
+            print()
+    else:
+        print(repr(parsed))
+
+
 def _list_predicates(engine_name: str) -> None:
     """Print predicate metadata from the YAML engine config."""
     cfg = engine_registry.get_engine_config(engine_name)
@@ -411,6 +464,14 @@ def main(argv: Optional[list] = None) -> None:
     if not program or not program.strip():
         print("Error: no query provided.", file=sys.stderr)
         sys.exit(1)
+
+    if args.show_datalog and not args.squall:
+        print("Error: --show-datalog requires --squall.", file=sys.stderr)
+        sys.exit(1)
+
+    if args.show_datalog:
+        _show_squall_datalog(program)
+        return
 
     t0 = time.perf_counter()
 
