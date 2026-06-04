@@ -1162,6 +1162,9 @@ class SquallTransformer(Transformer):
                 var_info = getattr(ng, '_var_info', None)
                 if var_info is not None and isinstance(var_info, tuple):
                     body_syms, head_syms = _resolve_var_info(var_info)
+                    noun_name = getattr(ng, '_noun_name', None)
+                    if noun_name:
+                        self._symbol_scope[noun_name] = body_syms
                     body = ng(body_syms)
                     scope = _apply_to_vars(d, head_syms)
                     result = Implication(scope, body)
@@ -1190,6 +1193,20 @@ class SquallTransformer(Transformer):
                 noun_name = getattr(ng, '_noun_name', None)
                 if noun_name and noun_name in self._symbol_scope:
                     x = self._symbol_scope[noun_name]
+                    if isinstance(x, tuple):
+                        # Anaphora resolution for a multi-dimensional noun
+                        # (e.g. "the Voxel" referring back to "every Voxel in
+                        # 3D").  The scope entry is a tuple of symbols
+                        # (x₀, x₁, x₂).  The continuation d may be a
+                        # single-arg lambda (e.g. lambda obj:
+                        # verb(subject, obj)), so calling d(t0, t1, t2)
+                        # would raise TypeError.  We call d with the first
+                        # variable, then spread the rest into the resulting
+                        # FunctionApplication.
+                        result = d(x[0])
+                        if len(x) > 1 and isinstance(result, FunctionApplication):
+                            result = result.functor(*result.args, *x[1:])
+                        return result
                     return d(x)
 
                 # Special handling for aggregation ng1 — mirrors det_every.
@@ -2198,7 +2215,17 @@ class SquallTransformer(Transformer):
     # ---- Dimension / Aggregation ----
 
     def app_dimension(self, args):
-        return None
+        """Handle ``in ND`` dimension annotations (e.g. ``in 3D``).
+
+        Returns a tuple of *n* fresh symbols so that ``ng1_noun`` stores it
+        as ``_var_info`` and downstream determiner handlers create multi-
+        argument predicate calls (e.g. ``Voxel in 3D`` → ``voxel(x₀, x₁, x₂)``),
+        matching the semantics of the explicit tuple form
+        ``Voxel (?x; ?y; ?z)``.
+        """
+        number = args[0]
+        n = int(number.value) if hasattr(number, 'value') else int(number)
+        return tuple(Symbol.fresh() for _ in range(n))
 
     def app_label(self, args):
         label = args[0]
