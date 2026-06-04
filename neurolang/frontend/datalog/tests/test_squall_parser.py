@@ -993,11 +993,49 @@ def test_anaphora_the_noun_with_nd_annotation_resolves():
 
     voxel_atom = next(a for a in body_atoms if a.functor == Symbol("voxel"))
     reports_atom = next(a for a in body_atoms if a.functor == Symbol("reports"))
-    voxel_var = voxel_atom.args[0]
-    reports_voxel_var = reports_atom.args[1]
-    assert voxel_var == reports_voxel_var, (
-        f"Expected ND anaphora resolution: voxel var {voxel_var} != reports arg {reports_voxel_var}"
+    assert len(voxel_atom.args) == 3, (
+        f"Expected voxel to have 3 args (3D), got {len(voxel_atom.args)}: {voxel_atom.args}"
     )
+    assert len(reports_atom.args) == 4, (
+        f"Expected reports to have 4 args (study + 3 voxel coords), "
+        f"got {len(reports_atom.args)}: {reports_atom.args}"
+    )
+    voxel_vars = voxel_atom.args
+    reports_voxel_vars = reports_atom.args[1:]
+    assert voxel_vars == reports_voxel_vars, (
+        f"Expected ND anaphora resolution: voxel vars {voxel_vars} "
+        f"!= reports voxel args {reports_voxel_vars}"
+    )
+
+
+def test_nd_annotation_and_tuple_label_equivalent_arity():
+    """'Voxel in 3D' and 'Voxel (?x; ?y; ?z)' must produce the same predicate arities."""
+    from neurolang.frontend.datalog.squall_syntax_lark import parser as p
+
+    r1 = p("obtain every Voxel (?x; ?y; ?z) that a Study reported.")
+    r2 = p("obtain every Voxel in 3D that a Study reported.")
+
+    def _collect_arities(expr, out=None):
+        if out is None:
+            out = {}
+        if hasattr(expr, 'functor') and hasattr(expr, 'args'):
+            name = expr.functor.name if isinstance(expr.functor, Symbol) else str(expr.functor)
+            out.setdefault(name, set()).add(len(expr.args))
+        if hasattr(expr, 'formulas'):
+            for f in expr.formulas:
+                _collect_arities(f, out)
+        if hasattr(expr, 'head') and hasattr(expr, 'body'):
+            _collect_arities(expr.head, out)
+            _collect_arities(expr.body, out)
+        return out
+
+    arities1 = _collect_arities(r1)
+    arities2 = _collect_arities(r2)
+
+    assert arities1['voxel'] == {3}, f"Tuple form: voxel arity = {arities1.get('voxel')}"
+    assert arities2['voxel'] == {3}, f"ND form: voxel arity = {arities2.get('voxel')}"
+    assert arities1['reported'] == {4}, f"Tuple form: reported arity = {arities1.get('reported')}"
+    assert arities2['reported'] == {4}, f"ND form: reported arity = {arities2.get('reported')}"
 
 
 def test_anaphora_unbound_noun_creates_existential():
