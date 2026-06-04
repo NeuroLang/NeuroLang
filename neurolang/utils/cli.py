@@ -439,6 +439,21 @@ def main(argv: Optional[list] = None) -> None:
         engine_registry.show_engines()
         return
 
+    # --show-datalog only needs the parser, not an engine.  Handle it
+    # early to avoid the expensive engine build (which downloads data).
+    if args.show_datalog:
+        program = _read_query(args)
+        if not program or not program.strip():
+            print("Error: no query provided.", file=sys.stderr)
+            sys.exit(1)
+        if not args.squall:
+            print(
+                "Error: --show-datalog requires --squall.", file=sys.stderr
+            )
+            sys.exit(1)
+        _show_squall_datalog(program)
+        return
+
     if args.engine not in engine_registry.list_engine_names():
         available = ", ".join(engine_registry.list_engine_names())
         print(
@@ -464,14 +479,6 @@ def main(argv: Optional[list] = None) -> None:
     if not program or not program.strip():
         print("Error: no query provided.", file=sys.stderr)
         sys.exit(1)
-
-    if args.show_datalog and not args.squall:
-        print("Error: --show-datalog requires --squall.", file=sys.stderr)
-        sys.exit(1)
-
-    if args.show_datalog:
-        _show_squall_datalog(program)
-        return
 
     t0 = time.perf_counter()
 
