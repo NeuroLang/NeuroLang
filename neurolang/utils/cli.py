@@ -50,7 +50,11 @@ from neurolang import expressions as ir
 from neurolang.datalog.chase import Chase
 from neurolang.datalog.expressions import Implication
 from neurolang.datalog import WrappedRelationalAlgebraSet
+from neurolang.expressions import (
+    Constant, Expression, FunctionApplication, Lambda, Query, Symbol,
+)
 from neurolang.frontend import NeurolangPDL
+from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.utils import engine_registry
 
 
@@ -322,11 +326,7 @@ def _execute_squall_program(
 
 
 def _format_ir(expr, fresh_map=None, _counter=None):
-    """Format a NeuroLang IR expression as human-readable Datalog-like text.
-
-    Strips type annotations, uses Datalog-style ``:-`` notation for
-    rules and queries, and renames fresh variables to short names
-    (``s₀``, ``s₁``, …).
+    """Backward-compat wrapper around DatalogPrettyPrinter.
 
     Parameters
     ----------
@@ -337,134 +337,50 @@ def _format_ir(expr, fresh_map=None, _counter=None):
     _counter : list, optional
         Mutable counter [int] for generating fresh-variable aliases.
     """
-    from neurolang.expressions import (
-        Symbol, Constant, FunctionApplication, Lambda, Query,
-    )
-    from neurolang.logic import (
-        Conjunction, Disjunction, Negation,
-        ExistentialPredicate, UniversalPredicate, Implication,
-    )
-
-    if fresh_map is None:
-        fresh_map = {}
-    if _counter is None:
-        _counter = [0]
-
-    def _sym_name(sym):
-        if sym.is_fresh:
-            if sym.name not in fresh_map:
-                n = _counter[0]
-                if n < 10:
-                    fresh_map[sym.name] = f"s{chr(0x2080 + n)}"
-                else:
-                    fresh_map[sym.name] = f"s{n}"
-                _counter[0] += 1
-            return fresh_map[sym.name]
-        return sym.name
-
-    def _fmt(e):
-        if isinstance(e, Symbol):
-            return _sym_name(e)
-        elif isinstance(e, Constant):
-            v = e.value
-            if callable(v) and hasattr(v, "__qualname__"):
-                return f"⟨{v.__qualname__}⟩"
-            return repr(v)
-        elif isinstance(e, tuple):
-            if len(e) == 0:
-                return "()"
-            return "({})".format(", ".join(_fmt(x) for x in e))
-        elif isinstance(e, FunctionApplication):
-            functor_s = _fmt(e.functor)
-            args_s = ", ".join(_fmt(a) for a in e.args)
-            return f"{functor_s}({args_s})"
-        elif isinstance(e, Lambda):
-            body_s = _fmt(e.function_expression)
-            args_s = ", ".join(
-                _sym_name(a) if isinstance(a, Symbol) else _fmt(a)
-                for a in e.args
-            )
-            return f"λ({args_s}). {body_s}"
-        elif isinstance(e, Conjunction):
-            parts = [_fmt(f) for f in e.formulas]
-            return " ∧ ".join(parts)
-        elif isinstance(e, Disjunction):
-            parts = [_fmt(f) for f in e.formulas]
-            return " ∨ ".join(parts)
-        elif isinstance(e, Negation):
-            return f"¬({_fmt(e.formula)})"
-        elif isinstance(e, ExistentialPredicate):
-            return f"∃{_sym_name(e.head)}. ({_fmt(e.body)})"
-        elif isinstance(e, UniversalPredicate):
-            return f"∀{_sym_name(e.head)}. ({_fmt(e.body)})"
-        elif isinstance(e, Implication):
-            cons_s = _fmt(e.consequent)
-            ante_s = _fmt_body(e.antecedent)
-            indented = "\n".join(
-                "    " + line for line in ante_s.split("\n")
-            )
-            return f"{cons_s} :-\n{indented}"
-        elif isinstance(e, Query):
-            head_s = _fmt(e.head)
-            body_s = _fmt_body(e.body)
-            indented = "\n".join(
-                "    " + line for line in body_s.split("\n")
-            )
-            return f"{head_s} :-\n{indented}"
-        else:
-            return repr(e)
-
-    def _fmt_body(e):
-        if isinstance(e, Conjunction):
-            parts = [_fmt(f) for f in e.formulas]
-            return ",\n".join(parts)
-        return _fmt(e)
-
-    return _fmt(expr)
+    return DatalogPrettyPrinter(fresh_map, _counter).walk(expr)
 
 
 def _show_squall_datalog(program_text: str) -> None:
     """Parse a SQUALL program and print the Datalog IR to stdout.
 
     This is the backend for ``neurolang-query --squall --show-datalog``.
-    It parses the SQUALL text, then prints every rule and query in the
-    resulting :class:`SquallProgram` (or :class:`Union` / single
-    :class:`Implication` for rule-only programs) using a human-readable
-    Datalog-like format that strips type annotations, uses ``:-``
-    notation for rules/queries, and shortens fresh variables to
-    ``s₀``, ``s₁``, etc.
+    It parses the SQUALL text, then prints every rule and query using
+    :class:`DatalogPrettyPrinter` — a PatternWalker-based formatter that
+    strips type annotations, uses ``:-`` notation for rules/queries, and
+    shortens fresh variables to ``s₀``, ``s₁``, etc.
 
     Parameters
     ----------
     program_text :
         SQUALL program text.
     """
+    from neurolang.datalog import Union as DatalogUnion
     from neurolang.frontend.datalog.squall_syntax_lark import (
         parser as squall_parser,
         SquallProgram,
     )
-    from neurolang.datalog import Union as DatalogUnion, Implication
     from neurolang.logic import Union as LogicUnion
 
     parsed = squall_parser(program_text)
+    printer = DatalogPrettyPrinter()
 
     if isinstance(parsed, SquallProgram):
         if parsed.queries:
             for i, q in enumerate(parsed.queries):
                 label = parsed.query_names.get(i, f"obtain_{i}")
-                print(f"── query ({label}) ──")
-                print(_format_ir(q))
+                print(f"\u2500\u2500 query ({label}) \u2500\u2500")
+                print(printer.walk(q))
                 print()
         for rule in parsed.rules:
-            print("── rule ──")
-            print(_format_ir(rule))
+            print("\u2500\u2500 rule \u2500\u2500")
+            print(printer.walk(rule))
             print()
     elif isinstance(parsed, (DatalogUnion, LogicUnion)):
         for f in parsed.formulas:
-            print(_format_ir(f))
+            print(printer.walk(f))
             print()
     else:
-        print(_format_ir(parsed))
+        print(printer.walk(parsed))
 
 
 def _list_predicates(engine_name: str) -> None:

@@ -8,14 +8,20 @@ import pytest
 from .... import config
 from ....datalog import Conjunction, Implication, Negation
 from ....expression_pattern_matching import add_match
-from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
-from ....expressions import Constant, FunctionApplication, Symbol
+from ....expression_walker import (
+    ExpressionWalker, PatternWalker, ReplaceExpressionWalker
+)
+from ....expressions import (
+    Constant, FunctionApplication, ParametricTypeClassMeta, Symbol
+)
+from ....type_system import get_generic_type, is_leq_informative
 from ....logic import (
     ExistentialPredicate,
     LogicOperator,
     NaryLogicOperator,
     UniversalPredicate
 )
+from ....probabilistic.expressions import Condition
 from ..squall import LogicSimplifier
 from ..squall_syntax_lark import (
     parser,
@@ -88,13 +94,75 @@ class LogicWeakEquivalence(ExpressionWalker):
 
     @add_match(EQ(..., ...))
     def eq_expression(self, expression):
-        return expression.args[0] == expression.args[1]
+        left, right = expression.args
+        if type(left) is not type(right):
+            # Unify Unknown/Any across parameterized types
+            lt = type(left)
+            rt = type(right)
+            if not (
+                isinstance(lt, ParametricTypeClassMeta) and
+                isinstance(rt, ParametricTypeClassMeta)
+            ):
+                return False
+            left_root = get_generic_type(lt)
+            right_root = get_generic_type(rt)
+            if not (
+                left_root is right_root and
+                (
+                    is_leq_informative(left.type, right.type) or
+                    is_leq_informative(right.type, left.type)
+                )
+            ):
+                return False
+        return left.unapply() == right.unapply()
 
 
 def weak_logic_eq(left, right):
     left = LogicSimplifier().walk(left)
     right = LogicSimplifier().walk(right)
     return LogicWeakEquivalence().walk(EQ(left, right))
+
+
+class ConditionAwareEqMixin(PatternWalker):
+    """Extend LogicWeakEquivalence with Condition comparison and fix
+    LogicOperator iteration to walk all children instead of early-returning
+    after the first child."""
+
+    @add_match(EQ(Condition, Condition))
+    def eq_condition(self, expression):
+        left, right = expression.args
+        return (
+            self.walk(EQ(left.conditioned, right.conditioned)) and
+            self.walk(EQ(left.conditioning, right.conditioning))
+        )
+
+    @add_match(EQ(LogicOperator, LogicOperator))
+    def eq_logic_operator(self, expression):
+        left, right = expression.args
+        results = []
+        for lv, rv in zip(left.unapply(), right.unapply()):
+            if isinstance(lv, tuple) and isinstance(rv, tuple):
+                if len(lv) != len(rv):
+                    return False
+                results.append(all(
+                    self.walk(EQ(lvv, rvv))
+                    for lvv, rvv in zip(lv, rv)
+                ))
+            else:
+                results.append(self.walk(EQ(lv, rv)))
+        return all(results)
+
+
+class ConditionAwareLogicWeakEquivalence(
+    ConditionAwareEqMixin, LogicWeakEquivalence
+):
+    pass
+
+
+def condition_aware_weak_logic_eq(left, right):
+    left = LogicSimplifier().walk(left)
+    right = LogicSimplifier().walk(right)
+    return ConditionAwareLogicWeakEquivalence().walk(EQ(left, right))
 
 
 @pytest.fixture(scope="module")
@@ -1088,6 +1156,87 @@ def test_compound_quantifier_explicit_vars():
     assert "selected_study" in functors
     assert "activates" in functors
     assert "mentions" in functors
+
+
+def _collect_predicate_atoms(expr, functor_name, result_list):
+    if isinstance(expr, FunctionApplication):
+        if isinstance(expr.functor, Symbol) and expr.functor.name == functor_name:
+            result_list.append(expr)
+        return
+    if isinstance(expr, (Conjunction,)):
+        for f in expr.formulas:
+            _collect_predicate_atoms(f, functor_name, result_list)
+    elif hasattr(expr, 'body'):
+        _collect_predicate_atoms(expr.body, functor_name, result_list)
+    elif hasattr(expr, 'antecedent'):
+        _collect_predicate_atoms(expr.antecedent, functor_name, result_list)
+    elif hasattr(expr, 'conditioned'):
+        _collect_predicate_atoms(expr.conditioned, functor_name, result_list)
+        _collect_predicate_atoms(expr.conditioning, functor_name, result_list)
+    elif hasattr(expr, 'formulas'):
+        for f in expr.formulas:
+            _collect_predicate_atoms(f, functor_name, result_list)
+
+
+def test_anaphora_predicate_class():
+    from neurolang.frontend.datalog.anaphora_resolution import (
+        AnaphoraPredicate
+    )
+    from neurolang.logic import ExistentialPredicate
+
+    x = Symbol.fresh()
+    p = Symbol("test_predicate")
+    body = p(x)
+    ap = AnaphoraPredicate(x, body, Symbol("test_noun"))
+
+    assert isinstance(ap, AnaphoraPredicate)
+    assert isinstance(ap, ExistentialPredicate)
+    assert ap.head is x
+    assert ap.body is body
+    assert ap.noun_name == Symbol("test_noun")
+
+
+def test_squall_marg_anaphora_resolves_across_given():
+    from neurolang.probabilistic.expressions import (
+        PROB, ProbabilisticQuery
+    )
+
+    result = parser(
+        "define as Published with probability every Voxel "
+        "that a SelectedStudy reports "
+        "given the SelectedStudy mentions 'emotion'."
+    )
+
+    # Use the parser's own fresh symbols so structural comparison succeeds.
+    v = result.consequent.args[0]
+    s = result.antecedent.head
+
+    expected = Implication(
+        FunctionApplication(Symbol("published"), (
+            v,
+            ProbabilisticQuery(PROB, (v,)),
+        )),
+        ExistentialPredicate(
+            s,
+            Condition(
+                Conjunction((
+                    FunctionApplication(Symbol("voxel"), (v,)),
+                    FunctionApplication(Symbol("selectedstudy"), (s,)),
+                    FunctionApplication(Symbol("reports"), (s, v)),
+                )),
+                Conjunction((
+                    FunctionApplication(Symbol("selectedstudy"), (s,)),
+                    FunctionApplication(Symbol("mentions"), (s, Constant("emotion"))),
+                )),
+            ),
+        ),
+    )
+
+    assert condition_aware_weak_logic_eq(result, expected), (
+        f"IR mismatch.\n\n"
+        f"Result:   {result}\n\n"
+        f"Expected: {expected}"
+    )
 
 
 def test_compound_quantifier_marg():

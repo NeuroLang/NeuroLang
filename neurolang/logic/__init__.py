@@ -149,6 +149,7 @@ class ExistentialPredicate(Quantifier):
         return r
 
 
+
 class UniversalPredicate(Quantifier):
     def __init__(self, head, body):
 
