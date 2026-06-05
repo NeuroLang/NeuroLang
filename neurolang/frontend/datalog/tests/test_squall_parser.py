@@ -11,7 +11,10 @@ from ....expression_pattern_matching import add_match
 from ....expression_walker import (
     ExpressionWalker, PatternWalker, ReplaceExpressionWalker
 )
-from ....expressions import Constant, FunctionApplication, Symbol
+from ....expressions import (
+    Constant, FunctionApplication, ParametricTypeClassMeta, Symbol
+)
+from ....type_system import is_leq_informative
 from ....logic import (
     ExistentialPredicate,
     LogicOperator,
@@ -91,7 +94,34 @@ class LogicWeakEquivalence(ExpressionWalker):
 
     @add_match(EQ(..., ...))
     def eq_expression(self, expression):
-        return expression.args[0] == expression.args[1]
+        left, right = expression.args
+        if type(left) is not type(right):
+            # Unknown/Any type parameter unification:
+            # same generic root + unifiable types → compare by structure
+            left_meta = type(left)
+            right_meta = type(right)
+            if not (
+                isinstance(left_meta, ParametricTypeClassMeta) and
+                isinstance(right_meta, ParametricTypeClassMeta)
+            ):
+                return False
+            # __generic_class__ only exists on parameterized subclasses;
+            # the base class itself is its own generic root
+            left_root = getattr(left_meta, '__generic_class__', None) or left_meta
+            right_root = getattr(right_meta, '__generic_class__', None) or right_meta
+            if not (
+                left_root is right_root and
+                (
+                    is_leq_informative(
+                        left_meta._nl_class_type, right_meta._nl_class_type
+                    ) or
+                    is_leq_informative(
+                        right_meta._nl_class_type, left_meta._nl_class_type
+                    )
+                )
+            ):
+                return False
+        return left.unapply() == right.unapply()
 
 
 def weak_logic_eq(left, right):
@@ -128,13 +158,6 @@ class ConditionAwareEqMixin(PatternWalker):
             else:
                 results.append(self.walk(EQ(l, r)))
         return all(results)
-
-    @add_match(EQ(..., ...))
-    def eq_expression(self, expression):
-        left, right = expression.args
-        if left.unapply() != right.unapply():
-            return False
-        return True
 
 
 class ConditionAwareLogicWeakEquivalence(
