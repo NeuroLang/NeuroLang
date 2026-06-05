@@ -16,6 +16,7 @@ from ....logic import (
     NaryLogicOperator,
     UniversalPredicate
 )
+from ....probabilistic.expressions import Condition
 from ..squall import LogicSimplifier
 from ..squall_syntax_lark import (
     parser,
@@ -95,6 +96,55 @@ def weak_logic_eq(left, right):
     left = LogicSimplifier().walk(left)
     right = LogicSimplifier().walk(right)
     return LogicWeakEquivalence().walk(EQ(left, right))
+
+
+class ConditionAwareEqMixin(ExpressionWalker):
+    """Extend LogicWeakEquivalence with Condition comparison and fix
+    LogicOperator iteration to walk all children instead of early-returning
+    after the first child."""
+
+    @add_match(EQ(Condition, Condition))
+    def eq_condition(self, expression):
+        left, right = expression.args
+        return (
+            self.walk(EQ(left.conditioned, right.conditioned)) and
+            self.walk(EQ(left.conditioning, right.conditioning))
+        )
+
+    @add_match(EQ(LogicOperator, LogicOperator))
+    def eq_logic_operator(self, expression):
+        left, right = expression.args
+        results = []
+        for l, r in zip(left.unapply(), right.unapply()):
+            if isinstance(l, tuple) and isinstance(r, tuple):
+                if len(l) != len(r):
+                    return False
+                results.append(all(
+                    self.walk(EQ(ll, rr))
+                    for ll, rr in zip(l, r)
+                ))
+            else:
+                results.append(self.walk(EQ(l, r)))
+        return all(results)
+
+    @add_match(EQ(..., ...))
+    def eq_expression(self, expression):
+        left, right = expression.args
+        if left.unapply() != right.unapply():
+            return False
+        return True
+
+
+class ConditionAwareLogicWeakEquivalence(
+    ConditionAwareEqMixin, LogicWeakEquivalence
+):
+    pass
+
+
+def condition_aware_weak_logic_eq(left, right):
+    left = LogicSimplifier().walk(left)
+    right = LogicSimplifier().walk(right)
+    return ConditionAwareLogicWeakEquivalence().walk(EQ(left, right))
 
 
 @pytest.fixture(scope="module")
@@ -1126,36 +1176,45 @@ def test_anaphora_predicate_class():
 
 
 def test_squall_marg_anaphora_resolves_across_given():
-    from neurolang.probabilistic.expressions import Condition
+    from neurolang.probabilistic.expressions import (
+        PROB, ProbabilisticQuery
+    )
 
     result = parser(
         "define as Published with probability every Voxel "
         "that a SelectedStudy reports "
         "given the SelectedStudy mentions 'emotion'."
     )
-    assert isinstance(result, Implication)
-    assert isinstance(result.antecedent, Condition), (
-        f"Expected Condition, got {type(result.antecedent)}"
-    )
-    cond = result.antecedent
 
-    cond_atoms = []
-    ing_atoms = []
-    _collect_predicate_atoms(cond.conditioned, "selectedstudy", cond_atoms)
-    _collect_predicate_atoms(cond.conditioning, "selectedstudy", ing_atoms)
+    # Use the parser's own fresh symbols so structural comparison succeeds.
+    v = result.consequent.args[0]
+    s = result.antecedent.head
 
-    assert len(cond_atoms) >= 1, (
-        f"No 'selectedstudy' atom in conditioned: {cond.conditioned}"
-    )
-    assert len(ing_atoms) >= 1, (
-        f"No 'selectedstudy' atom in conditioning: {cond.conditioning}"
+    expected = Implication(
+        FunctionApplication(Symbol("published"), (
+            v,
+            ProbabilisticQuery(PROB, (v,)),
+        )),
+        ExistentialPredicate(
+            s,
+            Condition(
+                Conjunction((
+                    FunctionApplication(Symbol("voxel"), (v,)),
+                    FunctionApplication(Symbol("selectedstudy"), (s,)),
+                    FunctionApplication(Symbol("reports"), (s, v)),
+                )),
+                Conjunction((
+                    FunctionApplication(Symbol("selectedstudy"), (s,)),
+                    FunctionApplication(Symbol("mentions"), (s, Constant("emotion"))),
+                )),
+            ),
+        ),
     )
 
-    cond_var = cond_atoms[0].args[0]
-    ing_var = ing_atoms[0].args[0]
-    assert cond_var == ing_var, (
-        f"Anaphora not resolved: conditioned uses {cond_var}, "
-        f"conditioning uses {ing_var}"
+    assert condition_aware_weak_logic_eq(result, expected), (
+        f"IR mismatch.\n\n"
+        f"Result:   {result}\n\n"
+        f"Expected: {expected}"
     )
 
 

@@ -37,22 +37,58 @@ def _find_matching_noun_var(expr, noun_name):
     return None
 
 
-def _strip_anaphora_markers(expr):
+def _strip_anaphora_markers(expr, resolved_heads=None):
     if isinstance(expr, AnaphoraPredicate):
-        body = _strip_anaphora_markers(expr.body)
+        body = _strip_anaphora_markers(expr.body, resolved_heads)
+        if resolved_heads is not None and expr.head in resolved_heads:
+            return body
         return ExistentialPredicate(expr.head, body)
     if isinstance(expr, Conjunction):
-        new_formulas = tuple(_strip_anaphora_markers(f) for f in expr.formulas)
+        new_formulas = tuple(
+            _strip_anaphora_markers(f, resolved_heads) for f in expr.formulas
+        )
         return Conjunction(new_formulas)
     if hasattr(expr, 'body') and hasattr(expr, 'head'):
         new_head = expr.head
-        new_body = _strip_anaphora_markers(expr.body)
+        new_body = _strip_anaphora_markers(expr.body, resolved_heads)
         return expr.apply(new_head, new_body)
     if hasattr(expr, 'formulas'):
         new_formulas = tuple(
-            _strip_anaphora_markers(f) for f in expr.formulas
+            _strip_anaphora_markers(f, resolved_heads) for f in expr.formulas
         )
         return expr.apply(new_formulas)
+    return expr
+
+
+def _unpack_existential(expr, head_symbol):
+    """Remove an ExistentialPredicate(head=head_symbol) and flatten its body.
+
+    When a variable referenced by an anaphora on the conditioning side is
+    bound by an existential on the conditioned side, that quantifier must
+    be lifted to scope over the entire Condition. This strips it from the
+    conditioned side, merging the body into the parent conjunction.
+    """
+    if isinstance(expr, ExistentialPredicate) and expr.head == head_symbol:
+        return expr.body
+    if isinstance(expr, Conjunction):
+        new_formulas = []
+        for f in expr.formulas:
+            if isinstance(f, ExistentialPredicate) and f.head == head_symbol:
+                if isinstance(f.body, Conjunction):
+                    new_formulas.extend(f.body.formulas)
+                else:
+                    new_formulas.append(f.body)
+            else:
+                new_formulas.append(_unpack_existential(f, head_symbol))
+        if not new_formulas:
+            return None
+        if len(new_formulas) == 1:
+            return new_formulas[0]
+        return Conjunction(tuple(new_formulas))
+    if hasattr(expr, 'body'):
+        return expr.apply(
+            expr.head, _unpack_existential(expr.body, head_symbol)
+        )
     return expr
 
 
@@ -104,6 +140,16 @@ class AnaphoraResolutionWalker(ExpressionWalker):
                 new_conditioning
             )
 
-        new_conditioning = _strip_anaphora_markers(new_conditioning)
+        new_conditioning = _strip_anaphora_markers(
+            new_conditioning, resolved_heads=set(replacement.values())
+        )
 
-        return Condition(new_conditioned, new_conditioning)
+        lifted_vars = set()
+        for matched_sym in set(replacement.values()):
+            new_conditioned = _unpack_existential(new_conditioned, matched_sym)
+            lifted_vars.add(matched_sym)
+
+        result = Condition(new_conditioned, new_conditioning)
+        for var in lifted_vars:
+            result = ExistentialPredicate(var, result)
+        return result
