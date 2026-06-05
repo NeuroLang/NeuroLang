@@ -1,8 +1,32 @@
+from ...exceptions import NeuroLangException
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, ReplaceSymbolWalker
 from ...expressions import FunctionApplication, Symbol
-from ...logic import AnaphoraPredicate, Conjunction, ExistentialPredicate
+from ...logic import Conjunction, ExistentialPredicate
 from ...probabilistic.expressions import Condition
+
+
+class AnaphoraPredicate(ExistentialPredicate):
+    """An existential introduced by 'the X' when X was not in symbol scope.
+
+    The noun_name (a Symbol) records which noun the anaphora refers to,
+    enabling a post-processing walker to resolve it against the matching
+    noun predicate on the other side of a Condition boundary.
+    """
+    def __init__(self, head, body, noun_name):
+        super().__init__(head, body)
+        if not isinstance(noun_name, Symbol):
+            raise NeuroLangException(
+                'A Symbol should be provided for the noun name of the '
+                'anaphora expression'
+            )
+        self.noun_name = noun_name
+
+    def __repr__(self):
+        r = '\u2203{{{0} st {1} | anaphora={2}}}'.format(
+            self.head, self.body, self.noun_name
+        )
+        return r
 
 
 def _collect_anaphoras(expr, result):

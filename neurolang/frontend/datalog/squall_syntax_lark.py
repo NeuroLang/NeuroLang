@@ -81,12 +81,13 @@ from ...expressions import (
     Symbol,
 )
 from ...logic import (
-    AnaphoraPredicate, Disjunction, ExistentialPredicate, UniversalPredicate
+    Disjunction, ExistentialPredicate, UniversalPredicate
 )
 from ...logic.expression_processing import extract_logic_free_variables
 from ...probabilistic.expressions import (
     Condition, ProbabilisticFact, ProbabilisticQuery, PROB
 )
+from .anaphora_resolution import AnaphoraPredicate
 from .squall import InvertedFunctionApplication
 
 

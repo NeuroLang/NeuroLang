@@ -8,7 +8,9 @@ import pytest
 from .... import config
 from ....datalog import Conjunction, Implication, Negation
 from ....expression_pattern_matching import add_match
-from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
+from ....expression_walker import (
+    ExpressionWalker, PatternWalker, ReplaceExpressionWalker
+)
 from ....expressions import Constant, FunctionApplication, Symbol
 from ....logic import (
     ExistentialPredicate,
@@ -98,7 +100,7 @@ def weak_logic_eq(left, right):
     return LogicWeakEquivalence().walk(EQ(left, right))
 
 
-class ConditionAwareEqMixin(ExpressionWalker):
+class ConditionAwareEqMixin(PatternWalker):
     """Extend LogicWeakEquivalence with Condition comparison and fix
     LogicOperator iteration to walk all children instead of early-returning
     after the first child."""
@@ -1161,7 +1163,10 @@ def _collect_predicate_atoms(expr, functor_name, result_list):
 
 
 def test_anaphora_predicate_class():
-    from neurolang.logic import AnaphoraPredicate, ExistentialPredicate
+    from neurolang.frontend.datalog.anaphora_resolution import (
+        AnaphoraPredicate
+    )
+    from neurolang.logic import ExistentialPredicate
 
     x = Symbol.fresh()
     p = Symbol("test_predicate")
