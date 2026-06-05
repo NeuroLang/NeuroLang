@@ -400,9 +400,9 @@ class TestExecuteProgram:
         assert result is not None
 
     def test_query_no_matching_results(self, nl):
-        result = _execute_program(nl, "ans(x) :- R(x, y) & (x > 100)")
-        # Chase may return None when a predicate yields no tuples
-        assert result is None
+        result, _ = _execute_program(nl, "ans(x) :- R(x, y) & (x > 100)")
+        assert result is not None
+        assert len(result) == 0
 
     def test_multiple_queries_raises(self, nl):
         with pytest.raises(ValueError, match="single query"):
@@ -454,7 +454,7 @@ class TestExecuteProgramProb:
         return nl
 
     def test_prob_query_returns_named_set(self, nl):
-        result = _execute_program(
+        result, col_names = _execute_program(
             nl,
             "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
             "ans(x, p) :- derived(x, p).",
@@ -462,9 +462,10 @@ class TestExecuteProgramProb:
         assert result is not None
         assert hasattr(result, "columns")
         assert result.columns == ("x", "p")
+        assert col_names == ["x", "p"]
 
     def test_prob_query_values(self, nl):
-        result = _execute_program(
+        result, _ = _execute_program(
             nl,
             "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
             "ans(x, p) :- derived(x, p).",
@@ -475,7 +476,7 @@ class TestExecuteProgramProb:
         assert rows[1] == (2, 1.0)
 
     def test_prob_query_format_table(self, nl):
-        result = _execute_program(
+        result, _ = _execute_program(
             nl,
             "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
             "ans(x, p) :- derived(x, p).",
@@ -486,7 +487,7 @@ class TestExecuteProgramProb:
         assert "1.0" in output
 
     def test_prob_query_format_csv(self, nl):
-        result = _execute_program(
+        result, _ = _execute_program(
             nl,
             "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
             "ans(x, p) :- derived(x, p).",

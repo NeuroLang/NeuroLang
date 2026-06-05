@@ -47,8 +47,7 @@ from typing import Optional
 import pandas as pd
 
 from neurolang import expressions as ir
-from neurolang.datalog.chase import Chase
-from neurolang.datalog.expressions import Implication
+
 from neurolang.datalog import WrappedRelationalAlgebraSet
 from neurolang.expressions import (
     Constant, Expression, FunctionApplication, Lambda, Query, Symbol,
@@ -221,13 +220,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _execute_program(nl: NeurolangPDL, program_text: str):
     """
-    Execute a Datalog program using direct chase evaluation.
+    Execute a Datalog program and return the result if a query is present.
 
-    This bypasses :meth:`NeurolangPDL._execute_query` which does not support
-    query bodies that are conjunctions, comparisons, or EDB-only predicates.
-    Instead it converts every ``Query`` into an ``Implication`` rule, adds it
-    to the program's IDB, and runs the deterministic chase — the same strategy
-    used by the base :class:`~neurolang.frontend.QueryBuilderDatalog`.
+    Delegates to :meth:`NeurolangPDL.execute_datalog_program` which handles
+    the full solver stack (deterministic chase + probabilistic solver + magic
+    sets rewriting) through the frontend's query resolution API.
 
     Parameters
     ----------
@@ -238,7 +235,12 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
 
     Returns
     -------
-    ``None``, ``bool``, or a relational algebra set.
+    ``None``
+        When no query is present, or the chase produced no tuples.
+    ``bool``
+        For boolean (headless) queries.
+    ``tuple`` of (RelationalAlgebraFrozenSet, list[str])
+        For tuple queries — result set plus column names.
 
     """
     from neurolang.frontend.datalog.standard_syntax import (
@@ -246,82 +248,36 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
     )
 
     ir_prog = datalog_parser(program_text)
-
-    formulas = list(ir_prog.formulas)
-    queries = [f for f in formulas if isinstance(f, ir.Query)]
-    others = [f for f in formulas if not isinstance(f, ir.Query)]
-
-    for f in others:
-        nl.program_ir.walk(f)
+    queries = [f for f in ir_prog.formulas if isinstance(f, ir.Query)]
+    others = [f for f in ir_prog.formulas if not isinstance(f, ir.Query)]
 
     if len(queries) == 0:
+        for f in others:
+            nl.program_ir.walk(f)
         return None
 
     if len(queries) > 1:
-        if others:
-            # Multiple Query formulas produced by the parser's PROB
-            # desugaring (PROB body syntax produces 1 Implication + 2
-            # Query formulas).  Walk all formulas as rules and use
-            # solve_all() which handles the combined deterministic +
-            # probabilistic solver stack.
-            for q in queries:
-                nl.program_ir.walk(Implication(q.head, q.body))
-            solution = nl.solve_all()
-            # Find the last (outermost) query result in the solution.
-            for q in reversed(queries):
-                head = q.head
-                if isinstance(head, ir.FunctionApplication):
-                    functor = (
-                        head.functor.body
-                        if isinstance(head.functor, ir.Lambda)
-                        else head.functor
-                    )
-                    pred_name = (
-                        functor.name
-                        if isinstance(functor, ir.Symbol)
-                        else str(functor)
-                    )
-                else:
-                    pred_name = str(head)
-                if pred_name in solution:
-                    return solution[pred_name]
-            return None
         raise ValueError("Only a single query per program is supported.")
 
-    q = queries[0]
+    # Single query — delegate to the frontend's high-level execution which
+    # handles the solver stack (deterministic chase, probabilistic solver,
+    # magic sets rewriting) through nl.query().
+    result = nl.execute_datalog_program(program_text)
 
-    # Extract both the head predicate name and the argument variable names
-    # from the parsed query head.  The head is always a FunctionApplication
-    # whose functor is a Symbol (simple) or a Lambda wrapping a Symbol (parser
-    # sugar), and whose args are Symbol nodes whose .name carries the Datalog
-    # variable name.
+    if result is None:
+        return None
+
+    # Extract column names from the parsed query head for display.
+    q = queries[0]
     if isinstance(q.head, ir.FunctionApplication):
         column_names = [a.name for a in q.head.args]
-        functor = (
-            q.head.functor.body
-            if isinstance(q.head.functor, ir.Lambda)
-            else q.head.functor
-        )
     else:
         column_names = None
-        functor = q.head
 
-    pred_name = (
-        functor.name if isinstance(functor, ir.Symbol) else str(functor)
-    )
+    if column_names is None:
+        return result
 
-    # Query → Implication so the DatalogProgram walker registers it as IDB
-    rule = Implication(q.head, q.body)
-    nl.program_ir.walk(rule)
-
-    chase = Chase(nl.program_ir)
-    solution = chase.build_chase_solution()
-
-    for sym, val in solution.items():
-        if sym.name == pred_name:
-            return val, column_names
-
-    return None
+    return result, column_names
 
 
 def _execute_squall_program(
