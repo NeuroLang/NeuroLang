@@ -17,8 +17,8 @@ from ....expressions import Constant, Expression, FunctionApplication, Symbol
 from ....logic import Conjunction, Implication
 from ....relational_algebra import RelationalAlgebraSet
 from ....utils import log_performance
-from ....utils.various import FrozenNDArray
 from ....type_system import is_leq_informative
+from ....utils.various import FrozenNDArray
 from ....regions import ExplicitVBR
 
 EUCLIDEAN = Symbol("EUCLIDEAN")
@@ -364,13 +364,14 @@ class TranslateRegionDestroy(PatternWalker):
 
         def _convert_to_frozen_arrays(v):
             if hasattr(v, 'voxels') and len(v.voxels) > 0:
-                return [FrozenNDArray(row) for row in v.voxels]
+                return tuple(FrozenNDArray(row) for row in v.voxels)
             return None
 
         new_col = container[col_name].apply(_convert_to_frozen_arrays)
         mask = new_col.notna()
-        ras._container = container.loc[mask].copy()
-        ras._container[col_name] = new_col.loc[mask]
+        container = container.loc[mask].copy()
+        container[col_name] = new_col.loc[mask]
+        ras._container = container
         return True
 
     def _delegate_to_next_match(self, expression):

@@ -33,6 +33,7 @@ from ..expressions import (
 )
 from ..logic import Union
 from ..type_system import (
+    Any,
     NeuroLangTypeException,
     Unknown,
     get_args,
@@ -123,6 +124,8 @@ class TypeResolutionMixin(PatternWalker):
                 continue
             for i, arg in enumerate(pred.args):
                 if not isinstance(arg, Symbol) or i >= len(col_types):
+                    continue
+                if col_types[i] is Any:
                     continue
                 self._set_or_unify_type(arg, col_types[i])
 
