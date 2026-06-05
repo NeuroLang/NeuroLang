@@ -109,8 +109,8 @@ class LogicWeakEquivalence(ExpressionWalker):
             if not (
                 left_root is right_root and
                 (
-                    is_leq_informative(lt._nl_class_type, rt._nl_class_type) or
-                    is_leq_informative(rt._nl_class_type, lt._nl_class_type)
+                    is_leq_informative(left.type, right.type) or
+                    is_leq_informative(right.type, left.type)
                 )
             ):
                 return False
