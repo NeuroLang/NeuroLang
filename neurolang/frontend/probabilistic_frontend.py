@@ -93,8 +93,12 @@ from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
 )
-from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
+from .datalog.sugar.spatial import (
+    TranslateEuclideanDistanceBoundMatrixMixin,
+    TranslateRegionDestroy,
+)
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
+from .type_resolution import TypeResolutionMixin
 from .datalog.squall import ResolveInvertedFunctionApplicationMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
@@ -144,6 +148,8 @@ class RegionFrontendCPLogicSolver(
     TranslateEuclideanDistanceBoundMatrixMixin,
     QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
+    TypeResolutionMixin,
+    TranslateRegionDestroy,
     RegionSolver,
     CommandsMixin,
     NumpyFunctionsMixin,
