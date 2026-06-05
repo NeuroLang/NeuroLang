@@ -258,6 +258,34 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
         return None
 
     if len(queries) > 1:
+        if others:
+            # Multiple Query formulas produced by the parser's PROB
+            # desugaring (PROB body syntax produces 1 Implication + 2
+            # Query formulas).  Walk all formulas as rules and use
+            # solve_all() which handles the combined deterministic +
+            # probabilistic solver stack.
+            for q in queries:
+                nl.program_ir.walk(Implication(q.head, q.body))
+            solution = nl.solve_all()
+            # Find the last (outermost) query result in the solution.
+            for q in reversed(queries):
+                head = q.head
+                if isinstance(head, ir.FunctionApplication):
+                    functor = (
+                        head.functor.body
+                        if isinstance(head.functor, ir.Lambda)
+                        else head.functor
+                    )
+                    pred_name = (
+                        functor.name
+                        if isinstance(functor, ir.Symbol)
+                        else str(functor)
+                    )
+                else:
+                    pred_name = str(head)
+                if pred_name in solution:
+                    return solution[pred_name]
+            return None
         raise ValueError("Only a single query per program is supported.")
 
     q = queries[0]

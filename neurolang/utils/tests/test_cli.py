@@ -434,6 +434,76 @@ class TestExecuteProgram:
 
 
 # ---------------------------------------------------------------------------
+# _execute_program — PROB queries
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteProgramProb:
+
+    """Tests for PROB queries through _execute_program."""
+
+    @pytest.fixture
+    def nl(self):
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a"), (2, "a")], name="edb1")
+        nl.add_uniform_probabilistic_choice_over_set(
+            [("a",), ("b",)], name="pc1"
+        )
+        return nl
+
+    def test_prob_query_returns_named_set(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        assert hasattr(result, "columns")
+        assert result.columns == ("x", "p")
+
+    def test_prob_query_values(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 1.0)
+        assert rows[1] == (2, 1.0)
+
+    def test_prob_query_format_table(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        output = _format_result(result)
+        assert "x" in output
+        assert "p" in output
+        assert "1.0" in output
+
+    def test_prob_query_format_csv(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        output = _format_result(result, fmt="csv")
+        lines = output.strip().split("\n")
+        assert lines[0] == "x,p"
+        assert "1,1.0" in lines[1:]
+
+    def test_prob_rule_without_query_returns_none(self, nl):
+        """PROB rule with no query returns None."""
+        result = _execute_program(
+            nl, "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p."
+        )
+        assert result is None
+
+# ---------------------------------------------------------------------------
 # --squall flag
 # ---------------------------------------------------------------------------
 
