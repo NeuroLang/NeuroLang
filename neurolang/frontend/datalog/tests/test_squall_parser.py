@@ -14,7 +14,7 @@ from ....expression_walker import (
 from ....expressions import (
     Constant, FunctionApplication, ParametricTypeClassMeta, Symbol
 )
-from ....type_system import is_leq_informative
+from ....type_system import get_generic_type, is_leq_informative
 from ....logic import (
     ExistentialPredicate,
     LogicOperator,
@@ -104,8 +104,8 @@ class LogicWeakEquivalence(ExpressionWalker):
                 isinstance(rt, ParametricTypeClassMeta)
             ):
                 return False
-            left_root = getattr(lt, '__generic_class__', lt)
-            right_root = getattr(rt, '__generic_class__', rt)
+            left_root = get_generic_type(lt)
+            right_root = get_generic_type(rt)
             if not (
                 left_root is right_root and
                 (
