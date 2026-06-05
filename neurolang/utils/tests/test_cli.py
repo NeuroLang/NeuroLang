@@ -2,12 +2,14 @@
 
 import pytest
 
+from neurolang.exceptions import NeuroLangException
 from neurolang.utils.cli import (
     _build_parser,
     _execute_program,
     _execute_squall_program,
+    _format_ir,
     _format_result,
-    _show_squall_datalog,
+    _read_query,
 )
 
 from neurolang.utils import engine_registry
@@ -194,25 +196,21 @@ engines:
         nl.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="csv_rel")
         nl.add_tuple_set([(4, "d"), (5, "e")], name="tsv_rel")
 
-        # Query CSV relation — _execute_program bypasses the probabilistic
-        # frontend query path (which doesn't handle EDB-only queries).
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x, y) :- csv_rel(x, y)"
         )
-        assert col_names == ["x", "y"]
         assert result is not None
-        output = _format_result(result, column_names=col_names)
+        output = _format_result(result, column_names=list(result.columns))
         assert "a" in output
         assert "b" in output
         assert "c" in output
 
         # Query TSV relation
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x, y) :- tsv_rel(x, y)"
         )
-        assert col_names == ["x", "y"]
         assert result is not None
-        output = _format_result(result, column_names=col_names)
+        output = _format_result(result, column_names=list(result.columns))
         assert "d" in output
         assert "e" in output
 
@@ -373,62 +371,62 @@ class TestExecuteProgram:
         assert result is None
 
     def test_simple_edb_query(self, nl):
-        result, col_names = _execute_program(nl, "ans(x) :- R(x, y)")
-        assert col_names == ["x"]
+        result = _execute_program(nl, "ans(x) :- R(x, y)")
         assert result is not None
+        assert result.columns == ("x",)
 
     def test_query_with_conjunction(self, nl):
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x, z) :- R(x, y) & S(x, z)"
         )
-        assert col_names == ["x", "z"]
         assert result is not None
+        assert result.columns == ("x", "z")
 
     def test_query_with_comparison(self, nl):
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x) :- S(x, z) & (z > 15.0)"
         )
-        assert col_names == ["x"]
         assert result is not None
+        assert result.columns == ("x",)
 
     def test_query_projection(self, nl):
         """Project only one of the variables."""
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(y) :- R(x, y) & S(x, z) & (z > 10.0)"
         )
-        assert col_names == ["y"]
         assert result is not None
+        assert result.columns == ("y",)
 
     def test_query_no_matching_results(self, nl):
-        result, _ = _execute_program(nl, "ans(x) :- R(x, y) & (x > 100)")
+        result = _execute_program(nl, "ans(x) :- R(x, y) & (x > 100)")
         assert result is not None
         assert len(result) == 0
 
     def test_multiple_queries_raises(self, nl):
-        with pytest.raises(ValueError, match="single query"):
+        with pytest.raises(NeuroLangException, match="more than one query"):
             _execute_program(nl, "ans(x) :- R(x, y)\nans(z) :- S(z, w)")
 
     def test_result_column_names_preserved(self, nl):
         """column_names match the Datalog variable names in the query."""
-        _, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(the_x, the_y) :- R(the_x, the_y)"
         )
-        assert col_names == ["the_x", "the_y"]
+        assert result.columns == ("the_x", "the_y")
 
     def test_table_format_output_has_column_names(self, nl):
         """Full roundtrip: execute → format with column names."""
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(val) :- R(x, y) & S(x, val)"
         )
-        output = _format_result(result, column_names=col_names)
+        output = _format_result(result, column_names=list(result.columns))
         assert "val" in output
         assert "10.0" in output
         assert "20.0" in output
         assert "30.0" in output
 
     def test_csv_output_has_header(self, nl):
-        result, col_names = _execute_program(nl, "ans(v) :- R(x, y) & S(x, v)")
-        output = _format_result(result, fmt="csv", column_names=col_names)
+        result = _execute_program(nl, "ans(v) :- R(x, y) & S(x, v)")
+        output = _format_result(result, fmt="csv", column_names=list(result.columns))
         lines = output.strip().split("\n")
         assert lines[0] == "v"
 
@@ -454,7 +452,7 @@ class TestExecuteProgramProb:
         return nl
 
     def test_prob_query_returns_named_set(self, nl):
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl,
             "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
             "ans(x, p) :- derived(x, p).",
@@ -462,10 +460,9 @@ class TestExecuteProgramProb:
         assert result is not None
         assert hasattr(result, "columns")
         assert result.columns == ("x", "p")
-        assert col_names == ["x", "p"]
 
     def test_prob_query_values(self, nl):
-        result, _ = _execute_program(
+        result = _execute_program(
             nl,
             "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
             "ans(x, p) :- derived(x, p).",
@@ -476,7 +473,7 @@ class TestExecuteProgramProb:
         assert rows[1] == (2, 1.0)
 
     def test_prob_query_format_table(self, nl):
-        result, _ = _execute_program(
+        result = _execute_program(
             nl,
             "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
             "ans(x, p) :- derived(x, p).",
@@ -487,7 +484,7 @@ class TestExecuteProgramProb:
         assert "1.0" in output
 
     def test_prob_query_format_csv(self, nl):
-        result, _ = _execute_program(
+        result = _execute_program(
             nl,
             "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
             "ans(x, p) :- derived(x, p).",

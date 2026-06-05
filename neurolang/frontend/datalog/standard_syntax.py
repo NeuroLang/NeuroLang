@@ -21,6 +21,7 @@ from ...expressions import (
     Symbol,
 )
 from ...logic import ExistentialPredicate
+from ...logic.expression_processing import extract_logic_free_variables
 from ...probabilistic.expressions import (
     PROB,
     Condition,
@@ -417,23 +418,6 @@ class DatalogTransformer(Transformer):
             return None
         return None
 
-    @staticmethod
-    def _extract_conjunction_vars(conjunction):
-        """Extract all Symbol variables from a Conjunction's formulas.
-
-        Returns a tuple of Symbol instances, preserving order and deduplicating.
-        Used by both MARG and PROB conjunction branches.
-        """
-        all_vars = []
-        seen = set()
-        for f in conjunction.formulas:
-            if isinstance(f, FunctionApplication):
-                for arg in f.args:
-                    if isinstance(arg, Symbol) and arg not in seen:
-                        seen.add(arg)
-                        all_vars.append(arg)
-        return tuple(all_vars)
-
     def _build_prob_rule(self, head, prob_specs, body):
         """Build rules from PROB/MARG markers in the body.
 
@@ -516,9 +500,9 @@ class DatalogTransformer(Transformer):
                 # Extract all variables from the conjunction to use as PROB
                 # arguments, then filter to only outside-connecting vars —
                 # the rest are marginalized by the probabilistic solver.
-                prob_vars = self._extract_conjunction_vars(subject)
                 prob_vars = tuple(
-                    v for v in prob_vars if v in outside_connect
+                    v for v in extract_logic_free_variables(subject)
+                    if v in outside_connect
                 )
                 fresh_body = subject
                 fresh_head = fresh_pred_sym(
@@ -543,9 +527,9 @@ class DatalogTransformer(Transformer):
                 if isinstance(subject, Conjunction) and len(subject.formulas) > 1:
                     # Extract all variables from conjunction and filter to
                     # outside-connecting vars (same as MARG conjunction case).
-                    prob_vars = self._extract_conjunction_vars(subject)
                     prob_vars = tuple(
-                        v for v in prob_vars if v in outside_connect
+                        v for v in extract_logic_free_variables(subject)
+                        if v in outside_connect
                     )
                     fresh_body = subject
                 else:

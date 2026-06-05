@@ -46,12 +46,7 @@ from typing import Optional
 
 import pandas as pd
 
-from neurolang import expressions as ir
-
 from neurolang.datalog import WrappedRelationalAlgebraSet
-from neurolang.expressions import (
-    Constant, Expression, FunctionApplication, Lambda, Query, Symbol,
-)
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.utils import engine_registry
@@ -236,48 +231,14 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
     Returns
     -------
     ``None``
-        When no query is present, or the chase produced no tuples.
+        When no query is present.
     ``bool``
         For boolean (headless) queries.
-    ``tuple`` of (RelationalAlgebraFrozenSet, list[str])
-        For tuple queries — result set plus column names.
+    ``RelationalAlgebraFrozenSet``
+        The query result set (may have a ``.columns`` attribute).
 
     """
-    from neurolang.frontend.datalog.standard_syntax import (
-        parser as datalog_parser,
-    )
-
-    ir_prog = datalog_parser(program_text)
-    queries = [f for f in ir_prog.formulas if isinstance(f, ir.Query)]
-    others = [f for f in ir_prog.formulas if not isinstance(f, ir.Query)]
-
-    if len(queries) == 0:
-        for f in others:
-            nl.program_ir.walk(f)
-        return None
-
-    if len(queries) > 1:
-        raise ValueError("Only a single query per program is supported.")
-
-    # Single query — delegate to the frontend's high-level execution which
-    # handles the solver stack (deterministic chase, probabilistic solver,
-    # magic sets rewriting) through nl.query().
-    result = nl.execute_datalog_program(program_text)
-
-    if result is None:
-        return None
-
-    # Extract column names from the parsed query head for display.
-    q = queries[0]
-    if isinstance(q.head, ir.FunctionApplication):
-        column_names = [a.name for a in q.head.args]
-    else:
-        column_names = None
-
-    if column_names is None:
-        return result
-
-    return result, column_names
+    return nl.execute_datalog_program(program_text)
 
 
 def _execute_squall_program(
@@ -505,12 +466,8 @@ def main(argv: Optional[list] = None) -> None:
                 print(output)
     else:
         result = _execute_program(nl, program)
-        if isinstance(result, tuple):
-            result, column_names = result
-        else:
-            column_names = None
         output = _format_result(
-            result, fmt=args.format, column_names=column_names
+            result, fmt=args.format, column_names=None
         )
         if output:
             print(output)
