@@ -96,28 +96,21 @@ class LogicWeakEquivalence(ExpressionWalker):
     def eq_expression(self, expression):
         left, right = expression.args
         if type(left) is not type(right):
-            # Unknown/Any type parameter unification:
-            # same generic root + unifiable types → compare by structure
-            left_meta = type(left)
-            right_meta = type(right)
+            # Unify Unknown/Any across parameterized types
+            lt = type(left)
+            rt = type(right)
             if not (
-                isinstance(left_meta, ParametricTypeClassMeta) and
-                isinstance(right_meta, ParametricTypeClassMeta)
+                isinstance(lt, ParametricTypeClassMeta) and
+                isinstance(rt, ParametricTypeClassMeta)
             ):
                 return False
-            # __generic_class__ only exists on parameterized subclasses;
-            # the base class itself is its own generic root
-            left_root = getattr(left_meta, '__generic_class__', None) or left_meta
-            right_root = getattr(right_meta, '__generic_class__', None) or right_meta
+            left_root = getattr(lt, '__generic_class__', lt)
+            right_root = getattr(rt, '__generic_class__', rt)
             if not (
                 left_root is right_root and
                 (
-                    is_leq_informative(
-                        left_meta._nl_class_type, right_meta._nl_class_type
-                    ) or
-                    is_leq_informative(
-                        right_meta._nl_class_type, left_meta._nl_class_type
-                    )
+                    is_leq_informative(lt._nl_class_type, rt._nl_class_type) or
+                    is_leq_informative(rt._nl_class_type, lt._nl_class_type)
                 )
             ):
                 return False
@@ -147,16 +140,16 @@ class ConditionAwareEqMixin(PatternWalker):
     def eq_logic_operator(self, expression):
         left, right = expression.args
         results = []
-        for l, r in zip(left.unapply(), right.unapply()):
-            if isinstance(l, tuple) and isinstance(r, tuple):
-                if len(l) != len(r):
+        for lv, rv in zip(left.unapply(), right.unapply()):
+            if isinstance(lv, tuple) and isinstance(rv, tuple):
+                if len(lv) != len(rv):
                     return False
                 results.append(all(
-                    self.walk(EQ(ll, rr))
-                    for ll, rr in zip(l, r)
+                    self.walk(EQ(lvv, rvv))
+                    for lvv, rvv in zip(lv, rv)
                 ))
             else:
-                results.append(self.walk(EQ(l, r)))
+                results.append(self.walk(EQ(lv, rv)))
         return all(results)
 
 
