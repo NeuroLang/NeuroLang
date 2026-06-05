@@ -80,7 +80,9 @@ from ...expressions import (
     Query,
     Symbol,
 )
-from ...logic import Disjunction, ExistentialPredicate, UniversalPredicate
+from ...logic import (
+    AnaphoraPredicate, Disjunction, ExistentialPredicate, UniversalPredicate
+)
 from ...logic.expression_processing import extract_logic_free_variables
 from ...probabilistic.expressions import (
     Condition, ProbabilisticFact, ProbabilisticQuery, PROB
@@ -1291,18 +1293,31 @@ class SquallTransformer(Transformer):
                     body = ng(body_syms)
                     scope = _apply_to_vars(d, head_syms)
                     result = Conjunction((body, scope))
-                    for sym in head_syms:
-                        result = ExistentialPredicate(sym, result)
+                    for i, sym in enumerate(head_syms):
+                        if i == 0 and noun_name:
+                            result = AnaphoraPredicate(
+                                sym, result, Symbol(noun_name)
+                            )
+                        else:
+                            result = ExistentialPredicate(sym, result)
                     return result
                 elif var_info is not None:
                     x = var_info
                     body = ng(x)
                     scope = d(x)
+                    if noun_name:
+                        return AnaphoraPredicate(
+                            x, Conjunction((body, scope)), Symbol(noun_name)
+                        )
                     return ExistentialPredicate(x, Conjunction((body, scope)))
                 else:
                     x = Symbol.fresh()
                     body = ng(x)
                     scope = d(x)
+                    if noun_name:
+                        return AnaphoraPredicate(
+                            x, Conjunction((body, scope)), Symbol(noun_name)
+                        )
                     return ExistentialPredicate(x, Conjunction((body, scope)))
             return apply_d
         return the
@@ -2567,16 +2582,21 @@ def parser(code, local_vars=None, global_vars=None):
         ) from e
 
     from .squall import LogicSimplifier, ResolveInvertedFunctionApplicationMixin
+    from .anaphora_resolution import AnaphoraResolutionWalker
     from neurolang.expression_walker import ExpressionWalker
 
     class _SquallSimplifier(ResolveInvertedFunctionApplicationMixin, LogicSimplifier, ExpressionWalker):
         pass
 
+    def _simplify(expr):
+        simplified = simplifier.walk(expr)
+        return AnaphoraResolutionWalker().walk(simplified)
+
     simplifier = _SquallSimplifier()
     if isinstance(result, SquallProgram):
         simplified_rules = []
         for r in result.rules:
-            simplified_rules.append(simplifier.walk(r))
+            simplified_rules.append(_simplify(r))
         # Choice defs are markers, already stored in result.choice_defs.
         result = SquallProgram(
             rules=simplified_rules,
@@ -2591,11 +2611,11 @@ def parser(code, local_vars=None, global_vars=None):
             if isinstance(f, (EquiprobableChoiceDef, WeightedChoiceDef)):
                 simplified.append(f)
             else:
-                simplified.append(simplifier.walk(f))
+                simplified.append(_simplify(f))
         result = Union(tuple(simplified))
     else:
         if isinstance(result, (EquiprobableChoiceDef, WeightedChoiceDef)):
             pass  # Choice defs are markers, not walkable expressions.
         else:
-            result = simplifier.walk(result)
+            result = _simplify(result)
     return result

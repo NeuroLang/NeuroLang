@@ -1090,6 +1090,75 @@ def test_compound_quantifier_explicit_vars():
     assert "mentions" in functors
 
 
+def _collect_predicate_atoms(expr, functor_name, result_list):
+    if isinstance(expr, FunctionApplication):
+        if isinstance(expr.functor, Symbol) and expr.functor.name == functor_name:
+            result_list.append(expr)
+        return
+    if isinstance(expr, (Conjunction,)):
+        for f in expr.formulas:
+            _collect_predicate_atoms(f, functor_name, result_list)
+    elif hasattr(expr, 'body'):
+        _collect_predicate_atoms(expr.body, functor_name, result_list)
+    elif hasattr(expr, 'antecedent'):
+        _collect_predicate_atoms(expr.antecedent, functor_name, result_list)
+    elif hasattr(expr, 'conditioned'):
+        _collect_predicate_atoms(expr.conditioned, functor_name, result_list)
+        _collect_predicate_atoms(expr.conditioning, functor_name, result_list)
+    elif hasattr(expr, 'formulas'):
+        for f in expr.formulas:
+            _collect_predicate_atoms(f, functor_name, result_list)
+
+
+def test_anaphora_predicate_class():
+    from neurolang.logic import AnaphoraPredicate, ExistentialPredicate
+
+    x = Symbol.fresh()
+    p = Symbol("test_predicate")
+    body = p(x)
+    ap = AnaphoraPredicate(x, body, Symbol("test_noun"))
+
+    assert isinstance(ap, AnaphoraPredicate)
+    assert isinstance(ap, ExistentialPredicate)
+    assert ap.head is x
+    assert ap.body is body
+    assert ap.noun_name == Symbol("test_noun")
+
+
+def test_squall_marg_anaphora_resolves_across_given():
+    from neurolang.probabilistic.expressions import Condition
+
+    result = parser(
+        "define as Published with probability every Voxel "
+        "that a SelectedStudy reports "
+        "given the SelectedStudy mentions 'emotion'."
+    )
+    assert isinstance(result, Implication)
+    assert isinstance(result.antecedent, Condition), (
+        f"Expected Condition, got {type(result.antecedent)}"
+    )
+    cond = result.antecedent
+
+    cond_atoms = []
+    ing_atoms = []
+    _collect_predicate_atoms(cond.conditioned, "selectedstudy", cond_atoms)
+    _collect_predicate_atoms(cond.conditioning, "selectedstudy", ing_atoms)
+
+    assert len(cond_atoms) >= 1, (
+        f"No 'selectedstudy' atom in conditioned: {cond.conditioned}"
+    )
+    assert len(ing_atoms) >= 1, (
+        f"No 'selectedstudy' atom in conditioning: {cond.conditioning}"
+    )
+
+    cond_var = cond_atoms[0].args[0]
+    ing_var = ing_atoms[0].args[0]
+    assert cond_var == ing_var, (
+        f"Anaphora not resolved: conditioned uses {cond_var}, "
+        f"conditioning uses {ing_var}"
+    )
+
+
 def test_compound_quantifier_marg():
     result = parser(
         "define as Joint_probability with inferred probability "
