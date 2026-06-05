@@ -2243,6 +2243,31 @@ class SquallTransformer(Transformer):
         n = int(number.value) if hasattr(number, 'value') else int(number)
         return tuple(Symbol.fresh() for _ in range(n))
 
+    def app_dimension_with(self, args):
+        """Handle ``in ND with Noun`` dimension annotations (e.g. ``in 3D with Probability``).
+
+        Like ``app_dimension`` but adds one extra dimension from the ``with``
+        clause, producing *n + 1* fresh symbols. This makes ``in 3D with X``
+        equivalent to ``in 4D`` — both produce 4 variables.
+        """
+        number = args[0]
+        n = int(number.value) if hasattr(number, 'value') else int(number)
+        return tuple(Symbol.fresh() for _ in range(n + 1))
+
+    def app_dimension_only(self, args):
+        """Handle ``with Probability`` / ``with Value`` standalone (without ``in ND``).
+
+        Returns 1 fresh symbol, allowing a dimension keyword to indicate a
+        single dimension on its own.
+        """
+        return (Symbol.fresh(),)
+
+    def dimension_noun(self, args):
+        """Convert a dimension keyword token to its lowercase Symbol form."""
+        token = args[0]
+        name = token.value if hasattr(token, 'value') else str(token)
+        return Symbol(name.lower())
+
     def app_label(self, args):
         label = args[0]
         if callable(label) and not isinstance(label, (Symbol, Constant)):
@@ -2269,6 +2294,15 @@ class SquallTransformer(Transformer):
         # "per region" → fresh groupby variable from the noun
         groupby_var = Symbol.fresh()
         return ('_per', groupby_var)
+
+    def dim_keyword(self, args):
+        """Handle ``with Probability`` / ``per Probability`` in dimension contexts.
+
+        Returns ('_per', noun_symbol) so the dimension noun is treated as
+        a groupby/per dimension in ng1_agg_npc.
+        """
+        noun = args[0]
+        return ('_per', noun)
 
     def dim_npc_list(self, args):
         """Handle 'per ?i, ?j, ?k' — multiple per-variables under one 'per' keyword.
