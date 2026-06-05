@@ -509,7 +509,7 @@ class TestShowDatalogFlag:
 class TestFormatIR:
     def test_symbol_non_fresh(self):
         from neurolang.expressions import Symbol
-        from neurolang.utils.cli import DatalogPrettyPrinter
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 
         printer = DatalogPrettyPrinter()
         x = Symbol("x")
@@ -517,7 +517,7 @@ class TestFormatIR:
 
     def test_symbol_fresh_renamed(self):
         from neurolang.expressions import Symbol
-        from neurolang.utils.cli import DatalogPrettyPrinter
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 
         printer = DatalogPrettyPrinter()
         f0 = Symbol.fresh()
@@ -528,7 +528,7 @@ class TestFormatIR:
 
     def test_constant_string(self):
         from neurolang.expressions import Constant
-        from neurolang.utils.cli import DatalogPrettyPrinter
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 
         printer = DatalogPrettyPrinter()
         c = Constant("emotion")
@@ -537,7 +537,7 @@ class TestFormatIR:
 
     def test_function_application(self):
         from neurolang.expressions import Symbol
-        from neurolang.utils.cli import DatalogPrettyPrinter
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 
         printer = DatalogPrettyPrinter()
         voxel = Symbol("voxel")
@@ -549,7 +549,7 @@ class TestFormatIR:
     def test_conjunction_inline(self):
         from neurolang.expressions import Symbol
         from neurolang.logic import Conjunction
-        from neurolang.utils.cli import DatalogPrettyPrinter
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 
         printer = DatalogPrettyPrinter()
         a, b = Symbol("a"), Symbol("b")
@@ -562,7 +562,7 @@ class TestFormatIR:
     def test_existential_predicate(self):
         from neurolang.expressions import Symbol
         from neurolang.logic import Conjunction, ExistentialPredicate
-        from neurolang.utils.cli import DatalogPrettyPrinter
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 
         printer = DatalogPrettyPrinter()
         s = Symbol.fresh()
@@ -577,7 +577,7 @@ class TestFormatIR:
         from neurolang.frontend.datalog.squall_syntax_lark import (
             parser as squall_parser,
         )
-        from neurolang.utils.cli import DatalogPrettyPrinter
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 
         parsed = squall_parser("obtain every Voxel (?x; ?y; ?z).")
         printer = DatalogPrettyPrinter()
@@ -590,7 +590,7 @@ class TestFormatIR:
         from neurolang.frontend.datalog.squall_syntax_lark import (
             parser as squall_parser,
         )
-        from neurolang.utils.cli import DatalogPrettyPrinter
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 
         parsed = squall_parser(
             "obtain every Voxel in 3D that a Study reported."
