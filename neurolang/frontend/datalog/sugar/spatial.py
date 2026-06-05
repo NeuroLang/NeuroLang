@@ -339,7 +339,10 @@ class TranslateRegionDestroy(PatternWalker):
                 continue
             col_idx = formula.args.index(region_var)
             col_name = ras.columns[col_idx]
-            return self._explode_voxel_column(ras, col_name)
+            new_ras = self._explode_voxel_column(ras, col_name)
+            if new_ras is not None:
+                pred_value.value = new_ras
+            return True
         return False
 
     def _resolve_edb(self, symbol):
@@ -353,26 +356,47 @@ class TranslateRegionDestroy(PatternWalker):
 
     @staticmethod
     def _explode_voxel_column(ras, col_name):
-        container = ras._container
-        if len(container) == 0:
-            return False
-        first_val = container[col_name].iloc[0]
+        """Build a new RAS with the voxel column exploded into tuples.
+
+        Uses only the public RAS interface. The ``unwrap()`` method
+        is used when available (``WrappedRelationalAlgebraSet``) to
+        avoid ``Constant``-wrapped rows that break tuple indexing.
+
+        Returns None if the column does not contain voxels (no conversion
+        needed).
+        """
+        if ras.is_empty():
+            return None
+        columns = list(ras.columns)
+        col_idx = columns.index(col_name)
+
+        # Unwrap to avoid Constant[tuple] rows from WrappedRA
+        inner = ras.unwrap() if hasattr(ras, 'unwrap') else ras
+
+        first_row = next(iter(inner), None)
+        if first_row is None:
+            return None
+        first_val = first_row[col_idx]
         if not hasattr(first_val, 'voxels') or isinstance(
             first_val, (str, bytes)
         ):
-            return False
-
-        def _convert_to_frozen_arrays(v):
-            if hasattr(v, 'voxels') and len(v.voxels) > 0:
-                return tuple(FrozenNDArray(row) for row in v.voxels)
             return None
 
-        new_col = container[col_name].apply(_convert_to_frozen_arrays)
-        mask = new_col.notna()
-        container = container.loc[mask].copy()
-        container[col_name] = new_col.loc[mask]
-        ras._container = container
-        return True
+        new_rows = []
+        for row in inner:
+            val = row[col_idx]
+            if hasattr(val, 'voxels') and len(val.voxels) > 0:
+                exploded = tuple(
+                    FrozenNDArray(v) for v in val.voxels
+                )
+                new_row = list(row)
+                new_row[col_idx] = exploded
+                new_rows.append(tuple(new_row))
+
+        if not new_rows:
+            return None
+
+        return type(ras)(iterable=new_rows)
 
     def _delegate_to_next_match(self, expression):
         skip = type(self).region_destroy
