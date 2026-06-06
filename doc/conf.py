@@ -8,6 +8,9 @@ import sys
 import subprocess
 from datetime import datetime
 
+import matplotlib
+matplotlib.use("Agg")
+
 # -- Path setup ---------------------------------------------------------------
 currentdir = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.abspath("../"))
@@ -39,6 +42,7 @@ extensions = [
     "sphinx_gallery.gen_gallery",
     "sphinx_design",
     "squall_lexer",
+    "sphinx_gallery.load_style",
 ]
 
 templates_path = ["_templates"]
@@ -53,9 +57,10 @@ sphinx_gallery_conf = {
     "gallery_dirs": "auto_examples",
     "doc_module": ("neurolang",),
     "backreferences_dir": "gen_api",
-    # Do not attempt to execute examples — neurolang requires Python <3.12
-    # and neuroimaging data not present in CI.
-    "plot_gallery": False,
+    "plot_gallery": True,
+    "capture_repr": ("_repr_html_", "__repr__"),
+    "abort_on_example_error": False,
+    "image_scrapers": ("matplotlib",),
 }
 
 # -- Autosummary / Autodoc ----------------------------------------------------

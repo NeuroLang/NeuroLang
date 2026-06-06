@@ -1,11 +1,10 @@
 # coding: utf-8
 r'''
-Loading and Querying the Destrieux et al. Atlas' Left Hemisphere
-========================================================================
+Loading and Querying the Destrieux Atlas' Left Hemisphere Gyri
+================================================================
 
-
-Uploading the Destrieux regions NeuroLang and
-executing a simple query.
+Upload the Destrieux regions into NeuroLang and
+execute a simple query, displaying a few selected regions.
 '''
 import warnings
 
@@ -60,12 +59,14 @@ with nl.scope as e:
 
 ###############################################################################
 # Visualise results
+# Show the first four matching regions in a concise 2×2 grid so the
+# sphinx-gallery thumbnail is informative.
 
-subplots = plt.subplots(
-    nrows=len(result), ncols=1,
-    figsize=(10, 5 * len(result))
-)[1]
+fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+for idx, (ax, result_row) in enumerate(zip(axes.ravel(), result[:4])):
+    region = result_row[0]
+    plotting.plot_roi(region.spatial_image(), axes=ax, title=f"Region {idx+1}")
+plt.tight_layout()
+plt.show()
 
-for (r, subplot) in zip(result, subplots):
-    region = r[0]
-    plotting.plot_roi(region.spatial_image(), axes=subplot)
+print(f"(Total {len(result)} left-hemisphere regions found)")
