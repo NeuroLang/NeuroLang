@@ -58,6 +58,41 @@ from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.utils import engine_registry
 
 
+def _parse_sort_spec(specs: list[str]) -> list[tuple[str, bool]]:
+    """Parse --sort flag values into (column, ascending) pairs.
+
+    Parameters
+    ----------
+    specs :
+        Raw strings from ``--sort``, each in ``column`` or ``column:dir``
+        format where ``dir`` is ``asc`` or ``desc``.
+
+    Returns
+    -------
+    list[tuple[str, bool]]
+        ``(column_name, ascending)`` tuples.  Ascending is ``True``.
+    """
+    sort_by: list[tuple[str, bool]] = []
+    for spec in specs:
+        parts = spec.split(":", maxsplit=1)
+        col = parts[0]
+        ascending = True
+        if len(parts) == 2:
+            direction = parts[1].lower()
+            if direction == "asc":
+                ascending = True
+            elif direction == "desc":
+                ascending = False
+            else:
+                print(
+                    f"Warning: invalid sort direction {parts[1]!r} "
+                    f"for column {col!r}, defaulting to ascending.",
+                    file=sys.stderr,
+                )
+        sort_by.append((col, ascending))
+    return sort_by
+
+
 def _read_query(args) -> str:
     """Obtain the Datalog program from the CLI arguments."""
     if args.file:
@@ -84,10 +119,23 @@ def _rename_unnamed_columns(df, column_names):
     return df
 
 
-def _emit(df, fmt):
+def _emit(df, fmt, sort_by=None):
     """Format a DataFrame in *fmt* mode (table, csv, or json)."""
     if df.empty:
         return "(empty)"
+    if sort_by:
+        columns, ascending = zip(*sort_by)
+        valid = [(c, a) for c, a in sort_by if c in df.columns]
+        invalid = [c for c, _ in sort_by if c not in df.columns]
+        for col in invalid:
+            print(
+                f"Warning: sort column {col!r} not found in result, "
+                f"ignoring.",
+                file=sys.stderr,
+            )
+        if valid:
+            cols, asc = zip(*valid)
+            df = df.sort_values(by=list(cols), ascending=list(asc))
     if fmt == "csv":
         return df.to_csv(index=False)
     if fmt == "json":
@@ -96,7 +144,8 @@ def _emit(df, fmt):
 
 
 def _format_result(
-    result, fmt: str = "table", column_names: Optional[list[str]] = None
+    result, fmt: str = "table", column_names: Optional[list[str]] = None,
+    sort_by: Optional[list[tuple[str, bool]]] = None,
 ) -> str:
     """Format a query result for display."""
     if result is None:
@@ -110,8 +159,11 @@ def _format_result(
             inner = result.value.unwrap()
             if hasattr(inner, "as_pandas_dataframe"):
                 return _emit(
-                    _rename_unnamed_columns(inner.as_pandas_dataframe(), column_names),
+                    _rename_unnamed_columns(
+                        inner.as_pandas_dataframe(), column_names
+                    ),
                     fmt,
+                    sort_by=sort_by,
                 )
             result = inner
 
@@ -125,7 +177,9 @@ def _format_result(
             arity = result.arity if hasattr(result, "arity") else len(rows[0])
             df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
 
-        return _emit(_rename_unnamed_columns(df, column_names), fmt)
+        return _emit(
+            _rename_unnamed_columns(df, column_names), fmt, sort_by=sort_by
+        )
     except Exception as exc:
         print(f"Warning: result formatting failed: {exc}", file=sys.stderr)
         return str(result)
@@ -214,6 +268,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="When used with --squall, print the Datalog IR (rules and "
         "queries) that the SQUALL program compiles to, then exit.  "
         "Useful for debugging and understanding the translation.",
+    )
+    parser.add_argument(
+        "--sort",
+        "-S",
+        action="append",
+        default=[],
+        metavar="COL[:dir]",
+        dest="sort",
+        help="Sort output by COL (ascending by default). "
+        "Append ':desc' for descending, ':asc' for ascending. "
+        "Repeatable for multi-key sorts (first key has highest priority).",
     )
 
     return parser
@@ -501,13 +566,15 @@ def main(argv: Optional[list] = None) -> None:
         sys.exit(1)
 
     t0 = time.perf_counter()
+    sort_by = _parse_sort_spec(args.sort)
 
     if args.squall:
         result = _execute_squall_program(nl, program)
         if isinstance(result, dict):
             for key, sub_result in result.items():
                 output = _format_result(
-                    sub_result, fmt=args.format, column_names=None
+                    sub_result, fmt=args.format, column_names=None,
+                    sort_by=sort_by,
                 )
                 if output:
                     print(f"── {key} ──")
@@ -515,7 +582,8 @@ def main(argv: Optional[list] = None) -> None:
                     print()
         else:
             output = _format_result(
-                result, fmt=args.format, column_names=None
+                result, fmt=args.format, column_names=None,
+                sort_by=sort_by,
             )
             if output:
                 print(output)
@@ -526,7 +594,8 @@ def main(argv: Optional[list] = None) -> None:
         else:
             column_names = None
         output = _format_result(
-            result, fmt=args.format, column_names=column_names
+            result, fmt=args.format, column_names=column_names,
+            sort_by=sort_by,
         )
         if output:
             print(output)
