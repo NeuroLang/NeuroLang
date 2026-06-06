@@ -418,6 +418,26 @@ class DatalogTransformer(Transformer):
             return None
         return None
 
+    @staticmethod
+    def _filter_prob_vars_outside(prob_vars, outside_connect):
+        """Keep only prob_vars that connect outside the probabilistic expression."""
+        return tuple(v for v in prob_vars if v in outside_connect)
+
+    @staticmethod
+    def _prob_vars_from_conjunction(subject, outside_connect):
+        """Extract prob_vars from a Conjunction, filtered to outside-connecting vars."""
+        return tuple(
+            v for v in extract_logic_free_variables(subject)
+            if v in outside_connect
+        )
+
+    @staticmethod
+    def _prob_vars_for_condition(subject, cond_body, outside_connect):
+        """Extract prob_vars from both sides of a ``//`` Condition, outside-connect filtered."""
+        all_vars = extract_logic_free_variables(subject)
+        all_vars |= extract_logic_free_variables(cond_body)
+        return tuple(v for v in all_vars if v in outside_connect)
+
     def _build_prob_rule(self, head, prob_specs, body):
         """Build rules from PROB/MARG markers in the body.
 
@@ -451,6 +471,7 @@ class DatalogTransformer(Transformer):
                         outside_var_set.add(arg)
 
         for spec in prob_specs:
+            # --- unpack spec ---
             if isinstance(spec, tuple) and len(spec) == 2 and isinstance(spec[0], str):
                 marker_name, args = spec
                 if len(args) == 3:
@@ -466,9 +487,7 @@ class DatalogTransformer(Transformer):
                     pred, result_var = spec
                     cond_body = None
 
-            # Unwrap single-formula conjunctions: PROB[p] queries parse as
-            # a Conjunction wrapping a single predicate when the grammar uses
-            # the conjunction rule (instead of predicate) for the inner part.
+            # Unwrap single-formula conjunctions
             inner = pred
             if isinstance(pred, Conjunction) and len(pred.formulas) == 1:
                 inner = pred.formulas[0]
@@ -476,79 +495,51 @@ class DatalogTransformer(Transformer):
             if classified is None:
                 continue
 
-            prob_vars, subject, _ = classified
+            _, subject, _ = classified
             is_marg = marker_name == "__MARG__"
             fresh_pred_sym = Symbol.fresh()
-            # Exclude result_var from outside_connecting vars — it carries
-            # the probability value, not a grouping variable.
             outside_connect = {
-                v for v in outside_var_set
-                if v != result_var
+                v for v in outside_var_set if v != result_var
             }
 
+            # --- determine prob_vars and body ---
             if cond_body is not None:
+                prob_vars = self._prob_vars_for_condition(
+                    subject, cond_body, outside_connect
+                )
                 fresh_body = Condition(subject, cond_body)
-                # Pull prob_vars from the full Condition (both subject and
-                # condition body).  When the subject is a Conjunction,
-                # _classify_prob_predicate returns empty prob_vars; and even
-                # for single predicates the condition body may contain
-                # variables (e.g. mentions(t,s)) not in the subject.
-                # All Condition variables are kept as prob_vars — the `//`
-                # conditional syntax means the user explicitly conditions
-                # on them.
-                prob_vars = extract_logic_free_variables(subject)
-                prob_vars |= extract_logic_free_variables(cond_body)
-                prob_vars = tuple(prob_vars & outside_connect)
-                fresh_head = fresh_pred_sym(
-                    *prob_vars, FunctionApplication(PROB, prob_vars)
-                )
-                query_body_atoms.append(fresh_pred_sym(*prob_vars, result_var))
             elif is_marg and isinstance(subject, Conjunction) and len(subject.formulas) > 1:
-                # MARG with conjunction (e.g. MARG[p1(x, y) & p2(y)] = p).
-                # Extract all variables from the conjunction to use as PROB
-                # arguments, then filter to only outside-connecting vars —
-                # the rest are marginalized by the probabilistic solver.
-                prob_vars = tuple(
-                    extract_logic_free_variables(subject) & outside_connect
-                )
+                prob_vars = self._prob_vars_from_conjunction(subject, outside_connect)
                 fresh_body = subject
-                fresh_head = fresh_pred_sym(
-                    *prob_vars, FunctionApplication(PROB, prob_vars)
-                )
-                query_body_atoms.append(fresh_pred_sym(*prob_vars, result_var))
             elif is_marg:
-                # Subject may be a bare Expression (FunctionApplication) due to
-                # ?conjunction inlining, or a Conjunction when there are multiple
-                # predicates. Normalize to Conjunction for the PROB wrapping.
-                if isinstance(subject, Conjunction):
-                    formulas = subject.formulas
-                else:
-                    formulas = (subject,)
+                formulas = (
+                    subject.formulas
+                    if isinstance(subject, Conjunction)
+                    else (subject,)
+                )
                 fresh_body = Conjunction(formulas)
                 fresh_head = fresh_pred_sym(
                     FunctionApplication(PROB, (Conjunction(formulas),))
                 )
                 query_body_atoms.append(fresh_pred_sym(result_var))
+                fresh_rules.append(Implication(fresh_head, fresh_body))
+                if result_var not in head_args:
+                    head_args.append(result_var)
+                continue
+            elif isinstance(subject, Conjunction) and len(subject.formulas) > 1:
+                prob_vars = self._prob_vars_from_conjunction(subject, outside_connect)
+                fresh_body = subject
             else:
-                # PROB with conjunction or single predicate
-                if isinstance(subject, Conjunction) and len(subject.formulas) > 1:
-                    # Extract all variables from conjunction and filter to
-                    # outside-connecting vars (same as MARG conjunction case).
-                    prob_vars = tuple(
-                        v for v in extract_logic_free_variables(subject)
-                        if v in outside_connect
-                    )
-                    fresh_body = subject
-                else:
-                    prob_vars = tuple(
-                        v for v in prob_vars if v in outside_connect
-                    )
-                    fresh_body = Conjunction((subject,))
-                fresh_head = fresh_pred_sym(
-                    *prob_vars, FunctionApplication(PROB, prob_vars)
+                prob_vars = self._filter_prob_vars_outside(
+                    classified[0], outside_connect
                 )
-                query_body_atoms.append(fresh_pred_sym(*prob_vars, result_var))
+                fresh_body = Conjunction((subject,))
 
+            # --- common head / atom (4 of 5 branches) ---
+            fresh_head = fresh_pred_sym(
+                *prob_vars, FunctionApplication(PROB, prob_vars)
+            )
+            query_body_atoms.append(fresh_pred_sym(*prob_vars, result_var))
             fresh_rules.append(Implication(fresh_head, fresh_body))
 
             if result_var not in head_args:
