@@ -347,6 +347,122 @@ class TestFormatResult:
         assert "x" in result
         assert "y" not in result
 
+    # -- Sort tests --------------------------------------------------------
+
+    def test_parse_sort_spec_empty(self):
+        from neurolang.utils.cli import _parse_sort_spec
+        assert _parse_sort_spec([]) == []
+
+    def test_parse_sort_spec_asc_default(self):
+        from neurolang.utils.cli import _parse_sort_spec
+        assert _parse_sort_spec(["x"]) == [("x", True)]
+
+    def test_parse_sort_spec_asc_explicit(self):
+        from neurolang.utils.cli import _parse_sort_spec
+        assert _parse_sort_spec(["x:asc"]) == [("x", True)]
+
+    def test_parse_sort_spec_desc(self):
+        from neurolang.utils.cli import _parse_sort_spec
+        assert _parse_sort_spec(["x:desc"]) == [("x", False)]
+
+    def test_parse_sort_spec_multiple(self):
+        from neurolang.utils.cli import _parse_sort_spec
+        result = _parse_sort_spec(["a", "b:desc", "c:asc"])
+        assert result == [("a", True), ("b", False), ("c", True)]
+
+    def test_parse_sort_spec_invalid_direction(self, capsys):
+        from neurolang.utils.cli import _parse_sort_spec
+        result = _parse_sort_spec(["x:sideways"])
+        assert result == [("x", True)]
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err
+
+    def test_sort_named_set_ascending(self):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(2, "b"), (1, "a"), (3, "c")]
+        )
+        result = _format_result(nras, sort_by=[("x", True)])
+        lines = result.strip().split("\n")
+        assert len(lines) == 4
+        # First data row should be (1, a) since x is sorted ascending
+        assert "1" in lines[1] and "a" in lines[1]
+
+    def test_sort_named_set_descending(self):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a"), (2, "b"), (3, "c")]
+        )
+        result = _format_result(nras, sort_by=[("x", False)])
+        lines = result.strip().split("\n")
+        assert len(lines) == 4
+        # First data row should be (3, c) since x is sorted descending
+        assert "3" in lines[1] and "c" in lines[1]
+
+    def test_sort_named_set_two_keys(self):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"),
+            iterable=[(1, "b"), (2, "a"), (1, "a")],
+        )
+        result = _format_result(
+            nras, sort_by=[("x", True), ("y", True)]
+        )
+        lines = result.strip().split("\n")
+        # Should be: (1,a), (1,b), (2,a)
+        assert "1" in lines[1] and "a" in lines[1]
+        assert "1" in lines[2] and "b" in lines[2]
+        assert "2" in lines[3] and "a" in lines[3]
+
+    def test_sort_unknown_column(self, capsys):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x",), iterable=[(2,), (1,)]
+        )
+        result = _format_result(nras, sort_by=[("nonexistent", True)])
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err
+        # Should still produce output, unsorted
+        assert "x" in result
+
+    def test_sort_with_csv_format(self):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(2, "b"), (1, "a")]
+        )
+        result = _format_result(
+            nras, fmt="csv", sort_by=[("x", True)]
+        )
+        lines = result.strip().split("\n")
+        assert lines[0] == "x,y"
+        assert lines[1] == "1,a"
+        assert lines[2] == "2,b"
+
+    def test_sort_with_json_format(self):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(2, "b"), (1, "a")]
+        )
+        result = _format_result(
+            nras, fmt="json", sort_by=[("x", True)]
+        )
+        import json
+        data = json.loads(result)
+        assert data[0]["x"] == 1
+        assert data[1]["x"] == 2
+
 
 # ---------------------------------------------------------------------------
 # _execute_program
