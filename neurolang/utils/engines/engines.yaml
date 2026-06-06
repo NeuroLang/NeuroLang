@@ -8,9 +8,15 @@ engines:
     use_base_symbols: true
     builtins: [exp, log, startswith]
     python_init: "neurolang.utils.engines.neurosynth.init"
+    atlases:
+      schaefer:
+        predicate_name: schaefer
+        n_rois: 100
+        resolution_mm: 2
+        yeo_networks: 17
     datalog_init: |
       study_with_peaks(S) :- peak_reported(I, J, K, S)
-      origin_peak(I, J, K, S) :- peak_reported(I, J, K, S), (I == 0)
+      mentions(t, s) :- term_in_study_tfidf(t, v, s), (v > 0.03)
     probabilistic_choice:
       selected_study:
         source: study
