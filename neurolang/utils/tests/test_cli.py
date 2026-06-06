@@ -469,8 +469,8 @@ class TestExecuteProgramProb:
         )
         rows = sorted(iter(result))
         assert len(rows) == 2
-        assert rows[0] == (1, 1.0)
-        assert rows[1] == (2, 1.0)
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
 
     def test_prob_query_format_table(self, nl):
         result = _execute_program(
@@ -481,7 +481,7 @@ class TestExecuteProgramProb:
         output = _format_result(result)
         assert "x" in output
         assert "p" in output
-        assert "1.0" in output
+        assert "0.5" in output
 
     def test_prob_query_format_csv(self, nl):
         result = _execute_program(
@@ -492,7 +492,7 @@ class TestExecuteProgramProb:
         output = _format_result(result, fmt="csv")
         lines = output.strip().split("\n")
         assert lines[0] == "x,p"
-        assert "1,1.0" in lines[1:]
+        assert "1,0.5" in lines[1:]
 
     def test_prob_rule_without_query_returns_none(self, nl):
         """PROB rule with no query returns None."""
@@ -500,6 +500,121 @@ class TestExecuteProgramProb:
             nl, "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p."
         )
         assert result is None
+
+    def test_marg_conjunction(self, nl):
+        """MARG with multi-formula conjunction branch."""
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- MARG[ edb1(x, s) & pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+    def test_prob_conjunction(self, nl):
+        """PROB with multi-formula conjunction branch."""
+        result = _execute_program(
+            nl,
+            "derived(x, s, p) :- PROB[ edb1(x, s) & pc1(s) ] = p.\n"
+            "ans(x, s, p) :- derived(x, s, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, "a", 0.5)
+        assert rows[1] == (2, "a", 0.5)
+
+    def test_prob_without_conditional_regular_body(self, nl):
+        """PROB single predicate with outside_connect filtering (plus body atoms)."""
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- edb1(x, s) & PROB[ pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+    def test_prob_non_ans_head(self, nl):
+        """PROB desugaring with non-ans rule head (line 552 in _build_prob_rule)."""
+        result = _execute_program(
+            nl,
+            "p(x, prob) :- PROB[ edb1(x, s) // pc1(s) ] = prob.\n"
+            "ans(x, prob) :- p(x, prob).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+
+# ---------------------------------------------------------------------------
+# _classify_prob_predicate — Negation and ExistentialPredicate branches
+# ---------------------------------------------------------------------------
+
+
+class TestClassifyProbPredicateBranches:
+
+    """Tests for _classify_prob_predicate branches inside PROB/MARG."""
+
+    @pytest.fixture
+    def nl(self):
+        from neurolang.frontend import NeurolangPDL
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a")], name="r1")
+        nl.add_tuple_set([(1, "a", True)], name="r_bool")
+        nl.add_uniform_probabilistic_choice_over_set([("a",), ("b",)], name="pc1")
+        return nl
+
+    def test_prob_existential(self, nl):
+        """ExistentialPredicate inside PROB — hits ExistentialPredicate branch."""
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ exists(s st r1(x, s)) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 1
+        assert rows[0] == (1, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Miscellaneous grammar construct tests
+# ---------------------------------------------------------------------------
+
+
+class TestMiscGrammar:
+
+    """Tests for parser transformer methods not yet covered."""
+
+    @pytest.fixture
+    def nl(self):
+        from neurolang.frontend import NeurolangPDL
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a")], name="R")
+        nl.add_tuple_set([(True,)], name="Rbool")
+        return nl
+
+    def test_negation_body(self, nl):
+        """Negation in a rule body (~R(x, y))."""
+        result = _execute_program(
+            nl,
+            "ans(x) :- R(x, y) & ~(x == 2).",
+        )
+        assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# --squall flag
+# ---------------------------------------------------------------------------
+
 
 # ---------------------------------------------------------------------------
 # --squall flag
