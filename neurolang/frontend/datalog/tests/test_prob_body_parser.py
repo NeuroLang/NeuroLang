@@ -502,6 +502,94 @@ def test_aggregate_with_group_vars():
     assert isinstance(result, Union)
 
 
+# --- Combined aggregation + probability tests ---
+
+
+def test_aggregate_with_prob_body():
+    """AGGREGATE with PROB body predicate in the conjunction."""
+    result = _parse("ans(x, cnt) :- AGGREGATE[x](PROB[R(x)] = p @ count(x)) = cnt.")
+    assert isinstance(result, Union)
+
+
+def test_aggregate_with_marg_body():
+    """AGGREGATE with MARG body predicate in the conjunction."""
+    result = _parse("ans(x, cnt) :- AGGREGATE[x](MARG[R(x)] = p @ count(x)) = cnt.")
+    assert isinstance(result, Union)
+
+
+def test_mixed_regular_and_prob_body():
+    """Rule body mixing regular and PROB predicates."""
+    result = _parse("ans(x, p) :- R(x), PROB[R(x)] = p.")
+    assert isinstance(result, Union)
+
+
+def test_mixed_regular_and_marg_body():
+    """Rule body mixing regular and MARG predicates."""
+    result = _parse("ans(x, p) :- R(x), MARG[R(x)] = p.")
+    assert isinstance(result, Union)
+
+
+def test_probabilistic_rule_with_regular_body():
+    """Probabilistic rule with regular predicates in the body."""
+    result = _parse("p(x) :: 0.5 :- R(x), q(x).")
+    assert isinstance(result, Union)
+
+
+def test_multiple_mixed_prob_specs():
+    """Multiple PROB specs with regular predicates interleaved."""
+    result = _parse(
+        "ans(x, p1, p2) :- R(x), PROB[R(x)] = p1, q(x), PROB[R(x)] = p2."
+    )
+    assert isinstance(result, Union)
+
+
+def test_direct_extract_special_body_atoms_mixed():
+    """_extract_special_body_atoms with regular + PROB atoms."""
+    from ..standard_syntax import DatalogTransformer
+    from neurolang.datalog import Conjunction
+    from neurolang.expressions import Symbol, FunctionApplication
+    t = DatalogTransformer()
+    reg = FunctionApplication(Symbol("p"), (Symbol("x"),))
+    prob_marker = FunctionApplication(Symbol("__PROB__"), (reg, None, Symbol("z")))
+    conj = Conjunction((reg, prob_marker))
+    regular, prob_specs = t._extract_special_body_atoms(conj)
+    assert len(regular) == 1
+    assert len(prob_specs) == 1
+    assert prob_specs[0][0] == "__PROB__"
+
+
+def test_direct_extract_special_body_atoms_all_regular():
+    """_extract_special_body_atoms with only regular atoms."""
+    from ..standard_syntax import DatalogTransformer
+    from neurolang.datalog import Conjunction
+    from neurolang.expressions import Symbol, FunctionApplication
+    t = DatalogTransformer()
+    reg1 = FunctionApplication(Symbol("p"), (Symbol("x"),))
+    reg2 = FunctionApplication(Symbol("q"), (Symbol("x"),))
+    conj = Conjunction((reg1, reg2))
+    regular, prob_specs = t._extract_special_body_atoms(conj)
+    assert len(regular) == 2
+    assert len(prob_specs) == 0
+
+
+def test_direct_extract_special_body_atoms_empty():
+    """_extract_special_body_atoms with only prob atoms."""
+    from ..standard_syntax import DatalogTransformer
+    from neurolang.datalog import Conjunction
+    from neurolang.expressions import Symbol, FunctionApplication
+    t = DatalogTransformer()
+    prob_marker = FunctionApplication(
+        Symbol("__PROB__"), (Symbol("p"), None, Symbol("z"))
+    )
+    marg_marker = FunctionApplication(
+        Symbol("__MARG__"), (Symbol("q"), None, Symbol("w"))
+    )
+    conj = Conjunction((prob_marker, marg_marker))
+    regular, prob_specs = t._extract_special_body_atoms(conj)
+    assert len(regular) == 0
+    assert len(prob_specs) == 2
+
+
 def test_direct_transformer_minus_op_single():
     """Direct call to minus_op with single int covers non-Expression."""
     from ..standard_syntax import DatalogTransformer
