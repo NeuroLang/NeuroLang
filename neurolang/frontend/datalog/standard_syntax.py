@@ -488,9 +488,17 @@ class DatalogTransformer(Transformer):
 
             if cond_body is not None:
                 fresh_body = Condition(subject, cond_body)
-                # Keep all Condition variables as prob_vars — the `//`
+                # Pull prob_vars from the full Condition (both subject and
+                # condition body).  When the subject is a Conjunction,
+                # _classify_prob_predicate returns empty prob_vars; and even
+                # for single predicates the condition body may contain
+                # variables (e.g. mentions(t,s)) not in the subject.
+                # All Condition variables are kept as prob_vars — the `//`
                 # conditional syntax means the user explicitly conditions
-                # on these variables, so they should not be marginalized.
+                # on them.
+                prob_vars = extract_logic_free_variables(subject)
+                prob_vars |= extract_logic_free_variables(cond_body)
+                prob_vars = tuple(prob_vars & outside_connect)
                 fresh_head = fresh_pred_sym(
                     *prob_vars, FunctionApplication(PROB, prob_vars)
                 )
@@ -501,8 +509,7 @@ class DatalogTransformer(Transformer):
                 # arguments, then filter to only outside-connecting vars —
                 # the rest are marginalized by the probabilistic solver.
                 prob_vars = tuple(
-                    v for v in extract_logic_free_variables(subject)
-                    if v in outside_connect
+                    extract_logic_free_variables(subject) & outside_connect
                 )
                 fresh_body = subject
                 fresh_head = fresh_pred_sym(
