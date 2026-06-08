@@ -564,7 +564,7 @@ def test_prob_head_rule_simple():
 
     expected = Union((
         Implication(
-            p(x),
+            p(x, FunctionApplication(PROB, (x,))),
             Conjunction((body(x),)),
         ),
     ))
@@ -581,7 +581,7 @@ def test_prob_head_rule_conditional():
 
     expected = Union((
         Implication(
-            p(x),
+            p(x, FunctionApplication(PROB, (x,))),
             Condition(a(x), b(x)),
         ),
     ))
@@ -756,12 +756,12 @@ def test_marg_body_with_filter():
 
     expected = Union((
         Implication(
-            fresh(FunctionApplication(PROB, (Conjunction((pred(x),)),))),
+            fresh(x, FunctionApplication(PROB, (x,))),
             Conjunction((pred(x),)),
         ),
         Query(
             ans(x, p),
-            Conjunction((filter_(x), fresh(p))),
+            Conjunction((filter_(x), fresh(x, p))),
         ),
     ))
     assert res == expected
@@ -857,7 +857,7 @@ def test_marg_head_rule_simple():
     res = parser("MARG[pred(x)] :- body(x)")
     expected = Union((
         Implication(
-            Conjunction((pred(x),)),
+            Conjunction((pred(x, FunctionApplication(PROB, (x,))),)),
             Conjunction((body(x),)),
         ),
     ))
@@ -873,7 +873,7 @@ def test_marg_head_rule_conditional():
     res = parser("MARG[pred(x) // cond(x)] :- body(x)")
     expected = Union((
         Implication(
-            Conjunction((pred(x),)),
+            pred(x, FunctionApplication(PROB, (x,))),
             Condition(
                 Conjunction((pred(x),)),
                 Conjunction((cond(x),)),
@@ -1071,7 +1071,7 @@ def test_underscore_wildcard():
 def test_agg_body_simple():
     """
     AGGREGATE[group](body @ count(var)) = result
-    → Implication with AggregationApplication appended to head args.
+    → Implication with aggregate fn call in head args.
     """
     res = parser(
         "study_count(r, c) :-"
@@ -1080,41 +1080,39 @@ def test_agg_body_simple():
     )
     fml = res.formulas[0]
     assert isinstance(fml, Implication)
-    # Head should include group var + AggregationApplication
     head_args = fml.consequent.args
     assert len(head_args) == 2
     assert head_args[0] == Symbol("r")
-    assert isinstance(head_args[1], AggregationApplication)
-    assert head_args[1].functor == Symbol("count")
-    assert head_args[1].args == (Symbol("s"),)
-    # Body should be conjunction of both atoms
+    assert head_args[1] == Symbol("count")(Symbol("s"))
     assert isinstance(fml.antecedent, Conjunction)
     assert len(fml.antecedent.formulas) == 2
 
 
 def test_agg_body_empty_group():
-    """AGGREGATE[()] — empty group produces only AggregationApplication in head."""
+    """AGGREGATE[()] — empty group desugars into fresh predicate + main rule."""
     res = parser("avg_w(m) :- AGGREGATE[()](weights(w) @ mean(w)) = m")
-    fml = res.formulas[0]
-    assert isinstance(fml, Implication)
-    head_args = fml.consequent.args
-    assert len(head_args) == 1
-    assert isinstance(head_args[0], AggregationApplication)
-    assert head_args[0].functor == Symbol("mean")
+    assert len(res.formulas) == 2
+    fresh_fml = res.formulas[0]
+    main_fml = res.formulas[1]
+    assert isinstance(fresh_fml, Implication)
+    assert isinstance(main_fml, Implication)
+    fresh_args = fresh_fml.consequent.args
+    assert len(fresh_args) == 1
+    assert fresh_args[0] == Symbol("mean")(Symbol("w"))
 
 
 def test_agg_body_single_predicate():
-    """AGGREGATE with a single body atom (no conjunction)."""
+    """AGGREGATE with a single body atom (no conjunction), empty group."""
     res = parser("max_v(m) :- AGGREGATE[()](value(v) @ max(v)) = m")
-    fml = res.formulas[0]
-    assert isinstance(fml, Implication)
-    head_args = fml.consequent.args
-    assert len(head_args) == 1
-    assert isinstance(head_args[0], AggregationApplication)
-    assert head_args[0].functor == Symbol("max")
-    # Single-atom body produces a Conjunction with one element
-    assert isinstance(fml.antecedent, Conjunction)
-    assert len(fml.antecedent.formulas) == 1
+    assert len(res.formulas) == 2
+    fresh_fml = res.formulas[0]
+    main_fml = res.formulas[1]
+    assert isinstance(fresh_fml, Implication)
+    fresh_args = fresh_fml.consequent.args
+    assert len(fresh_args) == 1
+    assert fresh_args[0] == Symbol("max")(Symbol("v"))
+    assert isinstance(fresh_fml.antecedent, Conjunction)
+    assert len(fresh_fml.antecedent.formulas) == 1
 
 
 def test_agg_body_mixed_disjunction_refused():

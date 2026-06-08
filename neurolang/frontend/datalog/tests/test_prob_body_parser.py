@@ -5,6 +5,7 @@ predicates and related constructs without executing through the solver.
 """
 
 import operator
+from os import X_OK
 import pytest
 
 from lark import Tree, Token
@@ -267,7 +268,7 @@ def test_prob_head_rule_simple():
     result = _parse("PROB[p(x)] :- q(x).")
     assert isinstance(list(result.formulas)[0], Implication)
 
-    expected = Union((Implication(p_(x_), Conjunction((q_(x_),))),))
+    expected = Union((Implication(p_(x_, PROB(x_)), Conjunction((q_(x_),))),))
     assert weak_eq(result, expected)
 
 
@@ -276,7 +277,7 @@ def test_prob_head_rule_conditional():
     result = _parse("PROB[p(x) // r(x, s)] :- q(s).")
 
     expected = Union(
-        (Implication(p_(x_), Condition(p_(x_), Conjunction((r_(x_, s_),)))),)
+        (Implication(p_(x_, PROB(x_)), Condition(p_(x_), Conjunction((r_(x_, s_),)))),)
     )
     assert weak_eq(result, expected)
 
@@ -286,7 +287,7 @@ def test_marg_head_rule_simple():
     result = _parse("MARG[p(x)] :- q(x).")
     assert isinstance(list(result.formulas)[0], Implication)
 
-    expected = Union((Implication(Conjunction((p_(x_),)), Conjunction((q_(x_),))),))
+    expected = Union((Implication(Conjunction((p_(x_, PROB(x_)),)), Conjunction((q_(x_),))),))
     assert weak_eq(result, expected)
 
 
@@ -297,7 +298,7 @@ def test_marg_head_rule_conditional():
     expected = Union(
         (
             Implication(
-                Conjunction((p_(x_),)),
+                p_(x_, PROB(x_)),
                 Condition(Conjunction((p_(x_),)), Conjunction((r_(x_, s_),))),
             ),
         )
@@ -588,7 +589,10 @@ def test_aggregate_assign_empty():
     """AGGREGATE without group vars — hits agg_assign_empty."""
     result = _parse("ans(c) :- AGGREGATE[](R(x, y) @ count(y)) = c.")
 
-    expected = Union((Implication(ans_(count_(y_)), Conjunction((R_(x_, y_),))),))
+    expected = Union((
+        Implication(Symbol("fresh_00000000")(count_(y_)), Conjunction((R_(x_, y_),))),
+        Implication(ans_(c_), Conjunction((Symbol("fresh_00000000")(c_),))),
+    ))
     assert weak_eq(result, expected)
 
 
@@ -644,7 +648,11 @@ def test_aggregate_fn_call():
     """AGGREGATE fn call — hits agg_fn_call transformer."""
     result = _parse("ans(cnt) :- AGGREGATE[](R(x, y) @ count(x)) = cnt.")
 
-    expected = Union((Implication(ans_(count_(x_)), Conjunction((R_(x_, y_),))),))
+    expected = Union((
+        Implication(Symbol("fresh_00000000")(count_(x_)), Conjunction((R_(x_, y_),))),
+        Implication(ans_(cnt_), Conjunction((Symbol("fresh_00000000")(cnt_),))),
+
+    ))
     assert weak_eq(result, expected)
 
 
@@ -1099,13 +1107,13 @@ def test_aggregate_with_prob_body():
 
 def test_aggregate_with_marg_body():
     """AGGREGATE with MARG body predicate in the conjunction."""
-    result = _parse("ans(x, cnt) :- AGGREGATE[x](MARG[R(x)] = p @ count(x)) = cnt.")
+    result = _parse("p(x, cnt) :- AGGREGATE[x](MARG[R(x)] = p @ count(x)) = cnt.")
 
     expected = Union(
-        (
+        (   Implication(Symbol("fresh_00000000")(x_, PROB(x_)), R_(x_)),
             Implication(
-                ans_(x_, count_(x_)),
-                Conjunction((__MARG__(Conjunction((R_(x_),)), p_),)),
+                p_(x_, count_(x_)),
+                Conjunction((Symbol("fresh_00000000")(x_, p_),)),
             ),
         )
     )
@@ -1140,7 +1148,7 @@ def test_mixed_regular_and_marg_body():
     expected = Union(
         (
             Implication(
-                Symbol("fresh_00000011")(PROB(Conjunction((R_(x_),)))),
+                Symbol("fresh_00000011")(x_, PROB(x_)),
                 Conjunction((R_(x_),)),
             ),
             Query(
@@ -1148,7 +1156,7 @@ def test_mixed_regular_and_marg_body():
                 Conjunction(
                     (
                         R_(x_),
-                        Symbol("fresh_00000011")(p_),
+                        Symbol("fresh_00000011")(x_, p_),
                     )
                 ),
             ),
