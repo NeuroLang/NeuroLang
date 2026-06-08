@@ -5,7 +5,6 @@ predicates and related constructs without executing through the solver.
 """
 
 import operator
-from os import X_OK
 import pytest
 
 from lark import Tree, Token
@@ -1108,12 +1107,11 @@ def test_aggregate_with_marg_body():
     result = _parse("p(x, cnt) :- AGGREGATE[x](MARG[R(x)] = p @ count(x)) = cnt.")
 
     expected = Union(
-        (   Implication(Symbol("fresh_00000000")(x_, PROB(x_)), R_(x_)),
-            Implication(
-                p_(x_, count_(x_)),
-                Conjunction((Symbol("fresh_00000000")(x_, p_),)),
-            ),
-        )
+        (Implication(Symbol("fresh_00000000")(x_, PROB(x_)), R_(x_)),
+         Implication(
+             p_(x_, count_(x_)),
+             Conjunction((Symbol("fresh_00000000")(x_, p_),)),
+         ),)
     )
     assert weak_eq(result, expected)
 

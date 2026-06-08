@@ -19,7 +19,6 @@ from ....exceptions import UnexpectedTokenError
 from ....probabilistic.expressions import (
     PROB,
     Condition,
-    ProbabilisticChoice,
     ProbabilisticFact,
 )
 from ..standard_syntax import ExternalSymbol, parser
@@ -481,7 +480,7 @@ def test_command_syntax():
 
 # ── New syntax: Aggregation in rule head ─────────────────────────────────────
 
-from ....datalog.expressions import AggregationApplication
+from ....datalog.expressions import AggregationApplication  # noqa: E402
 
 
 def test_head_aggregation_in_query():
@@ -868,7 +867,6 @@ def test_marg_head_rule_conditional():
     """MARG[pred(x) // cond(x)] :- body(x) — conditional marginal rule."""
     pred = Symbol("pred")
     cond = Symbol("cond")
-    body = Symbol("body")
     x = Symbol("x")
     res = parser("MARG[pred(x) // cond(x)] :- body(x)")
     expected = Union((
@@ -970,7 +968,6 @@ def test_prob_body_existential():
         ),
     ))
     assert res == expected
-
 
 
 # ── New syntax: SUCC body predicate (no-op) ──────────────────────────────────
@@ -1108,7 +1105,6 @@ def test_agg_body_single_predicate():
     res = parser("max_v(m) :- AGGREGATE[()](value(v) @ max(v)) = m")
     assert len(res.formulas) == 2
     fresh_fml = res.formulas[0]
-    main_fml = res.formulas[1]
     assert isinstance(fresh_fml, Implication)
     fresh_args = fresh_fml.consequent.args
     assert len(fresh_args) == 1

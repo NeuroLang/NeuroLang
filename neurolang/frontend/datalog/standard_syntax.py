@@ -605,9 +605,11 @@ class DatalogTransformer(Transformer):
             if result_var not in head_args:
                 head_args.append(result_var)
 
-        if isinstance(head, Query) or (isinstance(head, Expression)
-                and hasattr(head, 'functor')
-                and head.functor == Symbol("ans")):
+        if isinstance(head, Query) or (
+            isinstance(head, Expression)
+            and hasattr(head, 'functor')
+            and head.functor == Symbol("ans")
+        ):
             new_head = head.functor(*head_args)
         elif hasattr(head, 'functor'):
             new_head = head.functor(*head_args)
@@ -941,7 +943,7 @@ class DatalogTransformer(Transformer):
         )
 
     def command(self, ast):
-        if ast[1] == None:
+        if ast[1] is None:
             cmd = Command(ast[0], (), ())
         else:
             # only args, only kwargs or both
