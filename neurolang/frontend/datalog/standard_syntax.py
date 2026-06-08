@@ -683,13 +683,14 @@ class DatalogTransformer(Transformer):
 
                 head_args = list(head.args) if hasattr(head, 'args') and head.args else []
 
+                aggregation = AggregationApplication(agg_fn_call.functor, agg_fn_call.args)
                 new_head_args = []
                 for arg in head_args:
                     if (isinstance(arg, Symbol)
                             and result_var is not None
                             and isinstance(result_var, Symbol)
                             and arg.name == result_var.name):
-                        new_head_args.append(agg_fn_call)
+                        new_head_args.append(aggregation)
                     else:
                         new_head_args.append(arg)
                 new_head = head.functor(*new_head_args)
@@ -711,13 +712,14 @@ class DatalogTransformer(Transformer):
         head_args = list(head.args) if hasattr(head, 'args') and head.args else []
 
         if group_vars:
+            aggregation = AggregationApplication(agg_fn_call.functor, agg_fn_call.args)
             new_args = []
             for arg in head_args:
                 if (isinstance(arg, Symbol)
                         and result_var is not None
                         and isinstance(result_var, Symbol)
                         and arg.name == result_var.name):
-                    new_args.append(agg_fn_call)
+                    new_args.append(aggregation)
                 else:
                     new_args.append(arg)
             new_head = head.functor(*new_args)

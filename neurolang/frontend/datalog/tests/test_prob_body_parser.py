@@ -581,7 +581,7 @@ def test_aggregate_assign_vars():
     """AGGREGATE with group vars — hits agg_assign_vars."""
     result = _parse("ans(x, c) :- AGGREGATE[x](R(x, y) @ count(y)) = c.")
 
-    expected = Union((Implication(ans_(x_, count_(y_)), Conjunction((R_(x_, y_),))),))
+    expected = Union((Implication(ans_(x_, AggregationApplication(count_, (y_,))), Conjunction((R_(x_, y_),))),))
     assert weak_eq(result, expected)
 
 
@@ -1084,9 +1084,7 @@ def test_aggregate_with_group_vars():
     """AGGREGATE with group vars and extra head args."""
     result = _parse("ans(x, cnt) :- AGGREGATE[x](R(x, y) @ count(y)) = cnt.")
 
-    # --- Combined aggregation + probability tests ---
-
-    expected = Union((Implication(ans_(x_, count_(y_)), Conjunction((R_(x_, y_),))),))
+    expected = Union((Implication(ans_(x_, AggregationApplication(count_, (y_,))), Conjunction((R_(x_, y_),))),))
     assert weak_eq(result, expected)
 
 

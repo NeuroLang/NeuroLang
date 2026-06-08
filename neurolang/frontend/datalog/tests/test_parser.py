@@ -1071,7 +1071,7 @@ def test_underscore_wildcard():
 def test_agg_body_simple():
     """
     AGGREGATE[group](body @ count(var)) = result
-    → Implication with aggregate fn call in head args.
+    → Implication with AggregationApplication in head args.
     """
     res = parser(
         "study_count(r, c) :-"
@@ -1083,7 +1083,9 @@ def test_agg_body_simple():
     head_args = fml.consequent.args
     assert len(head_args) == 2
     assert head_args[0] == Symbol("r")
-    assert head_args[1] == Symbol("count")(Symbol("s"))
+    assert isinstance(head_args[1], AggregationApplication)
+    assert head_args[1].functor == Symbol("count")
+    assert head_args[1].args == (Symbol("s"),)
     assert isinstance(fml.antecedent, Conjunction)
     assert len(fml.antecedent.formulas) == 2
 
