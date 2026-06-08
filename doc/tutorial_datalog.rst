@@ -705,6 +705,42 @@ probability) also exist:
     p(x) :: exp(-d / 5.0) :- a(x, d), d < 0.8.
 
 
+10.6 Probabilistic Choices
+---------------------------
+
+Probabilistic choices represent mutually exclusive alternatives — exactly one
+alternative from each choice group holds in any possible world.  This is
+different from probabilistic facts (``::``), where each fact is an
+independent Bernoulli trial.
+
+The choice operators are ``^`` and ``:~:`` (both are equivalent):
+
+**Choice fact** — a standalone choice with a fixed probability:
+
+.. code-block:: none
+
+    0.3 ^ choice('a').
+    0.7 ^ choice('b').
+
+This declares two mutually exclusive alternatives: ``choice('a')`` holds with
+probability 0.3 and ``choice('b')`` holds with probability 0.7.  The
+probabilities in a choice group must sum to 1.
+
+**Choice rule** — a choice whose head depends on a body:
+
+.. code-block:: none
+
+    study_region(s, r) ^ (1 / c) :- study(s), region(r).
+
+Here the probability expression ``(1 / c)`` is evaluated at runtime; each
+tuple in the body produces one arm of the choice.  The ``:~:`` operator can
+be used interchangeably:
+
+.. code-block:: none
+
+    study_region(s, r) :~: (1 / c) :- study(s), region(r).
+
+
 .. _appendix-a-datalog:
 
 Appendix A: Running Datalog from Python

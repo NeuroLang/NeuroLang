@@ -25,6 +25,7 @@ from ...logic.expression_processing import extract_logic_free_variables
 from ...probabilistic.expressions import (
     PROB,
     Condition,
+    ProbabilisticChoice,
     ProbabilisticFact,
 )
 from ...type_system import Unknown
@@ -43,6 +44,8 @@ expressions : (expression)+
             | fact
             | probabilistic_rule
             | probabilistic_fact
+            | probabilistic_choice_rule
+            | probabilistic_choice_fact
             | prob_head_rule
             | marg_head_rule
             | succ_head_rule
@@ -133,6 +136,10 @@ STATEMENT_OP : ":="
 
 probabilistic_fact : ( arithmetic_operation | int_ext_identifier ) PROBA_OP constant_predicate
 PROBA_OP : "::"
+
+probabilistic_choice_fact : ( arithmetic_operation | int_ext_identifier ) CHOICE_OP constant_predicate
+probabilistic_choice_rule : head CHOICE_OP arithmetic_operation IMPLICATION (condition | body)
+CHOICE_OP : "^" | ":~:"
 
 command : "." cmd_identifier "(" [ cmd_args ] ")"
 cmd_args : cmd_arg ("," cmd_arg)*
@@ -940,6 +947,21 @@ class DatalogTransformer(Transformer):
         return Implication(
             ProbabilisticFact(ast[0], ast[2]),
             Constant(True),
+        )
+
+    def probabilistic_choice_fact(self, ast):
+        return Implication(
+            ProbabilisticChoice(ast[0], ast[2]),
+            Constant(True),
+        )
+
+    def probabilistic_choice_rule(self, ast):
+        head = ast[0]
+        probability = ast[2]
+        body = ast[4]
+        return Implication(
+            ProbabilisticChoice(probability, head),
+            body,
         )
 
     def command(self, ast):

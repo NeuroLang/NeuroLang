@@ -19,6 +19,7 @@ from ....exceptions import UnexpectedTokenError
 from ....probabilistic.expressions import (
     PROB,
     Condition,
+    ProbabilisticChoice,
     ProbabilisticFact,
 )
 from ..standard_syntax import ExternalSymbol, parser
@@ -239,6 +240,72 @@ def test_probabilistic_fact():
             ),
         )
     )
+    assert res == expected
+
+
+# ── Probabilistic choice syntax (^ and :~:) ──────────────────────────────────
+
+
+def test_probabilistic_choice_fact_caret():
+    A = Symbol('A')
+    p = Symbol('p')
+    res = parser('p ^ A(3)')
+    assert res == Union((
+        Implication(
+            ProbabilisticChoice(p, A(Constant(3.))),
+            Constant(True),
+        ),
+    ))
+
+
+def test_probabilistic_choice_fact_tilde():
+    A = Symbol('A')
+    res = parser('0.8 :~: A("a b", 3)')
+    assert res == Union((
+        Implication(
+            ProbabilisticChoice(
+                Constant(0.8),
+                A(Constant("a b"), Constant(3.)),
+            ),
+            Constant(True),
+        ),
+    ))
+
+
+def test_probabilistic_choice_rule_caret():
+    B = Symbol("B")
+    A = Symbol("A")
+    x = Symbol("x")
+    d = Symbol("d")
+    exp = Symbol("exp")
+    res = parser("B(x) ^ exp(-d / 5.0) :- A(x, d)")
+    expected = Union((
+        Implication(
+            ProbabilisticChoice(
+                FunctionApplication(
+                    exp,
+                    (Constant(truediv)(
+                        Constant(mul)(Constant(-1), d), Constant(5.0)
+                    ),),
+                ),
+                B(x),
+            ),
+            Conjunction((A(x, d),)),
+        ),
+    ))
+    assert res == expected
+
+
+def test_probabilistic_choice_rule_tilde():
+    B = Symbol("B")
+    x = Symbol("x")
+    res = parser("B(x) :~: 0.3 :- A(x)")
+    expected = Union((
+        Implication(
+            ProbabilisticChoice(Constant(0.3), B(x)),
+            Conjunction((Symbol("A")(x),)),
+        ),
+    ))
     assert res == expected
 
 
