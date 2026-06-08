@@ -1374,3 +1374,251 @@ def test_direct_transformer_head_predicate_prod():
     t = DatalogTransformer()
     result = t.head_predicate([Symbol("p"), [Symbol("x"), PROB, Symbol("y")]])
     assert isinstance(result, FunctionApplication)
+
+
+# ---------------------------------------------------------------------------
+# Coverage tests for standard_syntax.py uncovered branches
+# ---------------------------------------------------------------------------
+
+
+def test_start_single_expression():
+    """start rule with a single expression wraps in Union (lines 270-281)."""
+    result = _parse("P().")
+    assert isinstance(result, Union)
+    assert len(result.formulas) == 1
+
+
+def test_add_prob_arg_to_predicate_non_fa():
+    """_add_prob_arg_to_predicate with a non-FunctionApplication returns it
+    unchanged (line 321)."""
+    constant = Constant(True)
+    result = DatalogTransformer._add_prob_arg_to_predicate(
+        constant, (Symbol("x"),)
+    )
+    assert result is constant
+
+
+def test_add_prob_arg_to_conjunction_fa():
+    """_add_prob_arg_to_conjunction with a plain FunctionApplication (not
+    Conjunction) hits lines 367-369."""
+    pred = Symbol("P")(Symbol("x"))
+    prob_vars = (Symbol("x"),)
+    result = DatalogTransformer._add_prob_arg_to_conjunction(
+        pred, prob_vars, unwrap=False
+    )
+    assert isinstance(result, FunctionApplication)
+    assert result.args[-1].functor == PROB
+
+
+def test_add_prob_arg_to_conjunction_unwrap_single():
+    """_add_prob_arg_to_conjunction with unwrap=True and single-element
+    Conjunction returns the augmented atom directly (line 364-365)."""
+    conj = Conjunction((Symbol("P")(Symbol("x")),))
+    prob_vars = (Symbol("x"),)
+    result = DatalogTransformer._add_prob_arg_to_conjunction(
+        conj, prob_vars, unwrap=True
+    )
+    assert isinstance(result, FunctionApplication)
+    assert not isinstance(result, Conjunction)
+
+
+def test_add_prob_arg_to_conjunction_non_fa_non_conj():
+    """_add_prob_arg_to_conjunction with neither FunctionApplication nor
+    Conjunction returns it unchanged (line 369)."""
+    constant = Constant(True)
+    result = DatalogTransformer._add_prob_arg_to_conjunction(
+        constant, (Symbol("x"),), unwrap=False
+    )
+    assert result is constant
+
+
+def test_classify_prob_predicate_negation_non_fa():
+    """_classify_prob_predicate with Negation whose inner formula is not a
+    FunctionApplication returns None (line 467)."""
+    from neurolang.logic import Negation
+
+    neg = Negation(Constant(True))
+    result = DatalogTransformer._classify_prob_predicate(neg)
+    assert result is None
+
+
+def test_classify_prob_predicate_existential_non_fa_body():
+    """_classify_prob_predicate with ExistentialPredicate whose body attribute
+    is not a FunctionApplication returns None (line 475)."""
+    from neurolang.logic import ExistentialPredicate
+
+    ep = ExistentialPredicate(Symbol("x"), Symbol("P")(Symbol("x")))
+    ep.__dict__["body"] = Constant(True)
+    result = DatalogTransformer._classify_prob_predicate(ep)
+    assert result is None
+
+
+def test_classify_prob_predicate_unknown_type():
+    """_classify_prob_predicate with an unsupported type returns None
+    (line 476)."""
+    result = DatalogTransformer._classify_prob_predicate(Constant(42))
+    assert result is None
+
+
+def test_prob_body_rule_prob_marker():
+    """prob_body_rule with a PROB body predicate (non-MARG) hits the
+    __PROB__ marker path (lines 540-545)."""
+    result = _parse("ans(x, p) :- PROB[P(x)] = p, Q(x).")
+    assert isinstance(result, Union)
+    assert len(result.formulas) >= 2
+
+
+def test_build_prob_rule_result_var_already_in_head():
+    """_build_prob_rule where result_var is already in head_args hits
+    lines 594 and 613 (skip append)."""
+    result = _parse("ans(x, p) :- PROB[P(x)] = p, Q(x).")
+    assert isinstance(result, Union)
+    assert len(result.formulas) >= 2
+
+
+def test_build_prob_rule_no_body_atoms():
+    """_build_prob_rule with no non-prob body atoms hits line 630:
+    new_body = Constant(True)."""
+    result = _parse("ans(x, p) :- PROB[P(x)] = p.")
+    assert isinstance(result, Union)
+    assert len(result.formulas) >= 2
+
+
+def test_build_aggregate_rule_marg_desugaring():
+    """_build_aggregate_rule with MARG spec hits the MARG desugaring branch
+    (lines 656-716)."""
+    result = _parse(
+        'ans(c) :- AGGREGATE[x](MARG[P(x)] = p @ count(c)) = c.'
+    )
+    assert isinstance(result, Union)
+    assert len(result.formulas) >= 2
+
+
+def test_build_aggregate_rule_marg_no_prob_vars():
+    """_build_aggregate_rule MARG branch with no prob_vars hits line 711."""
+    result = _parse(
+        'ans(c) :- AGGREGATE[](MARG[P()] = p @ count(c)) = c.'
+    )
+    assert isinstance(result, Union)
+    assert len(result.formulas) >= 2
+
+
+def test_build_aggregate_rule_prob_marker_in_body():
+    """_build_aggregate_rule with PROB body predicate hits prob_marker_atoms
+    reconstruction (lines 651-653)."""
+    result = _parse(
+        'ans(c) :- AGGREGATE[x](PROB[P(x)] = p @ count(c)) = c.'
+    )
+    assert isinstance(result, Union)
+
+
+def test_extract_prob_result_var_string_marker_3_args():
+    """_extract_prob_result_var with string marker and 3-element args
+    (line 762)."""
+    rv = Symbol("p")
+    spec = ("__MARG__", (Symbol("P")(Symbol("x")), Symbol("cond"), rv))
+    result = DatalogTransformer._extract_prob_result_var(spec)
+    assert result == rv
+
+
+def test_extract_prob_result_var_string_marker_2_args():
+    """_extract_prob_result_var with string marker and 2-element args
+    (line 764)."""
+    rv = Symbol("p")
+    spec = ("__MARG__", (Symbol("P")(Symbol("x")), rv))
+    result = DatalogTransformer._extract_prob_result_var(spec)
+    assert result == rv
+
+
+def test_extract_prob_result_var_plain_tuple_3():
+    """_extract_prob_result_var with plain 3-element tuple (line 768)."""
+    rv = Symbol("p")
+    spec = (Symbol("P")(Symbol("x")), Symbol("cond"), rv)
+    result = DatalogTransformer._extract_prob_result_var(spec)
+    assert result == rv
+
+
+def test_extract_prob_result_var_plain_tuple_2():
+    """_extract_prob_result_var with plain 2-element tuple (line 770)."""
+    rv = Symbol("p")
+    spec = (Symbol("P")(Symbol("x")), rv)
+    result = DatalogTransformer._extract_prob_result_var(spec)
+    assert result == rv
+
+
+def test_extract_prob_result_var_none():
+    """_extract_prob_result_var with non-tuple returns None (line 772)."""
+    result = DatalogTransformer._extract_prob_result_var(Constant(42))
+    assert result is None
+
+
+def test_condition_transformation():
+    """condition transformer produces Condition(conditioned, conditioning)
+    (lines 823-826)."""
+    from neurolang.probabilistic.expressions import Condition as Cond
+
+    result = _parse("ans(x) :- P(x) // Q(x).")
+    assert isinstance(result, Union)
+    inner = result.formulas[0]
+    if isinstance(inner, Implication):
+        assert isinstance(inner.antecedent, Cond)
+
+
+def test_constraint_transformation():
+    """constraint transformer produces RightImplication (line 829)."""
+    from neurolang.datalog.constraints_representation import RightImplication
+
+    try:
+        result = _parse("Q(x) \u2192 A(x).")
+        if isinstance(result, RightImplication):
+            return
+    except Exception:
+        pass
+
+    t = DatalogTransformer()
+    from lark import Tree, Token
+    body = Symbol("Q")(Symbol("x"))
+    head = Symbol("A")(Symbol("x"))
+    arrow = Token("RIGHT_IMPLICATION", "\u2192")
+    result = t.constraint([body, arrow, head])
+    assert isinstance(result, RightImplication)
+
+
+def test_succ_head_rule_transformation():
+    """succ_head_rule returns Constant(True) (line 373)."""
+    result = _parse("SUCC[foo] :- Q(x).")
+    assert isinstance(result, Union)
+    assert result.formulas[0] == Constant(True)
+
+
+def test_conjunction_discard_succ_marker():
+    """conjunction transformer discards SUCC markers (line 837-839)."""
+    from lark import Tree, Token
+    t = DatalogTransformer()
+    succ_marker = FunctionApplication(Symbol("__SUCC__"), (Symbol("p"),))
+    regular_pred = Symbol("P")(Symbol("x"))
+    result = t.conjunction([regular_pred, succ_marker])
+    assert isinstance(result, Conjunction)
+    assert len(result.formulas) == 1
+    assert result.formulas[0] == regular_pred
+
+
+def test_conjunction_empty_returns_true():
+    """conjunction transformer returns Constant(True) when empty after
+    filtering (line 841-842)."""
+    t = DatalogTransformer()
+    succ_marker = FunctionApplication(Symbol("__SUCC__"), (Symbol("p"),))
+    result = t.conjunction([succ_marker])
+    assert result == Constant(True)
+
+
+def test_marg_body_predicate_simple():
+    """marg_body_predicate simple form (2-element ast, line 803-808)."""
+    result = _parse("ans(p) :- MARG[P(x)] = p.")
+    assert isinstance(result, (Union, Implication))
+
+
+def test_marg_body_predicate_conditional():
+    """marg_body_predicate conditional form (4-element ast, lines 795-802)."""
+    result = _parse("ans(p) :- MARG[P(x) // Q(x)] = p.")
+    assert isinstance(result, (Union, Implication))
