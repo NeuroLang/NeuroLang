@@ -45,9 +45,9 @@ jobs:
 
     - name: Generate coverage badge
       run: |
-        pip install coverage-badge
+        pip install genbadge[coverage]
         mkdir -p badges
-        coverage-badge -o badges/coverage.svg -f
+        genbadge coverage -i coverage.xml -o badges/coverage.svg --local
       if: github.ref == 'refs/heads/master' && matrix.python-version == '3.12'
 
     - name: Publish badge to gh-pages
