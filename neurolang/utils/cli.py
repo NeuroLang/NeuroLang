@@ -46,13 +46,7 @@ from typing import Optional
 
 import pandas as pd
 
-from neurolang import expressions as ir
-from neurolang.datalog.chase import Chase
-from neurolang.datalog.expressions import Implication
 from neurolang.datalog import WrappedRelationalAlgebraSet
-from neurolang.expressions import (
-    Constant, Expression, FunctionApplication, Lambda, Query, Symbol,
-)
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.utils import engine_registry
@@ -286,13 +280,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _execute_program(nl: NeurolangPDL, program_text: str):
     """
-    Execute a Datalog program using direct chase evaluation.
+    Execute a Datalog program and return the result if a query is present.
 
-    This bypasses :meth:`NeurolangPDL._execute_query` which does not support
-    query bodies that are conjunctions, comparisons, or EDB-only predicates.
-    Instead it converts every ``Query`` into an ``Implication`` rule, adds it
-    to the program's IDB, and runs the deterministic chase — the same strategy
-    used by the base :class:`~neurolang.frontend.QueryBuilderDatalog`.
+    Delegates to :meth:`NeurolangPDL.execute_datalog_program` which handles
+    the full solver stack (deterministic chase + probabilistic solver + magic
+    sets rewriting) through the frontend's query resolution API.
 
     Parameters
     ----------
@@ -303,62 +295,15 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
 
     Returns
     -------
-    ``None``, ``bool``, or a relational algebra set.
+    ``None``
+        When no query is present.
+    ``bool``
+        For boolean (headless) queries.
+    ``RelationalAlgebraFrozenSet``
+        The query result set (may have a ``.columns`` attribute).
 
     """
-    from neurolang.frontend.datalog.standard_syntax import (
-        parser as datalog_parser,
-    )
-
-    ir_prog = datalog_parser(program_text)
-
-    formulas = list(ir_prog.formulas)
-    queries = [f for f in formulas if isinstance(f, ir.Query)]
-    others = [f for f in formulas if not isinstance(f, ir.Query)]
-
-    for f in others:
-        nl.program_ir.walk(f)
-
-    if len(queries) == 0:
-        return None
-
-    if len(queries) > 1:
-        raise ValueError("Only a single query per program is supported.")
-
-    q = queries[0]
-
-    # Extract both the head predicate name and the argument variable names
-    # from the parsed query head.  The head is always a FunctionApplication
-    # whose functor is a Symbol (simple) or a Lambda wrapping a Symbol (parser
-    # sugar), and whose args are Symbol nodes whose .name carries the Datalog
-    # variable name.
-    if isinstance(q.head, ir.FunctionApplication):
-        column_names = [a.name for a in q.head.args]
-        functor = (
-            q.head.functor.body
-            if isinstance(q.head.functor, ir.Lambda)
-            else q.head.functor
-        )
-    else:
-        column_names = None
-        functor = q.head
-
-    pred_name = (
-        functor.name if isinstance(functor, ir.Symbol) else str(functor)
-    )
-
-    # Query → Implication so the DatalogProgram walker registers it as IDB
-    rule = Implication(q.head, q.body)
-    nl.program_ir.walk(rule)
-
-    chase = Chase(nl.program_ir)
-    solution = chase.build_chase_solution()
-
-    for sym, val in solution.items():
-        if sym.name == pred_name:
-            return val, column_names
-
-    return None
+    return nl.execute_datalog_program(program_text)
 
 
 def _execute_squall_program(
@@ -589,12 +534,8 @@ def main(argv: Optional[list] = None) -> None:
                 print(output)
     else:
         result = _execute_program(nl, program)
-        if isinstance(result, tuple):
-            result, column_names = result
-        else:
-            column_names = None
         output = _format_result(
-            result, fmt=args.format, column_names=column_names,
+            result, fmt=args.format, column_names=None,
             sort_by=sort_by,
         )
         if output:

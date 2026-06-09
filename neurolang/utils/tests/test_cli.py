@@ -2,12 +2,14 @@
 
 import pytest
 
+from neurolang.exceptions import NeuroLangException
 from neurolang.utils.cli import (
     _build_parser,
     _execute_program,
     _execute_squall_program,
+    _format_ir,
     _format_result,
-    _show_squall_datalog,
+    _read_query,
 )
 
 from neurolang.utils import engine_registry
@@ -194,25 +196,21 @@ engines:
         nl.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="csv_rel")
         nl.add_tuple_set([(4, "d"), (5, "e")], name="tsv_rel")
 
-        # Query CSV relation — _execute_program bypasses the probabilistic
-        # frontend query path (which doesn't handle EDB-only queries).
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x, y) :- csv_rel(x, y)"
         )
-        assert col_names == ["x", "y"]
         assert result is not None
-        output = _format_result(result, column_names=col_names)
+        output = _format_result(result, column_names=list(result.columns))
         assert "a" in output
         assert "b" in output
         assert "c" in output
 
         # Query TSV relation
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x, y) :- tsv_rel(x, y)"
         )
-        assert col_names == ["x", "y"]
         assert result is not None
-        output = _format_result(result, column_names=col_names)
+        output = _format_result(result, column_names=list(result.columns))
         assert "d" in output
         assert "e" in output
 
@@ -489,64 +487,249 @@ class TestExecuteProgram:
         assert result is None
 
     def test_simple_edb_query(self, nl):
-        result, col_names = _execute_program(nl, "ans(x) :- R(x, y)")
-        assert col_names == ["x"]
+        result = _execute_program(nl, "ans(x) :- R(x, y)")
         assert result is not None
+        assert result.columns == ("x",)
 
     def test_query_with_conjunction(self, nl):
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x, z) :- R(x, y) & S(x, z)"
         )
-        assert col_names == ["x", "z"]
         assert result is not None
+        assert result.columns == ("x", "z")
 
     def test_query_with_comparison(self, nl):
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x) :- S(x, z) & (z > 15.0)"
         )
-        assert col_names == ["x"]
         assert result is not None
+        assert result.columns == ("x",)
 
     def test_query_projection(self, nl):
         """Project only one of the variables."""
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(y) :- R(x, y) & S(x, z) & (z > 10.0)"
         )
-        assert col_names == ["y"]
         assert result is not None
+        assert result.columns == ("y",)
 
     def test_query_no_matching_results(self, nl):
         result = _execute_program(nl, "ans(x) :- R(x, y) & (x > 100)")
-        # Chase may return None when a predicate yields no tuples
-        assert result is None
+        assert result is not None
+        assert len(result) == 0
 
     def test_multiple_queries_raises(self, nl):
-        with pytest.raises(ValueError, match="single query"):
+        with pytest.raises(NeuroLangException, match="more than one query"):
             _execute_program(nl, "ans(x) :- R(x, y)\nans(z) :- S(z, w)")
 
     def test_result_column_names_preserved(self, nl):
         """column_names match the Datalog variable names in the query."""
-        _, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(the_x, the_y) :- R(the_x, the_y)"
         )
-        assert col_names == ["the_x", "the_y"]
+        assert result.columns == ("the_x", "the_y")
 
     def test_table_format_output_has_column_names(self, nl):
         """Full roundtrip: execute → format with column names."""
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(val) :- R(x, y) & S(x, val)"
         )
-        output = _format_result(result, column_names=col_names)
+        output = _format_result(result, column_names=list(result.columns))
         assert "val" in output
         assert "10.0" in output
         assert "20.0" in output
         assert "30.0" in output
 
     def test_csv_output_has_header(self, nl):
-        result, col_names = _execute_program(nl, "ans(v) :- R(x, y) & S(x, v)")
-        output = _format_result(result, fmt="csv", column_names=col_names)
+        result = _execute_program(nl, "ans(v) :- R(x, y) & S(x, v)")
+        output = _format_result(result, fmt="csv", column_names=list(result.columns))
         lines = output.strip().split("\n")
         assert lines[0] == "v"
+
+
+# ---------------------------------------------------------------------------
+# _execute_program — PROB queries
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteProgramProb:
+
+    """Tests for PROB queries through _execute_program."""
+
+    @pytest.fixture
+    def nl(self):
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a"), (2, "a")], name="edb1")
+        nl.add_uniform_probabilistic_choice_over_set(
+            [("a",), ("b",)], name="pc1"
+        )
+        return nl
+
+    def test_prob_query_returns_named_set(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        assert hasattr(result, "columns")
+        assert result.columns == ("x", "p")
+
+    def test_prob_query_values(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+    def test_prob_query_format_table(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        output = _format_result(result)
+        assert "x" in output
+        assert "p" in output
+        assert "0.5" in output
+
+    def test_prob_query_format_csv(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        output = _format_result(result, fmt="csv")
+        lines = output.strip().split("\n")
+        assert lines[0] == "x,p"
+        assert "1,0.5" in lines[1:]
+
+    def test_prob_rule_without_query_returns_none(self, nl):
+        """PROB rule with no query returns None."""
+        result = _execute_program(
+            nl, "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p."
+        )
+        assert result is None
+
+    def test_marg_conjunction(self, nl):
+        """MARG with multi-formula conjunction branch."""
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- MARG[ edb1(x, s) & pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+    def test_prob_conjunction(self, nl):
+        """PROB with multi-formula conjunction branch."""
+        result = _execute_program(
+            nl,
+            "derived(x, s, p) :- PROB[ edb1(x, s) & pc1(s) ] = p.\n"
+            "ans(x, s, p) :- derived(x, s, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, "a", 0.5)
+        assert rows[1] == (2, "a", 0.5)
+
+    def test_prob_without_conditional_regular_body(self, nl):
+        """PROB single predicate with outside_connect filtering (plus body atoms)."""
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- edb1(x, s) & PROB[ pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+    def test_prob_non_ans_head(self, nl):
+        """PROB desugaring with non-ans rule head (line 552 in _build_prob_rule)."""
+        result = _execute_program(
+            nl,
+            "p(x, prob) :- PROB[ edb1(x, s) // pc1(s) ] = prob.\n"
+            "ans(x, prob) :- p(x, prob).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+
+# ---------------------------------------------------------------------------
+# _classify_prob_predicate — Negation and ExistentialPredicate branches
+# ---------------------------------------------------------------------------
+
+
+class TestClassifyProbPredicateBranches:
+
+    """Tests for _classify_prob_predicate branches inside PROB/MARG."""
+
+    @pytest.fixture
+    def nl(self):
+        from neurolang.frontend import NeurolangPDL
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a")], name="r1")
+        nl.add_tuple_set([(1, "a", True)], name="r_bool")
+        nl.add_uniform_probabilistic_choice_over_set([("a",), ("b",)], name="pc1")
+        return nl
+
+    def test_prob_existential(self, nl):
+        """ExistentialPredicate inside PROB — hits ExistentialPredicate branch."""
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ exists(s st r1(x, s)) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 1
+        assert rows[0] == (1, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Miscellaneous grammar construct tests
+# ---------------------------------------------------------------------------
+
+
+class TestMiscGrammar:
+
+    """Tests for parser transformer methods not yet covered."""
+
+    @pytest.fixture
+    def nl(self):
+        from neurolang.frontend import NeurolangPDL
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a")], name="R")
+        nl.add_tuple_set([(True,)], name="Rbool")
+        return nl
+
+    def test_negation_body(self, nl):
+        """Negation in a rule body (~R(x, y))."""
+        result = _execute_program(
+            nl,
+            "ans(x) :- R(x, y) & ~(x == 2).",
+        )
+        assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# --squall flag
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

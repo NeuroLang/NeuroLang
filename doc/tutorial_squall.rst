@@ -1556,3 +1556,38 @@ edge cases that occur only with malformed programs or uncommon execution
 patterns.  The main-line feature paths — parsing, transformer registration,
 symbol-table population, and uniform-probability computation — are fully
 exercised.
+
+
+.. _appendix-e-squall:
+
+Appendix E: Querying from the Command Line
+============================================
+
+The ``neurolang-query`` command-line tool lets you run SQUALL (or Datalog)
+queries without writing Python code.  It picks up a preconfigured engine from
+the :ref:`engine registry <neurolang-engine-registry>` and executes the
+query directly.
+
+Running a SQUALL query inline::
+
+    neurolang-query --engine neurosynth --squall \
+        "obtain every peak_reported."
+
+Running a SQUALL query from a file::
+
+    neurolang-query --engine neurosynth --squall -f query.squall
+
+Showing the Datalog IR for a SQUALL query (no execution)::
+
+    neurolang-query --engine neurosynth --squall --show-datalog \
+        "obtain every Voxel in 3D that a Study reported."
+
+The tool also supports plain Datalog queries (omit ``--squall``).  For the
+full list of options, see ``neurolang-query --help`` or the
+:py:mod:`neurolang.utils.cli` module documentation.
+
+
+Appendix F: Engine Configuration (engines.yaml)
+===============================================
+
+See :doc:`engine_configuration` for the full engine registry reference.

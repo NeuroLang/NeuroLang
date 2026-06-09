@@ -19,7 +19,7 @@ def test_interactive_facts():
 
     res = completer.complete('A').token_options
     expected = {'Signs': {'values': {'('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'/', '+', '*', '**', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {':=', '::'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
+                'Operators': {'values': {'/', '+', '*', '**', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {':=', '^', ':~:', '::'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
 
     res = completer.complete('A(').token_options
@@ -29,7 +29,7 @@ def test_interactive_facts():
 
     res = completer.complete('A()').token_options
     expected = {'Signs': {'values': {'(', '∃', '@'}}, 'Numbers': {'values': {'<integer>', '<float>'}},
-                'Text': {'values': set()}, 'Operators': {'values': {'¬', '-', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'ans', 'MARG', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'True', 'False', '⊤'}}, 'Expression symbols': {'values': {'←', '::', '.', ':=', ':-'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<text>', '<identifier_regexp>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Text': {'values': set()}, 'Operators': {'values': {'¬', '-', '~'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'EXISTS', 'exists', 'ans', 'MARG', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'⊥', 'True', 'False', '⊤'}}, 'Expression symbols': {'values': {'←', '^', ':~:', '::', '.', ':=', ':-'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<cmd_identifier>', '<text>', '<identifier_regexp>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
     res = completer.complete('A(3').token_options
@@ -91,7 +91,7 @@ def test_interactive_rules():
 
     res = completer.complete('A(x)').token_options
     expected = {'Signs': {'values': set()}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {':-', '::', '←', ':='}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
+                'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {':-', '^', ':~:', '::', '←', ':='}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
 
     res = completer.complete('A(x):-').token_options
@@ -230,7 +230,7 @@ def test_interactive_aggregation():
 
     res = completer.complete('A(x, f(y))').token_options
     expected = {'Signs': {'values': set()}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {'::', ':=', ':-', '←'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
+                'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {'^', ':~:', '::', ':=', ':-', '←'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
 
 
@@ -245,12 +245,12 @@ def test_interactive_uri():
 
     res = completer.complete(f'`{str(label.name)}`').token_options
     expected = {'Signs': {'values': {'('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'+', '**', '*', '/', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {':=', '::'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
+                'Operators': {'values': {'+', '**', '*', '/', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {':=', '^', ':~:', '::'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
 
     res = completer.complete(f'`{str(label.name)}`(x)').token_options
     expected = {'Signs': {'values': set()}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {':-', '←', '::', ':='}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
+                'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {':-', '←', '^', ':~:', '::', ':='}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
 
     res = completer.complete(f'`{str(label.name)}`(x):-').token_options
@@ -477,7 +477,7 @@ def test_interactive_prob_implicit():
 
     res = completer.complete('B(x, PROB, y)').token_options
     expected = {'Signs': {'values': set()}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {'←', ':-', ':=', '::'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
+                'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {'←', ':-', ':=', '^', ':~:', '::'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
 
     res = completer.complete('B(x, PROB, y) :- C(x, y)').token_options
@@ -516,7 +516,7 @@ def test_interactive_prob_explicit():
 
     res = completer.complete('B(x, PROB(x, y), y)').token_options
     expected = {'Signs': {'values': set()}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {'←', ':=', ':-', '::'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
+                'Operators': {'values': set()}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {'←', ':=', ':-', '^', ':~:', '::'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
 
     res = completer.complete('B(x, PROB(x, y), y) :- C(x, y)').token_options
@@ -530,7 +530,7 @@ def test_interactive_lambda_definition():
 
     res = completer.complete('c').token_options
     expected = {'Signs': {'values': {'('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'**', '-', '+', '/', '*'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {':=', '::'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
+                'Operators': {'values': {'**', '-', '+', '/', '*'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': set()}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': set()}, 'Boleans': {'values': set()}, 'Expression symbols': {'values': {':=', '^', ':~:', '::'}}, 'Python string': {'values': set()}, 'Strings': {'values': set()}}
     assert res == expected
 
     res = completer.complete('c :=').token_options
