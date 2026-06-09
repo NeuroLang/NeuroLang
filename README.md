@@ -4,6 +4,7 @@
 [![Coverage](https://raw.githubusercontent.com/NeuroLang/NeuroLang/gh-pages/coverage.svg)](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/neurolang.svg)](https://pypi.org/project/neurolang/)
 [![Python](https://img.shields.io/pypi/pyversions/neurolang.svg)](https://pypi.org/project/neurolang/)
+[![Code style](https://img.shields.io/badge/code%20style-flake8-000000.svg)](https://github.com/PyCQA/flake8)
 
 
 Neurolang enables the analysis of NeuroImaging data through probabilistic logic programming. It seamlessly allow to combine, images, databases, and ontologies within a single framework.
