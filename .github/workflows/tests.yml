@@ -45,6 +45,7 @@ jobs:
 
     - name: Generate coverage badge
       run: |
+        pip install setuptools
         pip install coverage-badge
         mkdir -p badges
         coverage-badge -o badges/coverage.svg -f
