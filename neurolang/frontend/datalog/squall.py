@@ -74,14 +74,20 @@ class LogicSimplifier(
     )
     def flatten_nested_existentials(self, expression):
         inner = self.walk(expression.body)
+        # If walking the body produced no change, return the original expression.
+        # This prevents infinite re-walking when nested ExistentialPredicate
+        # chains (e.g. EP(x, EP(y, EP(z, Conj(...))))) are structurally stable
+        # but the handler below always creates new wrapper objects.
+        if inner is expression.body:
+            return expression
         if isinstance(inner, ExistentialPredicate):
             if isinstance(inner.body, Conjunction):
+                walked_inner_body = self.walk(inner.body)
+                if walked_inner_body is inner.body:
+                    return expression
                 return ExistentialPredicate(
                     expression.head,
-                    ExistentialPredicate(
-                        inner.head,
-                        self.walk(inner.body),
-                    ),
+                    ExistentialPredicate(inner.head, walked_inner_body),
                 )
         return ExistentialPredicate(expression.head, inner)
 
