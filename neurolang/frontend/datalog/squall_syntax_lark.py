@@ -300,12 +300,14 @@ class SquallTransformer(Transformer):
         """Initialise the transformer with optional source lines for error reporting."""
         super().__init__()
         self._symbol_scope = {}
+        self._has_rule_scope = False
         self._source_lines = source_lines or []
         self._current_line = None
         self._current_column = None
 
     def _clear_scope(self):
         self._symbol_scope.clear()
+        self._has_rule_scope = False
 
     def _capture_pos(self, token):
         if hasattr(token, 'line') and hasattr(token, 'column'):
@@ -860,6 +862,7 @@ class SquallTransformer(Transformer):
         noun_name = getattr(ng1, '_noun_name', None)
         if noun_name:
             self._symbol_scope[noun_name] = body_args
+            self._has_rule_scope = True
 
         body_formula = ng1(body_args)
 
@@ -886,6 +889,7 @@ class SquallTransformer(Transformer):
         noun_name = getattr(ng1, '_noun_name', None)
         if noun_name:
             self._symbol_scope[noun_name] = body_args
+            self._has_rule_scope = True
 
         type_predicate = ng1(body_args)
         return ('_quant_clause', (body_args, type_predicate))
@@ -1279,7 +1283,7 @@ class SquallTransformer(Transformer):
                     d(agg_expr)
                     return bare_body
 
-                if noun_name and self._symbol_scope:
+                if noun_name and self._has_rule_scope:
                     raise self._make_error(
                         f"Cannot resolve 'the {noun_name}' — "
                         f"'{noun_name}' was not introduced by any "
@@ -1375,39 +1379,92 @@ class SquallTransformer(Transformer):
     # ---- Noun Groups ----
 
     def ng1_noun(self, args):
+        """Handle ``noun1 [ app ]`` — noun group without relative clause.
+
+        Creates an ``ng`` closure carrying ``_noun_name`` and ``_var_info``
+        attributes.  Registers the noun in ``_symbol_scope`` so that
+        ``det_the`` in a following ``rel`` child can find it for anaphora
+        resolution.
+        """
         items = [a for a in args if a is not None]
         noun1 = items[0]
         app = None
-        rel = None
         for item in items[1:]:
-            if isinstance(item, tuple) and len(item) == 2 and item[0] == '_rel':
-                rel = item[1]
-            elif isinstance(item, Symbol):
+            if isinstance(item, Symbol):
                 app = item
             elif isinstance(item, tuple) and all(
                 isinstance(s, (Symbol, _AnonymousVar)) for s in item
             ):
                 app = item
             elif callable(item) and not isinstance(item, (Symbol, Constant)):
-                # Could be a CPS function from app_label or something else
                 if app is None:
                     app = item
 
         def ng(x):
-            # Resolve _AnonymousVar instances to their fresh symbols for body.
             if isinstance(x, tuple):
                 body_args = tuple(
                     item.as_symbol() if isinstance(item, _AnonymousVar) else item
                     for item in x
                 )
-                noun_app = noun1(*body_args)
+                return noun1(*body_args)
+            return noun1(x)
+
+        ng._noun_name = noun1.name if isinstance(noun1, Symbol) else None
+
+        if app is not None:
+            ng._var_info = app
+            # Eagerly register the noun in symbol scope so that relative-clause
+            # anaphora (e.g. ``the Voxel`` in ``where …``) can find it.  The
+            # ``ng1`` handler will later embed the optional ``rel``.
+            name = getattr(ng, '_noun_name', None)
+            if name and isinstance(app, tuple) and all(
+                isinstance(s, (Symbol, _AnonymousVar)) for s in app
+            ):
+                from .squall_syntax_lark import _resolve_var_info
+                body_args, _ = _resolve_var_info(app)
+                self._symbol_scope[name] = body_args
+        return ng
+
+    def ng1(self, args):
+        """Handle ``ng1_base [ rel ]`` — wrap a base ng closure with an optional relative clause.
+
+        The ``ng1_base`` child has already been processed by ``ng1_noun`` (which
+        registered the noun in ``_symbol_scope``).  If a ``rel`` child is present,
+        this method wraps the base ``ng`` closure so it also evaluates the relative
+        clause.  The returned closure has the same ``_noun_name`` and ``_var_info``
+        attributes so downstream consumers (``rule_body1``, ``det_every``, etc.)
+        are unaffected.
+        """
+        items = [a for a in args if a is not None]
+        base_ng = items[0]
+
+        rel = None
+        if len(items) > 1:
+            rel_item = items[1]
+            if isinstance(rel_item, tuple) and len(rel_item) == 2 and rel_item[0] == '_rel':
+                rel = rel_item[1]
+            elif callable(rel_item) and not isinstance(rel_item, (Symbol, Constant)):
+                rel = rel_item
+
+        if rel is None:
+            return base_ng
+
+        noun_name = getattr(base_ng, '_noun_name', None)
+        var_info = getattr(base_ng, '_var_info', None)
+
+        def ng_with_rel(x):
+            if isinstance(x, tuple):
+                body_args = tuple(
+                    item.as_symbol() if isinstance(item, _AnonymousVar) else item
+                    for item in x
+                )
+                noun_app = base_ng(body_args)
             else:
-                noun_app = noun1(x)
+                noun_app = base_ng(x)
             parts = [noun_app]
             if rel is not None:
                 rel_x = x
                 if isinstance(x, tuple):
-                    # Apply rel to the first named (non-anonymous) var or the tuple
                     named = [
                         item.as_symbol() if isinstance(item, _AnonymousVar) else item
                         for item in x
@@ -1422,11 +1479,10 @@ class SquallTransformer(Transformer):
                 return parts[0]
             return Conjunction(tuple(parts))
 
-        ng._noun_name = noun1.name if isinstance(noun1, Symbol) else None
-
-        if app is not None:
-            ng._var_info = app
-        return ng
+        ng_with_rel._noun_name = noun_name
+        if var_info is not None:
+            ng_with_rel._var_info = var_info
+        return ng_with_rel
 
     def ng1_agg_npc(self, args):
         """Handle ``noun1 OF npc [dims] [rel]`` aggregation noun groups.
@@ -1948,7 +2004,10 @@ class SquallTransformer(Transformer):
     # ---- Pass-through handlers for template-expanded rules ----
 
     def noun1(self, args):
-        return args[0]
+        item = args[0]
+        if isinstance(item, str):
+            return Symbol(str(item).lower())
+        return item
 
     def noun2(self, args):
         return args[0]
@@ -2249,18 +2308,36 @@ class SquallTransformer(Transformer):
         Like ``app_dimension`` but adds one extra dimension from the ``with``
         clause, producing *n + 1* fresh symbols. This makes ``in 3D with X``
         equivalent to ``in 4D`` — both produce 4 variables.
+
+        Also registers the dimension noun (e.g. ``Probability``) in the symbol
+        scope so that ``the Probability`` anaphora in a ``where`` clause
+        resolves to the same dimension variable.
         """
         number = args[0]
+        dim_noun = args[1] if len(args) > 1 else None
         n = int(number.value) if hasattr(number, 'value') else int(number)
-        return tuple(Symbol.fresh() for _ in range(n + 1))
+        result = tuple(Symbol.fresh() for _ in range(n + 1))
+        if isinstance(dim_noun, Symbol):
+            self._symbol_scope[dim_noun.name] = result[-1]
+        return result
 
     def app_dimension_only(self, args):
         """Handle ``with Probability`` / ``with Value`` standalone (without ``in ND``).
 
-        Returns 1 fresh symbol, allowing a dimension keyword to indicate a
-        single dimension on its own.
+        Returns 2 fresh symbols — one for the noun's base argument and one
+        for the dimension (probability, value, etc.).  This contrasts with
+        ``app_dimension_with`` (which returns *n + 1* symbols) because here
+        there is no explicit ``in ND`` count, so we assume the base noun
+        has exactly 1 inherent argument and add 1 dimension on top.
+
+        Also registers the dimension noun in the symbol scope for anaphora
+        resolution (e.g. ``the Probability`` in a ``where`` clause).
         """
-        return (Symbol.fresh(),)
+        dim_noun = args[0] if args else None
+        result = (Symbol.fresh(), Symbol.fresh())
+        if isinstance(dim_noun, Symbol):
+            self._symbol_scope[dim_noun.name] = result[-1]
+        return result
 
     def dimension_noun(self, args):
         """Convert a dimension keyword token to its lowercase Symbol form."""
@@ -2506,8 +2583,8 @@ def _apply_ops(ops, verb, subject):
     is_inverse = isinstance(verb, _InverseVerbSymbol)
     if callable(ops) and not isinstance(ops, (Symbol, Constant)):
         if is_inverse:
-            return ops(lambda obj: verb(obj, subject))
-        return ops(lambda obj: verb(subject, obj))
+            return ops(lambda *objs: verb(*objs, subject))
+        return ops(lambda *objs: verb(subject, *objs))
     elif isinstance(ops, tuple):
         if is_inverse:
             return verb(*ops, subject)

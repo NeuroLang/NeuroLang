@@ -1763,3 +1763,380 @@ def test_parse_weighted_choice_simple_prob():
     result = parser(code)
     assert isinstance(result, WeightedChoiceDef)
     assert result.head_symbol.name == "selected_study"
+
+
+def test_define_as_nested_relative_clause_no_recursion_error():
+    """Regression: nested relative clause with ``in 3D`` + transitive verb.
+
+    A query like ``define as Region_reported every Schaefer_region that labels
+    a Voxel in 3D that a Study that mentions 'language' reports.`` previously
+    raised ``RecursionError``.  Two bugs caused it:
+
+    1. ``_apply_ops`` used ``lambda obj: verb(subject, obj)`` which failed
+       when ``_apply_to_vars`` expanded a tuple ``(x, y, z)`` into separate
+       positional arguments — the single-param lambda raised ``TypeError``,
+       falling back to passing the raw tuple as a single arg.
+
+    2. ``flatten_nested_existentials`` re-wrapped structurally-stable
+       ``ExistentialPredicate`` chains on every visit, defeating
+       ``process_expression``'s identity-based change detection and causing
+       infinite re-walking.
+    """
+    from neurolang.logic import Implication, ExistentialPredicate, Conjunction
+    from neurolang.expressions import Symbol, Constant, FunctionApplication
+    from neurolang.expression_walker import ExpressionWalker
+
+    code = (
+        "define as Region_reported every Schaefer_region "
+        "that labels a Voxel in 3D "
+        "that a Study that mentions 'language' reports."
+    )
+    result = parser(code)
+    assert isinstance(result, Implication)
+
+    # Build the expected IR.  The head variable comes from the
+    # consequent (region_reported(r)), so we extract it to match
+    # exactly.  Body-bound variables use fresh symbols —
+    # weak_logic_eq handles those via quantifier-head renaming.
+    r = result.consequent.args[0]
+    x, y, z, s = (Symbol.fresh() for _ in range(4))
+
+    region_reported = Symbol("region_reported")
+    schaefer_region = Symbol("schaefer_region")
+    voxel = Symbol("voxel")
+    study = Symbol("study")
+    mentions = Symbol("mentions")
+    reports = Symbol("reports")
+    labels = Symbol("labels")
+    language = Constant("language")
+
+    expected = Implication(
+        region_reported(r),
+        Conjunction((
+            schaefer_region(r),
+            ExistentialPredicate(z, ExistentialPredicate(y, ExistentialPredicate(x,
+                Conjunction((
+                    Conjunction((
+                        voxel(x, y, z),
+                        ExistentialPredicate(s,
+                            Conjunction((
+                                Conjunction((
+                                    study(s),
+                                    mentions(s, language)
+                                )),
+                                reports(s, x, y, z)
+                            ))
+                        )
+                    )),
+                    labels(r, x, y, z)
+                ))
+            )))
+        ))
+    )
+
+    assert weak_logic_eq(result, expected), (
+        f"IR mismatch.\nGot:      {result}\nExpected: {expected}"
+    )
+
+
+def test_obtain_with_probability_standalone_adds_dimension():
+    """``with Probability`` / ``with Value`` standalone adds 2 head variables.
+
+    ``app_dimension_only`` (handles ``with Probability`` without a preceding
+    ``in ND``) returns 2 fresh symbols instead of 1.  This ensures the
+    predicate body retains the noun's base argument (e.g. a region variable)
+    while adding the probability/value dimension, producing a 2-column query.
+    """
+    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
+    from neurolang.expressions import Query, Symbol as Sym
+    from neurolang.datalog import extract_logic_free_variables
+    from neurolang.expression_walker import ExpressionWalker
+
+    # --- with Probability ---
+    result = parser(
+        "define as Region_reported every Schaefer_region. "
+        "obtain every Region_reported with Probability."
+    )
+    assert isinstance(result, SquallProgram)
+    assert len(result.queries) == 1
+    q = result.queries[0]
+    assert isinstance(q, Query)
+    assert isinstance(q.head, tuple)
+    assert len(q.head) == 2  # (region, probability)
+
+    # Verify the body is exactly region_reported(r, p) with the
+    # same free variables as the Query head.
+    free_vars = tuple(extract_logic_free_variables(q.body))
+    assert len(free_vars) == 2
+    expected_body = Sym("region_reported")(*free_vars)
+    assert weak_logic_eq(q.body, expected_body), (
+        f"Body mismatch.\nGot:      {q.body}\nExpected: {expected_body}"
+    )
+
+    # --- with Value ---
+    result2 = parser(
+        "define as Region_reported every Schaefer_region. "
+        "obtain every Region_reported with Value."
+    )
+    assert isinstance(result2, SquallProgram)
+    assert len(result2.queries) == 1
+    q2 = result2.queries[0]
+    assert isinstance(q2, Query)
+    assert isinstance(q2.head, tuple)
+    assert len(q2.head) == 2  # (region, value)
+
+    free_vars2 = tuple(extract_logic_free_variables(q2.body))
+    assert len(free_vars2) == 2
+    expected_body2 = Sym("region_reported")(*free_vars2)
+    assert weak_logic_eq(q2.body, expected_body2), (
+        f"Body mismatch.\nGot:      {q2.body}\nExpected: {expected_body2}"
+    )
+
+
+def test_compound_quantifier_with_probability_as_noun():
+    """``Probability`` keyword can be used as a regular noun in ``where``
+    clauses of compound-quantifier rules.
+
+    The grammar terminal ``DIM_PROBABILITY`` (exact string ``"Probability"``)
+    is excluded from ``UPPER_NAME`` by negative lookahead, so ``Probability``
+    could never match ``noun1``. This broke sentences where ``Probability``
+    appears as a regular noun after ``the`` in a ``where`` clause.
+
+    Fix: add ``DIM_PROBABILITY | DIM_VALUE`` as alternatives in ``noun1``,
+    and convert the Lark ``Token`` to ``Symbol`` in the ``noun1`` transformer.
+    """
+    from neurolang.logic import Implication, Conjunction, ExistentialPredicate
+    from neurolang.expressions import Symbol, FunctionApplication
+
+    def _check_anaphora(result, expected_n_dims):
+        """Verify that ``the Voxel`` / ``the Probability`` in the where clause
+        use the SAME variables as the outer ``for every Voxel … with Probability``
+        quantification (anaphora resolution)."""
+        assert isinstance(result, Implication)
+        assert isinstance(result.consequent, FunctionApplication)
+        voxel_vars = result.consequent.args
+
+        def find_func(expr, name):
+            found = []
+            if isinstance(expr, FunctionApplication) and expr.functor == Symbol(name):
+                found.append(expr.args)
+            if isinstance(expr, Conjunction):
+                for f in expr.formulas:
+                    found.extend(find_func(f, name))
+            if isinstance(expr, ExistentialPredicate):
+                found.extend(find_func(expr.body, name))
+            return found
+
+        labels_args = find_func(result.antecedent, "labels")
+        assert len(labels_args) == 1
+        # labels(schaefer_var, *voxel_vars) — the voxel args must match outer vars
+        actual_voxel = labels_args[0][1:]
+        assert actual_voxel == voxel_vars, (
+            f"Voxel vars in labels {actual_voxel} != outer {voxel_vars}"
+        )
+
+        reports_args = find_func(result.antecedent, "label_reports")
+        assert len(reports_args) == 1
+        # label_reports(schaefer_var, prob_var) — prob must match the last dimension
+        assert reports_args[0][1] == voxel_vars[-1], (
+            f"Probability var in reports {reports_args[0][1]} != outer {voxel_vars[-1]}"
+        )
+
+    code = (
+        "define as voxel_probability for every Voxel in 3D with Probability "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Probability."
+    )
+    result = parser(code)
+    _check_anaphora(result, expected_n_dims=4)
+    assert isinstance(result.antecedent, Conjunction)
+
+    body = result.antecedent
+    formula_string = str(body)
+    assert "schaefer_label" in formula_string
+    assert "labels" in formula_string
+    assert "label_reports" in formula_string
+    # No unresolved AnaphoraPredicate should remain
+    assert "anaphora" not in formula_string
+
+    code2 = (
+        "define as voxel_probability for every Voxel with Probability "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Probability."
+    )
+    result2 = parser(code2)
+    _check_anaphora(result2, expected_n_dims=2)
+
+    code3 = (
+        "define as voxel_value for every Voxel in 3D with Value "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Value."
+    )
+    result3 = parser(code3)
+    _check_anaphora(result3, expected_n_dims=4)
+
+
+def test_define_as_marg_given_anaphora_inside_rel():
+    """``the Selected_study`` in a ``given`` clause resolves to the
+    ``a Selected_study`` introduced inside a nested relative clause
+    (``that a Selected_study reports``).
+
+    After the post-parse ``AnaphoraResolutionWalker``:
+    - ``the Selected_study`` uses the SAME variable as ``a Selected_study``
+    - No ``AnaphoraPredicate`` markers remain
+    - The existential for ``Selected_study`` lifts to wrap the ``Condition``
+    """
+    from neurolang.logic import (
+        Implication, Conjunction, ExistentialPredicate
+    )
+    from neurolang.expressions import Symbol, FunctionApplication, Constant
+    from neurolang.probabilistic.expressions import (
+        ProbabilisticQuery, PROB, Condition
+    )
+
+    code = (
+        "define as Label_reports with inferred probability "
+        "every Schaefer_label that labels a Voxel in 3D "
+        "that a Selected_study reports "
+        "given the Selected_study mentions 'language'."
+    )
+    result = parser(code)
+
+    # Top-level structure
+    assert isinstance(result, Implication), (
+        f"Expected Implication, got {type(result).__name__}"
+    )
+
+    # --- Consequent: label_reports(?s, ProbabilisticQuery(PROB, (?s))) ---
+    head = result.consequent
+    assert isinstance(head, FunctionApplication)
+    assert head.functor == Symbol("label_reports"), (
+        f"Expected label_reports, got {head.functor}"
+    )
+    # First arg is the Schaefer_label variable; second is ProbabilisticQuery
+    assert len(head.args) == 2
+    head_var = head.args[0]
+    assert isinstance(head_var, Symbol)
+    prob_query = head.args[1]
+    assert isinstance(prob_query, ProbabilisticQuery)
+    # ProbabilisticQuery = FunctionApplication with PROB as functor
+    assert prob_query.functor == PROB
+
+    # --- Body: ExistentialPredicate of Condition ---
+    body = result.antecedent
+    # After AnaphoraResolutionWalker, the ?ss existential wraps Condition
+    assert isinstance(body, ExistentialPredicate), (
+        f"Body should be ExistentialPredicate wrapping Condition, "
+        f"got {type(body).__name__}"
+    )
+    assert isinstance(body.body, Condition), (
+        f"Body.body should be Condition, got {type(body.body).__name__}"
+    )
+    condition = body.body
+
+    # --- Conditioned side ---
+    conditioned = condition.conditioned
+    # Should be a conjunction with schaefer_label(?s) + voxel existential
+    assert isinstance(conditioned, Conjunction), (
+        f"Conditioned should be Conjunction, got {type(conditioned).__name__}"
+    )
+
+    def find_preds(expr, name):
+        """Find all FunctionApplication with functor == Symbol(name)."""
+        found = []
+        if isinstance(expr, FunctionApplication) and expr.functor == Symbol(name):
+            found.append(expr.args)
+        if isinstance(expr, Conjunction):
+            for f in expr.formulas:
+                found.extend(find_preds(f, name))
+        if isinstance(expr, ExistentialPredicate):
+            found.extend(find_preds(expr.body, name))
+        return found
+
+    # schaefer_label(?s) must be in the conditioned side
+    schaefer_labels = find_preds(conditioned, "schaefer_label")
+    assert len(schaefer_labels) == 1
+    assert schaefer_labels[0][0] == head_var, (
+        f"schaefer_label arg {schaefer_labels[0][0]} != head var {head_var}"
+    )
+
+    # voxel(vx, vy, vz) must be in the conditioned side
+    voxels = find_preds(conditioned, "voxel")
+    assert len(voxels) == 1
+    assert len(voxels[0]) == 3, (
+        f"voxel should have 3 args (in 3D), got {len(voxels[0])}"
+    )
+
+    # After anaphora resolution, selected_study(?ss) should be in the
+    # conditioned side (unpacked from the inner existential)
+    sel_study_conditioned = find_preds(conditioned, "selected_study")
+    assert len(sel_study_conditioned) == 1, (
+        f"Expected 1 selected_study in conditioned, "
+        f"got {len(sel_study_conditioned)}"
+    )
+
+    # reports(?ss, vx, vy, vz) must be present
+    reports_preds = find_preds(conditioned, "reports")
+    assert len(reports_preds) == 1
+    assert len(reports_preds[0]) == 4, (
+        f"reports should have 4 args (ss + 3 voxel coords), "
+        f"got {len(reports_preds[0])}"
+    )
+
+    # labels(?s, vx, vy, vz) must be present
+    labels_preds = find_preds(conditioned, "labels")
+    assert len(labels_preds) == 1
+    assert len(labels_preds[0]) == 4, (
+        f"labels should have 4 args (s + 3 voxel coords), "
+        f"got {len(labels_preds[0])}"
+    )
+
+    # --- Conditioning side ---
+    conditioning = condition.conditioning
+    # Should be the selected_study(?ss) ∧ mentions(?ss, 'language')
+    sel_study_cond = find_preds(conditioning, "selected_study")
+    assert len(sel_study_cond) == 1, (
+        f"Expected 1 selected_study in conditioning, "
+        f"got {len(sel_study_cond)}"
+    )
+
+    mentions_preds = find_preds(conditioning, "mentions")
+    assert len(mentions_preds) == 1
+    assert len(mentions_preds[0]) == 2
+    assert mentions_preds[0][1] == Constant("language")
+
+    # --- Anaphora check: the two selected_study vars MUST be the same ---
+    ss_conditioned = sel_study_conditioned[0][0]
+    ss_conditioning = sel_study_cond[0][0]
+    assert ss_conditioned == ss_conditioning, (
+        f"Anaphora mismatch: conditioned {ss_conditioned} != "
+        f"conditioning {ss_conditioning}"
+    )
+
+    # The lifted existential wrapping Condition must be this same variable
+    assert body.head == ss_conditioned, (
+        f"Lifted existential head {body.head} != "
+        f"selected_study var {ss_conditioned}"
+    )
+
+    # --- No unresolved AnaphoraPredicate markers remain ---
+    from ..anaphora_resolution import AnaphoraPredicate
+
+    def find_anaphora(expr):
+        if isinstance(expr, AnaphoraPredicate):
+            return True
+        if isinstance(expr, Conjunction):
+            return any(find_anaphora(f) for f in expr.formulas)
+        if isinstance(expr, ExistentialPredicate):
+            return find_anaphora(expr.body)
+        if isinstance(expr, Condition):
+            return find_anaphora(expr.conditioned) or find_anaphora(expr.conditioning)
+        if isinstance(expr, FunctionApplication):
+            return False
+        if hasattr(expr, 'body'):
+            return find_anaphora(expr.body)
+        return False
+
+    assert not find_anaphora(result), (
+        "Unresolved AnaphoraPredicate markers remain in the output"
+    )
