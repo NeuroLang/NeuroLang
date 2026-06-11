@@ -469,6 +469,9 @@ The anaphoric form is more natural and is what the Bayes Factor program uses.
    scope yet.  Each rule resolves ``the X`` from the ``for every X`` in its
    own head.
 
+   Anaphora also works across the ``conditioned to`` / ``given`` boundary
+   in conditional probability rules — see section 5.3 for details.
+
 4.4 The ``;`` Separator for Multi-Variable Heads
 ---------------------------------------------------
 
@@ -602,7 +605,7 @@ marginalising over studies — the study variable introduced by
    before the probabilistic step.
 
 5.3 Conditional Probability — ``with probability … conditioned to``
----------------------------------------------------------------------
+--------------------------------------------------------------------
 
 The MARG form computes a conditional probability:
 
@@ -633,6 +636,41 @@ the study term is 'emotion'"*.
    and conditioning noun-phrases must exactly match the corresponding
    relation arities.  Use ``_`` for columns that exist in the body relation
    but should not appear in the head.
+
+Anaphora across the condition boundary
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When ``the Noun`` appears on the **conditioning** side (after ``given`` /
+``conditioned to``), it refers back to a noun introduced in the **conditioned**
+side — the main clause:
+
+.. code-block:: squall
+
+    define as Published with probability every Voxel
+        that a SelectedStudy reports
+        given the SelectedStudy mentions 'emotion'.
+
+Here ``the SelectedStudy`` in the ``given`` clause refers to the same
+study variable introduced by ``a SelectedStudy`` in the main clause.
+The resolver collects ``the X`` markers from the conditioning side, finds
+a matching noun predicate on the conditioned side, and unifies the
+variables:
+
+* Conditioned side: ``∃ s. voxel(v) ∧ selected_study(s) ∧ reports(s, v)``
+* Conditioning side (before resolution):
+  ``∃ s'. selected_study(s') ∧ mentions(s', 'emotion')``
+* After resolution:
+  ``Condition(∃ s. voxel(v) ∧ selected_study(s) ∧ reports(s, v),
+             selected_study(s) ∧ mentions(s, 'emotion'))``
+* After existential lifting (the ``∃ s`` must scope over the whole Condition):
+  ``∃ s. Condition(voxel(v) ∧ selected_study(s) ∧ reports(s, v),
+                   selected_study(s) ∧ mentions(s, 'emotion'))``
+
+The variable ``s`` is now shared across both sides, so ``the SelectedStudy``
+and ``a SelectedStudy`` refer to the same study.  This is the only resolution
+direction supported: ``the`` on the conditioning side resolves against a noun
+on the conditioned side.  See section 4.3 for anaphora within compound
+quantifiers (the reverse direction).
 
 5.4 Explicit Probability — ``with probability NP``
 ----------------------------------------------------
@@ -1518,3 +1556,38 @@ edge cases that occur only with malformed programs or uncommon execution
 patterns.  The main-line feature paths — parsing, transformer registration,
 symbol-table population, and uniform-probability computation — are fully
 exercised.
+
+
+.. _appendix-e-squall:
+
+Appendix E: Querying from the Command Line
+============================================
+
+The ``neurolang-query`` command-line tool lets you run SQUALL (or Datalog)
+queries without writing Python code.  It picks up a preconfigured engine from
+the :ref:`engine registry <neurolang-engine-registry>` and executes the
+query directly.
+
+Running a SQUALL query inline::
+
+    neurolang-query --engine neurosynth --squall \
+        "obtain every peak_reported."
+
+Running a SQUALL query from a file::
+
+    neurolang-query --engine neurosynth --squall -f query.squall
+
+Showing the Datalog IR for a SQUALL query (no execution)::
+
+    neurolang-query --engine neurosynth --squall --show-datalog \
+        "obtain every Voxel in 3D that a Study reported."
+
+The tool also supports plain Datalog queries (omit ``--squall``).  For the
+full list of options, see ``neurolang-query --help`` or the
+:py:mod:`neurolang.utils.cli` module documentation.
+
+
+Appendix F: Engine Configuration (engines.yaml)
+===============================================
+
+See :doc:`engine_configuration` for the full engine registry reference.

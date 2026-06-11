@@ -5,8 +5,9 @@ Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
-from neurolang.datalog.magic_sets import magic_rewrite
-from neurolang.exceptions import (
+import operator
+from ..datalog.magic_sets import magic_rewrite
+from ..exceptions import (
     ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
 )
 from typing import (

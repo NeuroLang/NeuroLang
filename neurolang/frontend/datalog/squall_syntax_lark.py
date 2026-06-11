@@ -80,11 +80,14 @@ from ...expressions import (
     Query,
     Symbol,
 )
-from ...logic import Disjunction, ExistentialPredicate, UniversalPredicate
+from ...logic import (
+    Disjunction, ExistentialPredicate, UniversalPredicate
+)
 from ...logic.expression_processing import extract_logic_free_variables
 from ...probabilistic.expressions import (
     Condition, ProbabilisticFact, ProbabilisticQuery, PROB
 )
+from .anaphora_resolution import AnaphoraPredicate
 from .squall import InvertedFunctionApplication
 
 
@@ -1162,6 +1165,9 @@ class SquallTransformer(Transformer):
                 var_info = getattr(ng, '_var_info', None)
                 if var_info is not None and isinstance(var_info, tuple):
                     body_syms, head_syms = _resolve_var_info(var_info)
+                    noun_name = getattr(ng, '_noun_name', None)
+                    if noun_name:
+                        self._symbol_scope[noun_name] = body_syms
                     body = ng(body_syms)
                     scope = _apply_to_vars(d, head_syms)
                     result = Implication(scope, body)
@@ -1190,6 +1196,20 @@ class SquallTransformer(Transformer):
                 noun_name = getattr(ng, '_noun_name', None)
                 if noun_name and noun_name in self._symbol_scope:
                     x = self._symbol_scope[noun_name]
+                    if isinstance(x, tuple):
+                        # Anaphora resolution for a multi-dimensional noun
+                        # (e.g. "the Voxel" referring back to "every Voxel in
+                        # 3D").  The scope entry is a tuple of symbols
+                        # (x₀, x₁, x₂).  The continuation d may be a
+                        # single-arg lambda (e.g. lambda obj:
+                        # verb(subject, obj)), so calling d(t0, t1, t2)
+                        # would raise TypeError.  We call d with the first
+                        # variable, then spread the rest into the resulting
+                        # FunctionApplication.
+                        result = d(x[0])
+                        if len(x) > 1 and isinstance(result, FunctionApplication):
+                            result = result.functor(*result.args, *x[1:])
+                        return result
                     return d(x)
 
                 # Special handling for aggregation ng1 — mirrors det_every.
@@ -1274,18 +1294,31 @@ class SquallTransformer(Transformer):
                     body = ng(body_syms)
                     scope = _apply_to_vars(d, head_syms)
                     result = Conjunction((body, scope))
-                    for sym in head_syms:
-                        result = ExistentialPredicate(sym, result)
+                    for i, sym in enumerate(head_syms):
+                        if i == 0 and noun_name:
+                            result = AnaphoraPredicate(
+                                sym, result, Symbol(noun_name)
+                            )
+                        else:
+                            result = ExistentialPredicate(sym, result)
                     return result
                 elif var_info is not None:
                     x = var_info
                     body = ng(x)
                     scope = d(x)
+                    if noun_name:
+                        return AnaphoraPredicate(
+                            x, Conjunction((body, scope)), Symbol(noun_name)
+                        )
                     return ExistentialPredicate(x, Conjunction((body, scope)))
                 else:
                     x = Symbol.fresh()
                     body = ng(x)
                     scope = d(x)
+                    if noun_name:
+                        return AnaphoraPredicate(
+                            x, Conjunction((body, scope)), Symbol(noun_name)
+                        )
                     return ExistentialPredicate(x, Conjunction((body, scope)))
             return apply_d
         return the
@@ -2198,7 +2231,42 @@ class SquallTransformer(Transformer):
     # ---- Dimension / Aggregation ----
 
     def app_dimension(self, args):
-        return None
+        """Handle ``in ND`` dimension annotations (e.g. ``in 3D``).
+
+        Returns a tuple of *n* fresh symbols so that ``ng1_noun`` stores it
+        as ``_var_info`` and downstream determiner handlers create multi-
+        argument predicate calls (e.g. ``Voxel in 3D`` → ``voxel(x₀, x₁, x₂)``),
+        matching the semantics of the explicit tuple form
+        ``Voxel (?x; ?y; ?z)``.
+        """
+        number = args[0]
+        n = int(number.value) if hasattr(number, 'value') else int(number)
+        return tuple(Symbol.fresh() for _ in range(n))
+
+    def app_dimension_with(self, args):
+        """Handle ``in ND with Noun`` dimension annotations (e.g. ``in 3D with Probability``).
+
+        Like ``app_dimension`` but adds one extra dimension from the ``with``
+        clause, producing *n + 1* fresh symbols. This makes ``in 3D with X``
+        equivalent to ``in 4D`` — both produce 4 variables.
+        """
+        number = args[0]
+        n = int(number.value) if hasattr(number, 'value') else int(number)
+        return tuple(Symbol.fresh() for _ in range(n + 1))
+
+    def app_dimension_only(self, args):
+        """Handle ``with Probability`` / ``with Value`` standalone (without ``in ND``).
+
+        Returns 1 fresh symbol, allowing a dimension keyword to indicate a
+        single dimension on its own.
+        """
+        return (Symbol.fresh(),)
+
+    def dimension_noun(self, args):
+        """Convert a dimension keyword token to its lowercase Symbol form."""
+        token = args[0]
+        name = token.value if hasattr(token, 'value') else str(token)
+        return Symbol(name.lower())
 
     def app_label(self, args):
         label = args[0]
@@ -2226,6 +2294,15 @@ class SquallTransformer(Transformer):
         # "per region" → fresh groupby variable from the noun
         groupby_var = Symbol.fresh()
         return ('_per', groupby_var)
+
+    def dim_keyword(self, args):
+        """Handle ``with Probability`` / ``per Probability`` in dimension contexts.
+
+        Returns ('_per', noun_symbol) so the dimension noun is treated as
+        a groupby/per dimension in ng1_agg_npc.
+        """
+        noun = args[0]
+        return ('_per', noun)
 
     def dim_npc_list(self, args):
         """Handle 'per ?i, ?j, ?k' — multiple per-variables under one 'per' keyword.
@@ -2540,16 +2617,21 @@ def parser(code, local_vars=None, global_vars=None):
         ) from e
 
     from .squall import LogicSimplifier, ResolveInvertedFunctionApplicationMixin
+    from .anaphora_resolution import AnaphoraResolutionWalker
     from neurolang.expression_walker import ExpressionWalker
 
     class _SquallSimplifier(ResolveInvertedFunctionApplicationMixin, LogicSimplifier, ExpressionWalker):
         pass
 
+    def _simplify(expr):
+        simplified = simplifier.walk(expr)
+        return AnaphoraResolutionWalker().walk(simplified)
+
     simplifier = _SquallSimplifier()
     if isinstance(result, SquallProgram):
         simplified_rules = []
         for r in result.rules:
-            simplified_rules.append(simplifier.walk(r))
+            simplified_rules.append(_simplify(r))
         # Choice defs are markers, already stored in result.choice_defs.
         result = SquallProgram(
             rules=simplified_rules,
@@ -2564,11 +2646,11 @@ def parser(code, local_vars=None, global_vars=None):
             if isinstance(f, (EquiprobableChoiceDef, WeightedChoiceDef)):
                 simplified.append(f)
             else:
-                simplified.append(simplifier.walk(f))
+                simplified.append(_simplify(f))
         result = Union(tuple(simplified))
     else:
         if isinstance(result, (EquiprobableChoiceDef, WeightedChoiceDef)):
             pass  # Choice defs are markers, not walkable expressions.
         else:
-            result = simplifier.walk(result)
+            result = _simplify(result)
     return result

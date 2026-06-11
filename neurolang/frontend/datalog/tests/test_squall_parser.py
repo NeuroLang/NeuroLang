@@ -8,14 +8,20 @@ import pytest
 from .... import config
 from ....datalog import Conjunction, Implication, Negation
 from ....expression_pattern_matching import add_match
-from ....expression_walker import ExpressionWalker, ReplaceExpressionWalker
-from ....expressions import Constant, FunctionApplication, Symbol
+from ....expression_walker import (
+    ExpressionWalker, PatternWalker, ReplaceExpressionWalker
+)
+from ....expressions import (
+    Constant, FunctionApplication, ParametricTypeClassMeta, Symbol
+)
+from ....type_system import get_generic_type, is_leq_informative
 from ....logic import (
     ExistentialPredicate,
     LogicOperator,
     NaryLogicOperator,
     UniversalPredicate
 )
+from ....probabilistic.expressions import Condition
 from ..squall import LogicSimplifier
 from ..squall_syntax_lark import (
     parser,
@@ -88,13 +94,75 @@ class LogicWeakEquivalence(ExpressionWalker):
 
     @add_match(EQ(..., ...))
     def eq_expression(self, expression):
-        return expression.args[0] == expression.args[1]
+        left, right = expression.args
+        if type(left) is not type(right):
+            # Unify Unknown/Any across parameterized types
+            lt = type(left)
+            rt = type(right)
+            if not (
+                isinstance(lt, ParametricTypeClassMeta) and
+                isinstance(rt, ParametricTypeClassMeta)
+            ):
+                return False
+            left_root = get_generic_type(lt)
+            right_root = get_generic_type(rt)
+            if not (
+                left_root is right_root and
+                (
+                    is_leq_informative(left.type, right.type) or
+                    is_leq_informative(right.type, left.type)
+                )
+            ):
+                return False
+        return left.unapply() == right.unapply()
 
 
 def weak_logic_eq(left, right):
     left = LogicSimplifier().walk(left)
     right = LogicSimplifier().walk(right)
     return LogicWeakEquivalence().walk(EQ(left, right))
+
+
+class ConditionAwareEqMixin(PatternWalker):
+    """Extend LogicWeakEquivalence with Condition comparison and fix
+    LogicOperator iteration to walk all children instead of early-returning
+    after the first child."""
+
+    @add_match(EQ(Condition, Condition))
+    def eq_condition(self, expression):
+        left, right = expression.args
+        return (
+            self.walk(EQ(left.conditioned, right.conditioned)) and
+            self.walk(EQ(left.conditioning, right.conditioning))
+        )
+
+    @add_match(EQ(LogicOperator, LogicOperator))
+    def eq_logic_operator(self, expression):
+        left, right = expression.args
+        results = []
+        for lv, rv in zip(left.unapply(), right.unapply()):
+            if isinstance(lv, tuple) and isinstance(rv, tuple):
+                if len(lv) != len(rv):
+                    return False
+                results.append(all(
+                    self.walk(EQ(lvv, rvv))
+                    for lvv, rvv in zip(lv, rv)
+                ))
+            else:
+                results.append(self.walk(EQ(lv, rv)))
+        return all(results)
+
+
+class ConditionAwareLogicWeakEquivalence(
+    ConditionAwareEqMixin, LogicWeakEquivalence
+):
+    pass
+
+
+def condition_aware_weak_logic_eq(left, right):
+    left = LogicSimplifier().walk(left)
+    right = LogicSimplifier().walk(right)
+    return ConditionAwareLogicWeakEquivalence().walk(EQ(left, right))
 
 
 @pytest.fixture(scope="module")
@@ -993,11 +1061,49 @@ def test_anaphora_the_noun_with_nd_annotation_resolves():
 
     voxel_atom = next(a for a in body_atoms if a.functor == Symbol("voxel"))
     reports_atom = next(a for a in body_atoms if a.functor == Symbol("reports"))
-    voxel_var = voxel_atom.args[0]
-    reports_voxel_var = reports_atom.args[1]
-    assert voxel_var == reports_voxel_var, (
-        f"Expected ND anaphora resolution: voxel var {voxel_var} != reports arg {reports_voxel_var}"
+    assert len(voxel_atom.args) == 3, (
+        f"Expected voxel to have 3 args (3D), got {len(voxel_atom.args)}: {voxel_atom.args}"
     )
+    assert len(reports_atom.args) == 4, (
+        f"Expected reports to have 4 args (study + 3 voxel coords), "
+        f"got {len(reports_atom.args)}: {reports_atom.args}"
+    )
+    voxel_vars = voxel_atom.args
+    reports_voxel_vars = reports_atom.args[1:]
+    assert voxel_vars == reports_voxel_vars, (
+        f"Expected ND anaphora resolution: voxel vars {voxel_vars} "
+        f"!= reports voxel args {reports_voxel_vars}"
+    )
+
+
+def test_nd_annotation_and_tuple_label_equivalent_arity():
+    """'Voxel in 3D' and 'Voxel (?x; ?y; ?z)' must produce the same predicate arities."""
+    from neurolang.frontend.datalog.squall_syntax_lark import parser as p
+
+    r1 = p("obtain every Voxel (?x; ?y; ?z) that a Study reported.")
+    r2 = p("obtain every Voxel in 3D that a Study reported.")
+
+    def _collect_arities(expr, out=None):
+        if out is None:
+            out = {}
+        if hasattr(expr, 'functor') and hasattr(expr, 'args'):
+            name = expr.functor.name if isinstance(expr.functor, Symbol) else str(expr.functor)
+            out.setdefault(name, set()).add(len(expr.args))
+        if hasattr(expr, 'formulas'):
+            for f in expr.formulas:
+                _collect_arities(f, out)
+        if hasattr(expr, 'head') and hasattr(expr, 'body'):
+            _collect_arities(expr.head, out)
+            _collect_arities(expr.body, out)
+        return out
+
+    arities1 = _collect_arities(r1)
+    arities2 = _collect_arities(r2)
+
+    assert arities1['voxel'] == {3}, f"Tuple form: voxel arity = {arities1.get('voxel')}"
+    assert arities2['voxel'] == {3}, f"ND form: voxel arity = {arities2.get('voxel')}"
+    assert arities1['reported'] == {4}, f"Tuple form: reported arity = {arities1.get('reported')}"
+    assert arities2['reported'] == {4}, f"ND form: reported arity = {arities2.get('reported')}"
 
 
 def test_anaphora_unbound_noun_creates_existential():
@@ -1050,6 +1156,87 @@ def test_compound_quantifier_explicit_vars():
     assert "selected_study" in functors
     assert "activates" in functors
     assert "mentions" in functors
+
+
+def _collect_predicate_atoms(expr, functor_name, result_list):
+    if isinstance(expr, FunctionApplication):
+        if isinstance(expr.functor, Symbol) and expr.functor.name == functor_name:
+            result_list.append(expr)
+        return
+    if isinstance(expr, (Conjunction,)):
+        for f in expr.formulas:
+            _collect_predicate_atoms(f, functor_name, result_list)
+    elif hasattr(expr, 'body'):
+        _collect_predicate_atoms(expr.body, functor_name, result_list)
+    elif hasattr(expr, 'antecedent'):
+        _collect_predicate_atoms(expr.antecedent, functor_name, result_list)
+    elif hasattr(expr, 'conditioned'):
+        _collect_predicate_atoms(expr.conditioned, functor_name, result_list)
+        _collect_predicate_atoms(expr.conditioning, functor_name, result_list)
+    elif hasattr(expr, 'formulas'):
+        for f in expr.formulas:
+            _collect_predicate_atoms(f, functor_name, result_list)
+
+
+def test_anaphora_predicate_class():
+    from neurolang.frontend.datalog.anaphora_resolution import (
+        AnaphoraPredicate
+    )
+    from neurolang.logic import ExistentialPredicate
+
+    x = Symbol.fresh()
+    p = Symbol("test_predicate")
+    body = p(x)
+    ap = AnaphoraPredicate(x, body, Symbol("test_noun"))
+
+    assert isinstance(ap, AnaphoraPredicate)
+    assert isinstance(ap, ExistentialPredicate)
+    assert ap.head is x
+    assert ap.body is body
+    assert ap.noun_name == Symbol("test_noun")
+
+
+def test_squall_marg_anaphora_resolves_across_given():
+    from neurolang.probabilistic.expressions import (
+        PROB, ProbabilisticQuery
+    )
+
+    result = parser(
+        "define as Published with probability every Voxel "
+        "that a SelectedStudy reports "
+        "given the SelectedStudy mentions 'emotion'."
+    )
+
+    # Use the parser's own fresh symbols so structural comparison succeeds.
+    v = result.consequent.args[0]
+    s = result.antecedent.head
+
+    expected = Implication(
+        FunctionApplication(Symbol("published"), (
+            v,
+            ProbabilisticQuery(PROB, (v,)),
+        )),
+        ExistentialPredicate(
+            s,
+            Condition(
+                Conjunction((
+                    FunctionApplication(Symbol("voxel"), (v,)),
+                    FunctionApplication(Symbol("selectedstudy"), (s,)),
+                    FunctionApplication(Symbol("reports"), (s, v)),
+                )),
+                Conjunction((
+                    FunctionApplication(Symbol("selectedstudy"), (s,)),
+                    FunctionApplication(Symbol("mentions"), (s, Constant("emotion"))),
+                )),
+            ),
+        ),
+    )
+
+    assert condition_aware_weak_logic_eq(result, expected), (
+        f"IR mismatch.\n\n"
+        f"Result:   {result}\n\n"
+        f"Expected: {expected}"
+    )
 
 
 def test_compound_quantifier_marg():

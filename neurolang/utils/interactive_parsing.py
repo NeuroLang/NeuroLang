@@ -25,15 +25,17 @@ CATEGORIES = [
 
 # Dictionary for the correspondence between the NeuroLang grammar rules and the frontend categories.
 TERMINALS_TO_CATEGORIES = {
+    'AGGREGATE': CATEGORIES[7],
     'AMPERSAND': CATEGORIES[0],
     'AND_SYMBOL': CATEGORIES[0],
     'ANS': CATEGORIES[7],
     'AT': CATEGORIES[0],
+    'CHOICE_OP': CATEGORIES[9],
     'CMD_IDENTIFIER': CATEGORIES[11],
     'COLON': CATEGORIES[0],
     'COMMA': CATEGORIES[0],
     'COMPARISON_OPERATOR': CATEGORIES[3],
-    'CONDITION_OP': CATEGORIES[3],
+    'PROB_SEP': CATEGORIES[3],
     'CONJUNCTION_SYMBOL': CATEGORIES[0],
     'DOT': CATEGORIES[9],
     'DOTS': CATEGORIES[0],
@@ -48,14 +50,20 @@ TERMINALS_TO_CATEGORIES = {
     'INT': CATEGORIES[1],
     'LAMBDA': CATEGORIES[5],
     'LPAR': CATEGORIES[0],
+    'LSQB': CATEGORIES[0],
+    'MARG': CATEGORIES[7],
     'MINUS': CATEGORIES[3],
     'NEG_UNICODE': CATEGORIES[3],
     'PLUS': CATEGORIES[3],
     'POW': CATEGORIES[3],
+    'PROB': CATEGORIES[7],
     'PROBA_OP': CATEGORIES[9],
+    'SUCC': CATEGORIES[7],
+    'SUCC_INNER': CATEGORIES[11],
     'PYTHON_STRING': CATEGORIES[11],
     'RIGHT_IMPLICATION': CATEGORIES[9],
     'RPAR': CATEGORIES[0],
+    'RSQB': CATEGORIES[0],
     'SEMICOLON': CATEGORIES[0],
     'SLASH': CATEGORIES[3],
     'STAR': CATEGORIES[3],
@@ -141,6 +149,8 @@ class LarkCompleter:
                 accepted_tokens['commands'] = {"values": set()}
             elif (t_name == 'FLOAT'):
                 t_pattern = '<float>'
+            elif (t_name == 'PROB_SEP'):
+                t_pattern = '//'
             elif (t_name == 'IDENTIFIER_REGEXP'):
                 # t_pattern = '<identifier regular expression>'
                 t_pattern = '<identifier_regexp>'

@@ -2,11 +2,14 @@
 
 import pytest
 
+from neurolang.exceptions import NeuroLangException
 from neurolang.utils.cli import (
     _build_parser,
     _execute_program,
     _execute_squall_program,
+    _format_ir,
     _format_result,
+    _read_query,
 )
 
 from neurolang.utils import engine_registry
@@ -193,25 +196,21 @@ engines:
         nl.add_tuple_set([(1, "a"), (2, "b"), (3, "c")], name="csv_rel")
         nl.add_tuple_set([(4, "d"), (5, "e")], name="tsv_rel")
 
-        # Query CSV relation — _execute_program bypasses the probabilistic
-        # frontend query path (which doesn't handle EDB-only queries).
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x, y) :- csv_rel(x, y)"
         )
-        assert col_names == ["x", "y"]
         assert result is not None
-        output = _format_result(result, column_names=col_names)
+        output = _format_result(result, column_names=list(result.columns))
         assert "a" in output
         assert "b" in output
         assert "c" in output
 
         # Query TSV relation
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x, y) :- tsv_rel(x, y)"
         )
-        assert col_names == ["x", "y"]
         assert result is not None
-        output = _format_result(result, column_names=col_names)
+        output = _format_result(result, column_names=list(result.columns))
         assert "d" in output
         assert "e" in output
 
@@ -346,6 +345,122 @@ class TestFormatResult:
         assert "x" in result
         assert "y" not in result
 
+    # -- Sort tests --------------------------------------------------------
+
+    def test_parse_sort_spec_empty(self):
+        from neurolang.utils.cli import _parse_sort_spec
+        assert _parse_sort_spec([]) == []
+
+    def test_parse_sort_spec_asc_default(self):
+        from neurolang.utils.cli import _parse_sort_spec
+        assert _parse_sort_spec(["x"]) == [("x", True)]
+
+    def test_parse_sort_spec_asc_explicit(self):
+        from neurolang.utils.cli import _parse_sort_spec
+        assert _parse_sort_spec(["x:asc"]) == [("x", True)]
+
+    def test_parse_sort_spec_desc(self):
+        from neurolang.utils.cli import _parse_sort_spec
+        assert _parse_sort_spec(["x:desc"]) == [("x", False)]
+
+    def test_parse_sort_spec_multiple(self):
+        from neurolang.utils.cli import _parse_sort_spec
+        result = _parse_sort_spec(["a", "b:desc", "c:asc"])
+        assert result == [("a", True), ("b", False), ("c", True)]
+
+    def test_parse_sort_spec_invalid_direction(self, capsys):
+        from neurolang.utils.cli import _parse_sort_spec
+        result = _parse_sort_spec(["x:sideways"])
+        assert result == [("x", True)]
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err
+
+    def test_sort_named_set_ascending(self):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(2, "b"), (1, "a"), (3, "c")]
+        )
+        result = _format_result(nras, sort_by=[("x", True)])
+        lines = result.strip().split("\n")
+        assert len(lines) == 4
+        # First data row should be (1, a) since x is sorted ascending
+        assert "1" in lines[1] and "a" in lines[1]
+
+    def test_sort_named_set_descending(self):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a"), (2, "b"), (3, "c")]
+        )
+        result = _format_result(nras, sort_by=[("x", False)])
+        lines = result.strip().split("\n")
+        assert len(lines) == 4
+        # First data row should be (3, c) since x is sorted descending
+        assert "3" in lines[1] and "c" in lines[1]
+
+    def test_sort_named_set_two_keys(self):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"),
+            iterable=[(1, "b"), (2, "a"), (1, "a")],
+        )
+        result = _format_result(
+            nras, sort_by=[("x", True), ("y", True)]
+        )
+        lines = result.strip().split("\n")
+        # Should be: (1,a), (1,b), (2,a)
+        assert "1" in lines[1] and "a" in lines[1]
+        assert "1" in lines[2] and "b" in lines[2]
+        assert "2" in lines[3] and "a" in lines[3]
+
+    def test_sort_unknown_column(self, capsys):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x",), iterable=[(2,), (1,)]
+        )
+        result = _format_result(nras, sort_by=[("nonexistent", True)])
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err
+        # Should still produce output, unsorted
+        assert "x" in result
+
+    def test_sort_with_csv_format(self):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(2, "b"), (1, "a")]
+        )
+        result = _format_result(
+            nras, fmt="csv", sort_by=[("x", True)]
+        )
+        lines = result.strip().split("\n")
+        assert lines[0] == "x,y"
+        assert lines[1] == "1,a"
+        assert lines[2] == "2,b"
+
+    def test_sort_with_json_format(self):
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(2, "b"), (1, "a")]
+        )
+        result = _format_result(
+            nras, fmt="json", sort_by=[("x", True)]
+        )
+        import json
+        data = json.loads(result)
+        assert data[0]["x"] == 1
+        assert data[1]["x"] == 2
+
 
 # ---------------------------------------------------------------------------
 # _execute_program
@@ -372,64 +487,249 @@ class TestExecuteProgram:
         assert result is None
 
     def test_simple_edb_query(self, nl):
-        result, col_names = _execute_program(nl, "ans(x) :- R(x, y)")
-        assert col_names == ["x"]
+        result = _execute_program(nl, "ans(x) :- R(x, y)")
         assert result is not None
+        assert result.columns == ("x",)
 
     def test_query_with_conjunction(self, nl):
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x, z) :- R(x, y) & S(x, z)"
         )
-        assert col_names == ["x", "z"]
         assert result is not None
+        assert result.columns == ("x", "z")
 
     def test_query_with_comparison(self, nl):
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(x) :- S(x, z) & (z > 15.0)"
         )
-        assert col_names == ["x"]
         assert result is not None
+        assert result.columns == ("x",)
 
     def test_query_projection(self, nl):
         """Project only one of the variables."""
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(y) :- R(x, y) & S(x, z) & (z > 10.0)"
         )
-        assert col_names == ["y"]
         assert result is not None
+        assert result.columns == ("y",)
 
     def test_query_no_matching_results(self, nl):
         result = _execute_program(nl, "ans(x) :- R(x, y) & (x > 100)")
-        # Chase may return None when a predicate yields no tuples
-        assert result is None
+        assert result is not None
+        assert len(result) == 0
 
     def test_multiple_queries_raises(self, nl):
-        with pytest.raises(ValueError, match="single query"):
+        with pytest.raises(NeuroLangException, match="more than one query"):
             _execute_program(nl, "ans(x) :- R(x, y)\nans(z) :- S(z, w)")
 
     def test_result_column_names_preserved(self, nl):
         """column_names match the Datalog variable names in the query."""
-        _, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(the_x, the_y) :- R(the_x, the_y)"
         )
-        assert col_names == ["the_x", "the_y"]
+        assert result.columns == ("the_x", "the_y")
 
     def test_table_format_output_has_column_names(self, nl):
         """Full roundtrip: execute → format with column names."""
-        result, col_names = _execute_program(
+        result = _execute_program(
             nl, "ans(val) :- R(x, y) & S(x, val)"
         )
-        output = _format_result(result, column_names=col_names)
+        output = _format_result(result, column_names=list(result.columns))
         assert "val" in output
         assert "10.0" in output
         assert "20.0" in output
         assert "30.0" in output
 
     def test_csv_output_has_header(self, nl):
-        result, col_names = _execute_program(nl, "ans(v) :- R(x, y) & S(x, v)")
-        output = _format_result(result, fmt="csv", column_names=col_names)
+        result = _execute_program(nl, "ans(v) :- R(x, y) & S(x, v)")
+        output = _format_result(result, fmt="csv", column_names=list(result.columns))
         lines = output.strip().split("\n")
         assert lines[0] == "v"
+
+
+# ---------------------------------------------------------------------------
+# _execute_program — PROB queries
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteProgramProb:
+
+    """Tests for PROB queries through _execute_program."""
+
+    @pytest.fixture
+    def nl(self):
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a"), (2, "a")], name="edb1")
+        nl.add_uniform_probabilistic_choice_over_set(
+            [("a",), ("b",)], name="pc1"
+        )
+        return nl
+
+    def test_prob_query_returns_named_set(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        assert hasattr(result, "columns")
+        assert result.columns == ("x", "p")
+
+    def test_prob_query_values(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+    def test_prob_query_format_table(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        output = _format_result(result)
+        assert "x" in output
+        assert "p" in output
+        assert "0.5" in output
+
+    def test_prob_query_format_csv(self, nl):
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        output = _format_result(result, fmt="csv")
+        lines = output.strip().split("\n")
+        assert lines[0] == "x,p"
+        assert "1,0.5" in lines[1:]
+
+    def test_prob_rule_without_query_returns_none(self, nl):
+        """PROB rule with no query returns None."""
+        result = _execute_program(
+            nl, "derived(x, p) :- PROB[ edb1(x, s) // pc1(s) ] = p."
+        )
+        assert result is None
+
+    def test_marg_conjunction(self, nl):
+        """MARG with multi-formula conjunction branch."""
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- MARG[ edb1(x, s) & pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+    def test_prob_conjunction(self, nl):
+        """PROB with multi-formula conjunction branch."""
+        result = _execute_program(
+            nl,
+            "derived(x, s, p) :- PROB[ edb1(x, s) & pc1(s) ] = p.\n"
+            "ans(x, s, p) :- derived(x, s, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, "a", 0.5)
+        assert rows[1] == (2, "a", 0.5)
+
+    def test_prob_without_conditional_regular_body(self, nl):
+        """PROB single predicate with outside_connect filtering (plus body atoms)."""
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- edb1(x, s) & PROB[ pc1(s) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+    def test_prob_non_ans_head(self, nl):
+        """PROB desugaring with non-ans rule head (line 552 in _build_prob_rule)."""
+        result = _execute_program(
+            nl,
+            "p(x, prob) :- PROB[ edb1(x, s) // pc1(s) ] = prob.\n"
+            "ans(x, prob) :- p(x, prob).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 2
+        assert rows[0] == (1, 0.5)
+        assert rows[1] == (2, 0.5)
+
+
+# ---------------------------------------------------------------------------
+# _classify_prob_predicate — Negation and ExistentialPredicate branches
+# ---------------------------------------------------------------------------
+
+
+class TestClassifyProbPredicateBranches:
+
+    """Tests for _classify_prob_predicate branches inside PROB/MARG."""
+
+    @pytest.fixture
+    def nl(self):
+        from neurolang.frontend import NeurolangPDL
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a")], name="r1")
+        nl.add_tuple_set([(1, "a", True)], name="r_bool")
+        nl.add_uniform_probabilistic_choice_over_set([("a",), ("b",)], name="pc1")
+        return nl
+
+    def test_prob_existential(self, nl):
+        """ExistentialPredicate inside PROB — hits ExistentialPredicate branch."""
+        result = _execute_program(
+            nl,
+            "derived(x, p) :- PROB[ exists(s st r1(x, s)) ] = p.\n"
+            "ans(x, p) :- derived(x, p).",
+        )
+        assert result is not None
+        rows = sorted(iter(result))
+        assert len(rows) == 1
+        assert rows[0] == (1, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Miscellaneous grammar construct tests
+# ---------------------------------------------------------------------------
+
+
+class TestMiscGrammar:
+
+    """Tests for parser transformer methods not yet covered."""
+
+    @pytest.fixture
+    def nl(self):
+        from neurolang.frontend import NeurolangPDL
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a")], name="R")
+        nl.add_tuple_set([(True,)], name="Rbool")
+        return nl
+
+    def test_negation_body(self, nl):
+        """Negation in a rule body (~R(x, y))."""
+        result = _execute_program(
+            nl,
+            "ans(x) :- R(x, y) & ~(x == 2).",
+        )
+        assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# --squall flag
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -461,6 +761,146 @@ class TestSquallFlag:
         args = parser.parse_args(["-s", "-f", str(fp)])
         assert args.squall is True
         assert args.file == str(fp)
+
+
+# ---------------------------------------------------------------------------
+# --show-datalog flag
+# ---------------------------------------------------------------------------
+
+
+class TestShowDatalogFlag:
+    def test_show_datalog_defaults_to_false(self):
+        parser = _build_parser()
+        args = parser.parse_args([])
+        assert args.show_datalog is False
+
+    def test_show_datalog_flag_long(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["--squall", "--show-datalog", "obtain every Person."]
+        )
+        assert args.show_datalog is True
+        assert args.squall is True
+
+    def test_show_datalog_flag_short(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["-s", "-D", "obtain every Person."]
+        )
+        assert args.show_datalog is True
+        assert args.squall is True
+
+    def test_show_datalog_requires_squall(self):
+        from neurolang.utils.cli import main
+
+        with pytest.raises(SystemExit):
+            main(["--show-datalog", "ans(x) :- R(x)"])
+
+    def test_show_datalog_prints_ir(self, capsys):
+        from neurolang.utils.cli import _show_squall_datalog
+
+        _show_squall_datalog("obtain every Person that plays.")
+        captured = capsys.readouterr()
+        assert "query" in captured.out
+        assert "person" in captured.out
+
+
+class TestFormatIR:
+    def test_symbol_non_fresh(self):
+        from neurolang.expressions import Symbol
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+
+        printer = DatalogPrettyPrinter()
+        x = Symbol("x")
+        assert printer.walk(x) == "x"
+
+    def test_symbol_fresh_renamed(self):
+        from neurolang.expressions import Symbol
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+
+        printer = DatalogPrettyPrinter()
+        f0 = Symbol.fresh()
+        f1 = Symbol.fresh()
+        result = printer.walk((f0, f1))
+        assert "s\u2080" in result
+        assert "s\u2081" in result
+
+    def test_constant_string(self):
+        from neurolang.expressions import Constant
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+
+        printer = DatalogPrettyPrinter()
+        c = Constant("emotion")
+        result = printer.walk(c)
+        assert "'emotion'" in result
+
+    def test_function_application(self):
+        from neurolang.expressions import Symbol
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+
+        printer = DatalogPrettyPrinter()
+        voxel = Symbol("voxel")
+        x, y, z = Symbol("x"), Symbol("y"), Symbol("z")
+        app = voxel(x, y, z)
+        result = printer.walk(app)
+        assert result == "voxel(x, y, z)"
+
+    def test_conjunction_inline(self):
+        from neurolang.expressions import Symbol
+        from neurolang.logic import Conjunction
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+
+        printer = DatalogPrettyPrinter()
+        a, b = Symbol("a"), Symbol("b")
+        p = Symbol("p")
+        q = Symbol("q")
+        conj = Conjunction((p(a), q(b)))
+        result = printer.walk(conj)
+        assert "p(a) \u2227 q(b)" == result
+
+    def test_existential_predicate(self):
+        from neurolang.expressions import Symbol
+        from neurolang.logic import Conjunction, ExistentialPredicate
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+
+        printer = DatalogPrettyPrinter()
+        s = Symbol.fresh()
+        study = Symbol("study")(s)
+        body = Conjunction((study,))
+        ex = ExistentialPredicate(s, body)
+        result = printer.walk(ex)
+        assert result.startswith("\u2203s\u2080")
+        assert "study(s\u2080)" in result
+
+    def test_query_body_breaks_conjunction_into_lines(self):
+        from neurolang.frontend.datalog.squall_syntax_lark import (
+            parser as squall_parser,
+        )
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+
+        parsed = squall_parser("obtain every Voxel (?x; ?y; ?z).")
+        printer = DatalogPrettyPrinter()
+        result = printer.walk(parsed.queries[0])
+        lines = result.split("\n")
+        assert ":-" in lines[0]
+        assert "voxel(x, y, z)" in lines[1].strip()
+
+    def test_nd_annotation_uses_fresh_vars(self):
+        from neurolang.frontend.datalog.squall_syntax_lark import (
+            parser as squall_parser,
+        )
+        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+
+        parsed = squall_parser(
+            "obtain every Voxel in 3D that a Study reported."
+        )
+        printer = DatalogPrettyPrinter()
+        result = printer.walk(parsed.queries[0])
+        assert "s\u2080" in result
+        assert "\u2203" in result
+        assert "voxel" in result
+        assert "study" in result
+        assert "reported" in result
 
 
 # ---------------------------------------------------------------------------

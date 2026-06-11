@@ -86,6 +86,7 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
     protected_keywords = set()
 
     constant_equals = Constant[Callable[[Any, Any], bool]](op.eq)
+    constant_contains = Constant[Callable[[Any, Any], bool]](op.contains)
 
     @add_match(Symbol)
     def symbol(self, expression):

@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -41,10 +43,19 @@ jobs:
       timeout-minutes: 30
       if: matrix.python-version == '3.12'
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+    - name: Generate coverage badge
+      run: |
+        pip install setuptools
+        pip install coverage-badge
+        mkdir -p badges
+        coverage-badge -o badges/coverage.svg -f
+      if: github.ref == 'refs/heads/master' && matrix.python-version == '3.12'
+
+    - name: Publish badge to gh-pages
+      uses: peaceiris/actions-gh-pages@v4
       with:
-        file: ./coverage.xml
-        flags: unittest
-        name: codecov-${{ matrix.python-version }}
-      if: matrix.python-version == '3.12'
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./badges
+        destination_dir: ./
+        keep_files: false
+      if: github.ref == 'refs/heads/master' && matrix.python-version == '3.12'

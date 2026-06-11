@@ -85,6 +85,7 @@ a guided walkthrough.
    tutorial_squall
    tutorial_datalog
    concepts
+   engine_configuration
    auto_examples/index
    api
    tutorial_logic_programming
