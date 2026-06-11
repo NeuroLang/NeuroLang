@@ -16,7 +16,10 @@ engines:
         yeo_networks: 17
     datalog_init: |
       study_with_peaks(S) :- peak_reported(I, J, K, S)
-      mentions(t, s) :- term_in_study_tfidf(t, v, s), (v > 0.03)
+      reports(S, I, J, K) :- peak_reported(I, J, K, S)
+      mentions(s, t) :- term_in_study_tfidf(t, v, s), (v > 0.03)
+      labels(I, J, K, l) :- schaefer(l, r), contains(r, (I, J, K))
+      schaefer_label(l) :- schaefer(l)
     probabilistic_choice:
       selected_study:
         source: study
