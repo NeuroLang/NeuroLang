@@ -2140,3 +2140,82 @@ def test_define_as_marg_given_anaphora_inside_rel():
     assert not find_anaphora(result), (
         "Unresolved AnaphoraPredicate markers remain in the output"
     )
+
+
+def test_aggregation_of_4ary_predicate():
+    """``every agg_create_region_overlay of the Activation_probability in 3D with Probability``
+    should produce an ``AggregationApplication`` with 4 arguments (x, y, z, p),
+    not just 1.
+
+    The ``npc = the Activation_probability in 3D with Probability`` has 4 dimension
+    variables from ``app_dimension_with`` (3 coords + probability).  The aggregation
+    path in ``det_every`` uses ``capturing_cont`` which accepts ``(*args)`` — but
+    ``det_the``'s scope-found tuple path was calling ``d(x[0])`` and only spreading
+    the rest when ``isinstance(result, FunctionApplication)``, which fails for
+    ``capturing_cont`` (returns ``Constant(True)``), losing 3 of 4 variables.
+    """
+    from neurolang.expressions import Symbol, FunctionApplication
+    from neurolang.datalog.expressions import AggregationApplication
+    from neurolang.logic import Implication
+
+    code = (
+        "define as max_items "
+        "where every agg_create_region_overlay "
+        "of the Activation_probability in 3D with Probability."
+    )
+    result = parser(code)
+
+    assert isinstance(result, Implication)
+
+    head = result.consequent
+    assert isinstance(head, FunctionApplication)
+    assert head.functor == Symbol("max_items")
+
+    # The first (and only) arg to max_items is the AggregationApplication
+    agg_arg = head.args[0]
+    assert isinstance(agg_arg, AggregationApplication), (
+        f"Expected AggregationApplication, got {type(agg_arg).__name__}: {agg_arg}"
+    )
+
+    # AggregationApplication(func, (v0, v1, v2, v3)) — 4 args for in 3D with Probability
+    assert len(agg_arg.args) == 4, (
+        f"AggregationApplication should have 4 args (x, y, z, p), "
+        f"got {len(agg_arg.args)}: {agg_arg.args}"
+    )
+    # Each arg should be a Symbol
+    for i, a in enumerate(agg_arg.args):
+        assert isinstance(a, Symbol), (
+            f"AggregationApplication arg {i} is {type(a).__name__}, expected Symbol"
+        )
+
+    # The body should contain activation_probability(x, y, z, p)
+    body = result.antecedent
+
+    def _find_predicates(expr, name):
+        found = []
+        if isinstance(expr, FunctionApplication) and expr.functor == Symbol(name):
+            found.append(expr.args)
+        if isinstance(expr, Conjunction):
+            for f in expr.formulas:
+                found.extend(_find_predicates(f, name))
+        if isinstance(expr, ExistentialPredicate):
+            found.extend(_find_predicates(expr.body, name))
+        return found
+
+    ap_args_list = _find_predicates(body, "activation_probability")
+    assert len(ap_args_list) == 1, (
+        f"Expected 1 activation_probability predicate in body, "
+        f"got {len(ap_args_list)}"
+    )
+    # Should be 4-ary: activation_probability(x, y, z, p)
+    ap_args = ap_args_list[0]
+    assert len(ap_args) == 4, (
+        f"activation_probability should be 4-ary (x, y, z, p), "
+        f"got {len(ap_args)} args: {ap_args}"
+    )
+
+    # The activation_probability args should match the AggregationApplication args
+    assert ap_args == agg_arg.args, (
+        f"activation_probability args {ap_args} don't match "
+        f"AggregationApplication args {agg_arg.args}"
+    )

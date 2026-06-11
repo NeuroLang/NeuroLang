@@ -1201,19 +1201,25 @@ class SquallTransformer(Transformer):
                 if noun_name and noun_name in self._symbol_scope:
                     x = self._symbol_scope[noun_name]
                     if isinstance(x, tuple):
-                        # Anaphora resolution for a multi-dimensional noun
-                        # (e.g. "the Voxel" referring back to "every Voxel in
-                        # 3D").  The scope entry is a tuple of symbols
-                        # (x₀, x₁, x₂).  The continuation d may be a
-                        # single-arg lambda (e.g. lambda obj:
-                        # verb(subject, obj)), so calling d(t0, t1, t2)
-                        # would raise TypeError.  We call d with the first
-                        # variable, then spread the rest into the resulting
-                        # FunctionApplication.
-                        result = d(x[0])
-                        if len(x) > 1 and isinstance(result, FunctionApplication):
-                            result = result.functor(*result.args, *x[1:])
+                        # Multi-dimensional noun in scope.
+                        # Build the full formula matching the var_info tuple
+                        # path: ng(x) type predicate + continuation applied
+                        # via try/except (multi-arg for capturing_cont,
+                        # single-arg + FunctionApplication spread for verb
+                        # lambdas).  Wrap in AnaphoraPredicate / existential
+                        # chain so aggregation can strip them.
+                        body = ng(x)
+                        try:
+                            scope = d(*x)
+                        except TypeError:
+                            scope = d(x[0])
+                            if len(x) > 1 and isinstance(scope, FunctionApplication):
+                                scope = scope.functor(*scope.args, *x[1:])
+                        result = Conjunction((body, scope))
+                        for sym in x:
+                            result = ExistentialPredicate(sym, result)
                         return result
+                    return d(x)
                     return d(x)
 
                 # Special handling for aggregation ng1 — mirrors det_every.
