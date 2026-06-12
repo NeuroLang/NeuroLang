@@ -18,50 +18,23 @@ class ProbFol2DatalogMixin(PatternWalker):
 
     @add_match(
         Implication(..., ExistentialPredicate(..., Condition)),
-        lambda imp: (
-            is_conjunctive_negation(imp.antecedent.body.conditioned)
-            and is_conjunctive_negation(imp.antecedent.body.conditioning)
-        ),
     )
-    def strip_ep_over_conjunctive_condition(self, imp):
+    def strip_ep_over_condition(self, imp):
+        """Strip ``ExistentialPredicate`` that wraps a ``Condition`` in the
+        antecedent of an ``Implication``.
+
+        The ``AnaphoraResolutionWalker`` lifts the existential quantifier
+        (from ``a/an/every``) to wrap the ``Condition`` after cross-boundary
+        resolution.  Datalog semantics already treat free variables in the
+        body as existentially quantified, so the quantifier wrapper is
+        unnecessary and can be removed.  The inner ``Condition`` is then
+        handled naturally by downstream mixins such as
+        ``rewrite_conditional_query`` or
+        ``decompose_non_conjunctive_condition``.
+        """
         return self.walk(Implication(
             imp.consequent, imp.antecedent.body
         ))
-
-    @add_match(
-        Implication(..., ExistentialPredicate(..., Condition)),
-        lambda imp: any(
-            not is_conjunctive_negation(arg)
-            for arg in imp.antecedent.body.unapply()
-        ),
-    )
-    def translate_marg_query_lifted(self, imp):
-        """Handle ``Implication(..., ExistentialPredicate(?v, Condition(...)))``.
-
-        The ``AnaphoraResolutionWalker`` lifts the anaphoric variable to wrap
-        the ``Condition``.  Unwrap it, call ``rewrite_conditional_query``
-        directly on the inner ``Condition``, then re-apply the existential
-        quantifier to each resulting rule.
-        """
-        var = imp.antecedent.head
-        inner_imp = Implication(imp.consequent, imp.antecedent.body)
-        result = TranslateProbabilisticQueryMixin.rewrite_conditional_query(
-            self, inner_imp
-        )
-        if isinstance(result, tuple):
-            return tuple(
-                Implication(
-                    ExistentialPredicate(var, r.consequent),
-                    r.antecedent
-                ) if isinstance(r, Implication) else r
-                for r in result
-            )
-        if isinstance(result, Implication):
-            return Implication(
-                ExistentialPredicate(var, result.consequent),
-                result.antecedent
-            )
-        return result
 
     @add_match(
         Implication(..., Condition),
