@@ -14,9 +14,10 @@ from ....datalog.expression_processing import (
     extract_logic_free_variables,
 )
 from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
-from ....expression_walker import ReplaceExpressionWalker
+from ....expression_walker import ReplaceExpressionWalker, ReplaceSymbolWalker
 from ....expressions import Constant, FunctionApplication, Symbol
-from ....logic import TRUE, Conjunction, Implication
+from ....logic import TRUE, Conjunction, Implication, ExistentialPredicate
+from ....logic.transformations import ExtractBoundVariables
 from ....probabilistic.expressions import (
     PROB,
     Condition,
@@ -385,6 +386,43 @@ class TranslateHeadConstantsToEqualities(ew.PatternWalker):
 
 
 class TranslateProbabilisticQueryMixin(ew.PatternWalker):
+
+    @ew.add_match(Implication(..., Condition(ExistentialPredicate(..., ...), ...)))
+    def lift_ep_from_conditioned(self, impl):
+        condition = impl.antecedent
+        ep = condition.conditioned
+        other_side = condition.conditioning
+        other_bound = ExtractBoundVariables().walk(other_side)
+        if ep.head in other_bound:
+            fresh_var = Symbol[ep.head.type].fresh()
+            fresh_ep = ReplaceSymbolWalker({ep.head.name: fresh_var}).walk(ep)
+            lifted_ep = fresh_ep
+        else:
+            lifted_ep = ep
+        lifted = ExistentialPredicate(
+            lifted_ep.head,
+            Condition(lifted_ep.body, condition.conditioning)
+        )
+        return self.walk(Implication(impl.consequent, lifted))
+
+    @ew.add_match(Implication(..., Condition(..., ExistentialPredicate(..., ...))))
+    def lift_ep_from_conditioning(self, impl):
+        condition = impl.antecedent
+        ep = condition.conditioning
+        other_side = condition.conditioned
+        other_bound = ExtractBoundVariables().walk(other_side)
+        if ep.head in other_bound:
+            fresh_var = Symbol[ep.head.type].fresh()
+            fresh_ep = ReplaceSymbolWalker({ep.head.name: fresh_var}).walk(ep)
+            lifted_ep = fresh_ep
+        else:
+            lifted_ep = ep
+        lifted = ExistentialPredicate(
+            lifted_ep.head,
+            Condition(condition.conditioned, lifted_ep.body)
+        )
+        return self.walk(Implication(impl.consequent, lifted))
+
     @ew.add_match(
         Implication(
             ..., FunctionApplication(Constant[typing.Any](op.floordiv), ...)

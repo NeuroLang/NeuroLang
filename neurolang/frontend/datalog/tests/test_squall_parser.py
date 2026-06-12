@@ -2219,3 +2219,99 @@ def test_aggregation_of_4ary_predicate():
         f"activation_probability args {ap_args} don't match "
         f"AggregationApplication args {agg_arg.args}"
     )
+
+
+def test_lift_ep_from_conditioned_anaphora():
+    from neurolang.datalog.negation import is_conjunctive_negation
+    from neurolang.logic.transformations import ExtractBoundVariables
+    from neurolang.logic import ExistentialPredicate
+
+    v = Symbol('v')
+    p_of_v = FunctionApplication(Symbol('p'), (v,))
+    q_of_v = FunctionApplication(Symbol('q'), (v,))
+    ep = ExistentialPredicate(v, p_of_v)
+
+    anaphora_condition = Condition(ep, q_of_v)
+
+    other_bound = ExtractBoundVariables().walk(q_of_v)
+    assert v not in other_bound
+
+    lifted_ep = ep
+    lifted = ExistentialPredicate(
+        lifted_ep.head,
+        Condition(lifted_ep.body, q_of_v)
+    )
+
+    assert is_conjunctive_negation(lifted.body.conditioned)
+    assert is_conjunctive_negation(lifted.body.conditioning)
+
+    stripped = lifted.body
+
+    expected = Condition(p_of_v, q_of_v)
+    assert stripped.unapply() == expected.unapply(), (
+        f"Expected {expected}, got {stripped}"
+    )
+
+
+def test_lift_ep_clash_both_sides():
+    from neurolang.logic.transformations import ExtractBoundVariables
+    from neurolang.expression_walker import ReplaceSymbolWalker
+
+    x1 = Symbol('x')
+    x2 = Symbol('x')
+    p_of_x1 = FunctionApplication(Symbol('p'), (x1,))
+    q_of_x2 = FunctionApplication(Symbol('q'), (x2,))
+    ep_left = ExistentialPredicate(x1, p_of_x1)
+    ep_right = ExistentialPredicate(x2, q_of_x2)
+
+    clash_condition = Condition(ep_left, ep_right)
+
+    other_bound = ExtractBoundVariables().walk(ep_right)
+    assert x1 in other_bound
+
+    fresh_var = Symbol[x1.type].fresh()
+    fresh_ep = ReplaceSymbolWalker({x1.name: fresh_var}).walk(ep_left)
+    lifted = ExistentialPredicate(
+        fresh_ep.head,
+        Condition(fresh_ep.body, ep_right)
+    )
+
+    inner_cond = lifted.body
+    assert isinstance(inner_cond, Condition)
+    assert inner_cond.conditioned == fresh_ep.body
+    assert isinstance(inner_cond.conditioning, ExistentialPredicate)
+    assert lifted.head == fresh_ep.head
+    assert lifted.head.name != x1.name
+
+
+def test_decompose_non_conjunctive_condition():
+    from neurolang.datalog.negation import is_conjunctive_negation
+    from neurolang.datalog.expression_processing import extract_logic_free_variables
+    from neurolang.logic import Disjunction
+    from neurolang.logic.horn_clauses import fol_query_to_datalog_program
+    from neurolang.expressions import ExpressionBlock
+
+    x = Symbol('x')
+    p_of_x = FunctionApplication(Symbol('p'), (x,))
+    q_of_x = FunctionApplication(Symbol('q'), (x,))
+    r_of_x = FunctionApplication(Symbol('r'), (x,))
+    disj = Disjunction((q_of_x, r_of_x))
+    condition = Condition(p_of_x, disj)
+
+    results = []
+    new_args = []
+    for arg in (condition.conditioned, condition.conditioning):
+        if is_conjunctive_negation(arg):
+            new_args.append(arg)
+        else:
+            fv = extract_logic_free_variables(arg)
+            fresh_head = Symbol.fresh()(*tuple(fv))
+            aux = fol_query_to_datalog_program(fresh_head, arg)
+            results.append(aux)
+            new_args.append(fresh_head)
+
+    assert len(new_args) == 2
+    assert new_args[0] == p_of_x
+    assert isinstance(new_args[1], FunctionApplication)
+    assert len(results) == 1
+    assert isinstance(results[0], ExpressionBlock)
