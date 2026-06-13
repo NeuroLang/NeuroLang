@@ -1226,6 +1226,54 @@ def test_dimension_noun_in_sequential_quantifiers():
     )
 
 
+def test_dimension_noun_no_shadowing():
+    """Verify that 'the Voxel' in a multi-dimensional noun context does NOT
+    existentially rebind head variables — they remain free and shared with
+    the rule head."""
+
+    result = parser(
+        "define as activation_probability for every Voxel in 3D "
+        "and for every Probability "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Probability."
+    )
+    assert isinstance(result, Implication)
+
+    # Collect head variable names.
+    head_vars = set(str(s) for s in result.consequent.args)
+    assert len(head_vars) == 4  # s0, s1, s2, s3
+
+    # Walk the antecedent looking for ExistentialPredicate nodes.
+    def find_ep_heads(expr):
+        heads = set()
+        if isinstance(expr, ExistentialPredicate):
+            heads.add(str(expr.head))
+        if hasattr(expr, "formulas"):
+            for f in expr.formulas:
+                heads |= find_ep_heads(f)
+        if hasattr(expr, "body"):
+            heads |= find_ep_heads(expr.body)
+        return heads
+
+    ep_heads = find_ep_heads(result.antecedent)
+
+    # None of the head variables should be existentially bound.
+    shadowed = head_vars & ep_heads
+    assert not shadowed, (
+        f"Head variables {shadowed} are existentially bound (shadowed).\n"
+        f"Result: {result}"
+    )
+
+    # Only the Schaefer_label variable (s4 style) should be existential.
+    # Check that exactly 1 existential variable is not a head variable.
+    ep_non_head = ep_heads - head_vars
+    assert len(ep_non_head) == 1, (
+        f"Expected exactly 1 existential (non-head) variable, "
+        f"got {len(ep_non_head)}: {ep_non_head}\n"
+        f"Result: {result}"
+    )
+
+
 def test_anaphora_predicate_class():
 
     x = Symbol.fresh()

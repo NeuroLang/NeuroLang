@@ -1216,8 +1216,8 @@ class SquallTransformer(Transformer):
                         # path: ng(x) type predicate + continuation applied
                         # via try/except (multi-arg for capturing_cont,
                         # single-arg + FunctionApplication spread for verb
-                        # lambdas).  Wrap in AnaphoraPredicate / existential
-                        # chain so aggregation can strip them.
+                        # lambdas).  The variables in x are free head
+                        # variables, so they must NOT be existentially bound.
                         body = ng(x)
                         try:
                             scope = d(*x)
@@ -1226,8 +1226,6 @@ class SquallTransformer(Transformer):
                             if len(x) > 1 and isinstance(scope, FunctionApplication):
                                 scope = scope.functor(*scope.args, *x[1:])
                         result = Conjunction((body, scope))
-                        for sym in x:
-                            result = ExistentialPredicate(sym, result)
                         return result
                     return d(x)
 
