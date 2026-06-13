@@ -287,6 +287,12 @@ def _resolve_var_info(var_info):
     return var_info, [var_info]
 
 
+_DIMENSION_NOUN_NAMES = frozenset({
+    Symbol("probability"),
+    Symbol("value"),
+})
+
+
 class SquallTransformer(Transformer):
 
     """Transforms a SQUALL parse tree into NeuroLang logical expressions.
@@ -872,6 +878,9 @@ class SquallTransformer(Transformer):
         """Handle `for every Region [?r]` in a compound quantifier list.
 
         Returns `('_quant_clause', (var, type_predicate))`.
+        type_predicate may be None for type-annotation nouns (Probability,
+        Value) that introduce a variable into scope without generating a
+        body predicate.
         """
         items = [a for a in args if a is not None]
         ng1 = items[0]
@@ -891,7 +900,11 @@ class SquallTransformer(Transformer):
             self._symbol_scope[noun_name] = body_args
             self._has_rule_scope = True
 
-        type_predicate = ng1(body_args)
+        # Dimension nouns (Probability, Value) are type annotations that
+        # introduce a variable without generating a body predicate.
+        type_predicate = None
+        if noun_name and noun_name not in _DIMENSION_NOUN_NAMES:
+            type_predicate = ng1(body_args)
         return ('_quant_clause', (body_args, type_predicate))
 
     def quant_list_single(self, args):
@@ -921,7 +934,7 @@ class SquallTransformer(Transformer):
             type_preds.append(type_pred)
 
         body_parts = type_preds + [where_sentence]
-        body_formula = Conjunction(tuple(body_parts))
+        body_formula = Conjunction(tuple(p for p in body_parts if p is not None))
         return ('_rule_body2', (head_vars, body_formula))
 
     def rule_body1_cond_prior(self, args):

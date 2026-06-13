@@ -1178,10 +1178,14 @@ def test_dimension_noun_in_compound_quantifier():
     assert len(voxel_atoms) == 1
     assert len(voxel_atoms[0].args) == 3
 
+    # Probability/Value are type annotations — they introduce a variable
+    # into scope without generating a body predicate
     prob_atoms = []
     _collect_predicate_atoms(result.antecedent, "probability", prob_atoms)
-    assert len(prob_atoms) == 1
-    assert len(prob_atoms[0].args) == 1
+    assert len(prob_atoms) == 0, (
+        "Probability is a type noun, not a database predicate — "
+        "it must NOT appear in the rule body"
+    )
 
     schaefer_atoms = []
     _collect_predicate_atoms(
@@ -1209,10 +1213,11 @@ def test_dimension_noun_in_compound_quantifier():
     assert voxel_vars == labels_vars[1:], (
         "Voxel coords must be shared between voxel/3 and labels/4"
     )
-    prob_var = prob_atoms[0].args[0]
+    # Probability var comes from the head (4th arg), shared with label_reports
+    prob_var = result.consequent.args[3]
     lr_var = label_reports_atoms[0].args[1]
     assert prob_var == lr_var, (
-        "Probability var must be shared between probability/1 and "
+        "Probability var must be shared between head and "
         f"label_reports/2, got {prob_var} != {lr_var}"
     )
     # Anaphora: 'the Voxel' in labels and 'the Probability' in label_reports
