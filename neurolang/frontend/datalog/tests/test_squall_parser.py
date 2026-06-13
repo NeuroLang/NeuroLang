@@ -9,7 +9,7 @@ from .... import config
 from ....datalog import Conjunction, Implication, Negation
 from ....expression_pattern_matching import add_match
 from ....expression_walker import (
-    ExpressionWalker, PatternWalker, ReplaceExpressionWalker
+    ExpressionWalker, PatternWalker, ReplaceExpressionWalker, ReplaceSymbolWalker
 )
 from ....expressions import (
     Constant, FunctionApplication, ParametricTypeClassMeta, Symbol
@@ -19,9 +19,10 @@ from ....logic import (
     ExistentialPredicate,
     LogicOperator,
     NaryLogicOperator,
-    UniversalPredicate
+    UniversalPredicate,
+    Disjunction,
 )
-from ....probabilistic.expressions import Condition
+from ....probabilistic.expressions import Condition, ProbabilisticFact
 from ..squall import LogicSimplifier
 from ..squall_syntax_lark import (
     parser,
@@ -30,6 +31,14 @@ from ..squall_syntax_lark import (
     WeightedChoiceDef,
 )
 from ...probabilistic_frontend import RegionFrontendCPLogicSolver, Chase
+from ....datalog.expression_processing import extract_logic_free_variables
+from ....datalog.expressions import AggregationApplication
+from ....datalog.negation import is_conjunctive_negation
+from ....expressions import ExpressionBlock, Query
+from ....logic.horn_clauses import fol_query_to_datalog_program
+from ....logic.transformations import ExtractBoundVariables
+from ....probabilistic.expressions import PROB, ProbabilisticQuery
+from ..anaphora_resolution import AnaphoraPredicate
 
 
 LOGGER = logging.getLogger()
@@ -134,6 +143,19 @@ class ConditionAwareEqMixin(PatternWalker):
         return (
             self.walk(EQ(left.conditioned, right.conditioned)) and
             self.walk(EQ(left.conditioning, right.conditioning))
+        )
+
+    @add_match(EQ(NaryLogicOperator, NaryLogicOperator))
+    def eq_nary_logic_operator(self, expression):
+        left, right = expression.args
+        if len(left.formulas) != len(right.formulas) or type(left) is not type(right):
+            return False
+        return all(
+            self.walk(EQ(a1, a2))
+            for a1, a2 in zip(
+                sorted(left.formulas, key=repr),
+                sorted(right.formulas, key=repr)
+            )
         )
 
     @add_match(EQ(LogicOperator, LogicOperator))
@@ -548,8 +570,6 @@ def test_lark_semantics_join(datalog_simple):
 
 def test_squall_obtain_produces_squall_program():
     """'obtain' clause produces a SquallProgram with a Query expression."""
-    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
-    from neurolang.expressions import Query
 
     prog = parser("obtain every item that plays.")
     assert isinstance(prog, SquallProgram)
@@ -564,9 +584,6 @@ def test_squall_obtain_produces_squall_program():
 
 def test_squall_obtain_executes_against_engine(datalog_simple):
     """'obtain every Item that has item_count' returns correct results."""
-    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
-    from neurolang.expressions import Query
-    from neurolang.datalog import Implication
 
     prog = parser("obtain every Item that has an item_count.")
     assert isinstance(prog, SquallProgram)
@@ -656,7 +673,6 @@ def test_inverted_function_application_ir_node():
         InvertedFunctionApplication,
         ResolveInvertedFunctionApplicationMixin,
     )
-    from neurolang.expression_walker import ExpressionWalker
 
     class _Resolver(ResolveInvertedFunctionApplicationMixin, ExpressionWalker):
         pass
@@ -716,7 +732,6 @@ def test_squall_transitive_inv_argument_order():
 
 def test_squall_conditioned_prior_produces_condition_node():
     """rule_body1_cond_prior returns an Implication with Condition antecedent."""
-    from neurolang.probabilistic.expressions import Condition
 
     # Grammar: define as probably verb1 rule_body1_cond_prior
     # rule_body1_cond_prior: det ng1 CONDITIONED TO s
@@ -747,7 +762,6 @@ def test_squall_conditioned_prior_produces_condition_node():
 
 def test_squall_conditioned_posterior_produces_condition_node():
     """rule_body1_cond_posterior returns an Implication with Condition antecedent."""
-    from neurolang.probabilistic.expressions import Condition
 
     # Grammar: define as probably verb1 rule_body1_cond_posterior
     # rule_body1_cond_posterior: s CONDITIONED TO det ng1
@@ -778,7 +792,6 @@ def test_squall_conditioned_posterior_produces_condition_node():
 
 def test_rule_body1_cond_prior_tuple_var_info():
     """rule_body1_cond_prior unpacks tuple _var_info into separate head args."""
-    from neurolang.probabilistic.expressions import Condition
 
     result = parser(
         "define as probably Published every Voxel (?x; ?y; ?z) "
@@ -793,7 +806,6 @@ def test_rule_body1_cond_prior_tuple_var_info():
     assert len(head_args) == 3, (
         f"Expected 3 head args for (?x;?y;?z), got {len(head_args)}: {head_args}"
     )
-    from neurolang.expressions import Symbol
     assert all(isinstance(a, Symbol) for a in head_args), (
         f"All head args should be Symbols, got: {head_args}"
     )
@@ -801,8 +813,6 @@ def test_rule_body1_cond_prior_tuple_var_info():
 
 def test_rule_op_marg_produces_prob_query_in_head():
     """'with probability … conditioned to …' produces ProbabilisticQuery(PROB,...) in head."""
-    from neurolang.probabilistic.expressions import Condition, ProbabilisticQuery, PROB
-
     result = parser(
         "define as Published with probability every Voxel "
         "conditioned to every Study activates."
@@ -823,8 +833,6 @@ def test_rule_op_marg_produces_prob_query_in_head():
 
 def test_ng1_agg_npc_arbitrary_functor():
     """'every Custom_func of the Relation' uses Symbol as aggregation functor."""
-    from neurolang.expressions import Symbol, FunctionApplication
-    from neurolang.datalog.expressions import AggregationApplication
 
     # Non-builtin aggregation function: create_overlay is not in _AGG_FUNC_MAP
     result = parser(
@@ -845,8 +853,6 @@ def test_ng1_agg_npc_arbitrary_functor():
 
 def test_det_every_agg_free_var_fallback():
     """Global aggregation: agg args are all free vars in npc body, not just one var."""
-    from neurolang.expressions import FunctionApplication
-    from neurolang.datalog.expressions import AggregationApplication
 
     # Prob_map is a binary relation (x, p) — both should be agg args
     result = parser(
@@ -870,7 +876,6 @@ def test_det_every_agg_free_var_fallback():
 
 def test_rule_body2_cond_parses():
     """Test: define as … with probability every A conditioned to every B should parse."""
-    from ....probabilistic.expressions import Condition, ProbabilisticQuery
 
     result = parser(
         "define as spread with probability every virus conditioned to every study."
@@ -887,9 +892,6 @@ def test_rule_body2_cond_parses():
 
 def test_rel_body_function_call_parses():
     """Euclidean body atom includes the subject variable alongside the two labels."""
-    from ..squall_syntax_lark import parser
-    from ....datalog import Implication
-    from ....logic.expression_processing import extract_logic_free_variables
 
     result = parser(
         "squall define as Close every Person that euclidean(?x, ?y) holds."
@@ -909,7 +911,6 @@ def test_rel_body_function_call_parses():
 
 def test_rel_comp_variable_rhs_parses():
     """'that has an item_weight ?w greater than ?threshold' — variable RHS comparison."""
-    from ..squall_syntax_lark import parser
 
     result = parser(
         "define as Heavy every Item "
@@ -958,7 +959,6 @@ def test_two_anonymous_wildcards_get_distinct_symbols():
 
 def test_vpdo_explicit_prob_v1_accepts_variable():
     """'activates with probability ?p' should parse and produce ProbabilisticFact(Symbol('p'), ...)."""
-    from neurolang.probabilistic.expressions import ProbabilisticFact
 
     result = parser(
         "define as Probable every Study that activates with probability ?p."
@@ -993,8 +993,6 @@ def test_rel_fun_call_tuple_subject_no_prepend():
     should emit is_near(i1,j1,k1,i2,j2,k2) — the six explicit labels, nothing extra.
     Specifically, both i1 and i2 must appear as free variables in the rule body.
     """
-    from ....datalog import Implication
-    from ....logic.expression_processing import extract_logic_free_variables
 
     result = parser(
         "squall define as Near every Focus_reported (?i2; ?j2; ?k2; ?s) "
@@ -1078,10 +1076,9 @@ def test_anaphora_the_noun_with_nd_annotation_resolves():
 
 def test_nd_annotation_and_tuple_label_equivalent_arity():
     """'Voxel in 3D' and 'Voxel (?x; ?y; ?z)' must produce the same predicate arities."""
-    from neurolang.frontend.datalog.squall_syntax_lark import parser as p
 
-    r1 = p("obtain every Voxel (?x; ?y; ?z) that a Study reported.")
-    r2 = p("obtain every Voxel in 3D that a Study reported.")
+    r1 = parser("obtain every Voxel (?x; ?y; ?z) that a Study reported.")
+    r2 = parser("obtain every Voxel in 3D that a Study reported.")
 
     def _collect_arities(expr, out=None):
         if out is None:
@@ -1179,10 +1176,6 @@ def _collect_predicate_atoms(expr, functor_name, result_list):
 
 
 def test_anaphora_predicate_class():
-    from neurolang.frontend.datalog.anaphora_resolution import (
-        AnaphoraPredicate
-    )
-    from neurolang.logic import ExistentialPredicate
 
     x = Symbol.fresh()
     p = Symbol("test_predicate")
@@ -1197,9 +1190,6 @@ def test_anaphora_predicate_class():
 
 
 def test_squall_marg_anaphora_resolves_across_given():
-    from neurolang.probabilistic.expressions import (
-        PROB, ProbabilisticQuery
-    )
 
     result = parser(
         "define as Published with probability every Voxel "
@@ -1249,14 +1239,12 @@ def test_compound_quantifier_marg():
     assert result.consequent.functor == Symbol("joint_probability")
     # Head should have 3 args: r, t, PROB(r, t)
     assert len(result.consequent.args) == 3
-    from neurolang.probabilistic.expressions import ProbabilisticQuery, PROB
     prob_term = result.consequent.args[2]
     assert isinstance(prob_term, ProbabilisticQuery)
     assert prob_term.functor == PROB
 
 
 def test_compound_quantifier_explicit_prob():
-    from neurolang.probabilistic.expressions import ProbabilisticFact
     result = parser(
         "define as Weighted with probability 0.5 "
         "for every Region ?r and for every Term ?t "
@@ -1270,8 +1258,6 @@ def test_compound_quantifier_explicit_prob():
 
 
 def test_obtain_unnamed_simple_predicate():
-    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
-    from neurolang.expressions import Query, Symbol
 
     result = parser(
         "define as Active every Person that plays. "
@@ -1286,8 +1272,6 @@ def test_obtain_unnamed_simple_predicate():
 
 
 def test_obtain_unnamed_with_tuple_label_parses():
-    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
-    from neurolang.expressions import Query
 
     result = parser(
         "define as term_prob with inferred probability "
@@ -1314,8 +1298,6 @@ def test_probably_prefix_in_wlq_head_is_preserved():
     ``mentions`` instead of ``probably_mentions``, colliding with a
     deterministic ``mentions`` rule and causing the chase to hang.
     """
-    from neurolang.frontend.datalog.squall_syntax_lark import SquallProgram
-    from neurolang.probabilistic.expressions import ProbabilisticQuery
 
     program_text = (
         "define as mentions every Term_in_study (?s; ?t). "
@@ -1363,10 +1345,6 @@ def test_full_squall_program_ir_structure():
     5. MARG with conditioned-to
     6. aggregation in head with AggregationApplication
     """
-    from neurolang.probabilistic.expressions import (
-        Condition, ProbabilisticFact, ProbabilisticQuery,
-    )
-    from neurolang.logic import Implication, Conjunction
     from neurolang.datalog.aggregation import AggregationApplication as AggApp
 
     program_text = """
@@ -1463,8 +1441,6 @@ def test_rel_fun_call_with_string_literal():
     a body atom ``startswith(label, 'L ')`` with the constant ``'L '``
     as the second argument.
     """
-    from ....datalog import Implication
-    from ....expressions import Constant, FunctionApplication
 
     result = parser(
         "define as Left_label every Atlas_label ?label "
@@ -1499,8 +1475,6 @@ def test_rel_fun_call_with_string_literal():
 
 def test_rel_fun_call_with_numeric_literal():
     """rel_fun_call with a numeric literal argument parses correctly."""
-    from ....datalog import Implication
-    from ....expressions import Constant, FunctionApplication
 
     result = parser(
         "define as Large every Item ?i that size_greater(42) holds."
@@ -1529,7 +1503,6 @@ def test_rel_fun_call_with_numeric_literal():
 def test_command_parses_and_preserves_in_squall_program():
     """#set_backend('pandas') parses and is preserved in SquallProgram.commands."""
     from ..squall_syntax_lark import SquallProgram
-    from ....expressions import FunctionApplication
 
     result = parser(
         "#set_backend('pandas').\n"
@@ -1545,8 +1518,6 @@ def test_command_parses_and_preserves_in_squall_program():
 
 def test_squall_predicate_call():
     """Bare predicate call (``Predicate (?x, ?y, ?z)``) in a ``define … where`` body."""
-    from ....datalog import Implication
-    from ....expressions import Constant, FunctionApplication, Symbol
 
     result = parser(
         "define as Bayes_factor (?x; ?y; ?bf)\n"
@@ -1569,7 +1540,6 @@ def test_squall_predicate_call():
 
 def test_squall_predicate_call_with_literal():
     """Bare predicate call with a string literal argument."""
-    from ....expressions import Constant, FunctionApplication, Symbol
 
     result = parser(
         "define as Filtered (?x)\n"
@@ -1590,8 +1560,6 @@ def test_squall_predicate_call_with_literal():
 
 def test_squall_arithmetic_assign():
     """Arithmetic expression (``?bf = expression``) in a rule body."""
-    from ....datalog import Implication
-    from ....expressions import Constant, FunctionApplication, Symbol
     from operator import truediv
 
     code = """
@@ -1634,9 +1602,6 @@ def test_squall_arithmetic_assign():
 
 def test_squall_predicate_and_arithmetic_roundtrip():
     """End-to-end: define a rule with predicate calls + arithmetic, then execute against engine."""
-    from ....datalog import Implication
-    from ....expressions import Constant, FunctionApplication, Symbol
-    from ....datalog import Conjunction
     from ....datalog.expressions import Fact
     from ....frontend import NeurolangPDL
 
@@ -1677,7 +1642,6 @@ def test_squall_predicate_and_arithmetic_roundtrip():
 
 def test_squall_where_label_is_expr_does_not_conflict_with_where_s():
     """Existing ``?x is 'string'`` pattern (via s_np_vp) should not break."""
-    from ....expressions import Constant, FunctionApplication
 
     result = parser(
         "obtain every Item (?r; ?x) where ?r is 'target' as Items."
@@ -1763,3 +1727,336 @@ def test_parse_weighted_choice_simple_prob():
     result = parser(code)
     assert isinstance(result, WeightedChoiceDef)
     assert result.head_symbol.name == "selected_study"
+
+
+def test_define_as_nested_relative_clause_no_recursion_error():
+    """Regression: nested relative clause with ``in 3D`` + transitive verb.
+
+    A query like ``define as Region_reported every Schaefer_region that labels
+    a Voxel in 3D that a Study that mentions 'language' reports.`` previously
+    raised ``RecursionError``.  Two bugs caused it:
+
+    1. ``_apply_ops`` used ``lambda obj: verb(subject, obj)`` which failed
+       when ``_apply_to_vars`` expanded a tuple ``(x, y, z)`` into separate
+       positional arguments — the single-param lambda raised ``TypeError``,
+       falling back to passing the raw tuple as a single arg.
+
+    2. ``flatten_nested_existentials`` re-wrapped structurally-stable
+       ``ExistentialPredicate`` chains on every visit, defeating
+       ``process_expression``'s identity-based change detection and causing
+       infinite re-walking.
+    """
+    code = (
+        "define as Region_reported every Schaefer_region "
+        "that labels a Voxel in 3D "
+        "that a Study that mentions 'language' reports."
+    )
+    result = parser(code)
+    assert isinstance(result, Implication)
+
+    # Build the expected IR.  The head variable comes from the
+    # consequent (region_reported(r)), so we extract it to match
+    # exactly.  Body-bound variables use fresh symbols —
+    # weak_logic_eq handles those via quantifier-head renaming.
+    r = result.consequent.args[0]
+    x, y, z, s = (Symbol.fresh() for _ in range(4))
+
+    expected = Implication(
+        Symbol("region_reported")(r),
+        Conjunction((
+            Symbol("schaefer_region")(r),
+            ExistentialPredicate(z, ExistentialPredicate(y, ExistentialPredicate(x,
+                Conjunction((
+                    Symbol("voxel")(x, y, z),
+                    ExistentialPredicate(s,
+                        Conjunction((
+                            Symbol("study")(s),
+                            Symbol("mentions")(s, Constant("language")),
+                            Symbol("reports")(s, x, y, z)
+                        ))
+                    ),
+                    Symbol("labels")(r, x, y, z)
+                ))
+            )))
+        ))
+    )
+
+    assert weak_logic_eq(result, expected), (
+        f"IR mismatch.\nGot:      {result}\nExpected: {expected}"
+    )
+
+
+def test_obtain_with_probability_standalone_adds_dimension():
+    """``with Probability`` / ``with Value`` standalone adds 2 head variables.
+
+    ``app_dimension_only`` (handles ``with Probability`` without a preceding
+    ``in ND``) returns 2 fresh symbols instead of 1.  This ensures the
+    predicate body retains the noun's base argument (e.g. a region variable)
+    while adding the probability/value dimension, producing a 2-column query.
+    """
+    # --- with Probability ---
+    result = parser(
+        "define as Region_reported every Schaefer_region. "
+        "obtain every Region_reported with Probability."
+    )
+    assert isinstance(result, SquallProgram)
+    rule = result.rules[0]
+    q = result.queries[0]
+    expected = SquallProgram(
+        [Implication(
+            Symbol("region_reported")(rule.consequent.args[0]),
+            Symbol("schaefer_region")(rule.consequent.args[0])
+        )],
+        [Query(q.head, Symbol("region_reported")(*q.head))]
+    )
+    assert weak_logic_eq(result, expected)
+
+    # --- with Value ---
+    result2 = parser(
+        "define as Region_reported every Schaefer_region. "
+        "obtain every Region_reported with Value."
+    )
+    assert isinstance(result2, SquallProgram)
+    rule2 = result2.rules[0]
+    q2 = result2.queries[0]
+    expected2 = SquallProgram(
+        [Implication(
+            Symbol("region_reported")(rule2.consequent.args[0]),
+            Symbol("schaefer_region")(rule2.consequent.args[0])
+        )],
+        [Query(q2.head, Symbol("region_reported")(*q2.head))]
+    )
+    assert weak_logic_eq(result2, expected2)
+
+
+def _check_anaphora(result, expected_n_dims):
+    """Verify that ``the Voxel`` / ``the Probability`` in the where clause
+    use the SAME variables as the outer ``for every Voxel … with Probability``
+    quantification (anaphora resolution)."""
+    assert isinstance(result, Implication)
+    voxel_vars = result.consequent.args
+    assert len(voxel_vars) == expected_n_dims
+    s = Symbol.fresh()
+    expected = Implication(
+        result.consequent.functor(*voxel_vars),
+        Conjunction((
+            Symbol("voxel")(*voxel_vars),
+            ExistentialPredicate(s,
+                Conjunction((
+                    Symbol("schaefer_label")(s),
+                    Symbol("labels")(s, *voxel_vars),
+                    Symbol("label_reports")(s, voxel_vars[-1])
+                ))
+            )
+        ))
+    )
+    assert weak_logic_eq(result, expected)
+
+
+def test_compound_quantifier_with_probability_as_noun():
+    """``Probability`` keyword can be used as a regular noun in ``where``
+    clauses of compound-quantifier rules.
+
+    The grammar terminal ``DIM_PROBABILITY`` (exact string ``"Probability"``)
+    is excluded from ``UPPER_NAME`` by negative lookahead, so ``Probability``
+    could never match ``noun1``. This broke sentences where ``Probability``
+    appears as a regular noun after ``the`` in a ``where`` clause.
+
+    Fix: add ``DIM_PROBABILITY | DIM_VALUE`` as alternatives in ``noun1``,
+    and convert the Lark ``Token`` to ``Symbol`` in the ``noun1`` transformer.
+    """
+    code = (
+        "define as voxel_probability for every Voxel in 3D with Probability "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Probability."
+    )
+    result = parser(code)
+    _check_anaphora(result, expected_n_dims=4)
+
+    code2 = (
+        "define as voxel_probability for every Voxel with Probability "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Probability."
+    )
+    result2 = parser(code2)
+    _check_anaphora(result2, expected_n_dims=2)
+
+    code3 = (
+        "define as voxel_value for every Voxel in 3D with Value "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Value."
+    )
+    result3 = parser(code3)
+    _check_anaphora(result3, expected_n_dims=4)
+
+
+def test_define_as_marg_given_anaphora_inside_rel():
+    """``the Selected_study`` in a ``given`` clause resolves to the
+    ``a Selected_study`` introduced inside a nested relative clause
+    (``that a Selected_study reports``).
+
+    After the post-parse ``AnaphoraResolutionWalker``:
+    - ``the Selected_study`` uses the SAME variable as ``a Selected_study``
+    - No ``AnaphoraPredicate`` markers remain
+    - The existential for ``Selected_study`` lifts to wrap the ``Condition``
+    """
+    code = (
+        "define as Label_reports with inferred probability "
+        "every Schaefer_label that labels a Voxel in 3D "
+        "that a Selected_study reports "
+        "given the Selected_study mentions 'language'."
+    )
+    result = parser(code)
+    assert isinstance(result, Implication)
+
+    head = result.consequent
+    s = head.args[0]
+    ss = result.antecedent.head
+    condition = result.antecedent.body
+    assert isinstance(condition, Condition)
+
+    # Extract actual existentially-quantified variables from the result,
+    # so the expected expression faithfully represents parser output.
+    conditioned = condition.conditioned
+    ep_chain = conditioned.unapply()[0][1]
+    z = ep_chain.unapply()[0]
+    y = ep_chain.unapply()[1].unapply()[0]
+    x = ep_chain.unapply()[1].unapply()[1].unapply()[0]
+
+    # Build expected conditioned part: schaefer_label(s) ∧
+    #   ∃z ∃y ∃x ( voxel(x,y,z) ∧ selected_study(ss) ∧ reports(ss,x,y,z)
+    #           ∧ labels(s,x,y,z) )
+    expected_conditioned = Conjunction((
+        Symbol("schaefer_label")(s),
+        ExistentialPredicate(z, ExistentialPredicate(y, ExistentialPredicate(x,
+            Conjunction((
+                Symbol("voxel")(x, y, z),
+                Symbol("selected_study")(ss),
+                Symbol("reports")(ss, x, y, z),
+                Symbol("labels")(s, x, y, z),
+            ))
+        ))),
+    ))
+    assert weak_logic_eq(condition.conditioned, expected_conditioned)
+
+    # Build expected conditioning part: selected_study(ss) ∧ mentions(ss, 'language')
+    expected_conditioning = Conjunction((
+        Symbol("selected_study")(ss),
+        Symbol("mentions")(ss, Constant("language"))
+    ))
+    assert weak_logic_eq(condition.conditioning, expected_conditioning)
+
+    # Verify the existential wrapper matches
+    assert weak_logic_eq(result.antecedent, ExistentialPredicate(ss, condition))
+
+
+def test_aggregation_of_4ary_predicate():
+    """``every agg_create_region_overlay of the Activation_probability in 3D with Probability``
+    should produce an ``AggregationApplication`` with 4 arguments (x, y, z, p),
+    not just 1.
+
+    The ``npc = the Activation_probability in 3D with Probability`` has 4 dimension
+    variables from ``app_dimension_with`` (3 coords + probability).  The aggregation
+    path in ``det_every`` uses ``capturing_cont`` which accepts ``(*args)`` — but
+    ``det_the``'s scope-found tuple path was calling ``d(x[0])`` and only spreading
+    the rest when ``isinstance(result, FunctionApplication)``, which fails for
+    ``capturing_cont`` (returns ``Constant(True)``), losing 3 of 4 variables.
+    """
+    code = (
+        "define as max_items "
+        "where every agg_create_region_overlay "
+        "of the Activation_probability in 3D with Probability."
+    )
+    result = parser(code)
+
+    assert isinstance(result, Implication)
+    head = result.consequent
+    agg_arg = head.args[0]
+    assert isinstance(agg_arg, AggregationApplication)
+    assert len(agg_arg.args) == 4
+    for a in agg_arg.args:
+        assert isinstance(a, Symbol)
+
+    body = result.antecedent
+    assert isinstance(body, FunctionApplication), (
+        f"Expected body to be a FunctionApplication, got {type(body).__name__}"
+    )
+    assert body.functor == Symbol("activation_probability"), (
+        f"Expected activation_probability, got {body.functor}"
+    )
+    assert len(body.args) == 4, (
+        f"Expected 4 args (3D + probability), got {len(body.args)}: {body.args}"
+    )
+    for a in body.args:
+        assert isinstance(a, Symbol)
+
+
+def test_lift_ep_from_conditioned_anaphora():
+    v = Symbol('v')
+    p_of_v = FunctionApplication(Symbol('p'), (v,))
+    q_of_v = FunctionApplication(Symbol('q'), (v,))
+    ep = ExistentialPredicate(v, p_of_v)
+
+    other_bound = ExtractBoundVariables().walk(q_of_v)
+    assert v not in other_bound
+
+    lifted = ExistentialPredicate(
+        ep.head,
+        Condition(ep.body, q_of_v)
+    )
+
+    assert is_conjunctive_negation(lifted.body.conditioned)
+    assert is_conjunctive_negation(lifted.body.conditioning)
+
+
+def test_lift_ep_clash_both_sides():
+    x1 = Symbol('x')
+    x2 = Symbol('x')
+    p_of_x1 = FunctionApplication(Symbol('p'), (x1,))
+    q_of_x2 = FunctionApplication(Symbol('q'), (x2,))
+    ep_left = ExistentialPredicate(x1, p_of_x1)
+    ep_right = ExistentialPredicate(x2, q_of_x2)
+
+    other_bound = ExtractBoundVariables().walk(ep_right)
+    assert x1 in other_bound
+
+    fresh_var = Symbol[x1.type].fresh()
+    fresh_ep = ReplaceSymbolWalker({x1.name: fresh_var}).walk(ep_left)
+    lifted = ExistentialPredicate(
+        fresh_ep.head,
+        Condition(fresh_ep.body, ep_right)
+    )
+
+    inner_cond = lifted.body
+    assert isinstance(inner_cond, Condition)
+    assert inner_cond.conditioned == fresh_ep.body
+    assert isinstance(inner_cond.conditioning, ExistentialPredicate)
+    assert lifted.head == fresh_ep.head
+    assert lifted.head.name != x1.name
+
+
+def test_decompose_non_conjunctive_condition():
+    x = Symbol('x')
+    p_of_x = FunctionApplication(Symbol('p'), (x,))
+    q_of_x = FunctionApplication(Symbol('q'), (x,))
+    r_of_x = FunctionApplication(Symbol('r'), (x,))
+    disj = Disjunction((q_of_x, r_of_x))
+    condition = Condition(p_of_x, disj)
+
+    results = []
+    new_args = []
+    for arg in (condition.conditioned, condition.conditioning):
+        if is_conjunctive_negation(arg):
+            new_args.append(arg)
+        else:
+            fv = extract_logic_free_variables(arg)
+            fresh_head = Symbol.fresh()(*tuple(fv))
+            aux = fol_query_to_datalog_program(fresh_head, arg)
+            results.append(aux)
+            new_args.append(fresh_head)
+
+    assert len(new_args) == 2
+    assert new_args[0] == p_of_x
+    assert isinstance(new_args[1], FunctionApplication)
+    assert len(results) == 1
+    assert isinstance(results[0], ExpressionBlock)

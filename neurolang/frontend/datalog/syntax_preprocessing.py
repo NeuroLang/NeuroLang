@@ -1,12 +1,12 @@
+from ...datalog.expression_processing import extract_logic_free_variables
 from ...datalog.negation import is_conjunctive_negation
 from ...expression_walker import PatternWalker, add_match
-from ...expressions import NeuroLangException
-from ...logic import Implication
+from ...expressions import ExpressionBlock, NeuroLangException, Symbol
+from ...logic import Implication, ExistentialPredicate
 from ...logic.horn_clauses import (
     Fol2DatalogTranslationException,
     fol_query_to_datalog_program
 )
-from ...probabilistic.exceptions import ForbiddenConditionalQueryNonConjunctive
 from ...probabilistic.expressions import Condition
 
 
@@ -16,16 +16,50 @@ class ProbFol2DatalogMixin(PatternWalker):
     """
 
     @add_match(
+        Implication(..., ExistentialPredicate(..., Condition)),
+    )
+    def strip_ep_over_condition(self, imp):
+        """Strip ``ExistentialPredicate`` that wraps a ``Condition`` in the
+        antecedent of an ``Implication``.
+
+        The ``AnaphoraResolutionWalker`` lifts the existential quantifier
+        (from ``a/an/every``) to wrap the ``Condition`` after cross-boundary
+        resolution.  Datalog semantics already treat free variables in the
+        body as existentially quantified, so the quantifier wrapper is
+        unnecessary and can be removed.  The inner ``Condition`` is then
+        handled naturally by downstream mixins such as
+        ``rewrite_conditional_query`` or
+        ``decompose_non_conjunctive_condition``.
+        """
+        return self.walk(Implication(
+            imp.consequent, imp.antecedent.body
+        ))
+
+    @add_match(
         Implication(..., Condition),
         lambda imp: any(
             not is_conjunctive_negation(arg)
             for arg in imp.antecedent.unapply()
         ),
     )
-    def translate_marg_query(self, imp):
-        raise ForbiddenConditionalQueryNonConjunctive(
-            "Conditions on a MARG query need to be conjunctive"
-        )
+    def decompose_non_conjunctive_condition(self, imp):
+        condition = imp.antecedent
+        results = []
+        new_args = []
+        for arg in (condition.conditioned, condition.conditioning):
+            if is_conjunctive_negation(arg):
+                new_args.append(arg)
+            else:
+                fv = extract_logic_free_variables(arg)
+                fresh_head = Symbol.fresh()(*tuple(fv))
+                aux = fol_query_to_datalog_program(fresh_head, arg)
+                results.append(aux)
+                new_args.append(fresh_head)
+        new_condition = Condition(new_args[0], new_args[1])
+        main_impl = self.walk(Implication(imp.consequent, new_condition))
+        if results:
+            return ExpressionBlock([main_impl] + results)
+        return main_impl
 
     @add_match(
         Implication,

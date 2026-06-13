@@ -88,7 +88,7 @@ def init_engine(
         .T,
         name="voxel",
     )
-
+    nl.add_uniform_probabilistic_choice_over_set(study_ids, name="selected_study")
 
 def _read_ns_database(path: str) -> pd.DataFrame:
     activations = pd.read_csv(path, sep="\t")

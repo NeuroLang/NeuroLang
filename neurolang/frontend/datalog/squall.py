@@ -74,16 +74,14 @@ class LogicSimplifier(
     )
     def flatten_nested_existentials(self, expression):
         inner = self.walk(expression.body)
-        if isinstance(inner, ExistentialPredicate):
-            if isinstance(inner.body, Conjunction):
-                return ExistentialPredicate(
-                    expression.head,
-                    ExistentialPredicate(
-                        inner.head,
-                        self.walk(inner.body),
-                    ),
-                )
-        return ExistentialPredicate(expression.head, inner)
+        # If walking the body produced no change, return the original expression.
+        # This prevents infinite re-walking when nested ExistentialPredicate
+        # chains (e.g. EP(x, EP(y, EP(z, Conj(...))))) are structurally stable
+        # but the handler below always creates new wrapper objects.
+        if inner is expression.body:
+            return expression
+        expression = ExistentialPredicate(expression.head, inner)
+        return expression
 
     @add_match(
         UniversalPredicate,
@@ -91,17 +89,21 @@ class LogicSimplifier(
     )
     def flatten_nested_universals(self, expression):
         inner = self.walk(expression.body)
-        return UniversalPredicate(expression.head, inner)
+        if inner is expression.body:
+            return expression
+        expression = UniversalPredicate(expression.head, inner)
+        return expression
 
     @add_match(Implication)
     def walk_implication(self, expression):
         consequent = self.walk(expression.consequent)
         antecedent = self.walk(expression.antecedent)
         if (
-            consequent != expression.consequent
-            or antecedent != expression.antecedent
+            consequent is not expression.consequent
+            or antecedent is not expression.antecedent
         ):
-            return Implication(consequent, antecedent)
+            expression = Implication(consequent, antecedent)
+            return self.walk(expression)
         return expression
 
     @add_match(Negation)

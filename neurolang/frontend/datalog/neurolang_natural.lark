@@ -90,7 +90,8 @@ NO : _NO
 
 np2 : det ng2
 
-ng1 : noun1 [ app ] [ rel ] -> ng1_noun
+ng1_base : noun1 [ app ] -> ng1_noun
+ng1 : ng1_base [ rel ]
     | noun1 [ app ] ( _OF | _FROM ) npc{_THE}  [ dims ] [ rel ]   -> ng1_agg_npc
     // | noun1 [ app ] ng1 [ dims ]           -> ng1_agg_ng1
 ng2 : noun2 [ app ]
@@ -186,6 +187,8 @@ adj1 : intransitive
 adjn : transitive_multiple
 
 noun1 : intransitive
+      | DIM_PROBABILITY
+      | DIM_VALUE
 noun2 : transitive
 
 verb1 : intransitive
