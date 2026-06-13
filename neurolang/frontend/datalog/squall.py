@@ -6,7 +6,7 @@ and normalizes quantifier expressions produced by the SQUALL parser.
 """
 from ...datalog.expressions import AggregationApplication as _AggApp
 from ...expression_walker import ExpressionWalker, PatternWalker, add_match
-from ...expressions import Constant, FunctionApplication, Query
+from ...expressions import Constant, FunctionApplication, Query, Symbol
 from ...logic import (
     Conjunction,
     ExistentialPredicate,
@@ -169,3 +169,56 @@ class LogicSimplifier(
         if new_args != expression.args:
             return expression.functor(*new_args)
         return expression
+
+
+_DIMENSION_TYPE_PREDICATE_NAMES = frozenset({
+    "probability",
+    "value",
+})
+
+
+class StripDimensionTypePredicatesMixin(PatternWalker):
+    """Strips dimension-type atoms (probability/1, value/1) from rule bodies.
+
+    Probability and Value are type annotations in SQUALL — they introduce a
+    variable into scope without representing a database predicate. The SQUALL
+    parser generates ``probability(v)`` / ``value(v)`` atoms from quantifiers
+    like ``for every Probability``. This mixin removes those atoms from rule
+    bodies so they never reach the Datalog engine.
+
+    Must be placed in the frontend solver MRO after any expression-simplifying
+    walkers but before the Datalog program solver (e.g.,
+    ``TranslateToLogicWithAggregation``).
+    """
+
+    @add_match(
+        Conjunction,
+        lambda conjunction: any(
+            isinstance(f, FunctionApplication)
+            and isinstance(f.functor, Symbol)
+            and f.functor.name in _DIMENSION_TYPE_PREDICATE_NAMES
+            and len(f.args) == 1
+            for f in conjunction.formulas
+        ),
+    )
+    def strip_from_conjunction(self, conjunction):
+        filtered = tuple(
+            f for f in conjunction.formulas
+            if not self._is_dimension_type_atom(f)
+        )
+        if len(filtered) == 0:
+            return Constant(True)
+        if len(filtered) == 1:
+            return self.walk(filtered[0])
+        if len(filtered) == len(conjunction.formulas):
+            return conjunction
+        return Conjunction(filtered)
+
+    @staticmethod
+    def _is_dimension_type_atom(expr):
+        return (
+            isinstance(expr, FunctionApplication)
+            and isinstance(expr.functor, Symbol)
+            and expr.functor.name in _DIMENSION_TYPE_PREDICATE_NAMES
+            and len(expr.args) == 1
+        )

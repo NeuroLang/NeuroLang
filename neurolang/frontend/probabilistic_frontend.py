@@ -99,7 +99,7 @@ from .datalog.sugar.spatial import (
 )
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .type_resolution import TypeResolutionMixin
-from .datalog.squall import ResolveInvertedFunctionApplicationMixin
+from .datalog.squall import ResolveInvertedFunctionApplicationMixin, StripDimensionTypePredicatesMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
@@ -143,6 +143,7 @@ class RegionFrontendCPLogicSolver(
     InlineEqualityConstantsMixin,
     TranslateProbabilisticQueryMixin,
     ResolveInvertedFunctionApplicationMixin,
+    StripDimensionTypePredicatesMixin,
     TranslateToLogicWithAggregation,
     TranslateQueryBasedProbabilisticFactMixin,
     TranslateEuclideanDistanceBoundMatrixMixin,

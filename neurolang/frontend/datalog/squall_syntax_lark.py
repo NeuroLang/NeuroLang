@@ -287,12 +287,6 @@ def _resolve_var_info(var_info):
     return var_info, [var_info]
 
 
-_DIMENSION_NOUN_NAMES = frozenset({
-    Symbol("probability"),
-    Symbol("value"),
-})
-
-
 class SquallTransformer(Transformer):
 
     """Transforms a SQUALL parse tree into NeuroLang logical expressions.
@@ -900,11 +894,11 @@ class SquallTransformer(Transformer):
             self._symbol_scope[noun_name] = body_args
             self._has_rule_scope = True
 
-        # Dimension nouns (Probability, Value) are type annotations that
-        # introduce a variable without generating a body predicate.
-        type_predicate = None
-        if noun_name and noun_name not in _DIMENSION_NOUN_NAMES:
-            type_predicate = ng1(body_args)
+        # Always generate the type predicate for the quantifier noun.
+        # Dimension nouns (Probability, Value) will generate probability/1
+        # or value/1 atoms, which are stripped by StripDimensionTypePredicatesMixin
+        # at the frontend level (before the Datalog engine processes them).
+        type_predicate = ng1(body_args)
         return ('_quant_clause', (body_args, type_predicate))
 
     def quant_list_single(self, args):

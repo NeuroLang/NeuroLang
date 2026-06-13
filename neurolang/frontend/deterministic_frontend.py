@@ -15,6 +15,7 @@ from ..logic.horn_clauses import Fol2DatalogMixin
 from ..region_solver import RegionSolver
 from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..utils.data_manipulation import parse_region_label_map
+from .datalog.squall import StripDimensionTypePredicatesMixin
 from .datalog.sugar import (
     TranslateSSugarToSelectByColumn,
     TranslateSelectByFirstColumn,
@@ -71,6 +72,7 @@ class NeurolangDL(QueryBuilderDatalog):
 
 class RegionFrontendDatalogSolver(
     TranslateToLogicWithAggregation,
+    StripDimensionTypePredicatesMixin,
     TranslateSSugarToSelectByColumn,
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities,
