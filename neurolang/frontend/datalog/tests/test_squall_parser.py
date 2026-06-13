@@ -1155,6 +1155,76 @@ def test_compound_quantifier_explicit_vars():
     assert "mentions" in functors
 
 
+def test_dimension_noun_in_compound_quantifier():
+    """'Probability' and 'Value' (DIM_PROBABILITY / DIM_VALUE) must parse as
+    regular nouns in compound quantifiers (for every Voxel in 3D and for every
+    Probability). This tests the grammar change that adds dimension_noun as
+    an alternative in noun1."""
+    result = parser(
+        "define as activation_probability for every Voxel in 3D "
+        "and for every Probability "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Probability."
+    )
+    assert isinstance(result, Implication)
+    head = result.consequent
+    assert head.functor.name == "activation_probability"
+    assert len(head.args) == 4
+    # Body: voxel(s0, s1, s2), probability(s3),
+    #       exists s4: schaefer_label(s4), labels(s4, s0, s1, s2),
+    #                  label_reports(s4, s3)
+    voxel_atoms = []
+    _collect_predicate_atoms(result.antecedent, "voxel", voxel_atoms)
+    assert len(voxel_atoms) == 1
+    assert len(voxel_atoms[0].args) == 3
+
+    prob_atoms = []
+    _collect_predicate_atoms(result.antecedent, "probability", prob_atoms)
+    assert len(prob_atoms) == 1
+    assert len(prob_atoms[0].args) == 1
+
+    schaefer_atoms = []
+    _collect_predicate_atoms(
+        result.antecedent, "schaefer_label", schaefer_atoms
+    )
+    assert len(schaefer_atoms) == 1
+
+    labels_atoms = []
+    _collect_predicate_atoms(
+        result.antecedent, "labels", labels_atoms
+    )
+    assert len(labels_atoms) == 1
+    assert len(labels_atoms[0].args) == 4
+
+    label_reports_atoms = []
+    _collect_predicate_atoms(
+        result.antecedent, "label_reports", label_reports_atoms
+    )
+    assert len(label_reports_atoms) == 1
+    assert len(label_reports_atoms[0].args) == 2
+
+    # Verify variable sharing across atoms
+    voxel_vars = voxel_atoms[0].args
+    labels_vars = labels_atoms[0].args
+    assert voxel_vars == labels_vars[1:], (
+        "Voxel coords must be shared between voxel/3 and labels/4"
+    )
+    prob_var = prob_atoms[0].args[0]
+    lr_var = label_reports_atoms[0].args[1]
+    assert prob_var == lr_var, (
+        "Probability var must be shared between probability/1 and "
+        f"label_reports/2, got {prob_var} != {lr_var}"
+    )
+    # Anaphora: 'the Voxel' in labels and 'the Probability' in label_reports
+    # must resolve to the same vars as quantifier-introduced vars
+    schaefer_var = schaefer_atoms[0].args[0]
+    lr_schaefer_var = label_reports_atoms[0].args[0]
+    labels_schaefer_var = labels_atoms[0].args[0]
+    assert schaefer_var == lr_schaefer_var == labels_schaefer_var, (
+        "Anaphora: same Schaefer_label var across all atoms"
+    )
+
+
 def _collect_predicate_atoms(expr, functor_name, result_list):
     if isinstance(expr, FunctionApplication):
         if isinstance(expr.functor, Symbol) and expr.functor.name == functor_name:

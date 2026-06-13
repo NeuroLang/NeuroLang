@@ -187,8 +187,7 @@ adj1 : intransitive
 adjn : transitive_multiple
 
 noun1 : intransitive
-      | DIM_PROBABILITY
-      | DIM_VALUE
+     | dimension_noun
 noun2 : transitive
 
 verb1 : intransitive

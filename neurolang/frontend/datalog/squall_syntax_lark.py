@@ -914,7 +914,10 @@ class SquallTransformer(Transformer):
         type_preds = []
         for clause in quant_list:
             _, (var, type_pred) = clause
-            head_vars.append(var)
+            if isinstance(var, tuple):
+                head_vars.extend(var)
+            else:
+                head_vars.append(var)
             type_preds.append(type_pred)
 
         body_parts = type_preds + [where_sentence]
