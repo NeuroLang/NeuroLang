@@ -51,6 +51,7 @@ rule_body2 : quant_list _WHERE s                    -> rule_body2_where
 
 quant_list : quant_clause                           -> quant_list_single
            | quant_list _AND quant_clause            -> quant_list_rec
+           | quant_list quant_clause                 -> quant_list_rec
 
 quant_clause : _FOR _EVERY ng1 [ app ]               -> quant_clause_ng1
              | _FOR _EVERY npc{THE}                  -> quant_clause_npc

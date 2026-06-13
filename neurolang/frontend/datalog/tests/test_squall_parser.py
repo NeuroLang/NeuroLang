@@ -1191,6 +1191,41 @@ def test_dimension_noun_in_compound_quantifier():
     )
 
 
+def test_dimension_noun_in_sequential_quantifiers():
+    """'Probability' must parse as regular noun in sequential quantifiers
+    (for every Voxel in 3D for every Probability) — no 'and' between quantifiers."""
+    result = parser(
+        "define as activation_probability for every Voxel in 3D "
+        "for every Probability "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Probability."
+    )
+    assert isinstance(result, Implication)
+
+    # Head: activation_probability(s0, s1, s2, s3)
+    s0, s1, s2, s3 = result.consequent.args
+
+    # Extract s4 from the existential body
+    body_formulas = result.antecedent.unapply()[0]
+    _, _, outer_ep = body_formulas
+    s4 = outer_ep.unapply()[0]
+
+    expected = Implication(
+        Symbol("activation_probability")(s0, s1, s2, s3),
+        Conjunction((
+            Symbol("voxel")(s0, s1, s2),
+            Symbol("probability")(s3),
+            Symbol("schaefer_label")(s4),
+            Symbol("labels")(s4, s0, s1, s2),
+            Symbol("label_reports")(s4, s3),
+        )),
+    )
+
+    assert weak_logic_eq(result, expected), (
+        f"IR mismatch.\nGot:      {result}\nExpected: {expected}"
+    )
+
+
 def test_anaphora_predicate_class():
 
     x = Symbol.fresh()
