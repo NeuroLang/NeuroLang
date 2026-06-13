@@ -197,7 +197,7 @@ class StripDimensionTypePredicatesMixin(PatternWalker):
 
     @add_match(FunctionApplication(Symbol, (Expression,)))
     def replace_dimension_type_atom(self, fa):
-        if fa.functor.name not in self.__class__.dimension_type_predicate_names:
+        if fa.functor.name not in self.dimension_type_predicate_names:
             return fa
         return Constant(True)
 

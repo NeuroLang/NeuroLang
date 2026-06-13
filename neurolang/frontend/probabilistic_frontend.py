@@ -186,6 +186,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             wmc_solve_marg_query,
         ),
         check_qbased_pfact_tuple_unicity=False,
+        solver_class: Optional[Type] = None,
     ) -> "NeurolangPDL":
         """
         Query builder with probabilistic capabilities
@@ -204,14 +205,23 @@ class NeurolangPDL(QueryBuilderDatalog):
             used to compute probabilistic solutions,
             by default (lifted_solve_marg_query, wmc_solve_marg_query)
 
+        solver_class : Type, optional
+            Custom solver class to use instead of RegionFrontendCPLogicSolver.
+            Allows injecting custom mixins (e.g. with dimension_type_predicate_names
+            tailored from engine YAML config).
+
 
         Returns
         -------
         NeurolangPDL
             see description
         """
+        if solver_class is not None:
+            solver = solver_class()
+        else:
+            solver = RegionFrontendCPLogicSolver()
         super().__init__(
-            RegionFrontendCPLogicSolver(), chase_class=chase_class
+            solver, chase_class=chase_class
         )
         if len(probabilistic_solvers) != len(probabilistic_marg_solvers):
             raise ValueError(
