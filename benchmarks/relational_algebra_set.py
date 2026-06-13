@@ -1,16 +1,25 @@
 import logging
+import logging.config
 import time
+from functools import reduce
+
 import numpy as np
 import pandas as pd
-import dask.dataframe as dd
-from functools import reduce
 from sqlalchemy import table, column, and_, select
 from sqlalchemy.dialects import postgresql
-from dask_sql import Context
-from neurolang.utils.relational_algebra_set import (
-    pandas,
-    dask_sql,
-)
+
+from neurolang.utils.relational_algebra_set import pandas
+
+try:
+    import dask.dataframe as dd
+    from dask_sql import Context
+    from neurolang.utils.relational_algebra_set import dask_sql
+    HAS_DASK = True
+except ImportError:
+    dd = None
+    Context = None
+    dask_sql = None
+    HAS_DASK = False
 
 LOGGING_CONFIG = {
     "version": 1,
@@ -47,213 +56,209 @@ LOGGING_CONFIG = {
 logging.config.dictConfig(LOGGING_CONFIG)
 
 
-class TimeLeftNaturalJoins:
-    params = [
-        [10 ** 4, 10 ** 5],
-        [10],
-        [3],
-        [6, 12],
-        [0.75],
-        [pandas, dask_sql],
-    ]
+if HAS_DASK:  # noqa: MC0001
 
-    param_names = [
-        "rows",
-        "cols",
-        "number of join columns",
-        "number of chained joins",
-        "ratio of dictinct elements",
-        "RAS module to test",
-    ]
-
-    def setup(self, N, ncols, njoin_columns, njoins, distinct_r, module):
-        dfs = _generate_dataframes(N, ncols, njoin_columns, njoins, distinct_r)
-        self.sets = [
-            module.NamedRelationalAlgebraFrozenSet(df.columns, df)
-            for df in dfs
+    class TimeLeftNaturalJoins:
+        params = [
+            [10 ** 4, 10 ** 5],
+            [10],
+            [3],
+            [6, 12],
+            [0.75],
+            [pandas, dask_sql],
         ]
 
-    def time_ra_left_naturaljoin(
-        self, N, ncols, njoin_columns, njoins, distinct_r, module
-    ):
-        res = reduce(lambda a, b: a.left_naturaljoin(b), self.sets)
-        post_process_result(self.sets, res)
-
-
-class TimeChainedNaturalJoins:
-    params = [
-        [10 ** 4, 10 ** 5],
-        [10],
-        [3],
-        [6],
-        [0.75],
-        [pandas, dask_sql],
-    ]
-
-    param_names = [
-        "rows",
-        "cols",
-        "number of join columns",
-        "number of chained joins",
-        "ratio of dictinct elements",
-        "RAS module to test",
-    ]
-
-    timeout = 60 * 3
-
-    def setup(self, N, ncols, njoin_columns, njoins, distinct_r, module):
-        dfs = _generate_dataframes(N, ncols, njoin_columns, njoins, distinct_r)
-        self.sets = [
-            module.NamedRelationalAlgebraFrozenSet(df.columns, df)
-            for df in dfs
+        param_names = [
+            "rows",
+            "cols",
+            "number of join columns",
+            "number of chained joins",
+            "ratio of dictinct elements",
+            "RAS module to test",
         ]
 
-    def time_ra_naturaljoin_hard(
-        self, N, ncols, njoin_columns, njoins, distinct_r, module
-    ):
-        res = reduce(lambda a, b: a.naturaljoin(b), self.sets)
-        post_process_result(self.sets, res)
+        def setup(self, N, ncols, njoin_columns, njoins, distinct_r, module):
+            dfs = _generate_dataframes(N, ncols, njoin_columns, njoins, distinct_r)
+            self.sets = [
+                module.NamedRelationalAlgebraFrozenSet(df.columns, df)
+                for df in dfs
+            ]
 
-    def time_ra_naturaljoin_easy(
-        self, N, ncols, njoin_columns, njoins, distinct_r, module
-    ):
-        res = reduce(lambda a, b: a.naturaljoin(b), self.sets[::-1])
-        post_process_result(self.sets, res)
+        def time_ra_left_naturaljoin(
+            self, N, ncols, njoin_columns, njoins, distinct_r, module
+        ):
+            res = reduce(lambda a, b: a.left_naturaljoin(b), self.sets)
+            _post_process_result(self.sets, res)
 
 
-class TimeRawMerge:
-    params = [[10 ** 4, 10 ** 5], [10], [3], [6, 12], [0.75], [dd, pd]]
+    class TimeChainedNaturalJoins:
+        params = [
+            [10 ** 4, 10 ** 5],
+            [10],
+            [3],
+            [6],
+            [0.75],
+            [pandas, dask_sql],
+        ]
 
-    param_names = [
-        "rows",
-        "cols",
-        "number of join columns",
-        "number of chained joins",
-        "ratio of dictinct elements",
-        "lib",
-    ]
+        param_names = [
+            "rows",
+            "cols",
+            "number of join columns",
+            "number of chained joins",
+            "ratio of dictinct elements",
+            "RAS module to test",
+        ]
 
-    def setup(self, N, ncols, njoin_columns, njoins, distinct_r, lib):
-        self.dfs = _generate_dataframes(
-            N, ncols, njoin_columns, njoins, distinct_r
-        )
-        if lib == dd:
+        timeout = 60 * 3
+
+        def setup(self, N, ncols, njoin_columns, njoins, distinct_r, module):
+            dfs = _generate_dataframes(N, ncols, njoin_columns, njoins, distinct_r)
+            self.sets = [
+                module.NamedRelationalAlgebraFrozenSet(df.columns, df)
+                for df in dfs
+            ]
+
+        def time_ra_naturaljoin_hard(
+            self, N, ncols, njoin_columns, njoins, distinct_r, module
+        ):
+            res = reduce(lambda a, b: a.naturaljoin(b), self.sets)
+            _post_process_result(self.sets, res)
+
+        def time_ra_naturaljoin_easy(
+            self, N, ncols, njoin_columns, njoins, distinct_r, module
+        ):
+            res = reduce(lambda a, b: a.naturaljoin(b), self.sets[::-1])
+            _post_process_result(self.sets, res)
+
+
+    class TimeRawMerge:
+        params = [[10 ** 4, 10 ** 5], [10], [3], [6, 12], [0.75], [dd, pd]]
+
+        param_names = [
+            "rows",
+            "cols",
+            "number of join columns",
+            "number of chained joins",
+            "ratio of dictinct elements",
+            "lib",
+        ]
+
+        def setup(self, N, ncols, njoin_columns, njoins, distinct_r, lib):
+            self.dfs = _generate_dataframes(
+                N, ncols, njoin_columns, njoins, distinct_r
+            )
+            if lib == dd:
+                self.dfs = [dd.from_pandas(d, npartitions=1) for d in self.dfs]
+
+        def time_merge(self, N, ncols, njoin_columns, njoins, distinct_r, lib):
+            on = list(self.dfs[0].columns[:njoin_columns])
+            res = reduce(lambda a, b: lib.merge(a, b, on=on), self.dfs)
+            if lib == dd:
+                df = res.compute()
+
+
+    class TimeDaskSQLJoins:
+        params = [[10 ** 4, 10 ** 5], [10], [3], [6], [0.75]]
+
+        param_names = [
+            "rows",
+            "cols",
+            "number of join columns",
+            "number of chained joins",
+            "ratio of dictinct elements",
+        ]
+
+        def setup(self, N, ncols, njoin_columns, njoins, distinct_r):
+            self.dfs = _generate_dataframes(
+                N, ncols, njoin_columns, njoins, distinct_r
+            )
             self.dfs = [dd.from_pandas(d, npartitions=1) for d in self.dfs]
+            self.join_cols = [
+                c for c in self.dfs[0].columns if c in self.dfs[1].columns
+            ]
+            self.ctx = Context()
+            self._create_tables()
+            self._create_sql_query()
 
-    def time_merge(self, N, ncols, njoin_columns, njoins, distinct_r, lib):
-        on = list(self.dfs[0].columns[:njoin_columns])
-        res = reduce(lambda a, b: lib.merge(a, b, on=on), self.dfs)
-        if lib == dd:
-            df = res.compute()
+        def _create_tables(self):
+            self.tables = []
+            for i, df in enumerate(self.dfs):
+                _table_name = f"table_{i:03}"
+                self.ctx.create_table(_table_name, df)
+                _table = table(_table_name, *[column(c) for c in df.columns])
+                self.tables.append(_table)
+
+        def _create_sql_query(self):
+            left = self.tables[0]
+            joinq = left
+            select_cols = list(left.c)
+            for right in self.tables[1:]:
+                on = and_(
+                    left.c.get(col) == right.c.get(col) for col in self.join_cols
+                )
+                joinq = joinq.join(right, on)
+                select_cols += [c for c in right.c if c.name not in self.join_cols]
+            query = select(*select_cols).select_from(joinq)
+            self.sql_query = str(
+                query.compile(
+                    dialect=postgresql.dialect(),
+                    compile_kwargs={"literal_binds": True},
+                )
+            )
+
+        def time_joins(self, N, ncols, njoin_columns, njoins, distinct_r):
+            start = time.perf_counter()
+            print(f"Processing SQL query: {self.sql_query}")
+            res = self.ctx.sql(self.sql_query)
+            stop = time.perf_counter()
+            print(f"Processing SQL query took {stop-start:0.4f} s.")
+            start = time.perf_counter()
+            print("Computing dask dataframe")
+            res.compute()
+            stop = time.perf_counter()
+            print(f"Computing dask dataframe took {stop-start:0.4f} s.")
+            return res
 
 
-class TimeDaskSQLJoins:
-    params = [[10 ** 4, 10 ** 5], [10], [3], [6], [0.75]]
-
-    param_names = [
-        "rows",
-        "cols",
-        "number of join columns",
-        "number of chained joins",
-        "ratio of dictinct elements",
-    ]
-
-    def setup(self, N, ncols, njoin_columns, njoins, distinct_r):
-        self.dfs = _generate_dataframes(
-            N, ncols, njoin_columns, njoins, distinct_r
-        )
-        self.dfs = [dd.from_pandas(d, npartitions=1) for d in self.dfs]
-        self.join_cols = [
-            c for c in self.dfs[0].columns if c in self.dfs[1].columns
+    class TimeEquiJoin:
+        params = [
+            [10 ** 4, 10 ** 5],
+            [10],
+            [3],
+            [6, 12],
+            [0.75],
+            [pandas, dask_sql],
         ]
-        self.ctx = Context()
-        self._create_tables()
-        self._create_sql_query()
 
-    def _create_tables(self):
-        self.tables = []
-        for i, df in enumerate(self.dfs):
-            _table_name = f"table_{i:03}"
-            self.ctx.create_table(_table_name, df)
-            _table = table(_table_name, *[column(c) for c in df.columns])
-            self.tables.append(_table)
+        param_names = [
+            "rows",
+            "cols",
+            "number of join columns",
+            "number of chained joins",
+            "ratio of dictinct elements",
+            "RAS module to test",
+        ]
 
-    def _create_sql_query(self):
-        left = self.tables[0]
-        joinq = left
-        select_cols = list(left.c)
-        for right in self.tables[1:]:
-            on = and_(
-                left.c.get(col) == right.c.get(col) for col in self.join_cols
+        def setup(self, N, ncols, njoin_columns, njoins, distinct_r, module):
+            dfs = _generate_dataframes(N, ncols, njoin_columns, njoins, distinct_r)
+            for d in dfs:
+                d.columns = pd.RangeIndex(ncols)
+            self.sets = [module.RelationalAlgebraFrozenSet(df) for df in dfs]
+
+        def time_ra_equijoin(
+            self, N, ncols, njoin_columns, njoins, distinct_r, module
+        ):
+            res = reduce(
+                lambda a, b: a.equijoin(b, [(i, i) for i in range(njoin_columns)]),
+                self.sets,
             )
-            joinq = joinq.join(right, on)
-            select_cols += [c for c in right.c if c.name not in self.join_cols]
-        query = select(*select_cols).select_from(joinq)
-        self.sql_query = str(
-            query.compile(
-                dialect=postgresql.dialect(),
-                compile_kwargs={"literal_binds": True},
-            )
-        )
-
-    def time_joins(self, N, ncols, njoin_columns, njoins, distinct_r):
-        start = time.perf_counter()
-        print(f"Processing SQL query: {self.sql_query}")
-        res = self.ctx.sql(self.sql_query)
-        stop = time.perf_counter()
-        print(f"Processing SQL query took {stop-start:0.4f} s.")
-        start = time.perf_counter()
-        print("Computing dask dataframe")
-        res.compute()
-        stop = time.perf_counter()
-        print(f"Computing dask dataframe took {stop-start:0.4f} s.")
-        # Visualize task graph
-        # res.visualize('taskgraph.png')
-        return res
+            _post_process_result(self.sets, res)
 
 
-class TimeEquiJoin:
-    params = [
-        [10 ** 4, 10 ** 5],
-        [10],
-        [3],
-        [6, 12],
-        [0.75],
-        [pandas, dask_sql],
-    ]
-
-    param_names = [
-        "rows",
-        "cols",
-        "number of join columns",
-        "number of chained joins",
-        "ratio of dictinct elements",
-        "RAS module to test",
-    ]
-
-    def setup(self, N, ncols, njoin_columns, njoins, distinct_r, module):
-        dfs = _generate_dataframes(N, ncols, njoin_columns, njoins, distinct_r)
-        for d in dfs:
-            d.columns = pd.RangeIndex(ncols)
-        self.sets = [module.RelationalAlgebraFrozenSet(df) for df in dfs]
-
-    def time_ra_equijoin(
-        self, N, ncols, njoin_columns, njoins, distinct_r, module
-    ):
-        res = reduce(
-            lambda a, b: a.equijoin(b, [(i, i) for i in range(njoin_columns)]),
-            self.sets,
-        )
-
-        post_process_result(self.sets, res)
-
-
-def post_process_result(sets, result):
-    if isinstance(result, dask_sql.RelationalAlgebraFrozenSet):
-        # print(result)
-        # Fetch one seems slower than _fetchall. Need to investigate.
-        result._fetchall()
-        # result.fetch_one()
+    def _post_process_result(sets, result):
+        if isinstance(result, dask_sql.RelationalAlgebraFrozenSet):
+            result._fetchall()
 
 
 def _generate_dataframes(N, ncols, njoin_columns, njoins, distinct_r):

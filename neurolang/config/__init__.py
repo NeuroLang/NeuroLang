@@ -12,7 +12,7 @@ class NeurolangConfigParser(configparser.ConfigParser):
         """
         Convenience method to set the backend used by Neurolang.
         """
-        valid_backends = {"pandas", "dask"}
+        valid_backends = {"pandas", "dask", "polars"}
         if backend not in valid_backends:
             raise ValueError(
                 f"The query backend option should be one of {valid_backends}"
