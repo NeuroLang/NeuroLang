@@ -1167,94 +1167,71 @@ def test_dimension_noun_in_compound_quantifier():
         "and Label_reports the Probability."
     )
     assert isinstance(result, Implication)
-    head = result.consequent
-    assert head.functor.name == "activation_probability"
-    assert len(head.args) == 4
-    # Body: voxel(s0, s1, s2), probability(s3),
-    #       exists s4: schaefer_label(s4), labels(s4, s0, s1, s2),
-    #                  label_reports(s4, s3)
-    voxel_atoms = []
-    _collect_predicate_atoms(result.antecedent, "voxel", voxel_atoms)
-    assert len(voxel_atoms) >= 1
-    for a in voxel_atoms:
-        assert len(a.args) == 3, (
-            f"voxel must have 3 args (3D), got {len(a.args)}"
-        )
 
-    # Probability/Value generate type atoms at the parser level (probability/1).
-    # These are stripped by StripDimensionTypePredicatesMixin at the frontend
-    # solver level before reaching the Datalog engine. At the raw parser output
-    # we verify they are well-formed.
-    prob_atoms = []
-    _collect_predicate_atoms(result.antecedent, "probability", prob_atoms)
-    assert len(prob_atoms) == 1, (
-        "Probability generates a probability/1 atom at the parser level "
-        "(stripped by StripDimensionTypePredicatesMixin at frontend)"
-    )
-    assert len(prob_atoms[0].args) == 1
+    # Extract real variables from the result using unapply().
+    # Head: activation_probability(s0, s1, s2, s3)
+    head_functor, head_args = result.consequent.unapply()
+    s0, s1, s2, s3 = head_args
 
-    schaefer_atoms = []
-    _collect_predicate_atoms(
-        result.antecedent, "schaefer_label", schaefer_atoms
-    )
-    assert len(schaefer_atoms) == 1
+    # Body: Conjunction( voxel(s0,s1,s2), probability(s3),
+    #                    ExistentialPredicate(s4, ...) )
+    body = result.antecedent
+    (body_formulas,) = body.unapply()
+    _voxel_fa, _prob_fa, body_ep = body_formulas
 
-    labels_atoms = []
-    _collect_predicate_atoms(
-        result.antecedent, "labels", labels_atoms
-    )
-    assert len(labels_atoms) == 1
-    assert len(labels_atoms[0].args) == 4
+    # Outer existential: s4
+    s4, ep_body = body_ep.unapply()
 
-    label_reports_atoms = []
-    _collect_predicate_atoms(
-        result.antecedent, "label_reports", label_reports_atoms
-    )
-    assert len(label_reports_atoms) == 1
-    assert len(label_reports_atoms[0].args) == 2
+    # Inside the existential's body: Conjunction( schaefer_label(s4),
+    #   ExistentialPredicate(s2, ExistentialPredicate(s1, ExistentialPredicate(s0, ...))),
+    #   label_reports(s4, s3) )
+    (ep_body_formulas,) = ep_body.unapply()
+    _schaefer_fa, inner_ep_chain, _label_reports_fa = ep_body_formulas
 
-    # Verify variable sharing across atoms
-    # voxel/3 may appear twice (quantifier + anaphora resolution); use first
-    voxel_vars = voxel_atoms[0].args
-    labels_vars = labels_atoms[0].args
-    assert voxel_vars == labels_vars[1:], (
-        "Voxel coords must be shared between voxel/3 and labels/4"
-    )
-    # Probability var comes from the head (4th arg), shared with label_reports
-    prob_var = result.consequent.args[3]
-    lr_var = label_reports_atoms[0].args[1]
-    assert prob_var == lr_var, (
-        "Probability var must be shared between head and "
-        f"label_reports/2, got {prob_var} != {lr_var}"
-    )
-    # Anaphora: 'the Voxel' in labels and 'the Probability' in label_reports
-    # must resolve to the same vars as quantifier-introduced vars
-    schaefer_var = schaefer_atoms[0].args[0]
-    lr_schaefer_var = label_reports_atoms[0].args[0]
-    labels_schaefer_var = labels_atoms[0].args[0]
-    assert schaefer_var == lr_schaefer_var == labels_schaefer_var, (
-        "Anaphora: same Schaefer_label var across all atoms"
+    # Nested existential chain: s2 -> s1 -> s0 -> Conjunction(voxel(s0,s1,s2), labels(s4,s0,s1,s2))
+    eps2, ep_s2_body = inner_ep_chain.unapply()
+    eps1, ep_s1_body = ep_s2_body.unapply()
+    eps0, ep_s0_body = ep_s1_body.unapply()
+
+    # Build expected expression using extracted variables
+    activation_probability = Symbol("activation_probability")
+    voxel = Symbol("voxel")
+    probability = Symbol("probability")
+    schaefer_label = Symbol("schaefer_label")
+    labels = Symbol("labels")
+    label_reports = Symbol("label_reports")
+
+    expected = Implication(
+        activation_probability(s0, s1, s2, s3),
+        Conjunction((
+            voxel(s0, s1, s2),
+            probability(s3),
+            ExistentialPredicate(
+                s4,
+                Conjunction((
+                    schaefer_label(s4),
+                    ExistentialPredicate(
+                        s2,
+                        ExistentialPredicate(
+                            s1,
+                            ExistentialPredicate(
+                                s0,
+                                Conjunction((
+                                    voxel(s0, s1, s2),
+                                    labels(s4, s0, s1, s2),
+                                ))
+                            )
+                        )
+                    ),
+                    label_reports(s4, s3),
+                ))
+            )
+        ))
     )
 
-
-def _collect_predicate_atoms(expr, functor_name, result_list):
-    if isinstance(expr, FunctionApplication):
-        if isinstance(expr.functor, Symbol) and expr.functor.name == functor_name:
-            result_list.append(expr)
-        return
-    if isinstance(expr, (Conjunction,)):
-        for f in expr.formulas:
-            _collect_predicate_atoms(f, functor_name, result_list)
-    elif hasattr(expr, 'body'):
-        _collect_predicate_atoms(expr.body, functor_name, result_list)
-    elif hasattr(expr, 'antecedent'):
-        _collect_predicate_atoms(expr.antecedent, functor_name, result_list)
-    elif hasattr(expr, 'conditioned'):
-        _collect_predicate_atoms(expr.conditioned, functor_name, result_list)
-        _collect_predicate_atoms(expr.conditioning, functor_name, result_list)
-    elif hasattr(expr, 'formulas'):
-        for f in expr.formulas:
-            _collect_predicate_atoms(f, functor_name, result_list)
+    assert weak_logic_eq(result, expected), (
+        f"IR mismatch.\nGot:      {result}\nExpected: {expected}"
+    )
 
 
 def test_anaphora_predicate_class():
