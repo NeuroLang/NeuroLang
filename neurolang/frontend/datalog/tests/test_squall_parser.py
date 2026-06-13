@@ -1156,44 +1156,41 @@ def test_compound_quantifier_explicit_vars():
 
 
 def test_dimension_noun_in_compound_quantifier():
-    """'Probability' and 'Value' (DIM_PROBABILITY / DIM_VALUE) must parse as
-    regular nouns in compound quantifiers (for every Voxel in 3D and for every
-    Probability). This tests the grammar change that adds dimension_noun as
-    an alternative in noun1."""
+    """'Probability' and 'Value' must parse as regular nouns in compound
+    quantifiers (for every Voxel in 3D and for every Probability)."""
     result = parser(
         "define as activation_probability for every Voxel in 3D "
         "and for every Probability "
         "where a Schaefer_label labels the Voxel "
         "and Label_reports the Probability."
     )
-    assert isinstance(result, Implication)
+    simplified = LogicSimplifier().walk(result)
+    assert isinstance(simplified, Implication)
 
-    # Extract real variables from the result using unapply().
     # Head: activation_probability(s0, s1, s2, s3)
-    head_functor, head_args = result.consequent.unapply()
-    s0, s1, s2, s3 = head_args
+    s0, s1, s2, s3 = simplified.consequent.args
 
-    # Body: Conjunction( voxel(s0,s1,s2), probability(s3),
-    #                    ExistentialPredicate(s4, ...) )
-    body = result.antecedent
-    (body_formulas,) = body.unapply()
-    _voxel_fa, _prob_fa, body_ep = body_formulas
+    # Body: Conjunction(
+    #   voxel(s0,s1,s2), probability(s3),
+    #   ExistentialPredicate(s4, ...) )
+    conjuncts = simplified.antecedent.unapply()[0]
+    _voxel_fa, _prob_fa, body_ep = conjuncts
 
-    # Outer existential: s4
     s4, ep_body = body_ep.unapply()
 
-    # Inside the existential's body: Conjunction( schaefer_label(s4),
-    #   ExistentialPredicate(s2, ExistentialPredicate(s1, ExistentialPredicate(s0, ...))),
-    #   label_reports(s4, s3) )
-    (ep_body_formulas,) = ep_body.unapply()
-    _schaefer_fa, inner_ep_chain, _label_reports_fa = ep_body_formulas
+    # Inside the existential: a single flat Conjunction
+    # (LogicSimplifier.CollapseConjunctionsMixin already merged,
+    # but ExistentialPredicate chains remain — the anaphora-resolved
+    # voxel vars are re-quantified inside the EP for the labels atom)
+    inner_conjuncts = ep_body.unapply()[0]
+    _schaefer_fa, inner_ep_chain, _label_reports_fa = inner_conjuncts
 
-    # Nested existential chain: s2 -> s1 -> s0 -> Conjunction(voxel(s0,s1,s2), labels(s4,s0,s1,s2))
+    # Nested EP chain: s2 -> s1 -> s0 -> Conjunction(voxel, labels)
     eps2, ep_s2_body = inner_ep_chain.unapply()
     eps1, ep_s1_body = ep_s2_body.unapply()
     eps0, ep_s0_body = ep_s1_body.unapply()
 
-    # Build expected expression using extracted variables
+    # Build expected with the same structural shape
     activation_probability = Symbol("activation_probability")
     voxel = Symbol("voxel")
     probability = Symbol("probability")
@@ -1219,18 +1216,18 @@ def test_dimension_noun_in_compound_quantifier():
                                 Conjunction((
                                     voxel(s0, s1, s2),
                                     labels(s4, s0, s1, s2),
-                                ))
-                            )
-                        )
+                                )),
+                            ),
+                        ),
                     ),
                     label_reports(s4, s3),
-                ))
-            )
-        ))
+                )),
+            ),
+        )),
     )
 
-    assert weak_logic_eq(result, expected), (
-        f"IR mismatch.\nGot:      {result}\nExpected: {expected}"
+    assert weak_logic_eq(simplified, expected), (
+        f"IR mismatch.\nGot:      {simplified}\nExpected: {expected}"
     )
 
 

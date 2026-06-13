@@ -98,12 +98,9 @@ ng2 : noun2 [ app ]
 
 
 
-dimension_noun : DIM_PROBABILITY | DIM_VALUE
-
-app : _IN number"D" _WITH dimension_noun -> app_dimension_with
-    | _IN number"D" _WITH intransitive -> app_dimension_with
+app : _IN number"D" _WITH intransitive -> app_dimension_with
     | _IN number"D" -> app_dimension
-    | _WITH dimension_noun -> app_dimension_only
+    | _WITH intransitive -> app_dimension_only
     | label          -> app_label
 
 dims : dim                    -> dims_base
@@ -113,7 +110,7 @@ dim : (_PER | _FOR _EACH) ng2                         -> dim_ng2
     | (_PER | _FOR _EACH) npc{THE} ("," npc{THE})+    -> dim_npc_list
     | (_PER | _FOR _EACH) npc{THE}                    -> dim_npc
     | agg_func _OF npc{THE}                            -> dim_agg
-    | _PER dimension_noun                              -> dim_keyword
+    | _PER intransitive                              -> dim_keyword
 
 agg_func : AGG_FUNC
 AGG_FUNC : "count" | "sum" | "max" | "min" | "average"
@@ -187,8 +184,6 @@ adj1 : intransitive
 adjn : transitive_multiple
 
 noun1 : intransitive
-     | DIM_PROBABILITY
-     | DIM_VALUE
 noun2 : transitive
 
 verb1 : intransitive
@@ -350,12 +345,9 @@ _WHO : "who"
 _WHOM : "whom"
 _WHOSE : "whose"
 
-DIM_PROBABILITY : "Probability"
-DIM_VALUE : "Value"
-
 LOWER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
-UPPER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose|Probability|Value)\b))//[A-Z]\w*/
-NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose|Probability|Value)\b))//[a-zA-Z_]\w*/
+UPPER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
+NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-zA-Z_]\w*/
 UPPER_NAME_QUOTED : /`[A-Z][^`]*`/
 LOWER_NAME_QUOTED : /`[a-z][^`]*`/
 STRING : /[^']+/

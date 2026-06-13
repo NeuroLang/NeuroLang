@@ -2354,12 +2354,6 @@ class SquallTransformer(Transformer):
             self._symbol_scope[dim_noun.name] = result[-1]
         return result
 
-    def dimension_noun(self, args):
-        """Convert a dimension keyword token to its lowercase Symbol form."""
-        token = args[0]
-        name = token.value if hasattr(token, 'value') else str(token)
-        return Symbol(name.lower())
-
     def app_label(self, args):
         label = args[0]
         if callable(label) and not isinstance(label, (Symbol, Constant)):
