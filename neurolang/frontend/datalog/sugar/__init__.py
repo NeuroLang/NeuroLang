@@ -510,7 +510,7 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
             )
         )
 
-        new_denum_args = extract_logic_free_variables(right) & head_args
+        new_denum_args = extract_logic_free_variables(right)
         new_denum_prob_arg = ProbabilisticQuery(PROB, tuple(new_denum_args))
         new_denum_args.add(new_denum_prob_arg)
         denum_head = ir.Symbol.fresh()(*new_denum_args)

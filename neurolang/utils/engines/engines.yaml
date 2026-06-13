@@ -11,19 +11,16 @@ engines:
     atlases:
       schaefer:
         predicate_name: schaefer
-        n_rois: 100
         resolution_mm: 2
-        yeo_networks: 17
+        n_rois: 100
+        yeo_networks: 7
     datalog_init: |
-      study_with_peaks(S) :- peak_reported(I, J, K, S)
-      reports(S, I, J, K) :- peak_reported(I, J, K, S)
-      mentions(s, t) :- term_in_study_tfidf(t, v, s), (v > 0.03)
-      labels(I, J, K, l) :- schaefer(l, r), contains(r, (I, J, K))
-      schaefer_label(l) :- schaefer(l)
-    probabilistic_choice:
-      selected_study:
-        source: study
-        description: "Uniform probabilistic choice over studies"
+      study_with_peaks(S) :- peak_reported(I, J, K, S).
+      schaefer_voxels(I, J, K, l) :- schaefer(l, r), contains(r, (I, J, K)).
+    #probabilistic_choice:
+      # selected_study:
+      #  source: study
+      #  description: "Uniform probabilistic choice over studies"
     predicates:
       peak_reported:
         arity: 4
