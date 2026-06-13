@@ -1800,6 +1800,12 @@ def test_obtain_with_probability_standalone_adds_dimension():
         "obtain every Region_reported with Probability."
     )
     assert isinstance(result, SquallProgram)
+    assert len(result.rules) == 1
+    rule = result.rules[0]
+    assert isinstance(rule, Implication)
+    assert rule.consequent.functor == Symbol("region_reported")
+    expected_rule_body = Symbol("schaefer_region")(rule.consequent.args[0])
+    assert weak_logic_eq(rule.antecedent, expected_rule_body)
     q = result.queries[0]
     assert isinstance(q, Query)
     assert len(q.head) == 2
@@ -1814,6 +1820,12 @@ def test_obtain_with_probability_standalone_adds_dimension():
         "obtain every Region_reported with Value."
     )
     assert isinstance(result2, SquallProgram)
+    assert len(result2.rules) == 1
+    rule2 = result2.rules[0]
+    assert isinstance(rule2, Implication)
+    assert rule2.consequent.functor == Symbol("region_reported")
+    expected_rule_body2 = Symbol("schaefer_region")(rule2.consequent.args[0])
+    assert weak_logic_eq(rule2.antecedent, expected_rule_body2)
     q2 = result2.queries[0]
     assert isinstance(q2, Query)
     assert len(q2.head) == 2
