@@ -142,6 +142,7 @@ superpowers
 setup.cfg
 
 # internal dev artifacts (not for PR)
+.omo/
 .sisyphus/
 AGENTS.md
 ANALYSIS_SUMMARY.md
