@@ -19,7 +19,8 @@ from ....logic import (
     ExistentialPredicate,
     LogicOperator,
     NaryLogicOperator,
-    UniversalPredicate
+    UniversalPredicate,
+    Disjunction,
 )
 from ....probabilistic.expressions import Condition, ProbabilisticFact
 from ..squall import LogicSimplifier
@@ -34,7 +35,6 @@ from ....datalog.expression_processing import extract_logic_free_variables
 from ....datalog.expressions import AggregationApplication
 from ....datalog.negation import is_conjunctive_negation
 from ....expressions import ExpressionBlock, Query
-from ....logic import Disjunction
 from ....logic.horn_clauses import fol_query_to_datalog_program
 from ....logic.transformations import ExtractBoundVariables
 from ....probabilistic.expressions import PROB, ProbabilisticQuery
@@ -145,20 +145,22 @@ class ConditionAwareEqMixin(PatternWalker):
             self.walk(EQ(left.conditioning, right.conditioning))
         )
 
+    @add_match(EQ(NaryLogicOperator, NaryLogicOperator))
+    def eq_nary_logic_operator(self, expression):
+        left, right = expression.args
+        if len(left.formulas) != len(right.formulas) or type(left) is not type(right):
+            return False
+        return all(
+            self.walk(EQ(a1, a2))
+            for a1, a2 in zip(
+                sorted(left.formulas, key=repr),
+                sorted(right.formulas, key=repr)
+            )
+        )
+
     @add_match(EQ(LogicOperator, LogicOperator))
     def eq_logic_operator(self, expression):
         left, right = expression.args
-        from ....logic import NaryLogicOperator
-        if isinstance(left, NaryLogicOperator) and isinstance(right, NaryLogicOperator):
-            if len(left.formulas) != len(right.formulas) or type(left) is not type(right):
-                return False
-            return all(
-                self.walk(EQ(a1, a2))
-                for a1, a2 in zip(
-                    sorted(left.formulas, key=repr),
-                    sorted(right.formulas, key=repr)
-                )
-            )
         results = []
         for lv, rv in zip(left.unapply(), right.unapply()):
             if isinstance(lv, tuple) and isinstance(rv, tuple):
