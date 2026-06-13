@@ -8,7 +8,7 @@ from pytest import raises
 from ... import expression_walker, expressions
 from ...frontend.datalog.sugar import TranslateProbabilisticQueryMixin
 from ...frontend.probabilistic_frontend import NeurolangPDL
-from ...logic import Negation
+from ...logic import Negation, Union as LogicUnion
 from .. import DatalogProgram, Fact, Implication, Conjunction
 from ..aggregation import (
     AGG_COUNT,
@@ -636,7 +636,6 @@ def test_magic_init_rules_are_idb_not_edb():
     # not a Constant (EDB).
     for symb, value in dl2.symbol_table.items():
         if symb.name.startswith("magic_"):
-            from ...logic import Union as LogicUnion
             assert isinstance(value, LogicUnion), (
                 f"Expected magic predicate {symb.name} to be IDB (Union), "
                 f"but got {type(value).__name__}"
@@ -673,4 +672,10 @@ def test_magic_init_rules_walk_twice_no_crash():
 
     dl2 = Datalog()
     dl2.walk(mr)          # first walk
+    st_after_first = dict(dl2.symbol_table)
     dl2.walk(mr)          # second walk – must not raise
+    # Verify idempotency: second walk must not change the symbol table
+    assert st_after_first == dict(dl2.symbol_table), (
+        "Magic init rules are not idempotent: symbol table changed after "
+        "walking magic rules a second time"
+    )
