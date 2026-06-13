@@ -64,13 +64,13 @@ class TimeRASOperations:
         ras = self.RAS
         sa = self._named_xy_label(ras, self.tuples_a)
         sb = self._named_xy_label(ras, self.tuples_b)
-        sa | sb
+        _ = sa | sb
 
     def time_difference(self, backend, n):
         ras = self.RAS
         sa = self._named_xy_label(ras, self.tuples_a)
         sb = self._named_xy_label(ras, self.tuples_b)
-        sa - sb
+        _ = sa - sb
 
     def time_groupby_agg(self, backend, n):
         ras = self.RAS

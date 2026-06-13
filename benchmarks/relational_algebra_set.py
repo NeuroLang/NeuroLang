@@ -56,7 +56,7 @@ LOGGING_CONFIG = {
 logging.config.dictConfig(LOGGING_CONFIG)
 
 
-if HAS_DASK:
+if HAS_DASK:  # noqa: MC0001
 
     class TimeLeftNaturalJoins:
         params = [

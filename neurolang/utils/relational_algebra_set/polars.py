@@ -1,6 +1,4 @@
-"""
-Polars backend for NeuroLang's Relational Algebra Set (RAS) system.
-"""
+"""Polars backend for NeuroLang's Relational Algebra Set (RAS) system."""
 
 import builtins
 from collections import OrderedDict, namedtuple
@@ -8,7 +6,6 @@ from typing import (
     Callable,
     Dict,
     Iterable,
-    NamedTuple,
     Optional,
     Set as SetType,
     Tuple,
