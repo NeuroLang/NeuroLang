@@ -80,16 +80,8 @@ class LogicSimplifier(
         # but the handler below always creates new wrapper objects.
         if inner is expression.body:
             return expression
-        if isinstance(inner, ExistentialPredicate):
-            if isinstance(inner.body, Conjunction):
-                walked_inner_body = self.walk(inner.body)
-                if walked_inner_body is inner.body:
-                    return expression
-                return ExistentialPredicate(
-                    expression.head,
-                    ExistentialPredicate(inner.head, walked_inner_body),
-                )
-        return ExistentialPredicate(expression.head, inner)
+        expression = ExistentialPredicate(expression.head, inner)
+        return expression
 
     @add_match(
         UniversalPredicate,
@@ -97,17 +89,21 @@ class LogicSimplifier(
     )
     def flatten_nested_universals(self, expression):
         inner = self.walk(expression.body)
-        return UniversalPredicate(expression.head, inner)
+        if inner is expression.body:
+            return expression
+        expression = UniversalPredicate(expression.head, inner)
+        return expression
 
     @add_match(Implication)
     def walk_implication(self, expression):
         consequent = self.walk(expression.consequent)
         antecedent = self.walk(expression.antecedent)
         if (
-            consequent != expression.consequent
-            or antecedent != expression.antecedent
+            consequent is not expression.consequent
+            or antecedent is not expression.antecedent
         ):
-            return Implication(consequent, antecedent)
+            expression = Implication(consequent, antecedent)
+            return self.walk(expression)
         return expression
 
     @add_match(Negation)
