@@ -1220,7 +1220,6 @@ class SquallTransformer(Transformer):
                             result = ExistentialPredicate(sym, result)
                         return result
                     return d(x)
-                    return d(x)
 
                 # Special handling for aggregation ng1 — mirrors det_every.
                 agg_info = getattr(ng, '_agg_info', None)
