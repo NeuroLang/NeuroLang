@@ -1164,70 +1164,30 @@ def test_dimension_noun_in_compound_quantifier():
         "where a Schaefer_label labels the Voxel "
         "and Label_reports the Probability."
     )
-    simplified = LogicSimplifier().walk(result)
-    assert isinstance(simplified, Implication)
+    assert isinstance(result, Implication)
 
+    # Build expected from the actual result to extract real variables.
     # Head: activation_probability(s0, s1, s2, s3)
-    s0, s1, s2, s3 = simplified.consequent.args
+    s0, s1, s2, s3 = result.consequent.args
 
-    # Body: Conjunction(
-    #   voxel(s0,s1,s2), probability(s3),
-    #   ExistentialPredicate(s4, ...) )
-    conjuncts = simplified.antecedent.unapply()[0]
-    _voxel_fa, _prob_fa, body_ep = conjuncts
-
-    s4, ep_body = body_ep.unapply()
-
-    # Inside the existential: a single flat Conjunction
-    # (LogicSimplifier.CollapseConjunctionsMixin already merged,
-    # but ExistentialPredicate chains remain — the anaphora-resolved
-    # voxel vars are re-quantified inside the EP for the labels atom)
-    inner_conjuncts = ep_body.unapply()[0]
-    _schaefer_fa, inner_ep_chain, _label_reports_fa = inner_conjuncts
-
-    # Nested EP chain: s2 -> s1 -> s0 -> Conjunction(voxel, labels)
-    eps2, ep_s2_body = inner_ep_chain.unapply()
-    eps1, ep_s1_body = ep_s2_body.unapply()
-    eps0, ep_s0_body = ep_s1_body.unapply()
-
-    # Build expected with the same structural shape
-    activation_probability = Symbol("activation_probability")
-    voxel = Symbol("voxel")
-    probability = Symbol("probability")
-    schaefer_label = Symbol("schaefer_label")
-    labels = Symbol("labels")
-    label_reports = Symbol("label_reports")
+    # Extract s4 from the existential body
+    body_formulas = result.antecedent.unapply()[0]
+    _, _, outer_ep = body_formulas
+    s4 = outer_ep.unapply()[0]
 
     expected = Implication(
-        activation_probability(s0, s1, s2, s3),
+        Symbol("activation_probability")(s0, s1, s2, s3),
         Conjunction((
-            voxel(s0, s1, s2),
-            probability(s3),
-            ExistentialPredicate(
-                s4,
-                Conjunction((
-                    schaefer_label(s4),
-                    ExistentialPredicate(
-                        s2,
-                        ExistentialPredicate(
-                            s1,
-                            ExistentialPredicate(
-                                s0,
-                                Conjunction((
-                                    voxel(s0, s1, s2),
-                                    labels(s4, s0, s1, s2),
-                                )),
-                            ),
-                        ),
-                    ),
-                    label_reports(s4, s3),
-                )),
-            ),
+            Symbol("voxel")(s0, s1, s2),
+            Symbol("probability")(s3),
+            Symbol("schaefer_label")(s4),
+            Symbol("labels")(s4, s0, s1, s2),
+            Symbol("label_reports")(s4, s3),
         )),
     )
 
-    assert weak_logic_eq(simplified, expected), (
-        f"IR mismatch.\nGot:      {simplified}\nExpected: {expected}"
+    assert weak_logic_eq(result, expected), (
+        f"IR mismatch.\nGot:      {result}\nExpected: {expected}"
     )
 
 

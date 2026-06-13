@@ -6,7 +6,7 @@ and normalizes quantifier expressions produced by the SQUALL parser.
 """
 from ...datalog.expressions import AggregationApplication as _AggApp
 from ...expression_walker import ExpressionWalker, PatternWalker, add_match
-from ...expressions import Constant, FunctionApplication, Query, Symbol
+from ...expressions import Constant, Expression, FunctionApplication, Query, Symbol
 from ...logic import (
     Conjunction,
     ExistentialPredicate,
@@ -185,28 +185,58 @@ class StripDimensionTypePredicatesMixin(PatternWalker):
     replaces their atoms with Constant(True) so they are simplified away by
     RemoveTrivialOperationsMixin or ``LogicSimplifier.remove_true_from_conjunction``.
 
-    Extend with a different predicate set by subclassing and defining
-    ``dimension_type_predicate_names`` on the subclass::
+    Override ``dimension_type_predicate_names`` on a subclass for custom names::
 
         class MyMixin(StripDimensionTypePredicatesMixin):
-            dimension_type_predicate_names = frozenset({
-                "probability", "value", "intensity",
-            })
+            dimension_type_predicate_names = {"probability", "value", "intensity"}
 
-    The module-level ``_DIMENSION_TYPE_PREDICATE_NAMES`` is the default used
-    in the guard lambda. Subclasses override the attribute but the lambda
-    still matches structurally; the handler checks the instance attribute.
+    Use ``make_dimension_type_stripper()`` to create one from engine YAML config.
     """
 
     dimension_type_predicate_names = _DIMENSION_TYPE_PREDICATE_NAMES
 
-    @add_match(
-        FunctionApplication,
-        lambda fa: (
-            isinstance(fa.functor, Symbol)
-            and fa.functor.name in _DIMENSION_TYPE_PREDICATE_NAMES
-            and len(fa.args) == 1
-        ),
-    )
+    @add_match(FunctionApplication(Symbol, (Expression,)))
     def replace_dimension_type_atom(self, fa):
+        if fa.functor.name not in self.__class__.dimension_type_predicate_names:
+            return fa
         return Constant(True)
+
+
+def make_dimension_type_stripper(predicate_names=None):
+    """Create a StripDimensionTypePredicatesMixin subclass with custom names.
+
+    Parameters
+    ----------
+    predicate_names : iterable of str, optional
+        Predicate names to treat as dimension-type annotations.
+        Defaults to ``{"probability", "value"}``.
+
+    Returns
+    -------
+    type
+        A ``StripDimensionTypePredicatesMixin`` subclass that replaces
+        only *predicate_names* atoms with ``Constant(True)``.
+
+    Examples
+    --------
+    Used from engine YAML config::
+
+        from neurolang.frontend.datalog.squall import (
+            make_dimension_type_stripper,
+        )
+
+        Mixin = make_dimension_type_stripper(
+            ["probability", "value", "intensity"]
+        )
+        # Then insert Mixin into the frontend solver MRO
+    """
+    if predicate_names is not None:
+        predicate_names = frozenset(predicate_names)
+    else:
+        predicate_names = _DIMENSION_TYPE_PREDICATE_NAMES
+
+    class _Stripper(StripDimensionTypePredicatesMixin):
+        dimension_type_predicate_names = predicate_names
+
+    _Stripper.__qualname__ = "StripDimensionTypePredicatesMixin"
+    return _Stripper
