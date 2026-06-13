@@ -1800,19 +1800,16 @@ def test_obtain_with_probability_standalone_adds_dimension():
         "obtain every Region_reported with Probability."
     )
     assert isinstance(result, SquallProgram)
-    assert len(result.rules) == 1
     rule = result.rules[0]
-    assert isinstance(rule, Implication)
-    assert rule.consequent.functor == Symbol("region_reported")
-    expected_rule_body = Symbol("schaefer_region")(rule.consequent.args[0])
-    assert weak_logic_eq(rule.antecedent, expected_rule_body)
     q = result.queries[0]
-    assert isinstance(q, Query)
-    assert len(q.head) == 2
-    free_vars = tuple(extract_logic_free_variables(q.body))
-    assert len(free_vars) == 2
-    expected_body = Symbol("region_reported")(*free_vars)
-    assert weak_logic_eq(q.body, expected_body)
+    expected = SquallProgram(
+        [Implication(
+            Symbol("region_reported")(rule.consequent.args[0]),
+            Symbol("schaefer_region")(rule.consequent.args[0])
+        )],
+        [Query(q.head, Symbol("region_reported")(*q.head))]
+    )
+    assert weak_logic_eq(result, expected)
 
     # --- with Value ---
     result2 = parser(
@@ -1820,19 +1817,16 @@ def test_obtain_with_probability_standalone_adds_dimension():
         "obtain every Region_reported with Value."
     )
     assert isinstance(result2, SquallProgram)
-    assert len(result2.rules) == 1
     rule2 = result2.rules[0]
-    assert isinstance(rule2, Implication)
-    assert rule2.consequent.functor == Symbol("region_reported")
-    expected_rule_body2 = Symbol("schaefer_region")(rule2.consequent.args[0])
-    assert weak_logic_eq(rule2.antecedent, expected_rule_body2)
     q2 = result2.queries[0]
-    assert isinstance(q2, Query)
-    assert len(q2.head) == 2
-    free_vars2 = tuple(extract_logic_free_variables(q2.body))
-    assert len(free_vars2) == 2
-    expected_body2 = Symbol("region_reported")(*free_vars2)
-    assert weak_logic_eq(q2.body, expected_body2)
+    expected2 = SquallProgram(
+        [Implication(
+            Symbol("region_reported")(rule2.consequent.args[0]),
+            Symbol("schaefer_region")(rule2.consequent.args[0])
+        )],
+        [Query(q2.head, Symbol("region_reported")(*q2.head))]
+    )
+    assert weak_logic_eq(result2, expected2)
 
 
 def _check_anaphora(result, expected_n_dims):
