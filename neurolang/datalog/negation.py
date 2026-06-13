@@ -73,7 +73,7 @@ class DatalogProgramNegationMixin(PatternWalker):
 
         if consequent.functor in self.symbol_table:
             value = self.symbol_table[consequent.functor]
-            self._is_previously_defined(value)
+            self._is_previously_defined(value, consequent.functor.name)
             disj = self.symbol_table[consequent.functor].formulas
             self._is_in_idb(expression, disj)
 
@@ -99,13 +99,13 @@ class DatalogProgramNegationMixin(PatternWalker):
                 f'Expression {antecedent} is not conjunctive'
             )
 
-    def _is_previously_defined(self, value):
+    def _is_previously_defined(self, value, functor_name):
         if (
             isinstance(value, Constant) and
             is_leq_informative(value.type, AbstractSet)
         ):
             raise NeuroLangException(
-                'f{consequent.functor.name} has been previously '
+                f'{functor_name} has been previously '
                 'defined as Fact or extensional database.'
             )
 

@@ -8,7 +8,7 @@ from pytest import raises
 from ... import expression_walker, expressions
 from ...frontend.datalog.sugar import TranslateProbabilisticQueryMixin
 from ...frontend.probabilistic_frontend import NeurolangPDL
-from ...logic import Negation
+from ...logic import Negation, Union as LogicUnion
 from .. import DatalogProgram, Fact, Implication, Conjunction
 from ..aggregation import (
     AGG_COUNT,
@@ -593,4 +593,89 @@ def test_neurosynth_query(nl):
     p = res.as_pandas_dataframe()
     assert set(tuple(x) for x in p[["x", "y", "z"]].values) == set(
         (x, y, z) for x, y, z, _ in expected
+    )
+
+
+def test_magic_init_rules_are_idb_not_edb():
+    """Magic init rules must be registered as IDB, not EDB.
+
+    When ``create_magic_query_inits`` produces a rule like
+    ``magic_p(x) :- True``, the ``TranslateToLogic`` layer rewrites
+    ``Implication(..., Constant(True))`` into a ``Fact``. Facts are
+    stored as ``Constant[AbstractSet]`` (EDB). If two init rules share
+    the same functor, the second walk hits ``_is_previously_defined``
+    and crashes with "has been previously defined as Fact".
+
+    Regression test for: magic init rules using ``Constant(True)``.
+    """
+    # Build a program where the magic rewrite produces init rules.
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
+    code = Eb_(
+        [
+            Imp_(q(x), anc(a, x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x), dl)
+
+    # Walk the magic rules into a *fresh* solver and inspect the symbol table.
+    dl2 = Datalog()
+    dl2.walk(mr)
+
+    # Every magic predicate introduced by the init rules must be a Union (IDB),
+    # not a Constant (EDB).
+    for symb, value in dl2.symbol_table.items():
+        if symb.name.startswith("magic_"):
+            assert isinstance(value, LogicUnion), (
+                f"Expected magic predicate {symb.name} to be IDB (Union), "
+                f"but got {type(value).__name__}"
+            )
+
+
+def test_magic_init_rules_walk_twice_no_crash():
+    """Walking the same magic rules twice must not raise.
+
+    When init rules share a functor (e.g. two rules both introduce
+    ``magic_mentions``), walking them a second time used to trigger the
+    broken ``_is_previously_defined`` error path in the negation mixin.
+
+    Regression test for: double-walk of magic init rules.
+    """
+    edb = Eb_(
+        [
+            F_(par(a, b)),
+            F_(par(b, c)),
+            F_(par(c, d)),
+        ]
+    )
+    code = Eb_(
+        [
+            Imp_(q(x), anc(a, x)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x), dl)
+
+    dl2 = Datalog()
+    dl2.walk(mr)          # first walk
+    st_after_first = dict(dl2.symbol_table)
+    dl2.walk(mr)          # second walk – must not raise
+    # Verify idempotency: second walk must not change the symbol table
+    assert st_after_first == dict(dl2.symbol_table), (
+        "Magic init rules are not idempotent: symbol table changed after "
+        "walking magic rules a second time"
     )

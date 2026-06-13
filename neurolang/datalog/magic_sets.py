@@ -375,7 +375,7 @@ def create_magic_query_inits(constant_predicates: Iterable[AdornedSymbol]):
         magic_init_rules.append(
             Implication(
                 magic_predicate(predicate, adorned=False),
-                Constant(True),
+                Conjunction(()),
             )
         )
     return magic_init_rules
