@@ -167,3 +167,4 @@ neurolang/utils/server/neurolang-sparklis/
 
 # uv package manager
 uv.lock
+.omo/
