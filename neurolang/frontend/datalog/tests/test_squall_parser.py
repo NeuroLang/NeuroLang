@@ -1906,24 +1906,28 @@ def test_define_as_marg_given_anaphora_inside_rel():
     head = result.consequent
     s = head.args[0]
     ss = result.antecedent.head
-    x, y, z = (Symbol.fresh() for _ in range(3))
-
     condition = result.antecedent.body
     assert isinstance(condition, Condition)
 
+    # Extract actual existentially-quantified variables from the result,
+    # so the expected expression faithfully represents parser output.
+    conditioned = condition.conditioned
+    ep_chain = conditioned.unapply()[0][1]
+    z = ep_chain.unapply()[0]
+    y = ep_chain.unapply()[1].unapply()[0]
+    x = ep_chain.unapply()[1].unapply()[1].unapply()[0]
+
     # Build expected conditioned part: schaefer_label(s) ∧
-    #   ∃z ∃y ∃x ( (voxel(x,y,z) ∧ selected_study(ss) ∧ reports(ss,x,y,z))
+    #   ∃z ∃y ∃x ( voxel(x,y,z) ∧ selected_study(ss) ∧ reports(ss,x,y,z)
     #           ∧ labels(s,x,y,z) )
     expected_conditioned = Conjunction((
         Symbol("schaefer_label")(s),
         ExistentialPredicate(z, ExistentialPredicate(y, ExistentialPredicate(x,
             Conjunction((
-                Conjunction((
-                    Symbol("voxel")(x, y, z),
-                    Symbol("selected_study")(ss),
-                    Symbol("reports")(ss, x, y, z),
-                )),
-                Symbol("labels")(s, x, y, z)
+                Symbol("voxel")(x, y, z),
+                Symbol("selected_study")(ss),
+                Symbol("reports")(ss, x, y, z),
+                Symbol("labels")(s, x, y, z),
             ))
         ))),
     ))

@@ -1,6 +1,5 @@
 from ...datalog.expression_processing import extract_logic_free_variables
 from ...datalog.negation import is_conjunctive_negation
-from .sugar import TranslateProbabilisticQueryMixin
 from ...expression_walker import PatternWalker, add_match
 from ...expressions import ExpressionBlock, NeuroLangException, Symbol
 from ...logic import Implication, ExistentialPredicate
@@ -56,7 +55,7 @@ class ProbFol2DatalogMixin(PatternWalker):
                 aux = fol_query_to_datalog_program(fresh_head, arg)
                 results.append(aux)
                 new_args.append(fresh_head)
-        new_condition = Condition(*new_args)
+        new_condition = Condition(new_args[0], new_args[1])
         main_impl = self.walk(Implication(imp.consequent, new_condition))
         if results:
             return ExpressionBlock([main_impl] + results)
