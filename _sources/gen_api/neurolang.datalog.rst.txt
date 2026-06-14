@@ -1,6 +1,0 @@
-﻿neurolang.datalog
-=================
-
-.. currentmodule:: neurolang
-
-.. autodata:: datalog

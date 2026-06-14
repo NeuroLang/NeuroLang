@@ -1,6 +1,0 @@
-﻿neurolang.relational\_algebra
-=============================
-
-.. currentmodule:: neurolang
-
-.. autodata:: relational_algebra
