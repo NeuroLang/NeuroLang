@@ -865,6 +865,70 @@ class TestShowRewrittenFlag:
         captured = capsys.readouterr()
         assert "rewritten program" not in captured.out
 
+    def test_show_rewritten_builds_engine_and_prints(self, monkeypatch, capsys):
+        """--show-rewritten builds the requested engine and prints without solving."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        nl.add_tuple_set([("alice",)], name="plays")
+
+        build_engine_calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            build_engine_calls.append((name, str(data_dir), resolution))
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+        main([
+            "--engine", "neurosynth",
+            "--show-rewritten",
+            "--squall",
+            "obtain every Person that plays.",
+        ])
+
+        captured = capsys.readouterr()
+        assert build_engine_calls == [
+            ("neurosynth", "neurolang_data", None),
+        ]
+        assert "rewritten program" in captured.out
+        assert "Query completed" not in captured.err
+
+    def test_show_rewritten_datalog_builds_engine(self, monkeypatch, capsys):
+        """--show-rewritten for classical Datalog also builds the engine."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a"), (2, "b")], name="R")
+
+        build_engine_calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            build_engine_calls.append((name, str(data_dir), resolution))
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+        main([
+            "--engine", "neurosynth",
+            "--show-rewritten",
+            "ans(x) :- R(x, y).",
+        ])
+
+        captured = capsys.readouterr()
+        assert build_engine_calls == [
+            ("neurosynth", "neurolang_data", None),
+        ]
+        assert "rewritten program" in captured.out
+        assert "Query completed" not in captured.err
+
 
 # ---------------------------------------------------------------------------
 # --show-datalog flag

@@ -87,6 +87,7 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraColumnStr,
 )
+from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
 from ..commands import CommandsMixin
 from ..datalog.basic_representation import UnionOfConjunctiveQueries
 from . import query_resolution_expressions as fe
@@ -322,14 +323,15 @@ class NeurolangPDL(QueryBuilderDatalog):
         head: typing.Union[fe.Symbol, Tuple[fe.Expression, ...]],
         predicate: fe.Expression,
         show_rewritten: bool = False,
+        dry_run: bool = False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]
 
         Performs an inferential query: will return as first output
         an AbstractSet with as many elements as solutions
-        of the predicate query. AbstractSet's columns correspond to
-        the expressions in the head.
+        of the predicate query. AbstractSet's columns correspond to the
+        expressions in the head.
         Typically, probabilities are abstracted and processed similar
         to symbols, though of different nature (see examples)
         If head expressions are arguments of a functor, the latter will
@@ -346,6 +348,9 @@ class NeurolangPDL(QueryBuilderDatalog):
             see description
         show_rewritten : bool
             If True, print the Datalog program after magic-sets rewriting.
+        dry_run : bool
+            If True, print the rewritten program and return immediately
+            without running the chase.
 
         Returns
         -------
@@ -416,7 +421,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         # implementation which creates a fresh query rule and runs chase.
         symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
         if symbol_entry is None or isinstance(symbol_entry, ir.Constant):
-            return super()._execute_query(head, predicate, show_rewritten=show_rewritten)
+            return super()._execute_query(
+                head, predicate, show_rewritten=show_rewritten, dry_run=dry_run
+            )
 
         query = symbol_entry.formulas[0]
 
@@ -433,18 +440,26 @@ class NeurolangPDL(QueryBuilderDatalog):
                 ) = probabilistic_postprocess_magic_rules(
                     self.program_ir, magic_query, magic_rules
                 )
-                if show_rewritten:
+                if show_rewritten or dry_run:
                     print("── rewritten program ──")
                     printer = DatalogPrettyPrinter()
                     print(printer.walk(magic_query))
                     for rule in magic_rules.formulas:
                         print(printer.walk(rule))
                     print()
+                if dry_run:
+                    return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
             with self.scope:
                 self.program_ir.walk(magic_rules)
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
+            if dry_run:
+                print("── rewritten program ──")
+                printer = DatalogPrettyPrinter()
+                print(printer.walk(query))
+                print()
+                return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
             solution = self._solve(query)
 
         if not isinstance(head, tuple):
