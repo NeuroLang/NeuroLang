@@ -791,7 +791,26 @@ def build_engine(
     rel_base_dir = (Path(yaml_path).parent if yaml_path else None)
     mask = _resolve_mask(cfg, data_dir, resolution)
 
-    nl = NeurolangPDL()
+    # Wire dimension_type_predicates from YAML
+    dimension_predicates = cfg.get("dimension_type_predicates")
+    if dimension_predicates is not None:
+        from neurolang.frontend.datalog.squall import (
+            make_dimension_type_stripper,
+        )
+        Mixin = make_dimension_type_stripper(dimension_predicates)
+
+        from neurolang.frontend.probabilistic_frontend import (
+            RegionFrontendCPLogicSolver as _BaseSolver,
+        )
+
+        class _CustomSolver(Mixin, _BaseSolver):
+            pass
+
+        _CustomSolver.__qualname__ = _BaseSolver.__qualname__
+        _CustomSolver.__module__ = _BaseSolver.__module__
+        nl = NeurolangPDL(solver_class=_CustomSolver)
+    else:
+        nl = NeurolangPDL()
 
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
