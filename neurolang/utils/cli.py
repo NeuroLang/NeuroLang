@@ -264,6 +264,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "Useful for debugging and understanding the translation.",
     )
     parser.add_argument(
+        "--show-rewritten",
+        "-R",
+        action="store_true",
+        help="Print the Datalog program after magic-sets rewriting, "
+        "then continue execution.",
+    )
+    parser.add_argument(
         "--sort",
         "-S",
         action="append",
@@ -278,7 +285,9 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _execute_program(nl: NeurolangPDL, program_text: str):
+def _execute_program(
+    nl: NeurolangPDL, program_text: str, show_rewritten: bool = False
+):
     """
     Execute a Datalog program and return the result if a query is present.
 
@@ -292,6 +301,8 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
         Initialised engine (``NeurolangPDL`` or ``NeurolangDL``).
     program_text :
         Datalog program, possibly containing one ``Query`` rule.
+    show_rewritten :
+        If True, print the Datalog program after magic-sets rewriting.
 
     Returns
     -------
@@ -303,11 +314,11 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
         The query result set (may have a ``.columns`` attribute).
 
     """
-    return nl.execute_datalog_program(program_text)
+    return nl.execute_datalog_program(program_text, show_rewritten=show_rewritten)
 
 
 def _execute_squall_program(
-    nl: NeurolangPDL, program_text: str
+    nl: NeurolangPDL, program_text: str, show_rewritten: bool = False
 ):
     """
     Execute a SQUALL (controlled English) program.
@@ -321,6 +332,8 @@ def _execute_squall_program(
         Initialised engine.
     program_text :
         SQUALL program text.
+    show_rewritten :
+        If True, print the Datalog program after magic-sets rewriting.
 
     Returns
     -------
@@ -332,7 +345,7 @@ def _execute_squall_program(
         When there are multiple ``obtain`` queries.
 
     """
-    return nl.execute_squall_program(program_text)
+    return nl.execute_squall_program(program_text, show_rewritten=show_rewritten)
 
 
 def _format_ir(expr, fresh_map=None, _counter=None):
@@ -514,7 +527,7 @@ def main(argv: Optional[list] = None) -> None:
     sort_by = _parse_sort_spec(args.sort)
 
     if args.squall:
-        result = _execute_squall_program(nl, program)
+        result = _execute_squall_program(nl, program, show_rewritten=args.show_rewritten)
         if isinstance(result, dict):
             for key, sub_result in result.items():
                 output = _format_result(
@@ -533,7 +546,7 @@ def main(argv: Optional[list] = None) -> None:
             if output:
                 print(output)
     else:
-        result = _execute_program(nl, program)
+        result = _execute_program(nl, program, show_rewritten=args.show_rewritten)
         output = _format_result(
             result, fmt=args.format, column_names=None,
             sort_by=sort_by,

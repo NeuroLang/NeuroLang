@@ -36,6 +36,7 @@ from ..datalog.expression_processing import (
 )
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
+from .datalog.pretty_printer import DatalogPrettyPrinter
 from .datalog.squall_syntax_lark import (
     parser as squall_parser,
     EquiprobableChoiceDef,
@@ -106,6 +107,18 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
         self.datalog_parser = datalog_parser
+
+    def _print_rewritten_program(
+        self, query_expression, reachable_rules=None
+    ):
+        """Print the Datalog program after magic-sets rewriting."""
+        print("── rewritten program ──")
+        printer = DatalogPrettyPrinter()
+        print(printer.walk(query_expression))
+        if reachable_rules is not None:
+            for rule in reachable_rules.formulas:
+                print(printer.walk(rule))
+        print()
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -229,7 +242,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return rule
 
     def execute_datalog_program(
-        self, code: str
+        self, code: str, show_rewritten: bool = False
     ) -> Union[None, bool, RelationalAlgebraFrozenSet]:
         """
         Execute a Datalog program in classical syntax.
@@ -241,6 +254,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ----------
         code : string
             Datalog program.
+        show_rewritten : bool
+            If True, print the Datalog program after magic-sets rewriting.
 
         Examples
         --------
@@ -276,7 +291,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 ]
             )
             self.program_ir.walk(program)
-            return self.query(query.head.arguments, query.body)
+            return self.query(
+                query.head.arguments, query.body,
+                show_rewritten=show_rewritten,
+            )
         else:
             raise UnsupportedProgramError(
                 "Only one query, in the form of ans(...) :- R(...) is "
@@ -292,7 +310,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             )
 
     def execute_squall_program(
-        self, code: str
+        self, code: str, show_rewritten: bool = False
     ) -> Union[None, NamedRelationalAlgebraFrozenSet, Dict[str, NamedRelationalAlgebraFrozenSet]]:
         """
         Execute a SQUALL (controlled English) program.
@@ -308,6 +326,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         code : str
             SQUALL program text.  May contain any mixture of
             ``define as …`` rule definitions and ``obtain …`` queries.
+        show_rewritten : bool
+            If True, print the Datalog program after magic-sets rewriting.
 
         Returns
         -------
@@ -438,7 +458,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     fe.Expression(self, ir.Symbol(s.name))
                     for s in head_vars
                 )
-                ra, _ = self._execute_query(fe_head, fe_pred)
+                ra, _ = self._execute_query(fe_head, fe_pred, show_rewritten=show_rewritten)
             finally:
                 self.program_ir.pop_scope()
             results[key] = ra
@@ -572,7 +592,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
     def query(
-        self, *args
+        self, *args, show_rewritten: bool = False
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
         """
         Performs an inferential query on the database.
@@ -585,6 +605,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         query, adds it to the engine memory, and returns the
         corresponding symbol.
         See example for 3 modalities
+
+        Parameters
+        ----------
+        show_rewritten : bool
+            If True, print the Datalog program after magic-sets rewriting.
 
         Returns
         -------
@@ -617,7 +642,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         else:
             raise ValueError("query takes 1 or 2 arguments")
 
-        solution_set, functor_orig = self._execute_query(head, predicate)
+        solution_set, functor_orig = self._execute_query(
+            head, predicate, show_rewritten=show_rewritten
+        )
 
         if not isinstance(head, tuple):
             out_symbol = ir.Symbol[solution_set.type](functor_orig.name)
@@ -632,6 +659,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self,
         head: Union[fe.Symbol, Tuple[fe.Expression, ...]],
         predicate: fe.Expression,
+        show_rewritten: bool = False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]
@@ -649,6 +677,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             see description
         predicate : fe.Expression
             see description
+        show_rewritten : bool
+            If True, print the Datalog program after magic-sets rewriting.
 
         Returns
         -------
@@ -717,6 +747,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                     query_expression)
                 reachable_rules = reachable_code(
                     magic_query_expression, self.program_ir)
+                if show_rewritten:
+                    self._print_rewritten_program(
+                        magic_query_expression, reachable_rules
+                    )
                 solution = self.chase_class(
                     self.program_ir, rules=reachable_rules
                 ).build_chase_solution()

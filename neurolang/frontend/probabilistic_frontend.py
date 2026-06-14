@@ -47,6 +47,7 @@ from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
+from .datalog.pretty_printer import DatalogPrettyPrinter
 
 from ..exceptions import (
     UnsupportedQueryError,
@@ -320,6 +321,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         self,
         head: typing.Union[fe.Symbol, Tuple[fe.Expression, ...]],
         predicate: fe.Expression,
+        show_rewritten: bool = False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]
@@ -342,6 +344,8 @@ class NeurolangPDL(QueryBuilderDatalog):
             see description
         predicate : Expression
             see description
+        show_rewritten : bool
+            If True, print the Datalog program after magic-sets rewriting.
 
         Returns
         -------
@@ -412,7 +416,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         # implementation which creates a fresh query rule and runs chase.
         symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
         if symbol_entry is None or isinstance(symbol_entry, ir.Constant):
-            return super()._execute_query(head, predicate)
+            return super()._execute_query(head, predicate, show_rewritten=show_rewritten)
 
         query = symbol_entry.formulas[0]
 
@@ -429,6 +433,13 @@ class NeurolangPDL(QueryBuilderDatalog):
                 ) = probabilistic_postprocess_magic_rules(
                     self.program_ir, magic_query, magic_rules
                 )
+                if show_rewritten:
+                    print("── rewritten program ──")
+                    printer = DatalogPrettyPrinter()
+                    print(printer.walk(magic_query))
+                    for rule in magic_rules.formulas:
+                        print(printer.walk(rule))
+                    print()
             with self.scope:
                 self.program_ir.walk(magic_rules)
                 solution = self._solve(magic_query)

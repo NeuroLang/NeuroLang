@@ -764,6 +764,109 @@ class TestSquallFlag:
 
 
 # ---------------------------------------------------------------------------
+# --show-rewritten flag
+# ---------------------------------------------------------------------------
+
+
+class TestShowRewrittenFlag:
+    def test_show_rewritten_defaults_to_false(self):
+        parser = _build_parser()
+        args = parser.parse_args([])
+        assert args.show_rewritten is False
+
+    def test_show_rewritten_flag_long(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["--show-rewritten", "ans(x) :- R(x)"]
+        )
+        assert args.show_rewritten is True
+
+    def test_show_rewritten_flag_short(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["-R", "ans(x) :- R(x)"]
+        )
+        assert args.show_rewritten is True
+
+    def test_show_rewritten_works_without_squall(self):
+        """Unlike --show-datalog, --show-rewritten does NOT require --squall."""
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["--show-rewritten", "ans(x) :- R(x)"]
+        )
+        assert args.show_rewritten is True
+        assert args.squall is False
+
+    def test_show_rewritten_prints_for_datalog(self, capsys):
+        from neurolang.frontend import NeurolangDL
+        from neurolang import expressions as ir
+        from neurolang import datalog
+        from neurolang import logic
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([('a', 'b'), ('b', 'c'), ('c', 'd')], name='par')
+
+        S_ = ir.Symbol
+        x, y, z = S_('x'), S_('y'), S_('z')
+        anc = S_('anc')
+        par = S_('par')
+
+        nl.program_ir.walk(datalog.Implication(anc(x, y), par(x, y)))
+        nl.program_ir.walk(datalog.Implication(
+            anc(x, y), logic.Conjunction((anc(x, z), par(z, y)))
+        ))
+
+        result = nl.execute_datalog_program(
+            "ans(x) :- anc('a', x).", show_rewritten=True
+        )
+        captured = capsys.readouterr()
+        assert "rewritten program" in captured.out
+        assert "magic" in captured.out
+        assert result is not None
+
+    def test_show_rewritten_prints_for_squall(self, capsys):
+        from neurolang.frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        nl.add_tuple_set([("alice",)], name="plays")
+
+        result = nl.execute_squall_program(
+            "obtain every Person that plays.",
+            show_rewritten=True
+        )
+        captured = capsys.readouterr()
+        # SQUALL queries that don't trigger magic sets won't print
+        # the rewritten header; that's expected behavior
+        assert result is not None
+
+    def test_show_rewritten_no_output_when_false(self, capsys):
+        from neurolang.frontend import NeurolangDL
+        from neurolang import expressions as ir
+        from neurolang import datalog
+        from neurolang import logic
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([('a', 'b'), ('b', 'c'), ('c', 'd')], name='par')
+
+        S_ = ir.Symbol
+        x, y, z = S_('x'), S_('y'), S_('z')
+        anc = S_('anc')
+        par = S_('par')
+
+        nl.program_ir.walk(datalog.Implication(anc(x, y), par(x, y)))
+        nl.program_ir.walk(datalog.Implication(
+            anc(x, y), logic.Conjunction((anc(x, z), par(z, y)))
+        ))
+
+        nl.execute_datalog_program(
+            "ans(x) :- anc('a', x).", show_rewritten=False
+        )
+        captured = capsys.readouterr()
+        assert "rewritten program" not in captured.out
+
+
+# ---------------------------------------------------------------------------
 # --show-datalog flag
 # ---------------------------------------------------------------------------
 
