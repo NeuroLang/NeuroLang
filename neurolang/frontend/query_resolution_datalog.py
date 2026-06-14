@@ -4,12 +4,14 @@ Query Builder Datalog
 Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
+import sys
 from collections import defaultdict
 import operator
 from ..datalog.magic_sets import magic_rewrite
 from ..exceptions import (
     ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
 )
+from neurolang.utils.error_enrichment import enrich_exception
 from typing import (
     AbstractSet,
     Dict,
@@ -19,6 +21,7 @@ from typing import (
     Tuple,
     Type,
     Union,
+    cast,
 )
 from uuid import uuid1
 
@@ -257,39 +260,49 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         >>> q
         ... q: typing.AbstractSet[typing.Tuple[int]] = [(2,)]
         """
-        intermediate_representation = self.datalog_parser(code)
-        queries = [
-            rule
-            for rule in intermediate_representation.formulas
-            if isinstance(rule, ir.Query)
-        ]
-        if len(queries) == 0:
-            self.program_ir.walk(intermediate_representation)
-            return
-        elif len(queries) == 1:
-            query = self.frontend_translator.walk(queries[0])
-            program = logic.Union(
-                [
-                    rule
-                    for rule in intermediate_representation.formulas
-                    if not isinstance(rule, ir.Query)
-                ]
-            )
-            self.program_ir.walk(program)
-            return self.query(query.head.arguments, query.body)
-        else:
-            raise UnsupportedProgramError(
-                "Only one query, in the form of ans(...) :- R(...) is "
-                "supported. Datalog program has more than one query rule: "
-                "{}".format(
-                    "\n".join(
-                        [
-                            str(self.frontend_translator.walk(q))
-                            for q in queries
-                        ]
+        try:
+            intermediate_representation = self.datalog_parser(code)
+            queries = [
+                rule
+                for rule in intermediate_representation.formulas
+                if isinstance(rule, ir.Query)
+            ]
+            if len(queries) == 0:
+                self.program_ir.walk(intermediate_representation)
+                return
+            elif len(queries) == 1:
+                query = self.frontend_translator.walk(queries[0])
+                program = logic.Union(
+                    [
+                        rule
+                        for rule in intermediate_representation.formulas
+                        if not isinstance(rule, ir.Query)
+                    ]
+                )
+                self.program_ir.walk(program)
+                return self.query(query.head.arguments, query.body)
+            else:
+                raise UnsupportedProgramError(
+                    "Only one query, in the form of ans(...) :- R(...) is "
+                    "supported. Datalog program has more than one query rule: "
+                    "{}".format(
+                        "\n".join(
+                            [
+                                str(self.frontend_translator.walk(q))
+                                for q in queries
+                            ]
+                        )
                     )
                 )
-            )
+        except Exception:
+            _exc_type, exc, tb = sys.exc_info()
+            if exc is not None:
+                enrich_exception(
+                    cast(Exception, exc),
+                    query_text=code, engine_type="datalog",
+                )
+                raise cast(Exception, exc).with_traceback(tb)
+            raise
 
     def execute_squall_program(
         self, code: str
@@ -333,119 +346,129 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
         ['alice']
         """
-        parsed = squall_parser(code)
+        try:
+            parsed = squall_parser(code)
 
-        # Process directives (#set_backend, etc.) before walking rules.
-        if isinstance(parsed, SquallProgram) and parsed.commands:
-            from neurolang.config import config as nl_config
-            from neurolang.expressions import Constant
+            # Process directives (#set_backend, etc.) before walking rules.
+            if isinstance(parsed, SquallProgram) and parsed.commands:
+                from neurolang.config import config as nl_config
+                from neurolang.expressions import Constant
 
-            _KNOWN_COMMANDS = {"set_backend"}
-            for cmd in parsed.commands:
-                name = cmd.functor.name if hasattr(cmd, 'functor') else None
-                if name is None or name not in _KNOWN_COMMANDS:
-                    continue
-                if name == "set_backend":
-                    if cmd.args and isinstance(cmd.args[0], Constant):
-                        nl_config.set_query_backend(cmd.args[0].value)
-                    else:
-                        raise NeuroLangException(
-                            "#set_backend requires a string argument, "
-                            "e.g. #set_backend('pandas')."
-                        )
+                _KNOWN_COMMANDS = {"set_backend"}
+                for cmd in parsed.commands:
+                    name = cmd.functor.name if hasattr(cmd, 'functor') else None
+                    if name is None or name not in _KNOWN_COMMANDS:
+                        continue
+                    if name == "set_backend":
+                        if cmd.args and isinstance(cmd.args[0], Constant):
+                            nl_config.set_query_backend(cmd.args[0].value)
+                        else:
+                            raise NeuroLangException(
+                                "#set_backend requires a string argument, "
+                                "e.g. #set_backend('pandas')."
+                            )
 
-        # Rules-only (no obtain) — backward-compat: returns Union/Implication
-        if not isinstance(parsed, SquallProgram):
-            if isinstance(parsed, EquiprobableChoiceDef):
-                self._handle_equiprobable_choice(parsed)
-            elif isinstance(parsed, WeightedChoiceDef):
-                self._handle_weighted_choice(parsed)
-            elif isinstance(parsed, logic.Union):
-                for r in parsed.formulas:
-                    if isinstance(r, EquiprobableChoiceDef):
-                        self._handle_equiprobable_choice(r)
-                    elif isinstance(r, WeightedChoiceDef):
-                        self._handle_weighted_choice(r)
-                    else:
-                        try:
-                            self.program_ir.walk(r)
-                        except Fol2DatalogTranslationException as e:
-                            raise _wrap_fol_error_for_squall(e) from e
-            else:
+            # Rules-only (no obtain) — backward-compat: returns Union/Implication
+            if not isinstance(parsed, SquallProgram):
+                if isinstance(parsed, EquiprobableChoiceDef):
+                    self._handle_equiprobable_choice(parsed)
+                elif isinstance(parsed, WeightedChoiceDef):
+                    self._handle_weighted_choice(parsed)
+                elif isinstance(parsed, logic.Union):
+                    for r in parsed.formulas:
+                        if isinstance(r, EquiprobableChoiceDef):
+                            self._handle_equiprobable_choice(r)
+                        elif isinstance(r, WeightedChoiceDef):
+                            self._handle_weighted_choice(r)
+                        else:
+                            try:
+                                self.program_ir.walk(r)
+                            except Fol2DatalogTranslationException as e:
+                                raise _wrap_fol_error_for_squall(e) from e
+                else:
+                    try:
+                        self.program_ir.walk(parsed)
+                    except Fol2DatalogTranslationException as e:
+                        raise _wrap_fol_error_for_squall(e) from e
+                return None
+
+            # Walk all rule definitions into the engine (global scope).
+            # This makes the rules available to solve_all() and any code
+            # that inspects the global symbol table after the call returns.
+            for rule in parsed.rules_and_choice_defs:
+                if isinstance(rule, EquiprobableChoiceDef):
+                    self._handle_equiprobable_choice(rule)
+                elif isinstance(rule, WeightedChoiceDef):
+                    self._handle_weighted_choice(rule)
+                else:
+                    try:
+                        self.program_ir.walk(rule)
+                    except Fol2DatalogTranslationException as e:
+                        raise _wrap_fol_error_for_squall(e) from e
+
+            if not parsed.queries:
+                return None
+
+            # Execute each obtain query by building a fresh helper predicate
+            # h(head_vars) :- q.body and delegating to query(), exactly as
+            # execute_datalog_program does for ans(...) :- R(...).
+            #
+            # We push a scope and re-walk the rules so that probabilistic
+            # predicates are materialised with the correct signatures for
+            # the chase (e.g. `probably_mentions(x, PROB(x))`).  The IDB is
+            # shared across scopes so re-walking a ProbabilisticFact into
+            # a new scope would normally raise ForbiddenDisjunctionError;
+            # we catch that silently because identical re-definitions in a
+            # sub-scope are harmless.
+            results = {}
+            for i, q in enumerate(parsed.queries):
+                key = parsed.query_names.get(i, f"obtain_{i}")
+                head = q.head
+                if isinstance(head, ir.FunctionApplication):
+                    head_vars = tuple(head.args)
+                elif isinstance(head, ir.Symbol):
+                    head_vars = (head,)
+                else:
+                    head_vars = tuple(head)
+
+                h = ir.Symbol.fresh()
+                query_impl = datalog.Implication(h(*head_vars), q.body)
+
+                self.program_ir.push_scope()
                 try:
-                    self.program_ir.walk(parsed)
-                except Fol2DatalogTranslationException as e:
-                    raise _wrap_fol_error_for_squall(e) from e
-            return None
-
-        # Walk all rule definitions into the engine (global scope).
-        # This makes the rules available to solve_all() and any code
-        # that inspects the global symbol table after the call returns.
-        for rule in parsed.rules_and_choice_defs:
-            if isinstance(rule, EquiprobableChoiceDef):
-                self._handle_equiprobable_choice(rule)
-            elif isinstance(rule, WeightedChoiceDef):
-                self._handle_weighted_choice(rule)
-            else:
-                try:
-                    self.program_ir.walk(rule)
-                except Fol2DatalogTranslationException as e:
-                    raise _wrap_fol_error_for_squall(e) from e
-
-        if not parsed.queries:
-            return None
-
-        # Execute each obtain query by building a fresh helper predicate
-        # h(head_vars) :- q.body and delegating to query(), exactly as
-        # execute_datalog_program does for ans(...) :- R(...).
-        #
-        # We push a scope and re-walk the rules so that probabilistic
-        # predicates are materialised with the correct signatures for
-        # the chase (e.g. `probably_mentions(x, PROB(x))`).  The IDB is
-        # shared across scopes so re-walking a ProbabilisticFact into
-        # a new scope would normally raise ForbiddenDisjunctionError;
-        # we catch that silently because identical re-definitions in a
-        # sub-scope are harmless.
-        results = {}
-        for i, q in enumerate(parsed.queries):
-            key = parsed.query_names.get(i, f"obtain_{i}")
-            head = q.head
-            if isinstance(head, ir.FunctionApplication):
-                head_vars = tuple(head.args)
-            elif isinstance(head, ir.Symbol):
-                head_vars = (head,)
-            else:
-                head_vars = tuple(head)
-
-            h = ir.Symbol.fresh()
-            query_impl = datalog.Implication(h(*head_vars), q.body)
-
-            self.program_ir.push_scope()
-            try:
-                for rule in parsed.rules_and_choice_defs:
-                    if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
-                        # Choice defs are already registered in the global scope;
-                        # skip them in the scoped re-walk.
-                        pass
-                    else:
-                        try:
-                            self.program_ir.walk(rule)
-                        except ForbiddenDisjunctionError:
+                    for rule in parsed.rules_and_choice_defs:
+                        if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
+                            # Choice defs are already registered in the global scope;
+                            # skip them in the scoped re-walk.
                             pass
-                self.program_ir.walk(query_impl)
-                fe_pred = fe.Expression(self, h(*head_vars))
-                fe_head = tuple(
-                    fe.Expression(self, ir.Symbol(s.name))
-                    for s in head_vars
-                )
-                ra, _ = self._execute_query(fe_head, fe_pred)
-            finally:
-                self.program_ir.pop_scope()
-            results[key] = ra
+                        else:
+                            try:
+                                self.program_ir.walk(rule)
+                            except ForbiddenDisjunctionError:
+                                pass
+                    self.program_ir.walk(query_impl)
+                    fe_pred = fe.Expression(self, h(*head_vars))
+                    fe_head = tuple(
+                        fe.Expression(self, ir.Symbol(s.name))
+                        for s in head_vars
+                    )
+                    ra, _ = self._execute_query(fe_head, fe_pred)
+                finally:
+                    self.program_ir.pop_scope()
+                results[key] = ra
 
-        if len(results) == 1:
-            return next(iter(results.values()))
-        return results
+            if len(results) == 1:
+                return next(iter(results.values()))
+            return results
+        except Exception:
+            _exc_type, exc, tb = sys.exc_info()
+            if exc is not None:
+                enrich_exception(
+                    cast(Exception, exc),
+                    query_text=code, engine_type="squall",
+                )
+                raise cast(Exception, exc).with_traceback(tb)
+            raise
 
     def compute_datalog_program_for_autocompletion(
             self, code: str, autocompletion_code
