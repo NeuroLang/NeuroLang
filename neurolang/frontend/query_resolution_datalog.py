@@ -655,6 +655,53 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         else:
             return solution_set
 
+    def _magic_sets_rewrite_query(
+        self,
+        head: Union[fe.Symbol, Tuple[fe.Expression, ...]],
+        predicate: fe.Expression,
+    ) -> Tuple[Implication, logic.Union]:
+        """Build query expression and run magic-sets rewriting.
+
+        Returns the rewritten query expression and the reachable rules.
+        If magic-sets rewriting is not applicable, returns the original
+        query expression and reachable rules.
+
+        NOTE: The caller must have already created a sub-scope on the
+        symbol table via ``self.program_ir.symbol_table =
+        self.symbol_table.create_scope()`` and must restore it after
+        the chase or printing is complete.
+
+        Parameters
+        ----------
+        head : Union[fe.Symbol, Tuple[fe.Expression, ...]]
+            Query head.
+        predicate : fe.Expression
+            Query body.
+
+        Returns
+        -------
+        Tuple[Implication, logic.Union]
+            Rewritten query expression and reachable rules.
+
+        """
+        if isinstance(head, fe.Operation):
+            new_head = self.new_symbol()(*head.arguments)
+        elif isinstance(head, tuple):
+            new_head = self.new_symbol()(*head)
+        else:
+            raise ValueError("Wrong head syntax")
+        query_expression = self._declare_implication(new_head, predicate)
+
+        try:
+            magic_query_expression = self.magic_sets_rewrite_program(
+                query_expression)
+            reachable_rules = reachable_code(
+                magic_query_expression, self.program_ir)
+            return magic_query_expression, reachable_rules
+        except InvalidMagicSetError:
+            reachable_rules = reachable_code(query_expression, self.program_ir)
+            return query_expression, reachable_rules
+
     def _execute_query(
         self,
         head: Union[fe.Symbol, Tuple[fe.Expression, ...]],
@@ -729,42 +776,28 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
         """
         functor_orig = None
-        self.program_ir.symbol_table = self.symbol_table.create_scope()
         if isinstance(head, fe.Operation):
             functor_orig = head.expression.functor
-            new_head = self.new_symbol()(*head.arguments)
-            functor = new_head.expression.functor
-        elif isinstance(head, tuple):
-            new_head = self.new_symbol()(*head)
-            functor = new_head.expression.functor
-        else:
-            raise ValueError("Wrong head syntax")
-        query_expression = self._declare_implication(new_head, predicate)
 
+        self.program_ir.symbol_table = self.symbol_table.create_scope()
         try:
-            with self.scope:
-                magic_query_expression = self.magic_sets_rewrite_program(
-                    query_expression)
-                reachable_rules = reachable_code(
-                    magic_query_expression, self.program_ir)
-                if show_rewritten:
-                    self._print_rewritten_program(
-                        magic_query_expression, reachable_rules
-                    )
-                solution = self.chase_class(
-                    self.program_ir, rules=reachable_rules
-                ).build_chase_solution()
-                self.program_ir.symbol_table = self.symbol_table.enclosing_scope
-                functor = magic_query_expression.consequent.functor
-        except InvalidMagicSetError:
-            reachable_rules = reachable_code(query_expression, self.program_ir)
+            magic_query_expression, reachable_rules = self._magic_sets_rewrite_query(
+                head, predicate
+            )
+            if show_rewritten:
+                self._print_rewritten_program(
+                    magic_query_expression, reachable_rules
+                )
+
             solution = self.chase_class(
                 self.program_ir, rules=reachable_rules
             ).build_chase_solution()
+        finally:
             self.program_ir.symbol_table = self.symbol_table.enclosing_scope
 
         solution_set = solution.get(
-            functor, ir.Constant(WrappedRelationalAlgebraFrozenSet())
+            magic_query_expression.consequent.functor,
+            ir.Constant(WrappedRelationalAlgebraFrozenSet())
         )
 
         if isinstance(head, tuple):

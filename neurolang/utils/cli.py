@@ -47,7 +47,8 @@ from typing import Optional
 import pandas as pd
 
 from neurolang.datalog import WrappedRelationalAlgebraSet
-from neurolang.frontend import NeurolangPDL
+from neurolang.frontend import NeurolangDL, NeurolangPDL
+from neurolang.frontend import query_resolution_expressions as fe
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.utils import engine_registry
 
@@ -268,7 +269,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "-R",
         action="store_true",
         help="Print the Datalog program after magic-sets rewriting, "
-        "then continue execution.",
+        "then exit.",
     )
     parser.add_argument(
         "--sort",
@@ -473,6 +474,131 @@ def _list_sets(nl: NeurolangPDL) -> None:
     print(f"\n  Total RA sets: {len(sets_found)}")
 
 
+def _show_rewritten_program(program_text: str, squall: bool = False) -> None:
+    """Parse a program and print the magic-sets-rewritten Datalog IR.
+
+    This is the backend for ``neurolang-query --show-rewritten``.
+    It parses the program text, walks rules into a lightweight engine,
+    runs magic-sets rewriting, and prints the result without executing
+    the chase.
+
+    Parameters
+    ----------
+    program_text :
+        Datalog or SQUALL program text.
+    squall :
+        If True, interpret *program_text* as SQUALL.
+    """
+    from neurolang import datalog as nl_datalog
+    from neurolang import expressions as ir
+    from neurolang import logic
+    from neurolang.frontend.datalog.standard_syntax import (
+        parser as datalog_parser,
+    )
+    from neurolang.frontend.datalog.squall_syntax_lark import (
+        parser as squall_parser,
+        SquallProgram,
+    )
+
+    nl = NeurolangDL()
+
+    if squall:
+        parsed = squall_parser(program_text)
+        if not isinstance(parsed, SquallProgram):
+            # Rules-only or single expression
+            if isinstance(parsed, logic.Union):
+                for r in parsed.formulas:
+                    nl.program_ir.walk(r)
+            else:
+                nl.program_ir.walk(parsed)
+            return
+
+        # Walk rule definitions into the engine
+        for rule in parsed.rules_and_choice_defs:
+            nl.program_ir.walk(rule)
+
+        if not parsed.queries:
+            return
+
+        for i, q in enumerate(parsed.queries):
+            key = parsed.query_names.get(i, f"obtain_{i}")
+            head = q.head
+            if isinstance(head, ir.FunctionApplication):
+                head_vars = tuple(head.args)
+            elif isinstance(head, ir.Symbol):
+                head_vars = (head,)
+            else:
+                head_vars = tuple(head)
+
+            h = ir.Symbol.fresh()
+            query_impl = nl_datalog.Implication(h(*head_vars), q.body)
+
+            nl.program_ir.push_scope()
+            try:
+                for rule in parsed.rules_and_choice_defs:
+                    nl.program_ir.walk(rule)
+                nl.program_ir.walk(query_impl)
+                fe_pred = fe.Expression(nl, h(*head_vars))
+                fe_head = tuple(
+                    fe.Expression(nl, ir.Symbol(s.name))
+                    for s in head_vars
+                )
+                magic_qe, reachable = nl._magic_sets_rewrite_query(
+                    fe_head, fe_pred
+                )
+                print(f"\u2500\u2500 rewritten program ({key}) \u2500\u2500")
+                printer = DatalogPrettyPrinter()
+                print(printer.walk(magic_qe))
+                if reachable is not None:
+                    for rule in reachable.formulas:
+                        print(printer.walk(rule))
+                print()
+                # Restore the scope created by _magic_sets_rewrite_query
+                nl.program_ir.symbol_table = nl.symbol_table.enclosing_scope
+            finally:
+                nl.program_ir.pop_scope()
+    else:
+        intermediate_representation = datalog_parser(program_text)
+        queries = [
+            rule
+            for rule in intermediate_representation.formulas
+            if isinstance(rule, ir.Query)
+        ]
+        if len(queries) == 0:
+            nl.program_ir.walk(intermediate_representation)
+            return
+        elif len(queries) == 1:
+            query = nl.frontend_translator.walk(queries[0])
+            program = logic.Union(
+                [
+                    rule
+                    for rule in intermediate_representation.formulas
+                    if not isinstance(rule, ir.Query)
+                ]
+            )
+            nl.program_ir.walk(program)
+            nl.program_ir.symbol_table = nl.symbol_table.create_scope()
+            try:
+                magic_qe, reachable = nl._magic_sets_rewrite_query(
+                    query.head.arguments, query.body
+                )
+                print("\u2500\u2500 rewritten program \u2500\u2500")
+                printer = DatalogPrettyPrinter()
+                print(printer.walk(magic_qe))
+                if reachable is not None:
+                    for rule in reachable.formulas:
+                        print(printer.walk(rule))
+                print()
+            finally:
+                nl.program_ir.symbol_table = nl.symbol_table.enclosing_scope
+        else:
+            print(
+                "Error: multiple queries not supported.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+
 def main(argv: Optional[list] = None) -> None:
     """CLI entry point: parse arguments, build engine, run query."""
     parser = _build_parser()
@@ -495,6 +621,16 @@ def main(argv: Optional[list] = None) -> None:
             )
             sys.exit(1)
         _show_squall_datalog(program)
+        return
+
+    # --show-rewritten only needs the parser and a lightweight engine.
+    # Handle it early to avoid the expensive engine build.
+    if args.show_rewritten:
+        program = _read_query(args)
+        if not program or not program.strip():
+            print("Error: no query provided.", file=sys.stderr)
+            sys.exit(1)
+        _show_rewritten_program(program, squall=args.squall)
         return
 
     if args.engine not in engine_registry.list_engine_names():
