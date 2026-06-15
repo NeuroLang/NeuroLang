@@ -3,6 +3,10 @@
 import pytest
 
 from neurolang.exceptions import NeuroLangException
+from neurolang.expressions import Constant, Symbol
+from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
+from neurolang.logic import Conjunction, ExistentialPredicate
 from neurolang.utils.cli import (
     _build_parser,
     _execute_program,
@@ -974,17 +978,11 @@ class TestShowDatalogFlag:
 
 class TestFormatIR:
     def test_symbol_non_fresh(self):
-        from neurolang.expressions import Symbol
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         x = Symbol("x")
         assert printer.walk(x) == "x"
 
     def test_symbol_fresh_renamed(self):
-        from neurolang.expressions import Symbol
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         f0 = Symbol.fresh()
         f1 = Symbol.fresh()
@@ -993,18 +991,12 @@ class TestFormatIR:
         assert "s\u2081" in result
 
     def test_constant_string(self):
-        from neurolang.expressions import Constant
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         c = Constant("emotion")
         result = printer.walk(c)
         assert "'emotion'" in result
 
     def test_function_application(self):
-        from neurolang.expressions import Symbol
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         voxel = Symbol("voxel")
         x, y, z = Symbol("x"), Symbol("y"), Symbol("z")
@@ -1013,10 +1005,6 @@ class TestFormatIR:
         assert result == "voxel(x, y, z)"
 
     def test_conjunction_inline(self):
-        from neurolang.expressions import Symbol
-        from neurolang.logic import Conjunction
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         a, b = Symbol("a"), Symbol("b")
         p = Symbol("p")
@@ -1026,10 +1014,6 @@ class TestFormatIR:
         assert "p(a) \u2227 q(b)" == result
 
     def test_existential_predicate(self):
-        from neurolang.expressions import Symbol
-        from neurolang.logic import Conjunction, ExistentialPredicate
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         s = Symbol.fresh()
         study = Symbol("study")(s)
@@ -1040,11 +1024,6 @@ class TestFormatIR:
         assert "study(s\u2080)" in result
 
     def test_query_body_breaks_conjunction_into_lines(self):
-        from neurolang.frontend.datalog.squall_syntax_lark import (
-            parser as squall_parser,
-        )
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         parsed = squall_parser("obtain every Voxel (?x; ?y; ?z).")
         printer = DatalogPrettyPrinter()
         result = printer.walk(parsed.queries[0])
@@ -1053,11 +1032,6 @@ class TestFormatIR:
         assert "voxel(x, y, z)" in lines[1].strip()
 
     def test_nd_annotation_uses_fresh_vars(self):
-        from neurolang.frontend.datalog.squall_syntax_lark import (
-            parser as squall_parser,
-        )
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         parsed = squall_parser(
             "obtain every Voxel in 3D that a Study reported."
         )
