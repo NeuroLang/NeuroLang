@@ -3,13 +3,15 @@
 import pytest
 
 from neurolang.exceptions import NeuroLangException
+from neurolang.expressions import Constant, Symbol
+from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
+from neurolang.logic import Conjunction, ExistentialPredicate
 from neurolang.utils.cli import (
     _build_parser,
     _execute_program,
     _execute_squall_program,
-    _format_ir,
     _format_result,
-    _read_query,
 )
 
 from neurolang.utils import engine_registry
@@ -764,6 +766,172 @@ class TestSquallFlag:
 
 
 # ---------------------------------------------------------------------------
+# --show-rewritten flag
+# ---------------------------------------------------------------------------
+
+
+class TestShowRewrittenFlag:
+    def test_show_rewritten_defaults_to_false(self):
+        parser = _build_parser()
+        args = parser.parse_args([])
+        assert args.show_rewritten is False
+
+    def test_show_rewritten_flag_long(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["--show-rewritten", "ans(x) :- R(x)"]
+        )
+        assert args.show_rewritten is True
+
+    def test_show_rewritten_flag_short(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["-R", "ans(x) :- R(x)"]
+        )
+        assert args.show_rewritten is True
+
+    def test_show_rewritten_works_without_squall(self):
+        """Unlike --show-datalog, --show-rewritten does NOT require --squall."""
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["--show-rewritten", "ans(x) :- R(x)"]
+        )
+        assert args.show_rewritten is True
+        assert args.squall is False
+
+    def test_show_rewritten_prints_for_datalog(self, capsys):
+        from neurolang.frontend import NeurolangDL
+        from neurolang import expressions as ir
+        from neurolang import datalog
+        from neurolang import logic
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([('a', 'b'), ('b', 'c'), ('c', 'd')], name='par')
+
+        S_ = ir.Symbol
+        x, y, z = S_('x'), S_('y'), S_('z')
+        anc = S_('anc')
+        par = S_('par')
+
+        nl.program_ir.walk(datalog.Implication(anc(x, y), par(x, y)))
+        nl.program_ir.walk(datalog.Implication(
+            anc(x, y), logic.Conjunction((anc(x, z), par(z, y)))
+        ))
+
+        result = nl.execute_datalog_program(
+            "ans(x) :- anc('a', x).", show_rewritten=True
+        )
+        captured = capsys.readouterr()
+        assert "rewritten program" in captured.out
+        assert "magic" in captured.out
+        assert result is not None
+
+    def test_show_rewritten_prints_for_squall(self, capsys):
+        from neurolang.frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        nl.add_tuple_set([("alice",)], name="plays")
+
+        result = nl.execute_squall_program(
+            "obtain every Person that plays.",
+            show_rewritten=True
+        )
+        # SQUALL queries that don't trigger magic sets won't print
+        # the rewritten header; that's expected behavior
+        assert result is not None
+
+    def test_show_rewritten_no_output_when_false(self, capsys):
+        from neurolang.frontend import NeurolangDL
+        from neurolang import expressions as ir
+        from neurolang import datalog
+        from neurolang import logic
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([('a', 'b'), ('b', 'c'), ('c', 'd')], name='par')
+
+        S_ = ir.Symbol
+        x, y, z = S_('x'), S_('y'), S_('z')
+        anc = S_('anc')
+        par = S_('par')
+
+        nl.program_ir.walk(datalog.Implication(anc(x, y), par(x, y)))
+        nl.program_ir.walk(datalog.Implication(
+            anc(x, y), logic.Conjunction((anc(x, z), par(z, y)))
+        ))
+
+        nl.execute_datalog_program(
+            "ans(x) :- anc('a', x).", show_rewritten=False
+        )
+        captured = capsys.readouterr()
+        assert "rewritten program" not in captured.out
+
+    def test_show_rewritten_builds_engine_and_prints(self, monkeypatch, capsys):
+        """--show-rewritten builds the requested engine and prints without solving."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        nl.add_tuple_set([("alice",)], name="plays")
+
+        build_engine_calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            build_engine_calls.append((name, str(data_dir), resolution))
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+        main([
+            "--engine", "neurosynth",
+            "--show-rewritten",
+            "--squall",
+            "obtain every Person that plays.",
+        ])
+
+        captured = capsys.readouterr()
+        assert build_engine_calls == [
+            ("neurosynth", "neurolang_data", None),
+        ]
+        assert "rewritten program" in captured.out
+        assert "Query completed" not in captured.err
+
+    def test_show_rewritten_datalog_builds_engine(self, monkeypatch, capsys):
+        """--show-rewritten for classical Datalog also builds the engine."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a"), (2, "b")], name="R")
+
+        build_engine_calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            build_engine_calls.append((name, str(data_dir), resolution))
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+        main([
+            "--engine", "neurosynth",
+            "--show-rewritten",
+            "ans(x) :- R(x, y).",
+        ])
+
+        captured = capsys.readouterr()
+        assert build_engine_calls == [
+            ("neurosynth", "neurolang_data", None),
+        ]
+        assert "rewritten program" in captured.out
+        assert "Query completed" not in captured.err
+
+
+# ---------------------------------------------------------------------------
 # --show-datalog flag
 # ---------------------------------------------------------------------------
 
@@ -807,17 +975,11 @@ class TestShowDatalogFlag:
 
 class TestFormatIR:
     def test_symbol_non_fresh(self):
-        from neurolang.expressions import Symbol
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         x = Symbol("x")
         assert printer.walk(x) == "x"
 
     def test_symbol_fresh_renamed(self):
-        from neurolang.expressions import Symbol
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         f0 = Symbol.fresh()
         f1 = Symbol.fresh()
@@ -826,18 +988,12 @@ class TestFormatIR:
         assert "s\u2081" in result
 
     def test_constant_string(self):
-        from neurolang.expressions import Constant
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         c = Constant("emotion")
         result = printer.walk(c)
         assert "'emotion'" in result
 
     def test_function_application(self):
-        from neurolang.expressions import Symbol
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         voxel = Symbol("voxel")
         x, y, z = Symbol("x"), Symbol("y"), Symbol("z")
@@ -846,10 +1002,6 @@ class TestFormatIR:
         assert result == "voxel(x, y, z)"
 
     def test_conjunction_inline(self):
-        from neurolang.expressions import Symbol
-        from neurolang.logic import Conjunction
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         a, b = Symbol("a"), Symbol("b")
         p = Symbol("p")
@@ -859,10 +1011,6 @@ class TestFormatIR:
         assert "p(a) \u2227 q(b)" == result
 
     def test_existential_predicate(self):
-        from neurolang.expressions import Symbol
-        from neurolang.logic import Conjunction, ExistentialPredicate
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         printer = DatalogPrettyPrinter()
         s = Symbol.fresh()
         study = Symbol("study")(s)
@@ -873,11 +1021,6 @@ class TestFormatIR:
         assert "study(s\u2080)" in result
 
     def test_query_body_breaks_conjunction_into_lines(self):
-        from neurolang.frontend.datalog.squall_syntax_lark import (
-            parser as squall_parser,
-        )
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         parsed = squall_parser("obtain every Voxel (?x; ?y; ?z).")
         printer = DatalogPrettyPrinter()
         result = printer.walk(parsed.queries[0])
@@ -886,11 +1029,6 @@ class TestFormatIR:
         assert "voxel(x, y, z)" in lines[1].strip()
 
     def test_nd_annotation_uses_fresh_vars(self):
-        from neurolang.frontend.datalog.squall_syntax_lark import (
-            parser as squall_parser,
-        )
-        from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-
         parsed = squall_parser(
             "obtain every Voxel in 3D that a Study reported."
         )

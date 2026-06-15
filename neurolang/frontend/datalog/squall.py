@@ -68,31 +68,35 @@ class LogicSimplifier(
     into a single walker.
     """
 
+    @staticmethod
+    def _flatten_nested_quantifier(expression, cls, walk_body):
+        """Shared logic for flattening nested quantifier predicates.
+
+        Walks the body; if unchanged, returns the original expression to
+        prevent infinite re-wrapping of structurally stable chains.
+        """
+        inner = walk_body
+        if inner is expression.body:
+            return expression
+        return cls(expression.head, inner)
+
     @add_match(
         ExistentialPredicate,
         lambda e: isinstance(e.body, ExistentialPredicate),
     )
     def flatten_nested_existentials(self, expression):
-        inner = self.walk(expression.body)
-        # If walking the body produced no change, return the original expression.
-        # This prevents infinite re-walking when nested ExistentialPredicate
-        # chains (e.g. EP(x, EP(y, EP(z, Conj(...))))) are structurally stable
-        # but the handler below always creates new wrapper objects.
-        if inner is expression.body:
-            return expression
-        expression = ExistentialPredicate(expression.head, inner)
-        return expression
+        return self._flatten_nested_quantifier(
+            expression, ExistentialPredicate, self.walk(expression.body)
+        )
 
     @add_match(
         UniversalPredicate,
         lambda e: isinstance(e.body, UniversalPredicate),
     )
     def flatten_nested_universals(self, expression):
-        inner = self.walk(expression.body)
-        if inner is expression.body:
-            return expression
-        expression = UniversalPredicate(expression.head, inner)
-        return expression
+        return self._flatten_nested_quantifier(
+            expression, UniversalPredicate, self.walk(expression.body)
+        )
 
     @add_match(Implication)
     def walk_implication(self, expression):

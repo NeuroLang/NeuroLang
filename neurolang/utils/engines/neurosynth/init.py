@@ -23,12 +23,11 @@ import numpy as np
 import pandas as pd
 
 from neurolang.frontend import NeurolangPDL
-from neurolang.frontend.neurosynth_utils import StudyID
-
-try:
-    from nilearn.datasets.utils import _fetch_files
-except ImportError:
-    from nilearn.datasets._utils import fetch_files as _fetch_files
+from neurolang.frontend.neurosynth_utils import (
+    StudyID,
+    fetch_neurosynth_peak_data,
+    get_ns_term_study_associations,
+)
 
 
 def init_engine(
@@ -46,33 +45,14 @@ def init_engine(
         Directory under which downloaded data is cached.
 
     """
-    ns_database_fn, ns_features_fn = _fetch_files(
-        str(data_dir / "neurosynth"),
-        [
-            (
-                "database.txt",
-                "https://github.com/neurosynth/neurosynth-data"
-                "/raw/master/current_data.tar.gz",
-                {"uncompress": True},
-            ),
-            (
-                "features.txt",
-                "https://github.com/neurosynth/neurosynth-data"
-                "/raw/master/current_data.tar.gz",
-                {"uncompress": True},
-            ),
-        ],
-    )
-
-    activations = _read_ns_database(ns_database_fn)
+    activations = fetch_neurosynth_peak_data(data_dir, verbose=0)
     peak_data = _process_peaks(activations, mask)
     study_ids = peak_data[["study_id"]].drop_duplicates()
 
-    features = _read_ns_features(ns_features_fn)
-    term_data = features.melt(
-        var_name="term", id_vars="study_id", value_name="tfidf"
-    ).query("tfidf > 1e-3")[["term", "tfidf", "study_id"]]
-    term_data["study_id"] = term_data["study_id"].apply(StudyID)
+    term_data = get_ns_term_study_associations(
+        data_dir, verbose=0, convert_study_ids=True, tfidf_threshold=1e-3
+    )
+    term_data = term_data.rename(columns={"id": "study_id"})
 
     nl.add_tuple_set(peak_data, name="peak_reported")
     nl.add_tuple_set(study_ids, name="study")
@@ -89,12 +69,6 @@ def init_engine(
         name="voxel",
     )
     nl.add_uniform_probabilistic_choice_over_set(study_ids, name="selected_study")
-
-def _read_ns_database(path: str) -> pd.DataFrame:
-    activations = pd.read_csv(path, sep="\t")
-    activations["id"] = activations["id"].apply(StudyID)
-    return activations
-
 
 def _process_peaks(
     activations: pd.DataFrame, mni_mask: nib.Nifti1Image
@@ -151,7 +125,4 @@ def _process_peaks(
     return peak_data
 
 
-def _read_ns_features(path: str) -> pd.DataFrame:
-    features = pd.read_csv(path, sep="\t")
-    features.rename(columns={"pmid": "study_id"}, inplace=True)
-    return features
+

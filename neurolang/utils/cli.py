@@ -264,6 +264,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "Useful for debugging and understanding the translation.",
     )
     parser.add_argument(
+        "--show-rewritten",
+        "-R",
+        action="store_true",
+        help="Build the requested engine, print the Datalog program "
+        "after magic-sets rewriting, then exit without running the "
+        "chase. Useful for inspecting how a SQUALL or Datalog query "
+        "is rewritten before execution.",
+    )
+    parser.add_argument(
         "--sort",
         "-S",
         action="append",
@@ -278,7 +287,10 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _execute_program(nl: NeurolangPDL, program_text: str):
+def _execute_program(
+    nl: NeurolangPDL, program_text: str, show_rewritten: bool = False,
+    dry_run: bool = False,
+):
     """
     Execute a Datalog program and return the result if a query is present.
 
@@ -292,22 +304,30 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
         Initialised engine (``NeurolangPDL`` or ``NeurolangDL``).
     program_text :
         Datalog program, possibly containing one ``Query`` rule.
+    show_rewritten :
+        If True, print the Datalog program after magic-sets rewriting.
+    dry_run :
+        If True, print the rewritten program and return None without
+        running the chase.
 
     Returns
     -------
     ``None``
-        When no query is present.
+        When no query is present or when *dry_run* is True.
     ``bool``
         For boolean (headless) queries.
     ``RelationalAlgebraFrozenSet``
         The query result set (may have a ``.columns`` attribute).
 
     """
-    return nl.execute_datalog_program(program_text)
+    return nl.execute_datalog_program(
+        program_text, show_rewritten=show_rewritten, dry_run=dry_run,
+    )
 
 
 def _execute_squall_program(
-    nl: NeurolangPDL, program_text: str
+    nl: NeurolangPDL, program_text: str, show_rewritten: bool = False,
+    dry_run: bool = False,
 ):
     """
     Execute a SQUALL (controlled English) program.
@@ -321,18 +341,25 @@ def _execute_squall_program(
         Initialised engine.
     program_text :
         SQUALL program text.
+    show_rewritten :
+        If True, print the Datalog program after magic-sets rewriting.
+    dry_run :
+        If True, print the rewritten program and return None without
+        running the chase.
 
     Returns
     -------
     None
-        When there are no ``obtain`` queries.
+        When there are no ``obtain`` queries or when *dry_run* is True.
     NamedRelationalAlgebraFrozenSet
         When there is exactly one ``obtain`` query.
     Dict[str, NamedRelationalAlgebraFrozenSet]
         When there are multiple ``obtain`` queries.
 
     """
-    return nl.execute_squall_program(program_text)
+    return nl.execute_squall_program(
+        program_text, show_rewritten=show_rewritten, dry_run=dry_run,
+    )
 
 
 def _format_ir(expr, fresh_map=None, _counter=None):
@@ -460,6 +487,8 @@ def _list_sets(nl: NeurolangPDL) -> None:
     print(f"\n  Total RA sets: {len(sets_found)}")
 
 
+
+
 def main(argv: Optional[list] = None) -> None:
     """CLI entry point: parse arguments, build engine, run query."""
     parser = _build_parser()
@@ -493,6 +522,23 @@ def main(argv: Optional[list] = None) -> None:
         )
         sys.exit(1)
 
+    # --show-rewritten requires the requested engine because probabilistic
+    # SQUALL programs depend on engine data and the CP-Logic solver.
+    # Build the engine, print the rewritten program, and exit before the chase.
+    if args.show_rewritten:
+        program = _read_query(args)
+        if not program or not program.strip():
+            print("Error: no query provided.", file=sys.stderr)
+            sys.exit(1)
+        nl = engine_registry.build_engine(
+            args.engine, Path(args.data_dir), args.resolution
+        )
+        if args.squall:
+            _execute_squall_program(nl, program, dry_run=True)
+        else:
+            _execute_program(nl, program, dry_run=True)
+        return
+
     nl = engine_registry.build_engine(
         args.engine, Path(args.data_dir), args.resolution
     )
@@ -514,7 +560,7 @@ def main(argv: Optional[list] = None) -> None:
     sort_by = _parse_sort_spec(args.sort)
 
     if args.squall:
-        result = _execute_squall_program(nl, program)
+        result = _execute_squall_program(nl, program, show_rewritten=args.show_rewritten)
         if isinstance(result, dict):
             for key, sub_result in result.items():
                 output = _format_result(
@@ -533,7 +579,7 @@ def main(argv: Optional[list] = None) -> None:
             if output:
                 print(output)
     else:
-        result = _execute_program(nl, program)
+        result = _execute_program(nl, program, show_rewritten=args.show_rewritten)
         output = _format_result(
             result, fmt=args.format, column_names=None,
             sort_by=sort_by,

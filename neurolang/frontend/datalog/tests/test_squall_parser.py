@@ -23,7 +23,7 @@ from ....logic import (
     Disjunction,
 )
 from ....probabilistic.expressions import Condition, ProbabilisticFact
-from ..squall import LogicSimplifier
+from ..squall import LogicSimplifier, InvertedFunctionApplication, ResolveInvertedFunctionApplicationMixin
 from ..squall_syntax_lark import (
     parser,
     EquiprobableChoiceDef,
@@ -33,6 +33,7 @@ from ..squall_syntax_lark import (
 from ...probabilistic_frontend import RegionFrontendCPLogicSolver, Chase
 from ....datalog.expression_processing import extract_logic_free_variables
 from ....datalog.expressions import AggregationApplication
+from ....datalog.aggregation import AggregationApplication as AggApp
 from ....datalog.negation import is_conjunctive_negation
 from ....expressions import ExpressionBlock, Query
 from ....logic.horn_clauses import fol_query_to_datalog_program
@@ -467,8 +468,6 @@ def test_squall_quantified_np_nv2(
 
 
 def test_squall_voxel_activation():
-    from neurolang.frontend.datalog.squall import InvertedFunctionApplication
-
     query = "every voxel (?x; ?y; ?z) that a study ?s ~reports activates"
     res = parser(f"squall {query}")
     x = Symbol("x")
@@ -623,7 +622,6 @@ def test_squall_rel_ng2_whose_with_object():
 
 def test_squall_aggregation_ir():
     """Test aggregation IR structure for 'every Max of the Quantity where ?i item_count per ?i'."""
-    from neurolang.datalog.aggregation import AggregationApplication as AA
     code = (
         "define as max_items for every Item ?i ; "
         "where every Max of the Quantity where ?i item_count per ?i."
@@ -634,7 +632,7 @@ def test_squall_aggregation_ir():
     # The consequent must include an AggregationApplication argument
     consequent = rule.consequent
     agg_args = [
-        a for a in consequent.args if isinstance(a, AA)
+        a for a in consequent.args if isinstance(a, AggApp)
     ]
     assert agg_args, (
         f"Expected AggregationApplication in consequent args, got: {consequent.args}"
@@ -669,10 +667,6 @@ def test_lark_semantics_aggregation(datalog_simple):
 
 def test_inverted_function_application_ir_node():
     """Test: InvertedFunctionApplication reverses args when walked through mixin."""
-    from neurolang.frontend.datalog.squall import (
-        InvertedFunctionApplication,
-        ResolveInvertedFunctionApplicationMixin,
-    )
 
     class _Resolver(ResolveInvertedFunctionApplicationMixin, ExpressionWalker):
         pass
@@ -1444,7 +1438,6 @@ def test_full_squall_program_ir_structure():
     5. MARG with conditioned-to
     6. aggregation in head with AggregationApplication
     """
-    from neurolang.datalog.aggregation import AggregationApplication as AggApp
 
     program_text = """
 define as Voxel_reported with a probability of
@@ -1601,7 +1594,6 @@ def test_rel_fun_call_with_numeric_literal():
 
 def test_command_parses_and_preserves_in_squall_program():
     """#set_backend('pandas') parses and is preserved in SquallProgram.commands."""
-    from ..squall_syntax_lark import SquallProgram
 
     result = parser(
         "#set_backend('pandas').\n"
@@ -1701,7 +1693,6 @@ def test_squall_arithmetic_assign():
 
 def test_squall_predicate_and_arithmetic_roundtrip():
     """End-to-end: define a rule with predicate calls + arithmetic, then execute against engine."""
-    from ....datalog.expressions import Fact
     from ....frontend import NeurolangPDL
 
     nl = NeurolangPDL()

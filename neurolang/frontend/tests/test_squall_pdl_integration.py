@@ -61,6 +61,20 @@ def test_execute_squall_rules_fire_into_program(nl):
     )
 
 
+def test_show_rewritten_squall_prints_all_rules(capsys, nl):
+    """--show-rewritten must print all reachable define-as rules, not just the final query."""
+    nl.execute_squall_program(
+        "define as Active every Person that plays. "
+        "define as Fanatic every Active that plays. "
+        "obtain every Fanatic.",
+        show_rewritten=True,
+        dry_run=True,
+    )
+    captured = capsys.readouterr()
+    assert "active" in captured.out
+    assert "fanatic" in captured.out
+
+
 # ---------------------------------------------------------------------------
 # Single obtain clause returns NamedRelationalAlgebraFrozenSet
 # ---------------------------------------------------------------------------
