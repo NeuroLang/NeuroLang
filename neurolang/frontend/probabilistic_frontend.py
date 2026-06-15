@@ -442,23 +442,18 @@ class NeurolangPDL(QueryBuilderDatalog):
                 ) = probabilistic_postprocess_magic_rules(
                     self.program_ir, magic_query, magic_rules
                 )
-                if show_rewritten or dry_run:
-                    reachable_rules = reachable_code(
-                        magic_query, self.program_ir
-                    )
-                    self._print_rewritten_program(
-                        magic_query, reachable_rules
-                    )
-                if dry_run:
-                    return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
+            if self._handle_rewritten_output(
+                magic_query, show_rewritten, dry_run
+            ):
+                return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
             with self.scope:
                 self.program_ir.walk(magic_rules)
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
-            if dry_run:
-                reachable_rules = reachable_code(query, self.program_ir)
-                self._print_rewritten_program(query, reachable_rules)
+            if self._handle_rewritten_output(
+                query, show_rewritten, dry_run
+            ):
                 return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
             solution = self._solve(query)
 
