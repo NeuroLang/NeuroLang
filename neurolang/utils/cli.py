@@ -47,8 +47,7 @@ from typing import Optional
 import pandas as pd
 
 from neurolang.datalog import WrappedRelationalAlgebraSet
-from neurolang.frontend import NeurolangDL, NeurolangPDL
-from neurolang.frontend import query_resolution_expressions as fe
+from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.utils import engine_registry
 

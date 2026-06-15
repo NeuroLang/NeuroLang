@@ -1,8 +1,8 @@
 """Tests for StripDimensionTypePredicatesMixin and make_dimension_type_stripper."""
 
-from ....datalog import Conjunction, Implication
-from ....expression_walker import ExpressionWalker, PatternWalker, add_match
-from ....expressions import Constant, Expression, FunctionApplication, Symbol
+from ....datalog import Conjunction
+from ....expression_walker import ExpressionWalker
+from ....expressions import Constant, FunctionApplication, Symbol
 from ..squall import (
     StripDimensionTypePredicatesMixin,
     _DIMENSION_TYPE_PREDICATE_NAMES,

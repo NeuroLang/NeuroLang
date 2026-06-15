@@ -11,9 +11,7 @@ from neurolang.utils.cli import (
     _build_parser,
     _execute_program,
     _execute_squall_program,
-    _format_ir,
     _format_result,
-    _read_query,
 )
 
 from neurolang.utils import engine_registry
@@ -839,7 +837,6 @@ class TestShowRewrittenFlag:
             "obtain every Person that plays.",
             show_rewritten=True
         )
-        captured = capsys.readouterr()
         # SQUALL queries that don't trigger magic sets won't print
         # the rewritten header; that's expected behavior
         assert result is not None

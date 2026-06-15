@@ -1693,7 +1693,6 @@ def test_squall_arithmetic_assign():
 
 def test_squall_predicate_and_arithmetic_roundtrip():
     """End-to-end: define a rule with predicate calls + arithmetic, then execute against engine."""
-    from ....datalog.expressions import Fact
     from ....frontend import NeurolangPDL
 
     nl = NeurolangPDL()
