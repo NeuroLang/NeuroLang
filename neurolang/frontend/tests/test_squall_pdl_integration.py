@@ -908,3 +908,27 @@ def test_execute_equiprobable_choice_multi_column():
     assert len(rows) == 2
     assert abs(rows[0][0] - 0.5) < 1e-9
     assert abs(rows[1][0] - 0.5) < 1e-9
+
+
+def test_conditional_query_intermediate_predicates_are_deterministic():
+    """Regression: re-walking a conditional query must not create fresh intermediates."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([("v1",), ("v2",)], name="voxel")
+    engine.add_tuple_set([("s1",), ("s2",)], name="study")
+
+    engine.execute_squall_program(
+        "define as Published with probability every Voxel "
+        "conditioned to every Study activates."
+    )
+
+    cond_functors = set()
+    idb = engine.program_ir.intensional_database()
+    for ruleset in idb.values():
+        for rule in ruleset.formulas:
+            name = str(rule.consequent.functor)
+            if "^cond_num" in name or "^cond_den" in name:
+                cond_functors.add(name)
+
+    assert len(cond_functors) == 2, (
+        f"Expected 2 distinct intermediate functors, got {len(cond_functors)}: {cond_functors}"
+    )
