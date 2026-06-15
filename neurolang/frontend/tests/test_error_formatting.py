@@ -14,8 +14,10 @@ from neurolang.exceptions import (
     NeuroLangException,
     ParserError,
     SquallSemanticError,
+    SymbolNotFoundError,
     UnexpectedTokenError,
     UnexpectedCharactersError,
+    WrongArgumentsInPredicateError,
 )
 from neurolang.frontend.error_formatting import (
     format_error,
@@ -25,6 +27,8 @@ from neurolang.frontend.error_formatting import (
     _suggest_squall_fixes,
     _format_source_window,
     _format_source_pointer,
+    _edit_distance,
+    _suggest_similar_names,
 )
 
 
@@ -203,6 +207,109 @@ class TestFormatError:
         exc = NeuroLangException("Test error")
         result = format_lark_parse_error(exc, "test source")
         assert "Test error" in result
+
+
+class TestUndefinedPredicateError:
+    """Test formatting of SymbolNotFoundError."""
+
+    def test_basic_symbol_not_found(self):
+        exc = SymbolNotFoundError("Symbol Q not found")
+        result = format_error(exc, "ans(x) :- R(x), Q(x)")
+        assert "Undefined predicate" in result
+        assert "Symbol Q not found" in result
+
+    def test_symbol_not_found_with_line(self):
+        exc = SymbolNotFoundError("Symbol foo not found")
+        exc.line = 1
+        exc.column = 12
+        result = format_error(exc, "ans(x) :- foo(x)")
+        assert "line 1" in result
+        assert "^~~~" in result
+
+    def test_symbol_not_found_format_not_found(self):
+        exc = SymbolNotFoundError("Symbol not found foo")
+        result = format_error(exc, "ans(x) :- foo(x)")
+        assert "Undefined predicate" in result
+
+    def test_symbol_not_found_predicate_format(self):
+        exc = SymbolNotFoundError("Predicate foo not found")
+        result = format_error(exc, "ans(x) :- foo(x)")
+        assert "Undefined predicate" in result
+
+    def test_did_you_mean_suggestion(self):
+        exc = SymbolNotFoundError("Symbol regin_reported not found")
+        result = format_error(exc, "ans(x) :- regin_reported(x)")
+        assert "Did you mean" in result
+        assert "region_reported" in result
+
+    def test_no_suggestion_for_unknown_predicate(self):
+        exc = SymbolNotFoundError("Symbol XyzzyNotFound not found")
+        result = format_error(exc, "ans(x) :- XyzzyNotFound(x)")
+        assert "Undefined predicate" in result
+
+
+class TestArityMismatchError:
+    """Test formatting of WrongArgumentsInPredicateError."""
+
+    def test_basic_arity_mismatch(self):
+        exc = WrongArgumentsInPredicateError(
+            "There is a predicate in the query with the wrong number of arguments."
+        )
+        result = format_error(exc, "ans(x, y, z) :- R(x, y, z)")
+        assert "Arity mismatch" in result
+        assert "wrong number of arguments" in result
+
+    def test_arity_mismatch_with_line(self):
+        exc = WrongArgumentsInPredicateError(
+            "Predicate R expects 2 arguments but got 3"
+        )
+        exc.line = 1
+        exc.column = 18
+        result = format_error(exc, "ans(x) :- R(x, y, z)")
+        assert "Arity mismatch" in result
+        assert "^~~~" in result
+
+
+class TestEditDistance:
+    """Test the edit distance utility."""
+
+    def test_exact_match(self):
+        assert _edit_distance("hello", "hello") == 0
+
+    def test_one_substitution(self):
+        assert _edit_distance("hello", "hallo") == 1
+
+    def test_one_insertion(self):
+        assert _edit_distance("hello", "helloo") == 1
+
+    def test_one_deletion(self):
+        assert _edit_distance("hello", "hell") == 1
+
+    def test_completely_different(self):
+        assert _edit_distance("abc", "xyz") == 3
+
+    def test_empty_strings(self):
+        assert _edit_distance("", "") == 0
+        assert _edit_distance("abc", "") == 3
+        assert _edit_distance("", "abc") == 3
+
+
+class TestSimilarNames:
+    """Test the similar-name suggestion utility."""
+
+    def test_suggests_similar(self):
+        names = {"term_in_study_tfidf", "region_reported", "peak_reported"}
+        result = _suggest_similar_names("regin_reported", names)
+        assert "region_reported" in result
+
+    def test_does_not_suggest_dissimilar(self):
+        names = {"term_in_study_tfidf", "peak_reported"}
+        result = _suggest_similar_names("xyz", names)
+        assert len(result) == 0
+
+    def test_empty_input(self):
+        result = _suggest_similar_names("", {"foo", "bar"})
+        assert len(result) == 0
 
 
 class TestRealDatalogErrors:

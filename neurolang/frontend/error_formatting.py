@@ -22,8 +22,10 @@ from ..exceptions import (
     NeuroLangException,
     ParserError,
     SquallSemanticError,
+    SymbolNotFoundError,
     UnexpectedCharactersError,
     UnexpectedTokenError,
+    WrongArgumentsInPredicateError,
 )
 
 
@@ -297,6 +299,154 @@ def _format_lark_unexpected_characters(
     return "\n".join(parts)
 
 
+# ── Fuzzy-name matching for undefined symbols ──────────────────────────────
+
+
+def _edit_distance(s1: str, s2: str) -> int:
+    """Compute the Levenshtein edit distance between two strings."""
+    if len(s1) < len(s2):
+        return _edit_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    prev = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr = [i + 1]
+        for j, c2 in enumerate(s2):
+            cost = 0 if c1 == c2 else 1
+            curr.append(min(
+                curr[j] + 1,        # insert
+                prev[j + 1] + 1,    # delete
+                prev[j] + cost,     # substitute
+            ))
+        prev = curr
+    return prev[-1]
+
+
+def _suggest_similar_names(bad_name: str, known_names: set, max_suggestions: int = 3) -> list:
+    """Find known names within edit-distance threshold of *bad_name*.
+
+    The threshold scales with name length: 2 for short names (≤5 chars),
+    3 for medium (≤10 chars), 4 for longer names.
+    """
+    if not bad_name:
+        return []
+    max_distance = 2 if len(bad_name) <= 5 else (3 if len(bad_name) <= 10 else 4)
+    scored = sorted(
+        ((n, _edit_distance(bad_name.lower(), n.lower())) for n in known_names),
+        key=lambda x: x[1],
+    )
+    return [n for n, d in scored if d <= max_distance][:max_suggestions]
+
+
+_COMMON_DATALOG_PREDICATES = {
+    "ans",
+    "true",
+    "false",
+    # NeuroSynth engine predicates (common ones)
+    "term_in_study_tfidf", "term_in_study", "study_in_peak",
+    "peak_reported", "region_reported", "study",
+    "term", "peak", "region", "study_in_study",
+    "term_in_peak_tfidf", "term_in_peak",
+    "study_in_peak_tfidf",
+    # SQUALL internal predicates
+    "Activation", "Voxel", "Study", "Term", "Image", "Peak",
+    "Template", "Mask", "Region", "Label", "TissueClass",
+    "PeakReported", "TermInStudyTFIDF",
+}
+
+
+def _format_symbol_not_found(
+    exc: SymbolNotFoundError,
+    source_text: str,
+    source_lines: list,
+) -> str:
+    """Format a SymbolNotFoundError with similar-name suggestions."""
+    msg = str(exc)
+    parts = [_c("bold", "Undefined predicate") + " — symbol not found"]
+
+    line = getattr(exc, "line", None)
+    column = getattr(exc, "column", None)
+    if line is not None:
+        ctx = _format_source_window(source_lines, line, column or 1)
+        if ctx:
+            parts.append(ctx)
+        parts.append(
+            f"  {_c('red', 'Location:')} line {line}"
+            + (f", column {column}" if column else "")
+        )
+
+    # Extract the predicate name from the error message
+    pred_name = None
+    for pattern in [
+        r"Symbol not found\s+(.+)",
+        r"Symbol\s+(.+?)\s+not found",
+        r"Symbol\s+(.+?)\s+not",
+        r"Predicate\s+(.+?)\s+not found",
+        r"'([^']+)'",
+    ]:
+        m = re.search(pattern, msg, re.IGNORECASE)
+        if m:
+            pred_name = m.group(1)
+            break
+
+    parts.append(f"  {_c('red', 'Error:')} {msg}")
+
+    if pred_name:
+        suggestions = _suggest_similar_names(
+            pred_name, _COMMON_DATALOG_PREDICATES
+        )
+        if suggestions:
+            parts.append(
+                f"  {_c('yellow', 'Did you mean:')} "
+                + ", ".join(_c("bold", s) for s in suggestions)
+            )
+        else:
+            parts.append(
+                f"  {_c('yellow', 'Tip:')} Predicate '{pred_name}' has not been "
+                f"defined. Use ``nl.add_tuple_set(...)`` to register it, or "
+                f"check the spelling."
+            )
+
+    # Also run general Datalog suggestions
+    datalog_suggestions = _suggest_datalog_fixes(source_text)
+    if datalog_suggestions:
+        parts.append(_c("yellow", "  Suggestions:"))
+        for s in datalog_suggestions:
+            parts.append(f"    {s}")
+
+    return "\n".join(parts)
+
+
+def _format_wrong_arguments(
+    exc: WrongArgumentsInPredicateError,
+    source_text: str,
+    source_lines: list,
+) -> str:
+    """Format a WrongArgumentsInPredicateError with context."""
+    msg = str(exc)
+    parts = [_c("bold", "Arity mismatch") + " — wrong number of arguments"]
+
+    line = getattr(exc, "line", None)
+    column = getattr(exc, "column", None)
+    if line is not None:
+        ctx = _format_source_window(source_lines, line, column or 1)
+        if ctx:
+            parts.append(ctx)
+        parts.append(
+            f"  {_c('red', 'Location:')} line {line}"
+            + (f", column {column}" if column else "")
+        )
+
+    parts.append(f"  {_c('red', 'Error:')} {msg}")
+    parts.append(
+        f"  {_c('yellow', 'Tip:')} Every predicate call must provide exactly "
+        f"the same number of arguments as its definition. "
+        f"Check the predicate's definition and count the arguments."
+    )
+
+    return "\n".join(parts)
+
+
 def _format_squall_semantic_error(
     exc: SquallSemanticError,
     source_lines: list,
@@ -412,6 +562,12 @@ def format_error(
 
     if isinstance(exc, SquallSemanticError):
         return _format_squall_semantic_error(exc, source_lines)
+
+    if isinstance(exc, SymbolNotFoundError):
+        return _format_symbol_not_found(exc, source_text, source_lines)
+
+    if isinstance(exc, WrongArgumentsInPredicateError):
+        return _format_wrong_arguments(exc, source_text, source_lines)
 
     if isinstance(exc, UnexpectedToken):
         return _format_lark_unexpected_token(
