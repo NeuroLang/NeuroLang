@@ -35,6 +35,7 @@ class AdornedSymbol(Symbol):
         self.expression = expression
         self.adornment = adornment
         self.number = number
+        self.is_fresh = False
 
     @property
     def name(self):
