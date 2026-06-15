@@ -5,6 +5,8 @@ Strips type annotations, uses ``:-`` notation for rules/queries, and
 shortens fresh variables to short names (``s₀``, ``s₁``, …).
 """
 
+import operator as _operator
+
 from neurolang.expression_pattern_matching import add_match
 from neurolang.expression_walker import PatternWalker
 from neurolang.expressions import (
@@ -17,6 +19,21 @@ from neurolang.logic import (
     ExistentialPredicate, UniversalPredicate,
 )
 from neurolang.probabilistic.expressions import Condition
+
+# Binary operators that should be printed infix.
+# Maps operator function → display symbol.
+_INFIX_OPS = {
+    _operator.eq: "=",
+    _operator.ne: "\u2260",
+    _operator.lt: "<",
+    _operator.le: "\u2264",
+    _operator.gt: ">",
+    _operator.ge: "\u2265",
+    _operator.add: "+",
+    _operator.sub: "\u2212",
+    _operator.mul: "\u00d7",
+    _operator.truediv: "\u00f7",
+}
 
 
 class DatalogPrettyPrinter(PatternWalker):
@@ -76,6 +93,15 @@ class DatalogPrettyPrinter(PatternWalker):
 
     @add_match(FunctionApplication)
     def format_fa(self, expr: FunctionApplication) -> str:
+        if (
+            isinstance(expr.functor, Constant)
+            and callable(expr.functor.value)
+            and expr.functor.value in _INFIX_OPS
+            and len(expr.args) == 2
+        ):
+            left = self.walk(expr.args[0])
+            right = self.walk(expr.args[1])
+            return f"{left} {_INFIX_OPS[expr.functor.value]} {right}"
         args = ", ".join(self.walk(a) for a in expr.args)
         return f"{self.walk(expr.functor)}({args})"
 

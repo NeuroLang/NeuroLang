@@ -31,9 +31,11 @@ from ..datalog.chase import Chase
 from ..datalog.constraints_representation import RightImplication
 from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
+    remove_conjunction_duplicates,
     TranslateToDatalogSemantics,
     reachable_code,
 )
+from ..logic.transformations import RemoveTrivialOperations
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.pretty_printer import DatalogPrettyPrinter
@@ -108,10 +110,54 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
         self.datalog_parser = datalog_parser
 
+    @staticmethod
+    def _simplify_rewritten_rules(reachable_rules):
+        """Simplify reachable rules using existing expression walkers.
+
+        Applies RemoveTrivialOperations (unwraps single-element n-ary
+        operators, removes double negation) and remove_conjunction_duplicates
+        (deduplicates body predicates).
+
+        Note: TRUE removal from conjunctions is not covered by
+        the current MRO walkers — the LogicSimplifier in the SQUALL
+        parser handles that but is not in the general MRO.
+        """
+        if reachable_rules is None:
+            return None
+
+        trivial = RemoveTrivialOperations()
+
+        simplified = []
+        for rule in reachable_rules.formulas:
+            try:
+                rule = trivial.walk(rule)
+            except Exception:
+                pass
+            if isinstance(rule.antecedent, logic.Conjunction):
+                try:
+                    deduped = remove_conjunction_duplicates(rule.antecedent)
+                    if deduped is not rule.antecedent:
+                        rule = logic.Implication(rule.consequent, deduped)
+                except Exception:
+                    pass
+            simplified.append(rule)
+
+        seen = set()
+        unique = []
+        for rule in simplified:
+            key = repr(rule)
+            if key not in seen:
+                seen.add(key)
+                unique.append(rule)
+
+        return logic.Union(tuple(unique))
+
     def _print_rewritten_program(
         self, query_expression, reachable_rules=None
     ):
         """Print the Datalog program after magic-sets rewriting."""
+        reachable_rules = self._simplify_rewritten_rules(reachable_rules)
+
         print("── rewritten program ──")
         printer = DatalogPrettyPrinter()
         print(printer.walk(query_expression))
