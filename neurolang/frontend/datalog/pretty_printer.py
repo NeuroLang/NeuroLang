@@ -14,6 +14,7 @@ from neurolang.expressions import (
     FunctionApplication, Lambda, Query, Symbol,
 )
 from neurolang.datalog.expressions import Implication
+from neurolang.datalog.magic_sets import AdornedSymbol
 from neurolang.logic import (
     Conjunction, Disjunction, Negation,
     ExistentialPredicate, UniversalPredicate,
@@ -66,6 +67,8 @@ class DatalogPrettyPrinter(PatternWalker):
         self._counter = counter if counter is not None else [0]
 
     def _sym_name(self, sym: Symbol) -> str:
+        if isinstance(sym, AdornedSymbol):
+            return str(sym)
         if sym.is_fresh:
             if sym.name not in self._fresh_map:
                 n = self._counter[0]
