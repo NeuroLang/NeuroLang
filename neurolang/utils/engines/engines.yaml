@@ -8,16 +8,15 @@ engines:
     use_base_symbols: true
     builtins: [exp, log, startswith]
     python_init: "neurolang.utils.engines.neurosynth.init"
-    dimension_type_predicates: [probability, value]
-    atlases:
-      schaefer:
-        predicate_name: schaefer
-        resolution_mm: 2
-        n_rois: 100
-        yeo_networks: 7
     datalog_init: |
       study_with_peaks(S) :- peak_reported(I, J, K, S).
       schaefer_voxels(I, J, K, l) :- schaefer(l, r), contains(r, (I, J, K)).
+      study_with_peaks(S) :- peak_reported(I, J, K, S).
+      schaefer_voxels(I, J, K, l) :- schaefer(l, r), contains(r, (I, J, K)).
+      schaefer_label(l) :- schaefer(l, r)
+      labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
+      mentions(s, t) :- term_in_study_tfidf(t, v, s), (v > 0.03)
+      reports(s, i, j, k) :- peak_reported(i, j, k, s)
     #probabilistic_choice:
       # selected_study:
       #  source: study
@@ -64,7 +63,6 @@ engines:
         arity: 2
         columns: [name, region]
         description: "Cortical region name and ExplicitVBR geometry"
-    dimension_type_predicates: [probability, value]
 
   # Example template usage (commented out — uncomment to enable):
   #
