@@ -34,7 +34,10 @@ from ..datalog.aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..datalog.chase import Chase
-from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.constraints_representation import (
+    DatalogConstraintsProgram,
+    reachable_code,
+)
 from ..datalog.exceptions import InvalidMagicSetError
 from ..exceptions import SymbolNotFoundError
 from ..datalog.expression_processing import (
@@ -47,7 +50,6 @@ from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
-from .datalog.pretty_printer import DatalogPrettyPrinter
 
 from ..exceptions import (
     UnsupportedQueryError,
@@ -441,12 +443,12 @@ class NeurolangPDL(QueryBuilderDatalog):
                     self.program_ir, magic_query, magic_rules
                 )
                 if show_rewritten or dry_run:
-                    print("── rewritten program ──")
-                    printer = DatalogPrettyPrinter()
-                    print(printer.walk(magic_query))
-                    for rule in magic_rules.formulas:
-                        print(printer.walk(rule))
-                    print()
+                    reachable_rules = reachable_code(
+                        magic_query, self.program_ir
+                    )
+                    self._print_rewritten_program(
+                        magic_query, reachable_rules
+                    )
                 if dry_run:
                     return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
             with self.scope:
@@ -455,10 +457,8 @@ class NeurolangPDL(QueryBuilderDatalog):
                 query_pred_symb = magic_query.consequent.functor
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
             if dry_run:
-                print("── rewritten program ──")
-                printer = DatalogPrettyPrinter()
-                print(printer.walk(query))
-                print()
+                reachable_rules = reachable_code(query, self.program_ir)
+                self._print_rewritten_program(query, reachable_rules)
                 return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
             solution = self._solve(query)
 
