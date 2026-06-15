@@ -872,6 +872,9 @@ class SquallTransformer(Transformer):
         """Handle `for every Region [?r]` in a compound quantifier list.
 
         Returns `('_quant_clause', (var, type_predicate))`.
+        type_predicate may be None for type-annotation nouns (Probability,
+        Value) that introduce a variable into scope without generating a
+        body predicate.
         """
         items = [a for a in args if a is not None]
         ng1 = items[0]
@@ -891,6 +894,10 @@ class SquallTransformer(Transformer):
             self._symbol_scope[noun_name] = body_args
             self._has_rule_scope = True
 
+        # Always generate the type predicate for the quantifier noun.
+        # Dimension nouns (Probability, Value) will generate probability/1
+        # or value/1 atoms, which are stripped by StripDimensionTypePredicatesMixin
+        # at the frontend level (before the Datalog engine processes them).
         type_predicate = ng1(body_args)
         return ('_quant_clause', (body_args, type_predicate))
 
@@ -914,11 +921,14 @@ class SquallTransformer(Transformer):
         type_preds = []
         for clause in quant_list:
             _, (var, type_pred) = clause
-            head_vars.append(var)
+            if isinstance(var, tuple):
+                head_vars.extend(var)
+            else:
+                head_vars.append(var)
             type_preds.append(type_pred)
 
         body_parts = type_preds + [where_sentence]
-        body_formula = Conjunction(tuple(body_parts))
+        body_formula = Conjunction(tuple(p for p in body_parts if p is not None))
         return ('_rule_body2', (head_vars, body_formula))
 
     def rule_body1_cond_prior(self, args):
@@ -1206,8 +1216,8 @@ class SquallTransformer(Transformer):
                         # path: ng(x) type predicate + continuation applied
                         # via try/except (multi-arg for capturing_cont,
                         # single-arg + FunctionApplication spread for verb
-                        # lambdas).  Wrap in AnaphoraPredicate / existential
-                        # chain so aggregation can strip them.
+                        # lambdas).  The variables in x are free head
+                        # variables, so they must NOT be existentially bound.
                         body = ng(x)
                         try:
                             scope = d(*x)
@@ -1216,8 +1226,6 @@ class SquallTransformer(Transformer):
                             if len(x) > 1 and isinstance(scope, FunctionApplication):
                                 scope = scope.functor(*scope.args, *x[1:])
                         result = Conjunction((body, scope))
-                        for sym in x:
-                            result = ExistentialPredicate(sym, result)
                         return result
                     return d(x)
 
@@ -2343,12 +2351,6 @@ class SquallTransformer(Transformer):
         if isinstance(dim_noun, Symbol):
             self._symbol_scope[dim_noun.name] = result[-1]
         return result
-
-    def dimension_noun(self, args):
-        """Convert a dimension keyword token to its lowercase Symbol form."""
-        token = args[0]
-        name = token.value if hasattr(token, 'value') else str(token)
-        return Symbol(name.lower())
 
     def app_label(self, args):
         label = args[0]

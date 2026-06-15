@@ -15,6 +15,7 @@ from ..logic.horn_clauses import Fol2DatalogMixin
 from ..region_solver import RegionSolver
 from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..utils.data_manipulation import parse_region_label_map
+from .datalog.squall import StripDimensionTypePredicatesMixin
 from .datalog.sugar import (
     TranslateSSugarToSelectByColumn,
     TranslateSelectByFirstColumn,
@@ -63,14 +64,18 @@ class NeurolangDL(QueryBuilderDatalog):
     intermediate representation
     """
 
-    def __init__(self, program_ir=None):
+    def __init__(self, program_ir=None, solver_class=None):
         if program_ir is None:
-            program_ir = RegionFrontendDatalogSolver()
+            if solver_class is not None:
+                program_ir = solver_class()
+            else:
+                program_ir = RegionFrontendDatalogSolver()
         super().__init__(program_ir, chase_class=Chase)
 
 
 class RegionFrontendDatalogSolver(
     TranslateToLogicWithAggregation,
+    StripDimensionTypePredicatesMixin,
     TranslateSSugarToSelectByColumn,
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities,

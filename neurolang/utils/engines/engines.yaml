@@ -8,6 +8,7 @@ engines:
     use_base_symbols: true
     builtins: [exp, log, startswith]
     python_init: "neurolang.utils.engines.neurosynth.init"
+    dimension_type_predicates: [probability, value]
     atlases:
       schaefer:
         predicate_name: schaefer
@@ -63,6 +64,7 @@ engines:
         arity: 2
         columns: [name, region]
         description: "Cortical region name and ExplicitVBR geometry"
+    dimension_type_predicates: [probability, value]
 
   # Example template usage (commented out — uncomment to enable):
   #

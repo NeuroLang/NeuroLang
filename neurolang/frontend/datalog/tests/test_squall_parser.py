@@ -1155,24 +1155,123 @@ def test_compound_quantifier_explicit_vars():
     assert "mentions" in functors
 
 
-def _collect_predicate_atoms(expr, functor_name, result_list):
-    if isinstance(expr, FunctionApplication):
-        if isinstance(expr.functor, Symbol) and expr.functor.name == functor_name:
-            result_list.append(expr)
-        return
-    if isinstance(expr, (Conjunction,)):
-        for f in expr.formulas:
-            _collect_predicate_atoms(f, functor_name, result_list)
-    elif hasattr(expr, 'body'):
-        _collect_predicate_atoms(expr.body, functor_name, result_list)
-    elif hasattr(expr, 'antecedent'):
-        _collect_predicate_atoms(expr.antecedent, functor_name, result_list)
-    elif hasattr(expr, 'conditioned'):
-        _collect_predicate_atoms(expr.conditioned, functor_name, result_list)
-        _collect_predicate_atoms(expr.conditioning, functor_name, result_list)
-    elif hasattr(expr, 'formulas'):
-        for f in expr.formulas:
-            _collect_predicate_atoms(f, functor_name, result_list)
+def test_dimension_noun_in_compound_quantifier():
+    """'Probability' and 'Value' must parse as regular nouns in compound
+    quantifiers (for every Voxel in 3D and for every Probability)."""
+    result = parser(
+        "define as activation_probability for every Voxel in 3D "
+        "and for every Probability "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Probability."
+    )
+    assert isinstance(result, Implication)
+
+    # Build expected from the actual result to extract real variables.
+    # Head: activation_probability(s0, s1, s2, s3)
+    s0, s1, s2, s3 = result.consequent.args
+
+    # Extract s4 from the existential body
+    body_formulas = result.antecedent.unapply()[0]
+    _, _, outer_ep = body_formulas
+    s4 = outer_ep.unapply()[0]
+
+    expected = Implication(
+        Symbol("activation_probability")(s0, s1, s2, s3),
+        Conjunction((
+            Symbol("voxel")(s0, s1, s2),
+            Symbol("probability")(s3),
+            Symbol("schaefer_label")(s4),
+            Symbol("labels")(s4, s0, s1, s2),
+            Symbol("label_reports")(s4, s3),
+        )),
+    )
+
+    assert weak_logic_eq(result, expected), (
+        f"IR mismatch.\nGot:      {result}\nExpected: {expected}"
+    )
+
+
+def test_dimension_noun_in_sequential_quantifiers():
+    """'Probability' must parse as regular noun in sequential quantifiers
+    (for every Voxel in 3D for every Probability) — no 'and' between quantifiers."""
+    result = parser(
+        "define as activation_probability for every Voxel in 3D "
+        "for every Probability "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Probability."
+    )
+    assert isinstance(result, Implication)
+
+    # Head: activation_probability(s0, s1, s2, s3)
+    s0, s1, s2, s3 = result.consequent.args
+
+    # Extract s4 from the existential body
+    body_formulas = result.antecedent.unapply()[0]
+    _, _, outer_ep = body_formulas
+    s4 = outer_ep.unapply()[0]
+
+    expected = Implication(
+        Symbol("activation_probability")(s0, s1, s2, s3),
+        Conjunction((
+            Symbol("voxel")(s0, s1, s2),
+            Symbol("probability")(s3),
+            Symbol("schaefer_label")(s4),
+            Symbol("labels")(s4, s0, s1, s2),
+            Symbol("label_reports")(s4, s3),
+        )),
+    )
+
+    assert weak_logic_eq(result, expected), (
+        f"IR mismatch.\nGot:      {result}\nExpected: {expected}"
+    )
+
+
+def test_dimension_noun_no_shadowing():
+    """Verify that 'the Voxel' in a multi-dimensional noun context does NOT
+    existentially rebind head variables — they remain free and shared with
+    the rule head."""
+
+    result = parser(
+        "define as activation_probability for every Voxel in 3D "
+        "and for every Probability "
+        "where a Schaefer_label labels the Voxel "
+        "and Label_reports the Probability."
+    )
+    assert isinstance(result, Implication)
+
+    # Collect head variable names.
+    head_vars = set(str(s) for s in result.consequent.args)
+    assert len(head_vars) == 4  # s0, s1, s2, s3
+
+    # Walk the antecedent looking for ExistentialPredicate nodes.
+    def find_ep_heads(expr):
+        heads = set()
+        if isinstance(expr, ExistentialPredicate):
+            heads.add(str(expr.head))
+        if hasattr(expr, "formulas"):
+            for f in expr.formulas:
+                heads |= find_ep_heads(f)
+        if hasattr(expr, "body"):
+            heads |= find_ep_heads(expr.body)
+        return heads
+
+    ep_heads = find_ep_heads(result.antecedent)
+
+    # None of the head variables should be existentially bound.
+    shadowed = head_vars & ep_heads
+    assert not shadowed, (
+        f"Head variables {shadowed} are existentially bound (shadowed).\n"
+        f"Result: {result}"
+    )
+
+    # Only the Schaefer_label variable (s4 style) should be existential.
+    # Check that exactly 1 existential variable is not a head variable.
+    ep_non_head = ep_heads - head_vars
+    assert len(ep_non_head) == 1, (
+        f"Expected exactly 1 existential (non-head) variable, "
+        f"got {len(ep_non_head)}: {ep_non_head}\n"
+        f"Result: {result}"
+    )
 
 
 def test_anaphora_predicate_class():
