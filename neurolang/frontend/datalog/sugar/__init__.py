@@ -13,6 +13,7 @@ from ....datalog.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
 )
+from ....datalog.magic_sets import AdornedSymbol
 from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
 from ....expression_walker import ReplaceExpressionWalker, ReplaceSymbolWalker
 from ....expressions import Constant, FunctionApplication, Symbol
