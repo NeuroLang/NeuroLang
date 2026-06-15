@@ -92,6 +92,16 @@ class DatalogPrettyPrinter(PatternWalker):
         v = expr.value
         if callable(v) and hasattr(v, "__qualname__"):
             return f"\u27e8{v.__qualname__}\u27e9"
+        if isinstance(v, (tuple, list)):
+            items = ", ".join(
+                self._format_arg(item)
+                if not hasattr(item, "walk") or not callable(getattr(item, "walk", None))
+                else self.walk(item)
+                for item in v
+            )
+            if isinstance(v, tuple):
+                return f"({items})" if len(v) != 1 else f"({items},)"
+            return f"[{items}]"
         return repr(v)
 
     @add_match(FunctionApplication)
@@ -105,8 +115,13 @@ class DatalogPrettyPrinter(PatternWalker):
             left = self.walk(expr.args[0])
             right = self.walk(expr.args[1])
             return f"{left} {_INFIX_OPS[expr.functor.value]} {right}"
-        args = ", ".join(self.walk(a) for a in expr.args)
+        args = ", ".join(self._format_arg(a) for a in expr.args)
         return f"{self.walk(expr.functor)}({args})"
+
+    def _format_arg(self, arg):
+        if isinstance(arg, tuple):
+            return "(" + ", ".join(self._format_arg(a) for a in arg) + ")"
+        return self.walk(arg)
 
     @add_match(Lambda)
     def format_lambda(self, expr: Lambda) -> str:
