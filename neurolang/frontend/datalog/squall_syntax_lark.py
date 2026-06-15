@@ -2677,11 +2677,11 @@ def parser(code, local_vars=None, global_vars=None):
         tree = COMPILED_GRAMMAR.parse(source_code)
     except UnexpectedToken as e:
         raise UnexpectedTokenError(
-            str(e), line=e.line - 1, column=e.column - 1
+            str(e), line=e.line, column=e.column
         ) from e
     except UnexpectedCharacters as e:
         raise UnexpectedCharactersError(
-            str(e), line=e.line - 1, column=e.column - 1
+            str(e), line=e.line, column=e.column
         ) from e
     except LarkError as e:
         raise NeuroLangException(

@@ -1236,11 +1236,15 @@ def parser(code, locals=None, globals=None, interactive=False):
             jp = COMPILED_GRAMMAR.parse(code.strip())
             return DatalogTransformer().transform(jp)
     except UnexpectedToken as e:
-        raise UnexpectedTokenError(str(e), line=e.line - 1, column=e.column - 1) from e
+        raise UnexpectedTokenError(
+            str(e), line=e.line, column=e.column
+        ) from e
     except UnexpectedCharacters as e:
-        raise UnexpectedCharactersError(str(e), line=e.line - 1, column=e.column - 1) from e
+        raise UnexpectedCharactersError(
+            str(e), line=e.line, column=e.column
+        ) from e
     except LarkError as e:
-        raise NeuroLangException from e
+        raise NeuroLangException(str(e)) from e
 
 
 def parse_rules():
