@@ -1,0 +1,66 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # needed to push to gh-pages
+
+    steps:
+      - name: Checkout code with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          allow-prereleases: true
+
+      - name: Install ASV
+        run: pip install asv
+
+      - name: Restore previous benchmark results
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune --depth=1 origin gh-pages || true
+          if git rev-parse origin/gh-pages >/dev/null 2>&1; then
+            git checkout origin/gh-pages -- results/ 2>/dev/null || true
+            if [ -d results ]; then
+              mkdir -p .asv/results
+              cp -r results/* .asv/results/
+              rm -rf results/
+              echo "Restored $(ls .asv/results/ | wc -l) result files from gh-pages"
+            fi
+          fi
+
+      - name: Run benchmarks
+        run: |
+          asv machine --yes
+          asv run --new
+        timeout-minutes: 60
+
+      - name: Publish HTML dashboard
+        run: asv publish
+
+      - name: Stage results alongside HTML for persistence
+        run: |
+          mkdir -p .asv/html/results
+          if [ -d .asv/results ]; then
+            cp -r .asv/results/* .asv/html/results/
+            ls -la .asv/html/results/
+          fi
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .asv/html
+          destination_dir: .
+          keep_files: false
