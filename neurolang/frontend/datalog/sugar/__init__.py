@@ -13,7 +13,6 @@ from ....datalog.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
 )
-from ....datalog.magic_sets import AdornedSymbol
 from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
 from ....expression_walker import ReplaceExpressionWalker, ReplaceSymbolWalker
 from ....expressions import Constant, FunctionApplication, Symbol
@@ -523,9 +522,9 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
             Implication(denum_head, right)
         )
 
-        p = Symbol("__cond_p__")
-        p1 = Symbol("__cond_num_p__")
-        p2 = Symbol("__cond_den_p__")
+        p = Symbol.fresh()
+        p1 = Symbol.fresh()
+        p2 = Symbol.fresh()
         new_impl = self.walk(
             Implication(
                 self._replace_prob_query_arg_by_var(impl.consequent, p),
