@@ -86,6 +86,8 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraColumnStr,
 )
+from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
+from ..datalog.instance import MapInstance
 from ..commands import CommandsMixin
 from ..datalog.basic_representation import UnionOfConjunctiveQueries
 from . import query_resolution_expressions as fe
@@ -101,7 +103,7 @@ from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .type_resolution import TypeResolutionMixin
 from .datalog.squall import ResolveInvertedFunctionApplicationMixin
 from .frontend_extensions import NumpyFunctionsMixin
-from .query_resolution_datalog import QueryBuilderDatalog
+from .query_resolution_datalog import QueryBuilderDatalog, ShowRAChaseMixin
 
 
 def instance_lru_cache(key_fn, maxsize=128):
@@ -426,10 +428,14 @@ class NeurolangPDL(QueryBuilderDatalog):
                 )
             with self.scope:
                 self.program_ir.walk(magic_rules)
-                solution = self._solve(magic_query)
+                solution = self._solve(magic_query, show_ra=show_ra)
                 query_pred_symb = magic_query.consequent.functor
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
-            solution = self._solve(query)
+            if self._handle_rewritten_output(
+                query, show_rewritten, dry_run
+            ):
+                return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
+            solution = self._solve(query, show_ra=show_ra)
 
         if not isinstance(head, tuple):
             # assumes head is a predicate e.g. r(x, y)
@@ -445,12 +451,18 @@ class NeurolangPDL(QueryBuilderDatalog):
             solution = solution.value
         return solution, functor_orig
 
-    def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
+    def solve_all(self, show_ra: bool = False) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the Datalog program.
         Typically, probabilities are abstracted and processed similar
         to symbols, though of different nature (see examples)
+
+        Parameters
+        ----------
+        show_ra : bool, optional
+            If True, print the named RA expression for each rule in the
+            deterministic stratum and return an empty solution.
 
         Returns
         -------
@@ -472,7 +484,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         ...     e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
         ...     solution = nl.solve_all()
         """
-        solution_ir = self._solve()
+        solution_ir = self._solve(show_ra=show_ra)
         solution = {}
         for k, v in solution_ir.items():
             solution[k.name] = NamedRelationalAlgebraFrozenSet(
@@ -481,21 +493,23 @@ class NeurolangPDL(QueryBuilderDatalog):
             solution[k.name].row_type = v.value.row_type
         return solution
 
-    def _solve(self, query=None):
+    def _solve(self, query=None, show_ra: bool = False):
         idbs = stratify_program(query, self.program_ir)
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         postprob_idb = idbs.get("post_probabilistic", Union(tuple()))
-        solution = self._solve_deterministic_stratum(det_idb)
+        solution = self._solve_deterministic_stratum(det_idb, show_ra=show_ra)
         if prob_idb.formulas:
-            solution = self._solve_probabilistic_stratum(solution, prob_idb)
+            solution = self._solve_probabilistic_stratum(
+                solution, prob_idb, show_ra=show_ra
+            )
         if postprob_idb.formulas:
             solution = self._solve_postprobabilistic_deterministic_stratum(
-                solution, postprob_idb
+                solution, postprob_idb, show_ra=show_ra
             )
         return solution
 
-    def _solve_deterministic_stratum(self, det_idb):
+    def _solve_deterministic_stratum(self, det_idb, show_ra: bool = False):
         '''Resolution of the deterministic stratum. In case there
         are entries in the symbol table under the key __constraints__,
         a rewrite is performed and the resulting program is assigned
@@ -509,11 +523,24 @@ class NeurolangPDL(QueryBuilderDatalog):
         ----------
         det_idb : typing.Union
             union of rules composing the deterministic stratum.
+        show_ra : bool, optional
+            If True, print the named RA expression for each rule and
+            return an empty instance.
 
         Returns
         -------
         Result obtained after resolution of the deterministic stratum
         '''
+        if show_ra:
+            print("── deterministic stratum ──")
+            show_ra_chase_class = type(
+                f"ShowRA{self.chase_class.__name__}",
+                (ShowRAChaseMixin, self.chase_class),
+                {},
+            )
+            chase = show_ra_chase_class(self.program_ir, rules=det_idb)
+            chase.build_chase_solution()
+            return MapInstance()
         if "__constraints__" in self.symbol_table:
             det_idb = self._rewrite_det_idb(det_idb)
             if hasattr(self, 'connector_symbol'):
@@ -528,7 +555,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         solution = chase.build_chase_solution()
         return solution
 
-    def _solve_probabilistic_stratum(self, solution, prob_idb):
+    def _solve_probabilistic_stratum(self, solution, prob_idb, show_ra: bool = False):
         pfact_edb = self.program_ir.probabilistic_facts()
         pchoice_edb = self.program_ir.probabilistic_choices()
         for i, (succ_solver, marg_solver) in enumerate(
@@ -565,7 +592,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     def _solve_postprobabilistic_deterministic_stratum(
-        self, solution, postprob_idb
+        self, solution, postprob_idb, show_ra: bool = False
     ):
         solver = RegionFrontendCPLogicSolver()
         for psymb, relation in solution.items():

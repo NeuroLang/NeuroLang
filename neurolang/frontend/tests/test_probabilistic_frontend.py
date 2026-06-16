@@ -65,6 +65,36 @@ def test_add_uniform_probabilistic_choice_set():
     assert res_d2.type is AbstractSet[Tuple[float, str]]
 
 
+def test_show_ra_deterministic_stratum(capsys):
+    from neurolang.frontend import NeurolangPDL
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="P")
+    nl.execute_datalog_program("ans(x) :- P(x).", show_ra=True)
+    captured = capsys.readouterr()
+    assert "── deterministic stratum ──" in captured.out
+    assert "P" in captured.out
+
+
+def test_show_rewritten_datalog_prints_all_rules(capsys):
+    """--show-rewritten must print all reachable Datalog rules, not just the final query."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    nl.add_tuple_set([("alice",), ("carol",)], name="plays")
+    nl.execute_datalog_program(
+        """
+        active(x) :- person(x), plays(x).
+        fanatic(x) :- active(x), plays(x).
+        ans(x) :- fanatic(x).
+        """,
+        show_rewritten=True,
+        dry_run=True,
+    )
+    captured = capsys.readouterr()
+    assert "active" in captured.out
+    assert "fanatic" in captured.out
+
+
+
 def test_deterministic_query():
     nl = NeurolangPDL()
     d1 = [(1,), (2,), (3,), (4,), (5,)]
