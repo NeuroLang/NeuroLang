@@ -189,25 +189,27 @@ def test_wlq_floordiv_translation():
     translator = _TestTranslator()
     result = translator.walk(wlq)
 
-    # assert num == fresh_01(x, y, PROB) :- P(x) & R(x, y)
+    # assert num == Q^cond_num(x, y, PROB) :- P(x) & R(x, y)
     assert len(result) == 3
     num = result[0]
     fnum = num.consequent.functor
-    assert fnum.is_fresh
+    assert isinstance(fnum, Symbol)
+    assert fnum.name == "Q^cond_num"
     assert num == Implication(
         fnum(x, y, ProbabilisticQuery(PROB, (x, y))),
         Conjunction((P(x), R(x, y))),
     )
 
-    # assert denum == fresh_02(x, y, PROB) :- R(x, y)
+    # assert denum == Q^cond_den(x, y, PROB) :- R(x, y)
     denum = result[1]
     fdenum = denum.consequent.functor
-    assert fdenum.is_fresh
+    assert isinstance(fdenum, Symbol)
+    assert fdenum.name == "Q^cond_den"
     assert denum == Implication(
         fdenum(x, y, ProbabilisticQuery(PROB, (x, y))), R(x, y)
     )
 
-    # assert cond == Q(x, y, p) :- fresh_01(x, y, p0) & fresh_02(x, y, p1) & (p == p0 / p1)
+    # assert cond == Q(x, y, p) :- Q^cond_num(x, y, p0) & Q^cond_den(x, y, p1) & (p == p0 / p1)
     cond = result[2]
     p = [a for a in cond.consequent.args if a.is_fresh][0]
     p0 = [a for a in cond.antecedent.formulas[0].args if a.is_fresh][0]
@@ -239,25 +241,27 @@ def test_wlq_floordiv_translation_boolean_denominator():
     translator = _TestTranslator()
     result = translator.walk(wlq)
 
-    # assert num == fresh_01(x, PROB) :- P(x, y) & R(y)
+    # assert num == Q^cond_num(x, PROB) :- P(x, y) & R(y)
     assert len(result) == 3
     num = result[0]
     fnum = num.consequent.functor
-    assert fnum.is_fresh
+    assert isinstance(fnum, Symbol)
+    assert fnum.name == "Q^cond_num"
     assert num == Implication(
         fnum(x, ProbabilisticQuery(PROB, (x,))),
         Conjunction((P(x, y), R(y))),
     )
 
-    # assert denum == fresh_02(PROB) :- R(y)
+    # assert denum == Q^cond_den(PROB) :- R(y)
     denum = result[1]
     fdenum = denum.consequent.functor
-    assert fdenum.is_fresh
+    assert isinstance(fdenum, Symbol)
+    assert fdenum.name == "Q^cond_den"
     assert denum == Implication(
         fdenum(ProbabilisticQuery(PROB, tuple())), R(y)
     )
 
-    # assert cond == Q(x, y, p) :- fresh_01(x, y, p0) & fresh_02(x, y, p1) & (p == p0 / p1)
+    # assert cond == Q(x, p) :- Q^cond_num(x, p0) & Q^cond_den(p1) & (p == p0 / p1)
     cond = result[2]
     p = [a for a in cond.consequent.args if a.is_fresh][0]
     p0 = [a for a in cond.antecedent.formulas[0].args if a.is_fresh][0]

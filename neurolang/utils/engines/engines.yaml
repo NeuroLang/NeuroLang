@@ -8,6 +8,12 @@ engines:
     use_base_symbols: true
     builtins: [exp, log, startswith]
     python_init: "neurolang.utils.engines.neurosynth.init"
+    atlases:
+      schaefer:
+        predicate_name: schaefer
+        n_rois: 100
+        resolution_mm: 2
+        yeo_networks: 17
     datalog_init: |
       study_with_peaks(S) :- peak_reported(I, J, K, S).
       schaefer_voxels(I, J, K, l) :- schaefer(l, r), contains(r, (I, J, K)).
@@ -15,7 +21,7 @@ engines:
       schaefer_voxels(I, J, K, l) :- schaefer(l, r), contains(r, (I, J, K)).
       schaefer_label(l) :- schaefer(l, r)
       labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
-      mentions(s, t) :- term_in_study_tfidf(t, v, s), (v > 0.03)
+      mentions(s, t) :- term_in_study_tfidf(t, s, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
     #probabilistic_choice:
       # selected_study:
@@ -32,7 +38,7 @@ engines:
         description: "All study identifiers"
       term_in_study_tfidf:
         arity: 3
-        columns: [term, tfidf, study_id]
+        columns: [study_id, term, tfidf]
         description: "Term frequency–inverse document frequency values"
       selected_study:
         arity: 1

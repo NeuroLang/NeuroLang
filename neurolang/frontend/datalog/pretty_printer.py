@@ -14,6 +14,7 @@ from neurolang.expressions import (
     FunctionApplication, Lambda, Query, Symbol,
 )
 from neurolang.datalog.expressions import Implication
+from neurolang.datalog.magic_sets import AdornedSymbol
 from neurolang.logic import (
     Conjunction, Disjunction, Negation,
     ExistentialPredicate, UniversalPredicate,
@@ -66,6 +67,8 @@ class DatalogPrettyPrinter(PatternWalker):
         self._counter = counter if counter is not None else [0]
 
     def _sym_name(self, sym: Symbol) -> str:
+        if isinstance(sym, AdornedSymbol):
+            return str(sym)
         if sym.is_fresh:
             if sym.name not in self._fresh_map:
                 n = self._counter[0]
@@ -89,6 +92,8 @@ class DatalogPrettyPrinter(PatternWalker):
         v = expr.value
         if callable(v) and hasattr(v, "__qualname__"):
             return f"\u27e8{v.__qualname__}\u27e9"
+        if isinstance(v, (tuple, list)):
+            return self._format_arg(v)
         return repr(v)
 
     @add_match(FunctionApplication)
@@ -102,8 +107,16 @@ class DatalogPrettyPrinter(PatternWalker):
             left = self.walk(expr.args[0])
             right = self.walk(expr.args[1])
             return f"{left} {_INFIX_OPS[expr.functor.value]} {right}"
-        args = ", ".join(self.walk(a) for a in expr.args)
+        args = ", ".join(self._format_arg(a) for a in expr.args)
         return f"{self.walk(expr.functor)}({args})"
+
+    def _format_arg(self, arg):
+        if isinstance(arg, tuple):
+            items = ", ".join(self._format_arg(a) for a in arg)
+            return f"({items})" if len(arg) != 1 else f"({items},)"
+        if isinstance(arg, list):
+            return "[" + ", ".join(self._format_arg(a) for a in arg) + "]"
+        return self.walk(arg)
 
     @add_match(Lambda)
     def format_lambda(self, expr: Lambda) -> str:
