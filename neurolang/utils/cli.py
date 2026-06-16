@@ -264,6 +264,23 @@ def _build_parser() -> argparse.ArgumentParser:
         "Useful for debugging and understanding the translation.",
     )
     parser.add_argument(
+        "--show-rewritten",
+        "-R",
+        action="store_true",
+        help="Build the requested engine, print the Datalog program "
+        "after magic-sets rewriting, then exit without running the "
+        "chase. Useful for inspecting how a SQUALL or Datalog query "
+        "is rewritten before execution.",
+    )
+    parser.add_argument(
+        "--show-ra",
+        "-Q",
+        action="store_true",
+        help="Print the Relational Algebra plan that the Datalog "
+        "program compiles to, then exit without running the chase. "
+        "Useful for debugging and understanding the query compilation.",
+    )
+    parser.add_argument(
         "--sort",
         "-S",
         action="append",
@@ -278,7 +295,10 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _execute_program(nl: NeurolangPDL, program_text: str):
+def _execute_program(
+    nl: NeurolangPDL, program_text: str, show_rewritten: bool = False,
+    show_ra: bool = False, dry_run: bool = False,
+):
     """
     Execute a Datalog program and return the result if a query is present.
 
@@ -307,7 +327,9 @@ def _execute_program(nl: NeurolangPDL, program_text: str):
 
 
 def _execute_squall_program(
-    nl: NeurolangPDL, program_text: str
+    nl: NeurolangPDL, program_text: str, show_rewritten: bool = False,
+    show_ra: bool = False, dry_run: bool = False,
+):
 ):
     """
     Execute a SQUALL (controlled English) program.
@@ -493,6 +515,39 @@ def main(argv: Optional[list] = None) -> None:
         )
         sys.exit(1)
 
+    # --show-rewritten requires the requested engine because probabilistic
+    # SQUALL programs depend on engine data and the CP-Logic solver.
+    # Build the engine, print the rewritten program, and exit before the chase.
+    if args.show_rewritten:
+        program = _read_query(args)
+        if not program or not program.strip():
+            print("Error: no query provided.", file=sys.stderr)
+            sys.exit(1)
+        nl = engine_registry.build_engine(
+            args.engine, Path(args.data_dir), args.resolution
+        )
+        if args.squall:
+            _execute_squall_program(nl, program, dry_run=True)
+        else:
+            _execute_program(nl, program, dry_run=True)
+        return
+
+    # --show-ra requires the requested engine to build the RA plan.
+    # Build the engine, print the RA plan, and exit before the chase.
+    if args.show_ra:
+        program = _read_query(args)
+        if not program or not program.strip():
+            print("Error: no query provided.", file=sys.stderr)
+            sys.exit(1)
+        nl = engine_registry.build_engine(
+            args.engine, Path(args.data_dir), args.resolution
+        )
+        if args.squall:
+            _execute_squall_program(nl, program, show_ra=True, dry_run=True)
+        else:
+            _execute_program(nl, program, show_ra=True, dry_run=True)
+        return
+
     nl = engine_registry.build_engine(
         args.engine, Path(args.data_dir), args.resolution
     )
@@ -514,7 +569,10 @@ def main(argv: Optional[list] = None) -> None:
     sort_by = _parse_sort_spec(args.sort)
 
     if args.squall:
-        result = _execute_squall_program(nl, program)
+        result = _execute_squall_program(
+            nl, program, show_rewritten=args.show_rewritten,
+            show_ra=args.show_ra,
+        )
         if isinstance(result, dict):
             for key, sub_result in result.items():
                 output = _format_result(
@@ -533,7 +591,10 @@ def main(argv: Optional[list] = None) -> None:
             if output:
                 print(output)
     else:
-        result = _execute_program(nl, program)
+        result = _execute_program(
+            nl, program, show_rewritten=args.show_rewritten,
+            show_ra=args.show_ra,
+        )
         output = _format_result(
             result, fmt=args.format, column_names=None,
             sort_by=sort_by,
