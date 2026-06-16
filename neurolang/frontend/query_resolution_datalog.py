@@ -306,7 +306,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return rule
 
     def execute_datalog_program(
-        self, code: str, show_rewritten: bool = False, dry_run: bool = False
+        self, code: str, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Union[None, bool, RelationalAlgebraFrozenSet]:
         """
         Execute a Datalog program in classical syntax.
@@ -361,6 +362,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             return self.query(
                 query.head.arguments, query.body,
                 show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
             )
         else:
             raise UnsupportedProgramError(
@@ -426,7 +428,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self._walk_squall_rule(rule)
 
     def _execute_single_squall_query(self, query, rules_and_choice_defs,
-                                     show_rewritten=False, dry_run=False):
+                                     show_rewritten=False, dry_run=False,
+                                     show_ra=False):
         """Execute one obtain clause from a SQUALL program.
 
         Builds a fresh helper predicate h(head_vars) :- query.body and
@@ -462,13 +465,15 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             ra, _ = self._execute_query(
                 fe_head, fe_pred,
                 show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
             )
         finally:
             self.program_ir.pop_scope()
         return ra
 
     def execute_squall_program(
-        self, code: str, show_rewritten: bool = False, dry_run: bool = False
+        self, code: str, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Union[None, NamedRelationalAlgebraFrozenSet, Dict[str, NamedRelationalAlgebraFrozenSet]]:
         """
         Execute a SQUALL (controlled English) program.
@@ -536,6 +541,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             ra = self._execute_single_squall_query(
                 q, parsed.rules_and_choice_defs,
                 show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
             )
             if not dry_run:
                 results[key] = ra
@@ -671,7 +677,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
     def query(
-        self, *args, show_rewritten: bool = False, dry_run: bool = False
+        self, *args, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
         """
         Performs an inferential query on the database.
@@ -725,7 +732,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             raise ValueError("query takes 1 or 2 arguments")
 
         solution_set, functor_orig = self._execute_query(
-            head, predicate, show_rewritten=show_rewritten, dry_run=dry_run
+            head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
+            show_ra=show_ra,
         )
 
         if not isinstance(head, tuple):
@@ -790,6 +798,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         predicate: fe.Expression,
         show_rewritten: bool = False,
         dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]

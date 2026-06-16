@@ -327,6 +327,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         predicate: fe.Expression,
         show_rewritten: bool = False,
         dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]
@@ -425,7 +426,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
         if symbol_entry is None or isinstance(symbol_entry, ir.Constant):
             return super()._execute_query(
-                head, predicate, show_rewritten=show_rewritten, dry_run=dry_run
+                head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
             )
 
         query = symbol_entry.formulas[0]
