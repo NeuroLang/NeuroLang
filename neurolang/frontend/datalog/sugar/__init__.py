@@ -523,9 +523,9 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
             Implication(denum_head, right)
         )
 
-        p = Symbol.fresh()
-        p1 = Symbol.fresh()
-        p2 = Symbol.fresh()
+        p = Symbol("__cond_p__")
+        p1 = Symbol("__cond_num_p__")
+        p2 = Symbol("__cond_den_p__")
         new_impl = self.walk(
             Implication(
                 self._replace_prob_query_arg_by_var(impl.consequent, p),
