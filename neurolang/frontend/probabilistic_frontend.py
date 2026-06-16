@@ -619,6 +619,27 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _solve_postprobabilistic_deterministic_stratum(
         self, solution, postprob_idb, show_ra: bool = False
     ):
+        if show_ra:
+            print("── post-probabilistic stratum ──")
+            show_ra_chase_class = type(
+                f"ShowRA{self.chase_class.__name__}",
+                (ShowRAChaseMixin, self.chase_class),
+                {},
+            )
+            solver = RegionFrontendCPLogicSolver()
+            for psymb, relation in solution.items():
+                solver.add_extensional_predicate_from_tuples(
+                    psymb,
+                    relation.value,
+                )
+            for builtin_symb in self.program_ir.builtins():
+                solver.symbol_table[builtin_symb] = self.program_ir.symbol_table[
+                    builtin_symb
+                ]
+            solver.walk(postprob_idb)
+            chase = show_ra_chase_class(solver, rules=postprob_idb)
+            chase.build_chase_solution()
+            return MapInstance()
         solver = RegionFrontendCPLogicSolver()
         for psymb, relation in solution.items():
             solver.add_extensional_predicate_from_tuples(
