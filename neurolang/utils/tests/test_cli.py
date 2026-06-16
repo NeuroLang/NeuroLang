@@ -1003,6 +1003,59 @@ class TestShowRAFlag:
         assert "── deterministic stratum ──" in captured.out
         assert "Query completed" not in captured.err
 
+    def test_show_ra_neurosynth_prob_query(self, monkeypatch, capsys):
+        """--show-ra --squall with the original Neurosynth conditional MARG
+        query crashes with IndexError at
+        relational_algebra_provenance.py:423 before the fix."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set(
+            [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
+        )
+        nl.add_tuple_set([("s1",), ("s2",)], name="study")
+        nl.add_uniform_probabilistic_choice_over_set(
+            [("s1",), ("s2",)], name="selected_study"
+        )
+        nl.add_tuple_set(
+            [("memory", "s1", 0.5), ("memory", "s2", 0.6)],
+            name="term_in_study_tfidf",
+        )
+        nl.add_tuple_set([("A",), ("B",)], name="schaefer")
+        nl.add_tuple_set([(10, 20, 30), (11, 21, 31)], name="voxel")
+        # datalog_init rules from engines.yaml for the neurosynth engine
+        nl.execute_datalog_program(
+            "study_with_peaks(S) :- peak_reported(I, J, K, S)."
+        )
+        nl.execute_datalog_program("schaefer_label(l) :- schaefer(l, r).")
+        nl.execute_datalog_program(
+            "labels(l, i, j, k) :- voxel(i, j, k), schaefer(l)."
+        )
+        nl.execute_datalog_program(
+            "mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)."
+        )
+        nl.execute_datalog_program(
+            "reports(s, i, j, k) :- peak_reported(i, j, k, s)."
+        )
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            return nl
+
+        monkeypatch.setattr(engine_registry, "build_engine", fake_build_engine)
+
+        # Before the fix this raises IndexError; after the fix it prints the
+        # RA plan and exits cleanly.
+        main([
+            "--show-ra", "--squall",
+            "define as Label_reports with inferred probability every "
+            "Schaefer_label that labels a Voxel in 3D that a Selected_study "
+            "reports given the Selected_study mentions 'memory'. "
+            "obtain every Label_reports .",
+        ])
+        captured = capsys.readouterr()
+        assert "── probabilistic stratum ──" in captured.out
+
 
 # ---------------------------------------------------------------------------
 # --show-datalog flag

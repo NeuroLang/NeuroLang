@@ -103,6 +103,52 @@ def test_show_ra_probabilistic_stratum(capsys):
     assert "── probabilistic stratum ──" in captured.out
 
 
+def test_show_ra_probabilistic_with_det_idb():
+    """Regression: --show-ra crashes with IndexError at
+    relational_algebra_provenance.py:423 when a conditional MARG query
+    depends on deterministic IDB rules and magic rewrite fails.
+    """
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
+    )
+    nl.add_tuple_set([("s1",), ("s2",)], name="study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    nl.add_tuple_set(
+        [("memory", "s1", 0.5), ("memory", "s2", 0.6)],
+        name="term_in_study_tfidf",
+    )
+    nl.add_tuple_set([("A",), ("B",)], name="schaefer")
+    nl.add_tuple_set([(10, 20, 30), (11, 21, 31)], name="voxel")
+    with nl.scope as e:
+        e.schaefer_label[e.l] = e.schaefer[e.l, e.r]
+        e.labels[e.l, e.x, e.y, e.z] = (
+            e.voxel[e.x, e.y, e.z] & e.schaefer[e.l]
+        )
+        e.reports[e.s, e.x, e.y, e.z] = e.peak_reported[e.x, e.y, e.z, e.s]
+        e.mentions[e.s, e.t] = (
+            e.term_in_study_tfidf[e.s, e.t, e.v] & (e.v > 0.03)
+        )
+        nl.execute_squall_program(
+            "define as Label_reports with inferred probability every "
+            "Schaefer_label that labels a Voxel in 3D that a Selected_study "
+            "reports given the Selected_study mentions 'memory'."
+        )
+        # Direct query on the WLQ predicate (no ans(...) wrapper) hits the
+        # probabilistic IDB path, which falls back to _solve after magic
+        # rewrite fails and crashes in selection_rap_eq_columnint.
+        # Before the fix this raises IndexError; after the fix it returns
+        # without error and the probabilistic stratum is printed.
+        res = nl.query(
+            (e.l, e.p), e.label_reports[e.l, e.p], show_ra=True
+        )
+        assert res is not None
+
+
 def test_show_rewritten_datalog_prints_all_rules(capsys):
     """--show-rewritten must print all reachable Datalog rules, not just the final query."""
     nl = NeurolangPDL()
