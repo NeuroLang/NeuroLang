@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+prompt_toolkit = pytest.importorskip(
+    "prompt_toolkit", reason="prompt_toolkit is required for TUI tests"
+)
 from prompt_toolkit.document import Document
 
 from neurolang.utils.interactive_tui import (
