@@ -229,7 +229,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return rule
 
     def execute_datalog_program(
-        self, code: str
+        self, code: str, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Union[None, bool, RelationalAlgebraFrozenSet]:
         """
         Execute a Datalog program in classical syntax.
@@ -276,7 +277,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 ]
             )
             self.program_ir.walk(program)
-            return self.query(query.head.arguments, query.body)
+            return self.query(
+                query.head.arguments, query.body,
+                show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
+            )
         else:
             raise UnsupportedProgramError(
                 "Only one query, in the form of ans(...) :- R(...) is "
@@ -291,8 +296,102 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 )
             )
 
+    @staticmethod
+    def _process_squall_commands(parsed):
+        """Process SQUALL directives (#set_backend, etc.)."""
+        if not (isinstance(parsed, SquallProgram) and parsed.commands):
+            return
+        from neurolang.config import config as nl_config
+        from neurolang.expressions import Constant
+
+        _KNOWN_COMMANDS = {"set_backend"}
+        for cmd in parsed.commands:
+            name = cmd.functor.name if hasattr(cmd, 'functor') else None
+            if name is None or name not in _KNOWN_COMMANDS:
+                continue
+            if name == "set_backend":
+                if cmd.args and isinstance(cmd.args[0], Constant):
+                    nl_config.set_query_backend(cmd.args[0].value)
+                else:
+                    raise NeuroLangException(
+                        "#set_backend requires a string argument, "
+                        "e.g. #set_backend('pandas')."
+                    )
+
+    def _walk_squall_rule(self, rule):
+        """Walk a single SQUALL rule or choice definition into the engine."""
+        if isinstance(rule, EquiprobableChoiceDef):
+            self._handle_equiprobable_choice(rule)
+        elif isinstance(rule, WeightedChoiceDef):
+            self._handle_weighted_choice(rule)
+        else:
+            try:
+                self.program_ir.walk(rule)
+            except Fol2DatalogTranslationException as e:
+                raise _wrap_fol_error_for_squall(e) from e
+
+    def _walk_squall_rules(self, parsed):
+        """Walk all rule definitions from a parsed SQUALL program into the engine."""
+        if not isinstance(parsed, SquallProgram):
+            # Legacy non-SquallProgram parse tree
+            if isinstance(parsed, (EquiprobableChoiceDef, WeightedChoiceDef)):
+                self._walk_squall_rule(parsed)
+            elif isinstance(parsed, logic.Union):
+                for r in parsed.formulas:
+                    self._walk_squall_rule(r)
+            else:
+                self._walk_squall_rule(parsed)
+            return
+        for rule in parsed.rules_and_choice_defs:
+            self._walk_squall_rule(rule)
+
+    def _execute_single_squall_query(self, query, rules_and_choice_defs,
+                                     show_rewritten=False, dry_run=False,
+                                     show_ra=False):
+        """Execute one obtain clause from a SQUALL program.
+
+        Builds a fresh helper predicate h(head_vars) :- query.body and
+        delegates to _execute_query, exactly as execute_datalog_program
+        does for ans(...) :- R(...).
+        """
+        head = query.head
+        if isinstance(head, ir.FunctionApplication):
+            head_vars = tuple(head.args)
+        elif isinstance(head, ir.Symbol):
+            head_vars = (head,)
+        else:
+            head_vars = tuple(head)
+
+        h = ir.Symbol.fresh()
+        query_impl = datalog.Implication(h(*head_vars), query.body)
+
+        self.program_ir.push_scope()
+        try:
+            for rule in rules_and_choice_defs:
+                if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
+                    continue  # already registered in global scope
+                try:
+                    self.program_ir.walk(rule)
+                except ForbiddenDisjunctionError:
+                    pass
+            self.program_ir.walk(query_impl)
+            fe_pred = fe.Expression(self, h(*head_vars))
+            fe_head = tuple(
+                fe.Expression(self, ir.Symbol(s.name))
+                for s in head_vars
+            )
+            ra, _ = self._execute_query(
+                fe_head, fe_pred,
+                show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
+            )
+        finally:
+            self.program_ir.pop_scope()
+        return ra
+
     def execute_squall_program(
-        self, code: str
+        self, code: str, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Union[None, NamedRelationalAlgebraFrozenSet, Dict[str, NamedRelationalAlgebraFrozenSet]]:
         """
         Execute a SQUALL (controlled English) program.
@@ -409,39 +508,13 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         results = {}
         for i, q in enumerate(parsed.queries):
             key = parsed.query_names.get(i, f"obtain_{i}")
-            head = q.head
-            if isinstance(head, ir.FunctionApplication):
-                head_vars = tuple(head.args)
-            elif isinstance(head, ir.Symbol):
-                head_vars = (head,)
-            else:
-                head_vars = tuple(head)
-
-            h = ir.Symbol.fresh()
-            query_impl = datalog.Implication(h(*head_vars), q.body)
-
-            self.program_ir.push_scope()
-            try:
-                for rule in parsed.rules_and_choice_defs:
-                    if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
-                        # Choice defs are already registered in the global scope;
-                        # skip them in the scoped re-walk.
-                        pass
-                    else:
-                        try:
-                            self.program_ir.walk(rule)
-                        except ForbiddenDisjunctionError:
-                            pass
-                self.program_ir.walk(query_impl)
-                fe_pred = fe.Expression(self, h(*head_vars))
-                fe_head = tuple(
-                    fe.Expression(self, ir.Symbol(s.name))
-                    for s in head_vars
-                )
-                ra, _ = self._execute_query(fe_head, fe_pred)
-            finally:
-                self.program_ir.pop_scope()
-            results[key] = ra
+            ra = self._execute_single_squall_query(
+                q, parsed.rules_and_choice_defs,
+                show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
+            )
+            if not dry_run:
+                results[key] = ra
 
         if len(results) == 1:
             return next(iter(results.values()))
@@ -572,7 +645,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
     def query(
-        self, *args
+        self, *args, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
         """
         Performs an inferential query on the database.
@@ -617,7 +691,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         else:
             raise ValueError("query takes 1 or 2 arguments")
 
-        solution_set, functor_orig = self._execute_query(head, predicate)
+        solution_set, functor_orig = self._execute_query(
+            head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
+            show_ra=show_ra,
+        )
 
         if not isinstance(head, tuple):
             out_symbol = ir.Symbol[solution_set.type](functor_orig.name)
@@ -632,6 +709,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self,
         head: Union[fe.Symbol, Tuple[fe.Expression, ...]],
         predicate: fe.Expression,
+        show_rewritten: bool = False,
+        dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]
