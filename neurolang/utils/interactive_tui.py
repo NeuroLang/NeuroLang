@@ -81,48 +81,96 @@ The tab key triggers grammar-aware autocompletion.
 """
 
 # ---------------------------------------------------------------------------
-# Custom prompt_toolkit Completer wrapping LarkCompleter
+# SQUALL keywords used for keyword-based completion (Earley parser does not
+# support parse_interactive(), so we fall back to plain keyword matching).
+# ---------------------------------------------------------------------------
+
+SQUALL_KEYWORDS = [
+    "define", "as", "obtain", "every", "a", "an", "the",
+    "in", "where", "that", "with", "without", "if", "then",
+    "and", "or", "not", "for", "of", "from", "to", "by",
+    "at", "on", "is", "are", "has", "have", "there",
+    "probability", "conditioned", "inferred", "choose",
+    "peaks", "voxels", "studies", "terms", "experiments",
+    "reported", "in", "that", "which", "atlas",
+    "all", "each", "some", "no", "any",
+    "most", "few", "both", "neither",
+]
+
+# ---------------------------------------------------------------------------
+# Custom prompt_toolkit Completer — multi-source: grammar + predicates + keywords
 # ---------------------------------------------------------------------------
 
 
 class NeuroLangReplCompleter(Completer):
-    """prompt_toolkit Completer backed by the Lark grammar completer."""
+    """prompt_toolkit Completer combining grammar completions + engine predicates + dot commands."""
 
-    def __init__(self, lark_completer: LarkCompleter):
+    def __init__(
+        self,
+        lark_completer: Optional[LarkCompleter] = None,
+        engine_predicates: Optional[set[str]] = None,
+        squall_keywords: Optional[list[str]] = None,
+    ):
         self._lark = lark_completer
+        self._predicates = engine_predicates or set()
+        self._squall_keywords = squall_keywords or []
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
-        # Dot commands get literal completion
+
+        # 1. Dot commands
         if text.startswith("."):
             for cmd in DOT_COMMANDS:
                 if cmd.startswith(text):
                     yield Completion(cmd, start_position=-len(text))
             return
 
-        try:
-            result = self._lark.complete(text)
-        except Exception:
-            return
+        # 2. Grammar completions (Datalog LALR mode)
+        if self._lark is not None:
+            try:
+                result = self._lark.complete(text)
+                seen = set()
+                for category_key, container in result.token_options.items():
+                    for value in container.get("values", set()):
+                        if not value or value in seen:
+                            continue
+                        seen.add(value)
+                        display = value
+                        if value.startswith("<") and value.endswith(">"):
+                            display = value[1:-1]
+                        yield Completion(
+                            value,
+                            start_position=-len(result.prefix),
+                            display=display,
+                            display_meta=category_key,
+                        )
+            except Exception:
+                pass
 
-        opts = result.token_options
-        # Flatten token_options into completions
-        seen = set()
-        for category_key, container in opts.items():
-            for value in container.get("values", set()):
-                if not value or value in seen:
-                    continue
-                seen.add(value)
-                # Strip angle brackets for display
-                display = value
-                if value.startswith("<") and value.endswith(">"):
-                    display = value[1:-1]
-                yield Completion(
-                    value,
-                    start_position=-len(result.prefix),
-                    display=display,
-                    display_meta=category_key,
-                )
+        # 3. Engine predicate completions (both modes)
+        word_start = text.rfind(" ") + 1 if " " in text else 0
+        prefix = text[word_start:]
+        # Only suggest predicates when it looks like we're typing an identifier
+        if prefix and (prefix[0].isalpha() or prefix[0] == "_"):
+            for pred in sorted(self._predicates):
+                if pred.startswith(prefix):
+                    yield Completion(
+                        pred,
+                        start_position=-len(prefix),
+                        display=pred,
+                        display_meta="predicate",
+                    )
+
+        # 4. SQUALL keywords (when no lark completer — squall mode)
+        if self._lark is None:
+            for kw in self._squall_keywords:
+                if kw.startswith(prefix):
+                    yield Completion(
+                        kw,
+                        start_position=-len(prefix),
+                        display=kw,
+                        display_meta="keyword",
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +367,8 @@ class InteractiveTuiApp:
         self._engine_built = False
         self._last_df: Optional[pd.DataFrame] = None
         self._last_result_type: Optional[str] = None  # 'single' or 'dict'
+        self._engine_predicates: set[str] = set()
+        self._squall_keywords = SQUALL_KEYWORDS
 
         # History
         history_path = history_path or str(Path.home() / ".neurolang_query_history")
@@ -333,9 +383,13 @@ class InteractiveTuiApp:
             """Insert newline instead of submitting."""
             event.current_buffer.insert_text("\n")
 
-        # Completer
+        # Completer (initial: Datalog LALR mode)
         try:
-            self._completer = NeuroLangReplCompleter(LarkCompleter(COMPILED_GRAMMAR))
+            self._completer = NeuroLangReplCompleter(
+                lark_completer=LarkCompleter(COMPILED_GRAMMAR),
+                engine_predicates=self._engine_predicates,
+                squall_keywords=self._squall_keywords,
+            )
         except Exception as exc:
             _console.print(f"[yellow]Warning: autocomplete init failed: {exc}[/yellow]")
             self._completer = None
@@ -371,6 +425,47 @@ class InteractiveTuiApp:
         )
         self._engine_built = True
         _console.print("[green]Engine ready.[/green]")
+
+        # Collect predicates from the engine's symbol table and YAML metadata
+        self._engine_predicates = self._collect_predicates()
+        self._rebuild_completer()
+
+    def _collect_predicates(self) -> set[str]:
+        """Collect predicate names from the engine's symbol table and YAML config."""
+        preds: set[str] = set()
+        if self._nl is None:
+            return preds
+        st = self._nl.program_ir.symbol_table
+        for sym_name, sym_val in st.items():
+            val = getattr(sym_val, "value", sym_val)
+            if isinstance(val, WrappedRelationalAlgebraSet):
+                name = getattr(sym_name, "name", str(sym_name))
+                preds.add(name)
+        # Also add YAML-declared predicates from engine_registry
+        try:
+            yaml_preds = engine_registry.get_predicates(self.engine_name)
+            preds.update(yaml_preds.keys())
+        except Exception:
+            pass
+        return preds
+
+    def _rebuild_completer(self) -> None:
+        """Rebuild the prompt_toolkit completer for the current mode."""
+        if self.squall_mode:
+            lark = None
+        else:
+            try:
+                lark = LarkCompleter(COMPILED_GRAMMAR)
+            except Exception:
+                lark = None
+
+        self._completer = NeuroLangReplCompleter(
+            lark_completer=lark,
+            engine_predicates=self._engine_predicates,
+            squall_keywords=self._squall_keywords,
+        )
+        # Update the session's completer
+        self._session.completer = self._completer
 
     # -----------------------------------------------------------------------
     # Query execution
@@ -553,9 +648,11 @@ class InteractiveTuiApp:
         mode = args.strip().lower()
         if mode == "datalog":
             self.squall_mode = False
+            self._rebuild_completer()
             _console.print("[green]Mode: Datalog[/green]")
         elif mode == "squall":
             self.squall_mode = True
+            self._rebuild_completer()
             _console.print("[green]Mode: SQUALL[/green]")
         else:
             _console.print(f"[yellow]Unknown mode {mode!r}. Use 'datalog' or 'squall'.[/yellow]")

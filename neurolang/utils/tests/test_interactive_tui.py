@@ -12,6 +12,7 @@ from neurolang.utils.interactive_tui import (
     InteractiveTuiApp,
     NeuroLangReplCompleter,
     DOT_COMMANDS,
+    SQUALL_KEYWORDS,
 )
 from neurolang.utils.interactive_parsing import LarkCompleter
 from neurolang.frontend.datalog.standard_syntax import COMPILED_GRAMMAR
@@ -35,7 +36,7 @@ class TestNeuroLangReplCompleter:
             lark = LarkCompleter(COMPILED_GRAMMAR)
         except Exception:
             lark = None
-        return NeuroLangReplCompleter(lark)
+        return NeuroLangReplCompleter(lark_completer=lark)
 
     def test_dot_command_completions(self, completer):
         """Dot commands should complete partially typed commands."""
@@ -76,6 +77,63 @@ class TestNeuroLangReplCompleter:
         # May or may not return completions depending on Lark grammar state,
         # but should not crash
         assert isinstance(completions, list)
+
+    def test_squall_keywords(self):
+        """Completer yields SQUALL keywords when no lark_completer is set."""
+        completer = NeuroLangReplCompleter(squall_keywords=SQUALL_KEYWORDS)
+
+        class FakeDoc:
+            text_before_cursor = "ob"
+
+        completions = list(completer.get_completions(FakeDoc(), None))
+        texts = [c.text for c in completions]
+        assert "obtain" in texts
+
+    def test_engine_predicates(self):
+        """Completer yields engine predicate names."""
+        completer = NeuroLangReplCompleter(
+            engine_predicates={"term", "study", "peak"}
+        )
+
+        class FakeDoc:
+            text_before_cursor = "st"
+
+        completions = list(completer.get_completions(FakeDoc(), None))
+        texts = [c.text for c in completions]
+        assert "study" in texts
+        assert "term" not in texts  # doesn't start with "st"
+
+    def test_predicates_skipped_for_non_identifiers(self):
+        """Predicate completion should not fire for non-identifier prefixes."""
+        completer = NeuroLangReplCompleter(
+            engine_predicates={"term", "study"}
+        )
+
+        class FakeDoc:
+            text_before_cursor = "12"
+
+        completions = list(completer.get_completions(FakeDoc(), None))
+        texts = [c.text for c in completions]
+        assert "term" not in texts
+        assert "study" not in texts
+
+    def test_mode_switch_rebuilds_completer(self):
+        """InteractiveTuiApp._rebuild_completer switches between LALR and SQUALL."""
+        app = InteractiveTuiApp(engine_name="neurosynth", squall_mode=False)
+        assert app._completer is not None
+        # Datalog mode should have a lark completer
+        assert app._completer._lark is not None
+
+        # Switch to SQUALL
+        app._cmd_mode("squall")
+        assert app.squall_mode is True
+        # In SQUALL mode, lark should be None
+        assert app._completer._lark is None
+
+        # Switch back to Datalog
+        app._cmd_mode("datalog")
+        assert app.squall_mode is False
+        assert app._completer._lark is not None
 
 
 # ---------------------------------------------------------------------------
