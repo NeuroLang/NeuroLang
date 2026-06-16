@@ -68,12 +68,16 @@ from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
 )
+from ..probabilistic.expressions import Condition
 from ..probabilistic.magic_sets_processing import (
     probabilistic_postprocess_magic_rules,
 )
 from ..probabilistic.query_resolution import (
     QueryBasedProbFactToDetRule,
+    _build_probabilistic_program,
     compute_probabilistic_solution,
+    lift_solve_marg_query,
+    within_language_succ_query_to_intensional_rule,
 )
 from ..probabilistic.stratification import (
     get_list_of_intensional_rules,
@@ -583,6 +587,53 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _solve_probabilistic_stratum(self, solution, prob_idb, show_ra: bool = False):
         pfact_edb = self.program_ir.probabilistic_facts()
         pchoice_edb = self.program_ir.probabilistic_choices()
+        if show_ra:
+            print("── probabilistic stratum ──")
+            cpl, prob_idb = _build_probabilistic_program(
+                solution,
+                pfact_edb,
+                pchoice_edb,
+                prob_idb,
+                self.check_qbased_pfact_tuple_unicity,
+            )
+            for rule in prob_idb.formulas:
+                print(f"── rule {rule} ──")
+                if is_within_language_prob_query(rule):
+                    query = within_language_succ_query_to_intensional_rule(rule)
+                    if isinstance(rule.antecedent, Condition):
+                        provset = lift_solve_marg_query(
+                            rule,
+                            cpl,
+                            succ_solver=lambda r, c, **kw: succ_solver(
+                                r, c, run_relational_algebra_solver=False, **kw
+                            ),
+                        )
+                    else:
+                        for succ_solver in self.probabilistic_solvers:
+                            try:
+                                provset = succ_solver(
+                                    query,
+                                    cpl,
+                                    run_relational_algebra_solver=False,
+                                )
+                                break
+                            except UnsupportedSolverError:
+                                if succ_solver == self.probabilistic_solvers[-1]:
+                                    raise
+                else:
+                    for succ_solver in self.probabilistic_solvers:
+                        try:
+                            provset = succ_solver(
+                                rule,
+                                cpl,
+                                run_relational_algebra_solver=False,
+                            )
+                            break
+                        except UnsupportedSolverError:
+                            if succ_solver == self.probabilistic_solvers[-1]:
+                                raise
+                print(repr(provset.relation))
+            return MapInstance()
         for i, (succ_solver, marg_solver) in enumerate(
             zip(self.probabilistic_solvers, self.probabilistic_marg_solvers)
         ):

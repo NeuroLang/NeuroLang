@@ -86,6 +86,23 @@ def test_show_ra_postprobabilistic_stratum(capsys):
     assert "P" in captured.out
 
 
+def test_show_ra_probabilistic_stratum(capsys):
+    from neurolang.frontend import NeurolangPDL
+    nl = NeurolangPDL()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("c",)], name="Q"
+    )
+    with nl.scope as e:
+        e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
+        nl.execute_datalog_program("ans(p, x) :- Z(p, x).", show_ra=True)
+    captured = capsys.readouterr()
+    assert "── deterministic stratum ──" in captured.out
+    assert "── probabilistic stratum ──" in captured.out
+
+
 def test_show_rewritten_datalog_prints_all_rules(capsys):
     """--show-rewritten must print all reachable Datalog rules, not just the final query."""
     nl = NeurolangPDL()
