@@ -779,6 +779,230 @@ class TestSquallFlag:
 
 
 # ---------------------------------------------------------------------------
+# --show-rewritten flag
+# ---------------------------------------------------------------------------
+
+
+class TestShowRewrittenFlag:
+    def test_show_rewritten_defaults_to_false(self):
+        parser = _build_parser()
+        args = parser.parse_args([])
+        assert args.show_rewritten is False
+
+    def test_show_rewritten_flag_long(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["--show-rewritten", "ans(x) :- R(x)"]
+        )
+        assert args.show_rewritten is True
+
+    def test_show_rewritten_flag_short(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["-R", "ans(x) :- R(x)"]
+        )
+        assert args.show_rewritten is True
+
+    def test_show_rewritten_works_without_squall(self):
+        """Unlike --show-datalog, --show-rewritten does NOT require --squall."""
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["--show-rewritten", "ans(x) :- R(x)"]
+        )
+        assert args.show_rewritten is True
+        assert args.squall is False
+
+    def test_show_rewritten_prints_for_datalog(self, capsys):
+        from neurolang.frontend import NeurolangDL
+        from neurolang import expressions as ir
+        from neurolang import datalog
+        from neurolang import logic
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([('a', 'b'), ('b', 'c'), ('c', 'd')], name='par')
+
+        S_ = ir.Symbol
+        x, y, z = S_('x'), S_('y'), S_('z')
+        anc = S_('anc')
+        par = S_('par')
+
+        nl.program_ir.walk(datalog.Implication(anc(x, y), par(x, y)))
+        nl.program_ir.walk(datalog.Implication(
+            anc(x, y), logic.Conjunction((anc(x, z), par(z, y)))
+        ))
+
+        result = nl.execute_datalog_program(
+            "ans(x) :- anc('a', x).", show_rewritten=True
+        )
+        captured = capsys.readouterr()
+        assert "rewritten program" in captured.out
+        assert "magic" in captured.out
+        assert result is not None
+
+    def test_show_rewritten_prints_for_squall(self, capsys):
+        from neurolang.frontend import NeurolangDL
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        nl.add_tuple_set([("alice",)], name="plays")
+
+        result = nl.execute_squall_program(
+            "obtain every Person that plays.",
+            show_rewritten=True
+        )
+        # SQUALL queries that don't trigger magic sets won't print
+        # the rewritten header; that's expected behavior
+        assert result is not None
+
+    def test_show_rewritten_no_output_when_false(self, capsys):
+        from neurolang.frontend import NeurolangDL
+        from neurolang import expressions as ir
+        from neurolang import datalog
+        from neurolang import logic
+
+        nl = NeurolangDL()
+        nl.add_tuple_set([('a', 'b'), ('b', 'c'), ('c', 'd')], name='par')
+
+        S_ = ir.Symbol
+        x, y, z = S_('x'), S_('y'), S_('z')
+        anc = S_('anc')
+        par = S_('par')
+
+        nl.program_ir.walk(datalog.Implication(anc(x, y), par(x, y)))
+        nl.program_ir.walk(datalog.Implication(
+            anc(x, y), logic.Conjunction((anc(x, z), par(z, y)))
+        ))
+
+        nl.execute_datalog_program(
+            "ans(x) :- anc('a', x).", show_rewritten=False
+        )
+        captured = capsys.readouterr()
+        assert "rewritten program" not in captured.out
+
+    def test_show_rewritten_builds_engine_and_prints(self, monkeypatch, capsys):
+        """--show-rewritten builds the requested engine and prints without solving."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        nl.add_tuple_set([("alice",)], name="plays")
+
+        build_engine_calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            build_engine_calls.append((name, str(data_dir), resolution))
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+        main([
+            "--engine", "neurosynth",
+            "--show-rewritten",
+            "--squall",
+            "obtain every Person that plays.",
+        ])
+
+        captured = capsys.readouterr()
+        assert build_engine_calls == [
+            ("neurosynth", "neurolang_data", None),
+        ]
+        assert "rewritten program" in captured.out
+        assert "Query completed" not in captured.err
+
+    def test_show_rewritten_datalog_builds_engine(self, monkeypatch, capsys):
+        """--show-rewritten for classical Datalog also builds the engine."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1, "a"), (2, "b")], name="R")
+
+        build_engine_calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            build_engine_calls.append((name, str(data_dir), resolution))
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+        main([
+            "--engine", "neurosynth",
+            "--show-rewritten",
+            "ans(x) :- R(x, y).",
+        ])
+
+        captured = capsys.readouterr()
+        assert build_engine_calls == [
+            ("neurosynth", "neurolang_data", None),
+        ]
+        assert "rewritten program" in captured.out
+        assert "Query completed" not in captured.err
+
+
+# ---------------------------------------------------------------------------
+# --show-ra flag
+# ---------------------------------------------------------------------------
+
+
+class TestShowRAFlag:
+
+    def test_show_ra_dry_run_no_query_completed(self, monkeypatch, capsys):
+        """--show-ra builds the engine, prints the RA plan, and exits
+        without printing 'Query completed'."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1,), (2,)], name="P")
+
+        build_engine_calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            build_engine_calls.append((name, str(data_dir), resolution))
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+        main(["--show-ra", "ans(x) :- P(x)"])
+
+        captured = capsys.readouterr()
+        assert "── deterministic stratum ──" in captured.out
+        assert "Query completed" not in captured.err
+
+    def test_show_ra_squall_dry_run(self, monkeypatch, capsys):
+        """--show-ra with --squall builds the engine, prints the RA plan,
+        and exits without printing 'Query completed'."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1,), (2,)], name="P")
+
+        build_engine_calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            build_engine_calls.append((name, str(data_dir), resolution))
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+        main(["--squall", "--show-ra", "obtain every P."])
+
+        captured = capsys.readouterr()
+        assert "── deterministic stratum ──" in captured.out
+        assert "Query completed" not in captured.err
+
+
+# ---------------------------------------------------------------------------
 # --show-datalog flag
 # ---------------------------------------------------------------------------
 

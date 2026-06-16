@@ -323,13 +323,15 @@ def _execute_program(
         The query result set (may have a ``.columns`` attribute).
 
     """
-    return nl.execute_datalog_program(program_text)
+    return nl.execute_datalog_program(
+        program_text, show_rewritten=show_rewritten, dry_run=dry_run,
+        show_ra=show_ra,
+    )
 
 
 def _execute_squall_program(
     nl: NeurolangPDL, program_text: str, show_rewritten: bool = False,
     show_ra: bool = False, dry_run: bool = False,
-):
 ):
     """
     Execute a SQUALL (controlled English) program.
@@ -354,7 +356,10 @@ def _execute_squall_program(
         When there are multiple ``obtain`` queries.
 
     """
-    return nl.execute_squall_program(program_text)
+    return nl.execute_squall_program(
+        program_text, show_rewritten=show_rewritten, dry_run=dry_run,
+        show_ra=show_ra,
+    )
 
 
 def _format_ir(expr, fresh_map=None, _counter=None):
