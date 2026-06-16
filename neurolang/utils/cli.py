@@ -330,6 +330,7 @@ def _execute_program(
     """
     return nl.execute_datalog_program(
         program_text, show_rewritten=show_rewritten, dry_run=dry_run,
+        show_ra=show_ra,
     )
 
 
@@ -367,6 +368,7 @@ def _execute_squall_program(
     """
     return nl.execute_squall_program(
         program_text, show_rewritten=show_rewritten, dry_run=dry_run,
+        show_ra=show_ra,
     )
 
 

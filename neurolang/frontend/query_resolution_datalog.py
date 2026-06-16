@@ -218,12 +218,14 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         print()
 
     def _handle_rewritten_output(
-        self, query_expression, show_rewritten: bool, dry_run: bool
+        self, query_expression, show_rewritten: bool, dry_run: bool,
+        show_ra: bool = False,
     ) -> bool:
         """Print rewritten program if requested and return True if dry-running.
 
-        Returns True when dry_run is active (caller should short-circuit),
-        False when execution should continue.
+        Returns True when dry_run is active and show_ra is not active
+        (caller should short-circuit), False when execution should continue.
+        When show_ra is True, the caller still needs to build the RA plan.
         """
         if show_rewritten or dry_run:
             reachable_rules = reachable_code(
@@ -232,7 +234,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self._print_rewritten_program(
                 query_expression, reachable_rules
             )
-        return dry_run
+        return dry_run and not show_ra
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -930,7 +932,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 head, predicate
             )
             if self._handle_rewritten_output(
-                magic_query_expression, show_rewritten, dry_run
+                magic_query_expression, show_rewritten, dry_run, show_ra
             ):
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
             elif show_ra:

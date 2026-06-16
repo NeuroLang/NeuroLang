@@ -947,6 +947,64 @@ class TestShowRewrittenFlag:
 
 
 # ---------------------------------------------------------------------------
+# --show-ra flag
+# ---------------------------------------------------------------------------
+
+
+class TestShowRAFlag:
+
+    def test_show_ra_dry_run_no_query_completed(self, monkeypatch, capsys):
+        """--show-ra builds the engine, prints the RA plan, and exits
+        without printing 'Query completed'."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1,), (2,)], name="P")
+
+        build_engine_calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            build_engine_calls.append((name, str(data_dir), resolution))
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+        main(["--show-ra", "ans(x) :- P(x)"])
+
+        captured = capsys.readouterr()
+        assert "── deterministic stratum ──" in captured.out
+        assert "Query completed" not in captured.err
+
+    def test_show_ra_squall_dry_run(self, monkeypatch, capsys):
+        """--show-ra with --squall builds the engine, prints the RA plan,
+        and exits without printing 'Query completed'."""
+        from neurolang.frontend import NeurolangPDL
+        from neurolang.utils.cli import main
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1,), (2,)], name="P")
+
+        build_engine_calls = []
+
+        def fake_build_engine(name, data_dir, resolution=None):
+            build_engine_calls.append((name, str(data_dir), resolution))
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+        main(["--squall", "--show-ra", "obtain every P."])
+
+        captured = capsys.readouterr()
+        assert "── deterministic stratum ──" in captured.out
+        assert "Query completed" not in captured.err
+
+
+# ---------------------------------------------------------------------------
 # --show-datalog flag
 # ---------------------------------------------------------------------------
 
