@@ -637,7 +637,7 @@ def test_magic_init_rules_are_idb_not_edb():
     for symb, value in dl2.symbol_table.items():
         if symb.name.startswith("magic_"):
             assert isinstance(value, LogicUnion), (
-                f"Expected magic predicate {symb.name} to be IDB (Union), "
+                f"Expected magic predicate {str(symb)} to be IDB (Union), "
                 f"but got {type(value).__name__}"
             )
 

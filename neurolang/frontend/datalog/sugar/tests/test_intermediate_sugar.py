@@ -6,6 +6,7 @@ import pytest
 
 from .....datalog import Fact
 from .....datalog.expression_processing import extract_logic_atoms
+from .....datalog.expressions import AdornedSymbol
 from .....exceptions import ForbiddenExpressionError
 from .....expression_walker import ExpressionWalker, IdentityWalker
 from .....expressions import Constant, Symbol
@@ -193,8 +194,9 @@ def test_wlq_floordiv_translation():
     assert len(result) == 3
     num = result[0]
     fnum = num.consequent.functor
-    assert isinstance(fnum, Symbol)
-    assert fnum.name == "Q^cond_num"
+    assert isinstance(fnum, AdornedSymbol)
+    assert fnum.adornment == "cond_num"
+    assert str(fnum) == "Q^cond_num"
     assert num == Implication(
         fnum(x, y, ProbabilisticQuery(PROB, (x, y))),
         Conjunction((P(x), R(x, y))),
@@ -203,8 +205,9 @@ def test_wlq_floordiv_translation():
     # assert denum == Q^cond_den(x, y, PROB) :- R(x, y)
     denum = result[1]
     fdenum = denum.consequent.functor
-    assert isinstance(fdenum, Symbol)
-    assert fdenum.name == "Q^cond_den"
+    assert isinstance(fdenum, AdornedSymbol)
+    assert fdenum.adornment == "cond_den"
+    assert str(fdenum) == "Q^cond_den"
     assert denum == Implication(
         fdenum(x, y, ProbabilisticQuery(PROB, (x, y))), R(x, y)
     )
@@ -245,8 +248,9 @@ def test_wlq_floordiv_translation_boolean_denominator():
     assert len(result) == 3
     num = result[0]
     fnum = num.consequent.functor
-    assert isinstance(fnum, Symbol)
-    assert fnum.name == "Q^cond_num"
+    assert isinstance(fnum, AdornedSymbol)
+    assert fnum.adornment == "cond_num"
+    assert str(fnum) == "Q^cond_num"
     assert num == Implication(
         fnum(x, ProbabilisticQuery(PROB, (x,))),
         Conjunction((P(x, y), R(y))),
@@ -255,8 +259,9 @@ def test_wlq_floordiv_translation_boolean_denominator():
     # assert denum == Q^cond_den(PROB) :- R(y)
     denum = result[1]
     fdenum = denum.consequent.functor
-    assert isinstance(fdenum, Symbol)
-    assert fdenum.name == "Q^cond_den"
+    assert isinstance(fdenum, AdornedSymbol)
+    assert fdenum.adornment == "cond_den"
+    assert str(fdenum) == "Q^cond_den"
     assert denum == Implication(
         fdenum(ProbabilisticQuery(PROB, tuple())), R(y)
     )

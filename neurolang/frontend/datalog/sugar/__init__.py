@@ -13,6 +13,7 @@ from ....datalog.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
 )
+from ....datalog.expressions import AdornedSymbol
 from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
 from ....expression_walker import ReplaceExpressionWalker, ReplaceSymbolWalker
 from ....expressions import Constant, FunctionApplication, Symbol
@@ -502,8 +503,8 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         right = impl.antecedent.conditioning
 
         head_args = extract_logic_free_variables(impl.consequent)
-        num_head = ir.Symbol(
-            f"{impl.consequent.functor.name}^cond_num"
+        num_head = AdornedSymbol(
+            impl.consequent.functor, "cond_num", None
         )(*impl.consequent.args)
         new_num = self.walk(
             Implication(
@@ -515,8 +516,8 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         new_denum_args = extract_logic_free_variables(right) & head_args
         new_denum_prob_arg = ProbabilisticQuery(PROB, tuple(new_denum_args))
         new_denum_args.add(new_denum_prob_arg)
-        denum_head = ir.Symbol(
-            f"{impl.consequent.functor.name}^cond_den"
+        denum_head = AdornedSymbol(
+            impl.consequent.functor, "cond_den", None
         )(*new_denum_args)
         new_denum = self.walk(
             Implication(denum_head, right)
