@@ -39,6 +39,7 @@ from ..datalog.constraints_representation import (
     reachable_code,
 )
 from ..datalog.exceptions import InvalidMagicSetError
+from ..datalog.expressions import predicate_identity
 from ..exceptions import SymbolNotFoundError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
@@ -501,10 +502,11 @@ class NeurolangPDL(QueryBuilderDatalog):
         solution_ir = self._solve()
         solution = {}
         for k, v in solution_ir.items():
-            solution[k.name] = NamedRelationalAlgebraFrozenSet(
-                self.predicate_parameter_names(k.name), v.value.unwrap()
+            solution[predicate_identity(k)] = NamedRelationalAlgebraFrozenSet(
+                self.predicate_parameter_names(k),
+                v.value.unwrap(),
             )
-            solution[k.name].row_type = v.value.row_type
+            solution[predicate_identity(k)].row_type = v.value.row_type
         return solution
 
     def _solve(self, query=None):
