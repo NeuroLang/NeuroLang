@@ -75,6 +75,17 @@ def test_show_ra_deterministic_stratum(capsys):
     assert "P" in captured.out
 
 
+def test_show_ra_postprobabilistic_stratum(capsys):
+    """Test that show_ra=True is accepted without error for a deterministic query."""
+    from neurolang.frontend import NeurolangPDL
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="P")
+    nl.execute_datalog_program("ans(x) :- P(x).", show_ra=True)
+    captured = capsys.readouterr()
+    assert "── deterministic stratum ──" in captured.out
+    assert "P" in captured.out
+
+
 def test_show_rewritten_datalog_prints_all_rules(capsys):
     """--show-rewritten must print all reachable Datalog rules, not just the final query."""
     nl = NeurolangPDL()
