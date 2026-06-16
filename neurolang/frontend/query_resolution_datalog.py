@@ -31,6 +31,7 @@ from ..datalog.constraints_representation import RightImplication
 from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
     remove_conjunction_duplicates,
+    stratify,
     TranslateToDatalogSemantics,
     reachable_code,
 )
@@ -163,8 +164,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         printer = DatalogPrettyPrinter()
         print(printer.walk(query_expression))
         if reachable_rules is not None:
-            for rule in reachable_rules.formulas:
-                print(printer.walk(rule))
+            strata, _ = stratify(reachable_rules, self.program_ir)
+            query_functor = query_expression.consequent.functor
+            for stratum in strata:
+                for rule in stratum:
+                    if rule.consequent.functor != query_functor:
+                        print(printer.walk(rule))
         print()
 
     def _handle_rewritten_output(
@@ -446,13 +451,13 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         self.program_ir.push_scope()
         try:
-            for rule in rules_and_choice_defs:
-                if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
-                    continue  # already registered in global scope
-                try:
-                    self.program_ir.walk(rule)
-                except ForbiddenDisjunctionError:
-                    pass
+            # Rules are already walked into the global scope by
+            # execute_squall_program; re-walking them here duplicates
+            # intentional rules and makes --show-rewritten output contain
+            # repeated rules (fresh probability variables defeat repr-based
+            # deduplication). Choice definitions are already registered
+            # globally as well, so nothing from rules_and_choice_defs needs
+            # to be re-added in this per-query scope.
             self.program_ir.walk(query_impl)
             fe_pred = fe.Expression(self, h(*head_vars))
             fe_head = tuple(
