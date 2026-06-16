@@ -41,11 +41,16 @@ from neurolang.utils import engine_registry
 from neurolang.utils.interactive_parsing import LarkCompleter, TERMINALS_TO_CATEGORIES, CATEGORIES
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.document import Document
+from prompt_toolkit.formatted_text import HTML, StyleAndTextTuples
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.filters import HasSearch
+from prompt_toolkit.styles import Style
 
 import rich
 from rich.console import Console
@@ -65,7 +70,7 @@ DOT_COMMANDS = {
     ".predicates": "List available predicates for the current engine",
     ".save": "Save last result to a file\n  .save <path>        — save as CSV\n  .save <path>.nii    — save result voxel data as NIfTI",
     ".view": "Visualise a NIfTI file (uses nilearn plotting)\n  .view <path>.nii",
-    ".mode": "Toggle between Datalog and SQUALL mode\n  .mode datalog\n  .mode squall",
+    ".mode": "Toggle language mode or vi/emacs editing mode\n  .mode datalog\n  .mode squall\n  .mode vi\n  .mode emacs",
     ".quit": "Exit the REPL (also Ctrl+D / Ctrl+C)",
 }
 
@@ -114,6 +119,71 @@ SQUALL_KEYWORDS = [
     "all", "each", "some", "no", "any",
     "most", "few", "both", "neither",
 ]
+
+# ---------------------------------------------------------------------------
+# Constants for UI features
+# ---------------------------------------------------------------------------
+
+MAX_TABLE_ROWS = 20
+
+# ---------------------------------------------------------------------------
+# NeuroLangLexer — syntax highlighting for Datalog / SQUALL
+# ---------------------------------------------------------------------------
+
+
+class NeuroLangLexer(Lexer):
+    """Simple lexer highlighting Datalog/SQUALL tokens in the input line."""
+
+    KEYWORDS = frozenset({
+        "ans", "define", "as", "obtain", "every", "a", "an", "the",
+        "where", "that", "with", "without", "if", "then",
+        "and", "or", "not", "for", "of", "from", "to", "by",
+        "exists", "EXISTS", "MARG", "PROB", "SUCC",
+        "lambda", "True", "False",
+    })
+
+    OPERATORS = frozenset({":-", ":-~", "::", ":=", "->", "||"})
+
+    def lex_document(self, document: Document):
+        def get_line(lineno: int) -> StyleAndTextTuples:
+            line = document.lines[lineno] if lineno < len(document.lines) else ""
+            result: StyleAndTextTuples = []
+            i = 0
+            while i < len(line):
+                if line[i].isalnum() or line[i] == "_":
+                    j = i
+                    while j < len(line) and (line[j].isalnum() or line[j] == "_"):
+                        j += 1
+                    word = line[i:j]
+                    if word in self.KEYWORDS:
+                        result.append(("bold #ff8800", word))
+                    elif word[0].isupper():
+                        result.append(("#44ff44", word))
+                    else:
+                        result.append(("", word))
+                    i = j
+                elif line[i] in (":", "-", "+", "~", "¬", "(", ")", ",", ".", "=", "!", "|", "&"):
+                    j = i
+                    while j < len(line) and line[j] in (":", "-", "+", "~", "¬", "(", ")", ",", ".", "=", "!", "|", "&"):
+                        j += 1
+                    token = line[i:j]
+                    if token in self.OPERATORS:
+                        result.append(("#888888", token))
+                    else:
+                        result.append(("", token))
+                    i = j
+                else:
+                    result.append(("", line[i]))
+                    i += 1
+            return result
+
+        return get_line
+
+
+# Style dict for the prompt session
+_tui_style = Style([
+    ("keyword", "bold #ff8800"),
+])
 
 # ---------------------------------------------------------------------------
 # Custom prompt_toolkit Completer — multi-source: grammar + predicates + keywords
@@ -206,7 +276,7 @@ _console = Console()
 
 
 def _df_to_rich_table(df: pd.DataFrame, title: str = "") -> Table:
-    """Render a pandas DataFrame as a rich Table."""
+    """Render a pandas DataFrame as a rich Table, capped at MAX_TABLE_ROWS rows."""
     table = Table(
         title=title,
         box=box.ROUNDED,
@@ -216,8 +286,19 @@ def _df_to_rich_table(df: pd.DataFrame, title: str = "") -> Table:
     )
     for col in df.columns:
         table.add_column(str(col), overflow="fold")
-    for row in df.itertuples(index=False):
+
+    total = len(df)
+    if total > MAX_TABLE_ROWS:
+        display_df = df.head(MAX_TABLE_ROWS)
+    else:
+        display_df = df
+
+    for row in display_df.itertuples(index=False):
         table.add_row(*[str(v) if v is not None else "" for v in row])
+
+    if total > MAX_TABLE_ROWS:
+        table.caption = f"[dim]{total} rows, showing first {MAX_TABLE_ROWS}[/dim]"
+
     return table
 
 
@@ -426,6 +507,10 @@ class InteractiveTuiApp:
             multiline=False,
             enable_open_in_editor=True,
             vi_mode=False,
+            lexer=NeuroLangLexer(),
+            auto_suggest=AutoSuggestFromHistory(),
+            bottom_toolbar=self._get_toolbar,
+            style=_tui_style,
         )
 
     # -----------------------------------------------------------------------
@@ -498,6 +583,8 @@ class InteractiveTuiApp:
         """Parse, execute, and render a Datalog / SQUALL query."""
         self._ensure_engine()
         self._last_program = program
+
+        _console.print("[dim]⏳ Running query...[/dim]")
 
         sort_by = []
         for spec in self.sort_specs:
@@ -676,8 +763,14 @@ class InteractiveTuiApp:
             self.squall_mode = True
             self._rebuild_completer()
             _console.print("[green]Mode: SQUALL[/green]")
+        elif mode == "vi":
+            self._session.vi_mode = True
+            _console.print("[green]Vi mode enabled[/green]")
+        elif mode == "emacs":
+            self._session.vi_mode = False
+            _console.print("[green]Emacs mode enabled[/green]")
         else:
-            _console.print(f"[yellow]Unknown mode {mode!r}. Use 'datalog' or 'squall'.[/yellow]")
+            _console.print(f"[yellow]Unknown mode {mode!r}. Use 'datalog', 'squall', 'vi', or 'emacs'.[/yellow]")
 
     # -----------------------------------------------------------------------
     # Slash-command handlers
@@ -775,6 +868,30 @@ class InteractiveTuiApp:
         else:
             _console.print(f"[yellow]Unknown slash command: {verb}. Try /help[/yellow]")
         return True
+
+    # -----------------------------------------------------------------------
+    # Toolbar
+    # -----------------------------------------------------------------------
+
+    def _get_toolbar(self) -> HTML:
+        """Return the bottom toolbar text showing engine state."""
+        mode = "SQ" if self.squall_mode else "DL"
+        pred_count = len(self._engine_predicates)
+        if self._last_df is not None:
+            result_info = f"rows:{len(self._last_df)}"
+        elif self._last_result_type == "dict":
+            result_info = "dict"
+        elif self._last_result_type == "single":
+            result_info = "single"
+        else:
+            result_info = "—"
+        vi = "VI" if self._session.vi_mode else "EM"
+        return HTML(
+            f"<b>nl({self.engine_name}:{mode})</b>  "
+            f"preds:{pred_count}  "
+            f"{result_info}  "
+            f"[{vi}]"
+        )
 
     # -----------------------------------------------------------------------
     # Prompt style
