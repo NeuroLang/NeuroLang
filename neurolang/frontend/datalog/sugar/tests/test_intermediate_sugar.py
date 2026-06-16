@@ -6,7 +6,6 @@ import pytest
 
 from .....datalog import Fact
 from .....datalog.expression_processing import extract_logic_atoms
-from .....datalog.magic_sets import AdornedSymbol
 from .....exceptions import ForbiddenExpressionError
 from .....expression_walker import ExpressionWalker, IdentityWalker
 from .....expressions import Constant, Symbol
@@ -194,8 +193,8 @@ def test_wlq_floordiv_translation():
     assert len(result) == 3
     num = result[0]
     fnum = num.consequent.functor
-    assert isinstance(fnum, AdornedSymbol)
-    assert fnum.adornment == "cond_num"
+    assert isinstance(fnum, Symbol)
+    assert fnum.name == "Q^cond_num"
     assert num == Implication(
         fnum(x, y, ProbabilisticQuery(PROB, (x, y))),
         Conjunction((P(x), R(x, y))),
@@ -204,28 +203,25 @@ def test_wlq_floordiv_translation():
     # assert denum == Q^cond_den(x, y, PROB) :- R(x, y)
     denum = result[1]
     fdenum = denum.consequent.functor
-    assert isinstance(fdenum, AdornedSymbol)
-    assert fdenum.adornment == "cond_den"
+    assert isinstance(fdenum, Symbol)
+    assert fdenum.name == "Q^cond_den"
     assert denum == Implication(
         fdenum(x, y, ProbabilisticQuery(PROB, (x, y))), R(x, y)
     )
 
-    # assert cond == Q(x, y, __cond_p__) :-
-    #     Q^cond_num(x, y, __cond_num_p__) &
-    #     Q^cond_den(x, y, __cond_den_p__) &
-    #     (__cond_p__ == __cond_num_p__ / __cond_den_p__)
+    # assert cond == Q(x, y, p) :- Q^cond_num(x, y, p0) & Q^cond_den(x, y, p1) & (p == p0 / p1)
     cond = result[2]
-    cond_p = Symbol("__cond_p__")
-    cond_num_p = Symbol("__cond_num_p__")
-    cond_den_p = Symbol("__cond_den_p__")
+    p = [a for a in cond.consequent.args if a.is_fresh][0]
+    p0 = [a for a in cond.antecedent.formulas[0].args if a.is_fresh][0]
+    p1 = [a for a in cond.antecedent.formulas[1].args if a.is_fresh][0]
 
     assert cond == Implication(
-        Q(x, y, cond_p),
+        Q(x, y, p),
         Conjunction(
             (
-                fnum(x, y, cond_num_p),
-                fdenum(x, y, cond_den_p),
-                EQ_(cond_p, Constant(operator.truediv)(cond_num_p, cond_den_p)),
+                fnum(x, y, p0),
+                fdenum(x, y, p1),
+                EQ_(p, Constant(operator.truediv)(p0, p1)),
             )
         ),
     )
@@ -249,8 +245,8 @@ def test_wlq_floordiv_translation_boolean_denominator():
     assert len(result) == 3
     num = result[0]
     fnum = num.consequent.functor
-    assert isinstance(fnum, AdornedSymbol)
-    assert fnum.adornment == "cond_num"
+    assert isinstance(fnum, Symbol)
+    assert fnum.name == "Q^cond_num"
     assert num == Implication(
         fnum(x, ProbabilisticQuery(PROB, (x,))),
         Conjunction((P(x, y), R(y))),
@@ -259,28 +255,25 @@ def test_wlq_floordiv_translation_boolean_denominator():
     # assert denum == Q^cond_den(PROB) :- R(y)
     denum = result[1]
     fdenum = denum.consequent.functor
-    assert isinstance(fdenum, AdornedSymbol)
-    assert fdenum.adornment == "cond_den"
+    assert isinstance(fdenum, Symbol)
+    assert fdenum.name == "Q^cond_den"
     assert denum == Implication(
         fdenum(ProbabilisticQuery(PROB, tuple())), R(y)
     )
 
-    # assert cond == Q(x, __cond_p__) :-
-    #     Q^cond_num(x, __cond_num_p__) &
-    #     Q^cond_den(__cond_den_p__) &
-    #     (__cond_p__ == __cond_num_p__ / __cond_den_p__)
+    # assert cond == Q(x, p) :- Q^cond_num(x, p0) & Q^cond_den(p1) & (p == p0 / p1)
     cond = result[2]
-    cond_p = Symbol("__cond_p__")
-    cond_num_p = Symbol("__cond_num_p__")
-    cond_den_p = Symbol("__cond_den_p__")
+    p = [a for a in cond.consequent.args if a.is_fresh][0]
+    p0 = [a for a in cond.antecedent.formulas[0].args if a.is_fresh][0]
+    p1 = [a for a in cond.antecedent.formulas[1].args if a.is_fresh][0]
 
     assert cond == Implication(
-        Q(x, cond_p),
+        Q(x, p),
         Conjunction(
             (
-                fnum(x, cond_num_p),
-                fdenum(cond_den_p),
-                EQ_(cond_p, Constant(operator.truediv)(cond_num_p, cond_den_p)),
+                fnum(x, p0),
+                fdenum(p1),
+                EQ_(p, Constant(operator.truediv)(p0, p1)),
             )
         ),
     )
