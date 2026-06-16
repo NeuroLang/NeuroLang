@@ -107,6 +107,21 @@ class TestBuildParser:
         args = parser.parse_args(["--engine", "unknown"])
         assert args.engine == "unknown"
 
+    def test_show_ra_defaults_to_false(self):
+        parser = _build_parser()
+        args = parser.parse_args([])
+        assert args.show_ra is False
+
+    def test_show_ra_flag_long(self):
+        parser = _build_parser()
+        args = parser.parse_args(["--show-ra", "ans(x) :- P(x)"])
+        assert args.show_ra is True
+
+    def test_show_ra_flag_short(self):
+        parser = _build_parser()
+        args = parser.parse_args(["-Q", "ans(x) :- P(x)"])
+        assert args.show_ra is True
+
 
 # ---------------------------------------------------------------------------
 # Engine registry
