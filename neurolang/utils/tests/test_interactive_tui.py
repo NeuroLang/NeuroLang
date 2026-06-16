@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from prompt_toolkit.document import Document
+
 from neurolang.utils.interactive_tui import (
     _df_to_rich_table,
     _format_as_df,
@@ -12,6 +14,7 @@ from neurolang.utils.interactive_tui import (
     InteractiveTuiApp,
     NeuroLangReplCompleter,
     DOT_COMMANDS,
+    SLASH_COMMANDS,
     SQUALL_KEYWORDS,
 )
 from neurolang.utils.interactive_parsing import LarkCompleter
@@ -40,28 +43,18 @@ class TestNeuroLangReplCompleter:
 
     def test_dot_command_completions(self, completer):
         """Dot commands should complete partially typed commands."""
-        # Mock a document-like object
-        class FakeDoc:
-            text_before_cursor = ".h"
-
-        completions = list(completer.get_completions(FakeDoc(), None))
+        completions = list(completer.get_completions(Document(".h"), None))
         assert len(completions) > 0
         # Should complete to .help
         assert any(c.text == ".help" for c in completions)
 
     def test_dot_command_partial_engines(self, completer):
-        class FakeDoc:
-            text_before_cursor = ".eng"
-
-        completions = list(completer.get_completions(FakeDoc(), None))
+        completions = list(completer.get_completions(Document(".eng"), None))
         assert any(c.text == ".engines" for c in completions)
 
     def test_dot_command_empty_dot(self, completer):
         """Typing just '.' should suggest all dot commands."""
-        class FakeDoc:
-            text_before_cursor = "."
-
-        completions = list(completer.get_completions(FakeDoc(), None))
+        completions = list(completer.get_completions(Document("."), None))
         for cmd in DOT_COMMANDS:
             assert any(c.text == cmd for c in completions), (
                 f"Missing dot command {cmd!r} in completions"
@@ -69,11 +62,8 @@ class TestNeuroLangReplCompleter:
 
     def test_non_dot_does_not_crash(self, completer):
         """Non-dot input should call the Lark completer without crashing."""
-        class FakeDoc:
-            text_before_cursor = "ans(x) :- term"
-
         # Just ensure no exception is raised
-        completions = list(completer.get_completions(FakeDoc(), None))
+        completions = list(completer.get_completions(Document("ans(x) :- term"), None))
         # May or may not return completions depending on Lark grammar state,
         # but should not crash
         assert isinstance(completions, list)
@@ -82,10 +72,7 @@ class TestNeuroLangReplCompleter:
         """Completer yields SQUALL keywords when no lark_completer is set."""
         completer = NeuroLangReplCompleter(squall_keywords=SQUALL_KEYWORDS)
 
-        class FakeDoc:
-            text_before_cursor = "ob"
-
-        completions = list(completer.get_completions(FakeDoc(), None))
+        completions = list(completer.get_completions(Document("ob"), None))
         texts = [c.text for c in completions]
         assert "obtain" in texts
 
@@ -95,10 +82,7 @@ class TestNeuroLangReplCompleter:
             engine_predicates={"term", "study", "peak"}
         )
 
-        class FakeDoc:
-            text_before_cursor = "st"
-
-        completions = list(completer.get_completions(FakeDoc(), None))
+        completions = list(completer.get_completions(Document("st"), None))
         texts = [c.text for c in completions]
         assert "study" in texts
         assert "term" not in texts  # doesn't start with "st"
@@ -109,13 +93,81 @@ class TestNeuroLangReplCompleter:
             engine_predicates={"term", "study"}
         )
 
-        class FakeDoc:
-            text_before_cursor = "12"
-
-        completions = list(completer.get_completions(FakeDoc(), None))
+        completions = list(completer.get_completions(Document("12"), None))
         texts = [c.text for c in completions]
         assert "term" not in texts
         assert "study" not in texts
+
+
+class TestSlashCommands:
+    """Tests for SLASH_COMMANDS constant, slash completion, and handling."""
+
+    @pytest.fixture
+    def completer(self):
+        try:
+            lark = LarkCompleter(COMPILED_GRAMMAR)
+        except Exception:
+            lark = None
+        return NeuroLangReplCompleter(lark_completer=lark)
+
+    def test_slash_commands_constant(self):
+        """SLASH_COMMANDS dict contains all expected commands."""
+        assert "/rewritten" in SLASH_COMMANDS
+        assert "/datalog" in SLASH_COMMANDS
+        assert "/help" in SLASH_COMMANDS
+
+    def test_slash_completer(self, completer):
+        """Completer yields slash commands when text starts with /."""
+        completions = list(completer.get_completions(Document("/"), None))
+        commands = [c.text for c in completions]
+        assert "/rewritten" in commands
+        assert "/datalog" in commands
+        assert "/help" in commands
+
+    def test_slash_completer_partial(self, completer):
+        """Completer filters slash commands by prefix."""
+        completions = list(completer.get_completions(Document("/re"), None))
+        commands = [c.text for c in completions]
+        assert "/rewritten" in commands
+        assert "/datalog" not in commands
+        assert "/help" not in commands
+
+    def test_slash_completer_datalog_prefix(self, completer):
+        """Completer filters /datalog with /da prefix."""
+        completions = list(completer.get_completions(Document("/da"), None))
+        commands = [c.text for c in completions]
+        assert "/datalog" in commands
+        assert "/rewritten" not in commands
+
+    def test_slash_completer_doesnt_leak_to_plain_text(self, completer):
+        """Slash commands should NOT appear when text doesn't start with /."""
+        completions = list(completer.get_completions(Document("abc"), None))
+        texts = [c.text for c in completions]
+        assert "/rewritten" not in texts
+        assert "/datalog" not in texts
+        assert "/help" not in texts
+
+    def test_slash_completer_doesnt_leak_to_dot_text(self, completer):
+        """Slash commands should NOT appear when text starts with ."""
+        completions = list(completer.get_completions(Document(".help"), None))
+        texts = [c.text for c in completions]
+        assert "/help" not in texts
+
+    def test_slash_handle_unknown_prints_warning(self):
+        """Unknown slash command prints a warning (uses _console.print)."""
+        app = InteractiveTuiApp.__new__(InteractiveTuiApp)
+        # Verify _handle_slash_command exists and can be called
+        assert hasattr(app, "_handle_slash_command")
+        # It should return True (session continues) even for unknown cmds
+        result = app._handle_slash_command("/unknown")
+        assert result is True
+
+    def test_slash_help_does_not_crash(self):
+        """/help handler should exist and not crash."""
+        app = InteractiveTuiApp(engine_name="neurosynth")
+        assert hasattr(app, "_cmd_help")
+        # Should not raise
+        app._cmd_help()
 
     def test_mode_switch_rebuilds_completer(self):
         """InteractiveTuiApp._rebuild_completer switches between LALR and SQUALL."""

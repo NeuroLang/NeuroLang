@@ -18,18 +18,25 @@ Usage
 """
 
 import os
+import subprocess
 import sys
-import time
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
+import nibabel as nib
 import numpy as np
 import pandas as pd
 
-from neurolang.datalog import WrappedRelationalAlgebraSet
+from neurolang.datalog import WrappedRelationalAlgebraSet, Union as DatalogUnion
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog.standard_syntax import COMPILED_GRAMMAR
+from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+from neurolang.frontend.datalog.squall_syntax_lark import (
+    parser as squall_parser, SquallProgram,
+)
+from neurolang.logic import Union as LogicUnion
 from neurolang.utils import engine_registry
 from neurolang.utils.interactive_parsing import LarkCompleter, TERMINALS_TO_CATEGORIES, CATEGORIES
 
@@ -62,6 +69,12 @@ DOT_COMMANDS = {
     ".quit": "Exit the REPL (also Ctrl+D / Ctrl+C)",
 }
 
+SLASH_COMMANDS = {
+    "/rewritten": "Re-run last query showing magic-sets rewritten Datalog",
+    "/datalog": "Show Datalog IR of the last SQUALL query (--show-datalog)",
+    "/help": "Show this help message",
+}
+
 HELP_TEXT = """
 [bold yellow]Interactive NeuroLang Query REPL[/bold yellow]
 
@@ -72,10 +85,15 @@ The tab key triggers grammar-aware autocompletion.
 [bold cyan]Dot commands:[/bold cyan]
 """ + "\n".join(f"  [green]{cmd:<20}[/green] {desc}" for cmd, desc in DOT_COMMANDS.items()) + """
 
+[bold cyan]Slash commands:[/bold cyan]
+""" + "\n".join(f"  [green]{cmd:<20}[/green] {desc}" for cmd, desc in SLASH_COMMANDS.items()) + """
+
 [bold cyan]Examples:[/bold cyan]
   ans(t) :- term_in_study_tfidf(t, w, s)
   .mode squall
   obtain every peak_reported.
+  /datalog
+  /rewritten
   .save results/query_output.nii
   .view results/query_output.nii
 """
@@ -121,6 +139,13 @@ class NeuroLangReplCompleter(Completer):
         # 1. Dot commands
         if text.startswith("."):
             for cmd in DOT_COMMANDS:
+                if cmd.startswith(text):
+                    yield Completion(cmd, start_position=-len(text))
+            return
+
+        # 2. Slash commands
+        if text.startswith("/"):
+            for cmd in SLASH_COMMANDS:
                 if cmd.startswith(text):
                     yield Completion(cmd, start_position=-len(text))
             return
@@ -211,8 +236,6 @@ def _result_to_nifti(
     output image uses that template's affine and shape; otherwise an
     identity-affine 256×256×256 volume is created.
     """
-    import nibabel as nib
-
     # Try to detect coordinate columns
     col_lower = {c.lower(): c for c in df.columns}
     i_col = col_lower.get("i")
@@ -286,7 +309,6 @@ def _view_nifti(path: str) -> None:
         display.close()
         _console.print(f"[green]Saved visualisation to: {tmp_png}[/green]")
         # Try to open with system viewer
-        import subprocess
         subprocess.Popen(["open", tmp_png] if sys.platform == "darwin" else ["xdg-open", tmp_png])
         _console.print(f"[dim]Viewing: {tmp_png}[/dim]")
     except Exception as exc:
@@ -365,6 +387,7 @@ class InteractiveTuiApp:
         # State
         self._nl: Optional[NeurolangPDL] = None
         self._engine_built = False
+        self._last_program: Optional[str] = None
         self._last_df: Optional[pd.DataFrame] = None
         self._last_result_type: Optional[str] = None  # 'single' or 'dict'
         self._engine_predicates: set[str] = set()
@@ -474,6 +497,7 @@ class InteractiveTuiApp:
     def _execute_and_display(self, program: str) -> None:
         """Parse, execute, and render a Datalog / SQUALL query."""
         self._ensure_engine()
+        self._last_program = program
 
         sort_by = []
         for spec in self.sort_specs:
@@ -557,7 +581,6 @@ class InteractiveTuiApp:
 
     def _cmd_sets(self) -> None:
         self._ensure_engine()
-        from neurolang.datalog import WrappedRelationalAlgebraSet
         st = self._nl.program_ir.symbol_table
         sets_found = []
         for sym_name, sym_val in st.items():
@@ -621,7 +644,6 @@ class InteractiveTuiApp:
         if path.endswith(".nii"):
             try:
                 img = _result_to_nifti(self._last_df)
-                import nibabel as nib
                 nib.save(img, path)
                 _console.print(f"[green]NIfTI saved to: {path}[/green]")
             except Exception as exc:
@@ -657,6 +679,60 @@ class InteractiveTuiApp:
         else:
             _console.print(f"[yellow]Unknown mode {mode!r}. Use 'datalog' or 'squall'.[/yellow]")
 
+    # -----------------------------------------------------------------------
+    # Slash-command handlers
+    # -----------------------------------------------------------------------
+
+    def _cmd_datalog(self) -> None:
+        """Show Datalog IR of the last SQUALL query (/datalog)."""
+        if self._last_program is None:
+            _console.print("[yellow]No query has been executed yet.[/yellow]")
+            return
+        if not self.squall_mode:
+            _console.print("[yellow]/datalog only shows the Datalog IR of a SQUALL query. "
+                           "Use /rewritten to see magic-sets rewriting of a Datalog query.[/yellow]")
+            return
+        self._ensure_engine()
+        try:
+            parsed = squall_parser(self._last_program)
+            printer = DatalogPrettyPrinter()
+
+            if isinstance(parsed, SquallProgram):
+                if parsed.queries:
+                    for i, q in enumerate(parsed.queries):
+                        label = parsed.query_names.get(i, f"obtain_{i}")
+                        _console.print(f"\n[bold magenta]── query ({label}) ──[/bold magenta]")
+                        _console.print(printer.walk(q))
+                for rule in parsed.rules:
+                    _console.print(f"\n[bold magenta]── rule ──[/bold magenta]")
+                    _console.print(printer.walk(rule))
+            elif isinstance(parsed, (DatalogUnion, LogicUnion)):
+                for f in parsed.formulas:
+                    _console.print(printer.walk(f))
+            else:
+                _console.print(printer.walk(parsed))
+        except Exception as exc:
+            _console.print(f"[red]Failed to show Datalog IR: {exc}[/red]")
+
+    def _cmd_rewritten(self) -> None:
+        """Re-run last query showing magic-sets rewritten Datalog (/rewritten)."""
+        if self._last_program is None:
+            _console.print("[yellow]No query has been executed yet.[/yellow]")
+            return
+        self._ensure_engine()
+        try:
+            _console.print("[bold cyan]Magic-sets rewritten Datalog:[/bold cyan]")
+            if self.squall_mode:
+                result = self._nl.execute_squall_program(
+                    self._last_program, dry_run=True,
+                )
+            else:
+                result = self._nl.execute_datalog_program(
+                    self._last_program, dry_run=True,
+                )
+        except Exception as exc:
+            _console.print(f"[red]Failed to show rewritten query: {exc}[/red]")
+
     def _handle_dot_command(self, line: str) -> bool:
         """Handle a dot-command.  Returns True if the session should continue."""
         cmd = line.strip()
@@ -680,6 +756,24 @@ class InteractiveTuiApp:
             handler()
         else:
             _console.print(f"[yellow]Unknown command: {verb}. Try .help[/yellow]")
+        return True
+
+    def _handle_slash_command(self, line: str) -> bool:
+        """Handle a slash-command.  Returns True if the session should continue."""
+        cmd = line.strip()
+        parts = cmd.split(None, 1)
+        verb = parts[0].lower() if parts else ""
+
+        handlers = {
+            "/rewritten": lambda: self._cmd_rewritten(),
+            "/datalog": lambda: self._cmd_datalog(),
+            "/help": lambda: self._cmd_help(),
+        }
+        handler = handlers.get(verb)
+        if handler:
+            handler()
+        else:
+            _console.print(f"[yellow]Unknown slash command: {verb}. Try /help[/yellow]")
         return True
 
     # -----------------------------------------------------------------------
@@ -728,6 +822,11 @@ class InteractiveTuiApp:
             # Dot commands
             if line.startswith("."):
                 self._handle_dot_command(line)
+                continue
+
+            # Slash commands
+            if line.startswith("/"):
+                self._handle_slash_command(line)
                 continue
 
             # Execute as query
