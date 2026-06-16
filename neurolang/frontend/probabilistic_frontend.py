@@ -443,10 +443,15 @@ class NeurolangPDL(QueryBuilderDatalog):
                 query_pred_symb = magic_query.consequent.functor
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
             if show_ra:
-                return super()._execute_query(
-                    head, predicate, show_rewritten=show_rewritten,
-                    dry_run=dry_run, show_ra=show_ra,
-                )
+                try:
+                    self._solve(query, show_ra=show_ra)
+                    return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
+                except (InvalidMagicSetError, UnsupportedProgramError,
+                        SymbolNotFoundError):
+                    return super()._execute_query(
+                        head, predicate, show_rewritten=show_rewritten,
+                        dry_run=dry_run, show_ra=show_ra,
+                    )
             if self._handle_rewritten_output(
                 query, show_rewritten, dry_run, show_ra
             ):
