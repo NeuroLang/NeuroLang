@@ -38,7 +38,6 @@ from ..datalog.aggregation import (
 from ..datalog.chase import Chase
 from ..datalog.constraints_representation import (
     DatalogConstraintsProgram,
-    reachable_code,
 )
 from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expressions import predicate_identity
