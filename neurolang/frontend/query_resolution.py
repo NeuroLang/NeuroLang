@@ -859,7 +859,7 @@ class NeuroSynthMixin:
             name = str(uuid1())
         if convert_study_ids:
             return self.add_tuple_set(
-                metadata["id"].apply(StudyID).values,
+                metadata["id"].astype(StudyID).values,
                 type_=Tuple[StudyID],
                 name=name,
             )

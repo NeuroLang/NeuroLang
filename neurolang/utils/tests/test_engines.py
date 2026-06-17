@@ -2,7 +2,6 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 from unittest.mock import MagicMock, patch
 
 from neurolang.frontend.neurosynth_utils import StudyID
@@ -38,9 +37,9 @@ class TestNeurosynthEngineStudyIdConsistency:
         })
         mock_get_peaks.return_value = mock_peaks_df
 
-        # ---- Mock term data: study_id is StudyID (str subclass) --------------
+        # ---- Mock term data: study_id is StudyID (integer alias) -----------
         mock_term_df = pd.DataFrame({
-            "id": [StudyID("1"), StudyID("2"), StudyID("3")],
+            "id": [StudyID(1), StudyID(2), StudyID(3)],
             "term": ["memory", "memory", "language"],
             "tfidf": [0.5, 0.3, 0.7],
         })

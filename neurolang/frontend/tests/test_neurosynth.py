@@ -194,13 +194,13 @@ def test_load_neurosynth_mni_peaks_reported(mock_peaks_reported, mni_peaks):
 
 
 def test_studyid_is_integer_based():
-    """StudyID should behave as an integer: isinstance int, arithmetic, hashing.
+    """StudyID should behave as an integer: numpy integer, arithmetic, hashing.
 
-    Currently StudyID(str) — this test will fail until StudyID is changed to
-    an integer-based type.
+    StudyID is now ``np.int64`` (or an equivalent integer alias), so it must
+    behave as a numpy integer rather than a Python ``int`` subclass.
     """
     sid = StudyID(1)
-    assert isinstance(sid, int), "StudyID must be an int subclass"
+    assert isinstance(sid, np.integer), "StudyID must be a numpy integer"
     assert sid + 1 == 2, "StudyID must support integer arithmetic"
     assert hash(sid) == hash(1), "StudyID must hash like an int"
     assert {sid, StudyID(2)} == {1, 2}, "StudyID must work in sets with ints"
@@ -232,7 +232,7 @@ def test_get_ns_term_study_associations_studyid_type(
     ), f"Expected integer dtype, got {result['id'].dtype}"
 
     for val in result["id"].unique():
-        assert isinstance(val, int), f"StudyID value {val!r} is not an int"
-        assert isinstance(val, StudyID), (
+        assert isinstance(val, np.integer), f"StudyID value {val!r} is not an integer"
+        assert type(val) is StudyID, (
             f"StudyID value {val!r} is not a StudyID instance"
         )
