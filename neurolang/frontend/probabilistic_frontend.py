@@ -53,6 +53,10 @@ from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 
+from ..relational_algebra.optimisers import RelationalAlgebraOptimiser
+from ..relational_algebra.pretty_printer import pretty_repr, build_name_map_from_conjunction
+from .datalog.pretty_printer import DatalogPrettyPrinter
+
 from ..exceptions import (
     UnsupportedQueryError,
     UnsupportedSolverError,
@@ -698,7 +702,11 @@ class NeurolangPDL(QueryBuilderDatalog):
                 self.check_qbased_pfact_tuple_unicity,
             )
             for rule in prob_idb.formulas:
-                print(f"── rule {rule} ──")
+                rule_str = DatalogPrettyPrinter().walk(rule)
+                print(f"── rule {rule_str} ──")
+                name_map = build_name_map_from_conjunction(
+                    rule.antecedent, self.program_ir.symbol_table
+                )
                 if is_within_language_prob_query(rule):
                     query = within_language_succ_query_to_intensional_rule(rule)
                     if isinstance(rule.antecedent, Condition):
@@ -733,7 +741,15 @@ class NeurolangPDL(QueryBuilderDatalog):
                         except UnsupportedSolverError:
                             if succ_solver == self.probabilistic_solvers[-1]:
                                 raise
-                print(repr(provset.relation))
+                optimised_relation = provset.relation
+                for _ in range(32):
+                    prev = optimised_relation
+                    optimised_relation = RelationalAlgebraOptimiser().walk(
+                        optimised_relation
+                    )
+                    if optimised_relation is prev:
+                        break
+                print(pretty_repr(optimised_relation, name_map=name_map))
             return MapInstance()
         for i, (succ_solver, marg_solver) in enumerate(
             zip(self.probabilistic_solvers, self.probabilistic_marg_solvers)

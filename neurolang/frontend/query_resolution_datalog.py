@@ -51,6 +51,11 @@ from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
 from ..logic import Conjunction
 from ..logic.horn_clauses import Fol2DatalogTranslationException
+from ..relational_algebra.optimisers import RelationalAlgebraOptimiser
+from ..relational_algebra.pretty_printer import (
+    build_name_map_from_conjunction,
+    pretty_repr,
+)
 from . import query_resolution_expressions as fe
 
 __all__ = ["QueryBuilderDatalog"]
@@ -76,13 +81,24 @@ class ShowRAChaseMixin:
         predicates = tuple(rule_predicates_iterator)
         if not predicates:
             return []
-        ra_code = self.translate_conjunction_to_named_ra(
-            Conjunction(predicates)
-        )
+        conjunction = Conjunction(predicates)
+        ra_code = self.translate_conjunction_to_named_ra(conjunction)
         rule = getattr(self, "_show_ra_current_rule", None)
         if rule is not None:
-            print(f"── rule {rule} ──")
-        print(repr(ra_code))
+            rule_str = DatalogPrettyPrinter().walk(rule)
+            print(f"── rule {rule_str} ──")
+        name_map = build_name_map_from_conjunction(
+            conjunction, getattr(self, "datalog_program", None)
+        )
+        optimised_ra_code = ra_code
+        for _ in range(32):
+            prev = optimised_ra_code
+            optimised_ra_code = RelationalAlgebraOptimiser().walk(
+                optimised_ra_code
+            )
+            if optimised_ra_code is prev:
+                break
+        print(pretty_repr(optimised_ra_code, name_map=name_map))
         return []
 
     def pick_chase_instance_for_stratum(self, stratum, instance_update):
