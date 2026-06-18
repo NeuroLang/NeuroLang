@@ -47,6 +47,7 @@ from ..datalog.expression_processing import (
     InlineEqualityConstantsMixin,
     extract_logic_atoms,
     is_aggregation_rule,
+    remove_conjunction_duplicates,
 )
 from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
@@ -63,7 +64,7 @@ from ..exceptions import (
     UnsupportedProgramError,
 )
 from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
-from ..logic import Union, Symbol
+from ..logic import Union, Symbol, Conjunction, Implication
 from ..probabilistic import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -701,6 +702,22 @@ class NeurolangPDL(QueryBuilderDatalog):
                 prob_idb,
                 self.check_qbased_pfact_tuple_unicity,
             )
+            deduped_rules = []
+            for rule in prob_idb.formulas:
+                if (
+                    isinstance(rule.antecedent, Conjunction)
+                    and len(rule.antecedent.formulas) > 1
+                ):
+                    counts = collections.Counter(rule.antecedent.formulas)
+                    if any(c > 1 for c in counts.values()):
+                        cleaned = remove_conjunction_duplicates(
+                            rule.antecedent
+                        )
+                        if not isinstance(cleaned, Conjunction):
+                            cleaned = Conjunction((cleaned,))
+                        rule = Implication(rule.consequent, cleaned)
+                deduped_rules.append(rule)
+            prob_idb = Union(tuple(deduped_rules))
             for rule in prob_idb.formulas:
                 rule_str = DatalogPrettyPrinter().walk(rule)
                 print(f"── rule {rule_str} ──")
