@@ -12,6 +12,7 @@ from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import Implication
 from ...logic.expression_processing import (
     TranslateToLogic,
+    extract_logic_atoms,
     extract_logic_predicates,
 )
 from ...relational_algebra import (
@@ -59,6 +60,60 @@ def cplogic_to_datalog(cpl_program):
                 )
             dl.add_extensional_predicate_from_tuples(pred_symb, relation.value)
     return dl
+
+
+def cplogic_to_datalog_for_query(cpl_program, query_reachable_predicates):
+    """
+    Convert a CP-Logic program to a Datalog program restricted
+    to predicates transitively reachable from a query.
+
+    Parameters
+    ----------
+    cpl_program : CPLogicProgram
+        The full CP-Logic program.
+    query_reachable_predicates : set of Symbol
+        Predicate symbols that are transitively reachable
+        from the query (including the query predicate itself).
+
+    Returns
+    -------
+    Datalog
+        Restricted Datalog program containing only rules and
+        extensional facts needed to answer the query.
+    """
+    dl = Datalog()
+    for pred_symb in cpl_program.predicate_symbols:
+        if pred_symb not in query_reachable_predicates:
+            continue
+        if pred_symb in cpl_program.intensional_database():
+            if len(cpl_program.symbol_table[pred_symb].formulas) > 1:
+                raise ForbiddenDisjunctionError(
+                    "CP-Logic programs do not support disjunctions"
+                )
+            for formula in cpl_program.symbol_table[pred_symb].formulas:
+                dl.walk(formula)
+        else:
+            if pred_symb in cpl_program.extensional_database():
+                relation = cpl_program.symbol_table[pred_symb]
+            else:
+                relation = remove_probability_column(
+                    cpl_program.symbol_table[pred_symb]
+                )
+            dl.add_extensional_predicate_from_tuples(pred_symb, relation.value)
+    return dl
+
+
+def _get_reachable_predicates_from_query(cpl_program, query_predicate):
+    from ...datalog.expression_processing import reachable_code
+    query_rule = Implication(query_predicate, Constant[bool](True))
+    reachable_code_union = reachable_code(query_rule, cpl_program)
+    reachable_preds = {query_predicate.functor}
+    for rule in reachable_code_union.formulas:
+        reachable_preds.add(rule.consequent.functor)
+        for pred in extract_logic_atoms(rule.antecedent):
+            if isinstance(pred.functor, Symbol):
+                reachable_preds.add(pred.functor)
+    return reachable_preds
 
 
 def build_extensional_grounding(pred_symb, tuple_set):
@@ -119,9 +174,14 @@ def build_pfact_grounding_from_set(pred_symb, relation):
     return build_probabilistic_grounding(pred_symb, relation, Grounding)
 
 
-def build_grounding(cpl_program, dl_instance):
+def build_grounding(cpl_program, dl_instance, restricted_predicates=None):
     groundings = []
-    for pred_symb in cpl_program.predicate_symbols:
+    pred_iter = (
+        cpl_program.predicate_symbols
+        if restricted_predicates is None
+        else restricted_predicates
+    )
+    for pred_symb in pred_iter:
         relation = cpl_program.symbol_table[pred_symb]
         if pred_symb in cpl_program.pfact_pred_symbs:
             groundings.append(
@@ -149,6 +209,52 @@ def ground_cplogic_program(cpl_program):
     chase = Chase(dl_program)
     dl_instance = chase.build_chase_solution()
     return build_grounding(cpl_program, dl_instance)
+
+
+def ground_cplogic_program_for_query(cpl_program, query_predicate):
+    """
+    Ground only the subset of a CP-Logic program transitively
+    reachable from a query predicate.
+
+    This avoids the cost of grounding the entire program when only
+    a small fraction of its predicates are needed to answer a query.
+
+    Parameters
+    ----------
+    cpl_program : CPLogicProgram
+        The CP-Logic program to ground.
+    query_predicate : FunctionApplication
+        The query predicate (e.g. ``P(x, y)``) whose transitive
+        dependencies determine which rules/facts to ground.
+
+    Returns
+    -------
+    ExpressionBlock
+        Grounding expressions restricted to predicates reachable
+        from ``query_predicate``.
+    """
+    reachable_preds = _get_reachable_predicates_from_query(
+        cpl_program, query_predicate
+    )
+    # Ensure extensional / probabilistic predicates that are directly
+    # referenced (but never occur as rule consequents) are still included.
+    for pred in reachable_preds.copy():
+        if pred in cpl_program.extensional_database():
+            continue
+        if pred in cpl_program.pfact_pred_symbs or \
+           pred in cpl_program.pchoice_pred_symbs:
+            continue
+        relation = cpl_program.symbol_table.get(pred)
+        if relation is None:
+            continue
+        for atom in extract_logic_atoms(relation):
+            if isinstance(atom.functor, Symbol):
+                reachable_preds.add(atom.functor)
+
+    dl_program = cplogic_to_datalog_for_query(cpl_program, reachable_preds)
+    chase = Chase(dl_program)
+    dl_instance = chase.build_chase_solution()
+    return build_grounding(cpl_program, dl_instance, restricted_predicates=reachable_preds)
 
 
 def get_grounding_predicate(grounded_exp):
