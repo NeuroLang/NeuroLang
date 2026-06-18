@@ -27,6 +27,7 @@ from .relational_algebra import (
     RenameColumns,
     ReplaceNull,
     Selection,
+    UnaryRelationalAlgebraOperation,
     eq_,
     get_expression_columns,
     int2columnint_constant,
@@ -37,10 +38,37 @@ AND = Constant(operator.and_)
 EQ = Constant(operator.eq)
 
 
+def _ra_expression_is_empty(expr):
+    """Check if a relational algebra expression ultimately wraps an empty
+    Constant (i.e. a table with zero rows).
+
+    Handles: Constant (check ``len(value) == 0``),
+    UnaryRelationalAlgebraOperation (check ``.relation``), and
+    Product (any relation empty).
+    """
+    if isinstance(expr, Constant) and hasattr(expr.value, '__len__'):
+        return len(expr.value) == 0
+    elif isinstance(expr, UnaryRelationalAlgebraOperation):
+        return _ra_expression_is_empty(expr.relation)
+    elif isinstance(expr, Product):
+        return any(_ra_expression_is_empty(r) for r in expr.relations)
+    return False
+
+
 class ProductSimplification(ew.ExpressionWalker):
     @ew.add_match(Product, lambda x: len(x.relations) == 1)
     def single_product(self, product):
         return self.walk(product.relations[0])
+
+    @ew.add_match(Product, lambda x: any(
+        _ra_expression_is_empty(r) for r in x.relations
+    ))
+    def remove_empty_product(self, product):
+        first_empty = next(
+            r for r in product.relations
+            if _ra_expression_is_empty(r)
+        )
+        return self.walk(first_empty)
 
 
 class RewriteSelections(ew.ExpressionWalker):
