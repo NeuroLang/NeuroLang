@@ -120,47 +120,61 @@ def _is_non_primitive(val):
 def _real_cols(df):
     if df is None:
         return []
-    return [c for c in df.columns if c != _SENTINEL]
+    names = _lf_names(df) if isinstance(df, pl.LazyFrame) else df.columns
+    return [c for c in names if c != _SENTINEL]
 
 
 def _strip_sentinel(df):
-    if df is not None and _SENTINEL in df.columns:
-        return df.select(_real_cols(df))
+    if df is None:
+        return None
+    if isinstance(df, pl.LazyFrame):
+        names = _lf_names(df)
+    else:
+        names = df.columns
+    if _SENTINEL in names:
+        return df.select([c for c in names if c != _SENTINEL])
     return df
+
+
+def _lf_names(lf: pl.LazyFrame) -> list:
+    """Get column names from a LazyFrame without PerformanceWarning."""
+    return lf.collect_schema().names()
 
 
 def _concat_safe(dfs):
     """Concatenate LazyFrames, handling Null-typed columns."""
-    non_null = [df for df in dfs if df is not None and len(df.columns) > 0]
+    non_null = [df for df in dfs if df is not None and len(_lf_names(df)) > 0]
     if len(non_null) == 0:
         return None
     if len(non_null) == 1:
         return non_null[0]
     # Unify column order across all LazyFrames
-    all_col_sets = [set(df.columns) for df in non_null]
+    all_col_sets = [set(_lf_names(df)) for df in non_null]
     if len(all_col_sets) > 1:
         common_cols = all_col_sets[0]
         for cs in all_col_sets[1:]:
             common_cols &= cs
         if common_cols:
-            col_order = [c for c in non_null[0].columns if c in common_cols]
+            col_order = [c for c in _lf_names(non_null[0]) if c in common_cols]
             for i, df in enumerate(non_null):
-                existing = [c for c in col_order if c in df.columns]
+                names = _lf_names(df)
+                existing = [c for c in col_order if c in names]
                 non_null[i] = df.select(*[pl.col(c) for c in existing])
     # Check for Null-typed columns that need casting
-    common_cols = set(non_null[0].columns)
+    common_cols = set(_lf_names(non_null[0]))
     for df in non_null[1:]:
-        common_cols &= set(df.columns)
+        common_cols &= set(_lf_names(df))
+    col_schemas = [df.collect_schema() for df in non_null]
     for col in common_cols:
         target_type = None
-        for df in non_null:
-            dt = df.schema[col]
-            if dt != pl.Null:
+        for cs in col_schemas:
+            dt = cs.get(col)
+            if dt is not None and dt != pl.Null:
                 target_type = dt
                 break
         if target_type is not None:
             for i, df in enumerate(non_null):
-                if df.schema[col] == pl.Null:
+                if col_schemas[i].get(col) == pl.Null:
                     non_null[i] = df.with_columns(pl.lit(None, dtype=target_type).alias(col))
     return pl.concat(non_null, how="vertical")
 
@@ -168,7 +182,11 @@ def _concat_safe(dfs):
 def _has_sentinel(df):
     if df is None:
         return False
-    return len(df.columns) == 1 and df.columns[0] == _SENTINEL
+    try:
+        names = _lf_names(df) if isinstance(df, pl.LazyFrame) else df.columns
+    except Exception:
+        names = df.columns
+    return len(names) == 1 and names[0] == _SENTINEL
 
 
 def _dee_df():
@@ -401,13 +419,15 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if c is None:
             return self._empty_set_same_structure()
         for col in str_cols:
-            if col not in c.columns:
+            c_names = _lf_names(c)
+            if col not in c_names:
                 raise KeyError(
-                    f"Column '{col}' not found in {list(c.columns)}"
+                    f"Column '{col}' not found in {c_names}"
                 )
         new_c = c.select(*[pl.col(col) for col in str_cols])
+        new_c_names = _lf_names(new_c)
         new_c = new_c.rename(
-            dict(zip(new_c.columns, [str(i) for i in range(len(columns))]))
+            dict(zip(new_c_names, [str(i) for i in range(len(columns))]))
         )
         output = self._empty_set_same_structure()
         output._container = new_c
@@ -472,7 +492,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 new_container = (
                     c.with_columns(pl_expr.alias("__mask__"))
                     .filter(pl.col("__mask__").cast(pl.Boolean))
-                    .select(*[pl.col(col) for col in c.columns])
+                    .select(*[pl.col(col) for col in _lf_names(c)])
                 )
             except Exception:
                 # Fall back to eager row-by-row
@@ -556,9 +576,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         merged = merged.drop(tmp_col)
 
-        num_cols = len(merged.columns)
+        num_cols = len(_lf_names(merged))
         merged = merged.rename(
-            dict(zip(merged.columns, [str(i) for i in range(num_cols)]))
+            dict(zip(_lf_names(merged), [str(i) for i in range(num_cols)]))
         )
 
         output = self._empty_set_same_structure()
@@ -590,7 +610,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         total_cols = self.arity + other.arity
         merged = merged.rename(
-            dict(zip(merged.columns, [str(i) for i in range(total_cols)]))
+            dict(zip(_lf_names(merged), [str(i) for i in range(total_cols)]))
         )
 
         output = self._empty_set_same_structure()
@@ -665,7 +685,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             oc = _strip_sentinel(other._container)
             if sc is None or oc is None:
                 return self._empty_set_same_structure()
-            merged = sc.join(oc, how="inner", on=list(sc.columns))
+            merged = sc.join(oc, how="inner", on=_lf_names(sc))
             output = self._empty_set_same_structure()
             output._container = merged
             output._might_have_duplicates = (
@@ -776,7 +796,7 @@ class NamedRelationalAlgebraFrozenSet(
         elif isinstance(iterable, pl.LazyFrame):
             self._container = iterable
             self._container = self._container.rename(
-                dict(zip(self._container.columns, self._columns))
+                dict(zip(_lf_names(self._container), self._columns))
             )
         elif isinstance(iterable, pl.DataFrame):
             self._container = iterable.lazy()
@@ -848,7 +868,7 @@ class NamedRelationalAlgebraFrozenSet(
             if oc is not None:
                 self._container = oc
                 self._container = self._container.rename(
-                    dict(zip(self._container.columns, self._columns))
+                    dict(zip(_lf_names(self._container), self._columns))
                 )
             else:
                 self._container = None
@@ -1010,11 +1030,13 @@ class NamedRelationalAlgebraFrozenSet(
     def _unify_join_types(sc, oc, on):
         if sc is None or oc is None:
             return sc, oc
+        sc_schema = sc.collect_schema()
+        oc_schema = oc.collect_schema()
         for col in on:
-            if col not in sc.schema or col not in oc.schema:
+            if col not in sc_schema or col not in oc_schema:
                 continue
-            s_dtype = sc.schema[col]
-            o_dtype = oc.schema[col]
+            s_dtype = sc_schema[col]
+            o_dtype = oc_schema[col]
             if s_dtype != o_dtype:
                 if s_dtype == pl.Null and o_dtype != pl.Null:
                     sc = sc.with_columns(pl.col(col).cast(o_dtype))
@@ -1095,7 +1117,8 @@ class NamedRelationalAlgebraFrozenSet(
             return self.copy()
 
         # Check if column is Object type (e.g., frozenset)
-        dt = c.schema.get(src_column)
+        c_schema = c.collect_schema()
+        dt = c_schema.get(src_column)
         if dt == pl.Object or dt is None:
             # Fall back to pure Python approach since Polars can't explode Object dtype
             eager = c.collect()
@@ -1155,7 +1178,7 @@ class NamedRelationalAlgebraFrozenSet(
             new_columns = self.columns + dst_columns
 
         col_list = list(new_columns)
-        existing_cols = [c for c in col_list if c in new_container.columns]
+        existing_cols = [c for c in col_list if c in _lf_names(new_container)]
         new_container = new_container.select(*[pl.col(c) for c in existing_cols])
 
         return self._light_init_same_structure(
@@ -1229,7 +1252,8 @@ class NamedRelationalAlgebraFrozenSet(
         if self._container is not None:
             c = _strip_sentinel(self._container)
             if c is not None:
-                filtered_renames = {k: v for k, v in renames.items() if k in c.columns}
+                c_names = _lf_names(c)
+                filtered_renames = {k: v for k, v in renames.items() if k in c_names}
                 new_container = c.rename(filtered_renames)
             else:
                 new_container = self._container
@@ -1463,7 +1487,8 @@ class NamedRelationalAlgebraFrozenSet(
                     except Exception:
                         # Fall back to eager row-by-row
                         eager = new_container.collect()
-                        col_names = list(c.columns)
+                        c_names = _lf_names(c)
+                        col_names = c_names
                         values = []
                         for row in eager.iter_rows():
                             values.append(
@@ -1483,7 +1508,7 @@ class NamedRelationalAlgebraFrozenSet(
             elif callable(operation):
                 # Need eager for callable
                 eager = new_container.collect()
-                col_names = list(c.columns)
+                col_names = _lf_names(c)
                 Row = self._make_named_row_class(col_names)
                 values = [
                     operation(Row(*(
@@ -1567,8 +1592,9 @@ class NamedRelationalAlgebraFrozenSet(
             output._might_have_duplicates = self._might_have_duplicates
             return output
         container = c.select(*[pl.col(col) for col in col_list])
+        c_names = _lf_names(container)
         container = container.rename(
-            dict(zip(container.columns, [str(i) for i in range(len(container.columns))]))
+            dict(zip(c_names, [str(i) for i in range(len(c_names))]))
         )
         output = RelationalAlgebraFrozenSet()
         output._container = container
@@ -1683,7 +1709,7 @@ class NamedRelationalAlgebraFrozenSet(
             o_unified,
             list(self.columns),
         )
-        new_container = s_unified.join(o_unified, on=list(s_unified.columns), how="inner")
+        new_container = s_unified.join(o_unified, on=_lf_names(s_unified), how="inner")
 
         return self._light_init_same_structure(
             new_container,
