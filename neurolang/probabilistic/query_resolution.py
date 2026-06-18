@@ -437,7 +437,8 @@ class FilterZeroProbability(ExpressionWalker):
 def generate_provenance_query_solver(
     symbol_table, run_relational_algebra_solver,
     needed_projections=None,
-    solver_class=ProbSemiringToRelationalAlgebraSolver
+    solver_class=ProbSemiringToRelationalAlgebraSolver,
+    semiring=None,
 ):
     """
     Generate a walker that solves a RAP query.
@@ -454,6 +455,9 @@ def generate_provenance_query_solver(
     solver_class: PatternWalker
         class to translate a provenance RA sets program into a RA program.
         Default is `ProbSemiringToRelationalAlgebraSolver`.
+    semiring : Semiring, optional
+        Semiring to use for provenance computations.
+        If `None`, defaults to ``ProbabilitySemiring()``.
     """
 
     if needed_projections is None:
@@ -470,9 +474,12 @@ def generate_provenance_query_solver(
             LOG.log(self.level, self.message, expression)
             return expression
 
+    solver_kwargs = {'symbol_table': symbol_table}
+    if semiring is not None:
+        solver_kwargs['semiring'] = semiring
     steps = [
         RAQueryOptimiser(),
-        solver_class(symbol_table=symbol_table),
+        solver_class(**solver_kwargs),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
         AddNeededProjections(needed_projections),
         FilterZeroProbability(),
