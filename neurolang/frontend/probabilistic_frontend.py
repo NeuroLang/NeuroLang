@@ -47,7 +47,6 @@ from ..datalog.expression_processing import (
     InlineEqualityConstantsMixin,
     extract_logic_atoms,
     is_aggregation_rule,
-    remove_conjunction_duplicates,
 )
 from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
@@ -64,7 +63,8 @@ from ..exceptions import (
     UnsupportedProgramError,
 )
 from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
-from ..logic import Union, Symbol, Conjunction, Implication
+from ..logic import Union, Symbol
+from ..logic.transformations import RemoveDuplicatedConjunctsDisjuncts
 from ..probabilistic import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -702,22 +702,8 @@ class NeurolangPDL(QueryBuilderDatalog):
                 prob_idb,
                 self.check_qbased_pfact_tuple_unicity,
             )
-            deduped_rules = []
-            for rule in prob_idb.formulas:
-                if (
-                    isinstance(rule.antecedent, Conjunction)
-                    and len(rule.antecedent.formulas) > 1
-                ):
-                    counts = collections.Counter(rule.antecedent.formulas)
-                    if any(c > 1 for c in counts.values()):
-                        cleaned = remove_conjunction_duplicates(
-                            rule.antecedent
-                        )
-                        if not isinstance(cleaned, Conjunction):
-                            cleaned = Conjunction((cleaned,))
-                        rule = Implication(rule.consequent, cleaned)
-                deduped_rules.append(rule)
-            prob_idb = Union(tuple(deduped_rules))
+            dedup = RemoveDuplicatedConjunctsDisjuncts()
+            prob_idb = Union(tuple(dedup.walk(r) for r in prob_idb.formulas))
             for rule in prob_idb.formulas:
                 rule_str = DatalogPrettyPrinter().walk(rule)
                 print(f"── rule {rule_str} ──")
@@ -758,15 +744,9 @@ class NeurolangPDL(QueryBuilderDatalog):
                         except UnsupportedSolverError:
                             if succ_solver == self.probabilistic_solvers[-1]:
                                 raise
-                optimised_relation = provset.relation
-                for _ in range(32):
-                    prev = optimised_relation
-                    optimised_relation = RelationalAlgebraOptimiser().walk(
-                        optimised_relation
-                    )
-                    if optimised_relation is prev:
-                        break
-                print(pretty_repr(optimised_relation, name_map=name_map))
+                ra_code = provset.relation
+                ra_code = RelationalAlgebraOptimiser().walk(ra_code)
+                print(pretty_repr(ra_code, name_map=name_map))
             return MapInstance()
         for i, (succ_solver, marg_solver) in enumerate(
             zip(self.probabilistic_solvers, self.probabilistic_marg_solvers)

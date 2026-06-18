@@ -90,15 +90,7 @@ class ShowRAChaseMixin:
         name_map = build_name_map_from_conjunction(
             conjunction, getattr(self, "datalog_program", None)
         )
-        optimised_ra_code = ra_code
-        for _ in range(32):
-            prev = optimised_ra_code
-            optimised_ra_code = RelationalAlgebraOptimiser().walk(
-                optimised_ra_code
-            )
-            if optimised_ra_code is prev:
-                break
-        print(pretty_repr(optimised_ra_code, name_map=name_map))
+        print(pretty_repr(ra_code, name_map=name_map))
         return []
 
     def pick_chase_instance_for_stratum(self, stratum, instance_update):

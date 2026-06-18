@@ -110,6 +110,37 @@ class RemoveTrivialOperationsMixin(PatternWalker):
         return self.walk(expression.formula.formula)
 
 
+def nary_op_has_duplicated_formulas(nary_op: NaryLogicOperator) -> bool:
+    seen = set()
+    for formula in nary_op.formulas:
+        if formula in seen:
+            return True
+        seen.add(formula)
+    return False
+
+
+class RemoveDuplicatedConjunctsDisjunctsMixin(PatternWalker):
+    @add_match(Disjunction, nary_op_has_duplicated_formulas)
+    def disjunction(self, disjunction: Disjunction) -> Disjunction:
+        return self.walk(self._nary_op_without_duplicates(disjunction))
+
+    @add_match(Conjunction, nary_op_has_duplicated_formulas)
+    def conjunction(self, conjunction: Conjunction) -> Conjunction:
+        return self.walk(self._nary_op_without_duplicates(conjunction))
+
+    @staticmethod
+    def _nary_op_without_duplicates(
+        nary_op: NaryLogicOperator,
+    ) -> NaryLogicOperator:
+        return nary_op.apply(tuple(OrderedSet(nary_op.formulas)))
+
+
+class RemoveDuplicatedConjunctsDisjuncts(
+    RemoveDuplicatedConjunctsDisjunctsMixin, LogicExpressionWalker
+):
+    pass
+
+
 class MoveNegationsToAtomsSimpleOperationsMixin(PatternWalker):
     """
     Moves the negations the furthest possible to the atoms. On
@@ -607,7 +638,9 @@ class DistributeImplicationsWithConjunctiveHeads(PatternWalker):
 
 
 class RemoveTrivialOperations(
-    RemoveTrivialOperationsMixin, LogicExpressionWalker
+    RemoveTrivialOperationsMixin,
+    RemoveDuplicatedConjunctsDisjunctsMixin,
+    LogicExpressionWalker,
 ):
     pass
 
@@ -838,31 +871,6 @@ class GuaranteeDisjunction(IdentityWalker):
     @add_match(..., lambda e: not isinstance(e, Disjunction))
     def guarantee_conjunction(self, expression):
         return Disjunction((expression,))
-
-
-def nary_op_has_duplicated_formulas(nary_op: NaryLogicOperator) -> bool:
-    seen = set()
-    for formula in nary_op.formulas:
-        if formula in seen:
-            return True
-        seen.add(formula)
-    return False
-
-
-class RemoveDuplicatedConjunctsDisjuncts(LogicExpressionWalker):
-    @add_match(Disjunction, nary_op_has_duplicated_formulas)
-    def disjunction(self, disjunction: Disjunction) -> Disjunction:
-        return self.walk(self._nary_op_without_duplicates(disjunction))
-
-    @add_match(Conjunction, nary_op_has_duplicated_formulas)
-    def conjunction(self, conjunction: Conjunction) -> Conjunction:
-        return self.walk(self._nary_op_without_duplicates(conjunction))
-
-    @staticmethod
-    def _nary_op_without_duplicates(
-        nary_op: NaryLogicOperator,
-    ) -> NaryLogicOperator:
-        return nary_op.apply(tuple(set(nary_op.formulas)))
 
 
 class CheckConjunctiveQueryWithNegation(LogicExpressionWalker):
