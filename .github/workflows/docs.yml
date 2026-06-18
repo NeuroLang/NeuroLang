@@ -39,7 +39,7 @@ jobs:
           path: doc/_build/html
           retention-days: 30
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (production)
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: peaceiris/actions-gh-pages@v3
         with:

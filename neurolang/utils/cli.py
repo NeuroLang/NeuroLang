@@ -41,14 +41,21 @@ Usage
 import argparse
 import sys
 import time
+import traceback
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+from lark.exceptions import LarkError, VisitError
 
 from neurolang.datalog import WrappedRelationalAlgebraSet
+from neurolang.exceptions import NeuroLangException
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+from neurolang.frontend.error_formatting import (
+    print_formatted_error,
+    _USE_COLOR,
+)
 from neurolang.utils import engine_registry
 
 
@@ -559,33 +566,50 @@ def main(argv: Optional[list] = None) -> None:
     t0 = time.perf_counter()
     sort_by = _parse_sort_spec(args.sort)
 
-    if args.squall:
-        result = _execute_squall_program(nl, program, show_rewritten=args.show_rewritten)
-        if isinstance(result, dict):
-            for key, sub_result in result.items():
+    try:
+        if args.squall:
+            result = _execute_squall_program(nl, program, show_rewritten=args.show_rewritten)
+            if isinstance(result, dict):
+                for key, sub_result in result.items():
+                    output = _format_result(
+                        sub_result, fmt=args.format, column_names=None,
+                        sort_by=sort_by,
+                    )
+                    if output:
+                        print(f"── {key} ──")
+                        print(output)
+                        print()
+            else:
                 output = _format_result(
-                    sub_result, fmt=args.format, column_names=None,
+                    result, fmt=args.format, column_names=None,
                     sort_by=sort_by,
                 )
                 if output:
-                    print(f"── {key} ──")
                     print(output)
-                    print()
         else:
+            result = _execute_program(nl, program, show_rewritten=args.show_rewritten)
+            if isinstance(result, tuple):
+                result, column_names = result
+            else:
+                column_names = None
             output = _format_result(
-                result, fmt=args.format, column_names=None,
+                result, fmt=args.format, column_names=column_names,
                 sort_by=sort_by,
             )
             if output:
                 print(output)
-    else:
-        result = _execute_program(nl, program, show_rewritten=args.show_rewritten)
-        output = _format_result(
-            result, fmt=args.format, column_names=None,
-            sort_by=sort_by,
+    except (LarkError, NeuroLangException) as exc:
+        print_formatted_error(exc, program)
+        sys.exit(1)
+    except Exception as exc:
+        # For unexpected errors, show traceback in debug mode
+        print(
+            f"Unexpected error: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
         )
-        if output:
-            print(output)
+        if _USE_COLOR:
+            traceback.print_exc()
+        sys.exit(1)
 
     elapsed = time.perf_counter() - t0
     print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)
