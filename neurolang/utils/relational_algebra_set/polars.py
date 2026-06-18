@@ -1,4 +1,8 @@
-"""Polars backend for NeuroLang's Relational Algebra Set (RAS) system."""
+"""Polars backend for NeuroLang's Relational Algebra Set (RAS) system.
+
+Uses pl.LazyFrame internally to defer materialization, allowing Polars'
+query optimizer to handle chained operations efficiently.
+"""
 
 import builtins
 from collections import OrderedDict, namedtuple
@@ -28,7 +32,7 @@ class RelationalAlgebraStringExpression(str):
 
 
 def _make_unnamed(iterable):
-    if isinstance(iterable, (pl.DataFrame, RelationalAlgebraFrozenSet)):
+    if isinstance(iterable, (pl.LazyFrame, RelationalAlgebraFrozenSet)):
         return None
     if isinstance(iterable, set):
         iterable = list(iterable)
@@ -37,10 +41,10 @@ def _make_unnamed(iterable):
             iterable = list(iterable)
         elif iterable.ndim == 2:
             col_names = [str(i) for i in range(iterable.shape[1])]
-            return pl.DataFrame(iterable, schema=col_names)
+            return pl.DataFrame(iterable, schema=col_names).lazy()
     if isinstance(iterable, pd.DataFrame):
         try:
-            return pl.from_pandas(iterable)
+            return pl.from_pandas(iterable).lazy()
         except ImportError:
             pass
         data = [tuple(row) for row in iterable.to_numpy()]
@@ -48,7 +52,7 @@ def _make_unnamed(iterable):
         return _make_dataframe_from_rows(data, col_names)
     data = list(iterable)
     if len(data) == 0:
-        return pl.DataFrame({})
+        return pl.LazyFrame({})
     first = data[0]
     if isinstance(first, (tuple, list)):
         arity = len(first)
@@ -63,23 +67,25 @@ def _make_dataframe_from_rows(data, col_names):
     """Build a Polars DataFrame from row-oriented data, using pl.Object dtype
     for columns containing non-primitive values (namedtuples) to prevent Polars
     from silently converting them to Struct type (which yields dicts on read-back).
+
+    Returns a LazyFrame.
     """
     if len(data) == 0:
-        return pl.DataFrame({col: pl.Series(col, [], dtype=pl.Int64) for col in col_names})
+        return pl.DataFrame({col: pl.Series(col, [], dtype=pl.Int64) for col in col_names}).lazy()
     # Handle scalar values (e.g., single int passed directly as iterable)
     try:
         first = data[0]
     except (IndexError, TypeError):
         data = list(data)
         if len(data) == 0:
-            return pl.DataFrame({col: pl.Series(col, [], dtype=pl.Int64) for col in col_names})
+            return pl.DataFrame({col: pl.Series(col, [], dtype=pl.Int64) for col in col_names}).lazy()
         first = data[0]
     if not isinstance(first, (tuple, list)):
         # Scalars: wrap each element in a tuple for columnar construction
         data = [(v,) for v in data]
     if len(col_names) == 0:
         # DEE case: 0-column relation with N rows (e.g., data=[()])
-        return pl.DataFrame([() for _ in data], schema=[], orient="row")
+        return pl.DataFrame([() for _ in data], schema=[], orient="row").lazy()
     series_list = []
     for col_idx, col_name in enumerate(col_names):
         values = [row[col_idx] for row in data]
@@ -87,7 +93,7 @@ def _make_dataframe_from_rows(data, col_names):
             series_list.append(pl.Series(col_name, values, dtype=pl.Object))
         else:
             series_list.append(pl.Series(col_name, values))
-    return pl.DataFrame(series_list)
+    return pl.DataFrame(series_list).lazy()
 
 
 def _detect_schema_overrides(first_element, col_names):
@@ -105,28 +111,11 @@ def _detect_schema_overrides(first_element, col_names):
 def _is_non_primitive(val):
     """Check if a value should use pl.Object dtype to preserve its Python type."""
     return hasattr(val, '_fields') or type(val).__name__ == 'namedtuple'
-    data = list(iterable)
-    if len(data) == 0:
-        return pl.DataFrame({})
-    first = data[0]
-    if isinstance(first, (tuple, list)):
-        arity = len(first)
-    else:
-        arity = 1
-        data = [(v,) for v in data]
-    col_names = [str(i) for i in range(arity)]
-    # Use Object dtype for columns containing non-primitive values (namedtuples, dicts, etc.)
-    # to avoid Polars converting them to Struct type, which returns dicts instead
-    schema_overrides = {}
-    if arity > 0:
-        for idx in range(arity):
-            sample = first[idx] if isinstance(first, (tuple, list)) else first
-            if hasattr(sample, '_fields') or not isinstance(sample, (int, float, str, bool, bytes, type(None))):
-                schema_overrides[col_names[idx]] = pl.Object
-    if schema_overrides:
-        return pl.DataFrame(data, schema=col_names, orient="row", schema_overrides=schema_overrides)
-    return pl.DataFrame(data, schema=col_names, orient="row")
 
+
+# ---------------------------------------------------------------------------
+# Helper utils that work on either LazyFrame or DataFrame
+# ---------------------------------------------------------------------------
 
 def _real_cols(df):
     if df is None:
@@ -141,25 +130,23 @@ def _strip_sentinel(df):
 
 
 def _concat_safe(dfs):
-    """Concatenate DataFrames, handling Null-typed columns."""
-    # Filter to non-None DataFrames with columns
+    """Concatenate LazyFrames, handling Null-typed columns."""
     non_null = [df for df in dfs if df is not None and len(df.columns) > 0]
     if len(non_null) == 0:
         return None
     if len(non_null) == 1:
-        return non_null[0].clone()
-    # Unify column order across all DataFrames
+        return non_null[0]
+    # Unify column order across all LazyFrames
     all_col_sets = [set(df.columns) for df in non_null]
     if len(all_col_sets) > 1:
         common_cols = all_col_sets[0]
         for cs in all_col_sets[1:]:
             common_cols &= cs
         if common_cols:
-            # Reorder all DataFrames to the same column order
             col_order = [c for c in non_null[0].columns if c in common_cols]
             for i, df in enumerate(non_null):
                 existing = [c for c in col_order if c in df.columns]
-                non_null[i] = df[:, existing]
+                non_null[i] = df.select(*[pl.col(c) for c in existing])
     # Check for Null-typed columns that need casting
     common_cols = set(non_null[0].columns)
     for df in non_null[1:]:
@@ -185,28 +172,49 @@ def _has_sentinel(df):
 
 
 def _dee_df():
-    return pl.DataFrame({_SENTINEL: [0]})
+    return pl.LazyFrame({_SENTINEL: [0]})
 
 
 def _dum_df():
-    return pl.DataFrame({}).select([])
+    return pl.DataFrame({}).select([]).lazy()
 
 
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def __init__(self, iterable=None):
-        self._container: Optional[pl.DataFrame] = None
+        self._container: Optional[pl.LazyFrame] = None
         self._might_have_duplicates = True
         if iterable is not None:
             if isinstance(iterable, RelationalAlgebraFrozenSet):
                 if iterable._container is not None:
-                    self._container = iterable._container.clone()
+                    self._container = iterable._container
                 else:
                     self._container = None
+            elif isinstance(iterable, pl.LazyFrame):
+                self._container = iterable
             elif isinstance(iterable, pl.DataFrame):
-                self._container = iterable.clone()
+                self._container = iterable.lazy()
             else:
-                self._container = _make_unnamed(iterable)
+                result = _make_unnamed(iterable)
+                if isinstance(result, pl.DataFrame):
+                    result = result.lazy()
+                self._container = result
+
+    # ------------------------------------------------------------------ #
+    # helpers
+    # ------------------------------------------------------------------ #
+
+    def _eager(self) -> Optional[pl.DataFrame]:
+        """Materialize the lazy container, returning None if not set."""
+        if self._container is None:
+            return None
+        return self._container.collect()
+
+    @staticmethod
+    def _to_lazy(df):
+        if df is None:
+            return None
+        return df.lazy()
 
     @property
     def might_have_duplicates(self):
@@ -218,18 +226,21 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def _drop_duplicates_if_needed(self):
         if self._might_have_duplicates:
-            if self._container is not None and len(self._container) > 0:
-                try:
-                    self._container = self._container.unique(maintain_order=True)
-                except Exception:
-                    # Fallback for Object types that can't be row-encoded
-                    rows = list(dict.fromkeys(tuple(r) for r in self._container.iter_rows()))
-                    if rows:
-                        self._container = pl.DataFrame(
-                            rows, schema=self._container.columns, orient="row"
-                        )
-                    else:
-                        self._container = self._container.clear()
+            if self._container is not None:
+                eager = self._eager()
+                if eager is not None and len(eager) > 0:
+                    try:
+                        deduped = eager.unique(maintain_order=True)
+                        self._container = deduped.lazy()
+                    except Exception:
+                        # Fallback for Object types that can't be row-encoded
+                        rows = list(dict.fromkeys(tuple(r) for r in eager.iter_rows()))
+                        if rows:
+                            self._container = pl.DataFrame(
+                                rows, schema=eager.columns, orient="row"
+                            ).lazy()
+                        else:
+                            self._container = pl.LazyFrame({})
             self._might_have_duplicates = False
 
     @classmethod
@@ -262,7 +273,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return True
         if _has_sentinel(self._container):
             return False
-        return len(self._container) == 0
+        eager = self._eager()
+        return eager is None or len(eager) == 0
 
     def is_dee(self):
         if _has_sentinel(self._container):
@@ -272,8 +284,10 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def is_dum(self):
         if self._container is None:
             return True
-        if not _has_sentinel(self._container) and self.arity == 0 and len(self._container) == 0:
-            return True
+        if not _has_sentinel(self._container) and self.arity == 0:
+            eager = self._eager()
+            if eager is not None and len(eager) == 0:
+                return True
         return False
 
     def __contains__(self, element):
@@ -283,10 +297,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if self._container is None:
             return False
         try:
+            eager = self._eager()
+            if eager is None:
+                return False
             mask = None
             for i, val in enumerate(element):
                 col_name = str(i)
-                col = self._container[:, col_name]
+                col = eager[:, col_name]
                 if mask is None:
                     mask = (col == val)
                 else:
@@ -294,7 +311,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return mask.any()
         except NotImplementedError:
             # Object type comparision not supported by Polars, fall back
-            for row in self._container.iter_rows():
+            for row in eager.iter_rows():
                 if tuple(row) == tuple(element):
                     return True
             return False
@@ -323,16 +340,20 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def fetch_one(self):
         if self.is_dee():
             return tuple()
-        if self._container is None or len(self._container) == 0:
+        eager = self._eager()
+        if eager is None or len(eager) == 0:
             raise StopIteration("Cannot fetch_one from empty set")
-        row = self._container.row(0)
+        row = eager.row(0)
         return tuple(row)
 
     def __len__(self):
         if self._container is None:
             return 0
         self._drop_duplicates_if_needed()
-        return len(self._container)
+        eager = self._eager()
+        if eager is None:
+            return 0
+        return len(eager)
 
     @property
     def arity(self):
@@ -348,12 +369,19 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def as_numpy_array(self):
         self._drop_duplicates_if_needed()
-        c = _strip_sentinel(self._container)
+        eager = self._eager()
+        c = _strip_sentinel(eager) if eager is not None else None
+        if c is None:
+            return np.array([])
         return c.to_numpy()
 
     def as_pandas_dataframe(self):
         self._drop_duplicates_if_needed()
-        c = _strip_sentinel(self._container)
+        eager = self._eager()
+        c = _strip_sentinel(eager) if eager is not None else None
+        if c is None:
+            import pandas as pd
+            return pd.DataFrame()
         try:
             return c.to_pandas()
         except ImportError:
@@ -370,12 +398,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return self.dee()
         str_cols = list(dict.fromkeys(str(c) for c in columns))
         c = _strip_sentinel(self._container)
+        if c is None:
+            return self._empty_set_same_structure()
         for col in str_cols:
             if col not in c.columns:
                 raise KeyError(
                     f"Column '{col}' not found in {list(c.columns)}"
                 )
-        new_c = c[:, str_cols]
+        new_c = c.select(*[pl.col(col) for col in str_cols])
         new_c = new_c.rename(
             dict(zip(new_c.columns, [str(i) for i in range(len(columns))]))
         )
@@ -386,21 +416,26 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return output
 
     def _selection_dict(self, select_criteria):
+        """Build a boolean series for dict-based selection. Works on eager DataFrame."""
         it = iter(select_criteria.items())
         col, value = next(it)
         col_name = str(col)
+        eager = self._eager()
+        if eager is None:
+            # return something that filters to empty
+            return pl.Series([], dtype=pl.Boolean)
         if callable(value):
-            col_series = self._container[:, col_name]
+            col_series = eager[:, col_name]
             mask = col_series.map_elements(value, return_dtype=pl.Boolean)
         else:
-            mask = self._container[:, col_name] == value
+            mask = eager[:, col_name] == value
         for col, value in it:
             col_name = str(col)
             if callable(value):
-                col_series = self._container[:, col_name]
+                col_series = eager[:, col_name]
                 sub_mask = col_series.map_elements(value, return_dtype=pl.Boolean)
             else:
-                sub_mask = self._container[:, col_name] == value
+                sub_mask = eager[:, col_name] == value
             mask = mask & sub_mask
         return mask
 
@@ -414,48 +449,73 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     ):
         if self.is_empty() or self._container is None:
             return self._empty_set_same_structure()
-        c = _strip_sentinel(self._container) if _has_sentinel(self._container) else self._container
+        c = self._container
+        if _has_sentinel(c):
+            c = _strip_sentinel(c)
 
         if callable(select_criteria):
-            mask = c.map_rows(
+            # Need eager for callable map_rows
+            eager = self._eager()
+            if eager is None:
+                return self._empty_set_same_structure()
+            if _has_sentinel(eager):
+                eager = _strip_sentinel(eager)
+            mask = eager.map_rows(
                 lambda row: select_criteria(tuple(row))
             ).to_series()
             mask = mask.cast(pl.Boolean)
+            new_container = eager.filter(mask)
         elif isinstance(select_criteria, RelationalAlgebraStringExpression):
             expr_str = str(select_criteria)
             try:
                 pl_expr = _string_expr_to_polars(expr_str)
-                mask = c.with_columns(pl_expr.alias("__mask__"))["__mask__"]
-                mask = mask.cast(pl.Boolean)
+                new_container = (
+                    c.with_columns(pl_expr.alias("__mask__"))
+                    .filter(pl.col("__mask__").cast(pl.Boolean))
+                    .select(*[pl.col(col) for col in c.columns])
+                )
             except Exception:
+                # Fall back to eager row-by-row
+                eager = self._eager()
+                if _has_sentinel(eager):
+                    eager = _strip_sentinel(eager)
                 col_names = list(c.columns)
-                mask = c.map_rows(
+                mask = eager.map_rows(
                     lambda row: _eval_row_with_builtins(
                         expr_str, col_names, tuple(row)
                     )
                 ).to_series()
                 mask = mask.cast(pl.Boolean)
+                new_container = eager.filter(mask)
         else:
-            self._container = c
+            # Dict-based selection
+            eager = self._eager()
+            if eager is None:
+                return self._empty_set_same_structure()
+            if _has_sentinel(eager):
+                eager = _strip_sentinel(eager)
+            self._container = eager.lazy()
             mask = self._selection_dict(select_criteria)
+            new_container = eager.filter(mask)
 
-        new_container = c.filter(mask)
         output = self._empty_set_same_structure()
-        output._container = new_container
+        output._container = self._to_lazy(new_container) if isinstance(new_container, pl.DataFrame) else new_container
         output._might_have_duplicates = self._might_have_duplicates
         return output
 
     def selection_columns(self, select_criteria: Dict[int, int]):
         if self.is_empty() or self._container is None:
             return self._empty_set_same_structure()
-        c = _strip_sentinel(self._container) if _has_sentinel(self._container) else self._container
+        c = self._container
+        if _has_sentinel(c):
+            c = _strip_sentinel(c)
         it = iter(select_criteria.items())
         col1, col2 = next(it)
-        mask = c[:, str(col1)] == c[:, str(col2)]
+        condition = pl.col(str(col1)) == pl.col(str(col2))
         for col1, col2 in it:
-            mask = mask & (c[:, str(col1)] == c[:, str(col2)])
+            condition = condition & (pl.col(str(col1)) == pl.col(str(col2)))
 
-        new_container = c.filter(mask)
+        new_container = c.filter(condition)
         output = self._empty_set_same_structure()
         output._container = new_container
         output._might_have_duplicates = self._might_have_duplicates
@@ -478,18 +538,18 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         right_cols = [str(i) for i in range(other.arity)]
         shifted_cols = [str(self.arity + i) for i in range(other.arity)]
         right_rename = dict(zip(right_cols, shifted_cols))
-        right_df = oc.clone().rename(right_rename)
+        right_lf = oc.rename(right_rename)
 
         left_on = [str(l_idx) for l_idx, r_idx in join_indices]
         right_on = [str(self.arity + r_idx) for l_idx, r_idx in join_indices]
 
-        left_df = sc.clone()
+        left_lf = sc
 
         tmp_col = "__tmp_join__"
-        left_df = left_df.with_columns(pl.lit(1).alias(tmp_col))
-        right_df = right_df.with_columns(pl.lit(1).alias(tmp_col))
+        left_lf = left_lf.with_columns(pl.lit(1).alias(tmp_col))
+        right_lf = right_lf.with_columns(pl.lit(1).alias(tmp_col))
 
-        merged = left_df.join(right_df, on=tmp_col, how="inner")
+        merged = left_lf.join(right_lf, on=tmp_col, how="inner")
 
         for lc, rc in zip(left_on, right_on):
             merged = merged.filter(pl.col(lc) == pl.col(rc))
@@ -524,9 +584,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         right_cols = [str(i) for i in range(other.arity)]
         shifted_cols = [str(self.arity + i) for i in range(other.arity)]
         right_rename = dict(zip(right_cols, shifted_cols))
-        right_df = oc.clone().rename(right_rename)
+        right_lf = oc.rename(right_rename)
 
-        merged = sc.clone().join(right_df, how="cross")
+        merged = sc.join(right_lf, how="cross")
 
         total_cols = self.arity + other.arity
         merged = merged.rename(
@@ -544,13 +604,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         output = self._empty_set_same_structure()
         output._might_have_duplicates = self._might_have_duplicates
         if self._container is not None:
-            output._container = self._container.clone()
+            output._container = self._container
         return output
 
     def __repr__(self):
         if self.is_empty():
             return "{}"
-        return repr(self._container)
+        eager = self._eager()
+        return repr(eager)
 
     def __sub__(self, other):
         if isinstance(other, RelationalAlgebraFrozenSet):
@@ -585,7 +646,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             sc = _strip_sentinel(self._container)
             oc = _strip_sentinel(other._container)
             merged = _concat_safe([sc, oc])
-            merged = merged.unique(maintain_order=True) if merged is not None else None
+            if merged is not None:
+                merged = merged.unique(maintain_order=True)
             output = self._empty_set_same_structure()
             output._container = merged
             return output
@@ -621,8 +683,10 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 return False
             if self.arity == 0 and other.arity == 0:
                 return self.is_dee() and other.is_dee()
-            s = _strip_sentinel(self._container)
-            o = _strip_sentinel(other._container)
+            s_eager = self._eager()
+            o_eager = other._eager()
+            s = _strip_sentinel(s_eager)
+            o = _strip_sentinel(o_eager)
             if s is None and o is None:
                 return True
             if s is None or o is None:
@@ -651,9 +715,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         c = _strip_sentinel(self._container)
         if c is None:
             return
-        for g_id, group_df in c.group_by(col_names, maintain_order=True):
+        # LazyGroupBy is not iterable, so collect first
+        eager = c.collect()
+        for g_id, group_df in eager.group_by(col_names, maintain_order=True):
             group_set = self._empty_set_same_structure()
-            group_set._container = group_df
+            group_set._container = group_df.lazy()
             if isinstance(g_id, tuple) and len(g_id) == 1:
                 g_id = g_id[0]
             yield g_id, group_set
@@ -664,13 +730,19 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         c = _strip_sentinel(self._container)
         if c is None:
             return iter([])
-        return iter(c.iter_rows())
+        eager = c.collect()
+        return iter(eager.iter_rows())
 
     def __hash__(self):
         if self._container is None:
             return hash((tuple(), None))
         self._drop_duplicates_if_needed()
-        c = _strip_sentinel(self._container)
+        eager = self._eager()
+        if eager is None:
+            return hash((tuple(), None))
+        c = _strip_sentinel(eager)
+        if c is None:
+            return hash((tuple(), None))
         col_key = tuple(c.columns)
         data_bytes = c.to_numpy().tobytes()
         return hash((col_key, data_bytes))
@@ -701,10 +773,15 @@ class NamedRelationalAlgebraFrozenSet(
         elif isinstance(iterable, RelationalAlgebraFrozenSet):
             self._initialize_from_unnamed_ra_set(iterable)
             self._might_have_duplicates = iterable._might_have_duplicates
-        elif isinstance(iterable, pl.DataFrame):
-            self._container = iterable.clone()
+        elif isinstance(iterable, pl.LazyFrame):
+            self._container = iterable
             self._container = self._container.rename(
                 dict(zip(self._container.columns, self._columns))
+            )
+        elif isinstance(iterable, pl.DataFrame):
+            self._container = iterable.lazy()
+            self._container = self._container.rename(
+                dict(zip([str(i) for i in range(len(self._columns))], self._columns))
             )
         else:
             self._initialize_from_iterable(list(iterable))
@@ -714,7 +791,7 @@ class NamedRelationalAlgebraFrozenSet(
         if len(iterable) == 0 and len(columns) > 0:
             self._container = pl.DataFrame(
                 {col: pl.Series(col, [], dtype=pl.Int64) for col in columns}
-            )
+            ).lazy()
         elif len(iterable) > 0:
             if len(columns) == 0:
                 # DEE: 0 columns, non-empty (tuple() entries)
@@ -724,7 +801,7 @@ class NamedRelationalAlgebraFrozenSet(
         else:
             self._container = pl.DataFrame(
                 {col: pl.Series(col, [], dtype=pl.Int64) for col in columns}
-            )
+            ).lazy()
 
     def _initialize_from_named_ra_set(self, other):
         if not other.is_dum() and self.arity != other.arity:
@@ -732,15 +809,18 @@ class NamedRelationalAlgebraFrozenSet(
 
         if not other.is_empty() and other._container is not None:
             oc = _strip_sentinel(other._container)
-            self._container = oc[:, list(other.columns)].clone()
+            if oc is not None:
+                self._container = oc.select(*[pl.col(c) for c in other.columns])
+            else:
+                self._container = None
         else:
             col_list = list(self._columns)
             if col_list:
                 self._container = pl.DataFrame(
                     {col: pl.Series(col, [], dtype=pl.Int64) for col in col_list}
-                )
+                ).lazy()
             else:
-                self._container = pl.DataFrame()
+                self._container = pl.LazyFrame()
 
     def _initialize_from_unnamed_ra_set(self, other):
         if other.is_empty() and not other.is_dee():
@@ -748,9 +828,9 @@ class NamedRelationalAlgebraFrozenSet(
             if col_list:
                 self._container = pl.DataFrame(
                     {col: pl.Series(col, [], dtype=pl.Int64) for col in col_list}
-                )
+                ).lazy()
             else:
-                self._container = pl.DataFrame()
+                self._container = pl.LazyFrame()
         elif other.is_dee():
             self._container = _dee_df()
         elif other._container is None:
@@ -758,17 +838,20 @@ class NamedRelationalAlgebraFrozenSet(
             if len(data) > 0:
                 self._container = pl.DataFrame(
                     data, schema=self._columns, orient="row"
-                )
+                ).lazy()
             else:
-                self._container = pl.DataFrame()
+                self._container = pl.LazyFrame()
         else:
             if self.arity != other.arity:
                 raise ValueError("Relations must have the same arity")
             oc = _strip_sentinel(other._container)
-            self._container = oc.clone()
-            self._container = self._container.rename(
-                dict(zip(self._container.columns, self._columns))
-            )
+            if oc is not None:
+                self._container = oc
+                self._container = self._container.rename(
+                    dict(zip(self._container.columns, self._columns))
+                )
+            else:
+                self._container = None
 
     @staticmethod
     def _check_for_duplicated_columns(columns):
@@ -845,7 +928,7 @@ class NamedRelationalAlgebraFrozenSet(
         c = _strip_sentinel(self._container)
         if c is None:
             return type(self)(columns)
-        new_container = c[:, col_list]
+        new_container = c.select(*[pl.col(col) for col in col_list])
         return self._light_init_same_structure(
             new_container, might_have_duplicates=True, columns=columns
         )
@@ -869,7 +952,11 @@ class NamedRelationalAlgebraFrozenSet(
             Row = self._make_named_row_class(col_list)
             if self.is_empty() or self._container is None:
                 return self._empty_set_same_structure()
-            c = _strip_sentinel(self._container)
+            # Need eager for callable map_rows
+            eager = self._eager()
+            if eager is None:
+                return self._empty_set_same_structure()
+            c = _strip_sentinel(eager)
             if c is None:
                 return self._empty_set_same_structure()
             mask = c.map_rows(
@@ -878,7 +965,7 @@ class NamedRelationalAlgebraFrozenSet(
             mask = mask.cast(pl.Boolean)
             new_container = c.filter(mask)
             return self._light_init_same_structure(
-                new_container,
+                self._to_lazy(new_container),
                 might_have_duplicates=self._might_have_duplicates,
             )
         return super().selection(select_criteria)
@@ -909,7 +996,7 @@ class NamedRelationalAlgebraFrozenSet(
 
         sc, oc = self._unify_join_types(sc, oc, on)
         new_container = sc.join(oc, on=on, how="inner")
-        new_container = new_container[:, list(new_columns)]
+        new_container = new_container.select(*[pl.col(c) for c in new_columns])
 
         return self._light_init_same_structure(
             new_container,
@@ -929,11 +1016,9 @@ class NamedRelationalAlgebraFrozenSet(
             s_dtype = sc.schema[col]
             o_dtype = oc.schema[col]
             if s_dtype != o_dtype:
-                len_s = len(sc)
-                len_o = len(oc)
-                if len_s == 0 and len_o > 0:
+                if s_dtype == pl.Null and o_dtype != pl.Null:
                     sc = sc.with_columns(pl.col(col).cast(o_dtype))
-                elif len_o == 0 and len_s > 0:
+                elif o_dtype == pl.Null and s_dtype != pl.Null:
                     oc = oc.with_columns(pl.col(col).cast(s_dtype))
                 elif s_dtype.is_numeric() and o_dtype.is_numeric():
                     target = s_dtype if s_dtype != pl.Null else o_dtype
@@ -941,10 +1026,6 @@ class NamedRelationalAlgebraFrozenSet(
                         sc = sc.with_columns(pl.col(col).cast(target))
                     if o_dtype != target:
                         oc = oc.with_columns(pl.col(col).cast(target))
-                elif s_dtype == pl.Null and o_dtype != pl.Null:
-                    sc = sc.with_columns(pl.col(col).cast(o_dtype))
-                elif o_dtype == pl.Null and s_dtype != pl.Null:
-                    oc = oc.with_columns(pl.col(col).cast(s_dtype))
         return sc, oc
 
     def left_naturaljoin(self, other):
@@ -964,14 +1045,14 @@ class NamedRelationalAlgebraFrozenSet(
 
         if len(on) == 0:
             if other.is_empty() or oc is None:
-                new_container = sc.clone()
+                new_container = sc
                 for c in other.columns:
                     new_container = new_container.with_columns(pl.lit(None).alias(c))
             else:
                 return self.cross_product(other)
         else:
             if oc is None:
-                new_container = sc.clone()
+                new_container = sc
                 for c in other.columns:
                     if c not in self.columns:
                         new_container = new_container.with_columns(pl.lit(None).alias(c))
@@ -983,7 +1064,7 @@ class NamedRelationalAlgebraFrozenSet(
             c for c in other.columns if c not in self.columns
         )
         if new_container is not None:
-            new_container = new_container[:, list(new_columns)]
+            new_container = new_container.select(*[pl.col(c) for c in new_columns])
 
         return self._light_init_same_structure(
             new_container,
@@ -1017,8 +1098,9 @@ class NamedRelationalAlgebraFrozenSet(
         dt = c.schema.get(src_column)
         if dt == pl.Object or dt is None:
             # Fall back to pure Python approach since Polars can't explode Object dtype
-            rows = list(c.iter_rows())
-            col_names = list(c.columns)
+            eager = c.collect()
+            rows = list(eager.iter_rows())
+            col_names = list(eager.columns)
             src_idx = col_names.index(src_column)
 
             is_multi = isinstance(dst_columns, tuple)
@@ -1051,7 +1133,7 @@ class NamedRelationalAlgebraFrozenSet(
 
             new_df = pl.DataFrame(exploded_rows, schema=final_col_names, orient="row")
             return self._light_init_same_structure(
-                new_df, might_have_duplicates=True, columns=tuple(final_col_names),
+                new_df.lazy(), might_have_duplicates=True, columns=tuple(final_col_names),
             )
 
         # Native Polars explode for non-Object types
@@ -1074,7 +1156,7 @@ class NamedRelationalAlgebraFrozenSet(
 
         col_list = list(new_columns)
         existing_cols = [c for c in col_list if c in new_container.columns]
-        new_container = new_container[:, existing_cols]
+        new_container = new_container.select(*[pl.col(c) for c in existing_cols])
 
         return self._light_init_same_structure(
             new_container, might_have_duplicates=True, columns=new_columns,
@@ -1097,7 +1179,7 @@ class NamedRelationalAlgebraFrozenSet(
             return type(self)(new_columns)
 
         new_container = sc.join(oc, how="cross")
-        new_container = new_container[:, list(new_columns)]
+        new_container = new_container.select(*[pl.col(c) for c in new_columns])
 
         return self._light_init_same_structure(
             new_container,
@@ -1166,8 +1248,10 @@ class NamedRelationalAlgebraFrozenSet(
             return self._columns == other._columns
         if self._container is None or other._container is None:
             return False
-        scont = _strip_sentinel(self._container)
-        ocont = _strip_sentinel(other._container)
+        s_eager = self._eager()
+        o_eager = other._eager()
+        scont = _strip_sentinel(s_eager)
+        ocont = _strip_sentinel(o_eager)
         if scont is None and ocont is None:
             return True
         if scont is None or ocont is None:
@@ -1196,9 +1280,11 @@ class NamedRelationalAlgebraFrozenSet(
         c = _strip_sentinel(self._container)
         if c is None:
             return
-        for g_id, group_df in c.group_by(col_names, maintain_order=True):
+        # LazyGroupBy not iterable — collect first
+        eager = c.collect()
+        for g_id, group_df in eager.group_by(col_names, maintain_order=True):
             group_set = self._light_init_same_structure(
-                group_df,
+                group_df.lazy(),
                 might_have_duplicates=self._might_have_duplicates,
                 columns=self.columns,
             )
@@ -1252,44 +1338,48 @@ class NamedRelationalAlgebraFrozenSet(
                 result = c.select(pl.lit(1).alias('__dummy__'))
                 result = result.select([])
 
-        # multi-column aggregations
-        if len(aggs_multi_column) > 0:
-            if len(group_columns) == 0:
-                all_cols = list(c.columns)
-                values_dict = {col: c[col].to_list() for col in all_cols}
-                for dst, fun in aggs_multi_column.items():
-                    agg_val = fun(_AggRowProxy(values_dict))
-                    result = result.with_columns(pl.Series(name=dst, values=[agg_val]))
-            else:
-                for dst, fun in aggs_multi_column.items():
-                    groups = c.group_by(group_columns, maintain_order=True)
-                    result_rows = []
-                    group_keys = []
+        # multi-column aggregations — need eager for these
+        if len(aggs_multi_column) > 0 or len(eager_aggs) > 0:
+            eager_result = result.collect()
+            eager_c = c.collect()
+            all_cols = list(eager_c.columns)
+
+            if len(aggs_multi_column) > 0:
+                if len(group_columns) == 0:
+                    values_dict = {col: eager_c[col].to_list() for col in all_cols}
+                    for dst, fun in aggs_multi_column.items():
+                        agg_val = fun(_AggRowProxy(values_dict))
+                        eager_result = eager_result.with_columns(pl.Series(name=dst, values=[agg_val]))
+                else:
+                    for dst, fun in aggs_multi_column.items():
+                        groups = eager_c.group_by(group_columns, maintain_order=True)
+                        result_rows = []
+                        for keys, group_df in groups:
+                            group_dict = {col: group_df[col].to_list() for col in group_df.columns}
+                            result_rows.append(fun(_AggRowProxy(group_dict)))
+                        eager_result = eager_result.with_columns(
+                            pl.Series(name=dst, values=result_rows)
+                        )
+
+            # eager single-column aggregations for functions _map_agg_function couldn't handle
+            if len(eager_aggs) > 0:
+                if len(group_columns) == 0:
+                    values_dict = {col: eager_c[col].to_list() for col in all_cols}
+                    for dst, src, fun in eager_aggs:
+                        agg_val = fun(values_dict[src])
+                        eager_result = eager_result.with_columns(pl.Series(name=dst, values=[agg_val]))
+                else:
+                    groups = eager_c.group_by(group_columns, maintain_order=True)
+                    group_agg_values = {dst: [] for dst, _, _ in eager_aggs}
                     for keys, group_df in groups:
                         group_dict = {col: group_df[col].to_list() for col in group_df.columns}
-                        result_rows.append(fun(_AggRowProxy(group_dict)))
-                    result = result.with_columns(
-                        pl.Series(name=dst, values=result_rows)
-                    )
+                        for dst, src, fun in eager_aggs:
+                            agg_val = fun(group_dict[src])
+                            group_agg_values[dst].append(agg_val)
+                    for dst, values_list in group_agg_values.items():
+                        eager_result = eager_result.with_columns(pl.Series(name=dst, values=values_list))
 
-        # eager single-column aggregations for functions _map_agg_function couldn't handle
-        if len(eager_aggs) > 0:
-            all_cols = list(c.columns)
-            if len(group_columns) == 0:
-                values_dict = {col: c[col].to_list() for col in all_cols}
-                for dst, src, fun in eager_aggs:
-                    agg_val = fun(values_dict[src])
-                    result = result.with_columns(pl.Series(name=dst, values=[agg_val]))
-            else:
-                groups = c.group_by(group_columns, maintain_order=True)
-                group_agg_values = {dst: [] for dst, _, _ in eager_aggs}
-                for keys, group_df in groups:
-                    group_dict = {col: group_df[col].to_list() for col in group_df.columns}
-                    for dst, src, fun in eager_aggs:
-                        agg_val = fun(group_dict[src])
-                        group_agg_values[dst].append(agg_val)
-                for dst, values_list in group_agg_values.items():
-                    result = result.with_columns(pl.Series(name=dst, values=values_list))
+            result = eager_result.lazy()
 
         # Reorder to match original column order when possible
         all_agg_cols = list(aggs.keys()) + list(aggs_multi_column.keys())
@@ -1302,7 +1392,7 @@ class NamedRelationalAlgebraFrozenSet(
                     ordered.append(c)
             all_dst_columns = ordered
 
-        result = result[:, all_dst_columns]
+        result = result.select(*[pl.col(c) for c in all_dst_columns])
 
         return self._light_init_same_structure(
             result, might_have_duplicates=False, columns=all_dst_columns,
@@ -1354,7 +1444,7 @@ class NamedRelationalAlgebraFrozenSet(
         if c is None:
             return NamedRelationalAlgebraFrozenSet(columns=proj_columns, iterable=[])
 
-        new_container = c.clone()
+        new_container = c
         seen_pure_columns: SetType[abc.RelationalAlgebraColumn] = set()
 
         for dst_column, operation in eval_expressions.items():
@@ -1371,42 +1461,46 @@ class NamedRelationalAlgebraFrozenSet(
                             polars_expr.alias(dst_column)
                         )
                     except Exception:
+                        # Fall back to eager row-by-row
+                        eager = new_container.collect()
                         col_names = list(c.columns)
                         values = []
-                        for row in new_container.iter_rows():
+                        for row in eager.iter_rows():
                             values.append(
                                 _eval_row_with_builtins(
                                     op_str, col_names, row
                                 )
                             )
-                        new_container = new_container.with_columns(
+                        eager = eager.with_columns(
                             pl.Series(name=dst_column, values=values)
                         )
+                        new_container = eager.lazy()
             elif isinstance(operation, abc.RelationalAlgebraColumn):
                 seen_pure_columns.add(operation)
                 new_container = new_container.with_columns(
                     pl.col(str(operation)).alias(dst_column)
                 )
             elif callable(operation):
+                # Need eager for callable
+                eager = new_container.collect()
                 col_names = list(c.columns)
                 Row = self._make_named_row_class(col_names)
-                # Some columns may contain dicts (from Polars Struct type).
-                # Wrap dicts to support attribute access for nested field access.
                 values = [
                     operation(Row(*(
                         _DictWrapper(v) if isinstance(v, dict) else v
                         for v in row
-                    ))) for row in new_container.iter_rows()
+                    ))) for row in eager.iter_rows()
                 ]
-                new_container = new_container.with_columns(
+                eager = eager.with_columns(
                     pl.Series(name=dst_column, values=values)
                 )
+                new_container = eager.lazy()
             else:
                 new_container = new_container.with_columns(
                     pl.lit(operation).alias(dst_column)
                 )
 
-        new_container = new_container[:, proj_columns]
+        new_container = new_container.select(*[pl.col(c) for c in proj_columns])
         might_have_duplicates = not (
             (len(seen_pure_columns) == len(self.columns))
             and not self._might_have_duplicates
@@ -1442,23 +1536,24 @@ class NamedRelationalAlgebraFrozenSet(
         c = _strip_sentinel(self._container)
         if c is None:
             return
-        container = c[:, col_list]
+        eager = c.select(*[pl.col(col) for col in col_list]).collect()
         Row = self._make_named_row_class(col_list)
-        for row in container.iter_rows():
+        for row in eager.iter_rows():
             yield Row(*row)
 
     def fetch_one(self):
         if self.is_dee():
             return tuple()
-        if self._container is None or len(self._container) == 0:
+        eager = self._eager()
+        if eager is None or len(eager) == 0:
             raise StopIteration("Cannot fetch_one from empty set")
         col_list = list(self.columns)
-        c = _strip_sentinel(self._container)
+        c = _strip_sentinel(eager)
         if c is None:
             raise StopIteration("Cannot fetch_one from empty set")
-        container = c[:, col_list]
+        eager2 = c.select(*[pl.col(c) for c in col_list])
         Row = self._make_named_row_class(col_list)
-        return Row(*container.row(0))
+        return Row(*eager2.row(0))
 
     def to_unnamed(self):
         if self._container is None:
@@ -1471,7 +1566,7 @@ class NamedRelationalAlgebraFrozenSet(
             output = RelationalAlgebraFrozenSet()
             output._might_have_duplicates = self._might_have_duplicates
             return output
-        container = c[:, col_list].clone()
+        container = c.select(*[pl.col(col) for col in col_list])
         container = container.rename(
             dict(zip(container.columns, [str(i) for i in range(len(container.columns))]))
         )
@@ -1483,8 +1578,10 @@ class NamedRelationalAlgebraFrozenSet(
     def __sub__(self, other):
         if not isinstance(other, NamedRelationalAlgebraFrozenSet):
             return super().__sub__(other)
-        scont = _strip_sentinel(self._container)
-        ocont = _strip_sentinel(other._container)
+        s_eager = self._eager()
+        o_eager = other._eager()
+        scont = _strip_sentinel(s_eager)
+        ocont = _strip_sentinel(o_eager)
         if scont is not None and ocont is not None:
             if (self.arity > 0 and other.arity > 0) and (
                 set(scont.columns) != set(ocont.columns)
@@ -1505,21 +1602,22 @@ class NamedRelationalAlgebraFrozenSet(
             return self.copy()
 
         try:
-            new_container = scont.join(ocont, how="anti", on=list(scont.columns))
+            new_df = scont.join(ocont, how="anti", on=list(scont.columns))
+            new_lf = new_df.lazy()
         except BaseException:
             # Polars anti-join panics on Object-type columns, use Python fallback
             s_rows = set(tuple(r) for r in scont.iter_rows())
             o_rows = set(tuple(r) for r in ocont.iter_rows())
             diff_rows = s_rows - o_rows
             if diff_rows:
-                new_container = pl.DataFrame(
+                new_lf = pl.DataFrame(
                     list(diff_rows), schema=scont.columns, orient="row"
-                )
+                ).lazy()
             else:
-                new_container = scont.clear()
+                new_lf = pl.LazyFrame({})
 
         return self._light_init_same_structure(
-            new_container, might_have_duplicates=False,
+            new_lf, might_have_duplicates=False,
         )
 
     def __or__(self, other):
@@ -1530,8 +1628,10 @@ class NamedRelationalAlgebraFrozenSet(
             return res
         if set(self.columns) != set(other.columns):
             raise ValueError("Union defined only for sets with the same columns")
-        scont = _strip_sentinel(self._container)
-        ocont = _strip_sentinel(other._container)
+        s_eager = self._eager()
+        o_eager = other._eager()
+        scont = _strip_sentinel(s_eager)
+        ocont = _strip_sentinel(o_eager)
         if scont is None and ocont is None:
             return self.copy()
         if scont is None:
@@ -1539,9 +1639,16 @@ class NamedRelationalAlgebraFrozenSet(
         if ocont is None:
             return self.copy()
 
-        scont, ocont = self._unify_join_types(scont, ocont, list(self.columns))
-        new_container = _concat_safe([scont, ocont])
-        new_container = new_container.unique(maintain_order=True)
+        s_unified = self._to_lazy(scont) if isinstance(scont, pl.DataFrame) else scont
+        o_unified = self._to_lazy(ocont) if isinstance(ocont, pl.DataFrame) else ocont
+        s_unified, o_unified = self._unify_join_types(
+            s_unified,
+            o_unified,
+            list(self.columns),
+        )
+        new_container = _concat_safe([s_unified, o_unified])
+        if new_container is not None:
+            new_container = new_container.unique(maintain_order=True)
 
         return self._light_init_same_structure(
             new_container, might_have_duplicates=True,
@@ -1562,13 +1669,21 @@ class NamedRelationalAlgebraFrozenSet(
         self._drop_duplicates_if_needed()
         other._drop_duplicates_if_needed()
 
-        scont = _strip_sentinel(self._container)
-        ocont = _strip_sentinel(other._container)
+        s_eager = self._eager()
+        o_eager = other._eager()
+        scont = _strip_sentinel(s_eager)
+        ocont = _strip_sentinel(o_eager)
         if scont is None or ocont is None:
             return self._empty_set_same_structure()
 
-        scont, ocont = self._unify_join_types(scont, ocont, list(self.columns))
-        new_container = scont.join(ocont, on=list(scont.columns), how="inner")
+        s_unified = self._to_lazy(scont) if isinstance(scont, pl.DataFrame) else scont
+        o_unified = self._to_lazy(ocont) if isinstance(ocont, pl.DataFrame) else ocont
+        s_unified, o_unified = self._unify_join_types(
+            s_unified,
+            o_unified,
+            list(self.columns),
+        )
+        new_container = s_unified.join(o_unified, on=list(s_unified.columns), how="inner")
 
         return self._light_init_same_structure(
             new_container,
@@ -1599,22 +1714,30 @@ class RelationalAlgebraSet(
             self._container = _make_unnamed([value])
         else:
             new_row = _make_unnamed([value])
-            self._container = pl.concat([self._container, new_row], how="vertical")
+            eager = self._eager()
+            if eager is not None and new_row is not None:
+                new_eager = new_row.collect() if isinstance(new_row, pl.LazyFrame) else new_row
+                self._container = pl.concat([eager, new_eager], how="vertical").lazy()
+            elif eager is not None:
+                self._container = eager.lazy()
 
     def discard(self, value):
         if self.is_empty() or self._container is None:
             return
         try:
             value = self._normalise_element(value)
+            eager = self._eager()
+            if eager is None:
+                return
             mask = None
             for i, val in enumerate(value):
-                col = self._container[:, str(i)]
+                col = eager[:, str(i)]
                 if mask is None:
                     mask = (col == val)
                 else:
                     mask = mask & (col == val)
             if mask.any():
-                self._container = self._container.filter(~mask)
+                self._container = eager.filter(~mask).lazy()
         except KeyError:
             pass
 
@@ -1623,18 +1746,20 @@ class RelationalAlgebraSet(
             if other.is_empty() or other.arity == 0:
                 return self
             if self.is_empty() or self._container is None:
-                oc = _strip_sentinel(other._container)
-                self._container = oc.clone() if oc is not None else None
+                if other._container is not None:
+                    self._container = other._container
                 self._might_have_duplicates = other._might_have_duplicates
                 return self
             if other.arity != self.arity:
                 raise ValueError("Operation only valid for sets with the same arity")
-            sc = _strip_sentinel(self._container)
-            oc = _strip_sentinel(other._container)
+            self_eager = self._eager()
+            other_eager = other._eager()
+            sc = _strip_sentinel(self_eager)
+            oc = _strip_sentinel(other_eager)
             if sc is not None and oc is not None:
-                new_container = pl.concat([sc, oc], how="vertical")
-                new_container = new_container.unique(maintain_order=True)
-                self._container = new_container
+                new_eager = pl.concat([sc, oc], how="vertical")
+                new_eager = new_eager.unique(maintain_order=True)
+                self._container = new_eager.lazy()
             self._might_have_duplicates = True
             return self
         else:
@@ -1654,12 +1779,14 @@ class RelationalAlgebraSet(
             elif other.arity != self.arity:
                 raise ValueError("Operation only valid for sets with the same arity")
             else:
-                sc = _strip_sentinel(self._container)
-                oc = _strip_sentinel(other._container)
+                self_eager = self._eager()
+                other_eager = other._eager()
+                sc = _strip_sentinel(self_eager)
+                oc = _strip_sentinel(other_eager)
                 if sc is not None and oc is not None:
                     on_cols = list(sc.columns)
-                    new_container = sc.join(oc, on=on_cols, how="anti")
-                    self._container = new_container
+                    new_eager = sc.join(oc, on=on_cols, how="anti")
+                    self._container = new_eager.lazy()
             return self
         else:
             return super().__isub__(other)
