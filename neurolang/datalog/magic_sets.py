@@ -22,63 +22,13 @@ from .exceptions import (
     NoConstantPredicateFoundError,
 )
 from .expressions import (
+    AdornedSymbol,
     AggregationApplication,
     Conjunction,
     Implication,
     Union,
 )
 from .constraints_representation import RightImplication, reachable_code
-
-
-class AdornedSymbol(Symbol):
-    def __init__(self, expression, adornment, number):
-        self.expression = expression
-        self.adornment = adornment
-        self.number = number
-        self.is_fresh = False
-
-    @property
-    def name(self):
-        if isinstance(self.expression, Symbol):
-            return self.expression.name
-        else:
-            raise NotImplementedError()
-
-    def __eq__(self, other):
-        return (
-            hash(self) == hash(other)
-            and isinstance(other, AdornedSymbol)
-            and self.unapply() == other.unapply()
-        )
-
-    def __hash__(self):
-        return hash((self.expression, self.adornment, self.number))
-
-    def __str__(self) -> str:
-        if isinstance(self.expression, Symbol):
-            rep = self.expression.name
-        elif isinstance(self.expression, Constant):
-            rep = self.expression.value
-
-        if len(self.adornment) > 0:
-            superindex = f'^{self.adornment}'
-        else:
-            superindex = ''
-
-        if self.number is not None:
-            subindex = f'_{self.number}'
-        else:
-            subindex = ''
-        return f'{rep}{superindex}{subindex}'
-
-    def __repr__(self):
-        if config.expression_type_printing():
-            return (
-                f'S{{{self}: '
-                f'{self.__type_repr__}}}'
-            )
-        else:
-            return f'S{{{self}}}'
 
 
 class ReplaceAdornedSymbolWalker(ExpressionWalker):
