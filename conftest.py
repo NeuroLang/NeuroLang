@@ -74,3 +74,16 @@ def clear_dask_context_after_test_module():
     yield 0
 
     DaskContextManager._context = None
+
+
+@pytest.fixture(autouse=True)
+def clear_probabilistic_caches():
+    """Clear probabilistic resolution caches before each test to avoid
+    stale state across test boundaries."""
+    from neurolang.probabilistic import dalvi_suciu_lift, containment
+
+    dalvi_suciu_lift.clear_cache()
+    containment.clear_cache()
+    yield
+    dalvi_suciu_lift.clear_cache()
+    containment.clear_cache()

@@ -7,6 +7,7 @@ import numpy as np
 
 from .. import relational_algebra_provenance as rap
 from ..config import config
+from collections.abc import Mapping
 from ..datalog.expression_processing import (
     UnifyVariableEqualities,
     flatten_query
@@ -114,7 +115,48 @@ __all__ = [
     "dalvi_suciu_lift",
     "solve_succ_query",
     "solve_marg_query",
+    "clear_cache",
 ]
+
+
+# Bound cache to avoid unbounded memory growth in long-running processes.
+_MAX_DALVI_SUCU_CACHE_SIZE = 4096
+
+# Thread-safe LRU cache: OrderedDict keys are (id(rule), st_key).
+# id(rule) is unique among simultaneously-live objects in CPython.
+# st_key (stored in the value) guards against id reuse after GC.
+from collections import OrderedDict
+import threading
+
+_dalvi_suciu_lift_cache = OrderedDict()
+_dalvi_suciu_lift_cache_lock = threading.RLock()
+
+
+def clear_cache():
+    """Clear the internal cache used by `dalvi_suciu_lift`."""
+    with _dalvi_suciu_lift_cache_lock:
+        _dalvi_suciu_lift_cache.clear()
+
+
+def _make_symbol_table_key(symbol_table):
+    """Convert a symbol table mapping into an immutable, hashable key."""
+    key_items = []
+    for symb, value in symbol_table.items():
+        try:
+            value_hash = hash(value)
+        except TypeError:
+            # Constants wrapping large/unhashable RAS sets cannot be hashed.
+            # Fall back to object identity for caching purposes.
+            if isinstance(value, Constant):
+                value_hash = id(value.value)
+            else:
+                value_hash = id(value)
+        key_items.append((
+            symb,
+            type(value).__name__,
+            value_hash,
+        ))
+    return tuple(sorted(key_items, key=lambda kv: id(kv[0])))
 
 
 GC = GuaranteeConjunction()
@@ -328,41 +370,95 @@ def dalvi_suciu_lift(rule, symbol_table):
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
+    # Compute an immutable cache key for the symbol table.
+    if isinstance(symbol_table, Mapping):
+        st_key = _make_symbol_table_key(symbol_table)
+    else:
+        st_key = tuple(
+            (symb, type(value).__name__, hash(value))
+            for symb, value in sorted(
+                symbol_table.items(), key=lambda kv: hash(kv[0])
+            )
+        )
+    # id(rule) is unique among simultaneously-live objects in CPython.
+    # st_key (stored alongside the value) guards against id reuse on
+    # objects that have already been garbage-collected.
+    cache_key = (id(rule), st_key)
+
+    with _dalvi_suciu_lift_cache_lock:
+        try:
+            return _dalvi_suciu_lift_cache[cache_key]
+        except KeyError:
+            pass
+
     #  rule = RemoveUniversalPredicates().walk(rule)
     rule = RTO.walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:
-        return res
+        plan = res
+        with _dalvi_suciu_lift_cache_lock:
+            _dalvi_suciu_lift_cache[cache_key] = plan
+            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
+                _dalvi_suciu_lift_cache.popitem(last=False)
+        return plan
 
     rule_cnf = convert_ucq_to_ccq(rule, transformation='CNF')
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
-        return components_plan(
+        res = components_plan(
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
         )
+        with _dalvi_suciu_lift_cache_lock:
+            _dalvi_suciu_lift_cache[cache_key] = res
+            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
+                _dalvi_suciu_lift_cache.popitem(last=False)
+        return res
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
-        return components_plan(
+        res = components_plan(
             connected_components, rap.Union, symbol_table
         )
+        with _dalvi_suciu_lift_cache_lock:
+            _dalvi_suciu_lift_cache[cache_key] = res
+            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
+                _dalvi_suciu_lift_cache.popitem(last=False)
+        return res
 
     rule_pdnf = convert_to_pnf_with_dnf_matrix(rule_dnf)
     has_svs, plan = has_separator_variables(rule_pdnf, symbol_table)
     if has_svs:
+        with _dalvi_suciu_lift_cache_lock:
+            _dalvi_suciu_lift_cache[cache_key] = plan
+            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
+                _dalvi_suciu_lift_cache.popitem(last=False)
         return plan
 
     has_safe_plan, plan = disjoint_project(rule_dnf, symbol_table)
     if has_safe_plan:
+        with _dalvi_suciu_lift_cache_lock:
+            _dalvi_suciu_lift_cache[cache_key] = plan
+            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
+                _dalvi_suciu_lift_cache.popitem(last=False)
         return plan
 
     if len(rule_cnf.formulas) > 1:
-        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
+        res = inclusion_exclusion_conjunction(rule_cnf, symbol_table)
+        with _dalvi_suciu_lift_cache_lock:
+            _dalvi_suciu_lift_cache[cache_key] = res
+            while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
+                _dalvi_suciu_lift_cache.popitem(last=False)
+        return res
 
-    return NonLiftable(rule)
+    res = NonLiftable(rule)
+    with _dalvi_suciu_lift_cache_lock:
+        _dalvi_suciu_lift_cache[cache_key] = res
+        while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
+            _dalvi_suciu_lift_cache.popitem(last=False)
+    return res
 
 
 def symbol_or_deterministic_plan(rule, symbol_table):
