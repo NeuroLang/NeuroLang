@@ -36,6 +36,7 @@ from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.datalog.squall_syntax_lark import (
     parser as squall_parser, SquallProgram,
 )
+from neurolang.expressions import Symbol as ExprSymbol
 from neurolang.logic import Union as LogicUnion
 from neurolang.utils import engine_registry
 from neurolang.utils.interactive_parsing import LarkCompleter, TERMINALS_TO_CATEGORIES, CATEGORIES
@@ -50,6 +51,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.filters import HasSearch
+from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.styles import Style
 
 import rich
@@ -68,6 +70,8 @@ DOT_COMMANDS = {
     ".engines": "List available dataset engines",
     ".sets": "List loaded RA sets (EDB relations)",
     ".predicates": "List available predicates for the current engine",
+    ".idb": "List intensional (session-defined) predicates",
+    ".clear": "Clear intensional predicates\n  .clear              — clear all session-defined IDB predicates\n  .clear <predicate>  — clear a specific session-defined IDB predicate",
     ".save": "Save last result to a file\n  .save <path>        — save as CSV\n  .save <path>.nii    — save result voxel data as NIfTI",
     ".view": "Visualise a NIfTI file (uses nilearn plotting)\n  .view <path>.nii",
     ".mode": "Toggle language mode or vi/emacs editing mode\n  .mode datalog\n  .mode squall\n  .mode vi\n  .mode emacs",
@@ -537,6 +541,10 @@ class InteractiveTuiApp:
         # Collect predicates from the engine's symbol table and YAML metadata
         self._engine_predicates = self._collect_predicates()
         self._rebuild_completer()
+        self._open_session_scope()
+
+    def _open_session_scope(self) -> None:
+        self._nl.program_ir.push_scope()
 
     def _collect_predicates(self) -> set[str]:
         """Collect predicate names from the engine's symbol table and YAML config."""
@@ -714,6 +722,66 @@ class InteractiveTuiApp:
             table.add_row(f"{pname}({cols})", cols, desc)
         _console.print(table)
 
+    def _cmd_idb(self) -> None:
+        self._ensure_engine()
+        idb = self._nl.program_ir.intensional_database()
+        session_symbols = self._current_scope_idb_symbols()
+        if not session_symbols:
+            _console.print("  [dim](no session-defined IDB predicates)[/dim]")
+            return
+        table = Table(
+            title="Session IDB predicates",
+            box=box.ROUNDED,
+            header_style="bold cyan",
+        )
+        table.add_column("Predicate")
+        table.add_column("Rules")
+        table.add_column("Arity")
+        for sym in sorted(session_symbols, key=lambda s: s.name):
+            rules = idb[sym]
+            arity = len(rules.formulas[0].consequent.args)
+            table.add_row(sym.name, str(len(rules.formulas)), str(arity))
+        _console.print(table)
+        _console.print(f"\n[dim]Total session IDB predicates: {len(session_symbols)}[/dim]")
+
+    def _current_scope_idb_symbols(self) -> set:
+        self._ensure_engine()
+        st = self._nl.program_ir.symbol_table
+        return {
+            sym
+            for sym in self._nl.program_ir.intensional_database()
+            if sym in st._symbols
+        }
+
+    def _cmd_clear(self, args: str) -> None:
+        self._ensure_engine()
+        target = args.strip()
+        if not target:
+            self._nl.program_ir.pop_scope()
+            self._open_session_scope()
+            _console.print("[green]All session-defined IDB predicates cleared.[/green]")
+            return
+
+        sym = ExprSymbol(target)
+        st = self._nl.program_ir.symbol_table
+        if sym not in st:
+            _console.print(f"[yellow]Predicate {target!r} is not defined.[/yellow]")
+            return
+        if sym not in st._symbols:
+            _console.print(
+                f"[yellow]Predicate {target!r} is part of the engine; "
+                "only session-defined IDB predicates can be cleared.[/yellow]"
+            )
+            return
+        value = st[sym]
+        if not isinstance(value, DatalogUnion):
+            _console.print(
+                f"[yellow]Predicate {target!r} is not an IDB predicate.[/yellow]"
+            )
+            return
+        del st[sym]
+        _console.print(f"[green]IDB predicate {target!r} cleared.[/green]")
+
     def _cmd_save(self, args: str) -> None:
         if self._last_df is None:
             _console.print("[yellow]Nothing to save — run a query first.[/yellow]")
@@ -764,10 +832,10 @@ class InteractiveTuiApp:
             self._rebuild_completer()
             _console.print("[green]Mode: SQUALL[/green]")
         elif mode == "vi":
-            self._session.vi_mode = True
+            self._session.editing_mode = EditingMode.VI
             _console.print("[green]Vi mode enabled[/green]")
         elif mode == "emacs":
-            self._session.vi_mode = False
+            self._session.editing_mode = EditingMode.EMACS
             _console.print("[green]Emacs mode enabled[/green]")
         else:
             _console.print(f"[yellow]Unknown mode {mode!r}. Use 'datalog', 'squall', 'vi', or 'emacs'.[/yellow]")
@@ -838,6 +906,8 @@ class InteractiveTuiApp:
             ".engines": lambda: self._cmd_engines(),
             ".sets": lambda: self._cmd_sets(),
             ".predicates": lambda: self._cmd_predicates(),
+            ".idb": lambda: self._cmd_idb(),
+            ".clear": lambda: self._cmd_clear(rest),
             ".save": lambda: self._cmd_save(rest),
             ".view": lambda: self._cmd_view(rest),
             ".mode": lambda: self._cmd_mode(rest),
@@ -885,7 +955,7 @@ class InteractiveTuiApp:
             result_info = "single"
         else:
             result_info = "—"
-        vi = "VI" if self._session.vi_mode else "EM"
+        vi = "VI" if self._session.editing_mode == EditingMode.VI else "EM"
         return HTML(
             f"<b>nl({self.engine_name}:{mode})</b>  "
             f"preds:{pred_count}  "

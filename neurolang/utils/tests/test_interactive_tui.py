@@ -413,3 +413,51 @@ class TestInteractiveTuiAppPrompt:
         assert prompt.endswith("> ")
         assert "nl(" in prompt
         assert ")" in prompt
+
+
+
+class TestInteractiveTuiAppIdb:
+    @pytest.fixture
+    def app_with_engine(self):
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([("alice",), ("bob",)], name="person")
+        nl.add_tuple_set([("alice",)], name="plays")
+        nl.program_ir.push_scope()
+        nl.execute_datalog_program("active(x) :- person(x), plays(x).")
+
+        app = InteractiveTuiApp.__new__(InteractiveTuiApp)
+        app._nl = nl
+        app._engine_built = True
+        app.engine_name = "test"
+        return app
+
+    def test_idb_lists_session_predicate(self, app_with_engine, capsys):
+        app_with_engine._cmd_idb()
+        captured = capsys.readouterr()
+        assert "active" in captured.out
+
+    def test_clear_all_removes_session_idb(self, app_with_engine, capsys):
+        app_with_engine._cmd_clear("")
+        captured = capsys.readouterr()
+        assert "cleared" in captured.out
+        assert "active" not in [
+            sym.name for sym in app_with_engine._nl.program_ir.intensional_database()
+        ]
+
+    def test_clear_specific_removes_predicate(self, app_with_engine, capsys):
+        app_with_engine._cmd_clear("active")
+        captured = capsys.readouterr()
+        assert "active" in captured.out
+        assert "active" not in [
+            sym.name for sym in app_with_engine._nl.program_ir.intensional_database()
+        ]
+
+    def test_clear_specific_rejects_engine_predicate(self, app_with_engine, capsys):
+        app_with_engine._cmd_clear("person")
+        captured = capsys.readouterr()
+        assert "engine" in captured.out.lower() or "not an IDB predicate" in captured.out
+        assert "person" in [
+            sym.name for sym in app_with_engine._nl.program_ir.symbol_table
+        ]
