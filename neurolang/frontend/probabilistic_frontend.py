@@ -590,8 +590,8 @@ class NeurolangPDL(QueryBuilderDatalog):
                 {},
             )
             chase = show_ra_chase_class(self.program_ir, rules=det_idb)
-            chase.build_chase_solution()
-            return self._build_schema_only_deterministic_solution(det_idb)
+            solution = chase.build_chase_solution()
+            return solution
         if "__constraints__" in self.symbol_table:
             det_idb = self._rewrite_det_idb(det_idb)
             if hasattr(self, 'connector_symbol'):
@@ -605,90 +605,6 @@ class NeurolangPDL(QueryBuilderDatalog):
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
         return solution
-
-    def _build_schema_only_deterministic_solution(self, det_idb):
-        """Build a deterministic solution that contains no tuples.
-
-        For `--show-ra` on probabilistic programs, the deterministic
-        stratum is not materialised.  The probabilistic CP-Logic program
-        builder, however, needs deterministic relations to have the right
-        arity/columns so that provenance RA selections do not index into
-        an empty column set.  This method creates empty named relations
-        whose column names and row types match the deterministic EDB
-        predicates and the heads of the deterministic IDB rules.
-
-        Returns a plain dict rather than a MapInstance so that empty
-        relations are not dropped when the probabilistic program builder
-        iterates over them.
-        """
-        schema_solution = {}
-
-        def _empty_named_relation(columns, row_type):
-            empty_named = NamedRelationalAlgebraFrozenSet(columns, [])
-            return WrappedNamedRelationalAlgebraFrozenSet(
-                columns=columns,
-                iterable=empty_named,
-                row_type=row_type,
-                verify_row_type=False,
-            )
-
-        det_edb = self.program_ir.extensional_database()
-        for pred_symb, expr in det_edb.items():
-            if not isinstance(expr, ir.Constant):
-                continue
-            wrapped = expr.value
-            row_type = getattr(wrapped, "row_type", Unknown)
-            if row_type is Unknown or row_type is Tuple:
-                continue
-            type_args = get_args(row_type)
-            if pred_symb in self.program_ir.symbol_table:
-                terms = self.program_ir.predicate_terms(pred_symb)
-            else:
-                terms = tuple(ir.Symbol.fresh() for _ in type_args)
-            columns = tuple(
-                arg.name if isinstance(arg, ir.Symbol) else ir.Symbol.fresh().name
-                for arg in terms
-            )
-            if len(columns) != len(type_args):
-                columns = tuple(ir.Symbol.fresh().name for _ in type_args)
-            empty_set = _empty_named_relation(columns, row_type)
-            schema_solution[pred_symb] = ir.Constant[AbstractSet[row_type]](
-                empty_set, auto_infer_type=False, verify_type=False
-            )
-
-        seen_idb = set()
-        for rule in det_idb.formulas:
-            pred_symb = rule.consequent.functor
-            if pred_symb in seen_idb:
-                continue
-            seen_idb.add(pred_symb)
-            head_args = rule.consequent.args
-            if (
-                pred_symb in self.program_ir.symbol_table
-                and isinstance(
-                    self.program_ir.symbol_table[pred_symb], ir.Constant
-                )
-                and is_leq_informative(
-                    self.program_ir.symbol_table[pred_symb].type, AbstractSet
-                )
-            ):
-                row_type = get_args(
-                    self.program_ir.symbol_table[pred_symb].type
-                )[0]
-            else:
-                row_type = Tuple[tuple(a.type for a in head_args)]
-            if row_type is Unknown or row_type is Tuple:
-                continue
-            columns = tuple(
-                arg.name if isinstance(arg, ir.Symbol) else ir.Symbol.fresh().name
-                for arg in head_args
-            )
-            empty_set = _empty_named_relation(columns, row_type)
-            schema_solution[pred_symb] = ir.Constant[AbstractSet[row_type]](
-                empty_set, auto_infer_type=False, verify_type=False
-            )
-
-        return schema_solution
 
     def _solve_probabilistic_stratum(self, solution, prob_idb, show_ra: bool = False):
         pfact_edb = self.program_ir.probabilistic_facts()

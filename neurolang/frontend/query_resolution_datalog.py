@@ -92,7 +92,12 @@ class ShowRAChaseMixin:
             conjunction, getattr(self, "datalog_program", None)
         )
         print(pretty_repr(ra_code, name_map=name_map))
-        return []
+        try:
+            return super().obtain_substitutions(
+                iter(predicates), instance, restriction_instance
+            )
+        except Exception:
+            return []
 
     def pick_chase_instance_for_stratum(self, stratum, instance_update):
         """Wrap the inner per-stratum chase so its rules print RA too."""
