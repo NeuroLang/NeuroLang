@@ -17,7 +17,7 @@ from ..datalog.expression_processing import (
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import NeuroLangException
-from ..expression_walker import ChainedWalker, ExpressionWalker, PatternWalker, add_match
+from ..expression_walker import ExpressionWalker, PatternWalker, add_match
 from ..expressions import (
     Constant,
     ExpressionBlock,
@@ -728,11 +728,13 @@ def _prepare_and_translate_query(query_predicate, cpl_program):
             with log_performance(LOG, "Translation and lifted optimisation"):
                 ra_query = TranslateToNamedRA().walk(flat_query)
                 ra_query = Projection(ra_query, variables_to_project)
-                goo = ChainedWalker(
-                    DegenerateNaturalJoinToProduct(),
-                    GreedyJoinOrdering(),
-                )
-                ra_query = goo.walk(ra_query)
+                class WMCOptimiser(
+                    DegenerateNaturalJoinToProduct,
+                    GreedyJoinOrdering,
+                    ExpressionWalker,
+                ):
+                    pass
+                ra_query = WMCOptimiser().walk(ra_query)
                 ra_query = RAQueryOptimiser().walk(ra_query)
     return flat_query, ra_query
 

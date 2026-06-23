@@ -56,10 +56,8 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..relational_algebra.optimisers import (
     DegenerateNaturalJoinToProduct,
     GreedyJoinOrdering,
-    PushProjectionThroughProduct,
     RelationalAlgebraOptimiser,
 )
-from ..expression_walker import ChainedWalker
 from ..relational_algebra.pretty_printer import pretty_repr, build_name_map_from_conjunction
 from .datalog.pretty_printer import DatalogPrettyPrinter
 
@@ -667,13 +665,15 @@ class NeurolangPDL(QueryBuilderDatalog):
                             if succ_solver == self.probabilistic_solvers[-1]:
                                 raise
                 ra_code = provset.relation
-                goo = ChainedWalker(
-                    RelationalAlgebraOptimiser(),
-                    DegenerateNaturalJoinToProduct(),
-                    GreedyJoinOrdering(),
-                    RelationalAlgebraOptimiser(),
-                )
-                ra_code = goo.walk(ra_code)
+                class ShowRAOptimiser(
+                    RelationalAlgebraOptimiser,
+                    DegenerateNaturalJoinToProduct,
+                    GreedyJoinOrdering,
+                ):
+                    pass
+                ra_code = ShowRAOptimiser().walk(ra_code)
+                # Second RA optimisation pass after GOO reordering
+                ra_code = RelationalAlgebraOptimiser().walk(ra_code)
                 print(pretty_repr(ra_code, name_map=name_map))
             return MapInstance()
         for i, (succ_solver, marg_solver) in enumerate(

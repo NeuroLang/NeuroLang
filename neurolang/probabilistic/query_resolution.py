@@ -33,7 +33,6 @@ from ..relational_algebra import (
 )
 from ..relational_algebra.optimisers import (
     GreedyJoinOrdering,
-    PushProjectionThroughProduct,
     PushUnnamedSelectionsUp,
 )
 from ..relational_algebra_provenance import (
@@ -52,6 +51,13 @@ from .expressions import Condition, ProbabilisticPredicate
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
+
+class RAQueryGOOOptimiser(
+    GreedyJoinOrdering,
+    ExpressionWalker,
+):
+    pass
+
 
 AND = Constant(operator.and_)
 NE = Constant(operator.ne)
@@ -475,7 +481,7 @@ def generate_provenance_query_solver(
             return expression
 
     steps = [
-        GreedyJoinOrdering(),
+        RAQueryGOOOptimiser(),
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),

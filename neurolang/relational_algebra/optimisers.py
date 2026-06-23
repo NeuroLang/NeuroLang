@@ -1717,6 +1717,22 @@ def _has_eliminable_cross_product(operands):
     return has_overlap and has_disjoint
 
 
+def _degenerate_natural_join(expression):
+    """Guard: True if NaturalJoin(A, B) where A and B share no columns."""
+    left_cols = _ra_columns(expression.relation_left)
+    right_cols = _ra_columns(expression.relation_right)
+    return bool(left_cols) and bool(right_cols) and not (left_cols & right_cols)
+
+
+def _product_has_eliminable_cross_product(expression):
+    """Guard: True if Product has operands with both overlapping and
+    disjoint column sets — reordering can eliminate the cross product."""
+    if not isinstance(expression, Product):
+        return False
+    operands = list(expression.relations)
+    return _has_eliminable_cross_product(operands)
+
+
 class DegenerateNaturalJoinToProduct(ew.PatternWalker):
     """
     Convert NaturalJoin(A, B) to Product(A, B) when A and B share no
@@ -1724,38 +1740,11 @@ class DegenerateNaturalJoinToProduct(ew.PatternWalker):
     making it explicit lets the GOO pass detect and reorder it.
     """
 
-    @ew.add_match(NaturalJoin)
+    @ew.add_match(NaturalJoin, _degenerate_natural_join)
     def degenerate_join_to_product(self, expression):
         left = self.walk(expression.relation_left)
         right = self.walk(expression.relation_right)
-        left_cols = set(_ra_columns(left))
-        right_cols = set(_ra_columns(right))
-        if left_cols and right_cols and not (left_cols & right_cols):
-            return Product((left, right))
-        return NaturalJoin(left, right)
-
-    def walk(self, expression):
-        from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
-        try:
-            return self.match(expression)
-        except NeuroLangPatternMatchingNoMatch:
-            if isinstance(expression, ew.Expression):
-                args = expression.unapply()
-                new_args = tuple()
-                changed = False
-                for arg in args:
-                    if isinstance(arg, ew.Expression):
-                        new_arg = self.walk(arg)
-                        changed |= new_arg is not arg
-                    elif isinstance(arg, tuple) and len(arg) > 0 and isinstance(arg[0], ew.Expression):
-                        new_arg = tuple(self.walk(sub) for sub in arg)
-                        changed |= any(a is not b for a, b in zip(new_arg, arg))
-                    else:
-                        new_arg = arg
-                    new_args += (new_arg,)
-                if changed:
-                    return expression.apply(*new_args)
-            return expression
+        return Product((left, right))
 
 
 class PushProjectionThroughProduct(ew.PatternWalker):
@@ -1778,30 +1767,6 @@ class PushProjectionThroughProduct(ew.PatternWalker):
             else:
                 new_rels.append(self.walk(rel))
         return Product(tuple(new_rels))
-
-    def walk(self, expression):
-        from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
-        try:
-            return self.match(expression)
-        except NeuroLangPatternMatchingNoMatch:
-            if isinstance(expression, ew.Expression):
-                args = expression.unapply()
-                new_args = tuple()
-                changed = False
-                for arg in args:
-                    if isinstance(arg, ew.Expression):
-                        new_arg = self.walk(arg)
-                        changed |= new_arg is not arg
-                    elif isinstance(arg, tuple) and len(arg) > 0 and isinstance(arg[0], ew.Expression):
-                        new_arg = tuple(self.walk(sub) for sub in arg)
-                        changed |= any(a is not b for a, b in zip(new_arg, arg))
-                    else:
-                        new_arg = arg
-                    new_args += (new_arg,)
-                if changed:
-                    return expression.apply(*new_args)
-            return expression
-
 
 class GreedyJoinOrdering(ew.PatternWalker):
     """
@@ -1832,42 +1797,33 @@ class GreedyJoinOrdering(ew.PatternWalker):
 
         return self._build_reordered(operands)
 
-    @ew.add_match(Product)
+    @ew.add_match(Product, _product_has_eliminable_cross_product)
     def reorder_product(self, expression):
         new_rels = tuple(self.walk(r) for r in expression.relations)
         expression = Product(new_rels)
-
         operands = _flatten_join_or_product(expression)
-        if len(operands) <= 1:
-            return expression
-
-        if not _has_eliminable_cross_product(operands):
-            return expression
-
         return self._build_reordered(operands)
 
-    def walk(self, expression):
-        from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
-        try:
-            return self.match(expression)
-        except NeuroLangPatternMatchingNoMatch:
-            if isinstance(expression, ew.Expression):
-                args = expression.unapply()
-                new_args = tuple()
-                changed = False
-                for arg in args:
-                    if isinstance(arg, ew.Expression):
-                        new_arg = self.walk(arg)
-                        changed |= new_arg is not arg
-                    elif isinstance(arg, tuple) and len(arg) > 0 and isinstance(arg[0], ew.Expression):
-                        new_arg = tuple(self.walk(sub) for sub in arg)
-                        changed |= any(a is not b for a, b in zip(new_arg, arg))
-                    else:
-                        new_arg = arg
-                    new_args += (new_arg,)
-                if changed:
-                    return expression.apply(*new_args)
-            return expression
+    @ew.add_match(ew.Expression)
+    def fallthrough(self, expression):
+        """Recursively walk children for expressions that don't match
+        the reorder patterns. This replaces the old walk() override."""
+        args = expression.unapply()
+        new_args = tuple()
+        changed = False
+        for arg in args:
+            if isinstance(arg, ew.Expression):
+                new_arg = self.walk(arg)
+                changed |= new_arg is not arg
+            elif isinstance(arg, tuple) and len(arg) > 0 and isinstance(arg[0], ew.Expression):
+                new_arg = tuple(self.walk(sub) for sub in arg)
+                changed |= any(a is not b for a, b in zip(new_arg, arg))
+            else:
+                new_arg = arg
+            new_args += (new_arg,)
+        if changed:
+            return expression.apply(*new_args)
+        return expression
 
     def _build_reordered(self, operands):
         grouped = _group_operands_by_overlap(operands)
