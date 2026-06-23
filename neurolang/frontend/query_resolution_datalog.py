@@ -50,10 +50,73 @@ from .datalog.standard_syntax import parser as datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
+from ..logic import Conjunction
 from ..logic.horn_clauses import Fol2DatalogTranslationException
+from ..relational_algebra.optimisers import RelationalAlgebraOptimiser
+from ..relational_algebra.pretty_printer import (
+    build_name_map_from_conjunction,
+    pretty_repr,
+)
 from . import query_resolution_expressions as fe
 
 __all__ = ["QueryBuilderDatalog"]
+
+
+class ShowRAChaseMixin:
+    """
+    Mixin for the chase that prints the named RA expression each rule
+    would evaluate, then returns an empty substitution list so the chase
+    terminates immediately without producing any tuples.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._show_ra_current_rule = None
+
+    def chase_step(self, instance, rule, restriction_instance=None):
+        self._show_ra_current_rule = rule
+        return super().chase_step(instance, rule, restriction_instance)
+
+    def obtain_substitutions(
+        self, rule_predicates_iterator, instance, restriction_instance
+    ):
+        predicates = tuple(rule_predicates_iterator)
+        if not predicates:
+            return []
+        conjunction = Conjunction(predicates)
+        ra_code = self.translate_conjunction_to_named_ra(conjunction)
+        rule = getattr(self, "_show_ra_current_rule", None)
+        if rule is not None:
+            rule_str = DatalogPrettyPrinter().walk(rule)
+            print(f"── rule {rule_str} ──")
+        name_map = build_name_map_from_conjunction(
+            conjunction, getattr(self, "datalog_program", None)
+        )
+        print(pretty_repr(ra_code, name_map=name_map))
+        try:
+            return super().obtain_substitutions(
+                iter(predicates), instance, restriction_instance
+            )
+        except Exception:
+            return []
+
+    def pick_chase_instance_for_stratum(self, stratum, instance_update):
+        """Wrap the inner per-stratum chase so its rules print RA too."""
+        chase_instance = super().pick_chase_instance_for_stratum(
+            stratum, instance_update
+        )
+        if chase_instance is None:
+            return None
+        wrapped_class = type(
+            f"ShowRA{chase_instance.__class__.__name__}",
+            (ShowRAChaseMixin, chase_instance.__class__),
+            {},
+        )
+        wrapped = wrapped_class(
+            chase_instance.datalog_program,
+            rules=logic.Union(tuple(chase_instance.rules)),
+        )
+        wrapped.check_constraints(instance_update)
+        return wrapped
 
 
 def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exception:
@@ -173,12 +236,14 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         print()
 
     def _handle_rewritten_output(
-        self, query_expression, show_rewritten: bool, dry_run: bool
+        self, query_expression, show_rewritten: bool, dry_run: bool,
+        show_ra: bool = False,
     ) -> bool:
         """Print rewritten program if requested and return True if dry-running.
 
-        Returns True when dry_run is active (caller should short-circuit),
-        False when execution should continue.
+        Returns True when dry_run is active and show_ra is not active
+        (caller should short-circuit), False when execution should continue.
+        When show_ra is True, the caller still needs to build the RA plan.
         """
         if show_rewritten or dry_run:
             reachable_rules = reachable_code(
@@ -187,7 +252,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self._print_rewritten_program(
                 query_expression, reachable_rules
             )
-        return dry_run
+        return dry_run and not show_ra
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -311,7 +376,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return rule
 
     def execute_datalog_program(
-        self, code: str, show_rewritten: bool = False, dry_run: bool = False
+        self, code: str, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Union[None, bool, RelationalAlgebraFrozenSet]:
         """
         Execute a Datalog program in classical syntax.
@@ -366,6 +432,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             return self.query(
                 query.head.arguments, query.body,
                 show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
             )
         else:
             raise UnsupportedProgramError(
@@ -431,7 +498,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self._walk_squall_rule(rule)
 
     def _execute_single_squall_query(self, query, rules_and_choice_defs,
-                                     show_rewritten=False, dry_run=False):
+                                     show_rewritten=False, dry_run=False,
+                                     show_ra=False):
         """Execute one obtain clause from a SQUALL program.
 
         Builds a fresh helper predicate h(head_vars) :- query.body and
@@ -467,13 +535,15 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             ra, _ = self._execute_query(
                 fe_head, fe_pred,
                 show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
             )
         finally:
             self.program_ir.pop_scope()
         return ra
 
     def execute_squall_program(
-        self, code: str, show_rewritten: bool = False, dry_run: bool = False
+        self, code: str, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Union[None, NamedRelationalAlgebraFrozenSet, Dict[str, NamedRelationalAlgebraFrozenSet]]:
         """
         Execute a SQUALL (controlled English) program.
@@ -541,6 +611,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             ra = self._execute_single_squall_query(
                 q, parsed.rules_and_choice_defs,
                 show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
             )
             if not dry_run:
                 results[key] = ra
@@ -676,7 +747,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
     def query(
-        self, *args, show_rewritten: bool = False, dry_run: bool = False
+        self, *args, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
         """
         Performs an inferential query on the database.
@@ -730,7 +802,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             raise ValueError("query takes 1 or 2 arguments")
 
         solution_set, functor_orig = self._execute_query(
-            head, predicate, show_rewritten=show_rewritten, dry_run=dry_run
+            head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
+            show_ra=show_ra,
         )
 
         if not isinstance(head, tuple):
@@ -795,6 +868,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         predicate: fe.Expression,
         show_rewritten: bool = False,
         dry_run: bool = False,
+        show_ra: bool = False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]
@@ -876,8 +950,19 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 head, predicate
             )
             if self._handle_rewritten_output(
-                magic_query_expression, show_rewritten, dry_run
+                magic_query_expression, show_rewritten, dry_run, show_ra
             ):
+                solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
+            elif show_ra:
+                print("── deterministic stratum ──")
+                show_ra_chase_class = type(
+                    f"ShowRA{self.chase_class.__name__}",
+                    (ShowRAChaseMixin, self.chase_class),
+                    {},
+                )
+                show_ra_chase_class(
+                    self.program_ir, rules=reachable_rules
+                ).build_chase_solution()
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
             else:
                 solution = self.chase_class(

@@ -2,11 +2,12 @@ from pathlib import Path
 from typing import AbstractSet, Tuple
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from .. import NeurolangDL
-from ..neurosynth_utils import StudyID
+from ..neurosynth_utils import StudyID, get_ns_term_study_associations
 
 
 @pytest.fixture
@@ -190,3 +191,48 @@ def test_load_neurosynth_mni_peaks_reported(mock_peaks_reported, mni_peaks):
         nl[symbol.symbol_name].type
         is AbstractSet[Tuple[StudyID, int, int, int]]
     )
+
+
+def test_studyid_is_integer_based():
+    """StudyID should behave as an integer: numpy integer, arithmetic, hashing.
+
+    StudyID is now ``np.int64`` (or an equivalent integer alias), so it must
+    behave as a numpy integer rather than a Python ``int`` subclass.
+    """
+    sid = StudyID(1)
+    assert isinstance(sid, np.integer), "StudyID must be a numpy integer"
+    assert sid + 1 == 2, "StudyID must support integer arithmetic"
+    assert hash(sid) == hash(1), "StudyID must hash like an int"
+    assert {sid, StudyID(2)} == {1, 2}, "StudyID must work in sets with ints"
+
+
+@patch("neurolang.frontend.neurosynth_utils.fetch_feature_data")
+def test_get_ns_term_study_associations_studyid_type(
+    mock_fetch_feature_data, features
+):
+    """With convert_study_ids=True, study_id column must have integer dtype
+    and values must be int-based StudyID instances.
+
+    Currently StudyID(str) produces string values — this test will fail until
+    the type is changed.
+    """
+    # Simulate what fetch_feature_data does with convert_study_ids=True:
+    # currently applies StudyID(str) to the index
+    features_converted = features.copy()
+    features_converted.index = features_converted.index.map(StudyID)
+    mock_fetch_feature_data.return_value = features_converted
+    data_dir = Path("mock_data_dir")
+
+    result = get_ns_term_study_associations(
+        data_dir, convert_study_ids=True
+    )
+
+    assert np.issubdtype(
+        result["id"].dtype, np.integer
+    ), f"Expected integer dtype, got {result['id'].dtype}"
+
+    for val in result["id"].unique():
+        assert isinstance(val, np.integer), f"StudyID value {val!r} is not an integer"
+        assert type(val) is StudyID, (
+            f"StudyID value {val!r} is not a StudyID instance"
+        )

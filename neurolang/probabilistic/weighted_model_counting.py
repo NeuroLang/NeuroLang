@@ -40,6 +40,10 @@ from ..relational_algebra import (
     int2columnint_constant,
     str2columnstr_constant
 )
+from ..relational_algebra.optimisers import (
+    DegenerateNaturalJoinToProduct,
+    GreedyJoinOrdering,
+)
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolver
@@ -724,6 +728,13 @@ def _prepare_and_translate_query(query_predicate, cpl_program):
             with log_performance(LOG, "Translation and lifted optimisation"):
                 ra_query = TranslateToNamedRA().walk(flat_query)
                 ra_query = Projection(ra_query, variables_to_project)
+                class WMCOptimiser(
+                    DegenerateNaturalJoinToProduct,
+                    GreedyJoinOrdering,
+                    ExpressionWalker,
+                ):
+                    pass
+                ra_query = WMCOptimiser().walk(ra_query)
                 ra_query = RAQueryOptimiser().walk(ra_query)
     return flat_query, ra_query
 

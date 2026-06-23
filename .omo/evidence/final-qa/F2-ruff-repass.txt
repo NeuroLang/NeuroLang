@@ -1,0 +1,23 @@
+F2 Ruff Re-pass: Remove unused reachable_code import
+======================================================
+
+File: neurolang/frontend/probabilistic_frontend.py
+Change: Removed `reachable_code` from the import block at line 41.
+
+Verification Results:
+--------------------
+
+1. ruff check: All checks passed! (zero errors)
+
+2. show-ra probabilistic frontend tests (4/4 PASS):
+   - test_show_ra_deterministic_stratum ........... PASSED
+   - test_show_ra_postprobabilistic_stratum ...... PASSED
+   - test_show_ra_probabilistic_stratum .......... PASSED
+   - test_show_ra_probabilistic_with_det_idb .... PASSED
+
+3. CLI show-ra tests (3/3 PASS):
+   - test_show_ra_dry_run_no_query_completed ..... PASSED
+   - test_show_ra_squall_dry_run ................. PASSED
+   - test_show_ra_neurosynth_prob_query .......... PASSED
+
+Conclusion: F2 item resolved. All tests pass, ruff clean.

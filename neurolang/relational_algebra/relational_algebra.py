@@ -188,6 +188,25 @@ class NaturalJoin(BinaryRelationalAlgebraOperation):
         return f"[{self.relation_left}" f"\N{JOIN}" f"{self.relation_right}]"
 
 
+class NaryNaturalJoin(NAryRelationalAlgebraOperation):
+    """N-ary natural join holding N operands in a flat tuple.
+
+    Unlike a left-deep tree of *NaturalJoin* nodes, this preserves the
+    full set of operands so that join-reordering optimisers can reorder
+    them globally without rebuilding pairwise trees.
+    """
+
+    def __init__(self, relations):
+        self.relations = tuple(relations)
+
+    def __repr__(self):
+        return (
+            "["
+            + (" \N{JOIN} ".join(repr(r) for r in self.relations))
+            + "]"
+        )
+
+
 class LeftNaturalJoin(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
@@ -894,6 +913,15 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         row_type = self._compute_join_type(naturaljoin, res, left, right)
 
         return self._build_relation_constant(res, type_=AbstractSet[row_type])
+
+    @ew.add_match(NaryNaturalJoin, lambda expr: all(
+        isinstance(r, Constant) for r in expr.relations
+    ))
+    def ra_nary_naturaljoin(self, nary_join):
+        result = nary_join.relations[0]
+        for rel in nary_join.relations[1:]:
+            result = self.walk(NaturalJoin(result, rel))
+        return result
 
     def _compute_join_type(self, join, res, left, right):
         left_type_args = type_system.get_args(type_system.get_args(
