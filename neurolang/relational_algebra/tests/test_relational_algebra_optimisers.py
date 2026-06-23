@@ -1254,3 +1254,102 @@ def test_push_projections_down_full_pipeline():
     # Projection pushdown is a best-effort optimisation — the exact shape
     # depends on what EliminateTrivialProjections cleans up.
     assert not has_cross(curr)
+
+
+def test_greedy_join_ordering_reorders_mixed_product_join():
+    """
+    Regression test: GreedyJoinOrdering reorders a mixed Product/NaturalJoin
+    chain so operands with shared ColumnStr names are joined first.
+
+    Tree: NaturalJoin(Product(R1[a,b], R2[c,d]), R3[b,c])
+    R1 and R2 share no columns → Product.
+    R3 shares 'b' with R1 and 'c' with R2.
+    After GOO: R1 and R3 should be joined first (share 'b'),
+    then R2 (shares 'c' with the result).
+    Expected: nested NaturalJoin tree with no bare Product between
+    operands that share columns.
+    """
+    from ..optimisers import GreedyJoinOrdering, _ra_columns
+
+    a = Constant[ColumnStr](ColumnStr('a'))
+    b = Constant[ColumnStr](ColumnStr('b'))
+    c = Constant[ColumnStr](ColumnStr('c'))
+    d = Constant[ColumnStr](ColumnStr('d'))
+
+    r1 = Symbol[AbstractSet]('R1')
+    r2 = Symbol[AbstractSet]('R2')
+    r3 = Symbol[AbstractSet]('R3')
+
+    r1_named = NameColumns(r1, (a, b))
+    r2_named = NameColumns(r2, (c, d))
+    r3_named = NameColumns(r3, (b, c))
+
+    # NaturalJoin(Product(R1[a,b], R2[c,d]), R3[b,c])
+    tree = NaturalJoin(Product((r1_named, r2_named)), r3_named)
+
+    opt = GreedyJoinOrdering()
+    result = opt.walk(tree)
+
+    # The result must NOT be a bare Product — the cross product should
+    # have been eliminated by reordering.
+    assert type(result).__name__ != "Product", (
+        "Expected join (NaturalJoin), got Product — cross product not eliminated"
+    )
+
+    # The result should be a NaturalJoin (nested tree), not NaryNaturalJoin,
+    # not Product.
+    assert type(result).__name__ == "NaturalJoin", (
+        "Expected NaturalJoin, got " + type(result).__name__
+    )
+
+    # Verify no cross product remains: walk the tree and check that
+    # no Product node exists between operands that share columns.
+    def _check_no_product(expr):
+        if isinstance(expr, Product):
+            # Product is only OK if its operands truly share no columns
+            ops = list(expr.relations)
+            for i in range(len(ops)):
+                for j in range(i + 1, len(ops)):
+                    lc = _ra_columns(ops[i])
+                    rc = _ra_columns(ops[j])
+                    assert len(lc & rc) == 0, (
+                        f"Cross product between operands that share columns: "
+                        f"{lc} ∩ {rc} ≠ ∅"
+                    )
+        elif isinstance(expr, NaturalJoin):
+            _check_no_product(expr.relation_left)
+            _check_no_product(expr.relation_right)
+
+    _check_no_product(result)
+
+
+def test_greedy_join_ordering_preserves_disconnected_product():
+    """
+    Regression test: GreedyJoinOrdering must NOT convert a Product of
+    two operands with NO shared column names into a NaturalJoin.
+
+    Tree: Product(R1[a,b], R2[c,d])
+    R1 and R2 share no columns → must remain Product.
+    """
+    from ..optimisers import GreedyJoinOrdering
+
+    a = Constant[ColumnStr](ColumnStr('a'))
+    b = Constant[ColumnStr](ColumnStr('b'))
+    c = Constant[ColumnStr](ColumnStr('c'))
+    d = Constant[ColumnStr](ColumnStr('d'))
+
+    r1 = Symbol[AbstractSet]('R1')
+    r2 = Symbol[AbstractSet]('R2')
+
+    r1_named = NameColumns(r1, (a, b))
+    r2_named = NameColumns(r2, (c, d))
+
+    tree = Product((r1_named, r2_named))
+
+    opt = GreedyJoinOrdering()
+    result = opt.walk(tree)
+
+    # Must remain a Product — no shared columns means no join possible.
+    assert type(result).__name__ == "Product", (
+        "Expected Product (no shared columns), got " + type(result).__name__
+    )

@@ -31,7 +31,11 @@ from ..relational_algebra import (
     SimplifyExtendedProjectionsWithConstants,
     str2columnstr_constant
 )
-from ..relational_algebra.optimisers import PushUnnamedSelectionsUp
+from ..relational_algebra.optimisers import (
+    GreedyJoinOrdering,
+    PushProjectionThroughProduct,
+    PushUnnamedSelectionsUp,
+)
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet
@@ -471,6 +475,7 @@ def generate_provenance_query_solver(
             return expression
 
     steps = [
+        GreedyJoinOrdering(),
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
