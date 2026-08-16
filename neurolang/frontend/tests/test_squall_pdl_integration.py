@@ -932,3 +932,196 @@ def test_conditional_query_intermediate_predicates_are_deterministic():
     assert len(cond_functors) == 2, (
         f"Expected 2 distinct intermediate functors, got {len(cond_functors)}: {cond_functors}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Issue #877: SQUALL aggregations return the aggregate column
+# ---------------------------------------------------------------------------
+
+def test_execute_squall_count_obtain_returns_count_column(nl_counts):
+    """'obtain every Count of the Item.' yields a single count column.
+
+    Regression: the aggregation head was dropped, returning (N, 0).
+    """
+    result = nl_counts.execute_squall_program(
+        "obtain every Count of the Item."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (1, 1), f"got {df.shape}"
+    assert df.iloc[0, 0] == 4
+
+
+def test_execute_squall_issue877_count_of_defined_relation(nl):
+    """Issue-877 phrasing "'every ES of the ES count of the ES'" is a count."""
+    nl.execute_squall_program(
+        "define as ES every Person that plays."
+    )
+    result = nl.execute_squall_program(
+        "obtain every ES of the ES count of the ES."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (1, 1), f"got {df.shape}"
+    assert df.iloc[0, 0] == 2
+
+
+def test_execute_squall_count_over_nary_relation():
+    """Aggregation over an N-ary relation yields the aggregate column."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [(0, 0, 0), (1, 1, 1), (2, 2, 2)], name="voxel"
+    )
+    engine.add_tuple_set([("s1",), ("s2",)], name="study")
+    result = engine.execute_squall_program(
+        "obtain every Voxel in 3D of the Study count of the Study."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (1, 1), f"got {df.shape}"
+    assert df.iloc[0, 0] == 2
+
+
+# ---------------------------------------------------------------------------
+# Issue #877: canonical probabilistic overlay program completes and its
+# conditional-query join does not materialise structural cross products
+# ---------------------------------------------------------------------------
+
+def _build_issue877_engine():
+    """Small engine-shaped corpus for the canonical overlay program."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 1, 1)], name="voxel"
+    )
+    engine.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    engine.add_tuple_set([("s1",), ("s2",)], name="selectedstudy")
+    engine.add_tuple_set(
+        [
+            ("s1", 0, 0, 0),
+            ("s1", 0, 0, 1),
+            ("s1", 1, 1, 1),
+            ("s2", 0, 0, 1),
+        ],
+        name="reported",
+    )
+    engine.add_tuple_set(
+        [("s1", "emotion"), ("s2", "emotion"), ("s3", "language")],
+        name="mentions",
+    )
+
+    def agg_create_region_overlay(i, j, k, p):
+        return ("overlay", len(i))
+
+    engine.add_symbol(
+        agg_create_region_overlay, name="create_region_overlay"
+    )
+    return engine
+
+
+def test_execute_squall_issue877_overlay_program_completes():
+    """The canonical conditional-probability overlay program terminates
+    and yields a single overlay."""
+    engine = _build_issue877_engine()
+    engine.execute_squall_program(
+        "define as TermVoxels with inferred probability every Voxel in 3D "
+        "that a SelectedStudy reported conditioned to the SelectedStudy "
+        "mentions 'emotion'."
+        " define as EmotionOverlay every create_region_overlay of the "
+        "TermVoxels in 4D."
+    )
+    result = engine.execute_squall_program(
+        "obtain every EmotionOverlay."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (1, 1), f"expected a single overlay, got {df.shape}"
+
+
+def test_execute_squall_issue877_cond_num_join_no_cross_product():
+    """The MARG numerator rule must join atoms sharing variables first.
+
+    Regression: the numerator joined `voxel(x, y, z)` with
+    `selectedstudy(s)` first, materialising a voxel x study cross product
+    that makes the probabilistic solve hang at scale.
+    """
+    from neurolang.datalog.expression_processing import (
+        extract_logic_free_variables,
+    )
+
+    engine = _build_issue877_engine()
+    engine.execute_squall_program(
+        "define as TermVoxels with inferred probability every Voxel in 3D "
+        "that a SelectedStudy reported conditioned to the SelectedStudy "
+        "mentions 'emotion'."
+    )
+
+    num_rules = []
+    idb = engine.program_ir.intensional_database()
+    for ruleset in idb.values():
+        for rule in ruleset.formulas:
+            if "^cond_num" in str(rule.consequent.functor):
+                num_rules.append(rule)
+    assert len(num_rules) == 1, f"expected one cond_num rule, got {num_rules}"
+
+    formulas = tuple(num_rules[0].antecedent.formulas)
+    assert all(
+        isinstance(f, ir_Symbol) or hasattr(f, "args")
+        for f in formulas
+    ), "expected flat conjunction of atoms"
+    vars = [extract_logic_free_variables(f) for f in formulas]
+    for i in range(len(formulas) - 1):
+        if not vars[i] & vars[i + 1]:
+            remaining = set().union(*vars[i + 1:])
+            assert not vars[i] & remaining, (
+                f"atoms {i} and {i + 1} share no variable while later "
+                f"atoms do: {formulas}"
+            )
+
+
+@pytest.mark.slow
+def test_execute_squall_issue877_overlay_program_scaled():
+    """The canonical overlay program at a scale that used to blow up into
+    a voxel x study cross product; completes in seconds with the fix."""
+    import numpy as np
+
+    rng = np.random.default_rng(42)
+    grid = np.array(
+        np.meshgrid(np.arange(24), np.arange(24), np.arange(24), indexing="ij")
+    ).reshape(3, -1).T
+    voxels = grid[rng.choice(grid.shape[0], size=13824, replace=False), :]
+
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [tuple(map(int, v)) for v in voxels], name="voxel"
+    )
+    engine.add_tuple_set(
+        [("s%d" % i,) for i in range(723)], name="study"
+    )
+    engine.add_tuple_set(
+        [("s%d" % i,) for i in range(723)], name="selectedstudy"
+    )
+    engine.add_tuple_set(
+        [("s%d" % i, "emotion") for i in range(723)], name="mentions"
+    )
+    engine.add_tuple_set(
+        [
+            ("s%d" % (i % 723), int(voxels[i % 13824, 0]),
+             int(voxels[i % 13824, 1]), int(voxels[i % 13824, 2]))
+            for i in range(5000)
+        ],
+        name="reported",
+    )
+
+    def agg_create_region_overlay(i, j, k, p):
+        return ("overlay", len(i))
+
+    engine.add_symbol(
+        agg_create_region_overlay, name="create_region_overlay"
+    )
+    engine.execute_squall_program(
+        "define as TermVoxels with inferred probability every Voxel in 3D "
+        "that a SelectedStudy reported conditioned to the SelectedStudy "
+        "mentions 'emotion'."
+        " define as EmotionOverlay every create_region_overlay of the "
+        "TermVoxels in 4D."
+    )
+    result = engine.execute_squall_program(
+        "obtain every EmotionOverlay."
+    )
+    assert result.as_pandas_dataframe().shape == (1, 1)

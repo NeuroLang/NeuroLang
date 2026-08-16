@@ -35,7 +35,10 @@ from ..datalog.expression_processing import (
     TranslateToDatalogSemantics,
     reachable_code,
 )
-from ..datalog.expressions import predicate_identity
+from ..datalog.expressions import (
+    AggregationApplication,
+    predicate_identity,
+)
 from ..logic.transformations import RemoveTrivialOperations
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
@@ -439,9 +442,14 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         does for ans(...) :- R(...).
         """
         head = query.head
-        if isinstance(head, ir.FunctionApplication):
+        if (
+            isinstance(head, ir.FunctionApplication)
+            and not isinstance(head, AggregationApplication)
+        ):
             head_vars = tuple(head.args)
         elif isinstance(head, ir.Symbol):
+            head_vars = (head,)
+        elif isinstance(head, AggregationApplication):
             head_vars = (head,)
         else:
             head_vars = tuple(head)
@@ -461,7 +469,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.program_ir.walk(query_impl)
             fe_pred = fe.Expression(self, h(*head_vars))
             fe_head = tuple(
-                fe.Expression(self, ir.Symbol(s.name))
+                fe.Expression(self, s) if isinstance(s, ir.Symbol)
+                else fe.Expression(self, ir.Symbol.fresh())
                 for s in head_vars
             )
             ra, _ = self._execute_query(

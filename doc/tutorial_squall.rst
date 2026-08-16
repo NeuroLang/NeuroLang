@@ -1002,6 +1002,23 @@ Global aggregation (no ``per`` clause):
 This requires ``collect_all`` to be registered as an aggregation functor in
 the engine's symbol table.
 
+Aggregations can also run directly through ``obtain``.  The aggregate column
+is projected onto the result instead of being dropped, e.g. the total number
+of items:
+
+.. code-block:: squall
+
+    obtain every Count of the Item.
+
+The same holds for N-ary relations and aggregation over a defined relation —
+``COUNT``, ``sum``, ``max``, ``min`` and ``average`` all produce the
+aggregate column:
+
+.. code-block:: squall
+
+    define as Large_items every Item that has an item_count greater equal than 2.
+    obtain every Large_items of the Large_items count of the Large_items.
+
 10.2 Probabilistic Choice Definitions
 --------------------------------------
 

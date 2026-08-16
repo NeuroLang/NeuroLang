@@ -58,6 +58,7 @@ as a controlled natural language", Data & Knowledge Engineering, 2014.
 """
 import os
 
+import lark
 import numpy as np
 from lark import Lark, Transformer
 from lark.exceptions import (
@@ -207,6 +208,29 @@ COMPILED_GRAMMAR = Lark(
     parser="earley",
     ambiguity="resolve",
 )
+
+
+def squall_grammar_metadata() -> dict:
+    """Projection of the SQUALL grammar as a JSON-serializable dictionary.
+
+    Returns
+    -------
+    dict
+        The grammar file name, its full text and the Lark parser
+        configuration (library, version, mode and ambiguity strategy)
+        used to parse SQUALL programs.  Suitable for ``json.dumps``.
+    """
+    options = COMPILED_GRAMMAR.options
+    return {
+        "name": os.path.basename(GRAMMAR_PATH),
+        "grammar": GRAMMAR,
+        "parser": {
+            "library": "lark",
+            "version": getattr(lark, "__version__", "unknown"),
+            "mode": options.parser,
+            "ambiguity": options.ambiguity,
+        },
+    }
 
 
 COMPARISON_OPS = {
@@ -1558,10 +1582,16 @@ class SquallTransformer(Transformer):
             # Built-in names (count/sum/max/min/average) map to Python callables;
             # arbitrary names become Symbol(noun_name) — TranslateToLogicWithAggregation
             # promotes any FunctionApplication in a rule head to AggregationApplication.
-            agg_func = (
-                agg_func_from_noun if agg_func_from_noun is not None
-                else (Symbol(noun_name) if noun_name else None)
-            )
+            # An explicit aggregation dimension ("AGG_FUNC of the X", e.g.
+            # "the Study count of the Study") takes precedence: it defines
+            # both the aggregation function and the aggregated relation.
+            if agg_specs:
+                agg_func, npc = agg_specs[0]
+            else:
+                agg_func = (
+                    agg_func_from_noun if agg_func_from_noun is not None
+                    else (Symbol(noun_name) if noun_name else None)
+                )
             if agg_func is not None:
                 def ng_agg_fallback(x):
                     # Fallback body — only used if det_every does not intercept _agg_info.
@@ -2214,7 +2244,10 @@ class SquallTransformer(Transformer):
         formula = ops(capturing_d)
 
         if captured_vars:
-            head_vars = [v for v in captured_vars if isinstance(v, Symbol)]
+            head_vars = [
+                v for v in captured_vars
+                if isinstance(v, (Symbol, _AggApp))
+            ]
             while isinstance(formula, (UniversalPredicate, ExistentialPredicate)):
                 formula = formula.body
             if isinstance(formula, Implication):
@@ -2292,7 +2325,10 @@ class SquallTransformer(Transformer):
             free = sorted(extract_logic_free_variables(body_formula), key=lambda s: s.name)
             head_vars = free
         else:
-            head_vars = [v for v in captured_vars if isinstance(v, Symbol)]
+            head_vars = [
+                v for v in captured_vars
+                if isinstance(v, (Symbol, _AggApp))
+            ]
 
         head = name_sym(*head_vars) if head_vars else name_sym()
         impl = Implication(head, body_formula)
