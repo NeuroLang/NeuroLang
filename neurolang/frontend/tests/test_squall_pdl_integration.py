@@ -1,4 +1,6 @@
 """Tests for NeurolangPDL.execute_squall_program."""
+import numpy as np
+import pandas as pd
 import pytest
 
 from neurolang.exceptions import ForbiddenDisjunctionError
@@ -978,6 +980,62 @@ def test_execute_squall_count_over_nary_relation():
     df = result.as_pandas_dataframe()
     assert df.shape == (1, 1), f"got {df.shape}"
     assert df.iloc[0, 0] == 2
+
+
+def test_execute_squall_issue879_anaphora_and_conjunction():
+    """Anaphora + conjunction query completes instead of raising.
+
+    Regression from the #878 conjunction reordering: for "a Study that
+    mentions 'emotion' and mentions 'reward'", the reordered body splits
+    the two mentions atoms, and the magic-sets rewrite produces an init
+    rule with a free variable and an empty antecedent, rejected by the
+    negation mixin as "All variables on the consequent need to be on the
+    antecedent".
+    """
+    rng = np.random.RandomState(0)
+    n_studies, n_peaks = 40, 150
+    voxels = np.array(
+        [[i, j, k] for i in range(25, 35) for j in range(25, 35)
+         for k in range(25, 35)],
+        dtype=np.int64,
+    )
+    pick = rng.randint(0, len(voxels), n_peaks)
+    peaks = pd.DataFrame(
+        np.c_[voxels[pick], rng.randint(1, n_studies + 1, n_peaks)],
+        columns=["i", "j", "k", "study_id"],
+    )
+    studies = pd.DataFrame(
+        np.arange(1, n_studies + 1, dtype=np.int64),
+        columns=["study_id"],
+    )
+    terms = []
+    for s in range(1, n_studies + 1):
+        for t in ["emotion", "reward", "memory"]:
+            if rng.rand() < 0.6:
+                terms.append((t, float(rng.rand() * 3 + 0.01), s))
+    term_data = pd.DataFrame(terms, columns=["term", "tfidf", "study_id"])
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set(peaks, name="peak_reported")
+    nl.add_tuple_set(studies, name="study")
+    nl.add_tuple_set(term_data, name="term_in_study_tfidf")
+    nl.add_tuple_set(voxels, name="voxel")
+    nl.execute_datalog_program(
+        "mentions(s, t) :- term_in_study_tfidf(t, v, s), (v > 0.001)"
+    )
+    nl.execute_datalog_program(
+        "reported(i, j, k, s) :- peak_reported(i, j, k, s)"
+    )
+    nl.execute_datalog_program(
+        "reports(i, j, k, s) :- reported(i, j, k, s)"
+    )
+
+    result = nl.execute_squall_program(
+        "obtain every Voxel in 3D that a Study that mentions 'emotion' "
+        "and mentions 'reward' reports."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (24, 3), f"got {df.shape}"
 
 
 # ---------------------------------------------------------------------------
