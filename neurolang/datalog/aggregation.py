@@ -13,7 +13,12 @@ import typing
 
 import numpy
 
-from ..exceptions import ForbiddenUnstratifiedAggregation, NeuroLangException, NotConjunctiveExpressionNestedPredicates
+from ..exceptions import (
+    ForbiddenUnstratifiedAggregation,
+    NeuroLangException,
+    NotConjunctiveExpressionNestedPredicates,
+    SymbolNotFoundError,
+)
 from ..expression_walker import (
     FunctionApplicationToPythonLambda,
     PatternWalker,
@@ -219,8 +224,14 @@ class ChaseAggregationMixin:
             len(arg.args) == 1 and
             isinstance(arg.args[0], Symbol)
         ):
+            resolved_functor = self.datalog_program.walk(arg.functor)
+            if not (
+                isinstance(resolved_functor, Constant)
+                and callable(resolved_functor.value)
+            ):
+                raise SymbolNotFoundError(f"Symbol not found {arg.functor}")
+            fun = resolved_functor.value
             aggregation_args = arg.args[0].name
-            fun = self._resolve_aggregation_functor(arg.functor)
         else:
             aggregation_args = None
             fa = ReplaceSymbolsByConstants(
@@ -242,27 +253,6 @@ class ChaseAggregationMixin:
             ):
                 fun.__annotations__["return"] = fun_.__annotations__["return"]
         return aggregation_args, fun
-
-    def _resolve_aggregation_functor(self, functor):
-        """Resolve an aggregation functor, retrying the lookup at call time.
-
-        The functor may refer to a symbol that only becomes resolvable once
-        the rules it depends on have been evaluated, so the resolution is
-        deferred: the returned callable retries the lookup through the
-        program's symbol table each time it is applied.
-        """
-        resolved = self.datalog_program.walk(functor)
-        if isinstance(resolved, Constant) and callable(resolved.value):
-            return resolved.value
-
-        def delayed(values):
-            resolved = self.datalog_program.walk(functor)
-            if isinstance(resolved, Constant) and callable(resolved.value):
-                return resolved.value(values)
-            raise NeuroLangException(
-                f"Unknown aggregation function: {functor}"
-            )
-        return delayed
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
         if is_aggregation_predicate(consequent):

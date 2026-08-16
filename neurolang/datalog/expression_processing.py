@@ -512,6 +512,57 @@ def is_ground_predicate(predicate):
     return all(isinstance(arg, Constant) for arg in predicate.args)
 
 
+def order_conjunction_by_shared_variables(
+    formulas: typing.Tuple[Expression, ...],
+) -> typing.Tuple[Expression, ...]:
+    """Order flat conjunction atoms to avoid structural cross products.
+
+    Relational algebra plans execute the atoms of a conjunction as a
+    left-deep natural join in the order they appear.  Joining two atoms
+    that share no variable first materialises their cross product, which
+    can be enormous for domains such as ``voxel(x, y, z) x study(s)``.
+    Conjunctions commute, so the atoms are reordered (greedy
+    nearest-neighbour) so that each atom shares at least one variable
+    with the atoms selected so far, keeping intermediate relations as
+    small as possible.
+
+    The original order is kept whenever it does not contain a structural
+    cross product, so already-efficient conjunctions are left untouched.
+
+    Only flat conjunctions of predicate applications are reordered; any
+    other formula (negation, disjunction, nested quantifier, ...) is left
+    untouched in its original position.
+    """
+    if not all(isinstance(f, FunctionApplication) for f in formulas):
+        return formulas
+    var_sets = [
+        extract_logic_free_variables(f) for f in formulas
+    ]
+    bound = set()
+    for var_set in var_sets:
+        if bound and not var_set & bound:
+            break
+        bound |= var_set
+    else:
+        return formulas
+
+    remaining = list(formulas)
+    vars_remaining = list(var_sets)
+    start = max(
+        range(len(remaining)), key=lambda i: len(vars_remaining[i])
+    )
+    ordered = [remaining.pop(start)]
+    bound = vars_remaining.pop(start)
+    while remaining:
+        best = max(
+            range(len(remaining)),
+            key=lambda i: len(vars_remaining[i] & bound),
+        )
+        ordered.append(remaining.pop(best))
+        bound |= vars_remaining.pop(best)
+    return tuple(ordered)
+
+
 def enforce_conjunctive_antecedent(implication):
     antecedent = GuaranteeConjunction().walk(implication.antecedent)
     return implication.apply(implication.consequent, antecedent)

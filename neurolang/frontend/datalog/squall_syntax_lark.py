@@ -210,29 +210,6 @@ COMPILED_GRAMMAR = Lark(
 )
 
 
-def squall_grammar_metadata() -> dict:
-    """Projection of the SQUALL grammar as a JSON-serializable dictionary.
-
-    Returns
-    -------
-    dict
-        The grammar file name, its full text and the Lark parser
-        configuration (library, version, mode and ambiguity strategy)
-        used to parse SQUALL programs.  Suitable for ``json.dumps``.
-    """
-    options = COMPILED_GRAMMAR.options
-    return {
-        "name": os.path.basename(GRAMMAR_PATH),
-        "grammar": GRAMMAR,
-        "parser": {
-            "library": "lark",
-            "version": getattr(lark, "__version__", "unknown"),
-            "mode": options.parser,
-            "ambiguity": options.ambiguity,
-        },
-    }
-
-
 COMPARISON_OPS = {
     ("greater",): gt,
     ("greater", "equal"): ge,
@@ -319,6 +296,29 @@ class SquallTransformer(Transformer):
     as functions that take a continuation (predicate over an individual)
     and produce a logical formula with the quantifier in scope.
     """
+
+    @staticmethod
+    def squall_grammar_metadata() -> dict:
+        """Projection of the SQUALL grammar as a JSON-serializable dict.
+
+        Returns
+        -------
+        dict
+            The grammar file name, its full text and the Lark parser
+            configuration (library, version, mode and ambiguity strategy)
+            used to parse SQUALL programs.  Suitable for ``json.dumps``.
+        """
+        options = COMPILED_GRAMMAR.options
+        return {
+            "name": os.path.basename(GRAMMAR_PATH),
+            "grammar": GRAMMAR,
+            "parser": {
+                "library": "lark",
+                "version": getattr(lark, "__version__", "unknown"),
+                "mode": options.parser,
+                "ambiguity": options.ambiguity,
+            },
+        }
 
     def __init__(self, source_lines=None):
         """Initialise the transformer with optional source lines for error reporting."""

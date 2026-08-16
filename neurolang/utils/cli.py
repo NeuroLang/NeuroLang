@@ -52,10 +52,10 @@ import pandas as pd
 
 from neurolang.datalog import WrappedRelationalAlgebraSet
 from neurolang.frontend import NeurolangPDL
-from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-from neurolang.frontend.datalog.squall_syntax_lark import (
+from neurolang.frontend.datalog import (
     squall_grammar_metadata,
 )
+from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.utils import engine_registry
 
 

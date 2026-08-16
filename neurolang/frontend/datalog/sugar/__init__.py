@@ -12,6 +12,7 @@ from ....datalog.expression_processing import (
     conjunct_formulas,
     extract_logic_atoms,
     extract_logic_free_variables,
+    order_conjunction_by_shared_variables,
 )
 from ....datalog.expressions import AdornedSymbol
 from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
@@ -41,44 +42,6 @@ class Column(ir.Definition):
         self._symbols = (
             self.set_symbol._symbols | self.column_position._symbols
         )
-
-
-def _order_conjunction_by_shared_variables(
-    formulas: typing.Tuple[ir.Expression, ...],
-) -> typing.Tuple[ir.Expression, ...]:
-    """Order flat conjunction atoms to avoid structural cross products.
-
-    Relational algebra plans execute the atoms of a conjunction as a
-    left-deep natural join in the order they appear.  Joining two atoms
-    that share no variable first materialises their cross product, which
-    can be enormous for domains such as ``voxel(x, y, z) x study(s)``.
-    Conjunctions commute, so the atoms are reordered so that each atom
-    shares at least one variable with the atoms selected so far, keeping
-    intermediate relations as small as possible.
-
-    Only flat conjunctions of predicate applications are reordered; any
-    other formula (negation, disjunction, nested quantifier, ...) is left
-    untouched in its original position.
-    """
-    if not all(isinstance(f, FunctionApplication) for f in formulas):
-        return formulas
-    remaining = list(formulas)
-    var_sets = [
-        extract_logic_free_variables(f) for f in remaining
-    ]
-    start = max(
-        range(len(remaining)), key=lambda i: len(var_sets[i])
-    )
-    ordered = [remaining.pop(start)]
-    bound = var_sets.pop(start)
-    while remaining:
-        best = max(
-            range(len(remaining)),
-            key=lambda i: len(var_sets[i] & bound),
-        )
-        ordered.append(remaining.pop(best))
-        bound |= var_sets.pop(best)
-    return tuple(ordered)
 
 
 def _has_column_sugar(conjunction, marker):
@@ -547,7 +510,7 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         num_body = conjunct_formulas(left, right)
         if isinstance(num_body, Conjunction):
             num_body = Conjunction(
-                _order_conjunction_by_shared_variables(num_body.formulas)
+                order_conjunction_by_shared_variables(num_body.formulas)
             )
         new_num = self.walk(
             Implication(

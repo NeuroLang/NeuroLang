@@ -442,14 +442,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         does for ans(...) :- R(...).
         """
         head = query.head
-        if (
-            isinstance(head, ir.FunctionApplication)
-            and not isinstance(head, AggregationApplication)
-        ):
+        if isinstance(head, AggregationApplication):
+            head_vars = (head,)
+        elif isinstance(head, ir.FunctionApplication):
             head_vars = tuple(head.args)
         elif isinstance(head, ir.Symbol):
-            head_vars = (head,)
-        elif isinstance(head, AggregationApplication):
             head_vars = (head,)
         else:
             head_vars = tuple(head)

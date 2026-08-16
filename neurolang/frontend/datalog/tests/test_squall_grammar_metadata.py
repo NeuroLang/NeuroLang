@@ -7,13 +7,17 @@ from ..squall_syntax_lark import (
     COMPILED_GRAMMAR,
     GRAMMAR,
     GRAMMAR_PATH,
-    squall_grammar_metadata
+    SquallTransformer
 )
+
+
+def _metadata():
+    return SquallTransformer.squall_grammar_metadata()
 
 
 def test_squall_grammar_metadata_shape():
     """The metadata dict is JSON-serializable and self-consistent."""
-    info = squall_grammar_metadata()
+    info = _metadata()
     assert json.dumps(info)  # JSON-serializable
 
     assert info["name"] == "neurolang_natural.lark"
@@ -29,7 +33,7 @@ def test_squall_grammar_metadata_shape():
 
 def test_squall_grammar_metadata_matches_compiled_grammar():
     """Metadata reflects the grammar actually used by the parser."""
-    info = squall_grammar_metadata()
+    info = _metadata()
     options = COMPILED_GRAMMAR.options
     assert info["parser"]["mode"] == options.parser
     assert info["parser"]["ambiguity"] == options.ambiguity
