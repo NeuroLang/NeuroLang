@@ -391,17 +391,14 @@ class TranslateHeadConstantsToEqualities(ew.PatternWalker):
 class TranslateProbabilisticQueryMixin(ew.PatternWalker):
 
     @ew.add_match(
-        Implication(FunctionApplication(AdornedSymbol, ...), Conjunction),
-        lambda impl: (
-            getattr(impl.consequent.functor, "adornment", None) == "cond_num"
-            and order_conjunction_by_shared_variables(
-                impl.antecedent.formulas
-            ) != impl.antecedent.formulas
-        ),
+        Implication(..., Conjunction),
+        lambda impl: order_conjunction_by_shared_variables(
+            impl.antecedent.formulas
+        ) != impl.antecedent.formulas,
     )
-    def order_conditional_query_conjunction(self, impl):
+    def order_conjunction_for_join(self, impl):
         """
-        Order the numerator conjunction of a conditional query.
+        Order implication-conjunction bodies to avoid cross products.
 
         Relational algebra plans evaluate a conjunction as a left-deep
         natural join in atom order; joining two atoms that share no

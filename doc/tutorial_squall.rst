@@ -1002,22 +1002,36 @@ Global aggregation (no ``per`` clause):
 This requires ``collect_all`` to be registered as an aggregation functor in
 the engine's symbol table.
 
-Aggregations can also run directly through ``obtain``.  The aggregate column
-is projected onto the result instead of being dropped, e.g. the total number
-of items:
+Aggregations can also run directly through ``obtain`` — the aggregate
+column is projected onto the result instead of being dropped.  All
+supported functions work this way, e.g. over the ``quantity`` values
+(0, 1, 2, 3, 4) of the tutorial corpus:
 
 .. code-block:: squall
 
-    obtain every Count of the Item.
+    obtain every Count of the Quantity.    # 5
+    obtain every Sum of the Quantity.      # 10
+    obtain every Max of the Quantity.      # 4
+    obtain every Min of the Quantity.      # 0
+    obtain every Average of the Quantity.  # 2.0
 
-The same holds for N-ary relations and aggregation over a defined relation —
-``COUNT``, ``sum``, ``max``, ``min`` and ``average`` all produce the
-aggregate column:
+Each returns a single row with one column carrying the aggregate value.
+
+The aggregated relation can be defined earlier in the same program, and
+anaphoric definite references to that relation participate in the
+aggregation:
 
 .. code-block:: squall
 
-    define as Large_items every Item that has an item_count greater equal than 2.
-    obtain every Large_items of the Large_items count of the Large_items.
+    define as ES every Item that has an item_count.
+    obtain every ES of the ES count of the ES.   # 3, single column
+
+The aggregation noun may also refer to an N-ary relation, such as a
+voxel space:
+
+.. code-block:: squall
+
+    obtain every Voxel in 3D of the Study count of the Study.
 
 10.2 Probabilistic Choice Definitions
 --------------------------------------
