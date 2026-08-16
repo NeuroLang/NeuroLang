@@ -12,6 +12,9 @@ Usage
     # List available engines
     neurolang-query --list-engines
 
+    # Print the SQUALL grammar and parser metadata as JSON
+    neurolang-query --grammar-json
+
     # List predicates for an engine
     neurolang-query --engine neurosynth --list-predicates
 
@@ -39,6 +42,7 @@ Usage
 """
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -48,6 +52,9 @@ import pandas as pd
 
 from neurolang.datalog import WrappedRelationalAlgebraSet
 from neurolang.frontend import NeurolangPDL
+from neurolang.frontend.datalog import (
+    squall_grammar_metadata,
+)
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.utils import engine_registry
 
@@ -246,6 +253,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--list-engines",
         action="store_true",
         help="List available dataset engines and exit.",
+    )
+    parser.add_argument(
+        "--grammar-json",
+        action="store_true",
+        help="Print the SQUALL Lark grammar and parser metadata as JSON "
+        "and exit (no engine needed).",
     )
     parser.add_argument(
         "--squall",
@@ -496,6 +509,11 @@ def main(argv: Optional[list] = None) -> None:
 
     if args.list_engines:
         engine_registry.show_engines()
+        return
+
+    # --grammar-json only needs the parser, not an engine.
+    if args.grammar_json:
+        print(json.dumps(squall_grammar_metadata(), indent=2))
         return
 
     # --show-datalog only needs the parser, not an engine.  Handle it

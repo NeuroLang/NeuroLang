@@ -58,6 +58,7 @@ as a controlled natural language", Data & Knowledge Engineering, 2014.
 """
 import os
 
+import lark
 import numpy as np
 from lark import Lark, Transformer
 from lark.exceptions import (
@@ -230,6 +231,18 @@ _AGG_FUNC_MAP = {
 }
 
 
+def _tail_largest(values, n):
+    """Return the n-th largest value of *values*, clamped to its size."""
+    values = sorted(values)
+    return values[-min(int(n), len(values))]
+
+
+def _tail_smallest(values, n):
+    """Return the n-th smallest value of *values*, clamped to its size."""
+    values = sorted(values)
+    return values[min(int(n), len(values)) - 1]
+
+
 class _InverseVerbSymbol:
 
     """Thin callable wrapper that reverses argument order via InvertedFunctionApplication.
@@ -296,6 +309,31 @@ class SquallTransformer(Transformer):
     and produce a logical formula with the quantifier in scope.
     """
 
+    @staticmethod
+    def squall_grammar_metadata() -> dict:
+        """
+        Projection of the SQUALL grammar as a JSON-serializable dict.
+
+        Returns
+        -------
+        dict
+            The grammar file name, its full text and the Lark parser
+            configuration (library, version, mode and ambiguity strategy)
+            used to parse SQUALL programs.  Suitable for ``json.dumps``.
+
+        """
+        options = COMPILED_GRAMMAR.options
+        return {
+            "name": os.path.basename(GRAMMAR_PATH),
+            "grammar": GRAMMAR,
+            "parser": {
+                "library": "lark",
+                "version": getattr(lark, "__version__", "unknown"),
+                "mode": options.parser,
+                "ambiguity": options.ambiguity,
+            },
+        }
+
     def __init__(self, source_lines=None):
         """Initialise the transformer with optional source lines for error reporting."""
         super().__init__()
@@ -308,6 +346,44 @@ class SquallTransformer(Transformer):
     def _clear_scope(self):
         self._symbol_scope.clear()
         self._has_rule_scope = False
+
+    def _register_body_scope(self, body_formula, head_args):
+        """Re-register quantifier nouns into the symbol scope from the body.
+
+        The rule-level handlers call ``_clear_scope()`` before their
+        children's quantifier registrations are needed again by an ``ops``
+        CPS (e.g. ``the Item`` in ``where the Item item_count``).  Scan the
+        body atoms for unary noun predicates whose variable is also a head
+        argument and restore those entries.
+        """
+        candidates = set(
+            h for h in (head_args or []) if isinstance(h, Symbol)
+        )
+        if not candidates:
+            return
+        stack = [body_formula]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, FunctionApplication):
+                functor = getattr(node, 'functor', None)
+                args = node.args
+                if (
+                    isinstance(functor, Symbol)
+                    and len(args) == 1
+                    and isinstance(args[0], Symbol)
+                    and args[0] in candidates
+                ):
+                    self._symbol_scope[functor.name] = args[0]
+            stack.extend(
+                getattr(node, 'args', []) or []
+            )
+            stack.extend(
+                getattr(node, 'formulas', []) or []
+            )
+            if hasattr(node, 'body'):
+                stack.append(node.body)
+            if hasattr(node, 'antecedent'):
+                stack.append(node.antecedent)
 
     def _capture_pos(self, token):
         if hasattr(token, 'line') and hasattr(token, 'column'):
@@ -651,6 +727,13 @@ class SquallTransformer(Transformer):
         all_body_parts = [body_formula]
         head_args = list(body_args)
 
+        # Re-register the quantifier nouns in the symbol scope: the
+        # determiner children have run and registered them, but _clear_scope
+        # above wiped the registrations.  The restored scope entries are
+        # used by the ops CPS (e.g. ``the Item`` in ``where the Item
+        # item_count``).
+        self._register_body_scope(body_formula, head_args)
+
         if ops is not None:
             if callable(ops) and not isinstance(ops, (Symbol, Constant)):
                 # CPS NP: collect bound variables into head_args and body
@@ -849,7 +932,8 @@ class SquallTransformer(Transformer):
             head_args = [agg_expr]
             # Conjoin any trailing relative clause (e.g. "such that Voxel(…) and …")
             if extra_rel is not None:
-                extra_formula = extra_rel(None)
+                agg_slot = _agg_slot_var(agg_expr, bare_body)
+                extra_formula = extra_rel(agg_slot)
                 bare_body = Conjunction((bare_body, extra_formula))
             return ('_rule_body', (head_args, bare_body))
 
@@ -1169,7 +1253,8 @@ class SquallTransformer(Transformer):
 
                     # Conjoin any trailing relative clause (e.g. "such that Voxel(…)")
                     if extra_rel is not None:
-                        extra_formula = extra_rel(None)
+                        agg_slot = _agg_slot_var(agg_expr, bare_body)
+                        extra_formula = extra_rel(agg_slot)
                         bare_body = Conjunction((bare_body, extra_formula))
 
                     # Return the bare body predicate (existentials stripped) so
@@ -1276,7 +1361,8 @@ class SquallTransformer(Transformer):
                     agg_expr._per_vars = list(per_vars)
 
                     if extra_rel is not None:
-                        extra_formula = extra_rel(None)
+                        agg_slot = _agg_slot_var(agg_expr, bare_body)
+                        extra_formula = extra_rel(agg_slot)
                         extended_body = Conjunction((bare_body, extra_formula))
                         per_set = set(per_vars)
                         npc_free = extract_logic_free_variables(bare_body)
@@ -1497,6 +1583,77 @@ class SquallTransformer(Transformer):
             ng_with_rel._var_info = var_info
         return ng_with_rel
 
+    def ng1_tail_npc(self, args):
+        """Handle ``( Top | Bottom ) n [%] OF npc [dims] [rel]`` noun groups.
+
+        ``the Top 5% of the Zscore`` aggregates the npc values into a
+        single threshold per group: percent variants return the value at
+        the ``(100 − n)``-th (Top) or ``n``-th (Bottom) percentile, count
+        variants return the ``n``-th largest (Top) or smallest (Bottom)
+        value, clamped to the group size when the group is smaller than
+        ``n``.  The number is a parameter of one generic functor — not a
+        fixed set of named aggregations — so any ``n`` works.
+        """
+        items = [a for a in args if a is not None]
+        side_token = items[0] if items else None
+        side = (
+            side_token.lower() if isinstance(side_token, str)
+            else str(side_token.value).lower() if hasattr(side_token, 'value')
+            else str(side_token)
+        )
+        number = items[1] if len(items) > 1 else None
+        percent = any(
+            isinstance(a, str) and a.startswith('%') for a in args[2:]
+        )
+
+        npc = None
+        dims = None
+        extra_rel = None
+        for a in args[2:]:
+            if a is None:
+                continue
+            if isinstance(a, tuple) and a[0] == '_dims':
+                dims = a[1]
+            elif isinstance(a, tuple) and a[0] == '_rel':
+                extra_rel = a[1]
+            elif callable(a) and not isinstance(a, (Symbol, Constant)):
+                if npc is None:
+                    npc = a
+                else:
+                    extra_rel = lambda x, _r=a: _r(x)
+
+        per_vars = []
+        if dims is not None:
+            for d in dims:
+                if isinstance(d, tuple) and d[0] == '_per':
+                    per_vars.append(d[1])
+
+        import functools
+        if number is None:
+            raise self._make_error(
+                "Expected a number after 'Top'/'Bottom', "
+                "e.g. 'the Top 5% of the Zscore'."
+            )
+        if percent:
+            q = 100 - int(number.value) if side == 'top' else int(number.value)
+            agg_func = Constant(functools.partial(np.percentile, q=q))
+        elif side == 'top':
+            agg_func = Constant(
+                functools.partial(_tail_largest, n=number.value)
+            )
+        else:
+            agg_func = Constant(
+                functools.partial(_tail_smallest, n=number.value)
+            )
+
+        def ng_agg_fallback(x):
+            q = Symbol.fresh()
+            npc(lambda v: Constant(True))
+            return _AggApp(agg_func, (q,))
+
+        ng_agg_fallback._agg_info = (agg_func, npc, list(per_vars), extra_rel)
+        return ng_agg_fallback
+
     def ng1_agg_npc(self, args):
         """Handle ``noun1 OF npc [dims] [rel]`` aggregation noun groups.
 
@@ -1558,10 +1715,16 @@ class SquallTransformer(Transformer):
             # Built-in names (count/sum/max/min/average) map to Python callables;
             # arbitrary names become Symbol(noun_name) — TranslateToLogicWithAggregation
             # promotes any FunctionApplication in a rule head to AggregationApplication.
-            agg_func = (
-                agg_func_from_noun if agg_func_from_noun is not None
-                else (Symbol(noun_name) if noun_name else None)
-            )
+            # An explicit aggregation dimension ("AGG_FUNC of the X", e.g.
+            # "the Study count of the Study") takes precedence: it defines
+            # both the aggregation function and the aggregated relation.
+            if agg_specs:
+                agg_func, npc = agg_specs[0]
+            else:
+                agg_func = (
+                    agg_func_from_noun if agg_func_from_noun is not None
+                    else (Symbol(noun_name) if noun_name else None)
+                )
             if agg_func is not None:
                 def ng_agg_fallback(x):
                     # Fallback body — only used if det_every does not intercept _agg_info.
@@ -2214,7 +2377,10 @@ class SquallTransformer(Transformer):
         formula = ops(capturing_d)
 
         if captured_vars:
-            head_vars = [v for v in captured_vars if isinstance(v, Symbol)]
+            head_vars = [
+                v for v in captured_vars
+                if isinstance(v, (Symbol, _AggApp))
+            ]
             while isinstance(formula, (UniversalPredicate, ExistentialPredicate)):
                 formula = formula.body
             if isinstance(formula, Implication):
@@ -2292,7 +2458,10 @@ class SquallTransformer(Transformer):
             free = sorted(extract_logic_free_variables(body_formula), key=lambda s: s.name)
             head_vars = free
         else:
-            head_vars = [v for v in captured_vars if isinstance(v, Symbol)]
+            head_vars = [
+                v for v in captured_vars
+                if isinstance(v, (Symbol, _AggApp))
+            ]
 
         head = name_sym(*head_vars) if head_vars else name_sym()
         impl = Implication(head, body_formula)
@@ -2511,6 +2680,29 @@ def _extract_datalog_body(cps_np, head_args):
     extracted = _flatten_to_datalog(result)
     body_parts.extend(extracted)
     return body_parts
+
+
+def _agg_slot_var(agg_expr, bare_body):
+    """Pick the variable a trailing relative clause's object slot must join on.
+
+    ``the Max of the Quantity where the Item item_count`` builds the
+    relative clause by applying the clause CPS to the *aggregated*
+    variable — the same variable that appears both in the aggregation
+    application and free in the npc body (``quantity(fresh)``), so that
+    ``item_count(i, fresh)`` joins with the npc body instead of producing
+    an off-domain ``None`` slot.
+    """
+    from neurolang.logic.expression_processing import (
+        extract_logic_free_variables,
+    )
+    body_free = extract_logic_free_variables(bare_body)
+    for a in agg_expr.args:
+        if isinstance(a, Symbol) and a in body_free:
+            return a
+    for a in agg_expr.args:
+        if isinstance(a, Symbol):
+            return a
+    return Symbol.fresh()
 
 
 def _flatten_to_datalog(expr):

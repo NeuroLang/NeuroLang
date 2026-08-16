@@ -868,6 +868,41 @@ def test_det_every_agg_free_var_fallback():
     )
 
 
+def test_ng1_tail_npc_parses_parameterized_functors():
+    """'Top/Bottom n[%] of the Relation' builds parameterized aggregate functors."""
+
+    import functools
+    import numpy as np
+
+    cases = [
+        ("obtain the Top 5% of the Zscore.", "top", 5, True, np.percentile),
+        ("obtain the Bottom 5% of the Zscore.", "bottom", 5, True, np.percentile),
+        ("obtain the Top 2 of the Zscore.", "top", 2, False, None),
+        ("obtain the Bottom 100 of the Zscore.", "bottom", 100, False, None),
+    ]
+
+    for code, side, n, percent, base_fun in cases:
+        result = parser(code)
+        agg_arg = result.queries[0].head
+        assert isinstance(agg_arg, AggregationApplication), (
+            f"Expected AggregationApplication, got {type(agg_arg)}"
+        )
+        functor = agg_arg.functor.value
+        assert isinstance(functor, functools.partial), (
+            f"Expected a parameterized functor, got {type(functor)}"
+        )
+        if percent:
+            expected_q = 100 - n if side == "top" else n
+            assert base_fun is np.percentile
+            assert functor.keywords == {"q": expected_q}, (
+                f"Expected q={expected_q}, got {functor.keywords}"
+            )
+        else:
+            assert functor.keywords == {"n": n}, (
+                f"Expected n={n}, got {functor.keywords}"
+            )
+
+
 def test_rule_body2_cond_parses():
     """Test: define as … with probability every A conditioned to every B should parse."""
 

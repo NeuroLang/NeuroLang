@@ -35,7 +35,10 @@ from ..datalog.expression_processing import (
     TranslateToDatalogSemantics,
     reachable_code,
 )
-from ..datalog.expressions import predicate_identity
+from ..datalog.expressions import (
+    AggregationApplication,
+    predicate_identity,
+)
 from ..logic.transformations import RemoveTrivialOperations
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
@@ -439,15 +442,39 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         does for ans(...) :- R(...).
         """
         head = query.head
-        if isinstance(head, ir.FunctionApplication):
+        if isinstance(head, AggregationApplication):
+            head_vars = (head,)
+        elif isinstance(head, ir.FunctionApplication):
             head_vars = tuple(head.args)
         elif isinstance(head, ir.Symbol):
             head_vars = (head,)
         else:
             head_vars = tuple(head)
 
+        body = query.body
+        if (
+            len(head_vars) == 1
+            and isinstance(head_vars[0], ir.Symbol)
+            and isinstance(body, ir.FunctionApplication)
+            and isinstance(body.functor, ir.Symbol)
+            and len(body.args) == 1
+            and body.args[0] == head_vars[0]
+        ):
+            # "obtain every RelationName." without a tuple label projects
+            # the whole relation (all columns) instead of only the first.
+            try:
+                terms = self.program_ir.predicate_terms(body.functor)
+            except NeuroLangException:
+                terms = ()
+            if len(terms) > 1:
+                head_vars = tuple(
+                    t if isinstance(t, ir.Symbol) else ir.Symbol.fresh()
+                    for t in terms
+                )
+                body = body.functor(*head_vars)
+
         h = ir.Symbol.fresh()
-        query_impl = datalog.Implication(h(*head_vars), query.body)
+        query_impl = datalog.Implication(h(*head_vars), body)
 
         self.program_ir.push_scope()
         try:
@@ -461,7 +488,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.program_ir.walk(query_impl)
             fe_pred = fe.Expression(self, h(*head_vars))
             fe_head = tuple(
-                fe.Expression(self, ir.Symbol(s.name))
+                fe.Expression(self, s) if isinstance(s, ir.Symbol)
+                else fe.Expression(self, ir.Symbol.fresh())
                 for s in head_vars
             )
             ra, _ = self._execute_query(

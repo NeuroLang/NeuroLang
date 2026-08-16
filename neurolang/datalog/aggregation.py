@@ -13,7 +13,12 @@ import typing
 
 import numpy
 
-from ..exceptions import ForbiddenUnstratifiedAggregation, NeuroLangException, NotConjunctiveExpressionNestedPredicates
+from ..exceptions import (
+    ForbiddenUnstratifiedAggregation,
+    NeuroLangException,
+    NotConjunctiveExpressionNestedPredicates,
+    SymbolNotFoundError,
+)
 from ..expression_walker import (
     FunctionApplicationToPythonLambda,
     PatternWalker,
@@ -219,7 +224,13 @@ class ChaseAggregationMixin:
             len(arg.args) == 1 and
             isinstance(arg.args[0], Symbol)
         ):
-            fun = self.datalog_program.walk(arg.functor).value
+            resolved_functor = self.datalog_program.walk(arg.functor)
+            if not (
+                isinstance(resolved_functor, Constant)
+                and callable(resolved_functor.value)
+            ):
+                raise SymbolNotFoundError(f"Symbol not found {arg.functor}")
+            fun = resolved_functor.value
             aggregation_args = arg.args[0].name
         else:
             aggregation_args = None

@@ -975,32 +975,126 @@ This section documents features not used directly in the Bayes Factor
 example but available in the language.
 
 10.1 Aggregations
-------------------
+-----------------
 
-Aggregations summarise a set of values into a single result per group:
-
-.. code-block:: text
-
-    define as RESULT for every SUBJECT ;
-        where every AGG_FUNC of the MEASURE where CONDITION per SUBJECT.
-
+Aggregations summarise a set of values into a single result per group.
 Supported functions: ``count``, ``sum``, ``max``, ``min``, ``average``.
 
-Example — maximum ``item_count`` per item:
+The examples below use the following EDB relations, following the
+NeuroSynth-style corpus of this tutorial:
+
+.. code-block:: python
+
+    >>> nl = NeurolangPDL()
+    >>> nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    >>> nl.add_tuple_set([("s1", 0), ("s1", 1), ("s2", 2), ("s3", 3)],
+    ...                  name="measured")
+    >>> nl.add_tuple_set([(i,) for i in range(5)], name="zscore")
+
+The ``study`` relation lists the studies, ``measured`` links each study
+to the z-scores of the activation peaks it measured, and ``zscore``
+holds every possible z-score value.  (The lowercase EDB names are
+optional; NeuroLang equates ``Study`` and ``study``.)
+
+The canonical form groups the aggregation over a subject noun, joining
+through a binary relationship — e.g. the maximum z-score each study
+measured:
 
 .. code-block:: squall
 
-    define as max_items for every Item ?i ;
-        where every Max of the Quantity where ?i item_count per ?i.
+    define as study_peak_z for every Study ;
+        where every Max of the Zscore that the Study measured.
 
-Global aggregation (no ``per`` clause):
+The ``Study`` quantifier introduces the group; the anaphoric ``the Study``
+inside the ``where`` clause (here in a relative clause ``that … measured``)
+ties the aggregation back to it, so no auxiliary variable is needed.  The
+rule is understood as: for every study, the maximum ``zscore`` value that
+the study ``measured``.  It yields one row per study with the maximum
+measured z-score.
+
+The grouped relation is a normal relation and can be queried like any
+other — ``obtain`` without a tuple label projects every column:
 
 .. code-block:: squall
 
-    define as Result every Collect_all of the Item.
+    obtain every study_peak_z.          # one row per study: (study, max z)
+    obtain every study_peak_z (?s; ?z). # same, with explicit column names
 
-This requires ``collect_all`` to be registered as an aggregation functor in
-the engine's symbol table.
+Grouped aggregation is not limited to ``max``: the ``count``, ``sum``,
+``min`` and ``average`` functions combine with the same anaphoric clause:
+
+.. code-block:: squall
+
+    define as study_peak_count for every Study ;
+        where every Count of the Zscore that the Study measured.
+
+    define as study_peak_sum for every Study ;
+        where every Sum of the Zscore that the Study measured.
+
+    define as study_peak_mean for every Study ;
+        where every Average of the Zscore that the Study measured.
+
+Global aggregation (no per-group clause) runs directly through
+``obtain`` — the aggregate column is projected onto the result instead of
+being dropped:
+
+.. code-block:: squall
+
+    obtain every Count of the Zscore.     # 5
+    obtain every Sum of the Zscore.       # 10
+    obtain every Max of the Zscore.       # 4
+    obtain every Min of the Zscore.       # 0
+    obtain every Average of the Zscore.   # 2.0
+
+Each returns a single row with one column carrying the aggregate value.
+
+In addition to these summary functions, **tail aggregations** select a
+threshold below (Top) or above (Bottom) which a quoted fraction or count
+of the values lie.  ``obtain the …`` reads like English here, so the
+definite article is preferred over ``every``:
+
+.. code-block:: squall
+
+    obtain the Top 5% of the Zscore.      # 3.8 (95th percentile)
+    obtain the Bottom 5% of the Zscore.   # 0.2 (5th percentile)
+    obtain the Top 2 of the Zscore.       # 3 (second-largest value)
+    obtain the Bottom 2 of the Zscore.    # 1 (second-smallest value)
+
+A percentage selects the value at the corresponding percentile
+(``Top n%`` → the ``(100 − n)``-th percentile, ``Bottom n%`` → the
+``n``-th); a bare number selects the ``n``-th largest (Top) or ``n``-th
+smallest (Bottom) value, clamped to the group size when the group is
+smaller than ``n`` — e.g. ``Top 100`` of a 5-value column is the smallest
+of the five, since all of them lie within the top 100.
+
+Tail aggregations work with the anaphoric per-group clause too, using the
+``every`` determiner inside the rule body:
+
+.. code-block:: squall
+
+    define as study_top_threshold for every Study ;
+        where every Top 10% of the Zscore that the Study measured.
+
+    obtain every study_top_threshold.
+    # one row per study: s1 → 0.9 (90th percentile of {0, 1}),
+    #                    s2 → 2, s3 → 3
+
+The aggregated relation can be defined earlier in the same program, and
+anaphoric definite references to that relation participate in the
+aggregation:
+
+.. code-block:: squall
+
+    define as measured_studies every Study that measured.
+    obtain every measured_studies of the measured_studies count of the measured_studies.
+    # single column: 3 studies that measured at least one peak
+
+The aggregation noun may also refer to an N-ary relation, such as a
+voxel space:
+
+.. code-block:: squall
+
+    obtain every Voxel in 3D of the Study count of the Study.
 
 10.2 Probabilistic Choice Definitions
 --------------------------------------
