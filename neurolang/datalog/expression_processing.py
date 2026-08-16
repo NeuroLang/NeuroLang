@@ -579,6 +579,39 @@ def conjunction_needs_reordering(
     return False
 
 
+def order_conjunction_constant_atoms_first(
+    formulas: typing.Tuple[Expression, ...],
+) -> typing.Tuple[Expression, ...]:
+    """
+    Order a flat conjunction keeping atoms with constants first.
+
+    Magic sets adorns body atoms left to right; a constant-bearing atom
+    is only helpful as a seed (``magic_P(c) :- ()``) when its shared
+    variables are not yet bound, which requires no atom sharing them to
+    precede it.  Placing all constant-bearing atoms first (in their
+    original relative order) keeps them seedable, while the remaining
+    atoms are joined greedily on shared variables to avoid structural
+    cross products (see ``order_conjunction_by_shared_variables``).
+
+    Whether a cross product exists at all is decided by
+    ``conjunction_needs_reordering``; conjunctions without one are left
+    untouched.
+    """
+    if not conjunction_needs_reordering(formulas):
+        return formulas
+    constant_atoms = [
+        f for f in formulas
+        if any(isinstance(arg, Constant) for arg in f.args)
+    ]
+    free_atoms = [
+        f for f in formulas
+        if not any(isinstance(arg, Constant) for arg in f.args)
+    ]
+    return tuple(constant_atoms) + order_conjunction_by_shared_variables(
+        tuple(free_atoms)
+    )
+
+
 def enforce_conjunctive_antecedent(implication):
     antecedent = GuaranteeConjunction().walk(implication.antecedent)
     return implication.apply(implication.consequent, antecedent)

@@ -10,10 +10,9 @@ from .... import expression_walker as ew
 from .... import expressions as ir
 from ....datalog.expression_processing import (
     conjunct_formulas,
-    conjunction_needs_reordering,
     extract_logic_atoms,
     extract_logic_free_variables,
-    order_conjunction_by_shared_variables,
+    order_conjunction_constant_atoms_first,
 )
 from ....datalog.expressions import AdornedSymbol
 from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
@@ -34,31 +33,6 @@ from ....type_system import (
     get_generic_type,
     is_leq_informative,
 )
-
-
-def _has_repeated_constant_functor(formulas):
-    """
-    Whether a body repeats a functor on an atom carrying a constant.
-
-    The magic-sets rewrite adorns co-occurring atoms of an intensional
-    predicate left to right; reordering the atoms around such a pair can
-    bind the shared variable on the constant-bearing occurrence, turning
-    its magic init rule into ``magic_P(fresh, c) :- ()``, which the
-    negation mixin rejects as not range restricted.  Bodies like this are
-    kept in their original order (see ``order_conjunction_for_join``).
-    """
-    functor_atoms = {}
-    for formula in formulas:
-        functor_atoms.setdefault(formula.functor, []).append(formula)
-    return any(
-        len(atoms) > 1
-        and any(
-            isinstance(arg, Constant)
-            for atom in atoms
-            for arg in atom.args
-        )
-        for atoms in functor_atoms.values()
-    )
 
 
 class Column(ir.Definition):
@@ -417,11 +391,10 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
 
     @ew.add_match(
         Implication(..., Conjunction),
-        lambda impl: order_conjunction_by_shared_variables(
+        lambda impl: order_conjunction_constant_atoms_first(
             impl.antecedent.formulas
         )
-        != impl.antecedent.formulas
-        and not _has_repeated_constant_functor(impl.antecedent.formulas),
+        != impl.antecedent.formulas,
     )
     def order_conjunction_for_join(self, impl):
         """
@@ -429,16 +402,19 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
 
         Relational algebra plans evaluate a conjunction as a left-deep
         natural join in atom order; joining two atoms that share no
-        variable first materialises their cross product.  The order is
-        only changed when the current one contains such a cross product
-        (see ``conjunction_needs_reordering``), so already-efficient
+        variable first materialises their cross product.  Constant-
+        bearing atoms are kept first so the magic-sets rewrite can seed
+        them (see ``order_conjunction_constant_atoms_first``); the rest
+        is ordered by shared variables.  The order is only changed when
+        the current one contains such a cross product (see
+        ``conjunction_needs_reordering``), so already-efficient
         conjunctions are left untouched and handled by the other rules.
         """
         return self.walk(
             impl.apply(
                 impl.consequent,
                 Conjunction(
-                    order_conjunction_by_shared_variables(
+                    order_conjunction_constant_atoms_first(
                         impl.antecedent.formulas
                     )
                 ),
