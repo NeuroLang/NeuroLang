@@ -451,8 +451,30 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         else:
             head_vars = tuple(head)
 
+        body = query.body
+        if (
+            len(head_vars) == 1
+            and isinstance(head_vars[0], ir.Symbol)
+            and isinstance(body, ir.FunctionApplication)
+            and isinstance(body.functor, ir.Symbol)
+            and len(body.args) == 1
+            and body.args[0] == head_vars[0]
+        ):
+            # "obtain every RelationName." without a tuple label projects
+            # the whole relation (all columns) instead of only the first.
+            try:
+                terms = self.program_ir.predicate_terms(body.functor)
+            except NeuroLangException:
+                terms = ()
+            if len(terms) > 1:
+                head_vars = tuple(
+                    t if isinstance(t, ir.Symbol) else ir.Symbol.fresh()
+                    for t in terms
+                )
+                body = body.functor(*head_vars)
+
         h = ir.Symbol.fresh()
-        query_impl = datalog.Implication(h(*head_vars), query.body)
+        query_impl = datalog.Implication(h(*head_vars), body)
 
         self.program_ir.push_scope()
         try:

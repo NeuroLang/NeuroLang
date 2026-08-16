@@ -335,6 +335,44 @@ class SquallTransformer(Transformer):
         self._symbol_scope.clear()
         self._has_rule_scope = False
 
+    def _register_body_scope(self, body_formula, head_args):
+        """Re-register quantifier nouns into the symbol scope from the body.
+
+        The rule-level handlers call ``_clear_scope()`` before their
+        children's quantifier registrations are needed again by an ``ops``
+        CPS (e.g. ``the Item`` in ``where the Item item_count``).  Scan the
+        body atoms for unary noun predicates whose variable is also a head
+        argument and restore those entries.
+        """
+        candidates = set(
+            h for h in (head_args or []) if isinstance(h, Symbol)
+        )
+        if not candidates:
+            return
+        stack = [body_formula]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, FunctionApplication):
+                functor = getattr(node, 'functor', None)
+                args = node.args
+                if (
+                    isinstance(functor, Symbol)
+                    and len(args) == 1
+                    and isinstance(args[0], Symbol)
+                    and args[0] in candidates
+                ):
+                    self._symbol_scope[functor.name] = args[0]
+            stack.extend(
+                getattr(node, 'args', []) or []
+            )
+            stack.extend(
+                getattr(node, 'formulas', []) or []
+            )
+            if hasattr(node, 'body'):
+                stack.append(node.body)
+            if hasattr(node, 'antecedent'):
+                stack.append(node.antecedent)
+
     def _capture_pos(self, token):
         if hasattr(token, 'line') and hasattr(token, 'column'):
             self._current_line = token.line
@@ -677,6 +715,13 @@ class SquallTransformer(Transformer):
         all_body_parts = [body_formula]
         head_args = list(body_args)
 
+        # Re-register the quantifier nouns in the symbol scope: the
+        # determiner children have run and registered them, but _clear_scope
+        # above wiped the registrations.  The restored scope entries are
+        # used by the ops CPS (e.g. ``the Item`` in ``where the Item
+        # item_count``).
+        self._register_body_scope(body_formula, head_args)
+
         if ops is not None:
             if callable(ops) and not isinstance(ops, (Symbol, Constant)):
                 # CPS NP: collect bound variables into head_args and body
@@ -875,7 +920,8 @@ class SquallTransformer(Transformer):
             head_args = [agg_expr]
             # Conjoin any trailing relative clause (e.g. "such that Voxel(…) and …")
             if extra_rel is not None:
-                extra_formula = extra_rel(None)
+                agg_slot = _agg_slot_var(agg_expr, bare_body)
+                extra_formula = extra_rel(agg_slot)
                 bare_body = Conjunction((bare_body, extra_formula))
             return ('_rule_body', (head_args, bare_body))
 
@@ -1195,7 +1241,8 @@ class SquallTransformer(Transformer):
 
                     # Conjoin any trailing relative clause (e.g. "such that Voxel(…)")
                     if extra_rel is not None:
-                        extra_formula = extra_rel(None)
+                        agg_slot = _agg_slot_var(agg_expr, bare_body)
+                        extra_formula = extra_rel(agg_slot)
                         bare_body = Conjunction((bare_body, extra_formula))
 
                     # Return the bare body predicate (existentials stripped) so
@@ -1302,7 +1349,8 @@ class SquallTransformer(Transformer):
                     agg_expr._per_vars = list(per_vars)
 
                     if extra_rel is not None:
-                        extra_formula = extra_rel(None)
+                        agg_slot = _agg_slot_var(agg_expr, bare_body)
+                        extra_formula = extra_rel(agg_slot)
                         extended_body = Conjunction((bare_body, extra_formula))
                         per_set = set(per_vars)
                         npc_free = extract_logic_free_variables(bare_body)
@@ -2549,6 +2597,29 @@ def _extract_datalog_body(cps_np, head_args):
     extracted = _flatten_to_datalog(result)
     body_parts.extend(extracted)
     return body_parts
+
+
+def _agg_slot_var(agg_expr, bare_body):
+    """Pick the variable a trailing relative clause's object slot must join on.
+
+    ``the Max of the Quantity where the Item item_count`` builds the
+    relative clause by applying the clause CPS to the *aggregated*
+    variable — the same variable that appears both in the aggregation
+    application and free in the npc body (``quantity(fresh)``), so that
+    ``item_count(i, fresh)`` joins with the npc body instead of producing
+    an off-domain ``None`` slot.
+    """
+    from neurolang.logic.expression_processing import (
+        extract_logic_free_variables,
+    )
+    body_free = extract_logic_free_variables(bare_body)
+    for a in agg_expr.args:
+        if isinstance(a, Symbol) and a in body_free:
+            return a
+    for a in agg_expr.args:
+        if isinstance(a, Symbol):
+            return a
+    return Symbol.fresh()
 
 
 def _flatten_to_datalog(expr):

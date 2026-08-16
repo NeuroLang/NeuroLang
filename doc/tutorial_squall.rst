@@ -975,56 +975,57 @@ This section documents features not used directly in the Bayes Factor
 example but available in the language.
 
 10.1 Aggregations
-------------------
+-----------------
 
-Aggregations summarise a set of values into a single result per group:
-
-.. code-block:: text
-
-    define as RESULT for every SUBJECT ;
-        where every AGG_FUNC of the MEASURE where CONDITION per SUBJECT.
-
+Aggregations summarise a set of values into a single result per group.
 Supported functions: ``count``, ``sum``, ``max``, ``min``, ``average``.
 
-Example — maximum ``item_count`` per item:
+The canonical form groups the aggregation over a subject noun, joining
+through a binary relationship — e.g. over the peak z-scores each study
+reports:
 
 .. code-block:: squall
 
-    define as max_items for every Item ?i ;
-        where every Max of the Quantity where ?i item_count per ?i.
+    define as study_peak_z for every Study ;
+        where every Max of the Zscore where the Study peak_z.
 
-Global aggregation (no ``per`` clause):
+The ``Study`` quantifier introduces the group; the anaphoric ``the Study``
+inside the ``where`` clause ties the aggregation back to it, so no
+auxiliary variable is needed.  ``peak_z(study, z)`` relates studies to the
+z-scores they report and ``zscore`` holds the possible z-score values.
+The rule yields one row per study with the maximum reported z-score.
 
-.. code-block:: squall
-
-    define as Result every Collect_all of the Item.
-
-This requires ``collect_all`` to be registered as an aggregation functor in
-the engine's symbol table.
-
-Aggregations can also run directly through ``obtain`` — the aggregate
-column is projected onto the result instead of being dropped.  All
-supported functions work this way, e.g. over the ``quantity`` values
-(0, 1, 2, 3, 4) of the tutorial corpus:
+The grouped relation is a normal relation and can be queried like any
+other — ``obtain`` without a tuple label projects every column:
 
 .. code-block:: squall
 
-    obtain every Count of the Quantity.    # 5
-    obtain every Sum of the Quantity.      # 10
-    obtain every Max of the Quantity.      # 4
-    obtain every Min of the Quantity.      # 0
-    obtain every Average of the Quantity.  # 2.0
+    obtain every study_peak_z.          # one row per study: (study, max z)
+    obtain every study_peak_z (?s; ?z). # same, with explicit column names
+
+Global aggregation (no per-group clause) runs directly through
+``obtain`` — the aggregate column is projected onto the result instead of
+being dropped:
+
+.. code-block:: squall
+
+    obtain every Count of the Zscore.     # 5
+    obtain every Sum of the Zscore.       # 10
+    obtain every Max of the Zscore.       # 4
+    obtain every Min of the Zscore.       # 0
+    obtain every Average of the Zscore.   # 2.0
 
 Each returns a single row with one column carrying the aggregate value.
 
-The aggregated relation can be defined earlier in the same program, and
+An N-ary relation may be aggregated by an earlier-defined relation, and
 anaphoric definite references to that relation participate in the
 aggregation:
 
 .. code-block:: squall
 
-    define as ES every Item that has an item_count.
-    obtain every ES of the ES count of the ES.   # 3, single column
+    define as Peak_studies every Study that has a peak_z.
+    obtain every Peak_studies of the Peak_studies count of the Peak_studies.
+    # single column: 3 studies that have at least one peak
 
 The aggregation noun may also refer to an N-ary relation, such as a
 voxel space:
@@ -1032,6 +1033,20 @@ voxel space:
 .. code-block:: squall
 
     obtain every Voxel in 3D of the Study count of the Study.
+
+As with any aggregation, the ``count``, ``sum``, ``max``, ``min`` and
+``average`` functions can be combined with the per-group form:
+
+.. code-block:: squall
+
+    define as study_peak_count for every Study ;
+        where every Count of the Zscore where the Study peak_z.
+
+    define as study_peak_sum for every Study ;
+        where every Sum of the Zscore where the Study peak_z.
+
+    define as study_peak_mean for every Study ;
+        where every Average of the Zscore where the Study peak_z.
 
 10.2 Probabilistic Choice Definitions
 --------------------------------------
