@@ -939,7 +939,8 @@ def test_conditional_query_intermediate_predicates_are_deterministic():
 # ---------------------------------------------------------------------------
 
 def test_execute_squall_count_obtain_returns_count_column(nl_counts):
-    """'obtain every Count of the Item.' yields a single count column.
+    """
+    'obtain every Count of the Item.' yields a single count column.
 
     Regression: the aggregation head was dropped, returning (N, 0).
     """
@@ -1016,8 +1017,10 @@ def _build_issue877_engine():
 
 
 def test_execute_squall_issue877_overlay_program_completes():
-    """The canonical conditional-probability overlay program terminates
-    and yields a single overlay."""
+    """
+    The canonical conditional-probability overlay program terminates and
+    yields a single overlay.
+    """
     engine = _build_issue877_engine()
     engine.execute_squall_program(
         "define as TermVoxels with inferred probability every Voxel in 3D "
@@ -1034,7 +1037,8 @@ def test_execute_squall_issue877_overlay_program_completes():
 
 
 def test_execute_squall_issue877_cond_num_join_no_cross_product():
-    """The MARG numerator rule must join atoms sharing variables first.
+    """
+    The MARG numerator rule must join atoms sharing variables first.
 
     Regression: the numerator joined `voxel(x, y, z)` with
     `selectedstudy(s)` first, materialising a voxel x study cross product
@@ -1064,11 +1068,11 @@ def test_execute_squall_issue877_cond_num_join_no_cross_product():
         isinstance(f, ir_Symbol) or hasattr(f, "args")
         for f in formulas
     ), "expected flat conjunction of atoms"
-    vars = [extract_logic_free_variables(f) for f in formulas]
+    atom_vars = [extract_logic_free_variables(f) for f in formulas]
     for i in range(len(formulas) - 1):
-        if not vars[i] & vars[i + 1]:
-            remaining = set().union(*vars[i + 1:])
-            assert not vars[i] & remaining, (
+        if not atom_vars[i] & atom_vars[i + 1]:
+            remaining = set().union(*atom_vars[i + 1:])
+            assert not atom_vars[i] & remaining, (
                 f"atoms {i} and {i + 1} share no variable while later "
                 f"atoms do: {formulas}"
             )
@@ -1076,8 +1080,10 @@ def test_execute_squall_issue877_cond_num_join_no_cross_product():
 
 @pytest.mark.slow
 def test_execute_squall_issue877_overlay_program_scaled():
-    """The canonical overlay program at a scale that used to blow up into
-    a voxel x study cross product; completes in seconds with the fix."""
+    """
+    The canonical overlay program at a scale that used to blow up into a
+    voxel x study cross product; completes in seconds with the fix.
+    """
     import numpy as np
 
     rng = np.random.default_rng(42)

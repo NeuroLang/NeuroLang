@@ -10,6 +10,7 @@ from .... import expression_walker as ew
 from .... import expressions as ir
 from ....datalog.expression_processing import (
     conjunct_formulas,
+    conjunction_needs_reordering,
     extract_logic_atoms,
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
@@ -389,6 +390,37 @@ class TranslateHeadConstantsToEqualities(ew.PatternWalker):
 
 class TranslateProbabilisticQueryMixin(ew.PatternWalker):
 
+    @ew.add_match(
+        Implication(FunctionApplication(AdornedSymbol, ...), Conjunction),
+        lambda impl: (
+            getattr(impl.consequent.functor, "adornment", None) == "cond_num"
+            and order_conjunction_by_shared_variables(
+                impl.antecedent.formulas
+            ) != impl.antecedent.formulas
+        ),
+    )
+    def order_conditional_query_conjunction(self, impl):
+        """
+        Order the numerator conjunction of a conditional query.
+
+        Relational algebra plans evaluate a conjunction as a left-deep
+        natural join in atom order; joining two atoms that share no
+        variable first materialises their cross product.  The order is
+        only changed when the current one contains such a cross product
+        (see ``conjunction_needs_reordering``), so already-efficient
+        conjunctions are left untouched and handled by the other rules.
+        """
+        return self.walk(
+            impl.apply(
+                impl.consequent,
+                Conjunction(
+                    order_conjunction_by_shared_variables(
+                        impl.antecedent.formulas
+                    )
+                ),
+            )
+        )
+
     @ew.add_match(Implication(..., Condition(ExistentialPredicate(..., ...), ...)))
     def lift_ep_from_conditioned(self, impl):
         condition = impl.antecedent
@@ -508,10 +540,6 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
             impl.consequent.functor, "cond_num", None
         )(*impl.consequent.args)
         num_body = conjunct_formulas(left, right)
-        if isinstance(num_body, Conjunction):
-            num_body = Conjunction(
-                order_conjunction_by_shared_variables(num_body.formulas)
-            )
         new_num = self.walk(
             Implication(
                 num_head,

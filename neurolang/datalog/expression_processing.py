@@ -515,7 +515,8 @@ def is_ground_predicate(predicate):
 def order_conjunction_by_shared_variables(
     formulas: typing.Tuple[Expression, ...],
 ) -> typing.Tuple[Expression, ...]:
-    """Order flat conjunction atoms to avoid structural cross products.
+    """
+    Order flat conjunction atoms to avoid structural cross products.
 
     Relational algebra plans execute the atoms of a conjunction as a
     left-deep natural join in the order they appear.  Joining two atoms
@@ -533,21 +534,12 @@ def order_conjunction_by_shared_variables(
     other formula (negation, disjunction, nested quantifier, ...) is left
     untouched in its original position.
     """
-    if not all(isinstance(f, FunctionApplication) for f in formulas):
+    if not conjunction_needs_reordering(formulas):
         return formulas
-    var_sets = [
-        extract_logic_free_variables(f) for f in formulas
-    ]
-    bound = set()
-    for var_set in var_sets:
-        if bound and not var_set & bound:
-            break
-        bound |= var_set
-    else:
-        return formulas
-
     remaining = list(formulas)
-    vars_remaining = list(var_sets)
+    vars_remaining = [
+        extract_logic_free_variables(f) for f in remaining
+    ]
     start = max(
         range(len(remaining)), key=lambda i: len(vars_remaining[i])
     )
@@ -561,6 +553,30 @@ def order_conjunction_by_shared_variables(
         ordered.append(remaining.pop(best))
         bound |= vars_remaining.pop(best)
     return tuple(ordered)
+
+
+def conjunction_needs_reordering(
+    formulas: typing.Tuple[Expression, ...],
+) -> bool:
+    """
+    Whether a flat conjunction requires reordering to avoid a cross product.
+
+    True when some atom's variables share nothing with all the variables
+    of the atoms preceding it in the given order, i.e. when a left-deep
+    natural join in that order would materialise a structural cross
+    product.  Non-flat formulas (negation, disjunction, nested
+    quantifier, ...) are never considered for reordering.
+    """
+    if not all(isinstance(f, FunctionApplication) for f in formulas):
+        return False
+    bound = set()
+    for var_set in (
+        extract_logic_free_variables(f) for f in formulas
+    ):
+        if bound and not var_set & bound:
+            return True
+        bound |= var_set
+    return False
 
 
 def enforce_conjunctive_antecedent(implication):
