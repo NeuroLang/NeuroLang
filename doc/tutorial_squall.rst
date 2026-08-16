@@ -980,20 +980,37 @@ example but available in the language.
 Aggregations summarise a set of values into a single result per group.
 Supported functions: ``count``, ``sum``, ``max``, ``min``, ``average``.
 
+The examples below use the following EDB relations, following the
+NeuroSynth-style corpus of this tutorial:
+
+.. code-block:: python
+
+    >>> nl = NeurolangPDL()
+    >>> nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    >>> nl.add_tuple_set([("s1", 0), ("s1", 1), ("s2", 2), ("s3", 3)],
+    ...                  name="measured")
+    >>> nl.add_tuple_set([(i,) for i in range(5)], name="zscore")
+
+The ``study`` relation lists the studies, ``measured`` links each study
+to the z-scores of the activation peaks it measured, and ``zscore``
+holds every possible z-score value.  (The lowercase EDB names are
+optional; NeuroLang equates ``Study`` and ``study``.)
+
 The canonical form groups the aggregation over a subject noun, joining
-through a binary relationship — e.g. over the peak z-scores each study
-reports:
+through a binary relationship — e.g. the maximum z-score each study
+measured:
 
 .. code-block:: squall
 
     define as study_peak_z for every Study ;
-        where every Max of the Zscore where the Study peak_z.
+        where every Max of the Zscore that the Study measured.
 
 The ``Study`` quantifier introduces the group; the anaphoric ``the Study``
-inside the ``where`` clause ties the aggregation back to it, so no
-auxiliary variable is needed.  ``peak_z(study, z)`` relates studies to the
-z-scores they report and ``zscore`` holds the possible z-score values.
-The rule yields one row per study with the maximum reported z-score.
+inside the ``where`` clause (here in a relative clause ``that … measured``)
+ties the aggregation back to it, so no auxiliary variable is needed.  The
+rule is understood as: for every study, the maximum ``zscore`` value that
+the study ``measured``.  It yields one row per study with the maximum
+measured z-score.
 
 The grouped relation is a normal relation and can be queried like any
 other — ``obtain`` without a tuple label projects every column:
@@ -1002,6 +1019,20 @@ other — ``obtain`` without a tuple label projects every column:
 
     obtain every study_peak_z.          # one row per study: (study, max z)
     obtain every study_peak_z (?s; ?z). # same, with explicit column names
+
+Grouped aggregation is not limited to ``max``: the ``count``, ``sum``,
+``min`` and ``average`` functions combine with the same anaphoric clause:
+
+.. code-block:: squall
+
+    define as study_peak_count for every Study ;
+        where every Count of the Zscore that the Study measured.
+
+    define as study_peak_sum for every Study ;
+        where every Sum of the Zscore that the Study measured.
+
+    define as study_peak_mean for every Study ;
+        where every Average of the Zscore that the Study measured.
 
 Global aggregation (no per-group clause) runs directly through
 ``obtain`` — the aggregate column is projected onto the result instead of
@@ -1017,15 +1048,15 @@ being dropped:
 
 Each returns a single row with one column carrying the aggregate value.
 
-An N-ary relation may be aggregated by an earlier-defined relation, and
+The aggregated relation can be defined earlier in the same program, and
 anaphoric definite references to that relation participate in the
 aggregation:
 
 .. code-block:: squall
 
-    define as Peak_studies every Study that has a peak_z.
-    obtain every Peak_studies of the Peak_studies count of the Peak_studies.
-    # single column: 3 studies that have at least one peak
+    define as measured_studies every Study that measured.
+    obtain every measured_studies of the measured_studies count of the measured_studies.
+    # single column: 3 studies that measured at least one peak
 
 The aggregation noun may also refer to an N-ary relation, such as a
 voxel space:
@@ -1033,20 +1064,6 @@ voxel space:
 .. code-block:: squall
 
     obtain every Voxel in 3D of the Study count of the Study.
-
-As with any aggregation, the ``count``, ``sum``, ``max``, ``min`` and
-``average`` functions can be combined with the per-group form:
-
-.. code-block:: squall
-
-    define as study_peak_count for every Study ;
-        where every Count of the Zscore where the Study peak_z.
-
-    define as study_peak_sum for every Study ;
-        where every Sum of the Zscore where the Study peak_z.
-
-    define as study_peak_mean for every Study ;
-        where every Average of the Zscore where the Study peak_z.
 
 10.2 Probabilistic Choice Definitions
 --------------------------------------
