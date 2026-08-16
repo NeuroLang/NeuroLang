@@ -36,6 +36,31 @@ from ....type_system import (
 )
 
 
+def _has_repeated_constant_functor(formulas):
+    """
+    Whether a body repeats a functor on an atom carrying a constant.
+
+    The magic-sets rewrite adorns co-occurring atoms of an intensional
+    predicate left to right; reordering the atoms around such a pair can
+    bind the shared variable on the constant-bearing occurrence, turning
+    its magic init rule into ``magic_P(fresh, c) :- ()``, which the
+    negation mixin rejects as not range restricted.  Bodies like this are
+    kept in their original order (see ``order_conjunction_for_join``).
+    """
+    functor_atoms = {}
+    for formula in formulas:
+        functor_atoms.setdefault(formula.functor, []).append(formula)
+    return any(
+        len(atoms) > 1
+        and any(
+            isinstance(arg, Constant)
+            for atom in atoms
+            for arg in atom.args
+        )
+        for atoms in functor_atoms.values()
+    )
+
+
 class Column(ir.Definition):
     def __init__(self, set_symbol, column_position):
         self.set_symbol = set_symbol
@@ -394,7 +419,9 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         Implication(..., Conjunction),
         lambda impl: order_conjunction_by_shared_variables(
             impl.antecedent.formulas
-        ) != impl.antecedent.formulas,
+        )
+        != impl.antecedent.formulas
+        and not _has_repeated_constant_functor(impl.antecedent.formulas),
     )
     def order_conjunction_for_join(self, impl):
         """
