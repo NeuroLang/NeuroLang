@@ -9,7 +9,7 @@ from typing import Iterable, List, Set, Tuple
 
 
 from ..config import config
-from ..expressions import Constant, Expression, Symbol
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..expression_walker import ExpressionWalker
 from ..expression_pattern_matching import add_match
 from ..logic import Negation
@@ -29,6 +29,56 @@ from .expressions import (
     Union,
 )
 from .constraints_representation import RightImplication, reachable_code
+from .expression_processing import (
+    extract_logic_free_variables,
+    order_conjunction_by_shared_variables,
+)
+
+
+def order_conjunction_constant_atoms_first(
+    formulas: Tuple[Expression, ...],
+) -> Tuple[Expression, ...]:
+    """
+    Order a rule body so constant-bearing atoms are adorned first.
+
+    Magic sets adorns rule bodies left to right; a constant-bearing atom
+    only seeds the magic set (``magic_P(c) :- ()``) while its shared
+    variables are still free, i.e. when no atom sharing them precedes it.
+    Bodies where a constant-bearing atom would be adorned with an already
+    bound shared variable are reordered: constant-bearing atoms first,
+    in their original relative order, then the remaining atoms joined
+    greedily on shared variables (``order_conjunction_by_shared_variables``),
+    keeping every magic init rule range restricted -- no free variable
+    in a seed consequent.
+
+    Only flat conjunctions of predicate applications are considered;
+    bodies with negation or other non-predicate formulas, and bodies
+    whose constant atoms share nothing with earlier atoms, are returned
+    unchanged.
+    """
+    if not all(isinstance(f, FunctionApplication) for f in formulas):
+        return formulas
+    constant_atoms = [
+        f for f in formulas
+        if any(isinstance(arg, Constant) for arg in f.args)
+    ]
+    if not constant_atoms:
+        return formulas
+    prior_vars = set()
+    for f in formulas:
+        f_vars = extract_logic_free_variables(f)
+        if f in constant_atoms and f_vars & prior_vars:
+            break
+        prior_vars |= f_vars
+    else:
+        return formulas
+    free_atoms = [
+        f for f in formulas
+        if not any(isinstance(arg, Constant) for arg in f.args)
+    ]
+    return tuple(constant_atoms) + order_conjunction_by_shared_variables(
+        tuple(free_atoms)
+    )
 
 
 class ReplaceAdornedSymbolWalker(ExpressionWalker):
@@ -495,6 +545,14 @@ def adorn_code(
         for rule in rules.formulas:
             if isinstance(rule, RightImplication):
                 continue
+            if isinstance(rule.antecedent, Conjunction):
+                formulas = order_conjunction_constant_atoms_first(
+                    rule.antecedent.formulas
+                )
+                if formulas != rule.antecedent.formulas:
+                    rule = rule.apply(
+                        rule.consequent, Conjunction(formulas)
+                    )
             new_consequent = consequent.functor(*rule.consequent.args)
             adorned_antecedent, to_adorn = adorn_antecedent(
                 rule, new_consequent, rewritten_rules, sips
