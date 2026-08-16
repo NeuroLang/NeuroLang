@@ -93,6 +93,7 @@ np2 : det ng2
 
 ng1_base : noun1 [ app ] -> ng1_noun
 ng1 : ng1_base [ rel ]
+    | ( TOP | BOTTOM ) number ( PERCENT )? ( _OF | _FROM ) npc{_THE}  [ dims ] [ rel ]   -> ng1_tail_npc
     | noun1 [ app ] ( _OF | _FROM ) npc{_THE}  [ dims ] [ rel ]   -> ng1_agg_npc
     // | noun1 [ app ] ng1 [ dims ]           -> ng1_agg_ng1
 ng2 : noun2 [ app ]
@@ -263,6 +264,10 @@ _CONJUNCTION : "&" | "," | "\N{LOGICAL AND}" | _AND
 _DISJUNCTION : "|" | "\N{LOGICAL OR}" | _OR
 _IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}" | _IF
 _NEGATION : _NOT | "\N{Not Sign}"
+
+TOP.2 : "top" | "Top"
+BOTTOM.2 : "bottom" | "Bottom"
+PERCENT.2 : "%"
 
 ?expr{x} : expr_sum{x}
 expr_sum{x} : ( expr_sum{x} SUM )? expr_mul{x}

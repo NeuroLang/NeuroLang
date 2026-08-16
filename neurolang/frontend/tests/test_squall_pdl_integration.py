@@ -981,6 +981,95 @@ def test_execute_squall_count_over_nary_relation():
 
 
 # ---------------------------------------------------------------------------
+# Top / Bottom aggregations (percentile- and count-based thresholds)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def nl_tails():
+    """Fixture: studies with measured z-scores."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    engine.add_tuple_set(
+        [("s1", 0), ("s1", 1), ("s2", 2), ("s3", 3)], name="measured"
+    )
+    engine.add_tuple_set([(i,) for i in range(5)], name="zscore")
+    return engine
+
+
+def test_execute_squall_top_percent_obtain(nl_tails):
+    """'obtain the Top 5% of the Zscore.' yields the 95th percentile."""
+    result = nl_tails.execute_squall_program(
+        "obtain the Top 5% of the Zscore."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (1, 1), f"got {df.shape}"
+    assert abs(df.iloc[0, 0] - 3.8) < 1e-9
+
+
+def test_execute_squall_bottom_percent_obtain(nl_tails):
+    """'obtain the Bottom 5% of the Zscore.' yields the 5th percentile."""
+    result = nl_tails.execute_squall_program(
+        "obtain the Bottom 5% of the Zscore."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (1, 1), f"got {df.shape}"
+    assert abs(df.iloc[0, 0] - 0.2) < 1e-9
+
+
+def test_execute_squall_top_count_obtain(nl_tails):
+    """'obtain the Top 2 of the Zscore.' yields the second-largest value."""
+    result = nl_tails.execute_squall_program(
+        "obtain the Top 2 of the Zscore."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (1, 1), f"got {df.shape}"
+    assert df.iloc[0, 0] == 3
+
+
+def test_execute_squall_top_count_exceeds_total(nl_tails):
+    """
+    A count threshold larger than the group size clamps to the smallest value:
+
+    the whole z-score column (5 values) is within the top 100.
+    """
+    result = nl_tails.execute_squall_program(
+        "obtain the Top 100 of the Zscore."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (1, 1), f"got {df.shape}"
+    assert df.iloc[0, 0] == 0
+
+
+def test_execute_squall_bottom_count_obtain(nl_tails):
+    """'obtain the Bottom 2 of the Zscore.' yields the second-smallest value."""
+    result = nl_tails.execute_squall_program(
+        "obtain the Bottom 2 of the Zscore."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (1, 1), f"got {df.shape}"
+    assert df.iloc[0, 0] == 1
+
+
+def test_execute_squall_top_percent_grouped(nl_tails):
+    """
+    '… every Top 10% of the Zscore that the Study measured.' per study:
+
+    s1 measured {0, 1} → 90th percentile 0.9; s2 and s3 single values.
+    """
+    result = nl_tails.execute_squall_program(
+        "define as study_top10 for every Study ; "
+        "where every Top 10% of the Zscore that the Study measured. "
+        "obtain every study_top10."
+    )
+    df = result.as_pandas_dataframe()
+    assert df.shape == (3, 2), f"got {df.shape}"
+    rows = sorted(df.itertuples(index=False, name=None), key=lambda r: str(r[0]))
+    assert abs(rows[0][1] - 0.9) < 1e-9
+    assert rows[1][1] == 2
+    assert rows[2][1] == 3
+
+
+# ---------------------------------------------------------------------------
 # Issue #877: canonical probabilistic overlay program completes and its
 # conditional-query join does not materialise structural cross products
 # ---------------------------------------------------------------------------

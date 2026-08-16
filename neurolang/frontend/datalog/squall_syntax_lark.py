@@ -231,6 +231,18 @@ _AGG_FUNC_MAP = {
 }
 
 
+def _tail_largest(values, n):
+    """Return the n-th largest value of *values*, clamped to its size."""
+    values = sorted(values)
+    return values[-min(int(n), len(values))]
+
+
+def _tail_smallest(values, n):
+    """Return the n-th smallest value of *values*, clamped to its size."""
+    values = sorted(values)
+    return values[min(int(n), len(values)) - 1]
+
+
 class _InverseVerbSymbol:
 
     """Thin callable wrapper that reverses argument order via InvertedFunctionApplication.
@@ -1570,6 +1582,77 @@ class SquallTransformer(Transformer):
         if var_info is not None:
             ng_with_rel._var_info = var_info
         return ng_with_rel
+
+    def ng1_tail_npc(self, args):
+        """Handle ``( Top | Bottom ) n [%] OF npc [dims] [rel]`` noun groups.
+
+        ``the Top 5% of the Zscore`` aggregates the npc values into a
+        single threshold per group: percent variants return the value at
+        the ``(100 − n)``-th (Top) or ``n``-th (Bottom) percentile, count
+        variants return the ``n``-th largest (Top) or smallest (Bottom)
+        value, clamped to the group size when the group is smaller than
+        ``n``.  The number is a parameter of one generic functor — not a
+        fixed set of named aggregations — so any ``n`` works.
+        """
+        items = [a for a in args if a is not None]
+        side_token = items[0] if items else None
+        side = (
+            side_token.lower() if isinstance(side_token, str)
+            else str(side_token.value).lower() if hasattr(side_token, 'value')
+            else str(side_token)
+        )
+        number = items[1] if len(items) > 1 else None
+        percent = any(
+            isinstance(a, str) and a.startswith('%') for a in args[2:]
+        )
+
+        npc = None
+        dims = None
+        extra_rel = None
+        for a in args[2:]:
+            if a is None:
+                continue
+            if isinstance(a, tuple) and a[0] == '_dims':
+                dims = a[1]
+            elif isinstance(a, tuple) and a[0] == '_rel':
+                extra_rel = a[1]
+            elif callable(a) and not isinstance(a, (Symbol, Constant)):
+                if npc is None:
+                    npc = a
+                else:
+                    extra_rel = lambda x, _r=a: _r(x)
+
+        per_vars = []
+        if dims is not None:
+            for d in dims:
+                if isinstance(d, tuple) and d[0] == '_per':
+                    per_vars.append(d[1])
+
+        import functools
+        if number is None:
+            raise self._make_error(
+                "Expected a number after 'Top'/'Bottom', "
+                "e.g. 'the Top 5% of the Zscore'."
+            )
+        if percent:
+            q = 100 - int(number.value) if side == 'top' else int(number.value)
+            agg_func = Constant(functools.partial(np.percentile, q=q))
+        elif side == 'top':
+            agg_func = Constant(
+                functools.partial(_tail_largest, n=number.value)
+            )
+        else:
+            agg_func = Constant(
+                functools.partial(_tail_smallest, n=number.value)
+            )
+
+        def ng_agg_fallback(x):
+            q = Symbol.fresh()
+            npc(lambda v: Constant(True))
+            return _AggApp(agg_func, (q,))
+
+        ng_agg_fallback._agg_info = (agg_func, npc, list(per_vars), extra_rel)
+        return ng_agg_fallback
 
     def ng1_agg_npc(self, args):
         """Handle ``noun1 OF npc [dims] [rel]`` aggregation noun groups.

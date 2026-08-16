@@ -1048,6 +1048,37 @@ being dropped:
 
 Each returns a single row with one column carrying the aggregate value.
 
+In addition to these summary functions, **tail aggregations** select a
+threshold below (Top) or above (Bottom) which a quoted fraction or count
+of the values lie.  ``obtain the …`` reads like English here, so the
+definite article is preferred over ``every``:
+
+.. code-block:: squall
+
+    obtain the Top 5% of the Zscore.      # 3.8 (95th percentile)
+    obtain the Bottom 5% of the Zscore.   # 0.2 (5th percentile)
+    obtain the Top 2 of the Zscore.       # 3 (second-largest value)
+    obtain the Bottom 2 of the Zscore.    # 1 (second-smallest value)
+
+A percentage selects the value at the corresponding percentile
+(``Top n%`` → the ``(100 − n)``-th percentile, ``Bottom n%`` → the
+``n``-th); a bare number selects the ``n``-th largest (Top) or ``n``-th
+smallest (Bottom) value, clamped to the group size when the group is
+smaller than ``n`` — e.g. ``Top 100`` of a 5-value column is the smallest
+of the five, since all of them lie within the top 100.
+
+Tail aggregations work with the anaphoric per-group clause too, using the
+``every`` determiner inside the rule body:
+
+.. code-block:: squall
+
+    define as study_top_threshold for every Study ;
+        where every Top 10% of the Zscore that the Study measured.
+
+    obtain every study_top_threshold.
+    # one row per study: s1 → 0.9 (90th percentile of {0, 1}),
+    #                    s2 → 2, s3 → 3
+
 The aggregated relation can be defined earlier in the same program, and
 anaphoric definite references to that relation participate in the
 aggregation:
