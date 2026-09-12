@@ -147,7 +147,9 @@ class ReplaceAllSymbolsButConstantSets(ExpressionWalker):
         return res
 
 
-def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
+def solve_succ_query(
+    query, cpl_program, run_relational_algebra_solver=True, semiring=None
+):
     """
     Solve a SUCC query on a CP-Logic program.
 
@@ -162,6 +164,9 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         NamedRelationalAlgebraFrozenSet,
         when false the attribute is the relational algebra expression that
         produces the such set.
+    semiring : Semiring, optional
+        Semiring to use for provenance computations.
+        If ``None``, defaults to ``ProbabilitySemiring``.
 
     Returns
     -------
@@ -222,7 +227,8 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
         needed_projections=needed_projections,
-        solver_class=ExtendedRAPToRAWalker
+        solver_class=ExtendedRAPToRAWalker,
+        semiring=semiring,
     )
 
     with log_performance(LOG, "Run RAP query %s", init_args=(ra_query,)):

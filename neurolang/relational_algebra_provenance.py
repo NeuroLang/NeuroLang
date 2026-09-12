@@ -40,6 +40,11 @@ from .relational_algebra import (
     str2columnstr_constant
 )
 from .utils import OrderedSet
+from .probabilistic.semiring import (
+    ProbabilitySemiring,
+    MaxProductSemiring,
+    Semiring,
+)
 
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
@@ -212,7 +217,17 @@ class WeightedNaturalJoinSolverMixin(PatternWalker):
             relation = NaturalJoin(relation, relation_)
 
         prov_col = str2columnstr_constant(Symbol.fresh().name)
-        dst_prov_expr = sum(prov_columns[1:], prov_columns[0])
+        semiring = getattr(self, 'semiring', ProbabilitySemiring())
+        if isinstance(semiring, MaxProductSemiring) and prov_columns:
+            agg_fn = Constant(semiring.agg_add())
+            if len(prov_columns) == 1:
+                dst_prov_expr = prov_columns[0]
+            else:
+                dst_prov_expr = FunctionApplication(
+                    agg_fn, tuple(prov_columns)
+                )
+        else:
+            dst_prov_expr = sum(prov_columns[1:], prov_columns[0])
         relation = ExtendedProjection(
             relation,
             (FunctionApplicationListMember(
@@ -237,6 +252,24 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
     def independent_projection(self, proj_op):
         prov_set = proj_op.relation
         prov_col = prov_set.provenance_column
+
+        semiring = getattr(self, 'semiring', ProbabilitySemiring())
+        if isinstance(semiring, MaxProductSemiring):
+            agg_fn = Constant(semiring.agg_add())
+            aggregate_functions = (
+                FunctionApplicationListMember(
+                    FunctionApplication(agg_fn, (prov_col,)),
+                    prov_col,
+                ),
+            )
+            operation = GroupByAggregation(
+                prov_set.relation,
+                proj_op.attributes,
+                aggregate_functions,
+            )
+            return ProvenanceAlgebraSet(operation, prov_col)
+
+        # Probability semiring: 1 - ∏ (1 - p) via log-space
         proj_list = [
             FunctionApplicationListMember(col, col)
             for col in prov_set.non_provenance_columns
@@ -290,6 +323,23 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
     def independent_projection_universal(self, proj_op):
         prov_set = proj_op.relation
         prov_col = prov_set.provenance_column
+
+        semiring = getattr(self, 'semiring', ProbabilitySemiring())
+        if isinstance(semiring, MaxProductSemiring):
+            agg_fn = Constant(semiring.agg_add())
+            aggregate_functions = (
+                FunctionApplicationListMember(
+                    FunctionApplication(agg_fn, (prov_col,)),
+                    prov_col,
+                ),
+            )
+            operation = GroupByAggregation(
+                prov_set.relation,
+                proj_op.attributes,
+                aggregate_functions,
+            )
+            return ProvenanceAlgebraSet(operation, prov_col)
+
         proj_list = [
             FunctionApplicationListMember(col, col)
             for col in prov_set.non_provenance_columns
@@ -328,9 +378,11 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
     def disjoint_projection(self, proj_op):
         prov_set = proj_op.relation
         prov_col = prov_set.provenance_column
+        semiring = getattr(self, 'semiring', ProbabilitySemiring())
+        agg_fn = Constant(semiring.agg_add())
         aggregate_functions = [
             FunctionApplicationListMember(
-                FunctionApplication(Constant(sum), (prov_col,)),
+                FunctionApplication(agg_fn, (prov_col,)),
                 prov_col,
             ),
         ]
@@ -827,8 +879,10 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         return res
 
     def _semiring_agg_sum(self, args):
+        semiring = getattr(self, 'semiring', ProbabilitySemiring())
+        agg_fn = Constant(semiring.agg_add())
         return FunctionApplication(
-            SUM, args, validate_arguments=False, verify_type=False
+            agg_fn, args, validate_arguments=False, verify_type=False
         )
 
     @add_match(
