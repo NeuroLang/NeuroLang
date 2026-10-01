@@ -1072,6 +1072,65 @@ def test_cbma_prob_query_with_negation():
     assert_almost_equal(res, expected)
 
 
+def test_negated_conditioning_literal_with_distinguished_variable():
+    """Regression test for a bug where a conditional-probability query
+    negating a (deterministic) relation whose argument is a free variable
+    shared with the query's head returned an incorrect probability.
+
+    `TranslateProbabilisticQueryMixin.rewrite_conditional_query` builds the
+    numerator of `//` by flatly conjoining the conditioned and conditioning
+    sides into one within-language query. That numerator query was wrong
+    whenever it contained a negated literal with a distinguished-variable
+    argument (here, `r`), independent of the WMC-vs-lifted-solver choice.
+    The fix (`HoistNegatedDistinguishedVariableLiterals`) computes such a
+    negation as a plain deterministic rule first, using a deterministic
+    relation (`TrainStudy`) to range-restrict it, before any probabilistic
+    atom (`Selected`) is involved.
+
+    Fixture: 6 studies, 2 regions (A = {0,1,2}, B = {3,4,5}), 2 terms (pain
+    mentioned by {0,1,5}, joy by {2,3,4}). Hand-computed:
+    P(pain | not active in A) = P(mentions pain & study in {3,4,5}) / 3
+                               = 1/3 (only study 5 qualifies)
+    and symmetrically for the other three (term, region) pairs.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(s,) for s in range(6)], name="TrainStudy")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="Selected"
+    )
+    nl.add_tuple_set(
+        [(0, "A"), (1, "A"), (2, "A"), (3, "B"), (4, "B"), (5, "B")],
+        name="Active",
+    )
+    nl.add_tuple_set(
+        [(0, "pain"), (1, "pain"), (2, "joy"), (3, "joy"), (4, "joy"), (5, "pain")],
+        name="Mentions",
+    )
+    nl.add_tuple_set([("A",), ("B",)], name="Region")
+
+    with nl.environment as e:
+        e.PTermGivenNotRegion[e.t, e.r, e.PROB[e.t, e.r]] = (
+            e.Mentions[e.s, e.t] & e.Selected[e.s]
+        ) // (
+            ~e.Active[e.s, e.r]
+            & e.Region[e.r]
+            & e.TrainStudy[e.s]
+            & e.Selected[e.s]
+        )
+        res = nl.query(
+            (e.t, e.r, e.p), e.PTermGivenNotRegion[e.t, e.r, e.p]
+        )
+    expected = RelationalAlgebraFrozenSet(
+        [
+            ("pain", "A", 1 / 3),
+            ("joy", "A", 2 / 3),
+            ("pain", "B", 2 / 3),
+            ("joy", "B", 1 / 3),
+        ]
+    )
+    assert_almost_equal(res, expected)
+
+
 def test_query_based_spatial_prior():
     nl = NeurolangPDL()
     nl.add_tuple_set(
