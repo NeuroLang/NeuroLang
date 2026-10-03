@@ -1131,6 +1131,58 @@ def test_negated_conditioning_literal_with_distinguished_variable():
     assert_almost_equal(res, expected)
 
 
+def test_negated_conditioning_literal_with_two_distinguished_variables():
+    """Regression test: the hoisted negated literal's full free-variable
+    set (not just a single distinguished variable) must be preserved
+    and range-restricted when MULTIPLE of its arguments are
+    distinguished (shared with the query head) -- here `r1` AND `r2`,
+    both from the single negated literal `~CoActive[s, r1, r2]`.
+
+    Fixture: 6 studies, regions {A, B, C}; `CoActive(s, r1, r2)` holds
+    (symmetrically) for study 0 in {A, B} and study 3 in {B, C}. Terms:
+    pain mentioned by {0,1,5}, joy by {2,3,4}. Hand-computed:
+    P(pain | not co-active in (A, B)) = P(mentions pain & study != 0) / 5
+                                        = 2/5 (studies {1,2,3,4,5}, pain
+                                          in {1,5})
+    P(joy | not co-active in (B, C)) = P(mentions joy & study != 3) / 5
+                                        = 2/5 (studies {0,1,2,4,5}, joy
+                                          in {2,4})
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(s,) for s in range(6)], name="TrainStudy")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="Selected"
+    )
+    nl.add_tuple_set(
+        [(0, "A", "B"), (0, "B", "A"), (3, "B", "C"), (3, "C", "B")],
+        name="CoActive",
+    )
+    nl.add_tuple_set(
+        [(0, "pain"), (1, "pain"), (2, "joy"), (3, "joy"), (4, "joy"), (5, "pain")],
+        name="Mentions",
+    )
+    nl.add_tuple_set([("A",), ("B",), ("C",)], name="Region")
+
+    with nl.environment as e:
+        e.PTermGivenNotCoActive[
+            e.t, e.r1, e.r2, e.PROB[e.t, e.r1, e.r2]
+        ] = (e.Mentions[e.s, e.t] & e.Selected[e.s]) // (
+            ~e.CoActive[e.s, e.r1, e.r2]
+            & e.Region[e.r1]
+            & e.Region[e.r2]
+            & e.TrainStudy[e.s]
+            & e.Selected[e.s]
+        )
+        res = nl.query(
+            (e.t, e.r1, e.r2, e.p),
+            e.PTermGivenNotCoActive[e.t, e.r1, e.r2, e.p],
+        )
+    res_df = res.as_pandas_dataframe().set_index(["t", "r1", "r2"])
+    np.testing.assert_almost_equal(res_df.loc[("pain", "A", "B"), "p"], 2 / 5)
+    np.testing.assert_almost_equal(res_df.loc[("joy", "B", "C"), "p"], 2 / 5)
+    np.testing.assert_almost_equal(res_df.loc[("pain", "A", "A"), "p"], 1 / 2)
+
+
 def test_query_based_spatial_prior():
     nl = NeurolangPDL()
     nl.add_tuple_set(

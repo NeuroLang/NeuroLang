@@ -430,7 +430,17 @@ def _has_distinguished_variable_negation(impl):
     conditioning side has, at its top level, a Negation literal sharing a
     free variable with the implication's consequent (a "distinguished"
     variable -- one that stays free in the query's result).
+
+    Declines (returns False) once `impl` carries the
+    `_nl_hoist_checked` sentinel -- set by
+    `hoist_negated_distinguished_variable_literal` itself on an `impl`
+    it already tried and found nothing further it could safely hoist.
+    Without this, re-walking that same (unchanged) `impl` would match
+    this guard again forever instead of falling through to the next
+    pattern (`rewrite_conditional_query`) in the MRO.
     """
+    if getattr(impl, "_nl_hoist_checked", False):
+        return False
     if not isinstance(impl.antecedent, Condition):
         return False
     head_vars = extract_logic_free_variables(impl.consequent)
@@ -499,14 +509,13 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
             # Every negated distinguished-variable literal found by the
             # guard turned out to be unsafe to hoist (no deterministic
             # domain relation available for it in this conjunction -- see
-            # _hoist_side). The antecedent is therefore unchanged, and
-            # re-walking it would just re-match this same guard forever.
-            # Defer to whatever the rest of the MRO does with it as-is.
-            return delegate_to_next_match(
-                self,
-                impl,
-                type(self).hoist_negated_distinguished_variable_literal,
-            )
+            # _hoist_side). The antecedent is therefore unchanged. Mark
+            # `impl` so the guard declines on the next pass and normal
+            # dispatch falls through to whatever the rest of the MRO
+            # does with it (`rewrite_conditional_query`), instead of
+            # re-matching this same rule forever.
+            impl._nl_hoist_checked = True
+            return self.walk(impl)
         new_impl = self.walk(
             Implication(
                 impl.consequent, Condition(new_conditioned, new_conditioning)
