@@ -398,22 +398,27 @@ class TranslateHeadConstantsToEqualities(ew.PatternWalker):
 
 
 def _as_conjuncts(expression):
-    """Top-level conjuncts of `expression`: its formulas if it is a
-    Conjunction, or the single-element list [expression] otherwise.
+    """
+    Top-level conjuncts of `expression`.
+
+    Its formulas if it is a Conjunction, or the single-element list
+    [expression] otherwise.
     """
     return list(GuaranteeConjunction().walk(expression).formulas)
 
 
 def delegate_to_next_match(walker, expression, skip_action):
-    """Re-dispatch `expression` through `walker`'s pattern list, skipping
-    `skip_action` (the match currently executing). Lets a handler that
-    decided not to transform an expression hand it to whichever pattern
-    would have matched next, instead of returning it unchanged (which
-    would re-trigger its own guard forever) or re-walking it (same
-    problem). Shared by every mixin in this package that needs this
-    "decline and fall through" behavior -- see also
-    `TranslateRegionDestroy._delegate_to_next_match`'s former local copy
-    in spatial.py, now using this one.
+    """
+    Re-dispatch `expression` through `walker`'s patterns, skipping `skip_action`.
+
+    `skip_action` is the match currently executing. Lets a handler
+    that decided not to transform an expression hand it to whichever
+    pattern would have matched next, instead of returning it unchanged
+    (which would re-trigger its own guard forever) or re-walking it
+    (same problem). Shared by every mixin in this package that needs
+    this "decline and fall through" behavior -- see also
+    `TranslateRegionDestroy._delegate_to_next_match`'s former local
+    copy in spatial.py, now using this one.
     """
     for pattern, guard, action in walker.patterns:
         if action is skip_action:
@@ -426,10 +431,14 @@ def delegate_to_next_match(walker, expression, skip_action):
 
 
 def _has_distinguished_variable_negation(impl):
-    """True iff `impl`'s antecedent is a Condition whose conditioned or
-    conditioning side has, at its top level, a Negation literal sharing a
-    free variable with the implication's consequent (a "distinguished"
-    variable -- one that stays free in the query's result).
+    """
+    True iff `impl` has a hoistable negated distinguished-variable literal.
+
+    Specifically, iff its antecedent is a Condition whose conditioned
+    or conditioning side has, at its top level, a Negation literal
+    sharing a free variable with the implication's consequent (a
+    "distinguished" variable -- one that stays free in the query's
+    result).
 
     Declines (returns False) once `impl` carries the
     `_nl_hoist_checked` sentinel -- set by

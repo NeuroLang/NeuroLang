@@ -1073,9 +1073,12 @@ def test_cbma_prob_query_with_negation():
 
 
 def test_negated_conditioning_literal_with_distinguished_variable():
-    """Regression test for a bug where a conditional-probability query
-    negating a (deterministic) relation whose argument is a free variable
-    shared with the query's head returned an incorrect probability.
+    """
+    Regression test for negating a distinguished-variable literal in `//`.
+
+    A conditional-probability query negating a (deterministic)
+    relation whose argument is a free variable shared with the
+    query's head returned an incorrect probability.
 
     `TranslateProbabilisticQueryMixin.rewrite_conditional_query` builds the
     numerator of `//` by flatly conjoining the conditioned and conditioning
@@ -1132,11 +1135,14 @@ def test_negated_conditioning_literal_with_distinguished_variable():
 
 
 def test_negated_conditioning_literal_with_two_distinguished_variables():
-    """Regression test: the hoisted negated literal's full free-variable
-    set (not just a single distinguished variable) must be preserved
-    and range-restricted when MULTIPLE of its arguments are
-    distinguished (shared with the query head) -- here `r1` AND `r2`,
-    both from the single negated literal `~CoActive[s, r1, r2]`.
+    """
+    Regression test for a negated literal with two distinguished variables.
+
+    The hoisted negated literal's full free-variable set (not just a
+    single distinguished variable) must be preserved and
+    range-restricted when MULTIPLE of its arguments are distinguished
+    (shared with the query head) -- here `r1` AND `r2`, both from the
+    single negated literal `~CoActive[s, r1, r2]`.
 
     Fixture: 6 studies, regions {A, B, C}; `CoActive(s, r1, r2)` holds
     (symmetrically) for study 0 in {A, B} and study 3 in {B, C}. Terms:
