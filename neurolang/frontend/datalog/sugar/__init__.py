@@ -10,7 +10,6 @@ from .... import expression_walker as ew
 from .... import expressions as ir
 from ....datalog.expression_processing import (
     conjunct_formulas,
-    conjunct_if_needed,
     conjunction_needs_reordering,
     extract_logic_atoms,
     extract_logic_free_variables,
@@ -21,15 +20,8 @@ from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
 from ....expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ....expression_walker import ReplaceExpressionWalker, ReplaceSymbolWalker
 from ....expressions import Constant, FunctionApplication, Symbol
-from ....logic import (
-    TRUE,
-    Conjunction,
-    ExistentialPredicate,
-    Implication,
-    Negation,
-)
-from ....logic.horn_clauses import is_safe_range
-from ....logic.transformations import ExtractBoundVariables, GuaranteeConjunction
+from ....logic import TRUE, Conjunction, Implication, ExistentialPredicate
+from ....logic.transformations import ExtractBoundVariables
 from ....probabilistic.expressions import (
     PROB,
     Condition,
@@ -397,16 +389,6 @@ class TranslateHeadConstantsToEqualities(ew.PatternWalker):
         return self.walk(new_implication)
 
 
-def _as_conjuncts(expression):
-    """
-    Top-level conjuncts of `expression`.
-
-    Its formulas if it is a Conjunction, or the single-element list
-    [expression] otherwise.
-    """
-    return list(GuaranteeConjunction().walk(expression).formulas)
-
-
 def delegate_to_next_match(walker, expression, skip_action):
     """
     Re-dispatch `expression` through `walker`'s patterns, skipping `skip_action`.
@@ -430,162 +412,7 @@ def delegate_to_next_match(walker, expression, skip_action):
     raise NeuroLangPatternMatchingNoMatch(f"No match for {expression}")
 
 
-def _has_distinguished_variable_negation(impl):
-    """
-    True iff `impl` has a hoistable negated distinguished-variable literal.
-
-    Specifically, iff its antecedent is a Condition whose conditioned
-    or conditioning side has, at its top level, a Negation literal
-    sharing a free variable with the implication's consequent (a
-    "distinguished" variable -- one that stays free in the query's
-    result).
-
-    Declines (returns False) once `impl` carries the
-    `_nl_hoist_checked` sentinel -- set by
-    `hoist_negated_distinguished_variable_literal` itself on an `impl`
-    it already tried and found nothing further it could safely hoist.
-    Without this, re-walking that same (unchanged) `impl` would match
-    this guard again forever instead of falling through to the next
-    pattern (`rewrite_conditional_query`) in the MRO.
-    """
-    if getattr(impl, "_nl_hoist_checked", False):
-        return False
-    if not isinstance(impl.antecedent, Condition):
-        return False
-    head_vars = extract_logic_free_variables(impl.consequent)
-    for side in (impl.antecedent.conditioned, impl.antecedent.conditioning):
-        for conjunct in _as_conjuncts(side):
-            if isinstance(conjunct, Negation):
-                inner_vars = extract_logic_free_variables(conjunct.formula)
-                if inner_vars & head_vars:
-                    return True
-    return False
-
-
 class TranslateProbabilisticQueryMixin(ew.PatternWalker):
-    """
-    Hoist a negated literal whose argument is a free "distinguished"
-    variable (shared with the enclosing query head) out of a
-    probabilistic conditional query, into a plain deterministic rule,
-    before `rewrite_conditional_query` below ever sees it.
-
-    `rewrite_conditional_query` builds a numerator within-language
-    query by flatly conjoining the conditioned and conditioning sides
-    of a `//` query (`F1(x, y, z, PROB) :- Q(x) & R(y) & T(z)`). When
-    one of those conjuncts is a negated literal whose argument
-    includes a distinguished variable (e.g. `~Active(s, r)` with `r`
-    free in the query head), that numerator query returns an
-    incorrect probability -- confirmed wrong even as a bare SUCC
-    query with no conditional-probability machinery involved, and
-    independent of the WMC-vs-lifted-solver choice. The denominator
-    query is unaffected.
-
-    The fix: compute the negation as a plain deterministic rule
-    first (no probabilistic atom in scope yet, so the distinguished
-    variable is still a free Datalog variable, not yet part of any
-    probabilistic computation), then substitute the resulting
-    positive relation back into the query.
-
-    These methods are defined here, ahead of `rewrite_conditional_query`
-    in this same class, rather than in a separate mixin composed as a
-    base class -- pattern precedence in this framework follows
-    `type(self).mro()`, which checks a *subclass's own* patterns
-    before any it inherits, so a separate base-class mixin would run
-    *after* `rewrite_conditional_query`'s always-true guard, never
-    getting a chance to fire. Defining the hoist here instead (the
-    same precedence mechanism already used by `lift_ep_from_conditioned`
-    / `lift_ep_from_conditioning` below) gives it priority, and
-    guarantees every consumer of `TranslateProbabilisticQueryMixin`
-    gets the fix with no separate opt-in -- unlike composing a sibling
-    mixin that a call site could forget to include in the right place.
-    """
-
-    @ew.add_match(
-        Implication(..., Condition),
-        _has_distinguished_variable_negation,
-    )
-    def hoist_negated_distinguished_variable_literal(self, impl):
-        head_vars = extract_logic_free_variables(impl.consequent)
-        condition = impl.antecedent
-        hoisted_rules = []
-        new_conditioned = self._hoist_side(
-            condition.conditioned, head_vars, hoisted_rules
-        )
-        new_conditioning = self._hoist_side(
-            condition.conditioning, head_vars, hoisted_rules
-        )
-        if not hoisted_rules:
-            # Every negated distinguished-variable literal found by the
-            # guard turned out to be unsafe to hoist (no deterministic
-            # domain relation available for it in this conjunction -- see
-            # _hoist_side). The antecedent is therefore unchanged. Mark
-            # `impl` so the guard declines on the next pass and normal
-            # dispatch falls through to whatever the rest of the MRO
-            # does with it (`rewrite_conditional_query`), instead of
-            # re-matching this same rule forever.
-            impl._nl_hoist_checked = True
-            return self.walk(impl)
-        new_impl = self.walk(
-            Implication(
-                impl.consequent, Condition(new_conditioned, new_conditioning)
-            )
-        )
-        return tuple(hoisted_rules) + (new_impl,)
-
-    def _hoist_side(self, side, head_vars, hoisted_rules):
-        conjuncts = _as_conjuncts(side)
-        positive = [c for c in conjuncts if not isinstance(c, Negation)]
-        # A hoisted rule must stay purely deterministic -- including a
-        # probabilistic atom (e.g. the uniform choice over studies) as a
-        # range-restrictor would reintroduce a probabilistic dependency
-        # into what must be resolved *before* any probabilistic atom is
-        # involved, defeating the fix. `probabilistic_predicate_symbols`
-        # (CPLogicMixin) is absent on a program with no probabilistic
-        # layer mixed in at all (e.g. test_magic_sets.py's ad hoc
-        # "Datalog" class), hence the getattr default.
-        prob_symbs = getattr(self, "probabilistic_predicate_symbols", set())
-        deterministic_positive = [
-            p for p in positive if p.functor not in prob_symbs
-        ]
-        new_conjuncts = list(positive)
-        for conjunct in conjuncts:
-            if not isinstance(conjunct, Negation):
-                continue
-            inner_vars = extract_logic_free_variables(conjunct.formula)
-            if not (inner_vars & head_vars):
-                # No distinguished variable involved: this negation is
-                # not the pattern that triggers the bug, leave it as-is.
-                new_conjuncts.append(conjunct)
-                continue
-            # Range-restrict the hoisted rule with whatever DETERMINISTIC
-            # positive atoms on this same side already mention the
-            # negated literal's free variables, so the rule stays
-            # safe-range without depending on a probabilistic atom.
-            restrictors = [
-                p
-                for p in deterministic_positive
-                if extract_logic_free_variables(p) & inner_vars
-            ]
-            new_body = conjunct_if_needed([conjunct] + restrictors)
-            if not is_safe_range(new_body):
-                # Not every free variable of the negated literal can be
-                # range-restricted deterministically on this side (e.g.
-                # the only candidate restrictor is itself probabilistic).
-                # Hoisting would produce an unsafe rule, so leave this
-                # negation untouched rather than emit something wrong;
-                # the pre-existing (buggy) behavior is unchanged for this
-                # case, which is reported separately as a documented
-                # engine limitation when it is hit in practice.
-                new_conjuncts.append(conjunct)
-                continue
-            fresh_functor = Symbol.fresh()
-            fresh_args = tuple(
-                sorted(inner_vars, key=lambda v: v.name)
-            )
-            new_head = fresh_functor(*fresh_args)
-            hoisted_rules.append(self.walk(Implication(new_head, new_body)))
-            new_conjuncts.append(new_head)
-        return conjunct_if_needed(new_conjuncts)
 
     @ew.add_match(
         Implication(..., Conjunction),

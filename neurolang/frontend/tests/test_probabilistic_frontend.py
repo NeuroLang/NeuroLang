@@ -1084,11 +1084,18 @@ def test_negated_conditioning_literal_with_distinguished_variable():
     numerator of `//` by flatly conjoining the conditioned and conditioning
     sides into one within-language query. That numerator query was wrong
     whenever it contained a negated literal with a distinguished-variable
-    argument (here, `r`), independent of the WMC-vs-lifted-solver choice.
-    The fix (`HoistNegatedDistinguishedVariableLiterals`) computes such a
-    negation as a plain deterministic rule first, using a deterministic
-    relation (`TrainStudy`) to range-restrict it, before any probabilistic
-    atom (`Selected`) is involved.
+    argument (here, `r`) -- in fact wrong for ANY negated deterministic
+    literal in a probabilistic query, distinguished or not, `//`-wrapped
+    or a bare SUCC query. The actual defect was in
+    `small_dichotomy_theorem_based_solver`'s hierarchical-query safety
+    check: it only ever inspected the probabilistic-only sub-conjunction
+    of the query, so a `Negation` wrapping a plain deterministic relation
+    like `Active` (joined with the probabilistic choice `Selected` via a
+    shared variable) silently slipped past it instead of triggering the
+    `NotHierarchicalQueryException` fallback to the (correct) Dalvi-Suciu
+    lifted solver. The fix widens that check
+    (`_extract_deterministic_negated_atoms`) to also count negated
+    deterministic atoms.
 
     Fixture: 6 studies, 2 regions (A = {0,1,2}, B = {3,4,5}), 2 terms (pain
     mentioned by {0,1,5}, joy by {2,3,4}). Hand-computed:
@@ -1138,11 +1145,16 @@ def test_negated_conditioning_literal_with_two_distinguished_variables():
     """
     Regression test for a negated literal with two distinguished variables.
 
-    The hoisted negated literal's full free-variable set (not just a
-    single distinguished variable) must be preserved and
-    range-restricted when MULTIPLE of its arguments are distinguished
-    (shared with the query head) -- here `r1` AND `r2`, both from the
-    single negated literal `~CoActive[s, r1, r2]`.
+    The fix must correctly handle a negated deterministic literal
+    regardless of how many of its arguments are distinguished (shared
+    with the query head) -- here `r1` AND `r2`, both from the single
+    negated literal `~CoActive[s, r1, r2]`. The solver-level fix
+    (`small_dichotomy_theorem_based_solver._extract_deterministic_negated_atoms`)
+    never special-cases variable count or distinguished-ness at all --
+    it forces ANY negated deterministic atom to fall back to the
+    (correct) Dalvi-Suciu lifted solver -- so this is mostly a
+    confirmation that nothing about multiple shared variables breaks
+    that fallback path.
 
     Fixture: 6 studies, regions {A, B, C}; `CoActive(s, r1, r2)` holds
     (symmetrically) for study 0 in {A, B} and study 3 in {B, C}. Terms:
