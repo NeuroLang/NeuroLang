@@ -10,6 +10,7 @@ from .... import expression_walker as ew
 from .... import expressions as ir
 from ....datalog.expression_processing import (
     conjunct_formulas,
+    conjunct_if_needed,
     conjunction_needs_reordering,
     extract_logic_atoms,
     extract_logic_free_variables,
@@ -27,7 +28,8 @@ from ....logic import (
     Implication,
     Negation,
 )
-from ....logic.transformations import ExtractBoundVariables
+from ....logic.horn_clauses import is_safe_range
+from ....logic.transformations import ExtractBoundVariables, GuaranteeConjunction
 from ....probabilistic.expressions import (
     PROB,
     Condition,
@@ -399,15 +401,7 @@ def _as_conjuncts(expression):
     """Top-level conjuncts of `expression`: its formulas if it is a
     Conjunction, or the single-element list [expression] otherwise.
     """
-    if isinstance(expression, Conjunction):
-        return list(expression.formulas)
-    return [expression]
-
-
-def _rebuild_conjunction(conjuncts):
-    if len(conjuncts) == 1:
-        return conjuncts[0]
-    return Conjunction(tuple(conjuncts))
+    return list(GuaranteeConjunction().walk(expression).formulas)
 
 
 def delegate_to_next_match(walker, expression, skip_action):
@@ -527,8 +521,11 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         # probabilistic atom (e.g. the uniform choice over studies) as a
         # range-restrictor would reintroduce a probabilistic dependency
         # into what must be resolved *before* any probabilistic atom is
-        # involved, defeating the fix.
-        prob_symbs = self._safe_probabilistic_predicate_symbols()
+        # involved, defeating the fix. `probabilistic_predicate_symbols`
+        # (CPLogicMixin) is absent on a program with no probabilistic
+        # layer mixed in at all (e.g. test_magic_sets.py's ad hoc
+        # "Datalog" class), hence the getattr default.
+        prob_symbs = getattr(self, "probabilistic_predicate_symbols", set())
         deterministic_positive = [
             p for p in positive if p.functor not in prob_symbs
         ]
@@ -551,10 +548,8 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
                 for p in deterministic_positive
                 if extract_logic_free_variables(p) & inner_vars
             ]
-            restricted_vars = set()
-            for p in restrictors:
-                restricted_vars |= extract_logic_free_variables(p)
-            if not (inner_vars <= restricted_vars):
+            new_body = conjunct_if_needed([conjunct] + restrictors)
+            if not is_safe_range(new_body):
                 # Not every free variable of the negated literal can be
                 # range-restricted deterministically on this side (e.g.
                 # the only candidate restrictor is itself probabilistic).
@@ -570,25 +565,9 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
                 sorted(inner_vars, key=lambda v: v.name)
             )
             new_head = fresh_functor(*fresh_args)
-            new_body = _rebuild_conjunction([conjunct] + restrictors)
             hoisted_rules.append(self.walk(Implication(new_head, new_body)))
             new_conjuncts.append(new_head)
-        return _rebuild_conjunction(new_conjuncts)
-
-    def _safe_probabilistic_predicate_symbols(self):
-        """self.pfact_pred_symbs / pchoice_pred_symbs raise KeyError when no
-        probabilistic fact (resp. choice) has been registered yet in this
-        program -- their backing EDB relation symbol was never added to the
-        symbol table. Treat that as "no predicates of that kind" rather
-        than letting the lookup fail.
-        """
-        symbs = set()
-        for attr in ("pfact_pred_symbs", "pchoice_pred_symbs"):
-            try:
-                symbs |= set(getattr(self, attr))
-            except (KeyError, AttributeError):
-                pass
-        return symbs
+        return conjunct_if_needed(new_conjuncts)
 
     @ew.add_match(
         Implication(..., Conjunction),
