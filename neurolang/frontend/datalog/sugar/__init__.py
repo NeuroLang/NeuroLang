@@ -17,6 +17,7 @@ from ....datalog.expression_processing import (
 )
 from ....datalog.expressions import AdornedSymbol
 from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
+from ....expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ....expression_walker import ReplaceExpressionWalker, ReplaceSymbolWalker
 from ....expressions import Constant, FunctionApplication, Symbol
 from ....logic import TRUE, Conjunction, Implication, ExistentialPredicate
@@ -386,6 +387,29 @@ class TranslateHeadConstantsToEqualities(ew.PatternWalker):
         new_implication = Implication(new_consequent, new_antecedent)
 
         return self.walk(new_implication)
+
+
+def delegate_to_next_match(walker, expression, skip_action):
+    """
+    Re-dispatch `expression` through `walker`'s patterns, skipping `skip_action`.
+
+    `skip_action` is the match currently executing. Lets a handler
+    that decided not to transform an expression hand it to whichever
+    pattern would have matched next, instead of returning it unchanged
+    (which would re-trigger its own guard forever) or re-walking it
+    (same problem). Shared by every mixin in this package that needs
+    this "decline and fall through" behavior -- see also
+    `TranslateRegionDestroy._delegate_to_next_match`'s former local
+    copy in spatial.py, now using this one.
+    """
+    for pattern, guard, action in walker.patterns:
+        if action is skip_action:
+            continue
+        if walker.pattern_match(pattern, expression) and (
+            guard is None or guard(expression)
+        ):
+            return action(walker, expression)
+    raise NeuroLangPatternMatchingNoMatch(f"No match for {expression}")
 
 
 class TranslateProbabilisticQueryMixin(ew.PatternWalker):
