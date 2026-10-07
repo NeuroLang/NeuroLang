@@ -97,8 +97,9 @@ def solve_succ_query(query_predicate, cpl_program):
     n.d., 30.
 
     """
-    return problog_solve_succ_query(query_predicate, cpl_program)
-    grounded = ground_cplogic_program(cpl_program)
+    from .grounding import get_grounding_predicate, ground_cplogic_program, ground_cplogic_program_for_query
+    # return problog_solve_succ_query(query_predicate, cpl_program)
+    grounded = ground_cplogic_program_for_query(cpl_program, query_predicate)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
     qpred_symb = query_predicate.functor

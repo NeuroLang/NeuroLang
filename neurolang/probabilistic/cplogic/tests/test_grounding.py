@@ -14,18 +14,20 @@ from ...expressions import (
     ProbabilisticChoiceGrounding,
     ProbabilisticFact,
 )
-from ..grounding import ground_cplogic_program
+from ..grounding import ground_cplogic_program, ground_cplogic_program_for_query
 from ..program import CPLogicProgram
 
 P = Symbol("P")
 Q = Symbol("Q")
 R = Symbol("R")
 Z = Symbol("Z")
+W = Symbol("W")
 x = Symbol("x")
 y = Symbol("y")
 p = Symbol("p")
 a = Constant("a")
 b = Constant("b")
+c = Constant("c")
 
 
 def test_cplogic_grounding():
@@ -129,3 +131,37 @@ def test_forbidden_disjunction():
     cpl.walk(code)
     with pytest.raises(ForbiddenDisjunctionError):
         ground_cplogic_program(cpl)
+
+
+def test_ground_cplogic_program_for_query_restricts_to_reachable():
+    """Grounding with a query predicate should skip unreachable predicates."""
+    cpl_program = CPLogicProgram()
+    cpl_program.add_probabilistic_facts_from_tuples(
+        Q, {(1.0, "a"), (0.5, "b")}
+    )
+    cpl_program.add_probabilistic_facts_from_tuples(
+        P, {(0.8, "a"), (0.2, "c")}
+    )
+    rule = Implication(Z(x), Conjunction((Q(x),)))
+    unreachable_rule = Implication(W(x), Conjunction((P(x), Q(x))))
+    code = Union((rule, unreachable_rule))
+    cpl_program.walk(code)
+
+    full_grounded = ground_cplogic_program(cpl_program)
+    full_predicates = {
+        grounding.expression.consequent.functor
+        for grounding in full_grounded.expressions
+    }
+    assert W in full_predicates
+    assert P in full_predicates
+
+    restricted_grounded = ground_cplogic_program_for_query(cpl_program, Z(x))
+    restricted_predicates = {
+        grounding.expression.consequent.functor
+        for grounding in restricted_grounded.expressions
+    }
+
+    assert Z in restricted_predicates
+    assert Q in restricted_predicates
+    assert W not in restricted_predicates
+    assert P not in restricted_predicates
