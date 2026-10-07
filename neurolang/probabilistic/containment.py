@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 
 from ..datalog import Fact, chase
 from ..datalog.negation import DatalogProgramNegation
@@ -19,7 +20,7 @@ from ..logic.transformations import (
 LOG = logging.getLogger(__name__)
 
 
-__all__ = ['is_contained_rule', 'is_contained']
+__all__ = ['is_contained_rule', 'is_contained', 'clear_cache']
 
 
 def canonical_database_program(rule):
@@ -106,6 +107,14 @@ def is_contained(q1, q2):
         else:
             return False
     return True
+
+
+is_contained = lru_cache(maxsize=4096)(is_contained)
+
+
+def clear_cache():
+    """Clear the internal LRU cache used by `is_contained`."""
+    is_contained.cache_clear()
 
 
 def convert_pos_logic_query_to_datalog_rules(query, head):
