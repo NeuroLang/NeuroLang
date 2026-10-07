@@ -12,7 +12,12 @@ class InvalidMagicSetError(ForbiddenExpressionError):
     program. Subclasses should specify the reason why the algorithm cannot be
     applied, for instance if negations are present in the code.
     """
-    pass
+
+    _suggestion = (
+        "The magic sets rewrite could not be applied. "
+        "Ensure the program is conjunctive and has at least one "
+        "constant argument."
+    )
 
 
 class BoundAggregationApplicationError(InvalidMagicSetError):
@@ -25,14 +30,21 @@ class BoundAggregationApplicationError(InvalidMagicSetError):
     Q(x, count(y)) :- P(x, y)
     ans(x) :- Q(x, 3)
     """
-    pass
+
+    _suggestion = (
+        "Magic sets cannot be applied when an aggregate function "
+        "argument is bound to a constant."
+    )
 
 
 class NegationInMagicSetsRewriteError(InvalidMagicSetError):
     """
     Magic Sets algorithm does not work if negations are present in the code.
     """
-    pass
+
+    _suggestion = (
+        "Magic sets cannot be applied to programs with negation."
+    )
 
 
 class NonConjunctiveAntecedentInMagicSetsError(InvalidMagicSetError):
@@ -40,7 +52,10 @@ class NonConjunctiveAntecedentInMagicSetsError(InvalidMagicSetError):
     Magic Sets algorithm does not work if one of the rules has a non
     conjunctive antecedent.
     """
-    pass
+
+    _suggestion = (
+        "All rule antecedents must be conjunctive for magic sets."
+    )
 
 
 class NoConstantPredicateFoundError(InvalidMagicSetError):
@@ -48,4 +63,8 @@ class NoConstantPredicateFoundError(InvalidMagicSetError):
     Magic Sets algorithm only works if there is at least one predicate in the
     code with a constant as an argument.
     """
-    pass
+
+    _suggestion = (
+        "Magic sets requires at least one predicate with a constant "
+        "argument."
+    )

@@ -1,7 +1,42 @@
 class NeuroLangException(Exception):
     """Base class for NeuroLang Exceptions"""
 
-    pass
+    _suggestion = "Check the query for errors."
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.line = None
+        self.column = None
+        self.source_line = None
+
+    @property
+    def suggestion(self) -> str:
+        """Return an actionable fix hint string."""
+        return self._suggestion
+
+    def error_summary(self) -> dict:
+        """Return structured error information as a dictionary.
+
+        Returns
+        -------
+        dict
+            A dictionary with keys: short_message, detail, suggestion,
+            exception_type, line, column, source_line.
+        """
+        doc = type(self).__doc__
+        detail = (doc if doc else str(self)) or ""
+        return {
+            "short_message": (
+                str(self).split('\n')[0]
+                if str(self) else type(self).__name__
+            ),
+            "detail": detail,
+            "suggestion": self.suggestion,
+            "exception_type": type(self).__name__,
+            "line": self.line,
+            "column": self.column,
+            "source_line": self.source_line,
+        }
 
 
 class UnexpectedExpressionError(NeuroLangException):
@@ -38,11 +73,16 @@ class ForbiddenDisjunctionError(ForbiddenExpressionError):
     not allowed.
     """
 
-    pass
+    _suggestion = (
+        "Probabilistic queries do not support disjunctions. "
+        "Use a deterministic predicate or split into separate rules."
+    )
 
 
 class ForbiddenExistentialError(ForbiddenExpressionError):
-    pass
+    _suggestion = (
+        "Existential quantifiers are not supported in this context."
+    )
 
 
 class RelationalAlgebraError(NeuroLangException):
@@ -62,7 +102,9 @@ class NotConjunctiveExpression(NeuroLangException):
     - A function or predicate of constants
     """
 
-    pass
+    _suggestion = (
+        "Express the formula as a conjunction of literals."
+    )
 
 
 class NotConjunctiveExpressionNegation(NotConjunctiveExpression):
@@ -75,7 +117,10 @@ class NotConjunctiveExpressionNegation(NotConjunctiveExpression):
     - A negated predicate of conjunctive arguments
     """
 
-    pass
+    _suggestion = (
+        "Aggregation combined with negation is not supported. "
+        "Remove the negation or the aggregate."
+    )
 
 
 class NotConjunctiveExpressionNestedPredicates(NotConjunctiveExpression):
@@ -101,7 +146,9 @@ class NotConjunctiveExpressionNestedPredicates(NotConjunctiveExpression):
     `~RegionReported`.
     """
 
-    pass
+    _suggestion = (
+        "Aggregation combined with nested predicates is not supported."
+    )
 
 
 class ProjectionOverMissingColumnsError(RelationalAlgebraError):
@@ -110,7 +157,9 @@ class ProjectionOverMissingColumnsError(RelationalAlgebraError):
     See `WrongArgumentsInPredicateError`
     """
 
-    pass
+    _suggestion = (
+        "A predicate has wrong arguments. Check the predicate signatures."
+    )
 
 
 class RelationalAlgebraNotImplementedError(
@@ -121,15 +170,22 @@ class RelationalAlgebraNotImplementedError(
     defined in the program. This is probably due to a malformed query.
     """
 
-    pass
+    _suggestion = (
+        "One of the operations in your program could not be matched. "
+        "This is probably due to a malformed query."
+    )
 
 
 class ForbiddenBuiltinError(ForbiddenExpressionError):
-    pass
+    _suggestion = (
+        "A forbidden builtin was used in this context."
+    )
 
 
 class NotInFONegE(ForbiddenExpressionError):
-    pass
+    _suggestion = (
+        "This expression is not in first-order logic with negation."
+    )
 
 
 class NeuroLangFrontendException(NeuroLangException):
@@ -142,7 +198,11 @@ class SymbolNotFoundError(NeuroLangException):
     defined.
     """
 
-    pass
+    _suggestion = (
+        "Ensure the symbol is defined before use. "
+        "Use ``with nl.environment as e:`` to define it, "
+        "or check the spelling."
+    )
 
 
 class RuleNotFoundError(NeuroLangException):
@@ -153,18 +213,26 @@ class UnsupportedProgramError(NeuroLangException):
     """
     Some parts of the datalog program are (currently) unsupported.
     """
-    pass
+
+    _suggestion = (
+        "Some parts of the program are not supported."
+    )
 
 
 class UnsupportedQueryError(NeuroLangException):
     """
     Queries on probabilistic predicates are unsupported.
     """
-    pass
+
+    _suggestion = (
+        "Query type not supported."
+    )
 
 
 class UnsupportedSolverError(NeuroLangException):
-    pass
+    _suggestion = (
+        "Solver not supported for this query type."
+    )
 
 
 class ProtectedKeywordError(NeuroLangException):
@@ -172,7 +240,11 @@ class ProtectedKeywordError(NeuroLangException):
     One of the predicates in the program uses a reserved keyword.
     Reserved keywords include : {PROB, with, exists}
     """
-    pass
+
+    _suggestion = (
+        "Avoid using reserved keywords as predicate names: "
+        "PROB, with, exists."
+    )
 
 
 class ForbiddenRecursivityError(UnsupportedProgramError):
@@ -200,7 +272,10 @@ class ForbiddenRecursivityError(UnsupportedProgramError):
     the `B(x)` predicate.
     """
 
-    pass
+    _suggestion = (
+        "The program has circular dependencies and cannot be stratified. "
+        "Ensure probabilistic/deterministic parts are well-separated."
+    )
 
 
 class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
@@ -229,7 +304,10 @@ class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
        FNT in Databases. 5, 105–195 (2012).
     """
 
-    pass
+    _suggestion = (
+        "Rules with aggregate functions cannot reference predicates "
+        "from the same stratum in their body."
+    )
 
 
 class WrongArgumentsInPredicateError(NeuroLangException):
@@ -252,7 +330,11 @@ class WrongArgumentsInPredicateError(NeuroLangException):
         )
     """
 
-    pass
+    _suggestion = (
+        "Check the number of arguments in each predicate call. "
+        "The docstring example shows a predicate defined with 2 args "
+        "but used with 3."
+    )
 
 
 class TranslateToNamedRAException(NeuroLangException):
@@ -278,7 +360,10 @@ class NoValidChaseClassForStratumException(NeuroLangException):
     implementations.
     """
 
-    pass
+    _suggestion = (
+        "No solver available for this stratum. "
+        "This may require a recursive-compatible chase implementation."
+    )
 
 
 class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
@@ -319,6 +404,11 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
     .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
         (Addison Wesley, 1995), Addison-Wesley.
     """
+
+    _suggestion = (
+        "Express the formula in conjunctive or disjunctive "
+        "normal form (CNF or DNF)."
+    )
 
     def __init__(self, output):
         super().__init__(f"Could not translate conjunction: {output}")
@@ -361,6 +451,11 @@ class NegativeFormulaNotSafeRangeException(TranslateToNamedRAException):
         (Addison Wesley, 1995), Addison-Wesley.
     """
 
+    _suggestion = (
+        "Every variable in a negated literal must also appear in "
+        "a non-negated literal in the rule body."
+    )
+
     def __init__(self, formula):
         super().__init__(f"Negative predicate {formula} is not safe range")
         self.formula = formula
@@ -376,6 +471,10 @@ class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
     t(x, y) :- r(x, y) & q(y, z)
     s(x, y, prob(x, y)) :- ~t(x, x) & q(x, y)
     """
+
+    _suggestion = (
+        "Define the negated predicate as a non-negated relation first."
+    )
 
     def __init__(self, formula):
         super().__init__(f"Negative formula {formula} is not a named relation")
@@ -398,11 +497,14 @@ class InvalidCommandExpression(ForbiddenExpressionError):
     Invalid Command statement.
     """
 
-    pass
+    _suggestion = (
+        "Check the command syntax. See ``.help()`` for usage."
+    )
 
 
 class ParserError(NeuroLangException):
     def __init__(self, message, line=None, column=None):
+        super().__init__(message)
         self.message = message
         self.line = line
         self.column = column
@@ -443,8 +545,14 @@ class SquallSemanticError(NeuroLangException):
 
     """
 
+    _suggestion = (
+        "Check the SQUALL syntax. Common issues: empty rule body, "
+        "missing determiner, anaphoric reference with no antecedent."
+    )
+
     def __init__(self, message, *, line=None, column=None, source_line=None):
         """Initialise with message and optional source location."""
+        super().__init__(message)
         self.message = message
         self.line = line
         self.column = column
