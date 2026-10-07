@@ -11,8 +11,7 @@ except ImportError:
 from scipy import sparse
 
 
-class StudyID(str):
-    pass
+StudyID = np.int64
 
 
 class TfIDf(float):
@@ -131,7 +130,7 @@ def fetch_feature_data(
     metadata_df = fetch_study_metadata(data_dir, version, verbose)
     ids = metadata_df["id"]
     if convert_study_ids:
-        ids = ids.apply(StudyID)
+        ids = ids.astype(StudyID)
     feature_names = np.genfromtxt(
         files[1],
         dtype=str,
@@ -208,7 +207,7 @@ def fetch_neurosynth_peak_data(
         metadata[["id", "space"]].set_index("id"), on="id"
     )
     if convert_study_ids:
-        activations["id"] = activations["id"].apply(StudyID)
+        activations["id"] = activations["id"].astype(StudyID)
     return activations
 
 
