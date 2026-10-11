@@ -1,13 +1,14 @@
-NSQUALL: Controlled English for NeuroLang
-==========================================
+SQUALL: Controlled English for NeuroLang
+=========================================
 
-NSQUALL (NeuroLang's *Semantically controlled Query-Answerable Logical Language*)
-lets you write NeuroLang queries and rules in plain English sentences instead of
-symbolic Datalog notation.  Under the hood, each sentence is translated to a
-NeuroLang logical expression using Montague semantics in
+NeuroLang's SQUALL frontend (also referred to as NSQUALL, for NeuroLang
+SQUALL) lets you write NeuroLang queries and rules in plain English sentences
+instead of symbolic Datalog notation.  Under the hood, each sentence is
+translated to a NeuroLang logical expression using Montague semantics in
 Continuation-Passing Style, building on the original
 `SQUALL language <https://people.irisa.fr/Sebastien.Ferre/software/squall/>`_
-by Sébastien Ferré.
+by Sébastien Ferré [Ferre2012]_.  The probabilistic query answering that
+SQUALL programs compile to is described in [Zanitti2023]_.
 
 .. rubric:: References
 
@@ -22,9 +23,9 @@ by Sébastien Ferré.
 
 This tutorial is built around a single real-world neuroimaging problem:
 **Bayes Factor decoding of the right fusiform gyrus**.  Each section
-introduces exactly the NSQUALL feature needed for the next step, so by
+introduces exactly the SQUALL feature needed for the next step, so by
 the end you will understand every line of a complete probabilistic
-NSQUALL program.
+SQUALL program.
 
 The full program we will build:
 
@@ -86,14 +87,14 @@ activates region :math:`R` and mentions term :math:`T`,
 :math:`P(R)` is the marginal probability of activating :math:`R`, and
 :math:`P(T)` of mentioning :math:`T`.
 
-We will compute all three probability distributions as NSQUALL rules, then
+We will compute all three probability distributions as SQUALL rules, then
 combine them with arithmetic to produce :math:`\mathrm{BF}` — all inside
 NeuroLang with zero post-hoc pandas computation.
 
 1.2 The Data
 -------------
 
-The NSQUALL program works with six relations:
+The SQUALL program works with six relations:
 
 ``study(study_id)``
     The set of all study identifiers.
@@ -101,16 +102,19 @@ The NSQUALL program works with six relations:
     Activation foci from Neurosynth peaks, mapped to anatomical regions via
     the Julich-Brain atlas.
 ``mentions(study_id, term)``
-    TF-IDF term associations from Neurosynth.
+    TF-IDF term associations from Neurosynth, thresholded.  (Note that the
+    ``neurosynth`` engine of the command-line tool defines its own
+    ``mentions(term, study_id)`` with the opposite column order, see
+    :doc:`engine_configuration`.)
 ``region(region)``
     The set of all anatomical region names.
 ``term(term)``
     The set of all cognitive term names.
 ``selected_study(study_id)``
-    A probabilistic uniform choice over all studies (defined in NSQUALL
+    A probabilistic uniform choice over all studies (defined in SQUALL
     below, not from Python).
 
-These are registered in Python before running NSQUALL (see Appendix A for the
+These are registered in Python before running SQUALL (see Appendix A for the
 full API):
 
     >>> from neurolang.frontend import NeurolangPDL
@@ -120,15 +124,15 @@ full API):
     >>> nl.add_tuple_set(study_mentions_df, name="mentions")
     >>> nl.add_tuple_set(region_df, name="region")
     >>> nl.add_tuple_set(term_df, name="term")
-    >>> # Selected_study is then defined directly in NSQUALL (see below)
+    >>> # Selected_study is then defined directly in SQUALL (see below)
 
 A complete working example is in
 ``examples/plot_squall_bayes_factor_decoding.py``.
 
-1.3 Running an NSQUALL Program
-------------------------------
+1.3 Running a SQUALL Program
+----------------------------
 
-All NSQUALL code is passed as a string to ``execute_squall_program``:
+All SQUALL code is passed as a string to ``execute_squall_program``:
 
     >>> result = nl.execute_squall_program("""
     ...     define as Active_region every Region
@@ -155,7 +159,7 @@ Part 2: Nouns and Basic Queries
 2.1 Nouns as Relations
 -----------------------
 
-A noun in NSQUALL names a relation.  ``Region`` refers to the ``region`` EDB,
+A noun in SQUALL names a relation.  ``Region`` refers to the ``region`` EDB,
 ``Term`` to ``term``, ``Selected_study`` to ``selected_study``.
 
 The simplest query asks for all entities in a relation:
@@ -172,7 +176,7 @@ that asks for all values.  The sentence reads like plain English.
 2.2 Determiners
 -----------------
 
-NSQUALL supports four determiners:
+SQUALL supports four determiners:
 
 =========== ============ ==========================================
 Keyword     Meaning      Example
@@ -242,7 +246,7 @@ The ``where ?r is '...'`` clause filters ``?r`` to a fixed constant string.
 2.6 Reserved Words and Backtick Quoting
 -----------------------------------------
 
-NSQUALL reserves many common English words (``every``, ``a``, ``the``,
+SQUALL reserves many common English words (``every``, ``a``, ``the``,
 ``that``, ``is``, ``has``, ``not``, ``and``, ``or``, ``where``, ``who``,
 ``which``, etc.).  If a relation name coincides with a reserved word, wrap it
 in backticks:
@@ -266,7 +270,7 @@ Now we add verbs to connect nouns into sentences.
 The Bayes Factor problem needs two binary relations:
 ``activates(study, region)`` and ``mentions(study, term)``.
 
-In NSQUALL, a transitive verb maps subject→first argument, object→second
+In SQUALL, a transitive verb maps subject→first argument, object→second
 argument, in natural English order:
 
 .. code-block:: squall
@@ -355,7 +359,10 @@ join variable.
 
     define as NotPlaying every person that does not plays.
 
-Result: persons who do not appear in the ``plays`` relation.
+Result: persons who do not appear in the ``plays`` relation.  Note the
+ungrammatical ``does not plays``: SQUALL does not inflect verbs, so the verb
+must be spelled exactly as the relation name (``plays``); ``does not play``
+would look for a relation called ``play``.
 
 3.7 Function-Call Guard — ``Predicate(?x, ?y) holds``
 -------------------------------------------------------
@@ -365,9 +372,10 @@ arguments:
 
 .. code-block:: squall
 
-    define as Close every Pair ?p that euclidean(?x, ?y) holds.
+    define as Close every Pair (?x; ?y) where euclidean(?x, ?y) holds.
 
-This calls ``euclidean(x, y)`` as a guard in the body.  We will see a more
+Here ``?x`` and ``?y`` are bound by the tuple labels of ``Pair``, and
+``euclidean(x, y)`` is called as a guard in the body.  We will see a more
 general form of this in section 7.1.
 
 .. -- 3.8 Bare Predicate Calls --
@@ -403,7 +411,7 @@ This creates a new predicate ``active_region(region)``.  In Datalog notation:
 The rule says: *r is an active region if there exists a selected study s
 that activates r*.
 
-The Bayes Factor program defines four such intermediate rules:
+The Bayes Factor program defines two such unary intermediate rules:
 
 .. code-block:: squall
 
@@ -417,7 +425,7 @@ probabilities.
 4.2 Multi-Variable Rules — Compound Quantifiers
 -------------------------------------------------
 
-To build the joint distribution we need a **ternary** relation:
+To build the joint distribution we need a **binary** relation:
 ``cooccurrence(region, term)`` linking each study's region and term.
 
 The compound quantifier syntax chains ``for every`` clauses:
@@ -561,10 +569,11 @@ probability variable:
 
 .. code-block:: squall
 
-    define as probably activates every study.
+    define as probably reliable every study.
 
-The ``activates`` predicate is now probabilistic; the probability is inferred
-at query time.
+This defines a unary probabilistic predicate ``reliable(study)``, each tuple
+being an independent probabilistic fact whose probability is a fresh
+variable.
 
 5.2 Inferred Probability — ``with inferred probability``
 ---------------------------------------------------------
@@ -607,7 +616,9 @@ marginalising over studies — the study variable introduced by
 5.3 Conditional Probability — ``with probability … conditioned to``
 --------------------------------------------------------------------
 
-The MARG form computes a conditional probability:
+``with probability … conditioned to`` computes a conditional probability
+(it compiles to the same conditional query as ``MARG[… // …]`` in
+:doc:`tutorial_datalog`):
 
 .. code-block:: squall
 
@@ -632,7 +643,7 @@ the study term is 'emotion'"*.
 
 .. note::
 
-   When using MARG with tuple-labeled relations, the arity of the conditioned
+   When using conditional probabilities with tuple-labeled relations, the arity of the conditioned
    and conditioning noun-phrases must exactly match the corresponding
    relation arities.  Use ``_`` for columns that exist in the body relation
    but should not appear in the head.
@@ -656,15 +667,32 @@ The resolver collects ``the X`` markers from the conditioning side, finds
 a matching noun predicate on the conditioned side, and unifies the
 variables:
 
-* Conditioned side: ``∃ s. voxel(v) ∧ selected_study(s) ∧ reports(s, v)``
-* Conditioning side (before resolution):
-  ``∃ s'. selected_study(s') ∧ mentions(s', 'emotion')``
-* After resolution:
-  ``Condition(∃ s. voxel(v) ∧ selected_study(s) ∧ reports(s, v),
-             selected_study(s) ∧ mentions(s, 'emotion'))``
-* After existential lifting (the ``∃ s`` must scope over the whole Condition):
-  ``∃ s. Condition(voxel(v) ∧ selected_study(s) ∧ reports(s, v),
-                   selected_study(s) ∧ mentions(s, 'emotion'))``
+Conditioned side:
+
+.. code-block:: text
+
+    ∃ s. voxel(v) ∧ selected_study(s) ∧ reports(s, v)
+
+Conditioning side (before resolution):
+
+.. code-block:: text
+
+    ∃ s'. selected_study(s') ∧ mentions(s', 'emotion')
+
+After resolution:
+
+.. code-block:: text
+
+    Condition(∃ s. voxel(v) ∧ selected_study(s) ∧ reports(s, v),
+              selected_study(s) ∧ mentions(s, 'emotion'))
+
+After existential lifting (the ``∃ s`` must scope over the whole
+``Condition``):
+
+.. code-block:: text
+
+    ∃ s. Condition(voxel(v) ∧ selected_study(s) ∧ reports(s, v),
+                   selected_study(s) ∧ mentions(s, 'emotion'))
 
 The variable ``s`` is now shared across both sides, so ``the SelectedStudy``
 and ``a SelectedStudy`` refer to the same study.  This is the only resolution
@@ -782,7 +810,7 @@ to ``?bf``:
     ?bf is (?p_rt / ?p_r) / ((?p_t - ?p_rt) / (1.0 - ?p_r))
 
 This is the Bayes Factor formula from section 1.1, expressed directly in
-NSQUALL.  The expression supports ``+``, ``-``, ``*``, ``/`` with standard
+SQUALL.  The expression supports ``+``, ``-``, ``*``, ``/`` with standard
 operator precedence; parentheses are supported for grouping.
 
 The ``is`` clause translates to an ``eq`` builtin with the arithmetic
@@ -861,8 +889,9 @@ backwards through all the rules in the chain:
    into the ``bayes_factor`` call before the SIPS (Sideways Information
    Passing Strategy) sees it.
 2. The SIPS creates an adorned predicate
-   ``bayes_factor^bff_0(Constant('rfg'), t, bf)`` where ``bf`` means the
-   first argument is bound.
+   ``bayes_factor^bff_0(Constant('rfg'), t, bf)``.  The adornment ``bff``
+   has one letter per argument: ``b`` (bound) for the first argument and
+   ``f`` (free) for the other two.
 3. A magic init ``magic_bayes_factor^bff_0(Constant('rfg'))`` seeds the
    propagation.
 4. Magic rules propagate the bound argument down the dependency chain:
@@ -915,7 +944,8 @@ Putting it all together:
         where ?r is 'right fusiform gyrus' as BF.
 
 Running this on real Neurosynth data (see
-``examples/plot_squall_bayes_factor_decoding.py``) produces:
+``examples/plot_squall_bayes_factor_decoding.py``) produces the following
+top 20 terms (:doc:`tutorial_datalog` shows the top 10 of the same result):
 
 .. list-table:: Top terms by Bayes Factor for the right fusiform gyrus
    :header-rows: 1
@@ -968,8 +998,8 @@ All 20 terms exceed the Jeffreys "substantial evidence" threshold of
 face — is exactly what the right fusiform gyrus is known for.
 
 
-Part 10: Additional NSQUALL Syntax
-===================================
+Part 10: Additional SQUALL Syntax
+==================================
 
 This section documents features not used directly in the Bayes Factor
 example but available in the language.
@@ -1086,7 +1116,7 @@ aggregation:
 .. code-block:: squall
 
     define as measured_studies every Study that measured.
-    obtain every measured_studies of the measured_studies count of the measured_studies.
+    obtain every Count of the measured_studies.
     # single column: 3 studies that measured at least one peak
 
 The aggregation noun may also refer to an N-ary relation, such as a
@@ -1134,13 +1164,13 @@ expressions:
 Here ``?p`` is a variable bound from a multi-column source, and
 ``(?q / ?total)`` is an arithmetic expression evaluated per tuple.
 Support for executing weighted choice definitions directly from
-NSQUALL is not yet implemented — use ``add_probabilistic_choice_from_tuples``
+SQUALL is not yet implemented — use ``add_probabilistic_choice_from_tuples``
 in Python to register choices with non-uniform probabilities.
 
 10.3 Program-Level Directives — ``#name(args).``
 --------------------------------------------------
 
-A NSQUALL program may include directive lines of the form ``#name(arg, ...)``
+A SQUALL program may include directive lines of the form ``#name(arg, ...)``
 to pass configuration to the engine.  Directives are processed before rule
 walking.
 
@@ -1148,7 +1178,10 @@ Currently supported:
 
 ``#set_backend('backend')``
     Switch the relational algebra backend.  ``backend`` may be ``'pandas'``,
-    ``'dask'``, or ``'duckdb'``.
+    ``'dask'``, or ``'polars'``.  This calls
+    ``neurolang.config.config.set_query_backend`` and therefore changes the
+    backend **process-wide**, for every engine, not only for the current
+    program (see :doc:`performance`).
 
 .. code-block:: squall
 
@@ -1167,32 +1200,42 @@ tuple belongs to the relation named by ``Noun``:
 .. code-block:: squall
 
     define as SelectedPeak every Peak_reported (?i; ?j; ?k; ?s)
-        where (?i; ?j; ?k; ?s) is a Activation.
+        where (?i; ?j; ?k; ?s) is an Activation.
 
 The scalar form works too: ``where ?s is a Selected_study``.
 
 10.5 Nested Relative Clauses
 -----------------------------
 
-Relative clauses can be nested by using an intermediate IDB predicate as the
-noun:
+A relative clause can itself contain a noun phrase with its own relative
+clause:
 
 .. code-block:: squall
 
-    define as PlayingSelected every selected that plays.
+    define as Performer every person that sings a Genre that is popular.
+
+Here ``that is popular`` restricts ``Genre`` inside the relative clause
+``that sings a Genre …`` attached to ``person``.  Alternatively, the inner
+clause can be factored out into an intermediate IDB predicate that is then
+used as the noun:
+
+.. code-block:: squall
+
+    define as Popular_genre every Genre that is popular.
+    define as Performer every person that sings a Popular_genre.
 
 
 .. _part-9-appendix-a:
 
-Appendix A: Running NSQUALL from Python
-=========================================
+Appendix A: Running SQUALL from Python
+========================================
 
-All of the NSQUALL syntax shown in this tutorial can be executed from Python
+All of the SQUALL syntax shown in this tutorial can be executed from Python
 using the ``NeurolangPDL`` frontend.  The general workflow is:
 
 1. Create a ``NeurolangPDL`` engine.
 2. Register EDB facts with ``add_tuple_set``.
-3. Execute an NSQUALL program string with ``execute_squall_program``.
+3. Execute a SQUALL program string with ``execute_squall_program``.
 4. Inspect results via the direct return from ``obtain`` queries or with
    ``solve_all()``.
 
@@ -1200,10 +1243,10 @@ Registering facts and running a simple rule
 --------------------------------------------
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("alice",), ("bob",), ("carol",)], name="person"
     ... )
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("alice",), ("carol",)], name="plays"
     ... )
     >>> nl.execute_squall_program(
@@ -1241,9 +1284,9 @@ Transitive verbs and binary predicates
 ---------------------------------------
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> nl.add_tuple_set([("jazz",)], name="genre")
-    >>> nl.add_tuple_set([("alice", "jazz")], name="sings")
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("jazz",)], name="genre")
+    >>> _ = nl.add_tuple_set([("alice", "jazz")], name="sings")
     >>> nl.execute_squall_program(
     ...     "define as Performer every person that sings a Genre."
     ... )
@@ -1257,8 +1300,8 @@ Quantifiers: every, a, no
 **Every**
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> nl.add_tuple_set([("alice",)], name="plays")
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
     >>> nl.execute_squall_program("define as Active every person that plays.")
     >>> sorted(nl.solve_all()["active"].as_pandas_dataframe().iloc[:, 0].tolist())
     ['alice']
@@ -1266,8 +1309,8 @@ Quantifiers: every, a, no
 **A / an / some**
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
-    >>> nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
+    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
+    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
     >>> result = nl.execute_squall_program(
     ...     "obtain every item ?i that has an item_count ?c."
     ... )
@@ -1277,8 +1320,8 @@ Quantifiers: every, a, no
 **No**
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
-    >>> nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
+    >>> _ = nl.add_tuple_set([("a",), ("b",), ("c",)], name="item")
+    >>> _ = nl.add_tuple_set([("a", 1), ("b", 2)], name="item_count")
     >>> result = nl.execute_squall_program(
     ...     "obtain every item ?i that has no item_count ?c."
     ... )
@@ -1290,8 +1333,8 @@ Relative clauses and negation
 ------------------------------
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> nl.add_tuple_set([("alice",)], name="plays")
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
     >>> nl.execute_squall_program(
     ...     "define as NotPlaying every person that does not plays."
     ... )
@@ -1303,7 +1346,7 @@ Tuple (multi-dimensional) subjects
 -----------------------------------
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("v1", 0, 0, 1), ("v2", 1, 2, 3)], name="voxel"
     ... )
     >>> nl.execute_squall_program(
@@ -1316,7 +1359,7 @@ Tuple (multi-dimensional) subjects
 Anonymous wildcard ``_``::
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
     ... )
     >>> nl.execute_squall_program(
@@ -1331,11 +1374,11 @@ Compound quantifiers and anaphora
 ----------------------------------
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("A",), ("B",)], name="region")
-    >>> nl.add_tuple_set([("x",), ("y",)], name="term")
-    >>> nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="selected_study")
-    >>> nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
-    >>> nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
+    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
+    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
+    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="selected_study")
+    >>> _ = nl.add_tuple_set([("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates")
+    >>> _ = nl.add_tuple_set([("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions")
     >>> nl.execute_squall_program(
     ...     "define as Cooccurrence "
     ...     "for every Region and for every Term "
@@ -1352,33 +1395,43 @@ Probabilistic n-ary rules
 --------------------------
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("A",), ("B",)], name="region")
-    >>> nl.add_tuple_set([("x",), ("y",)], name="term")
-    >>> nl.add_tuple_set(
-    ...     [("A", "x"), ("A", "y"), ("B", "x")], name="cooccurs"
+    >>> _ = nl.add_tuple_set([("A",), ("B",)], name="region")
+    >>> _ = nl.add_tuple_set([("x",), ("y",)], name="term")
+    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",), ("s4",)], name="study")
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates"
+    ... )
+    >>> _ = nl.add_tuple_set(
+    ...     [("s1", "x"), ("s2", "y"), ("s3", "x")], name="mentions"
     ... )
     >>> result = nl.execute_squall_program(
+    ...     "define as Selected_study as an equiprobable choice over every Study. "
+    ...     "define as Cooccurrence "
+    ...     "for every Region and for every Term "
+    ...     "where a Selected_study activates the Region and mentions the Term. "
     ...     "define as Joint_prob with inferred probability "
-    ...     "for every Region ?r and for every Term ?t "
-    ...     "where ?r cooccurs ?t. "
+    ...     "every Cooccurrence (?r; ?t). "
     ...     "obtain every Joint_prob (?r; ?t; ?p) as P."
     ... )
     >>> df = result.as_pandas_dataframe()
     >>> df.columns = ["r", "t", "p"]
     >>> sorted(df.itertuples(index=False, name=None))
-    [('A', 'x', 1.0), ('A', 'y', 1.0), ('B', 'x', 1.0)]
+    [('A', 'x', 0.25), ('A', 'y', 0.25), ('B', 'x', 0.25)]
+
+Each region–term pair co-occurs in exactly one of the four equiprobable
+studies, hence the probability 1/4.
 
 
-Probabilistic choice (NSQUALL)
-------------------------------
+Probabilistic choice (SQUALL)
+-----------------------------
 
-An equiprobable choice can be defined directly in NSQUALL, avoiding the
+An equiprobable choice can be defined directly in SQUALL, avoiding the
 need for ``add_uniform_probabilistic_choice_over_set`` in Python:
 
     >>> from neurolang.expressions import Symbol
     >>>
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
     >>> nl.execute_squall_program(
     ...     "define as Selected_study "
     ...     "as an equiprobable choice over every Study."
@@ -1392,10 +1445,10 @@ Filtering with comparisons
 ---------------------------
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("a",), ("b",), ("c",), ("d",)], name="item"
     ... )
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
     ... )
     >>> nl.execute_squall_program(
@@ -1410,13 +1463,13 @@ Aggregations
 -------------
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("a",), ("b",), ("c",), ("d",)], name="item"
     ... )
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
     ... )
-    >>> nl.add_tuple_set([(i,) for i in range(5)], name="quantity")
+    >>> _ = nl.add_tuple_set([(i,) for i in range(5)], name="quantity")
     >>> nl.execute_squall_program(
     ...     "define as max_items for every Item ?i ;"
     ...     " where every Max of the Quantity where ?i item_count per ?i."
@@ -1435,9 +1488,9 @@ Boolean connectives
 **Conjunction (and)**
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> nl.add_tuple_set([("alice",), ("carol",)], name="plays")
-    >>> nl.add_tuple_set([("alice",), ("bob",)], name="runs")
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",), ("carol",)], name="plays")
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="runs")
     >>> nl.execute_squall_program(
     ...     "define as Player every person that plays. "
     ...     "define as PlayAndRun every Player that runs."
@@ -1448,9 +1501,9 @@ Boolean connectives
 **Disjunction (or)**
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
-    >>> nl.add_tuple_set([("alice",)], name="plays")
-    >>> nl.add_tuple_set([("bob",)], name="runs")
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
+    >>> _ = nl.add_tuple_set([("bob",)], name="runs")
     >>> nl.execute_squall_program(
     ...     "define as PlayOrRun every person that plays or runs."
     ... )
@@ -1463,10 +1516,10 @@ Boolean connectives
 Appendix B: IR Builder Cheat-Sheet
 ====================================
 
-Every NSQUALL sentence is compiled into NeuroLang's intermediate
+Every SQUALL sentence is compiled into NeuroLang's intermediate
 representation (IR).  You can also write IR directly using the
 **environment context manager**.  This is useful when a pattern has no
-NSQUALL syntax yet, or when you need to mix Python logic with declarative
+SQUALL syntax yet, or when you need to mix Python logic with declarative
 rules.
 
 **Scope vs Environment**
@@ -1483,7 +1536,7 @@ Both use the same ``e.<Name>`` attribute syntax.
 
 **Simple unary rule**
 
-NSQUALL:
+SQUALL:
 
 .. code-block:: text
 
@@ -1499,7 +1552,7 @@ IR builder:
 
 **Binary / n-ary rule**
 
-NSQUALL:
+SQUALL:
 
 .. code-block:: text
 
@@ -1514,26 +1567,29 @@ IR builder:
 
 **Probabilistic fact**
 
-NSQUALL:
+SQUALL:
 
 .. code-block:: text
 
-    define as probably activates every study.
+    define as probably reliable every study.
 
-IR builder:
+Equivalent IR expression (a probabilistic fact for every study, with a fresh
+probability variable):
 
 .. code-block:: python
 
-    from neurolang.probabilistic.expressions import ProbabilisticFact
     from neurolang.expressions import Symbol
+    from neurolang.logic import Implication
+    from neurolang.probabilistic.expressions import ProbabilisticFact
 
-    with nl.environment as e:
-        p = Symbol.fresh()
-        e.activates[e.s] = ProbabilisticFact(p, e.study(e.s))
+    s, p = Symbol("s"), Symbol.fresh()
+    rule = Implication(
+        ProbabilisticFact(p, Symbol("reliable")(s)), Symbol("study")(s)
+    )
 
 **Marginalisation (MARG) query**
 
-NSQUALL:
+SQUALL:
 
 .. code-block:: text
 
@@ -1555,7 +1611,7 @@ IR builder:
 
 **Aggregation**
 
-NSQUALL:
+SQUALL:
 
 .. code-block:: text
 
@@ -1581,80 +1637,22 @@ IR builder:
 Appendix C: Gap Report
 =======================
 
-All features described in this tutorial are fully supported.  The only patterns
-from the codebase that have no NSQUALL syntax yet are:
+All features described in this tutorial are supported, except for the
+execution of weighted choice definitions noted below.  The patterns from the
+codebase that have no complete SQUALL support yet are:
 
 - **Skolem-like functional terms in rule head** — ❌ Not supported.
   Requires IR changes beyond the grammar transformer scope.
-- **Weighted choice execution from NSQUALL** — ⏳ Grammar only.
+- **Weighted choice execution from SQUALL** — ⏳ Grammar only.
   ``define as X as a choice over Y with probability P`` parses but the
   execution path is not yet implemented.  Use
   ``add_probabilistic_choice_from_tuples`` in Python for arbitrary
   probabilities.
 
 
-.. _appendix-d:
-
-Appendix D: Test Coverage
-==========================
-
-The NSQUALL parser and execution engine (``squall_syntax_lark.py``,
-``query_resolution_datalog.py``) are covered by 92 tests (91 pass, 1
-pre-existing skip) in two test suites:
-
-- ``test_squall_parser.py`` — 52 tests covering grammar parsing,
-  transformer logic, simplifier, and SquallProgram construction.
-- ``test_squall_syntax_lark.py`` — 8 tests for Lark grammar integration.
-- ``test_squall_pdl_integration.py`` — 32 tests for end-to-end SQUALL
-  execution, including probabilistic queries.
-
-**Coverage of newly added probabilistic choice code** (manual analysis,
-run via ``pytest`` on Python 3.14 — coverage.py has a pre-existing numpy
-C-extension conflict on this platform):
-
-+--------------------------------------------+-------------+-------------+
-| Component                                  | Approx.     | Test        |
-|                                            | lines       | coverage    |
-+============================================+=============+=============+
-| Grammar rules (``neurolang_natural.lark``) | 20          | 100%        |
-+--------------------------------------------+-------------+-------------+
-| EquiprobableChoiceDef / WeightedChoiceDef  | 40          | ~100%       |
-| classes + SquallProgram integration        |             |             |
-+--------------------------------------------+-------------+-------------+
-| Transformer handlers                       | 50          | ~95%        |
-| (``rule_equiprobable_choice``,             |             |             |
-| ``rule_weighted_choice``, ``squall``       |             |             |
-| routing)                                   |             |             |
-+--------------------------------------------+-------------+-------------+
-| Parser simplification pass-through         | 15          | ~60%        |
-| (``parser()`` for choice defs in           |             |             |
-| Union/SquallProgram)                       |             |             |
-+--------------------------------------------+-------------+-------------+
-| ``_handle_equiprobable_choice`` (main      | 50          | ~85%        |
-| path)                                      |             |             |
-+--------------------------------------------+-------------+-------------+
-| ``_handle_weighted_choice``                | 10          | ~80%        |
-| (NotImplementedError)                      |             |             |
-+--------------------------------------------+-------------+-------------+
-| Error paths (missing source, non-constant  | 15          | 0%          |
-| source, unknown body formula)              |             |             |
-+--------------------------------------------+-------------+-------------+
-| Scoped re-walk with choice defs            | 10          | 0%          |
-| (obtain + choice together)                 |             |             |
-+--------------------------------------------+-------------+-------------+
-| **Total new non-test code**                | **~210**    | **~83%**    |
-+--------------------------------------------+-------------+-------------+
-
-The uncovered ~17% consists primarily of defensive error-handling paths and
-edge cases that occur only with malformed programs or uncommon execution
-patterns.  The main-line feature paths — parsing, transformer registration,
-symbol-table population, and uniform-probability computation — are fully
-exercised.
-
-
 .. _appendix-e-squall:
 
-Appendix E: Querying from the Command Line
+Appendix D: Querying from the Command Line
 ============================================
 
 The ``neurolang-query`` command-line tool lets you run SQUALL (or Datalog)
@@ -1681,7 +1679,7 @@ full list of options, see ``neurolang-query --help`` or the
 :py:mod:`neurolang.utils.cli` module documentation.
 
 
-Appendix F: Engine Configuration (engines.yaml)
+Appendix E: Engine Configuration (engines.yaml)
 ===============================================
 
 See :doc:`engine_configuration` for the full engine registry reference.

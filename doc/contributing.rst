@@ -10,7 +10,7 @@ a development environment and submit changes.
 Prerequisites
 -------------
 
-* **Python ≥ 3.8**
+* **Python ≥ 3.12**
 * **git**
 * **uv** (fast Python package manager) — install with:
 
@@ -66,13 +66,16 @@ This will build the HTML docs into ``doc/_build/html/``. Open
 
 .. note::
 
-   Building the full example gallery requires all neuroimaging packages
-   (nibabel, nilearn, neurosynth) and can take several minutes. To skip
-   the gallery during a quick doc build, set:
+   The documentation build executes only the gallery examples whose file
+   name matches ``plot_load_destrieux`` (``filename_pattern`` in
+   :file:`doc/conf.py`); the other examples are rendered without being run.
+   Running them requires the neuroimaging packages (nibabel, nilearn) and
+   downloads data.  To skip running the gallery entirely during a quick doc
+   build, disable ``plot_gallery``:
 
    .. code-block:: bash
 
-      SPHINXOPTS="-D sphinx_gallery_conf.run_stale_examples=False" make -C doc html
+      make -C doc html SPHINXOPTS="-D plot_gallery=0"
 
 
 Submitting a Pull Request
@@ -134,9 +137,9 @@ dataset backends.  To add a new engine:
    ``relations`` (CSV/TSV files loaded as predicates) run after the
    Python init.  See :ref:`concepts` for details.
 
- 2. If your engine needs custom Python logic (data downloads, non-trivial
-    processing), create the init module at
-    ``neurolang/utils/engines/my_dataset/init.py`` that exports:
+2. If your engine needs custom Python logic (data downloads, non-trivial
+   processing), create the init module at
+   ``neurolang/utils/engines/my_dataset/init.py`` that defines:
 
    .. code-block:: python
 
@@ -149,40 +152,40 @@ dataset backends.  To add a new engine:
           mask: nib.Nifti1Image | None,
           data_dir: Path
       ) -> None:
-          \"\"\"Register symbols and load data into *nl*.\"\"\"
+          """Register symbols and load data into *nl*."""
           # Register predicates with nl.add_tuple_set, etc.
 
-    If your engine needs the common neuroimaging symbols (``agg_count``,
-    ``agg_create_region``, ``agg_create_region_overlay``,
-    ``principal_direction``, ``region_union``), set
-    ``use_base_symbols: true`` in the YAML entry instead of calling
-    ``init_base_engine()`` from Python::
+   If your engine needs the common neuroimaging symbols (``agg_count``,
+   ``agg_create_region``, ``agg_create_region_overlay``,
+   ``principal_direction``, ``region_union``), set
+   ``use_base_symbols: true`` in the YAML entry instead of calling
+   ``init_base_engine()`` from Python::
 
-        my_dataset:
-          description: "..."
-          requires_mni_mask: true
-          use_base_symbols: true
-          builtins: [exp, log, startswith]
-          ...
+       my_dataset:
+         description: "..."
+         requires_mni_mask: true
+         use_base_symbols: true
+         builtins: [exp, log, startswith]
+         ...
 
-    This replaces the need for a Python init script when your engine
-    only needs the standard neuroimaging symbols plus declarative YAML
-    fields (``atlases``, ``relations``, ``datalog_init``, etc.).  See the
-    ``destrieux`` engine entry for a complete example of a YAML-only engine.
+   This replaces the need for a Python init script when your engine
+   only needs the standard neuroimaging symbols plus declarative YAML
+   fields (``atlases``, ``relations``, ``datalog_init``, etc.).  See the
+   ``destrieux`` engine entry for a complete example of a YAML-only engine.
 
-    For engines that require custom data processing (like NeuroSynth's
-    peak coordinate conversion), you still write a Python init module.
-    In that case, import and call ``init_base_engine`` if you need the
-    base symbols::
+   For engines that require custom data processing (like NeuroSynth's
+   peak coordinate conversion), you still write a Python init module.
+   In that case, import and call ``init_base_engine`` if you need the
+   base symbols::
 
-        from neurolang.utils.engines.base import init_base_engine
+       from neurolang.utils.engines.base import init_base_engine
 
-        def init_engine(nl, mask, data_dir):
-            init_base_engine(nl, mask)
-            # ... custom logic ...
+       def init_engine(nl, mask, data_dir):
+           init_base_engine(nl, mask)
+           # ... custom logic ...
 
-    If using ``use_base_symbols: true`` in the YAML, do **not** also call
-    ``init_base_engine`` from Python — the registry handles it for you.
+   If using ``use_base_symbols: true`` in the YAML, do **not** also call
+   ``init_base_engine`` from Python — the registry handles it for you.
 
 3. Add unit tests in ``neurolang/utils/tests/test_cli.py``, specifically
    in the ``TestEngineRegistry`` class to verify that your engine is
