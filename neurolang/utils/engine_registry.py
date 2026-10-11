@@ -74,12 +74,30 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import nibabel as nib
 import numpy as np
 import yaml
-from nilearn import datasets, image
 
-try:
-    from nilearn.datasets.utils import _fetch_files
-except ImportError:
-    from nilearn.datasets._utils import fetch_files as _fetch_files
+
+# nilearn.datasets and nilearn.image take over a second to import (they
+# pull in scikit-learn), so they are only imported when an engine is
+# actually built. This keeps ``neurolang-query --help`` and the listing
+# options fast.
+def _nilearn_datasets():
+    from nilearn import datasets
+
+    return datasets
+
+
+def _nilearn_image():
+    from nilearn import image
+
+    return image
+
+
+def _fetch_files(*args, **kwargs):
+    try:
+        from nilearn.datasets.utils import _fetch_files as fetch_files
+    except ImportError:
+        from nilearn.datasets._utils import fetch_files
+    return fetch_files(*args, **kwargs)
 
 if TYPE_CHECKING:
     from neurolang.frontend import NeurolangPDL
@@ -317,27 +335,27 @@ def get_predicates(
 
 _NILEARN_TEMPLATES: Dict[str, Dict[str, Any]] = {
     "brain_mask": {
-        "func": datasets.load_mni152_brain_mask,
+        "func": "load_mni152_brain_mask",
         "kind": "mask",
     },
     "gm_mask": {
-        "func": datasets.load_mni152_gm_mask,
+        "func": "load_mni152_gm_mask",
         "kind": "mask",
     },
     "wm_mask": {
-        "func": datasets.load_mni152_wm_mask,
+        "func": "load_mni152_wm_mask",
         "kind": "mask",
     },
     "template": {
-        "func": datasets.load_mni152_template,
+        "func": "load_mni152_template",
         "kind": "anatomical",
     },
     "gm_template": {
-        "func": datasets.load_mni152_gm_template,
+        "func": "load_mni152_gm_template",
         "kind": "anatomical",
     },
     "wm_template": {
-        "func": datasets.load_mni152_wm_template,
+        "func": "load_mni152_wm_template",
         "kind": "anatomical",
     },
 }
@@ -392,7 +410,7 @@ def _fetch_nilearn_template(
     elif variant in ("brain_mask", "gm_mask", "wm_mask"):
         kwargs["resolution"] = params.get("resolution")
 
-    img = info["func"](**kwargs)
+    img = getattr(_nilearn_datasets(), info["func"])(**kwargs)
 
     pred_name = params.get("predicate")
     if pred_name:
@@ -472,15 +490,15 @@ def _load_template(
 # ---------------------------------------------------------------------------
 
 def _fetch_atlas_destrieux(**kwargs):
-    return datasets.fetch_atlas_destrieux_2009(**kwargs)
+    return _nilearn_datasets().fetch_atlas_destrieux_2009(**kwargs)
 
 
 def _fetch_atlas_schaefer(**kwargs):
-    return datasets.fetch_atlas_schaefer_2018(**kwargs)
+    return _nilearn_datasets().fetch_atlas_schaefer_2018(**kwargs)
 
 
 def _fetch_atlas_difumo(**kwargs):
-    return datasets.fetch_atlas_difumo(**kwargs)
+    return _nilearn_datasets().fetch_atlas_difumo(**kwargs)
 
 
 _ATLAS_REGISTRY = {
@@ -638,7 +656,7 @@ def _load_atlas(
 
 def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
     return nib.load(
-        datasets.fetch_icbm152_2009(
+        _nilearn_datasets().fetch_icbm152_2009(
             data_dir=str(data_dir / "icbm")
         )["t1"]
     )
@@ -654,7 +672,7 @@ def _resolve_mask(
     if resolution is not None:
         # A 3x3 target affine keeps the original origin; scaling a 4x4
         # identity would also scale its homogeneous coordinate.
-        mask = image.resample_img(mask, np.eye(3) * resolution)
+        mask = _nilearn_image().resample_img(mask, np.eye(3) * resolution)
     return mask
 
 

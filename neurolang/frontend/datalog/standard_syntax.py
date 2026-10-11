@@ -1,3 +1,4 @@
+import functools
 import json
 import os
 from typing import Tuple
@@ -113,7 +114,7 @@ marg_body_predicate : "MARG" "[" conjunction "]" "=" argument
 
 // SUCC[...] = var  —  success probability query (skipped in execution)
 succ_body_predicate : "SUCC" "[" SUCC_INNER "]" "=" argument
-SUCC_INNER : /[a-zA-Z_*+.,()&@\/ \t-]+/
+SUCC_INNER : /[a-zA-Z_*+.,()&@\\/ \t-]+/
 
 // Separator inside PROB/MARG for the conditional form: accepts both // and |
 PROB_SEP : "//" | "|"
@@ -243,7 +244,18 @@ OPERATOR = {
 }
 
 
-COMPILED_GRAMMAR = Lark(GRAMMAR, parser='lalr', debug=True)
+@functools.lru_cache(maxsize=None)
+def compiled_grammar():
+    """Compile the Datalog grammar on first use (it takes ~0.15 s)."""
+    return Lark(GRAMMAR, parser='lalr')
+
+
+def __getattr__(name):
+    # Lazily expose the compiled grammar as the ``COMPILED_GRAMMAR``
+    # module attribute, kept for backwards compatibility.
+    if name == "COMPILED_GRAMMAR":
+        return compiled_grammar()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class ExternalSymbol(Symbol):
@@ -1228,12 +1240,12 @@ def parser(code, locals=None, globals=None, interactive=False):
 
     try:
         if (interactive):
-            completer = LarkCompleter(COMPILED_GRAMMAR)
+            completer = LarkCompleter(compiled_grammar())
             res = completer.complete(code.strip())
             return res.token_options
         else:
             code = _preprocess(code)
-            jp = COMPILED_GRAMMAR.parse(code.strip())
+            jp = compiled_grammar().parse(code.strip())
             return DatalogTransformer().transform(jp)
     except UnexpectedToken as e:
         raise UnexpectedTokenError(str(e), line=e.line - 1, column=e.column - 1) from e
