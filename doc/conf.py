@@ -64,7 +64,9 @@ sphinx_gallery_conf = {
 autosummary_generate = True
 autodoc_default_options = {
     "members": True,
-    "inherited-members": True,
+    # Document members inherited from NeuroLang classes, but not those of
+    # builtin bases (e.g. str.maketrans, int.to_bytes).
+    "inherited-members": "str,int,float,tuple,frozenset,set,dict,list,object",
 }
 
 # Import the real package so autodoc documents actual signatures and
