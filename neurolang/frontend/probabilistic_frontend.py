@@ -3,7 +3,7 @@ Probabilistic Frontend
 ======================
 Complements QueryBuilderDatalog class with probabilistic capabilities
 1- add extensional probabilistic facts and choices
-2- sove probabilistic queries
+2- solve probabilistic queries
 """
 import collections
 import functools
@@ -172,9 +172,13 @@ class RegionFrontendCPLogicSolver(
 
 class NeurolangPDL(QueryBuilderDatalog):
     """
-    Complements QueryBuilderDatalog class with probabilistic capabilities
-    1- add extensional probabilistic facts and choices
-    2- sove probabilistic queries
+    Probabilistic Datalog frontend.
+
+    Complements :class:`QueryBuilderDatalog` with probabilistic
+    capabilities:
+
+    1. add extensional probabilistic facts and choices;
+    2. solve probabilistic queries.
     """
 
     def __init__(

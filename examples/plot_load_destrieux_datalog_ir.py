@@ -45,8 +45,15 @@ image_data = image.get_fdata().astype(int)
 
 ##################################################
 # Load the regions into Voxel-style regions
+if 'lut' in atlas_destrieux:
+    # nilearn >= 0.11 provides a look-up table with label indices and names
+    lut = atlas_destrieux['lut']
+    atlas_labels = zip(lut['index'], lut['name'].astype(str))
+else:
+    atlas_labels = atlas_destrieux['labels']
+
 region_dict = {}
-for label, name in atlas_destrieux['labels']:
+for label, name in atlas_labels:
     if label == 0:
         continue
 
