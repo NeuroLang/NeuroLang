@@ -15,6 +15,11 @@ class RelationalAlgebraStringExpression(str):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
+# Below this many (row, row) pairs, element-wise membership tests are
+# cheaper than building a merge for a set difference.
+_ANTI_JOIN_MIN_PAIRS = 10_000
+
+
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     """
     RelationalAlgebraFrozenSet implementation using in-memory pandas.DataFrame
@@ -405,7 +410,43 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 if other.is_dee():
                     return self.dum()
                 return self.dee()
+            if other.is_dee():
+                return self.copy()
+            if (
+                len(self._container) * len(other._container)
+                > _ANTI_JOIN_MIN_PAIRS
+            ):
+                try:
+                    return self._anti_join(other)
+                except (TypeError, ValueError):
+                    # e.g. unhashable values: fall back to element-wise
+                    # membership tests
+                    pass
         return super().__sub__(other)
+
+    def _anti_join(self, other):
+        """Rows of ``self`` not in ``other``, as a vectorised merge.
+
+        The generic ``Set.__sub__`` iterates over ``self`` and tests each
+        row with ``__contains__``, which scans ``other`` every time.
+        """
+        self._drop_duplicates_if_needed()
+        col_types = self._extract_unified_column_types(other)
+        new_container = self._container.astype(col_types).merge(
+            other._container.astype(col_types),
+            indicator="_merge_indicator_", how="left",
+        )
+        new_container = new_container.loc[
+            new_container["_merge_indicator_"] == "left_only",
+            self._container.columns,
+        ]
+        new_container = new_container.astype(
+            self._container.dtypes.to_dict()
+        )
+        output = self._empty_set_same_structure()
+        output._container = new_container.reset_index(drop=True)
+        output._might_have_duplicates = False
+        return output
 
     def __or__(self, other):
         if self is other:
