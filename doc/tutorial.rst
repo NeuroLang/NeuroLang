@@ -6,7 +6,7 @@ Get Started with NeuroLang
 First Steps With NeuroLang
 --------------------------
 NeuroLang is a unifying formalism to perform complex queries and explorations using heterogeneous data sources like tabular data,
-volumetric images, and ontologies. To perform this in sound manner, NeuroLang is a probabilistic logic programming language based on Datalog [abiteboul1995]_, [maier2018]_.
+volumetric images, and ontologies. To perform this in a sound manner, NeuroLang is a probabilistic logic programming language based on Datalog [abiteboul1995]_, [maier2018]_.
 
 .. note::
 
@@ -32,7 +32,7 @@ which, if we assume that :math:`x` being on Destrieux et al's atlas means that :
    (\forall x) \operatorname{left\_hemisphere\_gyrus}(x) \leftarrow (\exists l)  \operatorname{destrieux\_atlas}(l, x) \wedge \operatorname{startswith}('L\,G', l)
 
 
-Finally, for notation convenience, we will drop the quantifiers, assuming that all variable on the left of the arrow (such as :math:`x`) is universally quantified, and all variable appearing only on the right of the arrow (such as :math:`l`) will be existentially quantified [maier2018]_. This leads to the expression 
+Finally, for notation convenience, we will drop the quantifiers, assuming that all variables on the left of the arrow (such as :math:`x`) are universally quantified, and all variables appearing only on the right of the arrow (such as :math:`l`) will be existentially quantified [maier2018]_. This leads to the expression 
 
 
 .. math::
@@ -40,25 +40,37 @@ Finally, for notation convenience, we will drop the quantifiers, assuming that a
    \operatorname{left\_hemisphere\_gyrus}(x) \leftarrow  \operatorname{destrieux\_atlas}(l, x) \wedge \operatorname{startswith}('L\,G', l)
 
 
-which we formalise in Python as:
+which we formalise in Python, where ``nl`` is a
+:class:`~neurolang.frontend.NeurolangDL` instance, as:
 
 .. code-block:: python
 
-  with neurolang.scope as e:
+  with nl.scope as e:
       e.left_hemisphere_gyrus[e.x] = e.destrieux_atlas(e.l, e.x) & e.startswith('L G', e.l)
 
 
 the full example is in our gallery in :ref:`sphx_glr_auto_examples_plot_load_destrieux_left_hemisphere_gyri.py`.
 
 
-Negation can also be used in NeuroLang. For instance
+Negation can also be used in NeuroLang, through the ``~`` operator. For
+instance, the regions of the atlas which are not left hemisphere gyri are
+
+.. code-block:: python
+
+  with nl.scope as e:
+      e.not_left_hemisphere_gyrus[e.x] = (
+          e.destrieux_atlas(e.l, e.x) & ~e.left_hemisphere_gyrus(e.x)
+      )
+
+Note that every variable of a negated atom must also appear in a positive atom
+of the same rule (here ``e.x`` is bound by ``destrieux_atlas``).
 
 
 Disjunctions in Logic Programming
 .................................
 
 
-Disjunctions in logic programming merit are a very specific case. For instance, let's say that all the regions in the left hemisphere's cortex are either a sulcus or gyrus, or more specifically
+Disjunctions in logic programming merit a specific discussion. For instance, let's say that all the regions in the left hemisphere's cortex are either a sulcus or gyrus, or more specifically
 
    x is a left hemisphere region **if** x is left sulcus **or** x is left gyrus
 
@@ -83,9 +95,9 @@ which we formalise in NeuroLang in the classical logical programming syntax:
 
 .. code-block:: python
 
-  with neurolang.scope as e:
-      e.left_hemisphere_region[e.x] = e.left_hemisphere_sulcus(x)
-      e.left_hemisphere_region[e.x] = e.left_hemisphere_gyrus(x) 
+  with nl.scope as e:
+      e.left_hemisphere_region[e.x] = e.left_hemisphere_sulcus(e.x)
+      e.left_hemisphere_region[e.x] = e.left_hemisphere_gyrus(e.x)
 
 
 
@@ -93,7 +105,7 @@ or in a less verbose manner:
 
 .. code-block:: python
 
-  with neurolang.scope as e:
+  with nl.scope as e:
       e.left_hemisphere_region[e.x] = e.left_hemisphere_sulcus(e.x) | e.left_hemisphere_gyrus(e.x)
 
 
@@ -109,11 +121,11 @@ Aggregations combine information from a set of tuples. A good example of an aggr
   (\exists province)(\exists pop)\operatorname{population\_per\_country\_province}(country, province, pop)
   \end{split}
 
-which in neurolang is expressed as
+which in NeuroLang is expressed as
 
 .. code-block:: python
 
-   with neurolang.scope as e:
+   with nl.scope as e:
        e.max_population_per_country[e.country, e.max(e.pop)] = e.population_per_country_province(e.country, e.province, e.pop)
 
 .. [abiteboul1995] Abiteboul, S., Hull, R. & Vianu, V. Foundations of databases. (Addison Wesley, 1995).

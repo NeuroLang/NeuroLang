@@ -16,7 +16,7 @@ sys.path.append(os.path.abspath("sphinxext"))
 
 # -- Project information ------------------------------------------------------
 project = "NeuroLang"
-copyright = "2017–2026, Demian Wassermann et al."
+copyright = "2017–2026, Demian Wassermann and the NeuroLang contributors"
 author = "Demian Wassermann et al."
 
 try:
@@ -53,33 +53,26 @@ sphinx_gallery_conf = {
     "gallery_dirs": "auto_examples",
     "doc_module": ("neurolang",),
     "backreferences_dir": "gen_api",
-    # Do not attempt to execute examples — neurolang requires Python <3.12
-    # and neuroimaging data not present in CI.
-    "plot_gallery": False,
+    # Only execute the examples that are fast and need small downloads;
+    # the NeuroSynth examples download several hundred MB of data.
+    "plot_gallery": True,
+    "filename_pattern": r"plot_load_destrieux",
+    "abort_on_example_error": False,
 }
 
 # -- Autosummary / Autodoc ----------------------------------------------------
 autosummary_generate = True
 autodoc_default_options = {
     "members": True,
-    "inherited-members": True,
+    # Document members inherited from NeuroLang classes, but not those of
+    # builtin bases (e.g. str.maketrans, int.to_bytes).
+    "inherited-members": "str,int,float,tuple,frozenset,set,dict,list,object",
 }
 
-# neurolang uses private typing internals removed in Python 3.12.
-# Mock the entire package so autodoc/autosummary can still produce stubs.
-autodoc_mock_imports = [
-    "neurolang",
-    "neurolang.frontend",
-    "neurolang.expressions",
-    "neurolang.expression_pattern_matching",
-    "neurolang.expression_walker",
-    "neurolang.exceptions",
-    "neurolang.logic",
-    "neurolang.datalog",
-    "neurolang.probabilistic",
-    "neurolang.relational_algebra",
-    "neurolang.relational_algebra_provenance",
-]
+# Import the real package so autodoc documents actual signatures and
+# docstrings (neurolang supports Python >= 3.12).
+autodoc_typehints = "description"
+numpydoc_show_class_members = False
 
 # -- Intersphinx --------------------------------------------------------------
 intersphinx_mapping = {
@@ -127,7 +120,7 @@ html_sidebars = {
     "**": ["sidebar-nav-bs.html", "page-toc.html"],
 }
 
-html_domain_indices = False
+html_domain_indices = True
 
 # -- LaTeX output (kept minimal) ----------------------------------------------
 latex_documents = [

@@ -2,7 +2,7 @@
 Command-line interface for NeuroLang query execution.
 
 Provides a ``neurolang-query`` command that initializes a NeuroLang engine
-from the :ref:`engine registry <neurolang.utils.engine_registry>` and
+from the :mod:`engine registry <neurolang.utils.engine_registry>` and
 executes Datalog queries from arguments, files, or standard input.
 
 Usage

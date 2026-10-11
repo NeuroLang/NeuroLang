@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""
-NeuroLang Example based Implementing a NeuroSynth Query
-====================================================
+Implementing a NeuroSynth Query in NeuroLang
+============================================
 
 """
 
@@ -22,13 +22,13 @@ import pandas as pd
 from neurolang import ExplicitVBROverlay, NeurolangPDL
 from neurolang.frontend.neurosynth_utils import get_ns_mni_peaks_reported
 
-###############################################################################
+# %%
 # Data preparation
 # ----------------
 
 data_dir = Path.home() / "neurolang_data"
 
-###############################################################################
+# %%
 # Load the MNI atlas and resample it to 4mm voxels
 
 mni_t1 = nibabel.load(
@@ -36,14 +36,14 @@ mni_t1 = nibabel.load(
 )
 mni_t1_4mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 4)
 
-###############################################################################
+# %%
 # Probabilistic Logic Programming in NeuroLang
 # --------------------------------------------
 
 nl = NeurolangPDL()
 
 
-###############################################################################
+# %%
 # Adding new aggregation function to build a region overlay
 
 
@@ -57,7 +57,7 @@ def agg_create_region_overlay(
     )
 
 
-###############################################################################
+# %%
 # Load the NeuroSynth database
 
 peak_data = get_ns_mni_peaks_reported(data_dir)
@@ -83,7 +83,7 @@ nl.load_neurosynth_term_study_associations(
 
 
 # %%
-###############################################################################
+# %%
 # Probabilistic program and querying
 
 with nl.scope as e:
@@ -104,7 +104,7 @@ with nl.scope as e:
 
 
 # %%
-###############################################################################
+# %%
 # Plotting results
 # --------------------------------------------
 
