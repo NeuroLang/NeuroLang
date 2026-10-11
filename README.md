@@ -7,7 +7,7 @@
 [![Code style](https://img.shields.io/badge/code%20style-flake8-000000.svg)](https://github.com/PyCQA/flake8)
 
 
-Neurolang enables the analysis of NeuroImaging data through probabilistic logic programming. It seamlessly allow to combine, images, databases, and ontologies within a single framework.
+NeuroLang enables the analysis of neuroimaging data through probabilistic logic programming. It seamlessly combines images, databases, and ontologies within a single framework.
 
 
 Important links
@@ -16,4 +16,8 @@ Important links
 - In-development interactive gallery of examples (best viewed with Chrome) http://neurolang-u18.saclay.inria.fr/hub/gallery
 - HTML documentation (stable release): http://neurolang.github.io/
 - HTML documentation (dev release): http://neurolang.github.io/dev
+
+Citing
+======
+G. E. Zanitti, Y. Soto, V. Iovene, M. V. Martinez, R. O. Rodriguez, G. I. Simari, D. Wassermann. *Scalable Query Answering Under Uncertainty to Neuroscientific Ontological Knowledge: The NeuroLang Approach*. Neuroinformatics, 21(2), 407-425, 2023.
 

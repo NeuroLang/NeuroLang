@@ -59,6 +59,29 @@ meta-analysis might state that the term "memory" is associated with region
 Queries over probabilistic data use **possible worlds semantics**: the answer
 to a query is the probability that the query holds in a randomly sampled world.
 
+Besides independent facts, NeuroLang supports **probabilistic choices**: a
+set of mutually exclusive tuples, exactly one of which holds in each possible
+world.  The typical example is a uniform choice over studies
+(``add_uniform_probabilistic_choice_over_set`` in Python, or ``define as
+Selected_study as an equiprobable choice over every Study`` in SQUALL), which
+turns "the fraction of studies satisfying a property" into a probability.
+Probabilistic queries are written with ``PROB[…] = p`` (or ``MARG[…] = p``)
+in text Datalog and ``with inferred probability`` in SQUALL; adding a
+condition with ``//`` (``given`` / ``conditioned to`` in SQUALL) yields a
+conditional probability.  See :doc:`tutorial_datalog` (Part 5) and
+:doc:`tutorial_squall` (Part 5) for worked examples.
+
+To compute these probabilities, :class:`~neurolang.frontend.NeurolangPDL`
+tries its solvers in order: first exact **lifted inference**
+(:mod:`neurolang.probabilistic.small_dichotomy_theorem_based_solver` and the
+Dalvi–Suciu algorithm in :mod:`neurolang.probabilistic.dalvi_suciu_lift`),
+which works directly on the query structure and scales to large data sets
+when the query is liftable; if the query is not supported by these, it falls
+back to **knowledge compilation**, i.e. weighted model counting over a
+sentential decision diagram (SDD) built with pysdd
+(:mod:`neurolang.probabilistic.weighted_model_counting`), which is general but
+can be much more expensive.  See [Zanitti2023]_ for details.
+
 .. note::
 
    The probabilistic extensions are implemented in
@@ -101,13 +124,14 @@ writing Python:
    # List predicates for the NeuroSynth engine
    neurolang-query --engine neurosynth --list-predicates
 
-   # Run a Datalog query
-   neurolang-query "ans(t) :- term_in_study_tfidf(t, w, s)"
+   # Run a Datalog query (--engine defaults to neurosynth)
+   neurolang-query "ans(t) :- term_in_study_tfidf(s, t, w)"
 
    # Use the Destrieux atlas engine
    neurolang-query --engine destrieux "ans(name) :- destrieux(name, region)"
 
-Engines are declared declaratively in :file:`engines/engines.yaml`:
+Engines are declared in :file:`neurolang/utils/engines/engines.yaml`
+(abridged; see :doc:`engine_configuration` for the full reference):
 
 .. code-block:: yaml
 
@@ -118,6 +142,7 @@ Engines are declared declaratively in :file:`engines/engines.yaml`:
        python_init: "neurolang.utils.engines.neurosynth.init"
        datalog_init: |
          study_with_peaks(S) :- peak_reported(I, J, K, S)
+         mentions(t, s) :- term_in_study_tfidf(s, t, v), (v > 0.03)
        relations:
          extra_data: "shared/my_data.csv"
        predicates:
@@ -127,13 +152,13 @@ Engines are declared declaratively in :file:`engines/engines.yaml`:
            description: "Reported activation peaks in voxel coordinates"
          ...
 
-Each engine references a Python module that exports
-``init_engine(nl, mask, data_dir)``.  The :mod:`neurolang.utils.engine_registry`
+An engine may reference, through ``python_init``, a Python module (given by
+its dotted module path) that defines ``init_engine(nl, mask, data_dir)``.  The :mod:`neurolang.utils.engine_registry`
 module handles YAML loading, MNI mask retrieval, and delegating to the
 engine's init script.
 
 **Init phases.**  When :func:`~neurolang.utils.engine_registry.build_engine`
-builds an engine, it runs up to nine phases in order:
+builds an engine, it runs up to ten phases, in this order:
 
 #. **Builtins** (``builtins``) — registers known functions (``exp``,
    ``log``, ``startswith``) as callable symbols.  Simple list in YAML::
@@ -156,8 +181,11 @@ builds an engine, it runs up to nine phases in order:
    ``use_base_symbols`` already covers your needs, this phase can be
    omitted entirely — see the ``destrieux`` engine entry for an example.
 
-#. **Downloads** (``downloads``) — fetches files from URLs before the
-   other phases.  Supports archive extraction::
+#. **Downloads** (``downloads``) — fetches files from URLs into the data
+   directory.  This runs after the Python init but before templates,
+   atlases, Datalog init, relations and ontologies, so files fetched here
+   are available to those later phases (but not to ``python_init``).
+   Supports archive extraction::
 
        downloads:
          - url: "https://example.com/data.tar.gz"
@@ -270,8 +298,9 @@ builds an engine, it runs up to nine phases in order:
    Supported formats: ``.csv``, ``.tsv``, ``.csv.gz``, ``.tsv.gz``.  The
    file is read with ``pandas.read_csv`` and registered via
    :meth:`~neurolang.frontend.query_resolution_datalog.QueryBuilderDatalog.add_tuple_set`.
-   Because relations are loaded after the Datalog init, your derived rules
-   can already reference them.
+   Relations are loaded *after* the Datalog init phase.  Rules in
+   ``datalog_init`` can nevertheless refer to them, because rules are only
+   evaluated when a query is run, by which time all phases have completed.
 
 #. **Probabilistic choices** (``probabilistic_choice``) — declares uniform
    probabilistic choices over existing predicates::
