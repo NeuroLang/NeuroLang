@@ -16,7 +16,7 @@ sys.path.append(os.path.abspath("sphinxext"))
 
 # -- Project information ------------------------------------------------------
 project = "NeuroLang"
-copyright = "2017–2026, Demian Wassermann et al."
+copyright = "2017–2026, Demian Wassermann and the NeuroLang contributors"
 author = "Demian Wassermann et al."
 
 try:
