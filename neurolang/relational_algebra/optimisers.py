@@ -1,5 +1,6 @@
 import operator
-from itertools import chain
+from functools import reduce
+from itertools import chain, combinations, permutations
 
 from .. import expression_walker as ew
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -27,6 +28,7 @@ from .relational_algebra import (
     RenameColumns,
     ReplaceNull,
     Selection,
+    _get_columns_for_RA_or_constant,
     eq_,
     get_expression_columns,
     int2columnint_constant,
@@ -338,14 +340,13 @@ class RewriteSelections(ew.ExpressionWalker):
             )
 
 
-def _proj_attrs_as_str_set(expr):
-    """Return projection attribute names as a set of plain strings."""
-    return {str(a.name) if hasattr(a, 'name') else str(a) for a in expr.attributes}
-
-
-def _ra_columns_as_str_set(expr):
-    """Return RA operation column names as a set of plain strings."""
-    return {str(c) for c in expr.columns()}
+def _is_trivial_nary_projection(expression):
+    """Guard: True if a Projection keeps every column of its relation."""
+    projected = {
+        str(a.name) if hasattr(a, 'name') else str(a)
+        for a in expression.attributes
+    }
+    return projected == {str(c) for c in expression.relation.columns()}
 
 
 class EliminateTrivialProjections(ew.PatternWalker):
@@ -364,10 +365,7 @@ class EliminateTrivialProjections(ew.PatternWalker):
 
     @ew.add_match(
         Projection(NaryNaturalJoin, ...),
-        lambda expression: (
-            _proj_attrs_as_str_set(expression)
-            == _ra_columns_as_str_set(expression.relation)
-        )
+        _is_trivial_nary_projection
     )
     def eliminate_trivial_nary_projection(self, expression):
         return self.walk(expression.relation)
@@ -1415,28 +1413,87 @@ def _ra_columns(expr):
     """Safely get output columns from any RA node or leaf Constant."""
     if isinstance(expr, RelationalAlgebraOperation):
         return expr.columns()
-    from .relational_algebra import _get_columns_for_RA_or_constant as _colsfb
     try:
-        return _colsfb(expr)
+        return _get_columns_for_RA_or_constant(expr)
     except (NotImplementedError, AttributeError):
         return set()
 
 
-def _flatten_joins(expr):
+def _project_onto_operand(operand, attributes):
+    """
+    Restrict a projection to the columns of one operand.
+
+    Return ``Projection(operand, attributes ∩ operand.columns)`` when that
+    drops at least one column, and ``operand`` itself otherwise.
+    """
+    operand_cols = _ra_columns(operand)
+    pushed_attrs = tuple(a for a in attributes if a in operand_cols)
+    if pushed_attrs and pushed_attrs != tuple(operand_cols):
+        return Projection(operand, pushed_attrs)
+    return operand
+
+
+def _flatten_joins(expr, with_products=False):
     """
     Collect all join operands into a flat list.
 
-    Recurse through both NaturalJoin (binary) and NaryNaturalJoin (n-ary)
-    so that nested join trees are fully unwound in one pass.
+    Recurse through NaturalJoin (binary) and NaryNaturalJoin (n-ary) so
+    that nested join trees are fully unwound in one pass. When
+    ``with_products`` is set, also recurse through Product and through
+    Projection wrappers sitting between join nodes, pushing each such
+    projection down onto the individual operands. This lets a mixed tree
+    such as ``NaturalJoin(Projection(Product(A, B)), C)`` be reordered
+    globally when the operands share column names.
     """
+    if with_products and isinstance(expr, Projection):
+        inner = _flatten_joins(expr.relation, with_products)
+        if len(inner) <= 1:
+            return [expr]
+        return [_project_onto_operand(op, expr.attributes) for op in inner]
+    flattened_types = (NaturalJoin, NaryNaturalJoin)
+    if with_products:
+        flattened_types += (Product,)
+    if not isinstance(expr, flattened_types):
+        return [expr]
     if isinstance(expr, NaturalJoin):
-        return _flatten_joins(expr.relation_left) + _flatten_joins(expr.relation_right)
-    if isinstance(expr, NaryNaturalJoin):
-        result = []
-        for r in expr.relations:
-            result.extend(_flatten_joins(r))
-        return result
-    return [expr]
+        children = (expr.relation_left, expr.relation_right)
+    else:
+        children = expr.relations
+    return [
+        op for child in children for op in _flatten_joins(child, with_products)
+    ]
+
+
+def _overlap_degrees(col_sets):
+    """Return, for each column set, its total overlap with all the others."""
+    return [
+        sum(len(cols & other) for j, other in enumerate(col_sets) if j != i)
+        for i, cols in enumerate(col_sets)
+    ]
+
+
+def _greedy_chain(col_sets, first, cumulative):
+    """
+    Order indices of ``col_sets`` by nearest-neighbour expansion.
+
+    Start at ``first`` and repeatedly append the remaining index whose
+    columns overlap most with the reference column set. The reference is
+    the union of all placed column sets when ``cumulative`` is true, and
+    the column set of the last placed index otherwise.
+    """
+    remaining = set(range(len(col_sets)))
+    remaining.remove(first)
+    order = [first]
+    reference = set(col_sets[first])
+    while remaining:
+        best = max(remaining, key=lambda j: len(col_sets[j] & reference))
+        order.append(best)
+        remaining.remove(best)
+        if cumulative:
+            reference |= col_sets[best]
+        else:
+            reference = set(col_sets[best])
+    return order
 
 
 def _sort_join_operands(operands):
@@ -1450,73 +1507,38 @@ def _sort_join_operands(operands):
     """
     if len(operands) <= 2:
         return operands
-
     col_sets = [_ra_columns(op) for op in operands]
-    n = len(operands)
-
-    remaining = set(range(n))
-    first = max(remaining, key=lambda i: sum(
-        len(col_sets[i] & col_sets[j]) for j in remaining if j != i
-    ))
-    result = [operands[first]]
-    remaining.remove(first)
-    current_cols = set(col_sets[first])
-
-    while remaining:
-        best = max(remaining, key=lambda j: len(col_sets[j] & current_cols))
-        result.append(operands[best])
-        remaining.remove(best)
-        current_cols |= col_sets[best]
-
-    return result
+    degrees = _overlap_degrees(col_sets)
+    first = max(range(len(operands)), key=degrees.__getitem__)
+    return [operands[i] for i in _greedy_chain(col_sets, first, True)]
 
 
-def _flatten_join_or_product(expr):
+def _connected_components(col_sets):
     """
-    Flatten any chain of joins and products into an operand list.
+    Group indices of ``col_sets`` into components of the overlap graph.
 
-    Flatten any chain of NaturalJoin, NaryNaturalJoin, and Product,
-    recursing through Projection wrappers that sit between join nodes.
-
-    This lets a mixed tree such as
-        NaturalJoin(Projection(Product(A, B)), C)
-    be reordered globally when the operands share column names.
-
-    Projections wrapping a join/product are pushed down to the individual
-    operands so the GOO pass sees the full operand list.
+    Two indices are adjacent when their column sets intersect. Components
+    are sorted by their smallest index and each holds its indices in
+    increasing order.
     """
-    if isinstance(expr, Projection):
-        inner = _flatten_join_or_product(expr.relation)
-        if len(inner) > 1:
-            result = []
-            for op in inner:
-                op_cols = _ra_columns(op)
-                pushed_attrs = tuple(
-                    a for a in expr.attributes
-                    if a in op_cols
-                )
-                if pushed_attrs and pushed_attrs != tuple(op_cols):
-                    result.append(Projection(op, pushed_attrs))
-                else:
-                    result.append(op)
-            return result
-        return [expr]
-    if isinstance(expr, NaturalJoin):
-        return (
-            _flatten_join_or_product(expr.relation_left)
-            + _flatten_join_or_product(expr.relation_right)
-        )
-    if isinstance(expr, NaryNaturalJoin):
-        result = []
-        for r in expr.relations:
-            result.extend(_flatten_join_or_product(r))
-        return result
-    if isinstance(expr, Product):
-        result = []
-        for r in expr.relations:
-            result.extend(_flatten_join_or_product(r))
-        return result
-    return [expr]
+    n = len(col_sets)
+    assigned = set()
+    components = []
+    for start in range(n):
+        if start in assigned:
+            continue
+        component, frontier = {start}, [start]
+        while frontier:
+            i = frontier.pop()
+            new = {
+                j for j in range(n)
+                if j not in component and col_sets[i] & col_sets[j]
+            }
+            component |= new
+            frontier.extend(new)
+        assigned |= component
+        components.append(sorted(component))
+    return components
 
 
 def _group_operands_by_overlap(operands):
@@ -1524,64 +1546,20 @@ def _group_operands_by_overlap(operands):
     Greedy operator ordering (GOO) by pairwise column-name overlap.
 
     Operands are grouped into connected components based on shared column
-    names. Within each connected component, operands are merged greedily:
-    at each step the pair/sub-plan with the largest column intersection is
-    joined, producing a left-deep chain whose order maximises adjacent
-    overlap. The merge is represented by a new sub-plan (a tuple entry) so
-    that the final component can be emitted as a single NaryNaturalJoin.
+    names, in order of first appearance. Each component is ordered with
+    :func:`_order_component_greedily` so that adjacent operands overlap.
 
     The cost model uses only column names: two sub-plans overlap when their
     column sets intersect. This requires no cardinality estimates.
     """
-    if len(operands) <= 1:
-        return [operands]
-
     col_sets = [set(_ra_columns(op)) for op in operands]
-    n = len(operands)
-
-    # Build adjacency by shared columns, grouping into connected components.
-    parent = list(range(n))
-
-    def find(i):
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    def union(i, j):
-        ri, rj = find(i), find(j)
-        if ri != rj:
-            parent[ri] = rj
-
-    for i in range(n):
-        for j in range(i + 1, n):
-            if col_sets[i] & col_sets[j]:
-                union(i, j)
-
-    groups = OrderedSet()
-    for i in range(n):
-        groups.add(find(i))
-    groups = list(groups)
-
-    component_map = {root: [] for root in groups}
-    for i in range(n):
-        component_map[find(i)].append(i)
-
-    grouped = []
-    for root in groups:
-        idxs = component_map[root]
-        if len(idxs) == 1:
-            grouped.append(([operands[idxs[0]]], col_sets[idxs[0]]))
-        else:
-            grouped.append((
-                _order_component_greedily(
-                    [operands[i] for i in idxs],
-                    [col_sets[i] for i in idxs],
-                ),
-                set().union(*[col_sets[i] for i in idxs]),
-            ))
-
-    return grouped
+    return [
+        _order_component_greedily(
+            [operands[i] for i in component],
+            [col_sets[i] for i in component],
+        )
+        for component in _connected_components(col_sets)
+    ]
 
 
 def _order_component_greedily(operands, col_sets):
@@ -1595,30 +1573,9 @@ def _order_component_greedily(operands, col_sets):
     """
     if len(operands) <= 2:
         return list(operands)
-
-    n = len(operands)
-    remaining = set(range(n))
-
-    total_overlap = {
-        i: sum(len(col_sets[i] & col_sets[j]) for j in range(n) if j != i)
-        for i in range(n)
-    }
-    first = min(remaining, key=lambda i: total_overlap[i])
-
-    ordered = [operands[first]]
-    remaining.remove(first)
-    tail_cols = set(col_sets[first])
-
-    while remaining:
-        best = max(
-            remaining,
-            key=lambda j: len(col_sets[j] & tail_cols),
-        )
-        ordered.append(operands[best])
-        remaining.remove(best)
-        tail_cols = set(col_sets[best])
-
-    return ordered
+    degrees = _overlap_degrees(col_sets)
+    first = min(range(len(operands)), key=degrees.__getitem__)
+    return [operands[i] for i in _greedy_chain(col_sets, first, False)]
 
 
 class FlattenAndReorderJoins(ew.PatternWalker):
@@ -1646,38 +1603,27 @@ class FlattenAndReorderJoins(ew.PatternWalker):
         operands = _flatten_joins(walked)
         if len(operands) <= 1:
             return operands[0] if operands else walked
-        sorted_ops = _sort_join_operands(operands)
-        return NaryNaturalJoin(sorted_ops)
+        return NaryNaturalJoin(_sort_join_operands(operands))
 
     @ew.add_match(NaryNaturalJoin)
     def reorder_nary(self, expression):
-        operands = list(expression.relations)
+        operands = expression.relations
         if len(operands) <= 1:
             return operands[0] if operands else expression
-        flat_ops = []
-        for op in operands:
-            if isinstance(op, NaryNaturalJoin):
-                flat_ops.extend(op.relations)
-            else:
-                flat_ops.append(op)
+        flat_ops = [
+            relation for op in operands
+            for relation in (
+                op.relations if isinstance(op, NaryNaturalJoin) else (op,)
+            )
+        ]
         sorted_ops = _sort_join_operands(flat_ops)
-        if all(a is b for a, b in zip(flat_ops, sorted_ops)):
-            # Walk operands so inner Projection patterns are reachable
-            new_ops = tuple(self.walk(op) for op in flat_ops)
-            if any(a is not b for a, b in zip(new_ops, flat_ops)):
-                return NaryNaturalJoin(new_ops)
-            return expression
-        return NaryNaturalJoin(sorted_ops)
-
-
-def _build_binary_join_tree(operands):
-    """Build a left-deep binary NaturalJoin tree from a list of operands."""
-    if len(operands) == 1:
-        return operands[0]
-    result = operands[0]
-    for op in operands[1:]:
-        result = NaturalJoin(result, op)
-    return result
+        if any(a is not b for a, b in zip(flat_ops, sorted_ops)):
+            return NaryNaturalJoin(sorted_ops)
+        # Walk operands so inner Projection patterns are reachable
+        new_ops = tuple(self.walk(op) for op in flat_ops)
+        if any(a is not b for a, b in zip(new_ops, flat_ops)):
+            return NaryNaturalJoin(new_ops)
+        return expression
 
 
 def _tree_contains_product(expr):
@@ -1690,13 +1636,9 @@ def _tree_contains_product(expr):
     """
     if isinstance(expr, Product):
         return True
-    if isinstance(expr, Selection):
+    if isinstance(expr, Selection) or not isinstance(expr, ew.Expression):
         return False
-    if isinstance(expr, ew.Expression):
-        for child in expr.unapply():
-            if isinstance(child, ew.Expression) and _tree_contains_product(child):
-                return True
-    return False
+    return any(_tree_contains_product(child) for child in expr.unapply())
 
 
 def _has_eliminable_cross_product(operands):
@@ -1711,16 +1653,8 @@ def _has_eliminable_cross_product(operands):
     already handles it. If no operands share columns, reordering won't help.
     """
     col_sets = [set(_ra_columns(op)) for op in operands]
-    n = len(operands)
-    has_overlap = False
-    has_disjoint = False
-    for i in range(n):
-        for j in range(i + 1, n):
-            if col_sets[i] & col_sets[j]:
-                has_overlap = True
-            else:
-                has_disjoint = True
-    return has_overlap and has_disjoint
+    overlaps = [bool(a & b) for a, b in combinations(col_sets, 2)]
+    return any(overlaps) and not all(overlaps)
 
 
 def _degenerate_natural_join(expression):
@@ -1728,19 +1662,6 @@ def _degenerate_natural_join(expression):
     left_cols = _ra_columns(expression.relation_left)
     right_cols = _ra_columns(expression.relation_right)
     return bool(left_cols) and bool(right_cols) and not (left_cols & right_cols)
-
-
-def _product_has_eliminable_cross_product(expression):
-    """
-    Guard: True if reordering can eliminate the Product's cross product.
-
-    True if Product has operands with both overlapping and
-    disjoint column sets — reordering can eliminate the cross product.
-    """
-    if not isinstance(expression, Product):
-        return False
-    operands = list(expression.relations)
-    return _has_eliminable_cross_product(operands)
 
 
 class DegenerateNaturalJoinToProduct(ew.PatternWalker):
@@ -1771,16 +1692,11 @@ class PushProjectionThroughProduct(ew.PatternWalker):
 
     @ew.add_match(Projection, lambda e: isinstance(e.relation, Product))
     def push_through_product(self, expression):
-        product = expression.relation
-        new_rels = []
-        for rel in product.relations:
-            rel_cols = _ra_columns(rel)
-            pushed_attrs = tuple(a for a in expression.attributes if a in rel_cols)
-            if pushed_attrs and pushed_attrs != tuple(rel_cols):
-                new_rels.append(self.walk(Projection(rel, pushed_attrs)))
-            else:
-                new_rels.append(self.walk(rel))
-        return Product(tuple(new_rels))
+        return Product(tuple(
+            self.walk(_project_onto_operand(rel, expression.attributes))
+            for rel in expression.relation.relations
+        ))
+
 
 class GreedyJoinOrdering(ew.PatternWalker):
     """
@@ -1803,21 +1719,17 @@ class GreedyJoinOrdering(ew.PatternWalker):
         left = self.walk(expression.relation_left)
         right = self.walk(expression.relation_right)
         expression = NaturalJoin(left, right)
-
-        operands = _flatten_join_or_product(expression)
-        if len(operands) <= 1:
-            return expression
-
+        operands = _flatten_joins(expression, with_products=True)
         if not _has_eliminable_cross_product(operands):
             return expression
-
         return self._build_reordered(operands)
 
-    @ew.add_match(Product, _product_has_eliminable_cross_product)
+    @ew.add_match(
+        Product, lambda e: _has_eliminable_cross_product(e.relations)
+    )
     def reorder_product(self, expression):
         new_rels = tuple(self.walk(r) for r in expression.relations)
-        expression = Product(new_rels)
-        operands = _flatten_join_or_product(expression)
+        operands = _flatten_joins(Product(new_rels), with_products=True)
         return self._build_reordered(operands)
 
     @ew.add_match(ew.Expression)
@@ -1846,23 +1758,27 @@ class GreedyJoinOrdering(ew.PatternWalker):
         return expression
 
     def _build_reordered(self, operands):
-        grouped = _group_operands_by_overlap(operands)
+        groups = _group_operands_by_overlap(operands)
+        join_groups = [reduce(NaturalJoin, g) for g in groups if len(g) > 1]
+        singletons = [g[0] for g in groups if len(g) == 1]
+        if len(join_groups) == 1 and not singletons:
+            return join_groups[0]
+        return Product(tuple(join_groups + singletons))
 
-        join_groups = []
-        product_groups = []
-        for group, _ in grouped:
-            if len(group) > 1:
-                join_groups.append(_build_binary_join_tree(group))
-            else:
-                product_groups.append(group[0])
 
-        if not join_groups:
-            return Product(tuple(product_groups))
-        if not product_groups:
-            if len(join_groups) == 1:
-                return join_groups[0]
-            return Product(tuple(join_groups))
-        return Product(tuple(join_groups + product_groups))
+def _shared_columns(col_sets):
+    """Return, for each column set, the columns it shares with any other."""
+    shared = [set() for _ in col_sets]
+    for i, j in permutations(range(len(col_sets)), 2):
+        shared[i] |= col_sets[i] & col_sets[j]
+    return shared
+
+
+def _project_if_narrower(operand, operand_cols, needed):
+    """Project ``operand`` on ``needed`` if it drops any of its columns."""
+    if needed and needed != operand_cols:
+        return Projection(operand, tuple(needed))
+    return operand
 
 
 class PushProjectionsDown(ew.PatternWalker):
@@ -1906,35 +1822,22 @@ class PushProjectionsDown(ew.PatternWalker):
     @ew.add_match(Projection(NaryNaturalJoin, ...))
     def push_through_nary_join(self, expression):
         cols = expression.attributes
-        nary = expression.relation
         cols_set = OrderedSet(cols)
-        operands = list(nary.relations)
-
+        operands = expression.relation.relations
         col_sets = [_ra_columns(op) for op in operands]
-        n = len(operands)
-
-        shared_with_any = [set() for _ in range(n)]
-        for i in range(n):
-            for j in range(n):
-                if i != j:
-                    shared_with_any[i] |= col_sets[i] & col_sets[j]
-
-        new_operands = []
-        changed = False
-        for i, op in enumerate(operands):
-            needed = (cols_set & col_sets[i]) | (shared_with_any[i] & col_sets[i])
-            if needed and needed != col_sets[i]:
-                new_operands.append(Projection(op, tuple(needed)))
-                changed = True
-            else:
-                new_operands.append(op)
-
-        if not changed:
+        new_operands = tuple(
+            _project_if_narrower(
+                op, op_cols, (cols_set & op_cols) | (shared & op_cols)
+            )
+            for op, op_cols, shared in zip(
+                operands, col_sets, _shared_columns(col_sets)
+            )
+        )
+        if all(a is b for a, b in zip(new_operands, operands)):
             # Walk operands so inner patterns are reachable
-            new_ops = tuple(self.walk(op) for op in operands)
-            if any(a is not b for a, b in zip(new_ops, operands)):
-                return Projection(NaryNaturalJoin(new_ops), cols)
-            return expression
+            new_operands = tuple(self.walk(op) for op in operands)
+            if all(a is b for a, b in zip(new_operands, operands)):
+                return expression
         return Projection(NaryNaturalJoin(new_operands), cols)
 
     def _push_through_pair(self, expression, join_cls):
@@ -1956,12 +1859,13 @@ class PushProjectionsDown(ew.PatternWalker):
         if A_needed == A_cols and B_needed == B_cols:
             return expression
 
-        if A_needed and A_needed != A_cols:
-            A = Projection(A, tuple(A_needed))
-        if B_needed and B_needed != B_cols:
-            B = Projection(B, tuple(B_needed))
-
-        return Projection(NaturalJoin(A, B), cols)
+        return Projection(
+            NaturalJoin(
+                _project_if_narrower(A, A_cols, A_needed),
+                _project_if_narrower(B, B_cols, B_needed),
+            ),
+            cols,
+        )
 
 
 class RelationalAlgebraOptimiser(
