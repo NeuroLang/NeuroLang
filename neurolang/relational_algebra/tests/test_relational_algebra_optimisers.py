@@ -1100,6 +1100,8 @@ def test_push_projection_into_join_operands(r1, r2, str_columns):
 
 def test_push_projection_eliminates_cross_product_across_projection():
     """
+    Check that pushing projections removes a trapped cross product.
+
     Integration: PushProjectionIntoJoinOperands + FlattenAndReorderJoins
     eliminates a cross product trapped inside a projection.
 
