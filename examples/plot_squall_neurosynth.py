@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""
 NeuroSynth Query in SQUALL Controlled English.
-=============================================
+==============================================
 
 Reproduces the NeuroSynth forward model — P(Activation | Term = 'auditory') —
 using `SQUALL controlled natural language
@@ -52,7 +52,7 @@ from neurolang import ExplicitVBROverlay, NeurolangPDL
 from neurolang.frontend.neurosynth_utils import get_ns_mni_peaks_reported
 
 # %%
-###############################################################################
+# %%
 # Data preparation
 # ----------------
 # Set the data directory and load the MNI T1 atlas resampled to 4 mm voxels.
@@ -65,7 +65,7 @@ mni_t1 = nibabel.load(
 mni_t1_4mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 4)
 
 # %%
-###############################################################################
+# %%
 # Set up the probabilistic engine and register helper symbols
 # -----------------------------------------------------------
 
@@ -84,7 +84,7 @@ def agg_create_region_overlay(
 
 
 # %%
-###############################################################################
+# %%
 # Load the NeuroSynth database
 # ----------------------------
 # Register peaks, study IDs, and term–study associations as extensional facts.
@@ -112,7 +112,7 @@ nl.load_neurosynth_term_study_associations(
 )
 
 # %%
-###############################################################################
+# %%
 # SQUALL controlled-English program
 # ----------------------------------
 # Four ``define`` sentences plus one ``obtain`` clause replace the entire
@@ -152,7 +152,7 @@ obtain every Activation_given_term_image (?x).
 result_set = nl.execute_squall_program(squall_program)
 
 # %%
-###############################################################################
+# %%
 # Solve and retrieve the probability map
 # --------------------------------------
 # The ``obtain`` clause executes only the image query; ``result_set`` is the
@@ -161,7 +161,7 @@ result_set = nl.execute_squall_program(squall_program)
 result_image = result_set.as_pandas_dataframe().iloc[0, 0].spatial_image()
 
 # %%
-###############################################################################
+# %%
 # Plot
 # ----
 

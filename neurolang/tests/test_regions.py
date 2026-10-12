@@ -614,3 +614,23 @@ def test_destrieux_cardinal_directions_inferior(destrieux):
         r = destrieux[n]
         assert cardinal_relation(r, r34, "I", refine_overlapping=True), n
         assert not cardinal_relation(r, r34, "S", refine_overlapping=True), n
+
+
+def test_from_spatial_image_labels_matches_single_label():
+    rng = np.random.default_rng(0)
+    data = rng.integers(0, 6, size=(7, 8, 9)).astype(np.int16)
+    data[data == 4] = 0  # label 4 has no voxels
+    affine = np.diag([2., 2., 2., 1.])
+    img = nib.Nifti1Image(data, affine)
+    labels = [1, 2, 3, 4, 5]
+
+    regions = ExplicitVBR.from_spatial_image_labels(img, labels)
+
+    assert set(regions) == set(labels)
+    for label in labels:
+        expected = ExplicitVBR.from_spatial_image_label(img, label)
+        assert type(regions[label]) is type(expected)
+        if isinstance(expected, ExplicitVBR):
+            assert np.array_equal(regions[label].voxels, expected.voxels)
+            assert np.array_equal(regions[label].affine, expected.affine)
+            assert regions[label].image_dim == expected.image_dim

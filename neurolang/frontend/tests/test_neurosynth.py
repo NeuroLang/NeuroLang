@@ -206,26 +206,33 @@ def test_studyid_is_integer_based():
     assert {sid, StudyID(2)} == {1, 2}, "StudyID must work in sets with ints"
 
 
-@patch("neurolang.frontend.neurosynth_utils.fetch_feature_data")
-def test_get_ns_term_study_associations_studyid_type(
-    mock_fetch_feature_data, features
-):
+def test_get_ns_term_study_associations_studyid_type(features, metadata):
     """With convert_study_ids=True, study_id column must have integer dtype
     and values must be int-based StudyID instances.
-
-    Currently StudyID(str) produces string values — this test will fail until
-    the type is changed.
     """
-    # Simulate what fetch_feature_data does with convert_study_ids=True:
-    # currently applies StudyID(str) to the index
-    features_converted = features.copy()
-    features_converted.index = features_converted.index.map(StudyID)
-    mock_fetch_feature_data.return_value = features_converted
-    data_dir = Path("mock_data_dir")
+    from scipy import sparse
 
-    result = get_ns_term_study_associations(
-        data_dir, convert_study_ids=True
-    )
+    from .. import neurosynth_utils
+
+    # Feed the loader the raw files it reads: the sparse tfidf matrix,
+    # the vocabulary and the study metadata.
+    data_dir = Path("mock_data_dir")
+    with patch.object(
+        neurosynth_utils, "_fetch_files", return_value=["npz", "vocab"]
+    ), patch.object(
+        neurosynth_utils.sparse,
+        "load_npz",
+        return_value=sparse.csr_matrix(features.to_numpy()),
+    ), patch.object(
+        neurosynth_utils.np,
+        "genfromtxt",
+        return_value=np.array(list(features.columns)),
+    ), patch.object(
+        neurosynth_utils, "fetch_study_metadata", return_value=metadata
+    ):
+        result = get_ns_term_study_associations(
+            data_dir, convert_study_ids=True
+        )
 
     assert np.issubdtype(
         result["id"].dtype, np.integer
@@ -236,3 +243,38 @@ def test_get_ns_term_study_associations_studyid_type(
         assert type(val) is StudyID, (
             f"StudyID value {val!r} is not a StudyID instance"
         )
+
+
+@pytest.mark.parametrize("threshold", [None, 0.1])
+@pytest.mark.parametrize("convert_study_ids", [False, True])
+def test_get_ns_term_study_associations_matches_dense_melt(
+    features, threshold, convert_study_ids
+):
+    from scipy import sparse
+
+    from .. import neurosynth_utils
+
+    ids = pd.Series(features.index)
+    if convert_study_ids:
+        ids = pd.Series([StudyID(i) for i in ids], dtype=object)
+    matrix = sparse.csr_matrix(features.to_numpy())
+    with patch.object(
+        neurosynth_utils,
+        "_fetch_feature_matrix",
+        return_value=(matrix, ids, list(features.columns)),
+    ):
+        result = neurosynth_utils.get_ns_term_study_associations(
+            Path("unused"),
+            convert_study_ids=convert_study_ids,
+            tfidf_threshold=threshold,
+        )
+
+    dense = features.copy()
+    dense.index = ids.tolist()
+    dense.index.name = "id"
+    expected = pd.melt(
+        dense.reset_index(), var_name="term", id_vars="id",
+        value_name="tfidf",
+    )
+    expected = expected.query(f"tfidf > {threshold or 0}")
+    pd.testing.assert_frame_equal(result, expected, check_dtype=False)

@@ -2,7 +2,7 @@
 Command-line interface for NeuroLang query execution.
 
 Provides a ``neurolang-query`` command that initializes a NeuroLang engine
-from the :ref:`engine registry <neurolang.utils.engine_registry>` and
+from the :mod:`engine registry <neurolang.utils.engine_registry>` and
 executes Datalog queries from arguments, files, or standard input.
 
 Usage
@@ -11,6 +11,9 @@ Usage
 
     # List available engines
     neurolang-query --list-engines
+
+    # Print the SQUALL grammar and parser metadata as JSON
+    neurolang-query --grammar-json
 
     # List predicates for an engine
     neurolang-query --engine neurosynth --list-predicates
@@ -39,6 +42,7 @@ Usage
 """
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -48,6 +52,9 @@ import pandas as pd
 
 from neurolang.datalog import WrappedRelationalAlgebraSet
 from neurolang.frontend import NeurolangPDL
+from neurolang.frontend.datalog import (
+    squall_grammar_metadata,
+)
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.utils import engine_registry
 
@@ -246,6 +253,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--list-engines",
         action="store_true",
         help="List available dataset engines and exit.",
+    )
+    parser.add_argument(
+        "--grammar-json",
+        action="store_true",
+        help="Print the SQUALL Lark grammar and parser metadata as JSON "
+        "and exit (no engine needed).",
     )
     parser.add_argument(
         "--squall",
@@ -508,6 +521,11 @@ def main(argv: Optional[list] = None) -> None:
         engine_registry.show_engines()
         return
 
+    # --grammar-json only needs the parser, not an engine.
+    if args.grammar_json:
+        print(json.dumps(squall_grammar_metadata(), indent=2))
+        return
+
     # --show-datalog only needs the parser, not an engine.  Handle it
     # early to avoid the expensive engine build (which downloads data).
     if args.show_datalog:
@@ -565,13 +583,15 @@ def main(argv: Optional[list] = None) -> None:
             _execute_program(nl, program, show_ra=True, dry_run=True)
         return
 
-    nl = engine_registry.build_engine(
-        args.engine, Path(args.data_dir), args.resolution
-    )
-
+    # Predicate metadata comes from the YAML config: no need to build
+    # (and download data for) the engine.
     if args.list_predicates:
         _list_predicates(args.engine)
         return
+
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution
+    )
 
     if args.list_sets:
         _list_sets(nl)
