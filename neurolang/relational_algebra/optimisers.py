@@ -1423,7 +1423,8 @@ def _ra_columns(expr):
 
 
 def _flatten_joins(expr):
-    """Collect all join operands into a flat list.
+    """
+    Collect all join operands into a flat list.
 
     Recurse through both NaturalJoin (binary) and NaryNaturalJoin (n-ary)
     so that nested join trees are fully unwound in one pass.
@@ -1472,6 +1473,8 @@ def _sort_join_operands(operands):
 
 def _flatten_join_or_product(expr):
     """
+    Flatten any chain of joins and products into an operand list.
+
     Flatten any chain of NaturalJoin, NaryNaturalJoin, and Product,
     recursing through Projection wrappers that sit between join nodes.
 
@@ -1620,6 +1623,8 @@ def _order_component_greedily(operands, col_sets):
 
 class FlattenAndReorderJoins(ew.PatternWalker):
     """
+    Flatten joins into an NaryNaturalJoin and reorder its operands.
+
     Flatten NaturalJoins and NaryNaturalJoins into a flat
     NaryNaturalJoin, then greedily reorder to minimise cross products.
 
@@ -1666,9 +1671,7 @@ class FlattenAndReorderJoins(ew.PatternWalker):
 
 
 def _build_binary_join_tree(operands):
-    """
-    Build a left-deep binary NaturalJoin tree from a list of operands.
-    """
+    """Build a left-deep binary NaturalJoin tree from a list of operands."""
     if len(operands) == 1:
         return operands[0]
     result = operands[0]
@@ -1678,7 +1681,8 @@ def _build_binary_join_tree(operands):
 
 
 def _tree_contains_product(expr):
-    """Check whether an RA expression tree contains a Product node.
+    """
+    Check whether an RA expression tree contains a Product node.
 
     Does NOT recurse into Selection nodes — a Product inside a Selection
     is already handled by RewriteSelections (eq-selection/product → EquiJoin)
@@ -1697,6 +1701,8 @@ def _tree_contains_product(expr):
 
 def _has_eliminable_cross_product(operands):
     """
+    Check whether reordering can eliminate a cross product.
+
     Check whether a flat operand list has a cross product that can be
     eliminated by reordering: i.e., there exist at least two operands
     that share columns AND at least one pair that doesn't.
@@ -1725,8 +1731,12 @@ def _degenerate_natural_join(expression):
 
 
 def _product_has_eliminable_cross_product(expression):
-    """Guard: True if Product has operands with both overlapping and
-    disjoint column sets — reordering can eliminate the cross product."""
+    """
+    Guard: True if reordering can eliminate the Product's cross product.
+
+    True if Product has operands with both overlapping and
+    disjoint column sets — reordering can eliminate the cross product.
+    """
     if not isinstance(expression, Product):
         return False
     operands = list(expression.relations)
@@ -1735,6 +1745,8 @@ def _product_has_eliminable_cross_product(expression):
 
 class DegenerateNaturalJoinToProduct(ew.PatternWalker):
     """
+    Convert NaturalJoin(A, B) to Product(A, B) when disjoint.
+
     Convert NaturalJoin(A, B) to Product(A, B) when A and B share no
     column names. A degenerate NaturalJoin is semantically a cross product;
     making it explicit lets the GOO pass detect and reorder it.
@@ -1749,6 +1761,8 @@ class DegenerateNaturalJoinToProduct(ew.PatternWalker):
 
 class PushProjectionThroughProduct(ew.PatternWalker):
     """
+    Push Projection through Product.
+
     Push Projection through Product so that the GOO pass can see
     individual Product operands without a Projection barrier.
 
@@ -1770,6 +1784,8 @@ class PushProjectionThroughProduct(ew.PatternWalker):
 
 class GreedyJoinOrdering(ew.PatternWalker):
     """
+    Reorder mixed Product/NaturalJoin chains with greedy ordering.
+
     Flatten mixed Product/NaturalJoin chains and reorder by pairwise
     ColumnStr overlap using a greedy operator ordering (GOO).
 
@@ -1806,8 +1822,12 @@ class GreedyJoinOrdering(ew.PatternWalker):
 
     @ew.add_match(ew.Expression)
     def fallthrough(self, expression):
-        """Recursively walk children for expressions that don't match
-        the reorder patterns. This replaces the old walk() override."""
+        """
+        Recursively walk children of non-matching expressions.
+
+        Recursively walk children for expressions that don't match
+        the reorder patterns. This replaces the old walk() override.
+        """
         args = expression.unapply()
         new_args = tuple()
         changed = False
@@ -1847,6 +1867,8 @@ class GreedyJoinOrdering(ew.PatternWalker):
 
 class PushProjectionsDown(ew.PatternWalker):
     """
+    Push projections through NaturalJoins.
+
     Push projections through NaturalJoins to reduce the columns flowing
     into each join operand, minimising intermediate data size.
 

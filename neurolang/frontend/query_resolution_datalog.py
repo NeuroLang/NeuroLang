@@ -55,7 +55,6 @@ from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
 from ..logic import Conjunction
 from ..logic.horn_clauses import Fol2DatalogTranslationException
-from ..relational_algebra.optimisers import RelationalAlgebraOptimiser
 from ..relational_algebra.pretty_printer import (
     build_name_map_from_conjunction,
     pretty_repr,
@@ -67,10 +66,13 @@ __all__ = ["QueryBuilderDatalog"]
 
 class ShowRAChaseMixin:
     """
+    Chase mixin printing the named RA expression of each rule.
+
     Mixin for the chase that prints the named RA expression each rule
     would evaluate, then returns an empty substitution list so the chase
     terminates immediately without producing any tuples.
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._show_ra_current_rule = None
@@ -397,6 +399,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return None without
             running the chase.
+        show_ra : bool
+            If True, print the named relational algebra expression
+            of each rule instead of evaluating it.
 
         Examples
         --------
@@ -592,6 +597,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return None without
             running the chase.
+        show_ra : bool
+            If True, print the named relational algebra expression
+            of each rule instead of evaluating it.
 
         Returns
         -------
@@ -797,6 +805,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return immediately
             without running the chase.
+        show_ra : bool
+            If True, print the named relational algebra expression
+            of each rule instead of evaluating it.
 
         Returns
         -------
@@ -919,6 +930,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return immediately
             without running the chase.
+        show_ra : bool
+            If True, print the named relational algebra expression
+            of each rule instead of evaluating it.
 
         Returns
         -------

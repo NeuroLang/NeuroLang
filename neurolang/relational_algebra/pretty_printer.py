@@ -35,7 +35,8 @@ from .relational_algebra import _get_columns_for_RA_or_constant
 
 
 def _column_name(col):
-    """Extract the column name as a string from any column representation.
+    """
+    Extract the column name as a string from any column representation.
 
     Handles Symbol (Projection attributes), Constant[ColumnStr] (table
     columns), Constant[ColumnInt] (numbered columns), and plain strings
@@ -49,7 +50,8 @@ def _column_name(col):
 
 
 def _columns_as_str_set(expr):
-    """Return column names as a set of strings for cross-product detection.
+    """
+    Return column names as a set of strings for cross-product detection.
 
     Normalises Symbol, ColumnStr, ColumnInt and any other column
     representation to plain strings so that shared-column comparison
@@ -76,7 +78,8 @@ def _is_cross_product(expr):
 
 
 class PrettyPrinter:
-    """Recursive pretty-printer for named relational algebra expressions.
+    """
+    Recursive pretty-printer for named relational algebra expressions.
 
     Parameters
     ----------
@@ -88,9 +91,11 @@ class PrettyPrinter:
         Number of spaces to indent per nesting level (default 2).
     width : int, optional
         Target line width, reserved for future wrapping support (default 80).
+
     """
 
     def __init__(self, name_map=None, indent=2, width=80, fresh_map=None, counter=None):
+        """Initialise the printer; see the class docstring for parameters."""
         if name_map is None:
             name_map = {}
         self.name_map = name_map
@@ -302,7 +307,8 @@ class PrettyPrinter:
         return self._fresh_map[name]
 
     def _lookup_name(self, expression):
-        """Look up a display name for a Constant or Symbol leaf.
+        """
+        Look up a display name for a Constant or Symbol leaf.
 
         The map may use the object itself (identity) or its ``id()`` as key,
         which is useful when the wrapped value is unhashable.
@@ -496,7 +502,8 @@ _populate_operator_symbols()
 
 
 def build_name_map_from_conjunction(conjunction, symbol_table=None):
-    """Build a name map from a Datalog Conjunction.
+    """
+    Build a name map from a Datalog Conjunction.
 
     Walks the conjunction recursively to find all `FunctionApplication`
     predicates and maps their functor (a `Constant` or `Symbol`) to a display
@@ -514,6 +521,7 @@ def build_name_map_from_conjunction(conjunction, symbol_table=None):
     -------
     dict
         Mapping from functor objects to display name strings.
+
     """
     name_map = {}
 
@@ -554,7 +562,8 @@ def build_name_map_from_conjunction(conjunction, symbol_table=None):
 
 
 def pretty_repr(expression, name_map=None, indent=2, width=80, fresh_map=None, counter=None):
-    """Return a pretty representation of an RA expression.
+    """
+    Return a pretty representation of an RA expression.
 
     Parameters
     ----------
@@ -575,6 +584,7 @@ def pretty_repr(expression, name_map=None, indent=2, width=80, fresh_map=None, c
     -------
     str
         Pretty formatted expression.
+
     """
     printer = PrettyPrinter(
         name_map=name_map, indent=indent, width=width,

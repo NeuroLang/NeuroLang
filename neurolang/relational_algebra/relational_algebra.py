@@ -189,7 +189,8 @@ class NaturalJoin(BinaryRelationalAlgebraOperation):
 
 
 class NaryNaturalJoin(NAryRelationalAlgebraOperation):
-    """N-ary natural join holding N operands in a flat tuple.
+    """
+    N-ary natural join holding N operands in a flat tuple.
 
     Unlike a left-deep tree of *NaturalJoin* nodes, this preserves the
     full set of operands so that join-reordering optimisers can reorder
@@ -572,6 +573,7 @@ class Destroy(UnaryRelationalAlgebraOperation):
         self.dst_column = dst_column
 
     def __repr__(self):
+        """Return a string representation of the set destruction."""
         return (
             f"set_destroy[{self.relation}, "
             "{self.src_column} -> {src.dst_column}]"
@@ -819,6 +821,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     _fa_2_lambda = ew.FunctionApplicationToPythonLambda()
 
     def __init__(self, symbol_table=None):
+        """Initialise the solver with an optional symbol table."""
         self.symbol_table = symbol_table
 
     @ew.add_match(

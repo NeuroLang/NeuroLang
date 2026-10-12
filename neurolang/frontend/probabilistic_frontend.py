@@ -23,9 +23,7 @@ from uuid import uuid1
 
 import pandas as pd
 from neurolang.type_system import (
-    Unknown,
     get_args,
-    is_leq_informative,
     replace_type_variable_fix_python36_37,
 )
 
@@ -105,7 +103,6 @@ from ..relational_algebra import (
     RelationalAlgebraColumnStr,
 )
 from ..datalog.wrapped_collections import (
-    WrappedNamedRelationalAlgebraFrozenSet,
     WrappedRelationalAlgebraFrozenSet,
 )
 from ..datalog.instance import MapInstance
@@ -377,6 +374,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         dry_run : bool
             If True, print the rewritten program and return immediately
             without running the chase.
+        show_ra : bool
+            If True, print the named relational algebra expression
+            of each rule instead of evaluating it.
 
         Returns
         -------

@@ -330,6 +330,9 @@ def _execute_program(
     dry_run :
         If True, print the rewritten program and return None without
         running the chase.
+    show_ra :
+        If True, print the named relational algebra expression
+        of each rule instead of evaluating it.
 
     Returns
     -------
@@ -368,6 +371,9 @@ def _execute_squall_program(
     dry_run :
         If True, print the rewritten program and return None without
         running the chase.
+    show_ra :
+        If True, print the named relational algebra expression
+        of each rule instead of evaluating it.
 
     Returns
     -------

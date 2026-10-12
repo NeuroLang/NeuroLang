@@ -1175,9 +1175,9 @@ def test_push_projections_down_through_join(r1, str_columns):
     # R1 should be projected to only (b) — column a is dropped
     # R2 should be projected to (b, c) — shared + output columns
     if type(left).__name__ == "Projection":
-        r1_proj, r2_proj = left, right
+        r1_proj = left
     else:
-        r1_proj, r2_proj = right, left
+        r1_proj = right
 
     assert type(r1_proj).__name__ == "Projection"
     # The projected attributes for R1: should only contain 'b' (shared column)
@@ -1245,9 +1245,6 @@ def test_push_projections_down_full_pipeline():
         if type(expr).__name__ != "NaturalJoin":
             return True
         left, right = expr.relation_left, expr.relation_right
-        # At least one child should have a projection pruning columns
-        left_has_proj = type(left).__name__ == "Projection"
-        right_has_proj = type(right).__name__ == "Projection"
         return check_pushdowns(left, path+".L") and check_pushdowns(right, path+".R")
 
     # At minimum the pipeline should not crash and should eliminate cross products.

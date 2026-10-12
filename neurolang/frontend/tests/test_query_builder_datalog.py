@@ -1,7 +1,5 @@
 """Tests for QueryBuilderDatalog's public API."""
 
-import pytest
-
 
 def test_querybuilder_accepts_show_ra():
     """show_ra=True should be accepted by execute_datalog_program
