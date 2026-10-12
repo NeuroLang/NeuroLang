@@ -19,7 +19,7 @@ engines:
       schaefer_voxels(I, J, K, l) :- schaefer(l, r), contains(r, (I, J, K)).
       schaefer_label(l) :- schaefer(l, r)
       labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
-      mentions(t, s) :- term_in_study_tfidf(s, t, v), (v > 0.03)
+      mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
       reports(s, i, j, k) :- peak_reported(i, j, k, s)
     #probabilistic_choice:
       # selected_study:
