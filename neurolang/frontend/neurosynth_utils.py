@@ -124,18 +124,11 @@ def _fetch_feature_matrix(
     verbose: int = 1,
     convert_study_ids: bool = False,
 ):
-    """
-    Download if needed and load the sparse Neurosynth tfidf matrix.
-
-    Returns
-    -------
-    tuple
-        ``(matrix, ids, feature_names)`` where ``matrix`` is a
-        ``scipy.sparse`` matrix of shape (studies, terms), ``ids`` a
-        pandas Series with the study id of each row and
-        ``feature_names`` the list of terms labelling each column.
-
-    """
+    """Load the sparse tfidf matrix with its study ids and terms."""
+    # Returns ``(matrix, ids, feature_names)``: a ``scipy.sparse`` matrix of
+    # shape (studies, terms), a pandas Series with the study id of each row
+    # and the list of terms labelling each column. Files are downloaded if
+    # needed.
     file_names = [
         f"data-neurosynth_version-{version}_vocab-terms_source-abstract_type-tfidf_features.npz",
         f"data-neurosynth_version-{version}_vocab-terms_vocabulary.txt",

@@ -428,12 +428,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return super().__sub__(other)
 
     def _anti_join(self, other):
-        """
-        Compute the rows of ``self`` not in ``other`` with a single merge.
-
-        The generic ``Set.__sub__`` iterates over ``self`` and tests each
-        row with ``__contains__``, which scans ``other`` every time.
-        """
+        """Compute the rows of ``self`` not in ``other`` with one merge."""
+        # The generic ``Set.__sub__`` iterates over ``self`` and tests each
+        # row with ``__contains__``, which scans ``other`` every time.
         self._drop_duplicates_if_needed()
         col_types = self._extract_unified_column_types(other)
         new_container = self._container.astype(col_types).merge(

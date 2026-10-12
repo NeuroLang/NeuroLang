@@ -1,60 +1,30 @@
-"""
-Lazy access to nilearn's dataset and image modules.
+"""Lazy access to nilearn's dataset and image modules."""
 
-``nilearn.datasets`` and ``nilearn.image`` take over a second to import
-because they pull in scikit-learn. Importing them only when data is
-downloaded or resampled keeps ``import neurolang`` and the
-``neurolang-query`` listing options fast.
-"""
+# ``nilearn.datasets`` and ``nilearn.image`` take over a second to import
+# because they pull in scikit-learn. Importing them only when data is
+# downloaded or resampled keeps ``import neurolang`` and the
+# ``neurolang-query`` listing options fast.
 
 
 def nilearn_datasets():
-    """
-    Return the ``nilearn.datasets`` module, importing it on first use.
-
-    Returns
-    -------
-    module
-        ``nilearn.datasets``.
-
-    """
+    """Return the ``nilearn.datasets`` module, importing it on first use."""
     from nilearn import datasets
 
     return datasets
 
 
 def nilearn_image():
-    """
-    Return the ``nilearn.image`` module, importing it on first use.
-
-    Returns
-    -------
-    module
-        ``nilearn.image``.
-
-    """
+    """Return the ``nilearn.image`` module, importing it on first use."""
     from nilearn import image
 
     return image
 
 
 def fetch_files(*args, **kwargs):
-    """
-    Download files with nilearn's (private) file fetcher.
-
-    Parameters
-    ----------
-    *args, **kwargs
-        passed to nilearn's ``fetch_files``: the data directory, a list
-        of ``(file name, url, options)`` tuples and options such as
-        ``verbose``.
-
-    Returns
-    -------
-    list of str
-        paths of the downloaded (or already cached) files.
-
-    """
+    """Download files with nilearn's file fetcher; return their paths."""
+    # Arguments are those of nilearn's (private) ``fetch_files``: the data
+    # directory, a list of ``(file name, url, options)`` tuples and options
+    # such as ``verbose``. Already downloaded files are reused.
     try:
         from nilearn.datasets.utils import _fetch_files as fetcher
     except ImportError:

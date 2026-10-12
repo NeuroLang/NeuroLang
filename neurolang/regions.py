@@ -99,30 +99,12 @@ class Region(object):
 
     @staticmethod
     def from_spatial_image_labels(spatial_image, labels, **kwargs):
-        """
-        Build one region per label reading the image data only once.
-
-        Equivalent to calling :meth:`from_spatial_image_label` for each
-        label, but the voxels of all labels are found in a single pass
-        over the image instead of one full scan (and, for proxied images,
-        one decompression of the file) per label.
-
-        Parameters
-        ----------
-        spatial_image : nibabel.spatialimages.SpatialImage
-            labelled image.
-        labels : iterable
-            label values to extract.
-        **kwargs
-            passed to :class:`ExplicitVBR`.
-
-        Returns
-        -------
-        dict
-            mapping each label to an :class:`ExplicitVBR`, or to an
-            :class:`EmptyRegion` when the label has no voxels.
-
-        """
+        """Map each label to its region, reading the image data once."""
+        # Equivalent to calling ``from_spatial_image_label`` for each label
+        # (``**kwargs`` are passed to ``ExplicitVBR``, and a label without
+        # voxels maps to an ``EmptyRegion``), but all labels are found in a
+        # single pass over the image instead of one full scan (and, for
+        # proxied images, one decompression of the file) per label.
         data = np.asanyarray(spatial_image.dataobj)
         if 'image_dim' not in kwargs:
             kwargs['image_dim'] = spatial_image.shape
@@ -137,24 +119,11 @@ class Region(object):
 
 
 def label_voxel_indices(data, labels):
-    """
-    Voxel coordinates of each label of a labelled array, in one pass.
-
-    Parameters
-    ----------
-    data : numpy.ndarray
-        labelled array.
-    labels : iterable
-        label values to look up.
-
-    Returns
-    -------
-    dict
-        mapping each label to an ``(n, data.ndim)`` integer array with the
-        coordinates of the voxels equal to it, in the same (C) order as
-        ``numpy.nonzero(data == label)``.
-
-    """
+    """Map each label to the coordinates of its voxels in ``data``."""
+    # One pass over the array: a stable argsort groups equal values, and
+    # each label's run is located with ``searchsorted``. The coordinates
+    # of each label come out as an ``(n, data.ndim)`` integer array in the
+    # same (C) order as ``numpy.nonzero(data == label)``.
     flat = data.ravel()
     order = np.argsort(flat, kind='stable')
     sorted_values = flat[order]

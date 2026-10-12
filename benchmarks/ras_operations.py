@@ -84,15 +84,11 @@ class TimeRASOperations:
 
 
 class TimeUnnamedDifference:
+    """Time set difference of unnamed relations on the pandas backend."""
 
-    """
-    Time set difference of unnamed relations on the pandas backend.
-
-    The pandas backend switches from element-wise membership tests to a
-    merge above ``_ANTI_JOIN_MIN_ROWS`` rows of the left operand; these
-    sizes cover both sides of that threshold.
-    """
-
+    # The pandas backend switches from element-wise membership tests to a
+    # merge above ``_ANTI_JOIN_MIN_ROWS`` rows of the left operand; these
+    # sizes cover both sides of that threshold.
     params = ([5, 20, 100, 1000], [10, 1000])
     param_names = ["n_left", "n_right"]
 
