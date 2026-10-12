@@ -185,6 +185,16 @@ class RegionFrontendCPLogicSolver(
     pass
 
 
+def _solve_unevaluated_succ_query(query, cpl, succ_solver):
+    """Build the provenance set of a SUCC query without evaluating it."""
+    return succ_solver(query, cpl, run_relational_algebra_solver=False)
+
+
+def _solve_unevaluated_marg_query(rule, cpl, succ_solver):
+    """Build the provenance set of a MARG query without evaluating it."""
+    return lift_solve_marg_query(rule, cpl, succ_solver)
+
+
 def _optimise_show_ra_plan(ra_code):
     """
     Optimise an RA plan for display with ``--show-ra``.
@@ -722,30 +732,22 @@ class NeurolangPDL(QueryBuilderDatalog):
         The relational algebra solver is not run, so the returned set holds
         the unevaluated RA plan.
         """
+        query = rule
+        solve = _solve_unevaluated_succ_query
         if is_within_language_prob_query(rule):
             query = within_language_succ_query_to_intensional_rule(rule)
             if isinstance(rule.antecedent, Condition):
-                return lift_solve_marg_query(
-                    rule,
-                    cpl,
-                    succ_solver=lambda r, c, **kw: succ_solver(
-                        r, c, run_relational_algebra_solver=False, **kw
-                    ),
-                )
-        else:
-            query = rule
+                # As in the solver (_solve_within_language_prob_query), a
+                # conditional query goes through the MARG solver, which
+                # splits it into joint and conditioning SUCC queries and
+                # does not run the RA solver on them.
+                solve = _solve_unevaluated_marg_query
         for succ_solver in self.probabilistic_solvers:
             try:
-                provset = succ_solver(
-                    query,
-                    cpl,
-                    run_relational_algebra_solver=False,
-                )
-                break
+                return solve(query, cpl, succ_solver)
             except UnsupportedSolverError:
                 if succ_solver == self.probabilistic_solvers[-1]:
                     raise
-        return provset
 
     def _solve_postprobabilistic_deterministic_stratum(
         self, solution, postprob_idb, show_ra: bool = False

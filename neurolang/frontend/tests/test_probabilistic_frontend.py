@@ -12,6 +12,7 @@ from ...exceptions import (
     UnsupportedProgramError,
     UnsupportedQueryError
 )
+from ...logic import Union
 from ...logic.horn_clauses import Fol2DatalogTranslationException
 from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
@@ -101,6 +102,51 @@ def test_show_ra_probabilistic_stratum(capsys):
     captured = capsys.readouterr()
     assert "── deterministic stratum ──" in captured.out
     assert "── probabilistic stratum ──" in captured.out
+
+
+def test_show_ra_conditional_query_provenance():
+    """
+    Check that show-ra builds the plan of a conditional (MARG) rule.
+
+    The frontend usually rewrites ``//`` into SUCC queries, but a rule
+    whose body is still a ``Condition`` (e.g. one built directly in the
+    IR) reaches the show-ra MARG branch, which referenced an unbound
+    solver and failed.
+    """
+    from ...datalog import Implication
+    from ...datalog.instance import MapInstance
+    from ...expressions import Symbol
+    from ...probabilistic.expressions import (
+        PROB,
+        Condition,
+        ProbabilisticQuery,
+    )
+    from ...probabilistic.query_resolution import (
+        _build_probabilistic_program,
+    )
+    from ...relational_algebra_provenance import ProvenanceAlgebraSet
+
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",)], name="P"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "a"), (0.3, "b")], name="Q"
+    )
+    x = Symbol("x")
+    rule = Implication(
+        Symbol("Z")(x, ProbabilisticQuery(PROB, (x,))),
+        Condition(Symbol("P")(x), Symbol("Q")(x)),
+    )
+    cpl, prob_idb = _build_probabilistic_program(
+        MapInstance(),
+        nl.program_ir.probabilistic_facts(),
+        nl.program_ir.probabilistic_choices(),
+        Union((rule,)),
+        nl.check_qbased_pfact_tuple_unicity,
+    )
+    provset = nl._show_ra_rule_provenance_set(prob_idb.formulas[0], cpl)
+    assert isinstance(provset, ProvenanceAlgebraSet)
 
 
 def test_show_ra_probabilistic_with_det_idb():
