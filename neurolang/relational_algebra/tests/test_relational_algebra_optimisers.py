@@ -1152,7 +1152,7 @@ def test_push_projection_eliminates_cross_product_across_projection():
 
 
 def test_push_projections_down_through_join(r1, str_columns):
-    """Check that PushProjectionsDown adds sub-projections pruning join inputs."""
+    """Check that PushProjectionsDown prunes join inputs with projections."""
     from ..optimisers import PushProjectionsDown
 
     a, b, c, _, _ = str_columns
@@ -1195,6 +1195,8 @@ def test_push_projections_down_through_join(r1, str_columns):
 
 def test_push_projections_down_full_pipeline():
     """
+    Check that the full optimiser pipeline leaves no cross products.
+
     End-to-end: the full RelationalAlgebraOptimiser pipeline
     (push projections into join operands → flatten/reorder → push projections)
     produces a plan with no cross products.
@@ -1260,6 +1262,8 @@ def test_push_projections_down_full_pipeline():
 
 def test_greedy_join_ordering_reorders_mixed_product_join():
     """
+    Check that greedy join ordering joins shared-column operands first.
+
     Regression test: GreedyJoinOrdering reorders a mixed Product/NaturalJoin
     chain so operands with shared ColumnStr names are joined first.
 
@@ -1327,6 +1331,8 @@ def test_greedy_join_ordering_reorders_mixed_product_join():
 
 def test_greedy_join_ordering_preserves_disconnected_product():
     """
+    Check that greedy join ordering keeps a disconnected product.
+
     Regression test: GreedyJoinOrdering must NOT convert a Product of
     two operands with NO shared column names into a NaturalJoin.
 
