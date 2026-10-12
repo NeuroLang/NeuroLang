@@ -32,6 +32,7 @@ from ..relational_algebra import (
     NaturalJoin,
     Product,
     Projection,
+    RelationalAlgebraSolver,
     RenameColumn,
     RenameColumns,
     ReplaceNull,
@@ -1306,3 +1307,35 @@ def test_greedy_join_ordering_preserves_disconnected_product():
     assert type(result).__name__ == "Product", (
         "Expected Product (no shared columns), got " + type(result).__name__
     )
+
+
+def test_push_projections_down_terminates_when_nothing_to_push():
+    """
+    Check that the optimiser stops when a projection cannot be pushed.
+
+    In ``π[b](π[b](R(b, g)) ⋈ S(c))`` the left side is already narrowed
+    and ``S`` needs no column, so pushing the projection changes nothing.
+    PushProjectionsDown used to rebuild an equal expression in that case,
+    and together with FlattenAndReorderJoins the walker rewrote the plan
+    forever (RecursionError).
+    """
+    r = _named_constant(("b", "g"), (0, 1))
+    s = _named_constant(("c",), (0,))
+    t = _named_constant(("f", "a", "c"), (0, 1, 2))
+    u = _named_constant(("c", "e", "f"), (2, 3, 0))
+    plan = Product((
+        Projection(NaturalJoin(r, s), (str2columnstr_constant("b"),)),
+        NaturalJoin(
+            Projection(
+                t,
+                (str2columnstr_constant("a"), str2columnstr_constant("f")),
+            ),
+            u,
+        ),
+    ))
+
+    optimised = RelationalAlgebraOptimiser().walk(plan)
+
+    expected = RelationalAlgebraSolver().walk(plan).value
+    result = RelationalAlgebraSolver().walk(optimised).value
+    assert result == expected
