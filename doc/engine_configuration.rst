@@ -65,7 +65,7 @@ Example — the ``neurosynth`` engine (abridged)::
             yeo_networks: 17
         datalog_init: |
           study_with_peaks(S) :- peak_reported(I, J, K, S)
-          mentions(t, s) :- term_in_study_tfidf(s, t, v), (v > 0.03)
+          mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
         predicates:
           peak_reported:
             arity: 4
@@ -81,8 +81,8 @@ Example — the ``neurosynth`` engine (abridged)::
             description: "Term frequency–inverse document frequency values"
 
 In this engine ``term_in_study_tfidf`` has columns ``(study_id, term,
-tfidf)``, so the derived ``mentions(t, s)`` relation has columns
-``(term, study_id)``.  The ``selected_study`` uniform choice over studies is
+tfidf)``, and the derived ``mentions(s, t)`` relation keeps the same
+order: ``(study_id, term)``.  The ``selected_study`` uniform choice over studies is
 registered by the Python init module.
 
 A note on the ``datalog_init`` syntax: the text Datalog parser does not

@@ -142,7 +142,7 @@ Engines are declared in :file:`neurolang/utils/engines/engines.yaml`
        python_init: "neurolang.utils.engines.neurosynth.init"
        datalog_init: |
          study_with_peaks(S) :- peak_reported(I, J, K, S)
-         mentions(t, s) :- term_in_study_tfidf(s, t, v), (v > 0.03)
+         mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
        relations:
          extra_data: "shared/my_data.csv"
        predicates:
