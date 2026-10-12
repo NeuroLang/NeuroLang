@@ -3,12 +3,9 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-try:
-    from nilearn.datasets.utils import _fetch_files
-except ImportError:
-    # nilearn >= 0.11: _fetch_files was moved and renamed
-    from nilearn.datasets._utils import fetch_files as _fetch_files
 from scipy import sparse
+
+from ..utils.nilearn_compat import fetch_files as _fetch_files
 
 
 class StudyID(str):
@@ -110,6 +107,35 @@ def fetch_feature_data(
     pd.DataFrame
         the features dataframe
     """
+    feature_data_sparse, ids, feature_names = _fetch_feature_matrix(
+        data_dir, version, verbose, convert_study_ids
+    )
+    feature_df = pd.DataFrame(
+        index=ids.tolist(),
+        columns=feature_names,
+        data=feature_data_sparse.toarray(),
+    )
+    return feature_df
+
+
+def _fetch_feature_matrix(
+    data_dir: Path,
+    version: int = 7,
+    verbose: int = 1,
+    convert_study_ids: bool = False,
+):
+    """
+    Download if needed and load the sparse Neurosynth tfidf matrix.
+
+    Returns
+    -------
+    tuple
+        ``(matrix, ids, feature_names)`` where ``matrix`` is a
+        ``scipy.sparse`` matrix of shape (studies, terms), ``ids`` a
+        pandas Series with the study id of each row and
+        ``feature_names`` the list of terms labelling each column.
+
+    """
     file_names = [
         f"data-neurosynth_version-{version}_vocab-terms_source-abstract_type-tfidf_features.npz",
         f"data-neurosynth_version-{version}_vocab-terms_vocabulary.txt",
@@ -127,20 +153,18 @@ def fetch_feature_data(
         verbose=verbose,
     )
     feature_data_sparse = sparse.load_npz(files[0])
-    feature_data = feature_data_sparse.todense()
     metadata_df = fetch_study_metadata(data_dir, version, verbose)
     ids = metadata_df["id"]
     if convert_study_ids:
-        ids = ids.apply(StudyID)
+        ids = pd.Series(
+            [StudyID(i) for i in ids], index=ids.index, dtype=object
+        )
     feature_names = np.genfromtxt(
         files[1],
         dtype=str,
         delimiter="\t",
     ).tolist()
-    feature_df = pd.DataFrame(
-        index=ids.tolist(), columns=feature_names, data=feature_data
-    )
-    return feature_df
+    return feature_data_sparse, ids, feature_names
 
 
 def fetch_neurosynth_peak_data(
@@ -208,7 +232,11 @@ def fetch_neurosynth_peak_data(
         metadata[["id", "space"]].set_index("id"), on="id"
     )
     if convert_study_ids:
-        activations["id"] = activations["id"].apply(StudyID)
+        activations["id"] = pd.Series(
+            [StudyID(i) for i in activations["id"]],
+            index=activations.index,
+            dtype=object,
+        )
     return activations
 
 
@@ -246,20 +274,30 @@ def get_ns_term_study_associations(
     pd.DataFrame
         the term association dataframe
     """
-    features = fetch_feature_data(
+    # Work on the sparse matrix directly: densifying and melting the
+    # full (studies x terms) matrix allocates tens of millions of rows,
+    # most of which are discarded by the threshold.
+    matrix, ids, feature_names = _fetch_feature_matrix(
         data_dir, version, verbose, convert_study_ids
     )
-    features.index.name = "id"
-    term_data = pd.melt(
-        features.reset_index(),
-        var_name="term",
-        id_vars="id",
-        value_name="tfidf",
+    # Column-major order reproduces the row order of ``pd.melt``.
+    matrix = sparse.csc_matrix(matrix)
+    matrix.sum_duplicates()
+    matrix.sort_indices()
+    coo = matrix.tocoo()
+    threshold = 0 if tfidf_threshold is None else tfidf_threshold
+    keep = coo.data > threshold
+    rows, cols, values = coo.row[keep], coo.col[keep], coo.data[keep]
+    order = np.lexsort((rows, cols))
+    rows, cols, values = rows[order], cols[order], values[order]
+    term_data = pd.DataFrame(
+        {
+            "id": ids.to_numpy()[rows],
+            "term": np.asarray(feature_names, dtype=object)[cols],
+            "tfidf": values.astype(float),
+        },
+        index=cols.astype(np.int64) * matrix.shape[0] + rows,
     )
-    if tfidf_threshold is not None:
-        term_data = term_data.query(f"tfidf > {tfidf_threshold}")
-    else:
-        term_data = term_data.query("tfidf > 0")
     return term_data
 
 

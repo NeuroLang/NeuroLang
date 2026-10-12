@@ -190,3 +190,38 @@ def test_load_neurosynth_mni_peaks_reported(mock_peaks_reported, mni_peaks):
         nl[symbol.symbol_name].type
         is AbstractSet[Tuple[StudyID, int, int, int]]
     )
+
+
+@pytest.mark.parametrize("threshold", [None, 0.1])
+@pytest.mark.parametrize("convert_study_ids", [False, True])
+def test_get_ns_term_study_associations_matches_dense_melt(
+    features, threshold, convert_study_ids
+):
+    from scipy import sparse
+
+    from .. import neurosynth_utils
+
+    ids = pd.Series(features.index)
+    if convert_study_ids:
+        ids = pd.Series([StudyID(i) for i in ids], dtype=object)
+    matrix = sparse.csr_matrix(features.to_numpy())
+    with patch.object(
+        neurosynth_utils,
+        "_fetch_feature_matrix",
+        return_value=(matrix, ids, list(features.columns)),
+    ):
+        result = neurosynth_utils.get_ns_term_study_associations(
+            Path("unused"),
+            convert_study_ids=convert_study_ids,
+            tfidf_threshold=threshold,
+        )
+
+    dense = features.copy()
+    dense.index = ids.tolist()
+    dense.index.name = "id"
+    expected = pd.melt(
+        dense.reset_index(), var_name="term", id_vars="id",
+        value_name="tfidf",
+    )
+    expected = expected.query(f"tfidf > {threshold or 0}")
+    pd.testing.assert_frame_equal(result, expected, check_dtype=False)

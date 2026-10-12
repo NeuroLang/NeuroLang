@@ -56,6 +56,7 @@ S. Ferré, "SQUALL: The expressiveness of SPARQL 1.1 made available
 as a controlled natural language", Data & Knowledge Engineering, 2014.
 
 """
+import functools
 import os
 
 import lark
@@ -203,11 +204,22 @@ with open(GRAMMAR_PATH, "r") as f:
     GRAMMAR = f.read()
 
 
-COMPILED_GRAMMAR = Lark(
-    GRAMMAR,
-    parser="earley",
-    ambiguity="resolve",
-)
+@functools.lru_cache(maxsize=None)
+def compiled_grammar():
+    """Compile the SQUALL grammar on first use (it takes ~0.17 s)."""
+    return Lark(
+        GRAMMAR,
+        parser="earley",
+        ambiguity="resolve",
+    )
+
+
+def __getattr__(name):
+    # Lazily expose the compiled grammar as the ``COMPILED_GRAMMAR``
+    # module attribute, kept for backwards compatibility.
+    if name == "COMPILED_GRAMMAR":
+        return compiled_grammar()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 COMPARISON_OPS = {
@@ -322,7 +334,7 @@ class SquallTransformer(Transformer):
             used to parse SQUALL programs.  Suitable for ``json.dumps``.
 
         """
-        options = COMPILED_GRAMMAR.options
+        options = compiled_grammar().options
         return {
             "name": os.path.basename(GRAMMAR_PATH),
             "grammar": GRAMMAR,
@@ -1628,7 +1640,6 @@ class SquallTransformer(Transformer):
                 if isinstance(d, tuple) and d[0] == '_per':
                     per_vars.append(d[1])
 
-        import functools
         if number is None:
             raise self._make_error(
                 "Expected a number after 'Top'/'Bottom', "
@@ -2866,7 +2877,7 @@ def parser(code, local_vars=None, global_vars=None):
     """
     source_code = code.strip()
     try:
-        tree = COMPILED_GRAMMAR.parse(source_code)
+        tree = compiled_grammar().parse(source_code)
     except UnexpectedToken as e:
         raise UnexpectedTokenError(
             str(e), line=e.line - 1, column=e.column - 1

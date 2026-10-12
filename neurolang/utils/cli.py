@@ -557,13 +557,15 @@ def main(argv: Optional[list] = None) -> None:
             _execute_program(nl, program, dry_run=True)
         return
 
-    nl = engine_registry.build_engine(
-        args.engine, Path(args.data_dir), args.resolution
-    )
-
+    # Predicate metadata comes from the YAML config: no need to build
+    # (and download data for) the engine.
     if args.list_predicates:
         _list_predicates(args.engine)
         return
+
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution
+    )
 
     if args.list_sets:
         _list_sets(nl)
