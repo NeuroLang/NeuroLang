@@ -1202,7 +1202,6 @@ def test_push_projections_down_full_pipeline():
     produces a plan with no cross products.
     """
     from ..optimisers import RelationalAlgebraOptimiser, _ra_columns
-    from neurolang.relational_algebra.pretty_printer import pretty_repr
 
     A_data = NamedRelationalAlgebraFrozenSet(('s5',), [(5,)])
     B_data = NamedRelationalAlgebraFrozenSet(('s1',), [(1,)])
@@ -1244,7 +1243,7 @@ def test_push_projections_down_full_pipeline():
             return has_cross(expr.relation_left) or has_cross(expr.relation_right)
         return False
 
-    assert not has_cross(curr), f"Cross product still present:\n{pretty_repr(curr, indent=2)}"
+    assert not has_cross(curr), f"Cross product still present:\n{curr!r}"
 
     # Verify projections were pushed down: every NaturalJoin's children
     # should have a Projection restricting their columns
