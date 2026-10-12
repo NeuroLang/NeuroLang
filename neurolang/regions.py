@@ -121,6 +121,7 @@ class Region(object):
         dict
             mapping each label to an :class:`ExplicitVBR`, or to an
             :class:`EmptyRegion` when the label has no voxels.
+
         """
         data = np.asanyarray(spatial_image.dataobj)
         if 'image_dim' not in kwargs:
@@ -152,6 +153,7 @@ def label_voxel_indices(data, labels):
         mapping each label to an ``(n, data.ndim)`` integer array with the
         coordinates of the voxels equal to it, in the same (C) order as
         ``numpy.nonzero(data == label)``.
+
     """
     flat = data.ravel()
     order = np.argsort(flat, kind='stable')

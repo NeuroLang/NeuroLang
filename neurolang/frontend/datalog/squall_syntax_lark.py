@@ -1640,7 +1640,6 @@ class SquallTransformer(Transformer):
                 if isinstance(d, tuple) and d[0] == '_per':
                     per_vars.append(d[1])
 
-        import functools
         if number is None:
             raise self._make_error(
                 "Expected a number after 'Top'/'Bottom', "

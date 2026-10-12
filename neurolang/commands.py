@@ -11,17 +11,7 @@ from .expression_pattern_matching import add_match
 from .expression_walker import PatternWalker
 from .expressions import Command, Constant, Symbol
 from .regions import EmptyRegion, ExplicitVBR
-
-
-def _fetch_files(*args, **kwargs):
-    # nilearn.datasets takes over a second to import (it pulls in
-    # scikit-learn), so only import it when a download is needed.
-    try:
-        from nilearn.datasets.utils import _fetch_files as fetch_files
-    except ImportError:
-        # nilearn >= 0.11: _fetch_files was moved and renamed
-        from nilearn.datasets._utils import fetch_files
-    return fetch_files(*args, **kwargs)
+from .utils.nilearn_compat import fetch_files as _fetch_files
 
 
 class CommandsMixin(PatternWalker):

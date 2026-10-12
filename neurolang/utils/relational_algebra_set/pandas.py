@@ -15,9 +15,15 @@ class RelationalAlgebraStringExpression(str):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
-# Below this many (row, row) pairs, element-wise membership tests are
-# cheaper than building a merge for a set difference.
-_ANTI_JOIN_MIN_PAIRS = 10_000
+# Set difference strategy for unnamed relations. The element-wise path
+# (``collections.abc.Set.__sub__``) runs one ``__contains__`` scan per row
+# of the left operand: about 0.28 ms per row, almost independent of the
+# size of the right operand. The merge in ``_anti_join`` costs a flat
+# ~6 ms. Measured on two-column relations (pandas 3.0, Python 3.12), they
+# break even at about 20 rows of the left operand, so the merge is used
+# above that. ``benchmarks/ras_operations.py::TimeUnnamedDifference``
+# tracks both regimes.
+_ANTI_JOIN_MIN_ROWS = 20
 
 
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
@@ -412,10 +418,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 return self.dee()
             if other.is_dee():
                 return self.copy()
-            if (
-                len(self._container) * len(other._container)
-                > _ANTI_JOIN_MIN_PAIRS
-            ):
+            if len(self._container) > _ANTI_JOIN_MIN_ROWS:
                 try:
                     return self._anti_join(other)
                 except (TypeError, ValueError):
@@ -425,7 +428,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return super().__sub__(other)
 
     def _anti_join(self, other):
-        """Rows of ``self`` not in ``other``, as a vectorised merge.
+        """
+        Compute the rows of ``self`` not in ``other`` with a single merge.
 
         The generic ``Set.__sub__`` iterates over ``self`` and tests each
         row with ``__contains__``, which scans ``other`` every time.

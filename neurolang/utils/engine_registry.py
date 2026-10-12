@@ -75,29 +75,9 @@ import nibabel as nib
 import numpy as np
 import yaml
 
-
-# nilearn.datasets and nilearn.image take over a second to import (they
-# pull in scikit-learn), so they are only imported when an engine is
-# actually built. This keeps ``neurolang-query --help`` and the listing
-# options fast.
-def _nilearn_datasets():
-    from nilearn import datasets
-
-    return datasets
-
-
-def _nilearn_image():
-    from nilearn import image
-
-    return image
-
-
-def _fetch_files(*args, **kwargs):
-    try:
-        from nilearn.datasets.utils import _fetch_files as fetch_files
-    except ImportError:
-        from nilearn.datasets._utils import fetch_files
-    return fetch_files(*args, **kwargs)
+from .nilearn_compat import fetch_files as _fetch_files
+from .nilearn_compat import nilearn_datasets as _nilearn_datasets
+from .nilearn_compat import nilearn_image as _nilearn_image
 
 if TYPE_CHECKING:
     from neurolang.frontend import NeurolangPDL

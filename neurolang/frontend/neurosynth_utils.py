@@ -5,16 +5,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-
-def _fetch_files(*args, **kwargs):
-    # nilearn.datasets takes over a second to import (it pulls in
-    # scikit-learn), so only import it when a download is needed.
-    try:
-        from nilearn.datasets.utils import _fetch_files as fetch_files
-    except ImportError:
-        # nilearn >= 0.11: _fetch_files was moved and renamed
-        from nilearn.datasets._utils import fetch_files
-    return fetch_files(*args, **kwargs)
+from ..utils.nilearn_compat import fetch_files as _fetch_files
 
 
 class StudyID(str):
@@ -143,6 +134,7 @@ def _fetch_feature_matrix(
         ``scipy.sparse`` matrix of shape (studies, terms), ``ids`` a
         pandas Series with the study id of each row and
         ``feature_names`` the list of terms labelling each column.
+
     """
     file_names = [
         f"data-neurosynth_version-{version}_vocab-terms_source-abstract_type-tfidf_features.npz",
