@@ -38,7 +38,6 @@ from ..datalog.constraints_representation import (
     DatalogConstraintsProgram,
 )
 from ..datalog.exceptions import InvalidMagicSetError
-from ..datalog.expressions import predicate_identity
 from ..exceptions import SymbolNotFoundError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
@@ -56,8 +55,6 @@ from ..relational_algebra.optimisers import (
     GreedyJoinOrdering,
     RelationalAlgebraOptimiser,
 )
-from ..relational_algebra.pretty_printer import pretty_repr, build_name_map_from_conjunction
-from .datalog.pretty_printer import DatalogPrettyPrinter
 
 from ..exceptions import (
     UnsupportedQueryError,
@@ -121,7 +118,11 @@ from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .type_resolution import TypeResolutionMixin
 from .datalog.squall import ResolveInvertedFunctionApplicationMixin, StripDimensionTypePredicatesMixin
 from .frontend_extensions import NumpyFunctionsMixin
-from .query_resolution_datalog import QueryBuilderDatalog, ShowRAChaseMixin
+from .query_resolution_datalog import (
+    QueryBuilderDatalog,
+    _print_rule_ra_plan,
+    show_ra_chase_class,
+)
 
 
 def instance_lru_cache(key_fn, maxsize=128):
@@ -571,14 +572,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         ...     solution = nl.solve_all()
         """
         solution_ir = self._solve(show_ra=show_ra)
-        solution = {}
-        for k, v in solution_ir.items():
-            solution[predicate_identity(k)] = NamedRelationalAlgebraFrozenSet(
-                self.predicate_parameter_names(k),
-                v.value.unwrap(),
-            )
-            solution[predicate_identity(k)].row_type = v.value.row_type
-        return solution
+        return self._solution_to_named_sets(solution_ir)
 
     def _solve(self, query=None, show_ra: bool = False):
         idbs = stratify_program(query, self.program_ir)
@@ -620,12 +614,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         '''
         if show_ra:
             print("── deterministic stratum ──")
-            show_ra_chase_class = type(
-                f"ShowRA{self.chase_class.__name__}",
-                (ShowRAChaseMixin, self.chase_class),
-                {},
+            chase = show_ra_chase_class(self.chase_class)(
+                self.program_ir, rules=det_idb
             )
-            chase = show_ra_chase_class(self.program_ir, rules=det_idb)
             solution = chase.build_chase_solution()
             return solution
         if "__constraints__" in self.symbol_table:
@@ -715,14 +706,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         dedup = RemoveDuplicatedConjunctsDisjuncts()
         prob_idb = Union(tuple(dedup.walk(r) for r in prob_idb.formulas))
         for rule in prob_idb.formulas:
-            rule_str = DatalogPrettyPrinter().walk(rule)
-            print(f"── rule {rule_str} ──")
-            name_map = build_name_map_from_conjunction(
-                rule.antecedent, self.program_ir.symbol_table
+            _print_rule_ra_plan(
+                rule,
+                rule.antecedent,
+                self.program_ir.symbol_table,
+                lambda rule=rule: _optimise_show_ra_plan(
+                    self._show_ra_rule_provenance_set(rule, cpl).relation
+                ),
             )
-            provset = self._show_ra_rule_provenance_set(rule, cpl)
-            ra_code = _optimise_show_ra_plan(provset.relation)
-            print(pretty_repr(ra_code, name_map=name_map))
         return MapInstance()
 
     def _show_ra_rule_provenance_set(self, rule, cpl):
@@ -749,30 +740,14 @@ class NeurolangPDL(QueryBuilderDatalog):
                 if succ_solver == self.probabilistic_solvers[-1]:
                     raise
 
-    def _solve_postprobabilistic_deterministic_stratum(
-        self, solution, postprob_idb, show_ra: bool = False
-    ):
-        if show_ra:
-            print("── post-probabilistic stratum ──")
-            show_ra_chase_class = type(
-                f"ShowRA{self.chase_class.__name__}",
-                (ShowRAChaseMixin, self.chase_class),
-                {},
-            )
-            solver = RegionFrontendCPLogicSolver()
-            for psymb, relation in solution.items():
-                solver.add_extensional_predicate_from_tuples(
-                    psymb,
-                    relation.value,
-                )
-            for builtin_symb in self.program_ir.builtins():
-                solver.symbol_table[builtin_symb] = self.program_ir.symbol_table[
-                    builtin_symb
-                ]
-            solver.walk(postprob_idb)
-            chase = show_ra_chase_class(solver, rules=postprob_idb)
-            chase.build_chase_solution()
-            return MapInstance()
+    def _build_postprobabilistic_solver(self, solution, postprob_idb):
+        """
+        Build the solver of the post-probabilistic deterministic stratum.
+
+        The relations of ``solution`` become extensional predicates, the
+        builtins of the program are copied, and the rules of
+        ``postprob_idb`` are added.
+        """
         solver = RegionFrontendCPLogicSolver()
         for psymb, relation in solution.items():
             solver.add_extensional_predicate_from_tuples(
@@ -784,6 +759,22 @@ class NeurolangPDL(QueryBuilderDatalog):
                 builtin_symb
             ]
         solver.walk(postprob_idb)
+        return solver
+
+    def _solve_postprobabilistic_deterministic_stratum(
+        self, solution, postprob_idb, show_ra: bool = False
+    ):
+        if show_ra:
+            print("── post-probabilistic stratum ──")
+            solver = self._build_postprobabilistic_solver(
+                solution, postprob_idb
+            )
+            chase = show_ra_chase_class(self.chase_class)(
+                solver, rules=postprob_idb
+            )
+            chase.build_chase_solution()
+            return MapInstance()
+        solver = self._build_postprobabilistic_solver(solution, postprob_idb)
         # Split plain Datalog rules from aggregation rules so that each
         # Chase stratum only contains rules of a single kind.  This can
         # happen when a MARG result rule (plain) and an aggregation rule

@@ -518,6 +518,27 @@ def _list_sets(nl: NeurolangPDL) -> None:
 
 
 
+def _dry_run_with_engine(args, **flags) -> None:
+    """
+    Build the requested engine and dry-run the query on it.
+
+    The query is read from ``args`` and run as SQUALL or Datalog with
+    ``dry_run=True`` plus the extra keyword ``flags``.  Exits with status
+    1 when no query is provided.
+    """
+    program = _read_query(args)
+    if not program or not program.strip():
+        print("Error: no query provided.", file=sys.stderr)
+        sys.exit(1)
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution
+    )
+    if args.squall:
+        _execute_squall_program(nl, program, dry_run=True, **flags)
+    else:
+        _execute_program(nl, program, dry_run=True, **flags)
+
+
 def main(argv: Optional[list] = None) -> None:
     """CLI entry point: parse arguments, build engine, run query."""
     parser = _build_parser()
@@ -560,33 +581,13 @@ def main(argv: Optional[list] = None) -> None:
     # SQUALL programs depend on engine data and the CP-Logic solver.
     # Build the engine, print the rewritten program, and exit before the chase.
     if args.show_rewritten:
-        program = _read_query(args)
-        if not program or not program.strip():
-            print("Error: no query provided.", file=sys.stderr)
-            sys.exit(1)
-        nl = engine_registry.build_engine(
-            args.engine, Path(args.data_dir), args.resolution
-        )
-        if args.squall:
-            _execute_squall_program(nl, program, dry_run=True)
-        else:
-            _execute_program(nl, program, dry_run=True)
+        _dry_run_with_engine(args)
         return
 
     # --show-ra requires the requested engine to build the RA plan.
     # Build the engine, print the RA plan, and exit before the chase.
     if args.show_ra:
-        program = _read_query(args)
-        if not program or not program.strip():
-            print("Error: no query provided.", file=sys.stderr)
-            sys.exit(1)
-        nl = engine_registry.build_engine(
-            args.engine, Path(args.data_dir), args.resolution
-        )
-        if args.squall:
-            _execute_squall_program(nl, program, show_ra=True, dry_run=True)
-        else:
-            _execute_program(nl, program, show_ra=True, dry_run=True)
+        _dry_run_with_engine(args, show_ra=True)
         return
 
     # Predicate metadata comes from the YAML config: no need to build

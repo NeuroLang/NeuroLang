@@ -5,6 +5,7 @@ Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
+from functools import lru_cache
 from ..datalog.magic_sets import magic_rewrite
 from ..exceptions import (
     ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
@@ -64,6 +65,31 @@ from . import query_resolution_expressions as fe
 __all__ = ["QueryBuilderDatalog"]
 
 
+def _print_rule_ra_plan(rule, conjunction, symbol_table, build_ra_code):
+    """
+    Print the ``--show-ra`` block of a rule.
+
+    The block is the rule header (skipped when ``rule`` is None) followed
+    by the pretty-printed RA plan returned by ``build_ra_code``, whose
+    tables are named after the predicates of ``conjunction``.
+    """
+    if rule is not None:
+        rule_str = DatalogPrettyPrinter().walk(rule)
+        print(f"── rule {rule_str} ──")
+    name_map = build_name_map_from_conjunction(conjunction, symbol_table)
+    print(pretty_repr(build_ra_code(), name_map=name_map))
+
+
+@lru_cache(maxsize=None)
+def show_ra_chase_class(chase_class):
+    """Return ``chase_class`` extended with :class:`ShowRAChaseMixin`."""
+    return type(
+        f"ShowRA{chase_class.__name__}",
+        (ShowRAChaseMixin, chase_class),
+        {},
+    )
+
+
 class ShowRAChaseMixin:
     """
     Chase mixin printing the named RA expression of each rule.
@@ -89,14 +115,12 @@ class ShowRAChaseMixin:
             return []
         conjunction = Conjunction(predicates)
         ra_code = self.translate_conjunction_to_named_ra(conjunction)
-        rule = getattr(self, "_show_ra_current_rule", None)
-        if rule is not None:
-            rule_str = DatalogPrettyPrinter().walk(rule)
-            print(f"── rule {rule_str} ──")
-        name_map = build_name_map_from_conjunction(
-            conjunction, getattr(self, "datalog_program", None)
+        _print_rule_ra_plan(
+            getattr(self, "_show_ra_current_rule", None),
+            conjunction,
+            getattr(self, "datalog_program", None),
+            lambda: ra_code,
         )
-        print(pretty_repr(ra_code, name_map=name_map))
         try:
             return super().obtain_substitutions(
                 iter(predicates), instance, restriction_instance
@@ -111,12 +135,7 @@ class ShowRAChaseMixin:
         )
         if chase_instance is None:
             return None
-        wrapped_class = type(
-            f"ShowRA{chase_instance.__class__.__name__}",
-            (ShowRAChaseMixin, chase_instance.__class__),
-            {},
-        )
-        wrapped = wrapped_class(
+        wrapped = show_ra_chase_class(chase_instance.__class__)(
             chase_instance.datalog_program,
             rules=logic.Union(tuple(chase_instance.rules)),
         )
@@ -997,12 +1016,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
             elif show_ra:
                 print("── deterministic stratum ──")
-                show_ra_chase_class = type(
-                    f"ShowRA{self.chase_class.__name__}",
-                    (ShowRAChaseMixin, self.chase_class),
-                    {},
-                )
-                show_ra_chase_class(
+                show_ra_chase_class(self.chase_class)(
                     self.program_ir, rules=reachable_rules
                 ).build_chase_solution()
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
@@ -1057,7 +1071,17 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ...     solution = nl.solve_all()
         """
         solution_ir = self.chase_class(self.program_ir).build_chase_solution()
+        return self._solution_to_named_sets(solution_ir)
 
+    def _solution_to_named_sets(
+        self, solution_ir
+    ) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
+        """
+        Convert a chase solution to named sets keyed by predicate name.
+
+        Each relation is wrapped in a ``NamedRelationalAlgebraFrozenSet``
+        whose columns are the predicate's parameter names.
+        """
         solution = {}
         for k, v in solution_ir.items():
             solution[predicate_identity(k)] = NamedRelationalAlgebraFrozenSet(

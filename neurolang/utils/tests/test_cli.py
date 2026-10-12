@@ -17,6 +17,9 @@ from neurolang.utils.cli import (
     main,
 )
 
+from neurolang.frontend.tests.test_probabilistic_frontend import (
+    build_neurosynth_like_engine,
+)
 from neurolang.utils import engine_registry
 
 # ---------------------------------------------------------------------------
@@ -972,58 +975,46 @@ class TestShowRewrittenFlag:
 
 class TestShowRAFlag:
 
-    def test_show_ra_dry_run_no_query_completed(self, monkeypatch, capsys):
+    @staticmethod
+    def _use_engine(monkeypatch, nl):
+        """Make the CLI use ``nl`` as the engine it builds."""
+        def fake_build_engine(name, data_dir, resolution=None):
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+    @pytest.fixture
+    def engine_with_p(self, monkeypatch):
+        """Make the CLI build an engine holding the relation ``P``."""
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1,), (2,)], name="P")
+        self._use_engine(monkeypatch, nl)
+        return nl
+
+    def test_show_ra_dry_run_no_query_completed(self, engine_with_p, capsys):
         """
         Check that --show-ra prints the RA plan without running the query.
 
         --show-ra builds the engine, prints the RA plan, and exits
         without printing 'Query completed'.
         """
-        from neurolang.frontend import NeurolangPDL
-        from neurolang.utils.cli import main
-
-        nl = NeurolangPDL()
-        nl.add_tuple_set([(1,), (2,)], name="P")
-
-        build_engine_calls = []
-
-        def fake_build_engine(name, data_dir, resolution=None):
-            build_engine_calls.append((name, str(data_dir), resolution))
-            return nl
-
-        monkeypatch.setattr(
-            engine_registry, "build_engine", fake_build_engine
-        )
-
         main(["--show-ra", "ans(x) :- P(x)"])
 
         captured = capsys.readouterr()
         assert "── deterministic stratum ──" in captured.out
         assert "Query completed" not in captured.err
 
-    def test_show_ra_squall_dry_run(self, monkeypatch, capsys):
+    def test_show_ra_squall_dry_run(self, engine_with_p, capsys):
         """
         Check that --show-ra with --squall prints the RA plan only.
 
         --show-ra with --squall builds the engine, prints the RA plan,
         and exits without printing 'Query completed'.
         """
-        from neurolang.frontend import NeurolangPDL
-        from neurolang.utils.cli import main
-
-        nl = NeurolangPDL()
-        nl.add_tuple_set([(1,), (2,)], name="P")
-
-        build_engine_calls = []
-
-        def fake_build_engine(name, data_dir, resolution=None):
-            build_engine_calls.append((name, str(data_dir), resolution))
-            return nl
-
-        monkeypatch.setattr(
-            engine_registry, "build_engine", fake_build_engine
-        )
-
         main(["--squall", "--show-ra", "obtain every P."])
 
         captured = capsys.readouterr()
@@ -1038,23 +1029,7 @@ class TestShowRAFlag:
         query crashes with IndexError at
         relational_algebra_provenance.py:423 before the fix.
         """
-        from neurolang.frontend import NeurolangPDL
-        from neurolang.utils.cli import main
-
-        nl = NeurolangPDL()
-        nl.add_tuple_set(
-            [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
-        )
-        nl.add_tuple_set([("s1",), ("s2",)], name="study")
-        nl.add_uniform_probabilistic_choice_over_set(
-            [("s1",), ("s2",)], name="selected_study"
-        )
-        nl.add_tuple_set(
-            [("memory", "s1", 0.5), ("memory", "s2", 0.6)],
-            name="term_in_study_tfidf",
-        )
-        nl.add_tuple_set([("A",), ("B",)], name="schaefer")
-        nl.add_tuple_set([(10, 20, 30), (11, 21, 31)], name="voxel")
+        nl = build_neurosynth_like_engine()
         # datalog_init rules from engines.yaml for the neurosynth engine
         nl.execute_datalog_program(
             "study_with_peaks(S) :- peak_reported(I, J, K, S)."
@@ -1070,10 +1045,7 @@ class TestShowRAFlag:
             "reports(s, i, j, k) :- peak_reported(i, j, k, s)."
         )
 
-        def fake_build_engine(name, data_dir, resolution=None):
-            return nl
-
-        monkeypatch.setattr(engine_registry, "build_engine", fake_build_engine)
+        self._use_engine(monkeypatch, nl)
 
         # Before the fix this raises IndexError; after the fix it prints the
         # RA plan and exits cleanly.

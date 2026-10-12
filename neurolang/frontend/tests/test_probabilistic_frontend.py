@@ -66,6 +66,30 @@ def test_add_uniform_probabilistic_choice_set():
     assert res_d2.type is AbstractSet[Tuple[float, str]]
 
 
+def build_neurosynth_like_engine():
+    """
+    Build a small engine with the EDB of the neurosynth engine.
+
+    It holds a few studies, peaks, terms and Schaefer labels, and a
+    uniform probabilistic choice over the studies.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
+    )
+    nl.add_tuple_set([("s1",), ("s2",)], name="study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    nl.add_tuple_set(
+        [("memory", "s1", 0.5), ("memory", "s2", 0.6)],
+        name="term_in_study_tfidf",
+    )
+    nl.add_tuple_set([("A",), ("B",)], name="schaefer")
+    nl.add_tuple_set([(10, 20, 30), (11, 21, 31)], name="voxel")
+    return nl
+
+
 def test_show_ra_deterministic_stratum(capsys):
     from neurolang.frontend import NeurolangPDL
     nl = NeurolangPDL()
@@ -77,14 +101,28 @@ def test_show_ra_deterministic_stratum(capsys):
 
 
 def test_show_ra_postprobabilistic_stratum(capsys):
-    """Test that show_ra=True is accepted without error for a deterministic query."""
-    from neurolang.frontend import NeurolangPDL
+    """
+    Check that show_ra prints the post-probabilistic stratum.
+
+    ``ans`` uses the result of the probabilistic rule ``Z`` and ``ans2``
+    uses ``ans``, so both land in the post-probabilistic stratum.
+    """
     nl = NeurolangPDL()
-    nl.add_tuple_set([(1,), (2,)], name="P")
-    nl.execute_datalog_program("ans(x) :- P(x).", show_ra=True)
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("c",)], name="Q"
+    )
+    with nl.scope as e:
+        e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
+        e.ans[e.x, e.p] = e.Z[e.p, e.x]
+        e.ans2[e.x] = e.ans[e.x, e.p] & (e.p > 0.1)
+        nl.query((e.x,), e.ans2[e.x], show_ra=True)
     captured = capsys.readouterr()
     assert "── deterministic stratum ──" in captured.out
-    assert "P" in captured.out
+    assert "── probabilistic stratum ──" in captured.out
+    assert "── post-probabilistic stratum ──" in captured.out
 
 
 def test_show_ra_probabilistic_stratum(capsys):
@@ -157,22 +195,7 @@ def test_show_ra_probabilistic_with_det_idb():
     relational_algebra_provenance.py:423 when a conditional MARG query
     depends on deterministic IDB rules and magic rewrite fails.
     """
-    from neurolang.frontend import NeurolangPDL
-
-    nl = NeurolangPDL()
-    nl.add_tuple_set(
-        [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
-    )
-    nl.add_tuple_set([("s1",), ("s2",)], name="study")
-    nl.add_uniform_probabilistic_choice_over_set(
-        [("s1",), ("s2",)], name="selected_study"
-    )
-    nl.add_tuple_set(
-        [("memory", "s1", 0.5), ("memory", "s2", 0.6)],
-        name="term_in_study_tfidf",
-    )
-    nl.add_tuple_set([("A",), ("B",)], name="schaefer")
-    nl.add_tuple_set([(10, 20, 30), (11, 21, 31)], name="voxel")
+    nl = build_neurosynth_like_engine()
     with nl.scope as e:
         e.schaefer_label[e.l] = e.schaefer[e.l, e.r]
         e.labels[e.l, e.x, e.y, e.z] = (
