@@ -24,6 +24,7 @@ import pandas as pd
 
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.neurosynth_utils import (
+    StudyID,
     fetch_neurosynth_peak_data,
     get_ns_term_study_associations,
 )
