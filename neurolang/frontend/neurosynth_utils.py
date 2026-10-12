@@ -8,7 +8,8 @@ from scipy import sparse
 from ..utils.nilearn_compat import fetch_files as _fetch_files
 
 
-StudyID = np.int64
+class StudyID(str):
+    pass
 
 
 class TfIDf(float):
@@ -155,7 +156,9 @@ def _fetch_feature_matrix(
     metadata_df = fetch_study_metadata(data_dir, version, verbose)
     ids = metadata_df["id"]
     if convert_study_ids:
-        ids = ids.astype(StudyID)
+        ids = pd.Series(
+            [StudyID(i) for i in ids], index=ids.index, dtype=object
+        )
     feature_names = np.genfromtxt(
         files[1],
         dtype=str,
@@ -229,7 +232,11 @@ def fetch_neurosynth_peak_data(
         metadata[["id", "space"]].set_index("id"), on="id"
     )
     if convert_study_ids:
-        activations["id"] = activations["id"].astype(StudyID)
+        activations["id"] = pd.Series(
+            [StudyID(i) for i in activations["id"]],
+            index=activations.index,
+            dtype=object,
+        )
     return activations
 
 

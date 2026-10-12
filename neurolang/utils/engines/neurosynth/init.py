@@ -24,7 +24,6 @@ import pandas as pd
 
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.neurosynth_utils import (
-    StudyID,
     fetch_neurosynth_peak_data,
     get_ns_term_study_associations,
 )
@@ -53,7 +52,6 @@ def init_engine(
         data_dir, verbose=0, convert_study_ids=True, tfidf_threshold=1e-3
     )
     term_data = term_data.rename(columns={"id": "study_id"})
-    term_data["study_id"] = term_data["study_id"].astype(StudyID)
 
     nl.add_tuple_set(peak_data, name="peak_reported")
     nl.add_tuple_set(study_ids, name="study")
@@ -100,12 +98,12 @@ def _process_peaks(
     )
     projected_df = pd.DataFrame(
         np.hstack(
-            [projected, non_mni_peaks[["study_id"]].values.astype(StudyID)]
+            [projected, non_mni_peaks[["study_id"]].values]
         ),
         columns=["x", "y", "z", "study_id"],
     )
     peak_data = pd.concat([projected_df, mni_peaks]).astype(
-        {"x": int, "y": int, "z": int, "study_id": StudyID}
+        {"x": int, "y": int, "z": int}
     )
 
     ijk_positions = np.round(

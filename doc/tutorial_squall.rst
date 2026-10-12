@@ -102,9 +102,10 @@ The SQUALL program works with six relations:
     Activation foci from Neurosynth peaks, mapped to anatomical regions via
     the Julich-Brain atlas.
 ``mentions(study_id, term)``
-    TF-IDF term associations from Neurosynth, thresholded.  The
-    ``neurosynth`` engine of the command-line tool defines ``mentions`` with
-    the same column order, see :doc:`engine_configuration`.
+    TF-IDF term associations from Neurosynth, thresholded.  (Note that the
+    ``neurosynth`` engine of the command-line tool defines its own
+    ``mentions(term, study_id)`` with the opposite column order, see
+    :doc:`engine_configuration`.)
 ``region(region)``
     The set of all anatomical region names.
 ``term(term)``
