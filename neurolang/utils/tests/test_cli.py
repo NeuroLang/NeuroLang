@@ -973,8 +973,12 @@ class TestShowRewrittenFlag:
 class TestShowRAFlag:
 
     def test_show_ra_dry_run_no_query_completed(self, monkeypatch, capsys):
-        """--show-ra builds the engine, prints the RA plan, and exits
-        without printing 'Query completed'."""
+        """
+        Check that --show-ra prints the RA plan without running the query.
+
+        --show-ra builds the engine, prints the RA plan, and exits
+        without printing 'Query completed'.
+        """
         from neurolang.frontend import NeurolangPDL
         from neurolang.utils.cli import main
 
@@ -998,8 +1002,12 @@ class TestShowRAFlag:
         assert "Query completed" not in captured.err
 
     def test_show_ra_squall_dry_run(self, monkeypatch, capsys):
-        """--show-ra with --squall builds the engine, prints the RA plan,
-        and exits without printing 'Query completed'."""
+        """
+        Check that --show-ra with --squall prints the RA plan only.
+
+        --show-ra with --squall builds the engine, prints the RA plan,
+        and exits without printing 'Query completed'.
+        """
         from neurolang.frontend import NeurolangPDL
         from neurolang.utils.cli import main
 
@@ -1023,9 +1031,13 @@ class TestShowRAFlag:
         assert "Query completed" not in captured.err
 
     def test_show_ra_neurosynth_prob_query(self, monkeypatch, capsys):
-        """--show-ra --squall with the original Neurosynth conditional MARG
+        """
+        Check --show-ra --squall on the Neurosynth conditional MARG query.
+
+        --show-ra --squall with the original Neurosynth conditional MARG
         query crashes with IndexError at
-        relational_algebra_provenance.py:423 before the fix."""
+        relational_algebra_provenance.py:423 before the fix.
+        """
         from neurolang.frontend import NeurolangPDL
         from neurolang.utils.cli import main
 

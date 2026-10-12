@@ -8,7 +8,8 @@ from neurolang.frontend.neurosynth_utils import StudyID
 
 
 class TestNeurosynthEngineStudyIdConsistency:
-    """Regression test: study_id dtype must be consistent across all tuple sets.
+    """
+    Regression test: study_id dtype must be consistent across all tuple sets.
 
     Currently ``init_engine`` loads ``peak_data`` study IDs as ``int64``
     (via ``fetch_neurosynth_peak_data`` without ``convert_study_ids``) while
@@ -22,7 +23,7 @@ class TestNeurosynthEngineStudyIdConsistency:
     @patch("neurolang.utils.engines.neurosynth.init.fetch_neurosynth_peak_data")
     @patch("neurolang.utils.engines.neurosynth.init.get_ns_term_study_associations")
     def test_study_id_consistency(
-        self, mock_get_term, mock_get_peaks
+        self, mock_get_term, mock_get_peaks, tmp_path
     ):
         """All study_id columns should share the same integer dtype."""
         from neurolang.utils.engines.neurosynth.init import init_engine
@@ -55,7 +56,7 @@ class TestNeurosynthEngineStudyIdConsistency:
 
         # ---- Mock NeurolangPDL to capture add_tuple_set calls ---------------
         nl = MagicMock()
-        init_engine(nl, mask, data_dir="/tmp/fake")
+        init_engine(nl, mask, data_dir=str(tmp_path / "fake"))
 
         # Collect the DataFrames that were passed to add_tuple_set
         captured_dfs: dict[str, pd.DataFrame] = {}

@@ -185,6 +185,24 @@ class RegionFrontendCPLogicSolver(
     pass
 
 
+def _optimise_show_ra_plan(ra_code):
+    """
+    Optimise an RA plan for display with ``--show-ra``.
+
+    Apply the RA optimiser together with greedy join ordering, then run a
+    second optimisation pass after the reordering.
+    """
+    class ShowRAOptimiser(
+        RelationalAlgebraOptimiser,
+        DegenerateNaturalJoinToProduct,
+        GreedyJoinOrdering,
+    ):
+        pass
+    ra_code = ShowRAOptimiser().walk(ra_code)
+    # Second RA optimisation pass after GOO reordering
+    return RelationalAlgebraOptimiser().walk(ra_code)
+
+
 class NeurolangPDL(QueryBuilderDatalog):
     """
     Probabilistic Datalog frontend.
@@ -618,68 +636,36 @@ class NeurolangPDL(QueryBuilderDatalog):
         pfact_edb = self.program_ir.probabilistic_facts()
         pchoice_edb = self.program_ir.probabilistic_choices()
         if show_ra:
-            print("── probabilistic stratum ──")
-            cpl, prob_idb = _build_probabilistic_program(
-                solution,
-                pfact_edb,
-                pchoice_edb,
-                prob_idb,
-                self.check_qbased_pfact_tuple_unicity,
+            return self._show_ra_probabilistic_stratum(
+                solution, pfact_edb, pchoice_edb, prob_idb
             )
-            dedup = RemoveDuplicatedConjunctsDisjuncts()
-            prob_idb = Union(tuple(dedup.walk(r) for r in prob_idb.formulas))
-            for rule in prob_idb.formulas:
-                rule_str = DatalogPrettyPrinter().walk(rule)
-                print(f"── rule {rule_str} ──")
-                name_map = build_name_map_from_conjunction(
-                    rule.antecedent, self.program_ir.symbol_table
-                )
-                if is_within_language_prob_query(rule):
-                    query = within_language_succ_query_to_intensional_rule(rule)
-                    if isinstance(rule.antecedent, Condition):
-                        provset = lift_solve_marg_query(
-                            rule,
-                            cpl,
-                            succ_solver=lambda r, c, **kw: succ_solver(
-                                r, c, run_relational_algebra_solver=False, **kw
-                            ),
-                        )
-                    else:
-                        for succ_solver in self.probabilistic_solvers:
-                            try:
-                                provset = succ_solver(
-                                    query,
-                                    cpl,
-                                    run_relational_algebra_solver=False,
-                                )
-                                break
-                            except UnsupportedSolverError:
-                                if succ_solver == self.probabilistic_solvers[-1]:
-                                    raise
-                else:
-                    for succ_solver in self.probabilistic_solvers:
-                        try:
-                            provset = succ_solver(
-                                rule,
-                                cpl,
-                                run_relational_algebra_solver=False,
-                            )
-                            break
-                        except UnsupportedSolverError:
-                            if succ_solver == self.probabilistic_solvers[-1]:
-                                raise
-                ra_code = provset.relation
-                class ShowRAOptimiser(
-                    RelationalAlgebraOptimiser,
-                    DegenerateNaturalJoinToProduct,
-                    GreedyJoinOrdering,
-                ):
-                    pass
-                ra_code = ShowRAOptimiser().walk(ra_code)
-                # Second RA optimisation pass after GOO reordering
-                ra_code = RelationalAlgebraOptimiser().walk(ra_code)
-                print(pretty_repr(ra_code, name_map=name_map))
-            return MapInstance()
+        prob_solution = self._compute_probabilistic_solution_with_fallback(
+            solution, pfact_edb, pchoice_edb, prob_idb
+        )
+
+        wlq_symbs = set(
+            rule.consequent.functor
+            for rule in prob_idb.formulas
+            if is_within_language_prob_query(rule)
+        )
+        solution.update(
+            {
+                pred_symb: relation
+                for pred_symb, relation in prob_solution.items()
+                if pred_symb in wlq_symbs
+            }
+        )
+        return solution
+
+    def _compute_probabilistic_solution_with_fallback(
+        self, solution, pfact_edb, pchoice_edb, prob_idb
+    ):
+        """
+        Compute the probabilistic solution with the first supported solver.
+
+        Solver pairs are tried in order; an ``UnsupportedSolverError`` is
+        only propagated when raised by the last pair.
+        """
         for i, (succ_solver, marg_solver) in enumerate(
             zip(self.probabilistic_solvers, self.probabilistic_marg_solvers)
         ):
@@ -698,20 +684,68 @@ class NeurolangPDL(QueryBuilderDatalog):
                     raise
             else:
                 break
+        return prob_solution
 
-        wlq_symbs = set(
-            rule.consequent.functor
-            for rule in prob_idb.formulas
-            if is_within_language_prob_query(rule)
+    def _show_ra_probabilistic_stratum(
+        self, solution, pfact_edb, pchoice_edb, prob_idb
+    ):
+        """
+        Print the optimised RA plan of every probabilistic rule.
+
+        Nothing is evaluated; an empty ``MapInstance`` is returned.
+        """
+        print("── probabilistic stratum ──")
+        cpl, prob_idb = _build_probabilistic_program(
+            solution,
+            pfact_edb,
+            pchoice_edb,
+            prob_idb,
+            self.check_qbased_pfact_tuple_unicity,
         )
-        solution.update(
-            {
-                pred_symb: relation
-                for pred_symb, relation in prob_solution.items()
-                if pred_symb in wlq_symbs
-            }
-        )
-        return solution
+        dedup = RemoveDuplicatedConjunctsDisjuncts()
+        prob_idb = Union(tuple(dedup.walk(r) for r in prob_idb.formulas))
+        for rule in prob_idb.formulas:
+            rule_str = DatalogPrettyPrinter().walk(rule)
+            print(f"── rule {rule_str} ──")
+            name_map = build_name_map_from_conjunction(
+                rule.antecedent, self.program_ir.symbol_table
+            )
+            provset = self._show_ra_rule_provenance_set(rule, cpl)
+            ra_code = _optimise_show_ra_plan(provset.relation)
+            print(pretty_repr(ra_code, name_map=name_map))
+        return MapInstance()
+
+    def _show_ra_rule_provenance_set(self, rule, cpl):
+        """
+        Build the provenance set of a probabilistic rule without solving it.
+
+        The relational algebra solver is not run, so the returned set holds
+        the unevaluated RA plan.
+        """
+        if is_within_language_prob_query(rule):
+            query = within_language_succ_query_to_intensional_rule(rule)
+            if isinstance(rule.antecedent, Condition):
+                return lift_solve_marg_query(
+                    rule,
+                    cpl,
+                    succ_solver=lambda r, c, **kw: succ_solver(
+                        r, c, run_relational_algebra_solver=False, **kw
+                    ),
+                )
+        else:
+            query = rule
+        for succ_solver in self.probabilistic_solvers:
+            try:
+                provset = succ_solver(
+                    query,
+                    cpl,
+                    run_relational_algebra_solver=False,
+                )
+                break
+            except UnsupportedSolverError:
+                if succ_solver == self.probabilistic_solvers[-1]:
+                    raise
+        return provset
 
     def _solve_postprobabilistic_deterministic_stratum(
         self, solution, postprob_idb, show_ra: bool = False

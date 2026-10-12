@@ -2,9 +2,13 @@
 
 
 def test_querybuilder_accepts_show_ra():
-    """show_ra=True should be accepted by execute_datalog_program
+    """
+    Check that execute_datalog_program accepts show_ra=True.
+
+    show_ra=True should be accepted by execute_datalog_program
     and threaded through the call chain without error at the
-    signature level (the actual RA printing is implemented later)."""
+    signature level (the actual RA printing is implemented later).
+    """
     from neurolang.frontend import NeurolangPDL
 
     nl = NeurolangPDL()

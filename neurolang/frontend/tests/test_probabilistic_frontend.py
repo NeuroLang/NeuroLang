@@ -104,7 +104,10 @@ def test_show_ra_probabilistic_stratum(capsys):
 
 
 def test_show_ra_probabilistic_with_det_idb():
-    """Regression: --show-ra crashes with IndexError at
+    """
+    Regression: --show-ra with a conditional query over deterministic IDB.
+
+    --show-ra crashed with IndexError at
     relational_algebra_provenance.py:423 when a conditional MARG query
     depends on deterministic IDB rules and magic rewrite fails.
     """

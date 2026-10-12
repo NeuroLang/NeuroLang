@@ -194,7 +194,8 @@ def test_load_neurosynth_mni_peaks_reported(mock_peaks_reported, mni_peaks):
 
 
 def test_studyid_is_integer_based():
-    """StudyID should behave as an integer: numpy integer, arithmetic, hashing.
+    """
+    Check that StudyID behaves as an integer: numpy integer, arithmetic, hashing.
 
     StudyID is now ``np.int64`` (or an equivalent integer alias), so it must
     behave as a numpy integer rather than a Python ``int`` subclass.
@@ -207,7 +208,10 @@ def test_studyid_is_integer_based():
 
 
 def test_get_ns_term_study_associations_studyid_type(features, metadata):
-    """With convert_study_ids=True, study_id column must have integer dtype
+    """
+    Check study_id column types with convert_study_ids=True.
+
+    With convert_study_ids=True, study_id column must have integer dtype
     and values must be int-based StudyID instances.
     """
     from scipy import sparse
@@ -240,7 +244,7 @@ def test_get_ns_term_study_associations_studyid_type(features, metadata):
 
     for val in result["id"].unique():
         assert isinstance(val, np.integer), f"StudyID value {val!r} is not an integer"
-        assert type(val) is StudyID, (
+        assert isinstance(val, StudyID), (
             f"StudyID value {val!r} is not a StudyID instance"
         )
 

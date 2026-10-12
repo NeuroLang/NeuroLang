@@ -1,3 +1,4 @@
+import contextlib
 import operator
 from typing import AbstractSet, Tuple
 
@@ -1044,6 +1045,8 @@ def test_push_unnamed_selections_up(r1):
 
 def test_push_projection_into_join_operands(r1, r2, str_columns):
     """
+    Check that PushProjectionsDown pushes projections into join operands.
+
     PushProjectionsDown pushes the projection down into join operands
     and eliminates the outer projection boundary.
 
@@ -1074,13 +1077,13 @@ def test_push_projection_into_join_operands(r1, r2, str_columns):
     # share at least one column after optimisation.
     def has_cross(expr):
         if hasattr(expr, 'relation_left') and hasattr(expr, 'relation_right'):
-            try:
+            # Operands whose columns cannot be computed are not counted
+            # as cross products.
+            with contextlib.suppress(Exception):
                 lc = _ra_columns(expr.relation_left)
                 rc = _ra_columns(expr.relation_right)
                 if len(lc & rc) == 0:
                     return True
-            except Exception:
-                pass
             return has_cross(expr.relation_left) or has_cross(expr.relation_right)
         return False
 
@@ -1122,7 +1125,7 @@ def test_push_projection_eliminates_cross_product_across_projection():
     tree = NaturalJoin(proj, C)  # C can be absorbed (C.columns ⊆ proj.columns)
 
     curr = tree
-    for i in range(10):
+    for _ in range(10):
         prev_repr = repr(curr)
         raop = RelationalAlgebraOptimiser()
         curr = raop.walk(curr)
@@ -1131,13 +1134,13 @@ def test_push_projection_eliminates_cross_product_across_projection():
 
     def has_cross(expr):
         if hasattr(expr, 'relation_left') and hasattr(expr, 'relation_right'):
-            try:
+            # Operands whose columns cannot be computed are not counted
+            # as cross products.
+            with contextlib.suppress(Exception):
                 lc = _ra_columns(expr.relation_left)
                 rc = _ra_columns(expr.relation_right)
                 if len(lc & rc) == 0:
                     return True
-            except Exception:
-                pass
             return has_cross(expr.relation_left) or has_cross(expr.relation_right)
         return False
 
@@ -1147,10 +1150,10 @@ def test_push_projection_eliminates_cross_product_across_projection():
 
 
 def test_push_projections_down_through_join(r1, str_columns):
-    """PushProjectionsDown adds sub-projections that prune columns from join inputs."""
+    """Check that PushProjectionsDown adds sub-projections pruning join inputs."""
     from ..optimisers import PushProjectionsDown
 
-    a, b, c, d, _ = str_columns
+    a, b, c, _, _ = str_columns
     # R1 has columns (int, int) → name them a, b
     # R2 has columns (int, int) → name them c, b (shares b)
     r_named = NameColumns(C_(r1), (a, b))
@@ -1217,7 +1220,7 @@ def test_push_projections_down_full_pipeline():
     tree = NaturalJoin(NaturalJoin(proj, C), D)
 
     curr = tree
-    for i in range(10):
+    for _ in range(10):
         prev_repr = repr(curr)
         raop = RelationalAlgebraOptimiser()
         curr = raop.walk(curr)
@@ -1227,13 +1230,13 @@ def test_push_projections_down_full_pipeline():
     # No cross products
     def has_cross(expr):
         if hasattr(expr, 'relation_left') and hasattr(expr, 'relation_right'):
-            try:
+            # Operands whose columns cannot be computed are not counted
+            # as cross products.
+            with contextlib.suppress(Exception):
                 lc = _ra_columns(expr.relation_left)
                 rc = _ra_columns(expr.relation_right)
                 if len(lc & rc) == 0:
                     return True
-            except Exception:
-                pass
             return has_cross(expr.relation_left) or has_cross(expr.relation_right)
         return False
 
@@ -1305,10 +1308,10 @@ def test_greedy_join_ordering_reorders_mixed_product_join():
         if isinstance(expr, Product):
             # Product is only OK if its operands truly share no columns
             ops = list(expr.relations)
-            for i in range(len(ops)):
-                for j in range(i + 1, len(ops)):
-                    lc = _ra_columns(ops[i])
-                    rc = _ra_columns(ops[j])
+            for i, op_i in enumerate(ops):
+                for op_j in ops[i + 1:]:
+                    lc = _ra_columns(op_i)
+                    rc = _ra_columns(op_j)
                     assert len(lc & rc) == 0, (
                         f"Cross product between operands that share columns: "
                         f"{lc} ∩ {rc} ≠ ∅"
