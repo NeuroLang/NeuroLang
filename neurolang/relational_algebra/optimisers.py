@@ -1856,16 +1856,15 @@ class PushProjectionsDown(ew.PatternWalker):
         A_needed = (cols_set & A_cols) | (A_cols & B_cols)
         B_needed = (cols_set & B_cols) | (A_cols & B_cols)
 
-        if A_needed == A_cols and B_needed == B_cols:
+        new_A = _project_if_narrower(A, A_cols, A_needed)
+        new_B = _project_if_narrower(B, B_cols, B_needed)
+        # Return the expression itself when neither side is narrowed (for
+        # instance when a side needs no column at all): rebuilding an
+        # equal expression makes the walker rewrite it forever.
+        if new_A is A and new_B is B:
             return expression
 
-        return Projection(
-            NaturalJoin(
-                _project_if_narrower(A, A_cols, A_needed),
-                _project_if_narrower(B, B_cols, B_needed),
-            ),
-            cols,
-        )
+        return Projection(NaturalJoin(new_A, new_B), cols)
 
 
 class RelationalAlgebraOptimiser(
