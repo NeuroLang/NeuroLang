@@ -964,7 +964,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 if isinstance(head, tuple):
                     row_type = solution_set.value.row_type
                     solution_set = NamedRelationalAlgebraFrozenSet(
-                        tuple(s.expression.name for s in head),
+                        self._parameter_names(s.expression for s in head),
                         solution_set.value.unwrap()
                     )
                     solution_set.row_type = row_type
@@ -1097,9 +1097,21 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             parameter names
         """
         predicate_name = self._get_predicate_name(predicate_name)
+        return self._parameter_names(
+            self.program_ir.predicate_terms(predicate_name)
+        )
+
+    def _parameter_names(self, parameters) -> Tuple[str]:
+        """
+        Return the column names of the head *parameters* of a rule.
+
+        A variable gives its name and an aggregation, such as
+        ``count(s)``, the name of its function, ``count``. Repeated
+        names get a ``_1``, ``_2``... suffix.
+        """
         parameter_names = []
         pcount = defaultdict(lambda: 0)
-        for s in self.program_ir.predicate_terms(predicate_name):
+        for s in parameters:
             param_name = self._obtain_parameter_name(s)
             pcount[param_name] += 1
             if pcount[param_name] > 1:
