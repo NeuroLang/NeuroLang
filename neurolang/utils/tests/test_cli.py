@@ -1,5 +1,7 @@
 """Tests for the neurolang-query CLI module."""
 
+import json
+
 import pytest
 
 from neurolang.exceptions import NeuroLangException
@@ -12,6 +14,7 @@ from neurolang.utils.cli import (
     _execute_program,
     _execute_squall_program,
     _format_result,
+    main,
 )
 
 from neurolang.utils import engine_registry
@@ -100,6 +103,22 @@ class TestBuildParser:
         parser = _build_parser()
         args = parser.parse_args(["--list-engines"])
         assert args.list_engines is True
+
+    def test_grammar_json_flag(self):
+        parser = _build_parser()
+        args = parser.parse_args(["--grammar-json"])
+        assert args.grammar_json is True
+
+    def test_grammar_json_output(self, capsys):
+        """main(["--grammar-json"]) prints the SQUALL grammar as JSON."""
+        main(["--grammar-json"])
+        captured = capsys.readouterr()
+        info = json.loads(captured.out)
+        assert info["name"] == "neurolang_natural.lark"
+        assert "squall" in info["grammar"]
+        assert info["parser"]["library"] == "lark"
+        assert info["parser"]["version"]
+        assert info["parser"]["mode"] == "earley"
 
     def test_engine_not_rejected_by_parser_anymore(self):
         """The parser no longer validates engine names; main() does."""

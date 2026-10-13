@@ -34,8 +34,13 @@ from ..datalog.constraints_representation import RightImplication
 from ..datalog.exceptions import InvalidMagicSetError
 from ..datalog.expression_processing import (
     remove_conjunction_duplicates,
+    stratify,
     TranslateToDatalogSemantics,
     reachable_code,
+)
+from ..datalog.expressions import (
+    AggregationApplication,
+    predicate_identity,
 )
 from ..logic.transformations import RemoveTrivialOperations
 from ..type_system import Unknown
@@ -165,8 +170,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         printer = DatalogPrettyPrinter()
         print(printer.walk(query_expression))
         if reachable_rules is not None:
-            for rule in reachable_rules.formulas:
-                print(printer.walk(rule))
+            strata, _ = stratify(reachable_rules, self.program_ir)
+            query_functor = query_expression.consequent.functor
+            for stratum in strata:
+                for rule in stratum:
+                    if rule.consequent.functor != query_functor:
+                        print(printer.walk(rule))
         print()
 
     def _handle_rewritten_output(
@@ -446,29 +455,54 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         does for ans(...) :- R(...).
         """
         head = query.head
-        if isinstance(head, ir.FunctionApplication):
+        if isinstance(head, AggregationApplication):
+            head_vars = (head,)
+        elif isinstance(head, ir.FunctionApplication):
             head_vars = tuple(head.args)
         elif isinstance(head, ir.Symbol):
             head_vars = (head,)
         else:
             head_vars = tuple(head)
 
+        body = query.body
+        if (
+            len(head_vars) == 1
+            and isinstance(head_vars[0], ir.Symbol)
+            and isinstance(body, ir.FunctionApplication)
+            and isinstance(body.functor, ir.Symbol)
+            and len(body.args) == 1
+            and body.args[0] == head_vars[0]
+        ):
+            # "obtain every RelationName." without a tuple label projects
+            # the whole relation (all columns) instead of only the first.
+            try:
+                terms = self.program_ir.predicate_terms(body.functor)
+            except NeuroLangException:
+                terms = ()
+            if len(terms) > 1:
+                head_vars = tuple(
+                    t if isinstance(t, ir.Symbol) else ir.Symbol.fresh()
+                    for t in terms
+                )
+                body = body.functor(*head_vars)
+
         h = ir.Symbol.fresh()
-        query_impl = datalog.Implication(h(*head_vars), query.body)
+        query_impl = datalog.Implication(h(*head_vars), body)
 
         self.program_ir.push_scope()
         try:
-            for rule in rules_and_choice_defs:
-                if isinstance(rule, (EquiprobableChoiceDef, WeightedChoiceDef)):
-                    continue  # already registered in global scope
-                try:
-                    self.program_ir.walk(rule)
-                except ForbiddenDisjunctionError:
-                    pass
+            # Rules are already walked into the global scope by
+            # execute_squall_program; re-walking them here duplicates
+            # intentional rules and makes --show-rewritten output contain
+            # repeated rules (fresh probability variables defeat repr-based
+            # deduplication). Choice definitions are already registered
+            # globally as well, so nothing from rules_and_choice_defs needs
+            # to be re-added in this per-query scope.
             self.program_ir.walk(query_impl)
             fe_pred = fe.Expression(self, h(*head_vars))
             fe_head = tuple(
-                fe.Expression(self, ir.Symbol(s.name))
+                fe.Expression(self, s) if isinstance(s, ir.Symbol)
+                else fe.Expression(self, ir.Symbol.fresh())
                 for s in head_vars
             )
             ra, _ = self._execute_query(
@@ -950,10 +984,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         solution = {}
         for k, v in solution_ir.items():
-            solution[k.name] = NamedRelationalAlgebraFrozenSet(
-                self.predicate_parameter_names(k.name), v.value.unwrap()
+            solution[predicate_identity(k)] = NamedRelationalAlgebraFrozenSet(
+                self.predicate_parameter_names(k),
+                v.value.unwrap(),
             )
-            solution[k.name].row_type = v.value.row_type
+            solution[predicate_identity(k)].row_type = v.value.row_type
         return solution
 
     def reset_program(self) -> None:
@@ -1053,7 +1088,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return param_name
 
     def _get_predicate_name(self, predicate_name):
-        if isinstance(predicate_name, fe.Symbol):
+        if isinstance(predicate_name, ir.Symbol):
+            return predicate_name
+        elif isinstance(predicate_name, fe.Symbol):
             predicate_name = predicate_name.neurolang_symbol
         elif isinstance(predicate_name, fe.Expression) and isinstance(
             predicate_name.expression, ir.Symbol

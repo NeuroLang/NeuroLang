@@ -21,8 +21,7 @@ import warnings
 from typing_inspect import is_callable_type
 
 from ..datalog.expression_processing import extract_logic_atoms
-from ..datalog.expressions import Implication
-from ..datalog.magic_sets import AdornedSymbol
+from ..datalog.expressions import AdornedSymbol, Implication, predicate_identity
 from ..datalog.negation import is_conjunctive_negation
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from ..expression_walker import PatternWalker, add_match
@@ -108,7 +107,7 @@ class TypeResolutionMixin(PatternWalker):
             entry = self.symbol_table.get(pred.functor)
             if entry is None:
                 warnings.warn(
-                    f"Symbol {pred.functor.name} used in rule body "
+                    f"Symbol {predicate_identity(pred.functor)} used in rule body "
                     f"has no entry in the symbol table. Types cannot "
                     f"be inferred for this predicate.",
                     UserWarning,

@@ -39,7 +39,8 @@ from .expressions import (
     Implication,
     NullConstant,
     Undefined,
-    Union
+    Union,
+    predicate_identity,
 )
 from .wrapped_collections import WrappedRelationalAlgebraSet
 
@@ -188,7 +189,7 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
             is_leq_informative(value.type, AbstractSet)
         ):
             raise NeuroLangException(
-                f'{consequent.functor.name} has been previously '
+                f'{predicate_identity(consequent.functor)} has been previously '
                 'defined as Fact or extensional database.'
             )
         disj = self.symbol_table[symbol].formulas
@@ -199,7 +200,7 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
             len(consequent.args)
         ):
             raise NeuroLangException(
-                f"{disj[0].consequent} is already in the IDB "
+                f"{predicate_identity(disj[0].consequent.functor)} is already in the IDB "
                 f"with different signature."
             )
 
@@ -274,13 +275,16 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
 
     def _predicate_terms_intensional(self, pred_repr):
         head_args = None
+        head_identity = None
         for formula in pred_repr.formulas:
+            current_identity = predicate_identity(formula.consequent.functor)
             if head_args is None:
                 head_args = formula.consequent.args
-            elif head_args != formula.consequent.args:
+                head_identity = current_identity
+            elif head_identity != current_identity:
                 warn(
                     'Several argument names found in the rules '
-                    f'defining {formula.consequent.functor.name}, keeping one'
+                    f'defining {head_identity}, keeping one'
                 )
                 break
         return head_args

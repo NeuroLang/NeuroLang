@@ -1231,3 +1231,19 @@ def test_hash_none_container(ra_module):
     # GH584: hash of RA set with None _container
     relation = ra_module.RelationalAlgebraSet()
     assert hash(relation) == hash((tuple(), None))
+
+
+def test_relational_algebra_difference_large(ra_module):
+    # Large enough to use the vectorised path, with mixed column types and
+    # duplicated rows on both sides.
+    left = [(i, f"s{i % 7}", i / 2) for i in range(300)] * 2
+    right = [(i, f"s{i % 7}", i / 2) for i in range(0, 600, 3)] * 2
+    first = ra_module.RelationalAlgebraFrozenSet(left)
+    second = ra_module.RelationalAlgebraFrozenSet(right)
+
+    expected = set(left) - set(right)
+    result = first - second
+    assert set(result) == expected
+    assert len(result) == len(expected)
+    assert result == ra_module.RelationalAlgebraFrozenSet(expected)
+    assert first - ra_module.RelationalAlgebraFrozenSet.dee() == first

@@ -19,6 +19,11 @@ class NeurolangConfigParser(configparser.ConfigParser):
             )
         LOG.info(f"Setting new query backend : {backend}")
         self["RAS"]["backend"] = backend
+        # Polars has its own query optimizer — disable the chase's
+        # manual join ordering heuristic to avoid unnecessary len() calls
+        # that would force materialization of lazy frames.
+        if backend == "polars":
+            self["CHASE"]["sort_join_predicates"] = "False"
         self.switch_backend()
 
     def switch_backend(self):
@@ -74,6 +79,9 @@ class NeurolangConfigParser(configparser.ConfigParser):
 
     def set_chase_max_iterations(self, value):
         self.set("CHASE", "max_iterations", str(value))
+
+    def get_chase_sort_join_predicates(self):
+        return self.getboolean("CHASE", "sort_join_predicates", fallback=True)
 
 
 config = NeurolangConfigParser()

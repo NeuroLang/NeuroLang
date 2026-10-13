@@ -43,7 +43,7 @@ jobs:
       - name: Run benchmarks
         run: |
           asv machine --yes
-          asv run NEW
+          asv run HEAD^!
         timeout-minutes: 60
 
       - name: Publish HTML dashboard

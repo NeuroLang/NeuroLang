@@ -5,6 +5,11 @@ Changelog
 
 All notable changes to NeuroLang are documented here.
 
+NeuroLang is in alpha.  Pre-release versions (``0.1aN``) are published on
+`PyPI <https://pypi.org/project/neurolang/#history>`_; the *Unreleased*
+section below lists the changes on the current ``master`` branch that are
+not yet part of a numbered release.
+
 Contributors: when adding a change, add an entry under *Unreleased* using the
 format below, then move it to the appropriate version section when releasing.
 

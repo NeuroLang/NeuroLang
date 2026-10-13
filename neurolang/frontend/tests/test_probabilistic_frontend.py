@@ -1072,6 +1072,135 @@ def test_cbma_prob_query_with_negation():
     assert_almost_equal(res, expected)
 
 
+def test_negated_conditioning_literal_with_distinguished_variable():
+    """
+    Regression test for negating a distinguished-variable literal in `//`.
+
+    A conditional-probability query negating a (deterministic)
+    relation whose argument is a free variable shared with the
+    query's head returned an incorrect probability.
+
+    `TranslateProbabilisticQueryMixin.rewrite_conditional_query` builds the
+    numerator of `//` by flatly conjoining the conditioned and conditioning
+    sides into one within-language query. That numerator query was wrong
+    whenever it contained a negated literal with a distinguished-variable
+    argument (here, `r`) -- in fact wrong for ANY negated deterministic
+    literal in a probabilistic query, distinguished or not, `//`-wrapped
+    or a bare SUCC query. The actual defect was in
+    `small_dichotomy_theorem_based_solver`'s hierarchical-query safety
+    check: it only ever inspected the probabilistic-only sub-conjunction
+    of the query, so a `Negation` wrapping a plain deterministic relation
+    like `Active` (joined with the probabilistic choice `Selected` via a
+    shared variable) silently slipped past it instead of triggering the
+    `NotHierarchicalQueryException` fallback to the (correct) Dalvi-Suciu
+    lifted solver. The fix widens that check
+    (`_extract_deterministic_negated_atoms`) to also count negated
+    deterministic atoms.
+
+    Fixture: 6 studies, 2 regions (A = {0,1,2}, B = {3,4,5}), 2 terms (pain
+    mentioned by {0,1,5}, joy by {2,3,4}). Hand-computed:
+    P(pain | not active in A) = P(mentions pain & study in {3,4,5}) / 3
+                               = 1/3 (only study 5 qualifies)
+    and symmetrically for the other three (term, region) pairs.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(s,) for s in range(6)], name="TrainStudy")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="Selected"
+    )
+    nl.add_tuple_set(
+        [(0, "A"), (1, "A"), (2, "A"), (3, "B"), (4, "B"), (5, "B")],
+        name="Active",
+    )
+    nl.add_tuple_set(
+        [(0, "pain"), (1, "pain"), (2, "joy"), (3, "joy"), (4, "joy"), (5, "pain")],
+        name="Mentions",
+    )
+    nl.add_tuple_set([("A",), ("B",)], name="Region")
+
+    with nl.environment as e:
+        e.PTermGivenNotRegion[e.t, e.r, e.PROB[e.t, e.r]] = (
+            e.Mentions[e.s, e.t] & e.Selected[e.s]
+        ) // (
+            ~e.Active[e.s, e.r]
+            & e.Region[e.r]
+            & e.TrainStudy[e.s]
+            & e.Selected[e.s]
+        )
+        res = nl.query(
+            (e.t, e.r, e.p), e.PTermGivenNotRegion[e.t, e.r, e.p]
+        )
+    expected = RelationalAlgebraFrozenSet(
+        [
+            ("pain", "A", 1 / 3),
+            ("joy", "A", 2 / 3),
+            ("pain", "B", 2 / 3),
+            ("joy", "B", 1 / 3),
+        ]
+    )
+    assert_almost_equal(res, expected)
+
+
+def test_negated_conditioning_literal_with_two_distinguished_variables():
+    """
+    Regression test for a negated literal with two distinguished variables.
+
+    The fix must correctly handle a negated deterministic literal
+    regardless of how many of its arguments are distinguished (shared
+    with the query head) -- here `r1` AND `r2`, both from the single
+    negated literal `~CoActive[s, r1, r2]`. The solver-level fix
+    (`small_dichotomy_theorem_based_solver._extract_deterministic_negated_atoms`)
+    never special-cases variable count or distinguished-ness at all --
+    it forces ANY negated deterministic atom to fall back to the
+    (correct) Dalvi-Suciu lifted solver -- so this is mostly a
+    confirmation that nothing about multiple shared variables breaks
+    that fallback path.
+
+    Fixture: 6 studies, regions {A, B, C}; `CoActive(s, r1, r2)` holds
+    (symmetrically) for study 0 in {A, B} and study 3 in {B, C}. Terms:
+    pain mentioned by {0,1,5}, joy by {2,3,4}. Hand-computed:
+    P(pain | not co-active in (A, B)) = P(mentions pain & study != 0) / 5
+                                        = 2/5 (studies {1,2,3,4,5}, pain
+                                          in {1,5})
+    P(joy | not co-active in (B, C)) = P(mentions joy & study != 3) / 5
+                                        = 2/5 (studies {0,1,2,4,5}, joy
+                                          in {2,4})
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(s,) for s in range(6)], name="TrainStudy")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="Selected"
+    )
+    nl.add_tuple_set(
+        [(0, "A", "B"), (0, "B", "A"), (3, "B", "C"), (3, "C", "B")],
+        name="CoActive",
+    )
+    nl.add_tuple_set(
+        [(0, "pain"), (1, "pain"), (2, "joy"), (3, "joy"), (4, "joy"), (5, "pain")],
+        name="Mentions",
+    )
+    nl.add_tuple_set([("A",), ("B",), ("C",)], name="Region")
+
+    with nl.environment as e:
+        e.PTermGivenNotCoActive[
+            e.t, e.r1, e.r2, e.PROB[e.t, e.r1, e.r2]
+        ] = (e.Mentions[e.s, e.t] & e.Selected[e.s]) // (
+            ~e.CoActive[e.s, e.r1, e.r2]
+            & e.Region[e.r1]
+            & e.Region[e.r2]
+            & e.TrainStudy[e.s]
+            & e.Selected[e.s]
+        )
+        res = nl.query(
+            (e.t, e.r1, e.r2, e.p),
+            e.PTermGivenNotCoActive[e.t, e.r1, e.r2, e.p],
+        )
+    res_df = res.as_pandas_dataframe().set_index(["t", "r1", "r2"])
+    np.testing.assert_almost_equal(res_df.loc[("pain", "A", "B"), "p"], 2 / 5)
+    np.testing.assert_almost_equal(res_df.loc[("joy", "B", "C"), "p"], 2 / 5)
+    np.testing.assert_almost_equal(res_df.loc[("pain", "A", "A"), "p"], 1 / 2)
+
+
 def test_query_based_spatial_prior():
     nl = NeurolangPDL()
     nl.add_tuple_set(
