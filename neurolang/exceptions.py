@@ -1,7 +1,8 @@
 class NeuroLangException(Exception):
     """Base class for NeuroLang Exceptions"""
 
-    pass
+    #: Actionable hint shown to users by the error formatter, if any.
+    suggestion = None
 
 
 class UnexpectedExpressionError(NeuroLangException):
@@ -38,7 +39,10 @@ class ForbiddenDisjunctionError(ForbiddenExpressionError):
     not allowed.
     """
 
-    pass
+    suggestion = (
+        "A probabilistic predicate can be defined by a single rule or set "
+        "of facts: give each probabilistic rule its own head predicate."
+    )
 
 
 class ForbiddenExistentialError(ForbiddenExpressionError):
@@ -101,7 +105,10 @@ class NotConjunctiveExpressionNestedPredicates(NotConjunctiveExpression):
     `~RegionReported`.
     """
 
-    pass
+    suggestion = (
+        "Negation and aggregation cannot be used in the same rule: "
+        "compute the negated part in a separate rule first."
+    )
 
 
 class ProjectionOverMissingColumnsError(RelationalAlgebraError):
@@ -142,7 +149,10 @@ class SymbolNotFoundError(NeuroLangException):
     defined.
     """
 
-    pass
+    suggestion = (
+        "Check the spelling, or define the symbol before using it "
+        "(e.g. with nl.add_tuple_set)."
+    )
 
 
 class RuleNotFoundError(NeuroLangException):
@@ -172,7 +182,9 @@ class ProtectedKeywordError(NeuroLangException):
     One of the predicates in the program uses a reserved keyword.
     Reserved keywords include : {PROB, with, exists}
     """
-    pass
+    suggestion = (
+        "Rename the predicate: PROB, with and exists are reserved keywords."
+    )
 
 
 class ForbiddenRecursivityError(UnsupportedProgramError):
@@ -200,7 +212,11 @@ class ForbiddenRecursivityError(UnsupportedProgramError):
     the `B(x)` predicate.
     """
 
-    pass
+    suggestion = (
+        "Break the dependency cycle: predicates used under negation, "
+        "aggregation or probabilistic queries must not depend on the head "
+        "of the rule using them."
+    )
 
 
 class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
@@ -229,7 +245,10 @@ class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
        FNT in Databases. 5, 105–195 (2012).
     """
 
-    pass
+    suggestion = (
+        "The predicates in the body of an aggregation rule must not depend "
+        "on its head (no recursion through aggregation)."
+    )
 
 
 class WrongArgumentsInPredicateError(NeuroLangException):
@@ -252,7 +271,10 @@ class WrongArgumentsInPredicateError(NeuroLangException):
         )
     """
 
-    pass
+    suggestion = (
+        "Use every predicate with the same number of arguments as in its "
+        "definition."
+    )
 
 
 class TranslateToNamedRAException(NeuroLangException):
@@ -320,6 +342,11 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
         (Addison Wesley, 1995), Addison-Wesley.
     """
 
+    suggestion = (
+        "Rewrite the formula in conjunctive or disjunctive normal form "
+        "(CNF or DNF)."
+    )
+
     def __init__(self, output):
         super().__init__(f"Could not translate conjunction: {output}")
         self.output = output
@@ -361,6 +388,11 @@ class NegativeFormulaNotSafeRangeException(TranslateToNamedRAException):
         (Addison Wesley, 1995), Addison-Wesley.
     """
 
+    suggestion = (
+        "Every variable of a negated predicate must also appear in a "
+        "non-negated predicate of the same rule body."
+    )
+
     def __init__(self, formula):
         super().__init__(f"Negative predicate {formula} is not safe range")
         self.formula = formula
@@ -376,6 +408,11 @@ class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
     t(x, y) :- r(x, y) & q(y, z)
     s(x, y, prob(x, y)) :- ~t(x, x) & q(x, y)
     """
+
+    suggestion = (
+        "Negate only named predicates: define the negated formula as its "
+        "own rule first."
+    )
 
     def __init__(self, formula):
         super().__init__(f"Negative formula {formula} is not a named relation")
@@ -403,6 +440,7 @@ class InvalidCommandExpression(ForbiddenExpressionError):
 
 class ParserError(NeuroLangException):
     def __init__(self, message, line=None, column=None):
+        super().__init__(message)
         self.message = message
         self.line = line
         self.column = column
@@ -445,6 +483,7 @@ class SquallSemanticError(NeuroLangException):
 
     def __init__(self, message, *, line=None, column=None, source_line=None):
         """Initialise with message and optional source location."""
+        super().__init__(message)
         self.message = message
         self.line = line
         self.column = column

@@ -364,3 +364,25 @@ def test_type_printing_option():
     config.disable_expression_type_printing()
     assert repr(x) == "S{x}"
     assert repr(a) == "C{'a'}"
+
+
+def test_change_type_clears_instance_attribute():
+    """change_type must clear any instance 'type' attribute so that
+    the class-level type (set by the class change) is not shadowed.
+    FunctionApplication is the primary case because its __init__
+    calls _verify_and_set_type which stores 'type' in __dict__."""
+    from neurolang.expressions import FunctionApplication, Symbol
+
+    f = Symbol("f")
+    x = Symbol("x")
+    fa = FunctionApplication(f, (x,))
+
+    assert fa.type is Unknown, (
+        "FunctionApplication with no explicit type should default to Unknown"
+    )
+
+    fa.change_type(bool)
+
+    assert fa.type is bool, (
+        f"After change_type(bool), fa.type should be bool, got {fa.type}"
+    )

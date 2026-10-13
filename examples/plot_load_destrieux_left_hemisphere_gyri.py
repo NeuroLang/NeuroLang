@@ -1,10 +1,11 @@
 # coding: utf-8
 r'''
-Loading and Querying the Destrieux Atlas' Left Hemisphere Gyri
+Loading and Querying the Destrieux Atlas' Left Hemisphere Sulci
 ================================================================
 
-Upload the Destrieux regions into NeuroLang and
-execute a simple query, displaying a few selected regions.
+
+Uploading the Destrieux regions into NeuroLang and
+executing a simple query selecting the left-hemisphere sulci.
 '''
 import warnings
 
@@ -18,7 +19,7 @@ from neurolang.frontend import NeurolangDL
 
 
 ##################################################
-# Initialise the NeuroLang probabilistic engine.
+# Initialise the NeuroLang (deterministic) Datalog engine.
 
 nl = NeurolangDL()
 
@@ -28,10 +29,16 @@ nl = NeurolangDL()
 
 
 atlas_destrieux = datasets.fetch_atlas_destrieux_2009()
-atlas_labels = {
-    label: str(name)
-    for label, name in atlas_destrieux['labels']
-}
+if 'lut' in atlas_destrieux:
+    # nilearn >= 0.11 provides a look-up table with label indices and names
+    lut = atlas_destrieux['lut']
+    atlas_labels = dict(zip(lut['index'], lut['name'].astype(str)))
+else:
+    atlas_labels = {
+        label: str(name)
+        for label, name in atlas_destrieux['labels']
+    }
+atlas_labels.pop(0, None)  # background
 
 
 nl.add_atlas_set('destrieux_atlas', atlas_labels, nib.load(atlas_destrieux['maps']))
@@ -45,8 +52,8 @@ def startswith(prefix: str, s: str) -> bool:
     return s.startswith(prefix)
 
 ###############################################################################
-# Query all left hemisphere regions superior to the temporal superior sulucs
-# and anterior to the central sulcus
+# Query all regions of the left hemisphere whose Destrieux name starts with
+# ``L S``, that is, the left-hemisphere sulci
 
 
 with nl.scope as e:
@@ -58,15 +65,14 @@ with nl.scope as e:
 
 
 ###############################################################################
-# Visualise results
-# Show the first four matching regions in a concise 2×2 grid so the
-# sphinx-gallery thumbnail is informative.
+# Visualise the first four results in a 2×2 grid, which also gives the
+# gallery an informative thumbnail.
 
+print(f"{len(result)} left-hemisphere sulci found")
 fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-for idx, (ax, result_row) in enumerate(zip(axes.ravel(), result[:4])):
+for ax in axes.ravel():
+    ax.set_axis_off()
+for ax, result_row in zip(axes.ravel(), list(result)[:4]):
     region = result_row[0]
-    plotting.plot_roi(region.spatial_image(), axes=ax, title=f"Region {idx+1}")
+    plotting.plot_roi(region.spatial_image(), axes=ax)
 plt.tight_layout()
-plt.show()
-
-print(f"(Total {len(result)} left-hemisphere regions found)")

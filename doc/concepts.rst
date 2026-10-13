@@ -59,6 +59,29 @@ meta-analysis might state that the term "memory" is associated with region
 Queries over probabilistic data use **possible worlds semantics**: the answer
 to a query is the probability that the query holds in a randomly sampled world.
 
+Besides independent facts, NeuroLang supports **probabilistic choices**: a
+set of mutually exclusive tuples, exactly one of which holds in each possible
+world.  The typical example is a uniform choice over studies
+(``add_uniform_probabilistic_choice_over_set`` in Python, or ``define as
+Selected_study as an equiprobable choice over every Study`` in SQUALL), which
+turns "the fraction of studies satisfying a property" into a probability.
+Probabilistic queries are written with ``PROB[…] = p`` (or ``MARG[…] = p``)
+in text Datalog and ``with inferred probability`` in SQUALL; adding a
+condition with ``//`` (``given`` / ``conditioned to`` in SQUALL) yields a
+conditional probability.  See :doc:`tutorial_datalog` (Part 5) and
+:doc:`tutorial_squall` (Part 5) for worked examples.
+
+To compute these probabilities, :class:`~neurolang.frontend.NeurolangPDL`
+tries its solvers in order: first exact **lifted inference**
+(:mod:`neurolang.probabilistic.small_dichotomy_theorem_based_solver` and the
+Dalvi–Suciu algorithm in :mod:`neurolang.probabilistic.dalvi_suciu_lift`),
+which works directly on the query structure and scales to large data sets
+when the query is liftable; if the query is not supported by these, it falls
+back to **knowledge compilation**, i.e. weighted model counting over a
+sentential decision diagram (SDD) built with pysdd
+(:mod:`neurolang.probabilistic.weighted_model_counting`), which is general but
+can be much more expensive.  See [Zanitti2023]_ for details.
+
 .. note::
 
    The probabilistic extensions are implemented in
@@ -85,6 +108,226 @@ The :class:`~neurolang.frontend.deterministic_frontend.NeurolangDL` and
 such as :meth:`add_tuple_set` and :meth:`add_atlas_set` to load these
 data sources.
 
+
+Declarative Engine Registry & CLI
+----------------------------------
+
+NeuroLang ships a command-line interface, ``neurolang-query``, that provides
+a quick way to run Datalog queries against pre-configured datasets without
+writing Python:
+
+.. code-block:: bash
+
+   # List available dataset engines
+   neurolang-query --list-engines
+
+   # List predicates for the NeuroSynth engine
+   neurolang-query --engine neurosynth --list-predicates
+
+   # Run a Datalog query (--engine defaults to neurosynth)
+   neurolang-query "ans(t) :- term_in_study_tfidf(s, t, w)"
+
+   # Use the Destrieux atlas engine
+   neurolang-query --engine destrieux "ans(name) :- destrieux(name, region)"
+
+Engines are declared in :file:`neurolang/utils/engines/engines.yaml`
+(abridged; see :doc:`engine_configuration` for the full reference):
+
+.. code-block:: yaml
+
+   engines:
+     neurosynth:
+       description: "Neurosynth database — forward and reverse inference"
+       requires_mni_mask: true
+       python_init: "neurolang.utils.engines.neurosynth.init"
+       datalog_init: |
+         study_with_peaks(S) :- peak_reported(I, J, K, S)
+         mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)
+       relations:
+         extra_data: "shared/my_data.csv"
+       predicates:
+         peak_reported:
+           arity: 4
+           columns: [i, j, k, study_id]
+           description: "Reported activation peaks in voxel coordinates"
+         ...
+
+An engine may reference, through ``python_init``, a Python module (given by
+its dotted module path) that defines ``init_engine(nl, mask, data_dir)``.  The :mod:`neurolang.utils.engine_registry`
+module handles YAML loading, MNI mask retrieval, and delegating to the
+engine's init script.
+
+**Init phases.**  When :func:`~neurolang.utils.engine_registry.build_engine`
+builds an engine, it runs up to ten phases, in this order:
+
+#. **Builtins** (``builtins``) — registers known functions (``exp``,
+   ``log``, ``startswith``) as callable symbols.  Simple list in YAML::
+
+       builtins: [exp, log, startswith]
+
+#. **Base symbols** (``use_base_symbols``) — when ``use_base_symbols: true``
+   is set (and ``requires_mni_mask`` is also true), the engine registry
+   automatically registers common neuroimaging symbols (``agg_count``,
+   ``agg_create_region``, ``agg_create_region_overlay``,
+   ``principal_direction``, ``region_union``) without needing a custom
+   Python init script.  This replaces calling
+   ``init_base_engine()`` from within a Python init module::
+
+       use_base_symbols: true
+
+#. **Python init** (``python_init``) — imports the module and calls
+   ``init_engine(nl, mask, data_dir)``.  Use this for downloading data,
+   registering complex symbols, or loading neuroimaging atlases.  If
+   ``use_base_symbols`` already covers your needs, this phase can be
+   omitted entirely — see the ``destrieux`` engine entry for an example.
+
+#. **Downloads** (``downloads``) — fetches files from URLs into the data
+   directory.  This runs after the Python init but before templates,
+   atlases, Datalog init, relations and ontologies, so files fetched here
+   are available to those later phases (but not to ``python_init``).
+   Supports archive extraction::
+
+       downloads:
+         - url: "https://example.com/data.tar.gz"
+           dest: my_engine/
+           extract: true
+
+#. **Templates** (``templates``) — downloads neuroimaging templates via
+   **nilearn** or **TemplateFlow** (if the ``templateflow`` package is
+   installed).  Each template can optionally register a
+   ``voxel(i, j, k)`` predicate from its non-zero mask::
+
+       templates:
+         # Nilearn brain mask → voxel(i, j, k) predicate
+         mni_brain:
+           source: nilearn
+           variant: brain_mask
+           predicate: voxel
+         # Nilearn T1 template (2 mm) — just download, no predicate
+         mni_t1:
+           source: nilearn
+           variant: template
+           resolution: 2
+         # TemplateFlow T1 template at 1 mm
+         t1_highres:
+           source: templateflow
+           template: MNI152NLin2009cAsym
+           resolution: 1
+           suffix: T1w
+
+   Supported **nilearn** variants:
+
+   * ``brain_mask`` — MNI152 brain mask (``load_mni152_brain_mask``)
+   * ``gm_mask`` — grey-matter mask (``load_mni152_gm_mask``)
+   * ``wm_mask`` — white-matter mask (``load_mni152_wm_mask``)
+   * ``template`` — MNI152 T1 template (``load_mni152_template``;
+     pass ``resolution: 1`` or ``resolution: 2``)
+   * ``gm_template`` — grey-matter template
+   * ``wm_template`` — white-matter template
+
+   **TemplateFlow** templates require ``pip install templateflow`` and
+   are identified by a ``template`` name from the
+   `TemplateFlow repository <https://www.templateflow.org/>`_
+   (e.g. ``MNI152NLin2009cAsym``, ``MNIInfant``).  The ``suffix``
+   and ``resolution`` fields select the specific image variant.
+
+   When ``predicate`` is set, the template is loaded as a NIfTI image
+   and all non-zero voxels are registered as a
+   ``predicate(i, j, k)`` tuple set — useful as a coordinate-space
+   reference in Datalog queries.
+
+#. **Atlases** (``atlases``) — downloads brain atlases via nilearn and
+   registers each region as a predicate with
+   :class:`~neurolang.regions.ExplicitVBR` geometry::
+
+       atlases:
+         destrieux:
+           predicate_name: destrieux
+         schaefer:
+           n_rois: 400
+           yeo_networks: 7
+           resolution_mm: 2
+           predicate_name: schaefer_400
+         difumo:
+           dimension: 64
+           threshold: 0.5
+           predicate_name: difumo_64
+
+   For probabilistic atlases (``difumo``) a second predicate is registered
+   automatically — ``{name}_prob(component, i, j, k, prob)`` — with the raw
+   probability value at each voxel for each component (filtered by
+   ``prob_threshold``, default 0.01)::
+
+       atlases:
+         difumo:
+           dimension: 64
+           threshold: 0.5
+           prob_threshold: 0.01
+           predicate_name: difumo_64
+           prob_predicate_name: difumo_64_prob
+
+   Supported atlases: ``destrieux`` (deterministic), ``schaefer``
+   (deterministic), ``difumo`` (probabilistic).
+
+#. **Datalog init** (``datalog_init``) — an optional YAML multiline string
+   of Datalog rules.  These are evaluated after templates and atlases
+   so they can reference template-derived voxel predicates and atlas
+   predicates::
+
+       datalog_init: |
+         left_region(N, R) :- destrieux(N, R), startswith('lh', N)
+         right_region(N, R) :- destrieux(N, R), startswith('rh', N)
+
+#. **Relations** (``relations``) — loads CSV/TSV files as extensional
+   predicates.  Each entry maps a relation name to a file path relative to
+   the :file:`engines/` directory.  The ``file`` value may be a URL for
+   automatic download::
+
+       relations:
+         my_table: "my_engine/data.csv"
+         extra_refs: "shared/references.tsv"
+
+   For richer metadata that appears in ``--list-predicates`` output, use a
+   dict with an optional ``description`` field::
+
+       relations:
+         my_table:
+           file: "https://example.com/data.csv"
+           description: "Experiment metadata loaded from CSV"
+
+   Supported formats: ``.csv``, ``.tsv``, ``.csv.gz``, ``.tsv.gz``.  The
+   file is read with ``pandas.read_csv`` and registered via
+   :meth:`~neurolang.frontend.query_resolution_datalog.QueryBuilderDatalog.add_tuple_set`.
+   Relations are loaded *after* the Datalog init phase.  Rules in
+   ``datalog_init`` can nevertheless refer to them, because rules are only
+   evaluated when a query is run, by which time all phases have completed.
+
+#. **Probabilistic choices** (``probabilistic_choice``) — declares uniform
+   probabilistic choices over existing predicates::
+
+       probabilistic_choice:
+         selected_study:
+           source: study
+           description: "Uniform choice over studies"
+
+#. **Ontologies** (``ontologies``) — loads OWL/RDF ontologies from URLs
+   or local paths::
+
+       ontologies:
+         - url: "https://example.com/ontology.owl"
+
+All phases are optional — include only what your engine needs.
+If ``use_base_symbols`` and the declarative YAML fields (``atlases``,
+``templates``, ``relations``, ``datalog_init``, ``probabilistic_choice``)
+cover your engine, you can omit ``python_init`` entirely — the
+``destrieux`` engine is a complete example of this pattern.
+
+To add a new engine, create a YAML entry.  If you need a custom Python
+init script, add a corresponding :mod:`init` module under
+:file:`neurolang/utils/engines/`.  See
+:mod:`neurolang.utils.engines.neurosynth.init` for a complete Python init
+example, and the ``destrieux`` engine entry for a purely YAML-driven
+example.
 
 Architecture
 -------------

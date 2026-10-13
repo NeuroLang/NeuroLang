@@ -3,6 +3,8 @@ import time
 from contextlib import contextmanager
 from itertools import chain, combinations
 
+import numpy as np
+
 
 @contextmanager
 def log_performance(
@@ -51,3 +53,28 @@ def log_performance(
 def powerset(iterable):
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+
+class FrozenNDArray(np.ndarray):
+    def __new__(cls, input_array):
+        obj = np.asarray(input_array).view(cls)
+        obj.setflags(write=False)
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
+        self.setflags(write=False)
+
+    def __hash__(self):
+        return hash(self.tobytes())
+
+    def __eq__(self, other):
+        if isinstance(other, (np.ndarray, FrozenNDArray)):
+            return np.array_equal(self, other)
+        return NotImplemented
+
+    def __ne__(self, other):
+        if isinstance(other, (np.ndarray, FrozenNDArray)):
+            return not np.array_equal(self, other)
+        return NotImplemented

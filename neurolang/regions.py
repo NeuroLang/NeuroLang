@@ -97,6 +97,77 @@ class Region(object):
         else:
             return EmptyRegion()
 
+    @staticmethod
+    def from_spatial_image_labels(spatial_image, labels, **kwargs):
+        """
+        Build one region per label reading the image data only once.
+
+        Equivalent to calling :meth:`from_spatial_image_label` for each
+        label, but the voxels of all labels are found in a single pass
+        over the image instead of one full scan (and, for proxied images,
+        one decompression of the file) per label.
+
+        Parameters
+        ----------
+        spatial_image : nibabel.spatialimages.SpatialImage
+            labelled image.
+        labels : iterable
+            label values to extract.
+        **kwargs
+            passed to :class:`ExplicitVBR`.
+
+        Returns
+        -------
+        dict
+            mapping each label to an :class:`ExplicitVBR`, or to an
+            :class:`EmptyRegion` when the label has no voxels.
+
+        """
+        data = np.asanyarray(spatial_image.dataobj)
+        if 'image_dim' not in kwargs:
+            kwargs['image_dim'] = spatial_image.shape
+        voxels_by_label = label_voxel_indices(data, labels)
+        return {
+            label: (
+                ExplicitVBR(voxels, spatial_image.affine, **kwargs)
+                if len(voxels) > 0 else EmptyRegion()
+            )
+            for label, voxels in voxels_by_label.items()
+        }
+
+
+def label_voxel_indices(data, labels):
+    """
+    Voxel coordinates of each label of a labelled array, in one pass.
+
+    Parameters
+    ----------
+    data : numpy.ndarray
+        labelled array.
+    labels : iterable
+        label values to look up.
+
+    Returns
+    -------
+    dict
+        mapping each label to an ``(n, data.ndim)`` integer array with the
+        coordinates of the voxels equal to it, in the same (C) order as
+        ``numpy.nonzero(data == label)``.
+
+    """
+    flat = data.ravel()
+    order = np.argsort(flat, kind='stable')
+    sorted_values = flat[order]
+    result = {}
+    for label in labels:
+        start = np.searchsorted(sorted_values, label, side='left')
+        end = np.searchsorted(sorted_values, label, side='right')
+        indices = order[start:end]
+        result[label] = np.column_stack(
+            np.unravel_index(indices, data.shape)
+        ).reshape(-1, data.ndim)
+    return result
+
 
 class EmptyRegion(Region):
     def __init__(self):
@@ -391,6 +462,13 @@ class ExplicitVBR(VolumetricBrainRegion):
 
     def __hash__(self):
         return hash((self.voxels.tobytes(), self.affine.tobytes()))
+
+    def __contains__(self, voxel):
+        """Return True if *voxel* is one of this region's voxels."""
+        voxel = np.asanyarray(voxel)
+        if voxel.ndim == 1:
+            return any(np.all(self.voxels == voxel, axis=1))
+        return all(any(np.all(self.voxels == v, axis=1)) for v in voxel)
 
 
 class ExplicitVBROverlay(ExplicitVBR):

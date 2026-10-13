@@ -1,11 +1,8 @@
 import pytest
 
 from .... import config
-from ..squall_syntax_lark import (
-    parser,
-    SquallSemanticError,
-    UnexpectedCharactersError,
-)
+from ....exceptions import SquallSemanticError, UnexpectedCharactersError
+from ..squall_syntax_lark import parser
 
 config.disable_expression_type_printing()
 

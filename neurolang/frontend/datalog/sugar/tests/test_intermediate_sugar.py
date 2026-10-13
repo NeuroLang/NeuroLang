@@ -6,6 +6,7 @@ import pytest
 
 from .....datalog import Fact
 from .....datalog.expression_processing import extract_logic_atoms
+from .....datalog.expressions import AdornedSymbol
 from .....exceptions import ForbiddenExpressionError
 from .....expression_walker import ExpressionWalker, IdentityWalker
 from .....expressions import Constant, Symbol
@@ -189,25 +190,29 @@ def test_wlq_floordiv_translation():
     translator = _TestTranslator()
     result = translator.walk(wlq)
 
-    # assert num == fresh_01(x, y, PROB) :- P(x) & R(x, y)
+    # assert num == Q^cond_num(x, y, PROB) :- P(x) & R(x, y)
     assert len(result) == 3
     num = result[0]
     fnum = num.consequent.functor
-    assert fnum.is_fresh
+    assert isinstance(fnum, AdornedSymbol)
+    assert fnum.adornment == "cond_num"
+    assert str(fnum) == "Q^cond_num"
     assert num == Implication(
         fnum(x, y, ProbabilisticQuery(PROB, (x, y))),
         Conjunction((P(x), R(x, y))),
     )
 
-    # assert denum == fresh_02(x, y, PROB) :- R(x, y)
+    # assert denum == Q^cond_den(x, y, PROB) :- R(x, y)
     denum = result[1]
     fdenum = denum.consequent.functor
-    assert fdenum.is_fresh
+    assert isinstance(fdenum, AdornedSymbol)
+    assert fdenum.adornment == "cond_den"
+    assert str(fdenum) == "Q^cond_den"
     assert denum == Implication(
         fdenum(x, y, ProbabilisticQuery(PROB, (x, y))), R(x, y)
     )
 
-    # assert cond == Q(x, y, p) :- fresh_01(x, y, p0) & fresh_02(x, y, p1) & (p == p0 / p1)
+    # assert cond == Q(x, y, p) :- Q^cond_num(x, y, p0) & Q^cond_den(x, y, p1) & (p == p0 / p1)
     cond = result[2]
     p = [a for a in cond.consequent.args if a.is_fresh][0]
     p0 = [a for a in cond.antecedent.formulas[0].args if a.is_fresh][0]
@@ -239,40 +244,55 @@ def test_wlq_floordiv_translation_boolean_denominator():
     translator = _TestTranslator()
     result = translator.walk(wlq)
 
-    # assert num == fresh_01(x, PROB) :- P(x, y) & R(y)
+    # assert num == Q^cond_num(x, PROB) :- P(x, y) & R(y)
     assert len(result) == 3
     num = result[0]
     fnum = num.consequent.functor
-    assert fnum.is_fresh
+    assert isinstance(fnum, AdornedSymbol)
+    assert fnum.adornment == "cond_num"
+    assert str(fnum) == "Q^cond_num"
     assert num == Implication(
         fnum(x, ProbabilisticQuery(PROB, (x,))),
         Conjunction((P(x, y), R(y))),
     )
 
-    # assert denum == fresh_02(PROB) :- R(y)
+    # assert denum == Q^cond_den(PROB) :- R(y)
     denum = result[1]
     fdenum = denum.consequent.functor
-    assert fdenum.is_fresh
+    assert isinstance(fdenum, AdornedSymbol)
+    assert fdenum.adornment == "cond_den"
+    assert str(fdenum) == "Q^cond_den"
     assert denum == Implication(
         fdenum(ProbabilisticQuery(PROB, tuple())), R(y)
     )
 
-    # assert cond == Q(x, y, p) :- fresh_01(x, y, p0) & fresh_02(x, y, p1) & (p == p0 / p1)
+    # assert cond == Q(x, p) :- Q^cond_num(x, p0) & Q^cond_den(p1) & (p == p0 / p1)
     cond = result[2]
+    cond_formulas = tuple(cond.antecedent.formulas)
+    # The atoms of the conditioning conjunction may be reordered to avoid
+    # structural cross products (order_conjunction_for_join), so they are
+    # identified by functor adornment rather than by position.
+    num_atom = [
+        f for f in cond_formulas
+        if getattr(f.functor, "adornment", None) == "cond_num"
+    ][0]
+    den_atom = [
+        f for f in cond_formulas
+        if getattr(f.functor, "adornment", None) == "cond_den"
+    ][0]
+    eq_atom = [
+        f for f in cond_formulas
+        if getattr(f.functor, "adornment", None) is None
+    ][0]
     p = [a for a in cond.consequent.args if a.is_fresh][0]
-    p0 = [a for a in cond.antecedent.formulas[0].args if a.is_fresh][0]
-    p1 = [a for a in cond.antecedent.formulas[1].args if a.is_fresh][0]
+    p0 = [a for a in num_atom.args if a.is_fresh][0]
+    p1 = [a for a in den_atom.args if a.is_fresh][0]
 
-    assert cond == Implication(
-        Q(x, p),
-        Conjunction(
-            (
-                fnum(x, p0),
-                fdenum(p1),
-                EQ_(p, Constant(operator.truediv)(p0, p1)),
-            )
-        ),
-    )
+    assert len(cond_formulas) == 3
+    assert num_atom == fnum(x, p0)
+    assert den_atom == fdenum(p1)
+    assert eq_atom == EQ_(p, Constant(operator.truediv)(p0, p1))
+    assert cond == Implication(Q(x, p), cond.antecedent)
 
 
 def test_wlq_marg_bad_syntax():

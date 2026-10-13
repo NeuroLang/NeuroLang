@@ -83,7 +83,10 @@ a guided walkthrough.
    install
    tutorial
    tutorial_squall
+   tutorial_datalog
    concepts
+   engine_configuration
+   performance
    auto_examples/index
    api
    tutorial_logic_programming

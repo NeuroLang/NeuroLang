@@ -43,12 +43,11 @@ dependencies = [
     "rdflib>=6.0.0",
     "sqlalchemy>=1.4",
     "siibra>=1.0.1a15",
+    "pyyaml>=6.0",
 ]
 
-[project.urls]
-Homepage = "https://neurolang.github.io"
-"Bug Tracker" = "https://github.com/neurolang/neurolang/issues"
-"Source Code" = "https://github.com/neurolang/neurolang"
+[project.scripts]
+neurolang-query = "neurolang.utils.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -56,6 +55,11 @@ dev = [
     "pytest-benchmark",
     "pytest-cov",
     "problog"
+]
+
+ras-polars = [
+    "polars>=1.17",
+    "pyarrow",
 ]
 
 doc = [

@@ -131,17 +131,27 @@ utest.xml
 *prof
 .asv
 neurolang/frontend/neurosynth_data/
+neurolang_data
+*scratch*
+experiments
+*_old*
+**/data
+cov.xml
+deploy_key*
 
 #coding assistants
 superpowers
 .claude
 .factory
+.opencode
+CLAUDE.md
 
 # worktrees
 .worktrees/
 setup.cfg
 
 # internal dev artifacts (not for PR)
+.omo/
 .sisyphus/
 AGENTS.md
 ANALYSIS_SUMMARY.md
@@ -155,3 +165,7 @@ doc/sg_execution_times.rst
 docs/superpowers/
 neurolang/_version_scm.py
 neurolang/utils/server/neurolang-sparklis/
+
+# uv package manager
+uv.lock
+.omo/

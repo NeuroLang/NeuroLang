@@ -51,6 +51,7 @@ rule_body2 : quant_list _WHERE s                    -> rule_body2_where
 
 quant_list : quant_clause                           -> quant_list_single
            | quant_list _AND quant_clause            -> quant_list_rec
+           | quant_list quant_clause                 -> quant_list_rec
 
 quant_clause : _FOR _EVERY ng1 [ app ]               -> quant_clause_ng1
              | _FOR _EVERY npc{THE}                  -> quant_clause_npc
@@ -90,14 +91,18 @@ NO : _NO
 
 np2 : det ng2
 
-ng1 : noun1 [ app ] [ rel ] -> ng1_noun
+ng1_base : noun1 [ app ] -> ng1_noun
+ng1 : ng1_base [ rel ]
+    | ( TOP | BOTTOM ) number ( PERCENT )? ( _OF | _FROM ) npc{_THE}  [ dims ] [ rel ]   -> ng1_tail_npc
     | noun1 [ app ] ( _OF | _FROM ) npc{_THE}  [ dims ] [ rel ]   -> ng1_agg_npc
     // | noun1 [ app ] ng1 [ dims ]           -> ng1_agg_ng1
 ng2 : noun2 [ app ]
 
 
 
-app : _IN number"D" -> app_dimension
+app : _IN number"D" _WITH intransitive -> app_dimension_with
+    | _IN number"D" -> app_dimension
+    | _WITH intransitive -> app_dimension_only
     | label          -> app_label
 
 dims : dim                    -> dims_base
@@ -107,6 +112,7 @@ dim : (_PER | _FOR _EACH) ng2                         -> dim_ng2
     | (_PER | _FOR _EACH) npc{THE} ("," npc{THE})+    -> dim_npc_list
     | (_PER | _FOR _EACH) npc{THE}                    -> dim_npc
     | agg_func _OF npc{THE}                            -> dim_agg
+    | _PER intransitive                              -> dim_keyword
 
 agg_func : AGG_FUNC
 AGG_FUNC : "count" | "sum" | "max" | "min" | "average"
@@ -259,6 +265,10 @@ _DISJUNCTION : "|" | "\N{LOGICAL OR}" | _OR
 _IMPLICATION : ":-" | "\N{LEFTWARDS ARROW}" | _IF
 _NEGATION : _NOT | "\N{Not Sign}"
 
+TOP.2 : "top" | "Top"
+BOTTOM.2 : "bottom" | "Bottom"
+PERCENT.2 : "%"
+
 ?expr{x} : expr_sum{x}
 expr_sum{x} : ( expr_sum{x} SUM )? expr_mul{x}
 expr_mul{x} : ( expr_mul{x} MUL )? expr_pow{x}
@@ -340,7 +350,6 @@ _HOLDS : "holds"
 _WHO : "who"
 _WHOM : "whom"
 _WHOSE : "whose"
-
 
 LOWER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[a-z_]\w*/
 UPPER_NAME : /(?!(\b(a|all|an|and|are|as|average|by|choice|conditioned|count|define|defines|do|does|did|each|equiprobable|every|equal|from|for|greater|given|inferred|holds|likely|obtain|has|hasn't|have|had|if|in|is|isn't|lower|max|min|no|not|of|or|over|per|probability|probably|some|such|sum|than|that|the|then|there|to|was|were|when|where|which|with|who|whom|whose)\b))//[A-Z]\w*/
