@@ -57,6 +57,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import sys
 import time
 import traceback
@@ -915,8 +916,12 @@ def _check_interactive_flags(args) -> None:
             sys.exit(1)
 
 
-def _tui_settings(args, tui):
-    """Return the REPL settings ``tui.TuiSettings`` requested by ``args``."""
+def _tui_settings(args, tui, argv=()):
+    """
+    Return the REPL settings ``tui.TuiSettings`` requested by ``args``.
+
+    ``argv`` are the command-line arguments, shown in the transcript.
+    """
     return tui.TuiSettings(
         engine_name=args.engine,
         squall=args.squall,
@@ -927,6 +932,8 @@ def _tui_settings(args, tui):
         show_rewritten=args.show_rewritten,
         debug=_debug_enabled(args),
         history_path=str(Path.home() / ".neurolang_query_history"),
+        data_dir=str(Path(args.data_dir).expanduser().resolve()),
+        command_line=shlex.join(["neurolang-query", *argv]),
     )
 
 
@@ -962,7 +969,7 @@ def _program_argument(args) -> str:
     return args.query or ""
 
 
-def _run_interactive(args) -> None:
+def _run_interactive(args, argv=()) -> None:
     """
     Build the engine once and start the interactive REPL on it.
 
@@ -970,7 +977,8 @@ def _run_interactive(args) -> None:
     before the first prompt. ``--show-ra`` and ``--show-rewritten``
     apply to every query of the session. When the standard input is not
     a terminal, its statements are run as a batch and the CLI exits with
-    status 1 if one of them failed.
+    status 1 if one of them failed. ``argv`` are the command-line
+    arguments, shown in the session's transcript.
     """
     _check_interactive_flags(args)
     _check_flag_dependencies(args)
@@ -981,7 +989,8 @@ def _run_interactive(args) -> None:
     nl = engine_registry.build_engine(
         args.engine, Path(args.data_dir), args.resolution
     )
-    status = tui.main(nl, _tui_settings(args, tui), initial_program=program)
+    settings = _tui_settings(args, tui, argv)
+    status = tui.main(nl, settings, initial_program=program)
     if status:
         sys.exit(status)
 
@@ -992,7 +1001,7 @@ def main(argv: Optional[list] = None) -> None:
     args = parser.parse_args(argv)
 
     if args.interactive:
-        _run_interactive(args)
+        _run_interactive(args, sys.argv[1:] if argv is None else argv)
         return
     if _run_engineless_command(args):
         return
