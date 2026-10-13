@@ -16,10 +16,12 @@ The REPL is organised in modules:
 - :mod:`.app`: the REPL loop and query execution,
 - :mod:`.commands`: the dot-command registry and the core commands,
 - :mod:`.interrupt`: interruption of long queries with Ctrl+C,
+- :mod:`.nifti`: saving results as CSV or NIfTI and viewing images,
 - :mod:`.results`: paged display of query results,
 - :mod:`.statements`: splitting of the input into statements.
 """
 
+from . import nifti  # registers the .save and .view commands
 from .app import InteractiveTuiApp, TuiSettings, main
 
-__all__ = ["InteractiveTuiApp", "TuiSettings", "main"]
+__all__ = ["InteractiveTuiApp", "TuiSettings", "main", "nifti"]
