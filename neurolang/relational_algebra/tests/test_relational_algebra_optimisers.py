@@ -1501,3 +1501,36 @@ def test_greedy_join_ordering_sizes_order_product_components():
         RelationalAlgebraSolver().walk(result).value
         == RelationalAlgebraSolver().walk(tree).value
     )
+
+def _relation(columns, rows):
+    """Build a named relation constant with integer columns."""
+    return C_[AbstractSet[Tuple[(int,) * len(columns)]]](
+        NamedRelationalAlgebraFrozenSet(columns, rows)
+    )
+
+
+def _same_result(expression, optimised):
+    """Check that two plans evaluate to the same relation."""
+    solver = RelationalAlgebraSolver()
+    return solver.walk(optimised).value == solver.walk(expression).value
+
+
+def test_push_selection_into_join_of_constants():
+    """
+    Check that a selection is pushed into the operand holding its column.
+
+    The operands are constant relations, which mention no column.
+    """
+    class Opt(PushInSelections, ExpressionWalker):
+        pass
+
+    left = _relation(("g", "e"), [(0, 1), (1, 1)])
+    right = _relation(("g", "f", "c"), [(0, 2, 0), (1, 2, 1)])
+    c = str2columnstr_constant("c")
+    tree = Selection(NaturalJoin(left, right), eq_(c, C_(0)))
+
+    result = Opt().walk(tree)
+
+    assert result == NaturalJoin(left, Selection(right, eq_(c, C_(0))))
+    assert _same_result(tree, result)
+

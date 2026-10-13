@@ -25,6 +25,7 @@ from ..relational_algebra import (
     get_expression_columns,
     int2columnint_constant
 )
+from .columns import _ra_columns
 
 
 AND = Constant(operator.and_)
@@ -326,14 +327,26 @@ class RewriteSelections(ew.ExpressionWalker):
             )
 
 
+def _formula_misses_relation(formula, relation):
+    """
+    Check that a selection formula uses no column of a relation.
+
+    The columns of ``relation`` are the ones it mentions and, when known,
+    the ones it outputs: a constant relation mentions no column.
+    """
+    columns = get_expression_columns(relation)
+    try:
+        columns = columns | _ra_columns(relation)
+    except NotImplementedError:
+        pass
+    return not (get_expression_columns(formula) & columns)
+
+
 class PushInSelections(ew.PatternWalker):
     @ew.add_match(
         Selection(NaturalJoin, ...),
-        lambda exp: (
-            len(
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_right)
-            ) == 0
+        lambda exp: _formula_misses_relation(
+            exp.formula, exp.relation.relation_right
         )
     )
     def push_selection_in_left(self, expression):
@@ -349,11 +362,8 @@ class PushInSelections(ew.PatternWalker):
 
     @ew.add_match(
         Selection(NaturalJoin, ...),
-        lambda exp: (
-            len(
-                get_expression_columns(exp.formula) &
-                get_expression_columns(exp.relation.relation_left)
-            ) == 0
+        lambda exp: _formula_misses_relation(
+            exp.formula, exp.relation.relation_left
         )
     )
     def push_selection_in_right(self, expression):
