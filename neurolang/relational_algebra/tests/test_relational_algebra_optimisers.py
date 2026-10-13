@@ -1534,3 +1534,25 @@ def test_push_selection_into_join_of_constants():
     assert result == NaturalJoin(left, Selection(right, eq_(c, C_(0))))
     assert _same_result(tree, result)
 
+
+def test_rename_not_pushed_below_projection_dropping_its_target():
+    """
+    Check that a renaming is not pushed where its target column exists.
+
+    The projected relation already has the column ``g`` that ``c`` is
+    renamed into.
+    """
+    class Opt(RenameOptimizations, ExpressionWalker):
+        pass
+
+    f, c, g = (str2columnstr_constant(n) for n in "fcg")
+    tree = RenameColumn(
+        Projection(_relation(("f", "c", "g"), [(0, 1, 2), (1, 0, 0)]), (f, c)),
+        c, g
+    )
+
+    result = Opt().walk(tree)
+
+    assert result == RenameColumns(tree.relation, ((c, g),))
+    assert _same_result(tree, result)
+

@@ -22,6 +22,25 @@ from ..relational_algebra import (
     Selection,
     get_expression_columns
 )
+from .columns import _ra_columns
+
+
+def _rename_past_projection_is_safe(expression):
+    """
+    Guard: True if a renaming can be pushed below a projection.
+
+    Below the projection, a column renamed into one the projection drops
+    would be duplicated. Relations of unknown columns are not checked.
+    """
+    try:
+        columns = _ra_columns(expression.relation.relation)
+    except NotImplementedError:
+        return True
+    sources = {src for src, _ in expression.renames}
+    return all(
+        dst not in columns or dst in sources
+        for _, dst in expression.renames
+    )
 
 
 class RenameOptimizations(ew.PatternWalker):
@@ -135,7 +154,9 @@ class RenameOptimizations(ew.PatternWalker):
             )
         )
 
-    @ew.add_match(RenameColumns(Projection, ...))
+    @ew.add_match(
+        RenameColumns(Projection, ...), _rename_past_projection_is_safe
+    )
     def push_rename_past_projection(self, expression):
         renames = {src: dst for src, dst in expression.renames}
         new_attributes = tuple(
