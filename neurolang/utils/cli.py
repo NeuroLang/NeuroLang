@@ -188,15 +188,17 @@ def squall_column_names(
     engine_name: str, program: str, relations: Optional[dict] = None
 ) -> dict:
     """
-    Return the declared columns of the relations a SQUALL program obtains.
+    Return column names for the results of a SQUALL program's queries.
 
-    ``obtain every R.`` returns the whole relation ``R`` with positional
-    column names. The result is a dict from the key of each such
+    ``obtain every R.`` returns the whole relation ``R``, and
+    ``obtain every R that ….`` the ``R`` satisfying the clause, under a
+    generated column name. The result is a dict from the key of each such
     ``obtain`` (as in the results of
     :meth:`~neurolang.frontend.QueryBuilderDatalog.execute_squall_program`)
     to the columns that the engine configuration declares for ``R``, or
     that *relations*, a dict from relation names to their columns, gives
-    for it.
+    for it. For a single-column result over an undeclared ``R``, the
+    column is named ``R``.
     """
     from neurolang.frontend.datalog.squall_syntax_lark import (
         SquallProgram,
@@ -208,16 +210,45 @@ def squall_column_names(
         parsed = squall_parser(program)
     except Exception:
         return {}
-    if not (columns and isinstance(parsed, SquallProgram)):
+    if not isinstance(parsed, SquallProgram):
         return {}
     names = {}
     for i, query in enumerate(parsed.queries):
-        functor = getattr(query.body, "functor", None)
-        declared = columns.get(getattr(functor, "name", None))
-        if declared:
-            key = parsed.query_names.get(i, f"obtain_{i}")
-            names[key] = list(declared)
+        query_columns = _query_columns(query, columns)
+        if query_columns:
+            names[parsed.query_names.get(i, f"obtain_{i}")] = query_columns
     return names
+
+
+def _query_noun(query):
+    """
+    Return the name of the noun a SQUALL query obtains, if any.
+
+    That is ``R`` in ``obtain every R.`` (the body is ``R(x)``) and in
+    ``obtain every R that ….`` (the body is a conjunction starting with
+    ``R(x)``, ``x`` being the query's single head variable).
+    """
+    body = query.body
+    if getattr(body, "functor", None) is not None:
+        return getattr(body.functor, "name", None)
+    head = getattr(query, "head", None)
+    for formula in getattr(body, "formulas", ()):
+        args = getattr(formula, "args", ())
+        if len(args) == 1 and args[0] == head:
+            return getattr(formula.functor, "name", None)
+    return None
+
+
+def _query_columns(query, columns: dict):
+    """Return the column names of *query*'s result, or None if unknown."""
+    noun = _query_noun(query)
+    if noun is None:
+        return None
+    if noun in columns:
+        declared = list(columns[noun])
+        whole = getattr(query.body, "functor", None) is not None
+        return declared if whole or len(declared) == 1 else None
+    return [noun] if getattr(query.body, "functor", None) is None else None
 
 
 def _emit(df, fmt, sort_by=None):

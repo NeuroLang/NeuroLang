@@ -1660,3 +1660,34 @@ class TestResultToDataFrameUsesBackendFrame:
             columns=("x", "y"), iterable=[(1, "a")]
         )
         assert result_to_dataframe(full).values.tolist() == [[1, "a"]]
+
+
+@pytest.mark.parametrize(
+    "program, expected",
+    [
+        ("obtain every term.", {"obtain_0": ["term"]}),
+        ("obtain every Term that a Study mentions.", {"obtain_0": ["term"]}),
+        ("obtain every Study that mentions 'pain'.", {"obtain_0": ["study_id"]}),
+        ("obtain every item that plays.", {"obtain_0": ["item"]}),
+        ("obtain every mentions.", {"obtain_0": ["study_id", "term"]}),
+    ],
+)
+def test_squall_column_names_follow_the_obtained_noun(program, expected):
+    """Check results are named after the noun they obtain."""
+    from neurolang.utils.cli import squall_column_names
+
+    names = squall_column_names("neurosynth", program)
+    assert {k: v for k, v in names.items()} == expected
+
+
+def test_squall_column_names_keep_user_variables():
+    """Check a user-named variable keeps its name in the result."""
+    import pandas as pd
+
+    from neurolang.utils.cli import _rename_unnamed_columns, squall_column_names
+
+    names = squall_column_names(
+        "neurosynth", "obtain every Study ?s that mentions 'pain'."
+    )
+    df = pd.DataFrame({"s": [1]})
+    assert list(_rename_unnamed_columns(df, names.get("obtain_0")).columns) == ["s"]
