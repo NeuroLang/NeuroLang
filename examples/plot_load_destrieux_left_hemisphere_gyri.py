@@ -1,7 +1,7 @@
 # coding: utf-8
 r'''
-Loading and Querying the Destrieux et al. Atlas' Left Hemisphere
-========================================================================
+Loading and Querying the Destrieux Atlas' Left Hemisphere Sulci
+================================================================
 
 
 Uploading the Destrieux regions into NeuroLang and
@@ -65,15 +65,14 @@ with nl.scope as e:
 
 
 ###############################################################################
-# Visualise the first few results
+# Visualise the first four results in a 2×2 grid, which also gives the
+# gallery an informative thumbnail.
 
 print(f"{len(result)} left-hemisphere sulci found")
-to_plot = list(result)[:4]
-subplots = plt.subplots(
-    nrows=len(to_plot), ncols=1,
-    figsize=(10, 3 * len(to_plot))
-)[1]
-
-for (r, subplot) in zip(to_plot, subplots):
-    region = r[0]
-    plotting.plot_roi(region.spatial_image(), axes=subplot)
+fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+for ax in axes.ravel():
+    ax.set_axis_off()
+for ax, result_row in zip(axes.ravel(), list(result)[:4]):
+    region = result_row[0]
+    plotting.plot_roi(region.spatial_image(), axes=ax)
+plt.tight_layout()
