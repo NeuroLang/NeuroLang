@@ -7,6 +7,7 @@ Complements QueryBuilderDatalog class with probabilistic capabilities
 """
 import collections
 import functools
+import random
 import typing
 from typing import (
     AbstractSet,
@@ -21,7 +22,6 @@ from typing import (
 )
 from uuid import uuid1
 
-import numpy as np
 import pandas as pd
 from neurolang.type_system import (
     get_args,
@@ -1078,87 +1078,76 @@ class NeurolangPDL(QueryBuilderDatalog):
         name: Optional[str] = None,
     ) -> Tuple[fe.Symbol, fe.Symbol]:
         """
-        Generate K-fold cross-validation assignments as a deterministic relation.
+        Assign the tuples of ``iterable`` to ``k`` cross-validation folds.
 
-        Each item in the iterable is assigned to one of k folds. The method
-        creates two relations:
-        - ``{name}_assign`` with columns ``(item_cols..., fold_id)`` mapping each
-          item to its fold.
-        - ``{name}_fold_id`` with column ``(fold_id,)`` enumerating all fold IDs.
+        Each distinct tuple is put in exactly one fold, and the sizes of
+        the folds differ by at most one. Two deterministic relations are
+        added: ``{name}_assign``, holding each tuple with its fold id
+        appended, and ``{name}_fold_id``, holding the fold ids
+        ``0, ..., k - 1``. Since the fold is just another column, the
+        training and test sets of all folds are obtained in a single
+        query, without looping over folds:
 
-        The intended usage pattern within a Datalog query is:
-
-        .. code-block:: python
-
-            fold_assign, fold_set = nl.k_fold_assign(items, k=10, name="cv")
-
-            with nl.scope as e:
-                # training items per fold via negation over fold assignments
-                e.train_set[e.fold_id, e.item_id] = (
-                    fold_set[e.fold_id] &
-                    all_items[e.item_id] &
-                    ~fold_assign[e.item_id, e.fold_id]
-                )
-
-        The fold dimension becomes just another column in joins.  All standard
-        Datalog operators (negation, aggregation, projection) work across folds
-        without looping.
+        >>> assign, fold_id = nl.k_fold_assign(studies, k=5, seed=0)
+        >>> with nl.scope as e:
+        ...     e.train[e.f, e.s] = (
+        ...         fold_id[e.f] & assign[e.s, e.g] & (e.g != e.f)
+        ...     )
+        ...     e.test[e.f, e.s] = assign[e.s, e.f]
 
         Parameters
         ----------
         iterable : Iterable[Tuple[Any, ...]]
-            Iterable of tuples to assign to folds.  Each tuple becomes one row
-            in the resulting relation, with an extra ``fold_id`` column appended.
+            tuples to assign to folds, as for ``add_tuple_set``.
+            Repeated tuples are assigned once.
         k : int, optional
-            Number of folds, by default 10.
+            number of folds, between 2 and the number of distinct tuples,
+            by default 10.
         shuffle : bool, optional
-            Whether to shuffle items before assigning folds, by default True.
+            whether to shuffle the tuples before assigning them to folds,
+            by default True. Otherwise tuples are assigned to folds in a
+            round-robin fashion, in the order of ``iterable``.
         seed : Optional[int], optional
-            Random seed for reproducible fold assignments, by default None.
+            seed of the shuffle. The same tuples and seed always give the
+            same folds, whatever the order of ``iterable``.
+            By default None, which gives different folds on each call.
         name : Optional[str], optional
-            Prefix for the output symbol names.  If None, a UUID is generated.
+            prefix of the names of the two relations, by default None,
+            in which case a unique name is generated.
 
         Returns
         -------
         Tuple[fe.Symbol, fe.Symbol]
-            ``(fold_assignment_symbol, fold_id_symbol)``.
-            - ``fold_assignment`` has columns ``(item_columns..., fold_id)``.
-            - ``fold_id_set`` has a single column ``(fold_id,)``.
+            the symbols of the ``{name}_assign`` and ``{name}_fold_id``
+            relations.
+
+        Raises
+        ------
+        ValueError
+            if ``k`` is less than 2 or more than the number of tuples.
+
         """
         if name is None:
             name = str(uuid1())
-
         if isinstance(iterable, pd.DataFrame):
-            iterable = iterable.rename(
-                columns={n: i for i, n in enumerate(iterable.columns)}
+            iterable = iterable.itertuples(index=False, name=None)
+        items = list(dict.fromkeys(
+            tuple(item) if isinstance(item, (tuple, list)) else (item,)
+            for item in iterable
+        ))
+        if not 2 <= k <= len(items):
+            raise ValueError(
+                f"k={k} must be between 2 and the number of tuples, "
+                f"{len(items)}"
             )
-
-        items = list(iterable)
-        n = len(items)
-
         if shuffle:
-            rng = np.random.default_rng(seed)
-            rng.shuffle(items)
-
-        fold_ids_for_items = np.arange(n) % k
-
-        fold_assign_tuples = []
-        for item, fid in zip(items, fold_ids_for_items):
-            if isinstance(item, tuple):
-                item_tuple = item
-            elif isinstance(item, list):
-                item_tuple = tuple(item)
-            else:
-                item_tuple = (item,)
-            fold_assign_tuples.append(item_tuple + (int(fid),))
-
-        fold_id_tuples = [(i,) for i in range(k)]
-
-        assign_sym = self.add_tuple_set(
-            fold_assign_tuples, name=f"{name}_assign"
+            items.sort()
+            random.Random(seed).shuffle(items)
+        assign = self.add_tuple_set(
+            [item + (i % k,) for i, item in enumerate(items)],
+            name=f"{name}_assign",
         )
-        fold_sym = self.add_tuple_set(
-            fold_id_tuples, name=f"{name}_fold_id"
+        fold_id = self.add_tuple_set(
+            [(i,) for i in range(k)], name=f"{name}_fold_id"
         )
-
-        return assign_sym, fold_sym
+        return assign, fold_id
