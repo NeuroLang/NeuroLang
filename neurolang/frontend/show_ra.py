@@ -30,11 +30,10 @@ from ..probabilistic.query_resolution import (
     lift_solve_marg_query,
     within_language_succ_query_to_intensional_rule,
 )
-from ..relational_algebra.optimisers import (
-    DegenerateNaturalJoinToProduct,
-    GreedyJoinOrdering,
-    RelationalAlgebraOptimiser,
+from ..probabilistic.weighted_model_counting import (
+    _prepare_and_translate_query as wmc_prepare_and_translate_query,
 )
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..relational_algebra import (
     ColumnStr,
     FunctionApplicationListMember,
@@ -250,24 +249,26 @@ class PlanDisplay:
 
     def print_rule(
         self, rule, conjunction, symbol_table, ra_code, leaf_sizes=None,
-        column_roles=None, leaf_arities=None,
+        column_roles=None, leaf_arities=None, notes=(),
     ):
         """
         Print the ``--show-ra`` block of a rule.
 
-        The block is the rule header (skipped when ``rule`` is None)
-        followed by the pretty-printed RA plan ``ra_code``, whose tables
-        are named after the predicates of ``conjunction`` and the
-        relations of ``symbol_table``. ``leaf_sizes`` maps the predicate
-        symbols of the plan whose size is known to their size. Columns
-        named after a variable of the rule are displayed as the variable
-        is in the rule header, and those in ``column_roles`` with the
-        label it maps them to. ``leaf_arities`` maps predicate symbols of
-        the plan to the number of columns of their relation.
+        The block is the rule header (skipped when ``rule`` is None), the
+        lines of ``notes``, then the pretty-printed RA plan ``ra_code``,
+        whose tables are named after the predicates of ``conjunction`` and
+        the relations of ``symbol_table``. ``leaf_sizes`` maps the
+        predicate symbols of the plan whose size is known to their size.
+        Columns named after a variable of the rule are displayed as the
+        variable is in the rule header, and those in ``column_roles``
+        with the label it maps them to. ``leaf_arities`` maps predicate
+        symbols of the plan to the number of columns of their relation.
         """
         fresh_map = {}
         if rule is not None:
             print(f"── rule {self.rule_text(rule, fresh_map)} ──")
+        for note in notes:
+            print(note)
         name_map = self.name_map(conjunction, symbol_table)
         print(pretty_repr(
             ra_code, name_map=name_map, leaf_sizes=leaf_sizes,
@@ -415,6 +416,26 @@ class ShowRAChaseMixin:
         return wrapped
 
 
+def lineage_leaf_sizes_and_arities(plan, cpl):
+    """
+    Return the sizes and arities of the relations of a lineage plan.
+
+    The leaves of ``plan`` are predicate symbols of the CP-Logic program
+    ``cpl``; the arity of a probabilistic table leaves out its
+    probability column, which the plan does not name.
+    """
+    probabilistic = set(cpl.probabilistic_facts()) | set(
+        cpl.probabilistic_choices()
+    )
+    sizes, arities = {}, {}
+    for node in plan_nodes(plan):
+        if isinstance(node, Symbol) and node in cpl.symbol_table:
+            relation = cpl.symbol_table[node].value
+            sizes[node] = len(relation)
+            arities[node] = relation.arity - (node in probabilistic)
+    return sizes, arities
+
+
 def probabilistic_table_names(cpl):
     """
     Map the probabilistic tables of a CP-Logic program to their predicate.
@@ -514,6 +535,53 @@ def _flatten(arguments):
             yield argument
 
 
+SOLVER_DESCRIPTIONS = {
+    "small_dichotomy_theorem_based_solver":
+        "small dichotomy theorem (safe plan)",
+    "dalvi_suciu_lift": "Dalvi–Suciu lifted inference",
+    "weighted_model_counting":
+        "weighted model counting (knowledge compilation)",
+}
+
+
+def solver_description(solver):
+    """Return a description of a probabilistic solver function."""
+    module = getattr(solver, "__module__", "") or ""
+    description = SOLVER_DESCRIPTIONS.get(module.rsplit(".", 1)[-1])
+    if description is None:
+        description = getattr(solver, "__qualname__", repr(solver))
+    return description
+
+
+def is_wmc_solver(solver):
+    """Return whether ``solver`` is a weighted model counting solver."""
+    module = getattr(solver, "__module__", "") or ""
+    return module.rsplit(".", 1)[-1] == "weighted_model_counting"
+
+
+@dataclass(frozen=True)
+class ProbabilisticPlan:
+    """
+    The plan of a probabilistic query.
+
+    Parameters
+    ----------
+    relation : Expression
+        relational algebra plan.
+    provenance_column : str or None
+        column of ``relation`` holding the probability of each tuple.
+    lineage : bool
+        whether ``relation`` is a lineage plan, whose provenance is
+        compiled to compute the probabilities, rather than a plan
+        computing them.
+
+    """
+
+    relation: Expression
+    provenance_column: object
+    lineage: bool
+
+
 class ShowRAStratumSolver(StratumSolver):
     """
     Print the RA plans of each stratum instead of evaluating it.
@@ -551,7 +619,14 @@ class ShowRAStratumSolver(StratumSolver):
         return chase.build_chase_solution()
 
     def probabilistic(self, solution, prob_idb):
-        """Print the optimised RA plan of every probabilistic rule."""
+        """
+        Print the RA plan of every probabilistic query.
+
+        The plans are those of the solver the stratum is solved with: as
+        in the evaluation, the first of the engine's solvers that can
+        solve all of the stratum's queries. Probabilistic rules that are
+        not queries are inlined in the queries using them.
+        """
         print("── probabilistic stratum ──")
         engine = self.engine
         cpl, prob_idb = _build_probabilistic_program(
@@ -563,21 +638,71 @@ class ShowRAStratumSolver(StratumSolver):
         )
         dedup = RemoveDuplicatedConjunctsDisjuncts()
         prob_idb = Union(tuple(dedup.walk(r) for r in prob_idb.formulas))
-        probability_tables = probabilistic_table_names(cpl)
+        queries = tuple(
+            rule for rule in prob_idb.formulas
+            if is_within_language_prob_query(rule)
+        )
+        solver, plans = self.stratum_plans(queries, cpl)
         for rule in prob_idb.formulas:
-            provenance_set = self.rule_provenance_set(rule, cpl)
-            plan = self.optimise_plan(provenance_set.relation)
-            self.display.print_rule(
-                rule,
-                rule.antecedent,
-                cpl.symbol_table,
-                plan,
-                column_roles=probability_column_roles(
-                    plan, provenance_set.provenance_column.value,
-                    probability_tables, rule,
-                ),
-            )
+            if rule not in plans:
+                print(f"── rule {self.display.rule_text(rule)} ──")
+                print(
+                    "(probabilistic rule: inlined into the queries using "
+                    "it, it has no plan of its own)"
+                )
+        for rule in queries:
+            self.print_probabilistic_plan(rule, plans[rule], solver, cpl)
         return MapInstance()
+
+    def print_probabilistic_plan(self, rule, plan, solver, cpl):
+        """Print the plan ``plan`` of the query ``rule`` solved by ``solver``."""
+        notes = [f"[solver: {solver_description(solver)}]"]
+        if plan.lineage:
+            notes.append(
+                "(lineage plan: its provenance is compiled into a decision "
+                "diagram to compute the probabilities)"
+            )
+            column_roles = {}
+            leaf_sizes, leaf_arities = lineage_leaf_sizes_and_arities(
+                plan.relation, cpl
+            )
+        else:
+            column_roles = probability_column_roles(
+                plan.relation, plan.provenance_column,
+                probabilistic_table_names(cpl), rule,
+            )
+            leaf_sizes, leaf_arities = {}, {}
+        self.display.print_rule(
+            rule,
+            rule.antecedent,
+            cpl.symbol_table,
+            plan.relation,
+            column_roles=column_roles,
+            leaf_sizes=leaf_sizes,
+            leaf_arities=leaf_arities,
+            notes=notes,
+        )
+
+    def stratum_plans(self, queries, cpl):
+        """
+        Return the solver of the probabilistic ``queries`` and their plans.
+
+        As in :meth:`NeurolangPDL._solve_probabilistic_stratum`, the
+        solver is the first of the engine's solvers that solves every
+        query; the plans map each query to its :class:`ProbabilisticPlan`.
+        """
+        if not queries:
+            return None, {}
+        solvers = self.engine.probabilistic_solvers
+        for index, succ_solver in enumerate(solvers):
+            try:
+                return succ_solver, {
+                    query: self.query_plan(query, cpl, succ_solver)
+                    for query in queries
+                }
+            except UnsupportedSolverError:
+                if index == len(solvers) - 1:
+                    raise
 
     def postprobabilistic(self, solution, postprob_idb):
         """Print the RA plan of every post-probabilistic rule."""
@@ -596,8 +721,47 @@ class ShowRAStratumSolver(StratumSolver):
         Build the provenance set of a probabilistic rule without solving it.
 
         The relational algebra solver is not run, so the returned set holds
-        the unevaluated RA plan.
+        the unevaluated RA plan. The rule is solved by the first of the
+        engine's solvers that can.
         """
+        solvers = self.engine.probabilistic_solvers
+        for succ_solver in solvers:
+            try:
+                return self._unevaluated_provenance_set(
+                    rule, cpl, succ_solver
+                )
+            except UnsupportedSolverError:
+                if succ_solver == solvers[-1]:
+                    raise
+
+    def query_plan(self, rule, cpl, succ_solver):
+        """
+        Return the :class:`ProbabilisticPlan` of ``rule`` by ``succ_solver``.
+
+        The plans of the weighted model counting solver are their lineage
+        plans, which are not run: that solver evaluates queries entirely.
+        """
+        if is_wmc_solver(succ_solver) and not isinstance(
+            rule.antecedent, Condition
+        ):
+            query = within_language_succ_query_to_intensional_rule(rule)
+            _, plan = wmc_prepare_and_translate_query(query, cpl)
+            if isinstance(plan, ProvenanceAlgebraSet):
+                return ProbabilisticPlan(
+                    plan.relation, plan.provenance_column.value, False
+                )
+            return ProbabilisticPlan(plan, None, True)
+        provenance_set = self._unevaluated_provenance_set(
+            rule, cpl, succ_solver
+        )
+        return ProbabilisticPlan(
+            provenance_set.relation,
+            provenance_set.provenance_column.value,
+            False,
+        )
+
+    def _unevaluated_provenance_set(self, rule, cpl, succ_solver):
+        """Build the provenance set of ``rule`` by ``succ_solver``."""
         query = rule
         solve = self._solve_unevaluated_succ_query
         if is_within_language_prob_query(rule):
@@ -608,13 +772,7 @@ class ShowRAStratumSolver(StratumSolver):
                 # splits it into joint and conditioning SUCC queries and
                 # does not run the RA solver on them.
                 solve = self._solve_unevaluated_marg_query
-        solvers = self.engine.probabilistic_solvers
-        for succ_solver in solvers:
-            try:
-                return solve(query, cpl, succ_solver)
-            except UnsupportedSolverError:
-                if succ_solver == solvers[-1]:
-                    raise
+        return solve(query, cpl, succ_solver)
 
     @staticmethod
     def _solve_unevaluated_succ_query(query, cpl, succ_solver):
@@ -625,21 +783,3 @@ class ShowRAStratumSolver(StratumSolver):
     def _solve_unevaluated_marg_query(rule, cpl, succ_solver):
         """Build the provenance set of a MARG query without evaluating it."""
         return lift_solve_marg_query(rule, cpl, succ_solver)
-
-    @staticmethod
-    def optimise_plan(ra_code):
-        """
-        Optimise an RA plan for display.
-
-        Apply the RA optimiser together with greedy join ordering, then run
-        a second optimisation pass after the reordering.
-        """
-        class ShowRAOptimiser(
-            RelationalAlgebraOptimiser,
-            DegenerateNaturalJoinToProduct,
-            GreedyJoinOrdering,
-        ):
-            pass
-        ra_code = ShowRAOptimiser().walk(ra_code)
-        # Second RA optimisation pass after GOO reordering
-        return RelationalAlgebraOptimiser().walk(ra_code)

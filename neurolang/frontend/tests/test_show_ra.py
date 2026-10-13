@@ -8,6 +8,7 @@ from .. import NeurolangDL, NeurolangPDL
 from ...datalog import Implication
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction
+from ...probabilistic import dalvi_suciu_lift
 from ...relational_algebra import (
     NameColumns,
     NaturalJoin,
@@ -304,3 +305,93 @@ def test_collapse_probabilistic_tables(capsys):
 def test_collapse_constant_argument(capsys):
     out = show_ra_output(capsys, "ans(x) :- edge(x, 2).")
     assert "edge(x, 2) ‹from 3 rows›" in out
+
+
+def test_probabilistic_plans_name_their_solver(capsys):
+    out = show_ra_output(
+        capsys,
+        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(x, q) :- z(x, q).",
+    )
+    assert "[solver: small dichotomy theorem (safe plan)]" in out
+
+
+def test_probabilistic_plans_name_lifted_solver(capsys):
+    nl = NeurolangPDL(
+        probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
+        probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
+    )
+    nl.add_tuple_set([(1, "a"), (2, "b")], name="label")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.8, 1), (0.4, 2)], name="active"
+    )
+    out = show_ra_output(
+        capsys,
+        "z(l, PROB) :- active(x), label(x, l).\nans(l, q) :- z(l, q).",
+        engine=nl,
+    )
+    assert "[solver: Dalvi–Suciu lifted inference]" in out
+
+
+def knows_engine():
+    """Return an engine whose ``knowing`` query needs the WMC solver."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("a",), ("b",)], name="person")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "a", "b")], name="knows"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",)], name="chosen"
+    )
+    return nl
+
+
+KNOWING = (
+    "knowing(x, PROB) :- knows(x, y), person(x), person(y).\n"
+)
+
+
+def test_wmc_plans_are_lineage_plans(capsys):
+    out = show_ra_output(
+        capsys, KNOWING + "ans(x, q) :- knowing(x, q).",
+        engine=knows_engine(),
+    )
+    assert (
+        "[solver: weighted model counting (knowledge compilation)]" in out
+    )
+    assert "lineage plan" in out
+    assert "knows(x, y) ‹1 row›" in out
+    assert "person(x) ‹2 rows›" in out
+
+
+def test_probabilistic_stratum_is_solved_by_one_solver(capsys):
+    """
+    Check that all queries of a stratum show the solver solving them all.
+
+    As in the evaluation, a query the small dichotomy solver can solve
+    is solved, with the others of its stratum, by the first solver that
+    solves them all (here WMC).
+    """
+    program = (
+        KNOWING
+        + "picking(x, PROB) :- chosen(x), person(x).\n"
+        + "both(x, q, r) :- knowing(x, q), picking(x, r).\n"
+        + "ans(x, q, r) :- both(x, q, r)."
+    )
+    out = show_ra_output(capsys, program, engine=knows_engine())
+    assert out.count("[solver: weighted model counting") == 2
+    assert "small dichotomy" not in out
+    res = knows_engine().execute_datalog_program(program)
+    assert len(res) == 1
+
+
+def test_non_query_probabilistic_rules_are_inlined(capsys):
+    out = show_ra_output(
+        capsys,
+        "al(x, l) :- active(x), label(x, l).\n"
+        "ans(l, p) :- PROB[al(x, l) // picked(x)] = p.",
+    )
+    block = out.split("── rule al(x, l) :-")[1]
+    assert block.split("──\n")[1].startswith(
+        "(probabilistic rule: inlined into the queries using it"
+    )
