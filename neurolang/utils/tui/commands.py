@@ -12,6 +12,7 @@ from typing import Callable, NamedTuple
 
 from rich.panel import Panel
 
+from neurolang.utils import engine_registry
 from neurolang.utils.cli import _parse_sort_spec, sort_dataframe
 
 from .results import ResultBlock, print_all
@@ -66,22 +67,52 @@ def run_command(app, line: str) -> None:
     cmd.handler(app, arg)
 
 
-HELP_EXAMPLES = """
-[bold cyan]Examples:[/bold cyan]
-  ans(t) :- term_in_study_tfidf(t, w, s)
-  .mode squall
-  obtain every peak_reported.
+def engine_relations(engine_name: str) -> list:
+    """Return ``name(col, ...)`` for each relation declared by the engine."""
+    if not engine_name:
+        return []
+    return [
+        f"{name}({', '.join(info.get('columns', []))})"
+        for name, info in engine_registry.get_predicates(engine_name).items()
+    ]
+
+
+def engine_examples(engine_name: str) -> dict:
+    """
+    Return an example query on the engine for each language.
+
+    The examples obtain the first relation declared by the engine, as
+    a dict from ``"datalog"`` and ``"squall"`` to the query text, or an
+    empty dict when the engine declares no relation.
+    """
+    if not engine_name:
+        return {}
+    predicates = engine_registry.get_predicates(engine_name)
+    for name, info in predicates.items():
+        columns = ", ".join(info.get("columns", []))
+        if columns:
+            return {
+                "datalog": f"ans({columns}) :- {name}({columns})",
+                "squall": f"obtain every {name}.",
+            }
+    return {}
+
+
+KEYS_HELP = """
+[bold cyan]Keys:[/bold cyan]
+  Enter                run the statement (continues an unfinished one)
+  Alt+Enter            insert a newline
+  Ctrl+C               discard the input, or interrupt a running query
+  Ctrl+D               exit
 """
 
 
-def help_text() -> str:
-    """Return the help text listing every registered command."""
+def help_text(engine_name: str = "") -> str:
+    """Return the help text: commands, keys and examples on the engine."""
     lines = [
         "[bold yellow]Interactive NeuroLang Query REPL[/bold yellow]",
         "",
-        "Type a Datalog (or SQUALL) query and press Enter to execute.",
-        "Use [bold]Alt+Enter[/bold] or [bold]Meta+Enter[/bold] for "
-        "multi-line input.",
+        "Type a Datalog (or SQUALL) query and press Enter to run it.",
         "",
         "[bold cyan]Dot commands:[/bold cyan]",
     ]
@@ -89,13 +120,24 @@ def help_text() -> str:
         f"  [green]{cmd.usage:<20}[/green] {cmd.help}"
         for cmd in COMMANDS.values()
     ]
-    return "\n".join(lines) + "\n" + HELP_EXAMPLES
+    examples = engine_examples(engine_name)
+    if examples:
+        lines += [
+            KEYS_HELP, f"[bold cyan]Examples ({engine_name}):[/bold cyan]",
+            f"  {examples['datalog']}", "  .more", "  .mode squall",
+            f"  {examples['squall']}",
+        ]
+    else:
+        lines.append(KEYS_HELP)
+    return "\n".join(lines)
 
 
 @command(".help", "Show this help message")
 def cmd_help(app, arg: str) -> None:
     """Print the help text."""
-    app.console.print(Panel(help_text(), border_style="cyan"))
+    app.console.print(
+        Panel(help_text(app.settings.engine_name), border_style="cyan")
+    )
 
 
 @command(".mode", "Switch the query language", ".mode datalog|squall")

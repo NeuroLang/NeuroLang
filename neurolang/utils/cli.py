@@ -22,13 +22,13 @@ Usage
     neurolang-query --engine neurosynth --list-sets
 
     # Inline query
-    neurolang-query "ans(t) :- term_in_study_tfidf(t, w, s)"
+    neurolang-query "ans(t) :- term_in_study_tfidf(s, t, w)"
 
     # Query from file
     neurolang-query -f query.dl
 
     # Query from stdin
-    echo "ans(t) :- term_in_study_tfidf(t, f, s)" | neurolang-query
+    echo "ans(t) :- term_in_study_tfidf(s, t, w)" | neurolang-query
 
     # Destrieux atlas engine
     neurolang-query --engine destrieux "ans(name) :- destrieux(name, region)"
@@ -129,7 +129,7 @@ def _rename_unnamed_columns(df, column_names):
     if column_names is not None and len(column_names) == len(df.columns):
         unnamed = all(
             isinstance(c, int)
-            or (isinstance(c, str) and c.startswith("c"))
+            or (isinstance(c, str) and (c.startswith("c") or c.isdigit()))
             for c in df.columns
         )
         if unnamed:
@@ -157,6 +157,38 @@ def sort_dataframe(df, sort_by):
         return df
     cols, asc = zip(*valid)
     return df.sort_values(by=list(cols), ascending=list(asc))
+
+
+def squall_column_names(engine_name: str, program: str) -> dict:
+    """
+    Return the declared columns of the relations a SQUALL program obtains.
+
+    ``obtain every R.`` returns the whole relation ``R`` with positional
+    column names. The result is a dict from the key of each such
+    ``obtain`` (as in the results of
+    :meth:`~neurolang.frontend.QueryBuilderDatalog.execute_squall_program`)
+    to the columns that the engine configuration declares for ``R``.
+    """
+    from neurolang.frontend.datalog.squall_syntax_lark import (
+        SquallProgram,
+        parser as squall_parser,
+    )
+
+    predicates = engine_registry.get_predicates(engine_name)
+    try:
+        parsed = squall_parser(program)
+    except Exception:
+        return {}
+    if not (predicates and isinstance(parsed, SquallProgram)):
+        return {}
+    names = {}
+    for i, query in enumerate(parsed.queries):
+        functor = getattr(query.body, "functor", None)
+        info = predicates.get(getattr(functor, "name", None))
+        if info and info.get("columns"):
+            key = parsed.query_names.get(i, f"obtain_{i}")
+            names[key] = list(info["columns"])
+    return names
 
 
 def _emit(df, fmt, sort_by=None):
@@ -759,21 +791,35 @@ def _run_dry_run_command(args) -> bool:
     return False
 
 
-def _print_result(result, args, sort_by) -> None:
-    """Print a query ``result``, one block per ``obtain`` when a dict."""
+def _result_column_names(args, program: str) -> dict:
+    """Return the column names of the results of ``program``, by key."""
+    if not args.squall:
+        return {}
+    return squall_column_names(args.engine, program)
+
+
+def _print_result(result, args, sort_by, column_names=None) -> None:
+    """
+    Print a query ``result``, one block per ``obtain`` when a dict.
+
+    ``column_names`` maps result keys to the names of their columns, as
+    returned by :func:`squall_column_names`.
+    """
+    column_names = column_names or {}
     if isinstance(result, dict):
         for key, sub_result in result.items():
             output = _format_result(
-                sub_result, fmt=args.format, column_names=None,
-                sort_by=sort_by,
+                sub_result, fmt=args.format,
+                column_names=column_names.get(key), sort_by=sort_by,
             )
             if output:
                 print(f"── {key} ──")
                 print(output)
                 print()
         return
+    names = next(iter(column_names.values()), None)
     output = _format_result(
-        result, fmt=args.format, column_names=None, sort_by=sort_by,
+        result, fmt=args.format, column_names=names, sort_by=sort_by,
     )
     if output:
         print(output)
@@ -797,7 +843,9 @@ def _run_query(args) -> None:
     result = _run_reporting_errors(
         lambda: execute(nl, program), program, args, nl
     )
-    _print_result(result, args, sort_by)
+    _print_result(
+        result, args, sort_by, _result_column_names(args, program)
+    )
 
     elapsed = time.perf_counter() - t0
     print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)

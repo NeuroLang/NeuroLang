@@ -1469,3 +1469,18 @@ class TestResultToDataFrame:
         out = sort_dataframe(df, [("y", True), ("x", False)])
         assert list(out["x"]) == [3, 2, 1]
         assert "sort column 'y' not found" in capsys.readouterr().err
+
+
+def test_squall_obtain_relation_uses_declared_column_names(
+    monkeypatch, capsys
+):
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, 2, 3, 10)], name="peak_reported")
+    monkeypatch.setattr(
+        engine_registry, "build_engine", lambda *args, **kwargs: nl
+    )
+    main(["--squall", "obtain every peak_reported."])
+    header = capsys.readouterr().out.splitlines()[0].split()
+    assert header == ["i", "j", "k", "study_id"]

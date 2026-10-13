@@ -313,3 +313,49 @@ def test_unknown_command_without_close_match(small_app):
     out = _output(small_app)
     assert "Unknown command .zzzzzz." in out
     assert "Did you mean" not in out
+
+
+@pytest.fixture
+def peaks_engine(engine):
+    """Return the small engine with a 4-column ``peak_reported``."""
+    engine.add_tuple_set(
+        [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
+    )
+    engine.add_tuple_set([(10,), (11,)], name="study")
+    return engine
+
+
+def test_banner_lists_relations_and_example(peaks_engine):
+    app = _app(peaks_engine, engine_name="neurosynth")
+    app._print_banner()
+    out = _output(app)
+    assert "Engine: neurosynth" in out
+    assert "Mode: Datalog · .help for help · Ctrl+D or .quit to exit" in out
+    assert "term_in_study_tfidf(study_id, term, tfidf)" in out
+    example = "ans(i, j, k, study_id) :- peak_reported(i, j, k, study_id)"
+    assert f"Try: {example}" in out
+    app._execute_and_display(example)
+    assert list(app.result.frame.columns) == ["i", "j", "k", "study_id"]
+    assert len(app.result.frame) == 2
+
+
+def test_banner_squall_example(peaks_engine):
+    app = _app(peaks_engine, engine_name="neurosynth", squall=True)
+    app._print_banner()
+    assert "Try: obtain every peak_reported." in _output(app)
+
+
+def test_help_examples_match_engine_columns(small_app):
+    small_app.settings.engine_name = "neurosynth"
+    small_app._handle_dot_command(".help")
+    out = _output(small_app)
+    assert "term_in_study_tfidf(t, w, s)" not in out
+    assert "obtain every peak_reported." in out
+    assert ".more" in out
+
+
+def test_squall_obtain_shows_declared_column_names(peaks_engine):
+    app = _app(peaks_engine, engine_name="neurosynth", squall=True)
+    app._execute_and_display("obtain every peak_reported.")
+    assert list(app.result.frame.columns) == ["i", "j", "k", "study_id"]
+    assert "study_id" in _output(app)

@@ -12,7 +12,6 @@ from prompt_toolkit.filters import HasSearch
 from prompt_toolkit.history import FileHistory, InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
-from rich.panel import Panel
 
 from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.utils import engine_registry
@@ -24,9 +23,15 @@ from neurolang.utils.cli import (
     report_error,
     result_to_dataframe,
     sort_dataframe,
+    squall_column_names,
 )
 
-from .commands import QuitRepl, run_command
+from .commands import (
+    QuitRepl,
+    engine_examples,
+    engine_relations,
+    run_command,
+)
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 
 
@@ -144,9 +149,11 @@ class InteractiveTuiApp:
             file=self.err_console.file,
         )
 
-    def _show_frame(self, result, title: str = "") -> None:
+    def _show_frame(self, result, title: str, column_names=None) -> None:
         """Sort and print the first page of the rows of a query *result*."""
-        df = sort_dataframe(result_to_dataframe(result), self.settings.sort_by)
+        df = sort_dataframe(
+            result_to_dataframe(result, column_names), self.settings.sort_by
+        )
         self.result = ResultBlock(df, title)
         self.print_block(self.result)
 
@@ -165,8 +172,13 @@ class InteractiveTuiApp:
             self.console.out(_emit(block.frame, fmt), highlight=False)
             block.shown = len(block.frame)
 
-    def _show_result(self, result) -> None:
-        """Print a query *result*, keeping the last table shown."""
+    def _show_result(self, result, column_names: dict) -> None:
+        """
+        Print a query *result*, keeping the last table shown.
+
+        *column_names* maps result keys to their column names, as
+        :func:`~neurolang.utils.cli.squall_column_names` returns them.
+        """
         if result is None:
             self.console.print("[dim](no result)[/dim]")
             self.result = None
@@ -182,9 +194,15 @@ class InteractiveTuiApp:
                 self.console.print(
                     f"\n[bold magenta]── {key} ──[/bold magenta]"
                 )
-                self._show_frame(sub_result, title=key)
+                self._show_frame(sub_result, key, column_names.get(key))
             return
-        self._show_frame(result)
+        self._show_frame(result, "", next(iter(column_names.values()), None))
+
+    def _column_names(self, program: str) -> dict:
+        """Return the declared column names of the results of *program*."""
+        if not (self.settings.squall and self.settings.engine_name):
+            return {}
+        return squall_column_names(self.settings.engine_name, program)
 
     def _execute_and_display(self, program: str) -> None:
         """Run a Datalog or SQUALL query and print its result."""
@@ -200,7 +218,7 @@ class InteractiveTuiApp:
             return
         elapsed = time.perf_counter() - t0
         if not self.settings.show_ra:
-            self._show_result(result)
+            self._show_result(result, self._column_names(program))
         self.console.print(f"\n[dim]Query completed in {elapsed:.2f} s[/dim]")
 
     def _handle_dot_command(self, line: str) -> None:
@@ -213,21 +231,30 @@ class InteractiveTuiApp:
         return f"nl({self.settings.engine_name}:{mode})> "
 
     def _print_banner(self) -> None:
-        """Print the welcome banner and the engine description."""
-        self.console.print(Panel.fit(
-            "[bold yellow]NeuroLang Interactive Query REPL[/bold yellow]\n"
-            "Type [green].help[/green] for commands.  "
-            "Ctrl+D or [green].quit[/green] to exit.",
-            border_style="cyan",
-        ))
+        """Print the engine, the mode, its relations and an example query."""
         name = self.settings.engine_name
-        cfg = engine_registry.get_engine_config(name) if name else {}
-        self.console.print(
-            f"[dim]Engine: {name} — "
-            f"{cfg.get('description', '')}[/dim]"
-        )
         mode = "SQUALL" if self.settings.squall else "Datalog"
-        self.console.print(f"[dim]Mode: {mode}[/dim]")
+        self.console.print(
+            "[bold yellow]NeuroLang interactive query REPL[/bold yellow]"
+        )
+        if name:
+            description = " ".join(
+                engine_registry.get_engine_config(name)
+                .get("description", "").split()
+            )
+            self.console.print(f"Engine: [bold]{name}[/bold] — {description}")
+        self.console.print(
+            f"Mode: {mode} · [green].help[/green] for help · "
+            "[green]Ctrl+D[/green] or [green].quit[/green] to exit"
+        )
+        relations = engine_relations(name)
+        if relations:
+            self.console.print("Relations:")
+            for relation in relations:
+                self.console.print(f"  {relation}", markup=False)
+        example = engine_examples(name).get(mode.lower())
+        if example:
+            self.console.print(f"Try: {example}", markup=False)
 
     def _make_session(self) -> PromptSession:
         """Return the prompt session reading the REPL input."""
