@@ -62,20 +62,12 @@ import os
 import lark
 import numpy as np
 from lark import Lark, Transformer
-from lark.exceptions import (
-    LarkError, UnexpectedCharacters, UnexpectedToken,
-    VisitError,
-)
+from lark.exceptions import VisitError
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow as op_pow, sub, truediv
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.expressions import AggregationApplication as _AggApp
-from ...exceptions import (
-    NeuroLangException,
-    SquallSemanticError,
-    UnexpectedCharactersError,
-    UnexpectedTokenError,
-)
+from ...exceptions import SquallSemanticError
 from ...expressions import (
     Constant,
     FunctionApplication,
@@ -90,6 +82,7 @@ from ...probabilistic.expressions import (
     Condition, ProbabilisticFact, ProbabilisticQuery, PROB
 )
 from .anaphora_resolution import AnaphoraPredicate
+from .lark_errors import lark_errors_as_neurolang
 from .squall import InvertedFunctionApplication
 
 
@@ -2875,21 +2868,10 @@ def parser(code, local_vars=None, global_vars=None):
         unsupported construction (empty body, unresolved anaphora, etc.).
 
     """
-    source_code = code.strip()
-    try:
+    # Keep leading blank lines so error positions match the user's text.
+    source_code = code.rstrip()
+    with lark_errors_as_neurolang("Parse error: "):
         tree = compiled_grammar().parse(source_code)
-    except UnexpectedToken as e:
-        raise UnexpectedTokenError(
-            str(e), line=e.line - 1, column=e.column - 1
-        ) from e
-    except UnexpectedCharacters as e:
-        raise UnexpectedCharactersError(
-            str(e), line=e.line - 1, column=e.column - 1
-        ) from e
-    except LarkError as e:
-        raise NeuroLangException(
-            f"Parse error: {e}"
-        ) from e
 
     try:
         result = SquallTransformer(

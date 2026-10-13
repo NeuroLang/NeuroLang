@@ -49,19 +49,26 @@ Usage
 
 import argparse
 import json
+import os
+import re
 import sys
 import time
+import traceback
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 
+from lark.exceptions import LarkError
+
 from neurolang.datalog import WrappedRelationalAlgebraSet
+from neurolang.exceptions import NeuroLangException
 from neurolang.frontend import NeurolangPDL
 from neurolang.frontend.datalog import (
     squall_grammar_metadata,
 )
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+from neurolang.frontend.error_formatting import print_formatted_error
 from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.utils import engine_registry
 
@@ -324,6 +331,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "Append ':desc' for descending, ':asc' for ascending. "
         "Repeatable for multi-key sorts (first key has highest priority).",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="On errors, also print the Python traceback (same as setting "
+        "the NEUROLANG_DEBUG=1 environment variable).",
+    )
 
     return parser
 
@@ -542,6 +555,51 @@ def _list_sets(nl: NeurolangPDL) -> None:
 
 
 
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+def _known_symbol_names(nl: Optional[NeurolangPDL]) -> list:
+    """Return the identifier-like symbol names defined in *nl*."""
+    if nl is None:
+        return []
+    names = {getattr(s, "name", str(s)) for s in nl.symbol_table}
+    return sorted(n for n in names if _IDENTIFIER.match(n))
+
+
+def _debug_enabled(args) -> bool:
+    """Return True if ``--debug`` or ``NEUROLANG_DEBUG`` is set."""
+    return args.debug or os.environ.get("NEUROLANG_DEBUG", "0") not in (
+        "", "0"
+    )
+
+
+def _run_reporting_errors(action, program: str, args, nl=None):
+    """
+    Run *action* and report any failure as a formatted error.
+
+    On error, prints a readable message (source context, location and
+    hints) to stderr and exits with status 1. In debug mode
+    (``--debug`` or ``NEUROLANG_DEBUG=1``) the traceback is printed first.
+    """
+    try:
+        return action()
+    except Exception as exc:
+        debug = _debug_enabled(args)
+        if debug:
+            traceback.print_exc()
+        print_formatted_error(
+            exc, program,
+            language="SQUALL" if args.squall else "Datalog",
+            known_symbols=_known_symbol_names(nl),
+        )
+        if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
+            print(
+                "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
+                "traceback.", file=sys.stderr,
+            )
+        sys.exit(1)
+
+
 def _dry_run_with_engine(args, **flags) -> None:
     """
     Build the requested engine and dry-run the query on it.
@@ -557,10 +615,11 @@ def _dry_run_with_engine(args, **flags) -> None:
     nl = engine_registry.build_engine(
         args.engine, Path(args.data_dir), args.resolution
     )
-    if args.squall:
-        _execute_squall_program(nl, program, dry_run=True, **flags)
-    else:
-        _execute_program(nl, program, dry_run=True, **flags)
+    execute = _execute_squall_program if args.squall else _execute_program
+    _run_reporting_errors(
+        lambda: execute(nl, program, dry_run=True, **flags),
+        program, args, nl,
+    )
 
 
 def _show_ra_options(args):
@@ -617,7 +676,9 @@ def _run_engineless_command(args) -> bool:
     if args.show_datalog:
         program = _read_query_or_exit(args)
         _check_flag_dependencies(args)
-        _show_squall_datalog(program)
+        _run_reporting_errors(
+            lambda: _show_squall_datalog(program), program, args
+        )
         return True
     return False
 
@@ -690,10 +751,10 @@ def _run_query(args) -> None:
 
     t0 = time.perf_counter()
     sort_by = _parse_sort_spec(args.sort)
-    if args.squall:
-        result = _execute_squall_program(nl, program)
-    else:
-        result = _execute_program(nl, program)
+    execute = _execute_squall_program if args.squall else _execute_program
+    result = _run_reporting_errors(
+        lambda: execute(nl, program), program, args, nl
+    )
     _print_result(result, args, sort_by)
 
     elapsed = time.perf_counter() - t0

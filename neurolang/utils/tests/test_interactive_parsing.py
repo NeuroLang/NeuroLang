@@ -434,8 +434,10 @@ def test_interactive_existential():
                 'Text': {'values': set()}, 'Operators': {'values': {'¬', '~', '-'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'exists', 'EXISTS', 'ans', 'MARG', 'PROB', 'SUCC'}}, 'Boleans': {'values': {'True', '⊥', '⊤', 'False'}}, 'Expression symbols': {'values': {'.'}}, 'Python string': {'values': set()}, 'Strings': {'values': {'<text>', '<identifier_regexp>', '<cmd_identifier>'}}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}, 'commands': {'values': set()}}
     assert res == expected
 
-    with pytest.raises(UnexpectedTokenError):
+    with pytest.raises(UnexpectedTokenError) as exc_info:
         completer.complete('C(x) :- B(x), exists(s1; )').token_options
+    # Positions are 1-based, like the parsers' errors.
+    assert (exc_info.value.line, exc_info.value.column) == (1, 26)
 
 
 def test_interactive_query():

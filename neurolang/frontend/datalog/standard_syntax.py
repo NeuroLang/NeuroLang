@@ -4,13 +4,11 @@ import os
 from typing import Tuple
 
 from lark import Lark, Transformer
-from lark.exceptions import UnexpectedToken, UnexpectedCharacters, LarkError
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
 from ...datalog.expressions import AggregationApplication
-from ...exceptions import UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException
 from ...expressions import (
     Command,
     Constant,
@@ -31,6 +29,7 @@ from ...probabilistic.expressions import (
 )
 from ...type_system import Unknown
 from ...utils.interactive_parsing import LarkCompleter
+from .lark_errors import lark_errors_as_neurolang
 
 # Aggregation function names recognised in rule head arguments.
 AGGREGATION_FUNCS = frozenset({"count", "sum", "max", "min", "mean", "avg", "std"})
@@ -1238,21 +1237,16 @@ def _preprocess(code):
 
 def parser(code, locals=None, globals=None, interactive=False):
 
-    try:
+    with lark_errors_as_neurolang():
         if (interactive):
             completer = LarkCompleter(compiled_grammar())
             res = completer.complete(code.strip())
             return res.token_options
         else:
             code = _preprocess(code)
-            jp = compiled_grammar().parse(code.strip())
+            # Keep leading blank lines so error positions match the input.
+            jp = compiled_grammar().parse(code.rstrip())
             return DatalogTransformer().transform(jp)
-    except UnexpectedToken as e:
-        raise UnexpectedTokenError(str(e), line=e.line - 1, column=e.column - 1) from e
-    except UnexpectedCharacters as e:
-        raise UnexpectedCharactersError(str(e), line=e.line - 1, column=e.column - 1) from e
-    except LarkError as e:
-        raise NeuroLangException from e
 
 
 def parse_rules():
