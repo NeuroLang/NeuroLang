@@ -1472,7 +1472,96 @@ def _overlap_degrees(col_sets):
     ]
 
 
-def _greedy_chain(col_sets, first, cumulative):
+_ROW_BOUNDED_OPERATIONS = (
+    NameColumns, NumberColumns, Projection, RenameColumn, RenameColumns,
+    Selection,
+)
+
+
+def _estimated_size(expression, resolve=None):
+    """
+    Cheaply estimate an upper bound of the number of rows of an RA leaf.
+
+    Sizes are only known for constant relations, possibly wrapped in
+    renames, projections or selections, whose size is estimated as the one
+    of their input. The estimate comes from the set's
+    ``row_count_estimate`` method, which never deduplicates the set.
+
+    Parameters
+    ----------
+    expression : Expression
+        Relational algebra expression to estimate.
+    resolve : callable, optional
+        Called on any other expression, it returns an expression standing
+        for the same relation (for instance the value of a symbol in a
+        symbol table) or ``None``.
+
+    Returns
+    -------
+    int or None
+        Estimated number of rows, ``None`` when unknown.
+
+    """
+    for _ in range(64):
+        if isinstance(expression, _ROW_BOUNDED_OPERATIONS):
+            expression = expression.relation
+        elif isinstance(expression, Constant):
+            estimate = getattr(expression.value, "row_count_estimate", None)
+            return estimate() if callable(estimate) else None
+        elif resolve is not None and expression is not None:
+            expression = resolve(expression)
+        else:
+            return None
+    return None
+
+
+def _known_sizes(sizes):
+    """Return ``sizes`` if at least two of them are known, else ``None``."""
+    if sizes is None or sum(size is not None for size in sizes) < 2:
+        return None
+    return sizes
+
+
+def _smallest_first(sizes, degrees):
+    """
+    Choose the starting operand of a size-aware greedy ordering.
+
+    Return the index of the smallest operand of known size overlapping
+    with at least one other operand, preferring the most connected one
+    among equally small operands, or ``None`` if there is no such operand.
+    """
+    candidates = [
+        i for i, size in enumerate(sizes)
+        if size is not None and degrees[i] > 0
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda i: (sizes[i], -degrees[i]))
+
+
+def _smallest_connected(remaining, col_sets, placed, sizes):
+    """
+    Pick the smallest operand of known size joining the placed operands.
+
+    Among the ``remaining`` indices whose columns overlap with the
+    ``placed`` columns and whose size is known, return the one with the
+    smallest size, and then the largest overlap. Return ``None`` when
+    sizes are not used or no such index exists.
+    """
+    if sizes is None:
+        return None
+    candidates = [
+        j for j in sorted(remaining)
+        if sizes[j] is not None and col_sets[j] & placed
+    ]
+    if not candidates:
+        return None
+    return min(
+        candidates, key=lambda j: (sizes[j], -len(col_sets[j] & placed))
+    )
+
+
+def _greedy_chain(col_sets, first, cumulative, sizes=None):
     """
     Order indices of ``col_sets`` by nearest-neighbour expansion.
 
@@ -1480,15 +1569,23 @@ def _greedy_chain(col_sets, first, cumulative):
     columns overlap most with the reference column set. The reference is
     the union of all placed column sets when ``cumulative`` is true, and
     the column set of the last placed index otherwise.
+
+    When ``sizes`` is given, the remaining index of smallest known size
+    among those overlapping with the placed column sets is appended
+    first; the overlap criterion is used when there is none.
     """
     remaining = set(range(len(col_sets)))
     remaining.remove(first)
     order = [first]
     reference = set(col_sets[first])
+    placed = set(col_sets[first])
     while remaining:
-        best = max(remaining, key=lambda j: len(col_sets[j] & reference))
+        best = _smallest_connected(remaining, col_sets, placed, sizes)
+        if best is None:
+            best = max(remaining, key=lambda j: len(col_sets[j] & reference))
         order.append(best)
         remaining.remove(best)
+        placed |= col_sets[best]
         if cumulative:
             reference |= col_sets[best]
         else:
@@ -1496,7 +1593,7 @@ def _greedy_chain(col_sets, first, cumulative):
     return order
 
 
-def _sort_join_operands(operands):
+def _sort_join_operands(operands, sizes=None):
     """
     Greedy sort to minimise cross products.
 
@@ -1504,13 +1601,21 @@ def _sort_join_operands(operands):
     cumulative column set of already-placed operands. This maximises
     shared columns at each join boundary, eliminating cross products
     unless the join graph is truly disconnected.
+
+    When the estimated ``sizes`` of at least two operands are known, start
+    from the smallest connected operand and, among the operands sharing
+    columns with the placed ones, pick the smallest known one first.
+    Operands of unknown size are placed by column overlap.
     """
     if len(operands) <= 2:
         return operands
     col_sets = [_ra_columns(op) for op in operands]
     degrees = _overlap_degrees(col_sets)
-    first = max(range(len(operands)), key=degrees.__getitem__)
-    return [operands[i] for i in _greedy_chain(col_sets, first, True)]
+    sizes = _known_sizes(sizes)
+    first = None if sizes is None else _smallest_first(sizes, degrees)
+    if first is None:
+        first = max(range(len(operands)), key=degrees.__getitem__)
+    return [operands[i] for i in _greedy_chain(col_sets, first, True, sizes)]
 
 
 def _connected_components(col_sets):
@@ -1541,7 +1646,7 @@ def _connected_components(col_sets):
     return components
 
 
-def _group_operands_by_overlap(operands):
+def _group_operands_by_overlap(operands, sizes=None):
     """
     Greedy operator ordering (GOO) by pairwise column-name overlap.
 
@@ -1549,20 +1654,24 @@ def _group_operands_by_overlap(operands):
     names, in order of first appearance. Each component is ordered with
     :func:`_order_component_greedily` so that adjacent operands overlap.
 
-    The cost model uses only column names: two sub-plans overlap when their
-    column sets intersect. This requires no cardinality estimates.
+    The cost model uses column names: two sub-plans overlap when their
+    column sets intersect. Estimated operand ``sizes``, when given, are
+    used to join the smallest connected operands first.
     """
     col_sets = [set(_ra_columns(op)) for op in operands]
+    if sizes is None:
+        sizes = [None] * len(operands)
     return [
         _order_component_greedily(
             [operands[i] for i in component],
             [col_sets[i] for i in component],
+            [sizes[i] for i in component],
         )
         for component in _connected_components(col_sets)
     ]
 
 
-def _order_component_greedily(operands, col_sets):
+def _order_component_greedily(operands, col_sets, sizes=None):
     """
     Greedily order operands in one connected component.
 
@@ -1570,12 +1679,21 @@ def _order_component_greedily(operands, col_sets):
     expansion from a low-degree endpoint. This places bridge operands
     between otherwise disconnected sub-graphs, avoiding adjacent operands
     that share no columns.
+
+    When the ``sizes`` of at least two operands are known, start from the
+    smallest operand and join the smallest operands sharing columns with
+    the placed ones first, as in :func:`_sort_join_operands`.
     """
     if len(operands) <= 2:
         return list(operands)
     degrees = _overlap_degrees(col_sets)
-    first = min(range(len(operands)), key=degrees.__getitem__)
-    return [operands[i] for i in _greedy_chain(col_sets, first, False)]
+    sizes = _known_sizes(sizes)
+    first = None if sizes is None else _smallest_first(sizes, degrees)
+    if first is None:
+        first = min(range(len(operands)), key=degrees.__getitem__)
+    return [
+        operands[i] for i in _greedy_chain(col_sets, first, False, sizes)
+    ]
 
 
 class FlattenAndReorderJoins(ew.PatternWalker):
@@ -1603,7 +1721,9 @@ class FlattenAndReorderJoins(ew.PatternWalker):
         operands = _flatten_joins(walked)
         if len(operands) <= 1:
             return operands[0] if operands else walked
-        return NaryNaturalJoin(_sort_join_operands(operands))
+        return NaryNaturalJoin(_sort_join_operands(
+            operands, [_estimated_size(op) for op in operands]
+        ))
 
     @ew.add_match(NaryNaturalJoin)
     def reorder_nary(self, expression):
@@ -1616,7 +1736,9 @@ class FlattenAndReorderJoins(ew.PatternWalker):
                 op.relations if isinstance(op, NaryNaturalJoin) else (op,)
             )
         ]
-        sorted_ops = _sort_join_operands(flat_ops)
+        sorted_ops = _sort_join_operands(
+            flat_ops, [_estimated_size(op) for op in flat_ops]
+        )
         if any(a is not b for a, b in zip(flat_ops, sorted_ops)):
             return NaryNaturalJoin(sorted_ops)
         # Walk operands so inner Projection patterns are reachable
@@ -1655,6 +1777,18 @@ def _has_eliminable_cross_product(operands):
     col_sets = [set(_ra_columns(op)) for op in operands]
     overlaps = [bool(a & b) for a, b in combinations(col_sets, 2)]
     return any(overlaps) and not all(overlaps)
+
+
+def _is_left_deep_join_of(expression, operands):
+    """Check whether ``expression`` is the left-deep join of ``operands``."""
+    for operand in reversed(operands[1:]):
+        if (
+            not isinstance(expression, NaturalJoin)
+            or expression.relation_right is not operand
+        ):
+            return False
+        expression = expression.relation_left
+    return expression is operands[0]
 
 
 def _degenerate_natural_join(expression):
@@ -1712,6 +1846,14 @@ class GreedyJoinOrdering(ew.PatternWalker):
 
     Emits nested NaturalJoin trees (not NaryNaturalJoin) for connected
     groups and Product for disconnected groups.
+
+    Operand sizes, estimated with :func:`_estimated_size`, drive the order
+    within connected groups when known: the smallest operands sharing
+    columns with the already joined ones are joined first. A NaturalJoin
+    chain without Product is also reordered this way when at least two of
+    its operands have a known size. Subclasses can resolve leaves which
+    are not constants, such as symbols, by overriding
+    :meth:`resolve_relation`.
     """
 
     @ew.add_match(NaturalJoin, _tree_contains_product)
@@ -1731,6 +1873,29 @@ class GreedyJoinOrdering(ew.PatternWalker):
         new_rels = tuple(self.walk(r) for r in expression.relations)
         operands = _flatten_joins(Product(new_rels), with_products=True)
         return self._build_reordered(operands)
+
+    @ew.add_match(NaturalJoin, lambda e: not _tree_contains_product(e))
+    def reorder_join_by_size(self, expression):
+        """
+        Reorder a NaturalJoin chain using estimated operand sizes.
+
+        The chain is flattened and rebuilt as a left-deep NaturalJoin tree
+        ordered by :func:`_sort_join_operands`, which joins the smallest
+        connected operands first. When fewer than two operand sizes are
+        known, only the children are walked.
+        """
+        operands = _flatten_joins(expression)
+        sizes = None
+        if len(operands) > 2:
+            sizes = _known_sizes([self.operand_size(op) for op in operands])
+        if sizes is None:
+            return self.fallthrough(expression)
+        ordered = [
+            self.walk(op) for op in _sort_join_operands(operands, sizes)
+        ]
+        if _is_left_deep_join_of(expression, ordered):
+            return expression
+        return reduce(NaturalJoin, ordered)
 
     @ew.add_match(ew.Expression)
     def fallthrough(self, expression):
@@ -1757,8 +1922,47 @@ class GreedyJoinOrdering(ew.PatternWalker):
             return expression.apply(*new_args)
         return expression
 
+    def resolve_relation(self, expression):
+        """
+        Resolve a non-constant leaf into an expression of the same relation.
+
+        Used to estimate operand sizes. The default implementation resolves
+        nothing, so only constant relations have a known size.
+
+        Parameters
+        ----------
+        expression : Expression
+            Leaf of a relational algebra expression.
+
+        Returns
+        -------
+        Expression or None
+            Expression for the same relation, or ``None``.
+
+        """
+        return None
+
+    def operand_size(self, operand):
+        """
+        Estimate the number of rows of a join operand.
+
+        Parameters
+        ----------
+        operand : Expression
+            Join operand.
+
+        Returns
+        -------
+        int or None
+            Estimated number of rows, ``None`` when unknown.
+
+        """
+        return _estimated_size(operand, self.resolve_relation)
+
     def _build_reordered(self, operands):
-        groups = _group_operands_by_overlap(operands)
+        groups = _group_operands_by_overlap(
+            operands, [self.operand_size(op) for op in operands]
+        )
         join_groups = [reduce(NaturalJoin, g) for g in groups if len(g) > 1]
         singletons = [g[0] for g in groups if len(g) == 1]
         if len(join_groups) == 1 and not singletons:

@@ -17,7 +17,9 @@ from ..optimisers import (
     RenameOptimizations,
     RewriteSelections,
     SimplifyExtendedProjectionsWithConstants,
-    _ra_columns
+    _estimated_size,
+    _ra_columns,
+    _sort_join_operands
 )
 from ..relational_algebra import (
     ColumnInt,
@@ -1339,3 +1341,163 @@ def test_push_projections_down_terminates_when_nothing_to_push():
     expected = RelationalAlgebraSolver().walk(plan).value
     result = RelationalAlgebraSolver().walk(optimised).value
     assert result == expected
+
+
+def _sized_constant(columns, n_rows):
+    """Build a named relation constant with ``n_rows`` distinct rows."""
+    return C_[AbstractSet[Tuple[(int,) * len(columns)]]](
+        NamedRelationalAlgebraFrozenSet(
+            columns, [(i,) * len(columns) for i in range(n_rows)]
+        )
+    )
+
+
+def _left_deep_operands(expression):
+    """Return the operands of a left-deep NaturalJoin tree in join order."""
+    operands = []
+    while isinstance(expression, NaturalJoin):
+        operands.append(expression.relation_right)
+        expression = expression.relation_left
+    return [expression] + operands[::-1]
+
+
+def test_estimated_size_of_wrapped_constants():
+    """
+    Check the size estimation of constant relations.
+
+    Renames, projections and selections are estimated with the size of
+    their input; other expressions and symbols have an unknown size.
+    """
+    r = _sized_constant(("a", "b"), 7)
+    a, b, c = (str2columnstr_constant(n) for n in "abc")
+    assert _estimated_size(r) == 7
+    assert _estimated_size(Projection(RenameColumn(r, b, c), (a,))) == 7
+    assert _estimated_size(Selection(r, eq_(a, C_(1)))) == 7
+    assert _estimated_size(_named_symbol("R", "ab")) is None
+    assert _estimated_size(NaturalJoin(r, r)) is None
+
+
+def test_row_count_estimate_does_not_drop_duplicates():
+    """Check that the pandas row count estimate does not deduplicate."""
+    ras = NamedRelationalAlgebraFrozenSet(("a",), [(1,), (1,), (2,)])
+    assert ras.row_count_estimate() == 3
+    assert ras.might_have_duplicates
+    assert len(ras) == 2
+
+
+def test_sort_join_operands_prefers_small_connected_operands():
+    """
+    Check that known sizes drive the greedy order of join operands.
+
+    The smallest operand sharing columns with the others starts the
+    order, then the smallest operand connected to the placed ones is
+    picked, never introducing a cross product. Without sizes the order
+    only depends on column overlap.
+    """
+    reports = _sized_constant(("s", "x"), 50)
+    voxel = _sized_constant(("x",), 100)
+    labels = _sized_constant(("l", "x"), 5)
+    label = _sized_constant(("l",), 2)
+    operands = [reports, voxel, labels, label]
+    sizes = [50, 100, 5, 2]
+
+    assert _sort_join_operands(operands, sizes) == [
+        label, labels, reports, voxel
+    ]
+    assert _sort_join_operands(operands) == [labels, reports, voxel, label]
+    assert _sort_join_operands(operands, [None, None, None, 2]) == (
+        _sort_join_operands(operands)
+    )
+
+
+def test_greedy_join_ordering_joins_small_relation_first():
+    """
+    Check that GreedyJoinOrdering joins the smallest relations first.
+
+    In ``(R(a, b) ⋈ V(b)) ⋈ L(b, c)`` with sizes 50, 100 and 5, joining
+    the small relation ``L`` with ``R`` before the large ``V`` keeps the
+    intermediate results small. The result of the plan is unchanged.
+    """
+    r = _sized_constant(("a", "b"), 50)
+    v = _sized_constant(("b",), 100)
+    l_ = _sized_constant(("b", "c"), 5)
+    tree = NaturalJoin(NaturalJoin(r, v), l_)
+
+    result = GreedyJoinOrdering().walk(tree)
+
+    assert _left_deep_operands(result) == [l_, r, v]
+    assert (
+        RelationalAlgebraSolver().walk(result).value
+        == RelationalAlgebraSolver().walk(tree).value
+    )
+    assert GreedyJoinOrdering().walk(result) is result
+
+
+def test_greedy_join_ordering_unknown_sizes_keep_order():
+    """
+    Check that joins of relations of unknown size are not reordered.
+
+    Symbols have no known size, and a single known size is not enough to
+    compare operands, so the join trees are left untouched.
+    """
+    tree = NaturalJoin(
+        NaturalJoin(_named_symbol("R", "ab"), _named_symbol("V", "b")),
+        _named_symbol("L", "bc"),
+    )
+    assert GreedyJoinOrdering().walk(tree) is tree
+
+    tree = NaturalJoin(
+        NaturalJoin(_named_symbol("R", "ab"), _named_symbol("V", "b")),
+        _sized_constant(("b", "c"), 5),
+    )
+    assert GreedyJoinOrdering().walk(tree) is tree
+
+
+def test_greedy_join_ordering_resolves_symbol_sizes():
+    """
+    Check that subclasses can resolve the size of symbols.
+
+    Overriding ``resolve_relation`` with a symbol table lookup lets
+    GreedyJoinOrdering order joins of symbols by the size of their values.
+    """
+    table = {
+        Symbol[AbstractSet]("R"): _sized_constant(("0", "1"), 50),
+        Symbol[AbstractSet]("V"): _sized_constant(("0",), 100),
+        Symbol[AbstractSet]("L"): _sized_constant(("0", "1"), 5),
+    }
+
+    class SymbolTableJoinOrdering(GreedyJoinOrdering, ExpressionWalker):
+        def resolve_relation(self, expression):
+            return table.get(expression)
+
+    r = _named_symbol("R", "ab")
+    v = _named_symbol("V", "b")
+    l_ = _named_symbol("L", "bc")
+    tree = NaturalJoin(NaturalJoin(r, v), l_)
+
+    result = SymbolTableJoinOrdering().walk(tree)
+
+    assert _left_deep_operands(result) == [l_, r, v]
+
+
+def test_greedy_join_ordering_sizes_order_product_components():
+    """
+    Check that sizes order the joins built when removing a cross product.
+
+    ``Product(A(a), B(b)) ⋈ C(a, b) ⋈ D(b)``: the cross product is
+    eliminated and, within the connected group, the smallest operand
+    ``D`` starts the join, followed by the smallest connected ones.
+    """
+    a = _sized_constant(("a",), 40)
+    b = _sized_constant(("b",), 30)
+    c = _sized_constant(("a", "b"), 20)
+    d = _sized_constant(("b",), 3)
+    tree = NaturalJoin(NaturalJoin(Product((a, b)), c), d)
+
+    result = GreedyJoinOrdering().walk(tree)
+
+    assert _left_deep_operands(result) == [d, c, b, a]
+    assert (
+        RelationalAlgebraSolver().walk(result).value
+        == RelationalAlgebraSolver().walk(tree).value
+    )
