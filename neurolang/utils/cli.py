@@ -332,6 +332,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "Repeatable for multi-key sorts (first key has highest priority).",
     )
     parser.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        dest="interactive",
+        help="Start an interactive REPL rendering the query results "
+        "as tables.",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="On errors, also print the Python traceback (same as setting "
@@ -745,6 +753,17 @@ def _run_query(args) -> None:
 
     if args.list_sets:
         _list_sets(nl)
+        return
+
+    if args.interactive:
+        from neurolang.utils.tui import main as tui_main
+        tui_main(
+            engine_name=args.engine,
+            data_dir=args.data_dir,
+            resolution=args.resolution,
+            squall_mode=args.squall,
+            sort_specs=args.sort,
+        )
         return
 
     program = _read_query_or_exit(args)
