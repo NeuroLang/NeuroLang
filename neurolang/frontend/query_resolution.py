@@ -93,8 +93,8 @@ class QueryBuilderBase:
         ValueError
             if no symbol could be found with given name
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> nl.add_symbol(3, "x")
@@ -251,12 +251,12 @@ class QueryBuilderBase:
         when exiting the environment context
 
         Yields
-        -------
+        ------
         QuerySymbolsProxy
             in dynamic mode, can be used to create symbols on-the-fly
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> with nl.environment as e:
@@ -283,12 +283,12 @@ class QueryBuilderBase:
         when exiting the scope context
 
         Yields
-        -------
+        ------
         QuerySymbolsProxy
             in dynamic mode, can be used to create symbols on-the-fly
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> with nl.scope as e:
@@ -345,8 +345,8 @@ class QueryBuilderBase:
         List[str]
             list of symbols of type leq Callable
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> def f(x: int) -> int:
@@ -390,8 +390,8 @@ class QueryBuilderBase:
         fe.Symbol
             created symbol
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> @nl.add_symbol
@@ -451,8 +451,8 @@ class QueryBuilderBase:
         ValueError
             if no symbol could be found with given name
 
-        Example
-        -------
+        Examples
+        --------
         >>> p_ir = DatalogProgram()
         >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> nl.add_symbol(3, "x")
@@ -720,9 +720,12 @@ class RegionMixin:
             see description
         """
         atlas_set = list()
+        regions = ExplicitVBR.from_spatial_image_labels(
+            spatial_image, atlas_labels.keys()
+        )
         for label_number, label_name in atlas_labels.items():
-            region = self.create_region(spatial_image, label=label_number)
-            if region is None:
+            region = regions[label_number]
+            if not isinstance(region, ExplicitVBR):
                 continue
             atlas_set.append((label_name, region))
         return self.add_tuple_set(
@@ -859,7 +862,7 @@ class NeuroSynthMixin:
             name = str(uuid1())
         if convert_study_ids:
             return self.add_tuple_set(
-                metadata["id"].apply(StudyID).values,
+                metadata["id"].astype(StudyID).values,
                 type_=Tuple[StudyID],
                 name=name,
             )

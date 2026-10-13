@@ -300,9 +300,15 @@ class ChaseNamedRelationalAlgebraMixin:
 
         return res
 
-    def obtain_substitutions(
-        self, rule_predicates_iterator, instance, restriction_instance
-    ):
+    @staticmethod
+    def ra_symbol_table(predicates, instance, restriction_instance):
+        """
+        Return the symbol table the RA plan of ``predicates`` runs on.
+
+        Relations are taken from ``instance`` merged with
+        ``restriction_instance``, except for the positive predicates
+        found in ``restriction_instance``, which are bound to it alone.
+        """
         symbol_table = defaultdict(
             lambda: Constant[AbstractSet](
                 WrappedRelationalAlgebraSet(),
@@ -315,7 +321,25 @@ class ChaseNamedRelationalAlgebraMixin:
                 s = symbol_table[k]
                 v = v.apply(s.value | v.value)
             symbol_table[k] = v
+        # Differential evaluation fix: for positive body predicates that
+        # exist in restriction_instance, use ONLY the delta instead of the
+        # merged instance|delta.  This restores semi-naive differential
+        # evaluation. Negated predicates keep the merged value so that
+        # set-difference (RA difference) computes correctly.
+        for predicate in predicates:
+            if isinstance(predicate, FunctionApplication):
+                functor = predicate.functor
+                if functor in restriction_instance:
+                    symbol_table[functor] = restriction_instance[functor]
+        return symbol_table
+
+    def obtain_substitutions(
+        self, rule_predicates_iterator, instance, restriction_instance
+    ):
         predicates = tuple(rule_predicates_iterator)
+        symbol_table = self.ra_symbol_table(
+            predicates, instance, restriction_instance
+        )
 
         if len(predicates) == 0:
             return [{}]

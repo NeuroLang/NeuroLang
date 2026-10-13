@@ -512,6 +512,73 @@ def is_ground_predicate(predicate):
     return all(isinstance(arg, Constant) for arg in predicate.args)
 
 
+def order_conjunction_by_shared_variables(
+    formulas: typing.Tuple[Expression, ...],
+) -> typing.Tuple[Expression, ...]:
+    """
+    Order flat conjunction atoms to avoid structural cross products.
+
+    Relational algebra plans execute the atoms of a conjunction as a
+    left-deep natural join in the order they appear.  Joining two atoms
+    that share no variable first materialises their cross product, which
+    can be enormous for domains such as ``voxel(x, y, z) x study(s)``.
+    Conjunctions commute, so the atoms are reordered (greedy
+    nearest-neighbour) so that each atom shares at least one variable
+    with the atoms selected so far, keeping intermediate relations as
+    small as possible.
+
+    The original order is kept whenever it does not contain a structural
+    cross product, so already-efficient conjunctions are left untouched.
+
+    Only flat conjunctions of predicate applications are reordered; any
+    other formula (negation, disjunction, nested quantifier, ...) is left
+    untouched in its original position.
+    """
+    if not conjunction_needs_reordering(formulas):
+        return formulas
+    remaining = list(formulas)
+    vars_remaining = [
+        extract_logic_free_variables(f) for f in remaining
+    ]
+    start = max(
+        range(len(remaining)), key=lambda i: len(vars_remaining[i])
+    )
+    ordered = [remaining.pop(start)]
+    bound = vars_remaining.pop(start)
+    while remaining:
+        best = max(
+            range(len(remaining)),
+            key=lambda i: len(vars_remaining[i] & bound),
+        )
+        ordered.append(remaining.pop(best))
+        bound |= vars_remaining.pop(best)
+    return tuple(ordered)
+
+
+def conjunction_needs_reordering(
+    formulas: typing.Tuple[Expression, ...],
+) -> bool:
+    """
+    Whether a flat conjunction requires reordering to avoid a cross product.
+
+    True when some atom's variables share nothing with all the variables
+    of the atoms preceding it in the given order, i.e. when a left-deep
+    natural join in that order would materialise a structural cross
+    product.  Non-flat formulas (negation, disjunction, nested
+    quantifier, ...) are never considered for reordering.
+    """
+    if not all(isinstance(f, FunctionApplication) for f in formulas):
+        return False
+    bound = set()
+    for var_set in (
+        extract_logic_free_variables(f) for f in formulas
+    ):
+        if bound and not var_set & bound:
+            return True
+        bound |= var_set
+    return False
+
+
 def enforce_conjunctive_antecedent(implication):
     antecedent = GuaranteeConjunction().walk(implication.antecedent)
     return implication.apply(implication.consequent, antecedent)
@@ -1047,3 +1114,79 @@ class EqualitySymbolLeftHandSideNormaliseMixin(PatternWalker):
         return Constant[new_type](operator.eq, auto_infer_type=False)(
             *reversed(equality.args)
         )
+
+
+def is_inlineable_equality(formula):
+    """Check if *formula* is ``eq(Symbol, Constant)``.
+
+    This pattern appears in SQUALL queries such as
+    ``?x is 'value'`` which the frontend translates to
+    ``eq(x, Constant('value'))``.
+    """
+    try:
+        is_eq_functor = formula.functor == Constant(operator.eq)
+    except (ValueError, AttributeError):
+        return False
+    return (
+        is_eq_functor
+        and isinstance(formula.args[0], Symbol)
+        and isinstance(formula.args[1], Constant)
+    )
+
+
+class InlineEqualityConstantsMixin(PatternWalker):
+    """Rewrite ``eq(var, Constant)`` atoms in query rules by inlining the
+    constant into IDB predicate arguments.
+
+    Magic-sets (SIPS) skips builtin predicates (those whose functor is a
+    ``Constant``), so ``eq`` atoms with a constant argument never propagate
+    bindings.  This walker transforms::
+
+        h(x, y) :- p(x, y), eq(x, Constant('a'))
+
+    into::
+
+        h(Constant('a'), y) :- p(Constant('a'), y)
+
+    so that magic-sets sees the bound argument in a non-builtin predicate and
+    propagates the ``'b'`` adornment.
+
+    Must run *after* `EqualitySymbolLeftHandSideNormaliseMixin` so that all
+    equality atoms have the Symbol as the first argument.
+    """
+
+    @add_match(
+        Implication(FunctionApplication, Conjunction),
+        lambda implication: any(
+            is_inlineable_equality(conjunct)
+            for conjunct in extract_logic_atoms(implication.antecedent)
+        ),
+    )
+    def inline_equality_constants(self, implication):
+        eq_map = {}
+        other_formulas = []
+        for f in implication.antecedent.formulas:
+            if is_inlineable_equality(f):
+                eq_map[f.args[0]] = f.args[1]
+            else:
+                other_formulas.append(f)
+        inlined_formulas = []
+        for f in other_formulas:
+            if isinstance(f, FunctionApplication) and not isinstance(
+                f.functor, Constant
+            ):
+                new_args = tuple(eq_map.get(arg, arg) for arg in f.args)
+                if new_args != f.args:
+                    f = f.functor(*new_args)
+            inlined_formulas.append(f)
+        new_body = (
+            Conjunction(tuple(inlined_formulas))
+            if len(inlined_formulas) > 1
+            else inlined_formulas[0]
+        )
+        new_head_args = tuple(
+            eq_map.get(arg, arg) for arg in implication.consequent.args
+        )
+        new_head = implication.consequent.functor(*new_head_args)
+        new_implication = Implication(new_head, new_body)
+        return self.walk(new_implication)

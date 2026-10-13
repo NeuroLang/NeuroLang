@@ -3,9 +3,10 @@ Probabilistic Frontend
 ======================
 Complements QueryBuilderDatalog class with probabilistic capabilities
 1- add extensional probabilistic facts and choices
-2- sove probabilistic queries
+2- solve probabilistic queries
 """
 import collections
+import functools
 import typing
 from typing import (
     AbstractSet,
@@ -33,11 +34,16 @@ from ..datalog.aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..datalog.chase import Chase
-from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.constraints_representation import (
+    DatalogConstraintsProgram,
+)
 from ..datalog.exceptions import InvalidMagicSetError
 from ..exceptions import SymbolNotFoundError
 from ..datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
+    InlineEqualityConstantsMixin,
+    extract_logic_atoms,
+    is_aggregation_rule,
 )
 from ..datalog.magic_sets import magic_rewrite
 from ..datalog.negation import DatalogProgramNegationMixin
@@ -82,6 +88,7 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraColumnStr,
 )
+from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
 from ..commands import CommandsMixin
 from ..datalog.basic_representation import UnionOfConjunctiveQueries
 from . import query_resolution_expressions as fe
@@ -89,20 +96,70 @@ from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
 )
-from .datalog.sugar.spatial import TranslateEuclideanDistanceBoundMatrixMixin
+from .datalog.sugar.spatial import (
+    TranslateEuclideanDistanceBoundMatrixMixin,
+    TranslateRegionDestroy,
+)
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
+from .type_resolution import TypeResolutionMixin
+from .datalog.squall import ResolveInvertedFunctionApplicationMixin, StripDimensionTypePredicatesMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
+from .show_ra import (
+    ShowRAStratumSolver,
+    generated_query_symbol,
+    show_ra_options,
+)
+from .stratum_solver import StratumSolver
+
+
+def instance_lru_cache(key_fn, maxsize=128):
+    """LRU cache decorator for instance methods with non-hashable arguments.
+
+    key_fn(*args, **kwargs) must return a hashable cache key.
+    The cache is stored per-instance to avoid cross-instance sharing.
+    Call wrapper.cache_clear(instance) to invalidate.
+    """
+    def decorator(method):
+        cache_attr = f'_lru_cache_{method.__name__}'
+
+        @functools.wraps(method)
+        def wrapper(self, *args, **kwargs):
+            cache = getattr(self, cache_attr, None)
+            if cache is None:
+                cache = collections.OrderedDict()
+                setattr(self, cache_attr, cache)
+            key = key_fn(*args, **kwargs)
+            if key in cache:
+                cache.move_to_end(key)
+                return cache[key]
+            result = method(self, *args, **kwargs)
+            cache[key] = result
+            if maxsize is not None and len(cache) > maxsize:
+                cache.popitem(last=False)
+            return result
+
+        def cache_clear(instance):
+            setattr(instance, cache_attr, collections.OrderedDict())
+
+        wrapper.cache_clear = cache_clear
+        return wrapper
+    return decorator
 
 
 class RegionFrontendCPLogicSolver(
     EqualitySymbolLeftHandSideNormaliseMixin,
+    InlineEqualityConstantsMixin,
     TranslateProbabilisticQueryMixin,
+    ResolveInvertedFunctionApplicationMixin,
+    StripDimensionTypePredicatesMixin,
     TranslateToLogicWithAggregation,
     TranslateQueryBasedProbabilisticFactMixin,
     TranslateEuclideanDistanceBoundMatrixMixin,
     QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
+    TypeResolutionMixin,
+    TranslateRegionDestroy,
     RegionSolver,
     CommandsMixin,
     NumpyFunctionsMixin,
@@ -119,9 +176,13 @@ class RegionFrontendCPLogicSolver(
 
 class NeurolangPDL(QueryBuilderDatalog):
     """
-    Complements QueryBuilderDatalog class with probabilistic capabilities
-    1- add extensional probabilistic facts and choices
-    2- sove probabilistic queries
+    Probabilistic Datalog frontend.
+
+    Complements :class:`QueryBuilderDatalog` with probabilistic
+    capabilities:
+
+    1. add extensional probabilistic facts and choices;
+    2. solve probabilistic queries.
     """
 
     def __init__(
@@ -138,6 +199,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             wmc_solve_marg_query,
         ),
         check_qbased_pfact_tuple_unicity=False,
+        solver_class: Optional[Type] = None,
     ) -> "NeurolangPDL":
         """
         Query builder with probabilistic capabilities
@@ -156,14 +218,23 @@ class NeurolangPDL(QueryBuilderDatalog):
             used to compute probabilistic solutions,
             by default (lifted_solve_marg_query, wmc_solve_marg_query)
 
+        solver_class : Type, optional
+            Custom solver class to use instead of RegionFrontendCPLogicSolver.
+            Allows injecting custom mixins (e.g. with dimension_type_predicate_names
+            tailored from engine YAML config).
+
 
         Returns
         -------
         NeurolangPDL
             see description
         """
+        if solver_class is not None:
+            solver = solver_class()
+        else:
+            solver = RegionFrontendCPLogicSolver()
         super().__init__(
-            RegionFrontendCPLogicSolver(), chase_class=chase_class
+            solver, chase_class=chase_class
         )
         if len(probabilistic_solvers) != len(probabilistic_marg_solvers):
             raise ValueError(
@@ -220,6 +291,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             for e in expressions:
                 self.program_ir.walk(e)
 
+        self._rewrite_det_idb.cache_clear(self)
         return self.connector_symbol
 
     @property
@@ -234,8 +306,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         List[fe.Expression]
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> nl = NeurolangPDL()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
         ...     [("a",), ("b",), ("c",)], name="P"
@@ -261,14 +333,17 @@ class NeurolangPDL(QueryBuilderDatalog):
         self,
         head: typing.Union[fe.Symbol, Tuple[fe.Expression, ...]],
         predicate: fe.Expression,
+        show_rewritten: bool = False,
+        dry_run: bool = False,
+        show_ra=False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]
 
         Performs an inferential query: will return as first output
         an AbstractSet with as many elements as solutions
-        of the predicate query. AbstractSet's columns correspond to
-        the expressions in the head.
+        of the predicate query. AbstractSet's columns correspond to the
+        expressions in the head.
         Typically, probabilities are abstracted and processed similar
         to symbols, though of different nature (see examples)
         If head expressions are arguments of a functor, the latter will
@@ -283,6 +358,16 @@ class NeurolangPDL(QueryBuilderDatalog):
             see description
         predicate : Expression
             see description
+        show_rewritten : bool
+            If True, print the Datalog program after magic-sets rewriting.
+        dry_run : bool
+            If True, print the rewritten program and return immediately
+            without running the chase.
+        show_ra : bool or ShowRAOptions
+            If True, print the named relational algebra expression
+            of each rule instead of evaluating it. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects
+            how the plans are displayed.
 
         Returns
         -------
@@ -341,35 +426,49 @@ class NeurolangPDL(QueryBuilderDatalog):
             raise UnsupportedQueryError(
                 "Queries on probabilistic predicates are not supported"
             )
-        query = self.program_ir.symbol_table[query_pred_symb].formulas[0]
+
+        # The probabilistic query path (below) assumes the predicate functor
+        # maps to a rule entry (Union.formulas) in the program_ir symbol
+        # table.  This holds when querying an IDB predicate defined by a
+        # rule, but fails for:
+        #   1. EDB predicates — symbol entry is a Constant (no .formulas).
+        #   2. Conjunction queries (p(x), q(y)) — functor is `and_`, which
+        #      is not in the symbol table at all.
+        # In both cases fall through to the base QueryBuilderDatalog
+        # implementation which creates a fresh query rule and runs chase.
+        symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
+        if symbol_entry is None or isinstance(symbol_entry, ir.Constant):
+            return super()._execute_query(
+                head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
+            )
+
+        query = symbol_entry.formulas[0]
+        options = show_ra_options(show_ra)
+        if options is not None:
+            return self._show_ra_query(
+                query, options, show_rewritten, dry_run,
+                (self._query_head_symbols(head)[0], query_pred_args),
+            )
 
         try:
-            with self.scope:
-                goal, magic_rules = magic_rewrite(
-                    query.consequent, self.program_ir
-                )
-                self.program_ir.walk(magic_rules)
-                magic_query = self.program_ir.symbol_table[goal].formulas[0]
-                (
-                    magic_query,
-                    magic_rules,
-                ) = probabilistic_postprocess_magic_rules(
-                    self.program_ir, magic_query, magic_rules
-                )
+            magic_query, magic_rules = self._magic_rewrite_query(query)
+            if self._handle_rewritten_output(
+                magic_query, show_rewritten, dry_run
+            ):
+                return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
             with self.scope:
                 self.program_ir.walk(magic_rules)
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
+            if self._handle_rewritten_output(
+                query, show_rewritten, dry_run
+            ):
+                return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
             solution = self._solve(query)
 
-        if not isinstance(head, tuple):
-            # assumes head is a predicate e.g. r(x, y)
-            head_symbols = tuple(head.expression.args)
-            functor_orig = head.expression.functor
-        else:
-            head_symbols = tuple(t.expression for t in head)
-            functor_orig = None
+        head_symbols, functor_orig = self._query_head_symbols(head)
         solution = self._restrict_to_query_solution(
             head_symbols, query_pred_symb, query_pred_args, solution
         )
@@ -377,12 +476,92 @@ class NeurolangPDL(QueryBuilderDatalog):
             solution = solution.value
         return solution, functor_orig
 
-    def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
+    @staticmethod
+    def _query_head_symbols(head):
+        """
+        Return the symbols of a query's head and its functor, if any.
+
+        ``head`` is a tuple of expressions, or a predicate such as
+        ``r(x, y)``, whose functor is returned (None for a tuple).
+        """
+        if not isinstance(head, tuple):
+            # assumes head is a predicate e.g. r(x, y)
+            return tuple(head.expression.args), head.expression.functor
+        return tuple(t.expression for t in head), None
+
+    def _magic_rewrite_query(self, query):
+        """
+        Rewrite ``query`` with magic sets.
+
+        The rewriting is done in a scope that is closed on return, so the
+        program is left unchanged. Return the rewritten query and the
+        magic rules it needs.
+        """
+        with self.scope:
+            goal, magic_rules = magic_rewrite(
+                query.consequent, self.program_ir
+            )
+            self.program_ir.walk(magic_rules)
+            magic_query = self.program_ir.symbol_table[goal].formulas[0]
+            return probabilistic_postprocess_magic_rules(
+                self.program_ir, magic_query, magic_rules
+            )
+
+    def _show_ra_query(
+        self, query, options, show_rewritten, dry_run, query_atom
+    ):
+        """
+        Print the RA plans of ``query`` instead of solving it.
+
+        As in :meth:`_execute_query`, the plans are those of the query
+        rewritten with magic sets, or of ``query`` itself when the rewritten
+        query cannot be solved, followed by the restriction of the query
+        predicate's relation to the query, whose head symbols and query
+        predicate arguments are ``query_atom``. Errors raised while
+        building the plans of ``query`` reach the caller. ``options`` is
+        the :class:`~neurolang.frontend.show_ra.ShowRAOptions` of the
+        display. An empty set is returned.
+        """
+        stratum_solver = ShowRAStratumSolver(
+            self, options, generated_query_symbol(query)
+        )
+        try:
+            magic_query, magic_rules = self._magic_rewrite_query(query)
+            self._handle_rewritten_output(
+                magic_query, show_rewritten, dry_run, show_ra=True
+            )
+            with self.scope:
+                self.program_ir.walk(magic_rules)
+                solution = self._solve(
+                    magic_query, stratum_solver=stratum_solver
+                )
+                query_pred_symb = magic_query.consequent.functor
+        except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
+            self._handle_rewritten_output(
+                query, show_rewritten, dry_run, show_ra=True
+            )
+            solution = self._solve(query, stratum_solver=stratum_solver)
+            query_pred_symb = query.consequent.functor
+        head_symbols, query_pred_args = query_atom
+        stratum_solver.print_query(
+            head_symbols, query_pred_symb(*query_pred_args), solution
+        )
+        return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
+
+    def solve_all(self, show_ra=False) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the Datalog program.
         Typically, probabilities are abstracted and processed similar
         to symbols, though of different nature (see examples)
+
+        Parameters
+        ----------
+        show_ra : bool or ShowRAOptions, optional
+            If True, print the named RA expression of each rule instead
+            of evaluating it, and return an empty solution. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects how
+            the plans are displayed.
 
         Returns
         -------
@@ -390,8 +569,8 @@ class NeurolangPDL(QueryBuilderDatalog):
             extensional and intentional facts that have been derived
             through the current program, optionally with probabilities
 
-        Example
-        -------
+        Examples
+        --------
         Note: example ran with pandas backend
         >>> nl = NeurolangPDL()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
@@ -403,36 +582,38 @@ class NeurolangPDL(QueryBuilderDatalog):
         >>> with nl.scope as e:
         ...     e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
         ...     solution = nl.solve_all()
-        >>> solution
-        {
-            'Z':
-                PROB        x
-            0   0.111111    a
-            1   0.111111    c
-        }
         """
-        solution_ir = self._solve()
-        solution = {}
-        for k, v in solution_ir.items():
-            solution[k.name] = NamedRelationalAlgebraFrozenSet(
-                self.predicate_parameter_names(k.name), v.value.unwrap()
-            )
-            solution[k.name].row_type = v.value.row_type
-        return solution
+        solution_ir = self._solve(show_ra=show_ra)
+        return self._solution_to_named_sets(solution_ir)
 
-    def _solve(self, query=None):
+    def _solve(self, query=None, show_ra=False, stratum_solver=None):
+        """
+        Solve the program, restricted to ``query`` when given.
+
+        The strata are solved by ``stratum_solver``; when it is None, a
+        :class:`StratumSolver` or, if ``show_ra`` requests it, a
+        :class:`~neurolang.frontend.show_ra.ShowRAStratumSolver`.
+        """
         idbs = stratify_program(query, self.program_ir)
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         postprob_idb = idbs.get("post_probabilistic", Union(tuple()))
-        solution = self._solve_deterministic_stratum(det_idb)
+        if stratum_solver is None:
+            stratum_solver = self._stratum_solver(show_ra_options(show_ra))
+        solution = stratum_solver.deterministic(det_idb)
         if prob_idb.formulas:
-            solution = self._solve_probabilistic_stratum(solution, prob_idb)
+            solution = stratum_solver.probabilistic(solution, prob_idb)
         if postprob_idb.formulas:
-            solution = self._solve_postprobabilistic_deterministic_stratum(
+            solution = stratum_solver.postprobabilistic(
                 solution, postprob_idb
             )
         return solution
+
+    def _stratum_solver(self, show_ra_opts):
+        """Return the stratum solver for the ShowRAOptions (or None)."""
+        if show_ra_opts is None:
+            return StratumSolver(self)
+        return ShowRAStratumSolver(self, show_ra_opts)
 
     def _solve_deterministic_stratum(self, det_idb):
         '''Resolution of the deterministic stratum. In case there
@@ -454,7 +635,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         Result obtained after resolution of the deterministic stratum
         '''
         if "__constraints__" in self.symbol_table:
-            det_idb = self._rewrite_program_with_ontology(det_idb)
+            det_idb = self._rewrite_det_idb(det_idb)
             if hasattr(self, 'connector_symbol'):
                 connector_rules = tuple(
                     [q
@@ -503,9 +684,14 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         return solution
 
-    def _solve_postprobabilistic_deterministic_stratum(
-        self, solution, postprob_idb
-    ):
+    def _build_postprobabilistic_solver(self, solution, postprob_idb):
+        """
+        Build the solver of the post-probabilistic deterministic stratum.
+
+        The relations of ``solution`` become extensional predicates, the
+        builtins of the program are copied, and the rules of
+        ``postprob_idb`` are added.
+        """
         solver = RegionFrontendCPLogicSolver()
         for psymb, relation in solution.items():
             solver.add_extensional_predicate_from_tuples(
@@ -517,7 +703,87 @@ class NeurolangPDL(QueryBuilderDatalog):
                 builtin_symb
             ]
         solver.walk(postprob_idb)
-        chase = self.chase_class(solver, rules=postprob_idb)
+        return solver
+
+    def _solve_postprobabilistic_deterministic_stratum(
+        self, solution, postprob_idb, make_chase=None
+    ):
+        """
+        Solve the post-probabilistic deterministic stratum.
+
+        The rules of ``postprob_idb`` are run over ``solution`` by the
+        chases ``make_chase(program, rules)`` returns, by default chases
+        of the engine's chase class.
+        """
+        if make_chase is None:
+            def make_chase(program, rules):
+                return self.chase_class(program, rules=rules)
+        solver = self._build_postprobabilistic_solver(solution, postprob_idb)
+        # Split plain Datalog rules from aggregation rules so that each
+        # Chase stratum only contains rules of a single kind.  This can
+        # happen when a MARG result rule (plain) and an aggregation rule
+        # both land in post_probabilistic together (e.g. SQUALL programs).
+        plain_rules = Union(tuple(
+            r for r in postprob_idb.formulas if not is_aggregation_rule(r)
+        ))
+        agg_rules = Union(tuple(
+            r for r in postprob_idb.formulas if is_aggregation_rule(r)
+        ))
+        if plain_rules.formulas and agg_rules.formulas:
+            # Three-pass: plain first (produces activation_given_term),
+            # then AGG (aggregates it), then plain again for rules that
+            # depend on AGG output (e.g. a fresh query-wrapper predicate).
+            def _make_solver(src_solution):
+                s = RegionFrontendCPLogicSolver()
+                for psymb, relation in src_solution.items():
+                    s.add_extensional_predicate_from_tuples(
+                        psymb, relation.value
+                    )
+                for builtin_symb in self.program_ir.builtins():
+                    s.symbol_table[builtin_symb] = (
+                        self.program_ir.symbol_table[builtin_symb]
+                    )
+                return s
+
+            # Pass 1: plain rules → activation_given_term and peers
+            plain_solver1 = _make_solver(solution)
+            plain_solver1.walk(plain_rules)
+            plain_sol1 = make_chase(
+                plain_solver1, plain_rules
+            ).build_chase_solution()
+            combined1 = dict(solution)
+            combined1.update(plain_sol1)
+
+            # Pass 2: AGG rules → activation_given_term_image
+            agg_solver = _make_solver(combined1)
+            agg_solver.walk(agg_rules)
+            agg_sol = make_chase(
+                agg_solver, agg_rules
+            ).build_chase_solution()
+            combined2 = dict(combined1)
+            combined2.update(agg_sol)
+
+            # Pass 3: plain rules that depend on AGG output and are NOT
+            # already solved (consequent not yet in combined2).
+            agg_symbs = {r.consequent.functor for r in agg_rules.formulas}
+            post_agg_rules = Union(tuple(
+                r for r in plain_rules.formulas
+                if r.consequent.functor not in combined2
+                and any(
+                    p.functor in agg_symbs
+                    for p in extract_logic_atoms(r.antecedent)
+                    if hasattr(p, 'functor')
+                )
+            ))
+            if post_agg_rules.formulas:
+                plain_solver2 = _make_solver(combined2)
+                plain_solver2.walk(post_agg_rules)
+                plain_sol2 = make_chase(
+                    plain_solver2, post_agg_rules
+                ).build_chase_solution()
+                combined2.update(plain_sol2)
+            return combined2
+        chase = make_chase(solver, postprob_idb)
         solution = chase.build_chase_solution()
         return solution
 
@@ -543,11 +809,17 @@ class NeurolangPDL(QueryBuilderDatalog):
         }
         if constant_selection:
             query_solution = query_solution.selection(constant_selection)
-        cols = list(
-            arg.name if isinstance(arg, ir.Symbol)
-            else ir.Symbol.fresh().name
-            for arg in pred_args
-        )
+        if len(pred_args) == len(head_symbols):
+            cols = list(
+                arg.name if isinstance(arg, ir.Symbol) else symb.name
+                for arg, symb in zip(pred_args, head_symbols)
+            )
+        else:
+            cols = list(
+                arg.name if isinstance(arg, ir.Symbol)
+                else ir.Symbol.fresh().name
+                for arg in pred_args
+            )
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
             *(symb.name for symb in head_symbols)
@@ -560,6 +832,20 @@ class NeurolangPDL(QueryBuilderDatalog):
             query_row_type, proj_row_type
         )
         return ir.Constant[AbstractSet](query_solution)
+
+    @instance_lru_cache(
+        key_fn=lambda det_idb: frozenset(str(r) for r in det_idb.formulas),
+        maxsize=32,
+    )
+    def _rewrite_det_idb(self, det_idb):
+        """Xrewrite det_idb against ontology constraints, LRU-cached per instance.
+
+        Only the Xrewrite step is cached. The connector_rules scan that follows
+        in _solve_deterministic_stratum accesses live program_ir and is NOT
+        cached, so EDB added after load_ontology() remains visible.
+        Cache is invalidated by load_ontology() on each call.
+        """
+        return self._rewrite_program_with_ontology(det_idb)
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
@@ -587,8 +873,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         in the same possible world, contrary to a probabilistic choice.
         See example for details.
 
-        Warning
-        -------
+        Warnings
+        --------
         Typing for the iterable is improper, true -but yet unsupported
         in Python typing- typing should be Iterable[Tuple[float, Any, ...]]
         See examples
@@ -610,8 +896,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         fe.Symbol
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> nl = NeurolangPDL()
         >>> p = [(0.8, 'a', 'b'), (0.7, 'b', 'c')]
         >>> nl.add_probabilistic_facts_from_tuples(p, name="P")
@@ -647,8 +933,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         in the set are mutually exclusive.
         See example for details.
 
-        Warning
-        -------
+        Warnings
+        --------
         Typing for the iterable is improper, true -but yet unsupported-
         typing should be Iterable[Tuple[float, Any, ...]]
         See examples
@@ -676,8 +962,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         DistributionDoesNotSumToOneError
             if float probabilities do not sum to 1.
 
-        Example
-        -------
+        Examples
+        --------
         >>> nl = NeurolangPDL()
         >>> p = [(0.8, 'a', 'b'), (0.2, 'b', 'c')]
         >>> nl.add_probabilistic_choice_from_tuples(p, name="P")
@@ -744,8 +1030,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         fe.Symbol
             see description
 
-        Example
-        -------
+        Examples
+        --------
         >>> nl = NeurolangPDL()
         >>> p = [('a',), ('b',)]
         >>> nl.add_uniform_probabilistic_choice_over_set(p, name="P")

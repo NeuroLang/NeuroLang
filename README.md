@@ -1,12 +1,13 @@
 # NeuroLang
 
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/a39fccb376b74d3aa152d3d522030eb7)](https://app.codacy.com/gh/NeuroLang/NeuroLang/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade) [![Codacy Badge](https://app.codacy.com/project/badge/Coverage/a39fccb376b74d3aa152d3d522030eb7)](https://app.codacy.com/gh/NeuroLang/NeuroLang/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_coverage)
+[![Tests](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml/badge.svg)](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml)
+[![Coverage](https://raw.githubusercontent.com/NeuroLang/NeuroLang/gh-pages/coverage.svg)](https://github.com/NeuroLang/NeuroLang/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/neurolang.svg)](https://pypi.org/project/neurolang/)
+[![Python](https://img.shields.io/pypi/pyversions/neurolang.svg)](https://pypi.org/project/neurolang/)
+[![Code style](https://img.shields.io/badge/code%20style-flake8-000000.svg)](https://github.com/PyCQA/flake8)
 
-[![Maintainability](https://api.codeclimate.com/v1/badges/dc08b264f2be98d9a9e2/maintainability)](https://codeclimate.com/repos/5d2c5d18aaf970014e004cd8/maintainability)
-[![Test Coverage](https://api.codeclimate.com/v1/badges/dc08b264f2be98d9a9e2/test_coverage)](https://codeclimate.com/repos/5d2c5d18aaf970014e004cd8/test_coverage)
 
-
-Neurolang enables the analysis of NeuroImaging data through probabilistic logic programming. It seamlessly allow to combine, images, databases, and ontologies within a single framework.
+NeuroLang enables the analysis of neuroimaging data through probabilistic logic programming. It seamlessly combines images, databases, and ontologies within a single framework.
 
 
 Important links
@@ -15,4 +16,8 @@ Important links
 - In-development interactive gallery of examples (best viewed with Chrome) http://neurolang-u18.saclay.inria.fr/hub/gallery
 - HTML documentation (stable release): http://neurolang.github.io/
 - HTML documentation (dev release): http://neurolang.github.io/dev
+
+Citing
+======
+G. E. Zanitti, Y. Soto, V. Iovene, M. V. Martinez, R. O. Rodriguez, G. I. Simari, D. Wassermann. *Scalable Query Answering Under Uncertainty to Neuroscientific Ontological Knowledge: The NeuroLang Approach*. Neuroinformatics, 21(2), 407-425, 2023.
 

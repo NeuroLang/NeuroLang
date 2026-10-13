@@ -3,7 +3,6 @@ r'''
 Datalog Intermediate Representation Example based on the Destrieux Atlas
 ========================================================================
 
-
 Uploading the Destrieux left sulci into NeuroLang and
 executing some simple queries.
 '''
@@ -45,8 +44,15 @@ image_data = image.get_fdata().astype(int)
 
 ##################################################
 # Load the regions into Voxel-style regions
+if 'lut' in atlas_destrieux:
+    # nilearn >= 0.11 provides a look-up table with label indices and names
+    lut = atlas_destrieux['lut']
+    atlas_labels = zip(lut['index'], lut['name'].astype(str))
+else:
+    atlas_labels = atlas_destrieux['labels']
+
 region_dict = {}
-for label, name in atlas_destrieux['labels']:
+for label, name in atlas_labels:
     if label == 0:
         continue
 
@@ -133,12 +139,17 @@ solution = Chase(dl).build_chase_solution()
 
 ###############################################################################
 # Extracting the results from the intermediate representation to a python set
-# and plotting the first element of the result
+# Plot a few results in one multi-panel figure for a clean gallery thumbnail.
 
 
 rsbv = ew.ReplaceExpressionsByValues({})
 result = rsbv.walk(solution['superior_sts_l'])
 
-for name, region in result.unwrapped_iter():
-    plt.figure()
-    plotting.plot_roi(region.spatial_image(), title=name)
+print(f"{len(result)} regions found")
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+for ax in axes:
+    ax.set_axis_off()
+for ax, (name, region) in zip(axes, list(result.unwrapped_iter())[:3]):
+    plotting.plot_roi(region.spatial_image(), title=name, axes=ax)
+plt.suptitle("Regions superior to L S_temporal_sup (LH)")
+plt.tight_layout()

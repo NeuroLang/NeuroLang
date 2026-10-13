@@ -12,13 +12,18 @@ class NeurolangConfigParser(configparser.ConfigParser):
         """
         Convenience method to set the backend used by Neurolang.
         """
-        valid_backends = {"pandas", "dask"}
+        valid_backends = {"pandas", "dask", "polars"}
         if backend not in valid_backends:
             raise ValueError(
                 f"The query backend option should be one of {valid_backends}"
             )
         LOG.info(f"Setting new query backend : {backend}")
         self["RAS"]["backend"] = backend
+        # Polars has its own query optimizer — disable the chase's
+        # manual join ordering heuristic to avoid unnecessary len() calls
+        # that would force materialization of lazy frames.
+        if backend == "polars":
+            self["CHASE"]["sort_join_predicates"] = "False"
         self.switch_backend()
 
     def switch_backend(self):
@@ -68,6 +73,15 @@ class NeurolangConfigParser(configparser.ConfigParser):
 
     def disable_probabilistic_solver_check_unate(self):
         self.set("PROBABILISTIC_SOLVER", "check_unate", "False")
+
+    def get_chase_max_iterations(self):
+        return self.getint("CHASE", "max_iterations", fallback=10000)
+
+    def set_chase_max_iterations(self, value):
+        self.set("CHASE", "max_iterations", str(value))
+
+    def get_chase_sort_join_predicates(self):
+        return self.getboolean("CHASE", "sort_join_predicates", fallback=True)
 
 
 config = NeurolangConfigParser()

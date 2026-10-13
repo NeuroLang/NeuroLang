@@ -95,6 +95,22 @@ class RelationalAlgebraFrozenSet(Set):
     def as_numpy_array(self):
         pass
 
+    def row_count_estimate(self):
+        """
+        Return a cheap upper bound of the number of rows of the set.
+
+        The estimate must not trigger any deduplication or materialisation
+        of the set, it is meant for query planning. Backends that cannot
+        provide one cheaply return ``None``.
+
+        Returns
+        -------
+        int or None
+            Upper bound of the number of rows, or ``None`` if unknown.
+
+        """
+        return None
+
     def _dee_dum_product(self, other):
         res = None
         if self.is_dum():

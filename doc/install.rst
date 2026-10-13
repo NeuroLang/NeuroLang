@@ -1,9 +1,17 @@
 Installing NeuroLang
 ====================
 
-NeuroLang requires **Python ≥ 3.8**. The recommended way to install it is
+NeuroLang requires **Python ≥ 3.12**. The recommended way to install it is
 with `uv <https://github.com/astral-sh/uv>`_ — a fast Python package manager —
 or with standard ``pip``.
+
+.. important::
+
+   The latest release published on PyPI (``0.1a19``, October 2023) predates
+   the SQUALL controlled natural language, the ``neurolang-query`` command
+   line tool and the engine registry used throughout these tutorials.
+   Until a new release is published, install NeuroLang **from GitHub**
+   as shown below.
 
 .. tab-set::
 
@@ -27,7 +35,7 @@ or with standard ``pip``.
 
       .. code-block:: text
 
-         uv pip install neurolang
+         uv pip install "neurolang @ git+https://github.com/NeuroLang/NeuroLang.git"
 
       **3. Verify**
 
@@ -49,7 +57,7 @@ or with standard ``pip``.
 
       .. code-block:: bash
 
-         uv pip install neurolang
+         uv pip install "neurolang @ git+https://github.com/NeuroLang/NeuroLang.git"
 
       **3. Verify**
 
@@ -69,7 +77,7 @@ or with standard ``pip``.
 
       .. code-block:: bash
 
-         uv pip install neurolang
+         uv pip install "neurolang @ git+https://github.com/NeuroLang/NeuroLang.git"
 
       **3. Verify**
 
@@ -109,7 +117,7 @@ If you prefer plain pip:
 
 .. code-block:: bash
 
-   pip install neurolang
+   pip install "neurolang @ git+https://github.com/NeuroLang/NeuroLang.git"
 
 
 Dependencies
@@ -117,76 +125,72 @@ Dependencies
 
 NeuroLang requires the following libraries (installed automatically):
 
-* `NumPy <https://numpy.org>`_
-* `SciPy <https://scipy.org>`_
-* `pandas <https://pandas.pydata.org>`_
-* `nibabel <https://nipy.org/nibabel/>`_
-* `nilearn <https://nilearn.github.io>`_
-* `scikit-learn <https://scikit-learn.org>`_
-* `matplotlib <https://matplotlib.org>`_
-* `rdflib <https://rdflib.readthedocs.io>`_
+* `NumPy <https://numpy.org>`_, `SciPy <https://scipy.org>`_ and
+  `pandas <https://pandas.pydata.org>`_
+* `nibabel <https://nipy.org/nibabel/>`_ and
+  `nilearn <https://nilearn.github.io>`_ for neuroimaging data
+* `PySDD <https://github.com/wannesm/PySDD>`_ for probabilistic inference
+  through knowledge compilation
+* `Lark <https://github.com/lark-parser/lark>`_ for the Datalog and SQUALL
+  parsers
+* `rdflib <https://rdflib.readthedocs.io>`_ for ontologies
+* `siibra <https://siibra-python.readthedocs.io>`_ for atlases
+* `scikit-learn <https://scikit-learn.org>`_,
+  `matplotlib <https://matplotlib.org>`_ and
+  `seaborn <https://seaborn.pydata.org>`_
+* `SQLAlchemy <https://www.sqlalchemy.org>`_, `PyYAML <https://pyyaml.org>`_
+  and ``typing_inspect``
 
-Installing alternative backends for Neurolang
----------------------------------------------
+Optional extras
+---------------
 
-By default, Neurolang uses the pandas library to manage its data.
-It is however possible to use an alternative backend which relies
-on `dask-sql <https://github.com/NeuroLang/dask-sql>`__.
+.. list-table::
+   :header-rows: 1
 
-Using the dask-sql backend allows Neurolang to benefit from some
-query optimizations based on SQL syntax, as well as parallelism in
-computation by using dask instead of pandas. In other words, using
-the dask-sql backend might help improve the performance of specific
-queries which are slow to resolve with the default installation of
-Neurolang. It is not however guaranteed to be faster, as query
-optimizations are very case specific...
+   * - Extra
+     - Installs
+     - Use it to
+   * - ``ras-polars``
+     - ``polars``, ``pyarrow``
+     - use the Polars relational-algebra backend (see :doc:`performance`)
+   * - ``dev``
+     - ``pytest``, ``pytest-cov``, ``pytest-benchmark``, ``problog``
+     - run the test suite
+   * - ``doc``
+     - ``sphinx`` and extensions
+     - build this documentation
 
-To install Neurolang with the dask-sql backend, **it is required to
-first install a version of the maven library along with a running
-java installation with version >= 8** (dask-sql needs Java for
-parsing the SQL queries). There are two ways to install maven along
-with java:
+For instance, from a clone of the repository:
 
-On a linux machine, run the following command in your shell terminal:
+.. code-block:: bash
 
-.. container:: code
+   uv pip install -e ".[ras-polars]"
 
-   ::
 
-      sudo apt update && sudo apt install maven
+Alternative backends
+--------------------
 
-Or, if you're using conda to manage your python environments, you can
-run the following command in your active python environment:
+By default NeuroLang stores relations in pandas data frames. Two
+alternative backends are available:
 
-.. container:: code
+``polars``
+   Backed by `Polars <https://pola.rs>`_ lazy frames. Install the
+   ``ras-polars`` extra. It is usually faster on relations holding numbers
+   and strings; see :doc:`performance` for details.
 
-   ::
+``dask``
+   Backed by `dask-sql <https://github.com/NeuroLang/dask-sql>`__, which
+   translates queries to SQL and may parallelise them. dask-sql is not
+   installed by any extra; it needs a Java (≥ 8) runtime and Maven, e.g.
+   ``sudo apt install maven`` or ``conda install -c conda-forge maven``,
+   followed by ``pip install dask-sql``.
 
-      conda install -c conda-forge maven
+To select a backend, either edit the ``[RAS] backend`` entry of
+``neurolang/config/config.ini``, or call
 
-Once you've setup your machine with a working version of java and maven,
-you can install Neurolang with the dask-sql backend by running the 
-following command in your active python environment from a local copy of
-the Neurolang repository:
+.. code-block:: python
 
-.. container:: code
+   from neurolang.config import config
+   config.set_query_backend("polars")  # "pandas", "dask" or "polars"
 
-   ::
-
-      pip install -U --user neurolang[dask]
-
-Finally, to enable the dask-sql backend for Neurolang, you can either
-edit Neurolang's configuration file located in your python environment
-path under `config/config.ini`, or you can call
-
-.. container:: code
-
-   ::
-
-      from neurolang.config import config
-      config.set_query_backend("dask")
-
-from your python shell.
-
-**Note**: you need to call the `set_query_backend` method at the top
-of your script, before you import other modules from Neurolang.
+**at the top of your script, before importing other NeuroLang modules.**

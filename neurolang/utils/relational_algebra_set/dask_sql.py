@@ -335,6 +335,21 @@ class DaskRelationalAlgebraBaseSet:
                 self._count = len(self.container.drop_duplicates())
         return self._count
 
+    def row_count_estimate(self):
+        """
+        Return the number of rows if it is already known.
+
+        Counting the rows of a dask-sql table requires running a query,
+        so only an already computed count is returned.
+
+        Returns
+        -------
+        int or None
+            Number of rows, or ``None`` if it was not computed yet.
+
+        """
+        return self._count
+
     def __contains__(self, element):
         if self.arity == 0:
             return False

@@ -9,9 +9,12 @@ from ...exceptions import (
     NegativeFormulaNotNamedRelationException,
     NegativeFormulaNotSafeRangeException,
     NeuroLangException,
+    SymbolNotFoundError,
     UnsupportedProgramError,
-    UnsupportedQueryError
+    UnsupportedQueryError,
+    WrongArgumentsInPredicateError
 )
+from ...logic import Union
 from ...logic.horn_clauses import Fol2DatalogTranslationException
 from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
@@ -63,6 +66,173 @@ def test_add_uniform_probabilistic_choice_set():
 
     assert data2.type is AbstractSet[Tuple[float, str]]
     assert res_d2.type is AbstractSet[Tuple[float, str]]
+
+
+def build_neurosynth_like_engine():
+    """
+    Build a small engine with the EDB of the neurosynth engine.
+
+    It holds a few studies, peaks, terms and (label, region) Schaefer
+    pairs, and a uniform probabilistic choice over the studies.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
+    )
+    nl.add_tuple_set([("s1",), ("s2",)], name="study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    nl.add_tuple_set(
+        [("memory", "s1", 0.5), ("memory", "s2", 0.6)],
+        name="term_in_study_tfidf",
+    )
+    nl.add_tuple_set([("A", "rA"), ("B", "rB")], name="schaefer")
+    nl.add_tuple_set([(10, 20, 30), (11, 21, 31)], name="voxel")
+    return nl
+
+
+def test_show_ra_deterministic_stratum(capsys):
+    from neurolang.frontend import NeurolangPDL
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="P")
+    nl.execute_datalog_program("ans(x) :- P(x).", show_ra=True)
+    captured = capsys.readouterr()
+    assert "── deterministic stratum ──" in captured.out
+    assert "P" in captured.out
+
+
+def test_show_ra_conditional_query_provenance():
+    """
+    Check that show-ra builds the plan of a conditional (MARG) rule.
+
+    The frontend usually rewrites ``//`` into SUCC queries, but a rule
+    whose body is still a ``Condition`` (e.g. one built directly in the
+    IR) reaches the show-ra MARG branch, which referenced an unbound
+    solver and failed.
+    """
+    from ...datalog import Implication
+    from ...datalog.instance import MapInstance
+    from ...expressions import Symbol
+    from ...probabilistic.expressions import (
+        PROB,
+        Condition,
+        ProbabilisticQuery,
+    )
+    from ...probabilistic.query_resolution import (
+        _build_probabilistic_program,
+    )
+    from ...relational_algebra_provenance import ProvenanceAlgebraSet
+    from ..show_ra import ShowRAStratumSolver
+
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",)], name="P"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "a"), (0.3, "b")], name="Q"
+    )
+    x = Symbol("x")
+    rule = Implication(
+        Symbol("Z")(x, ProbabilisticQuery(PROB, (x,))),
+        Condition(Symbol("P")(x), Symbol("Q")(x)),
+    )
+    cpl, prob_idb = _build_probabilistic_program(
+        MapInstance(),
+        nl.program_ir.probabilistic_facts(),
+        nl.program_ir.probabilistic_choices(),
+        Union((rule,)),
+        nl.check_qbased_pfact_tuple_unicity,
+    )
+    provset = ShowRAStratumSolver(nl).rule_provenance_set(
+        prob_idb.formulas[0], cpl
+    )
+    assert isinstance(provset, ProvenanceAlgebraSet)
+
+
+def test_show_ra_probabilistic_with_det_idb():
+    """
+    Regression: --show-ra with a conditional query over deterministic IDB.
+
+    --show-ra crashed with IndexError at
+    relational_algebra_provenance.py:423 when a conditional MARG query
+    depends on deterministic IDB rules and magic rewrite fails.
+    """
+    nl = build_neurosynth_like_engine()
+    with nl.scope as e:
+        e.schaefer_label[e.l] = e.schaefer[e.l, e.r]
+        e.labels[e.l, e.x, e.y, e.z] = (
+            e.voxel[e.x, e.y, e.z] & e.schaefer[e.l, e.r]
+        )
+        e.reports[e.s, e.x, e.y, e.z] = e.peak_reported[e.x, e.y, e.z, e.s]
+        e.mentions[e.s, e.t] = (
+            e.term_in_study_tfidf[e.s, e.t, e.v] & (e.v > 0.03)
+        )
+        nl.execute_squall_program(
+            "define as Label_reports with inferred probability every "
+            "Schaefer_label that labels a Voxel in 3D that a Selected_study "
+            "reports given the Selected_study mentions 'memory'."
+        )
+        # Direct query on the WLQ predicate (no ans(...) wrapper) hits the
+        # probabilistic IDB path, which falls back to _solve after magic
+        # rewrite fails and crashes in selection_rap_eq_columnint.
+        # Before the fix this raises IndexError; after the fix it returns
+        # without error and the probabilistic stratum is printed.
+        res = nl.query(
+            (e.l, e.p), e.label_reports[e.l, e.p], show_ra=True
+        )
+        assert res is not None
+
+
+@pytest.mark.parametrize("show_ra", [False, True])
+def test_show_ra_reports_wrong_arity_error(show_ra):
+    """
+    Check that show-ra reports an arity error as evaluation does.
+
+    ``schaefer`` has one column but the rule uses two. The show-ra chase
+    used to swallow the error and print the plan of an empty relation.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("A",), ("B",)], name="schaefer")
+    with pytest.raises(WrongArgumentsInPredicateError):
+        nl.execute_datalog_program(
+            "label(l) :- schaefer(l, r).\nans(l) :- label(l).",
+            show_ra=show_ra,
+        )
+
+
+@pytest.mark.parametrize("show_ra", [False, True])
+def test_show_ra_reports_unsolvable_query_error(show_ra, capsys):
+    """
+    Check that show-ra reports why a query without magic sets fails.
+
+    SQUALL turns the noun ``P`` into the predicate ``p``, which does not
+    exist. Show-ra used to hide the error and print a deterministic plan.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="P")
+    with pytest.raises(SymbolNotFoundError, match="Symbol not found p"):
+        nl.execute_squall_program("obtain every P.", show_ra=show_ra)
+    assert "── deterministic stratum ──" not in capsys.readouterr().out
+
+
+def test_show_rewritten_datalog_prints_all_rules(capsys):
+    """--show-rewritten must print all reachable Datalog rules, not just the final query."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("alice",), ("bob",), ("carol",)], name="person")
+    nl.add_tuple_set([("alice",), ("carol",)], name="plays")
+    nl.execute_datalog_program(
+        """
+        active(x) :- person(x), plays(x).
+        fanatic(x) :- active(x), plays(x).
+        ans(x) :- fanatic(x).
+        """,
+        show_rewritten=True,
+        dry_run=True,
+    )
+    captured = capsys.readouterr()
+    assert "active" in captured.out
+    assert "fanatic" in captured.out
 
 
 def test_deterministic_query():
@@ -1051,6 +1221,135 @@ def test_cbma_prob_query_with_negation():
         ]
     )
     assert_almost_equal(res, expected)
+
+
+def test_negated_conditioning_literal_with_distinguished_variable():
+    """
+    Regression test for negating a distinguished-variable literal in `//`.
+
+    A conditional-probability query negating a (deterministic)
+    relation whose argument is a free variable shared with the
+    query's head returned an incorrect probability.
+
+    `TranslateProbabilisticQueryMixin.rewrite_conditional_query` builds the
+    numerator of `//` by flatly conjoining the conditioned and conditioning
+    sides into one within-language query. That numerator query was wrong
+    whenever it contained a negated literal with a distinguished-variable
+    argument (here, `r`) -- in fact wrong for ANY negated deterministic
+    literal in a probabilistic query, distinguished or not, `//`-wrapped
+    or a bare SUCC query. The actual defect was in
+    `small_dichotomy_theorem_based_solver`'s hierarchical-query safety
+    check: it only ever inspected the probabilistic-only sub-conjunction
+    of the query, so a `Negation` wrapping a plain deterministic relation
+    like `Active` (joined with the probabilistic choice `Selected` via a
+    shared variable) silently slipped past it instead of triggering the
+    `NotHierarchicalQueryException` fallback to the (correct) Dalvi-Suciu
+    lifted solver. The fix widens that check
+    (`_extract_deterministic_negated_atoms`) to also count negated
+    deterministic atoms.
+
+    Fixture: 6 studies, 2 regions (A = {0,1,2}, B = {3,4,5}), 2 terms (pain
+    mentioned by {0,1,5}, joy by {2,3,4}). Hand-computed:
+    P(pain | not active in A) = P(mentions pain & study in {3,4,5}) / 3
+                               = 1/3 (only study 5 qualifies)
+    and symmetrically for the other three (term, region) pairs.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(s,) for s in range(6)], name="TrainStudy")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="Selected"
+    )
+    nl.add_tuple_set(
+        [(0, "A"), (1, "A"), (2, "A"), (3, "B"), (4, "B"), (5, "B")],
+        name="Active",
+    )
+    nl.add_tuple_set(
+        [(0, "pain"), (1, "pain"), (2, "joy"), (3, "joy"), (4, "joy"), (5, "pain")],
+        name="Mentions",
+    )
+    nl.add_tuple_set([("A",), ("B",)], name="Region")
+
+    with nl.environment as e:
+        e.PTermGivenNotRegion[e.t, e.r, e.PROB[e.t, e.r]] = (
+            e.Mentions[e.s, e.t] & e.Selected[e.s]
+        ) // (
+            ~e.Active[e.s, e.r]
+            & e.Region[e.r]
+            & e.TrainStudy[e.s]
+            & e.Selected[e.s]
+        )
+        res = nl.query(
+            (e.t, e.r, e.p), e.PTermGivenNotRegion[e.t, e.r, e.p]
+        )
+    expected = RelationalAlgebraFrozenSet(
+        [
+            ("pain", "A", 1 / 3),
+            ("joy", "A", 2 / 3),
+            ("pain", "B", 2 / 3),
+            ("joy", "B", 1 / 3),
+        ]
+    )
+    assert_almost_equal(res, expected)
+
+
+def test_negated_conditioning_literal_with_two_distinguished_variables():
+    """
+    Regression test for a negated literal with two distinguished variables.
+
+    The fix must correctly handle a negated deterministic literal
+    regardless of how many of its arguments are distinguished (shared
+    with the query head) -- here `r1` AND `r2`, both from the single
+    negated literal `~CoActive[s, r1, r2]`. The solver-level fix
+    (`small_dichotomy_theorem_based_solver._extract_deterministic_negated_atoms`)
+    never special-cases variable count or distinguished-ness at all --
+    it forces ANY negated deterministic atom to fall back to the
+    (correct) Dalvi-Suciu lifted solver -- so this is mostly a
+    confirmation that nothing about multiple shared variables breaks
+    that fallback path.
+
+    Fixture: 6 studies, regions {A, B, C}; `CoActive(s, r1, r2)` holds
+    (symmetrically) for study 0 in {A, B} and study 3 in {B, C}. Terms:
+    pain mentioned by {0,1,5}, joy by {2,3,4}. Hand-computed:
+    P(pain | not co-active in (A, B)) = P(mentions pain & study != 0) / 5
+                                        = 2/5 (studies {1,2,3,4,5}, pain
+                                          in {1,5})
+    P(joy | not co-active in (B, C)) = P(mentions joy & study != 3) / 5
+                                        = 2/5 (studies {0,1,2,4,5}, joy
+                                          in {2,4})
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(s,) for s in range(6)], name="TrainStudy")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="Selected"
+    )
+    nl.add_tuple_set(
+        [(0, "A", "B"), (0, "B", "A"), (3, "B", "C"), (3, "C", "B")],
+        name="CoActive",
+    )
+    nl.add_tuple_set(
+        [(0, "pain"), (1, "pain"), (2, "joy"), (3, "joy"), (4, "joy"), (5, "pain")],
+        name="Mentions",
+    )
+    nl.add_tuple_set([("A",), ("B",), ("C",)], name="Region")
+
+    with nl.environment as e:
+        e.PTermGivenNotCoActive[
+            e.t, e.r1, e.r2, e.PROB[e.t, e.r1, e.r2]
+        ] = (e.Mentions[e.s, e.t] & e.Selected[e.s]) // (
+            ~e.CoActive[e.s, e.r1, e.r2]
+            & e.Region[e.r1]
+            & e.Region[e.r2]
+            & e.TrainStudy[e.s]
+            & e.Selected[e.s]
+        )
+        res = nl.query(
+            (e.t, e.r1, e.r2, e.p),
+            e.PTermGivenNotCoActive[e.t, e.r1, e.r2, e.p],
+        )
+    res_df = res.as_pandas_dataframe().set_index(["t", "r1", "r2"])
+    np.testing.assert_almost_equal(res_df.loc[("pain", "A", "B"), "p"], 2 / 5)
+    np.testing.assert_almost_equal(res_df.loc[("joy", "B", "C"), "p"], 2 / 5)
+    np.testing.assert_almost_equal(res_df.loc[("pain", "A", "A"), "p"], 1 / 2)
 
 
 def test_query_based_spatial_prior():
