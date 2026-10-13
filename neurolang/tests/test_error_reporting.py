@@ -1,6 +1,6 @@
 """Tests for structured error reporting in NeuroLang exceptions."""
 
-import pickle
+import pickle  # nosec B403 - round-trips exceptions built by the test
 
 import pytest
 
@@ -84,25 +84,25 @@ class TestPickleRoundtrip:
     @pytest.mark.parametrize(
         "exc_factory",
         [
-            lambda: WrongArgumentsInPredicateError(),
-            lambda: ForbiddenDisjunctionError(),
-            lambda: ForbiddenRecursivityError(),
-            lambda: ForbiddenUnstratifiedAggregation(),
+            WrongArgumentsInPredicateError,
+            ForbiddenDisjunctionError,
+            ForbiddenRecursivityError,
+            ForbiddenUnstratifiedAggregation,
             lambda: SymbolNotFoundError("test"),
-            lambda: ProtectedKeywordError(),
-            lambda: NoValidChaseClassForStratumException(),
+            ProtectedKeywordError,
+            NoValidChaseClassForStratumException,
             lambda: CouldNotTranslateConjunctionException("test"),
             lambda: NegativeFormulaNotSafeRangeException("p(x)"),
             lambda: NegativeFormulaNotNamedRelationException("p(x)"),
             lambda: SquallSemanticError("test"),
             lambda: ParserError("test", line=1, column=2),
-            lambda: DistributionDoesNotSumToOneError(),
-            lambda: InvalidMagicSetError(),
-            lambda: UnsupportedProbabilisticQueryError(),
+            DistributionDoesNotSumToOneError,
+            InvalidMagicSetError,
+            UnsupportedProbabilisticQueryError,
         ],
     )
     def test_pickle(self, exc_factory):
         exc = exc_factory()
-        restored = pickle.loads(pickle.dumps(exc))
+        restored = pickle.loads(pickle.dumps(exc))  # nosec B301 - data created here
         assert type(restored) is type(exc)
         assert restored.suggestion == exc.suggestion
