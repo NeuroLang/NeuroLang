@@ -33,6 +33,7 @@ from .commands import (
     engine_relations,
     run_command,
 )
+from .interrupt import call_interruptibly
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 from .statements import is_complete, split_statements
 
@@ -155,9 +156,18 @@ class InteractiveTuiApp:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             try:
-                return self._execute(program)
+                return call_interruptibly(
+                    lambda: self._execute(program), self._print_stuck_hint
+                )
             finally:
                 self._print_notes(caught)
+
+    def _print_stuck_hint(self) -> None:
+        """Tell that the interrupted query is busy in native code."""
+        self.err_console.print(
+            "Interrupting... the query is busy in a native computation; "
+            "press Ctrl+C again to quit NeuroLang.", style="yellow",
+        )
 
     def _print_notes(self, caught) -> None:
         """Print one note per distinct warning in *caught*."""
