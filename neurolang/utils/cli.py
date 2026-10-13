@@ -891,6 +891,31 @@ def _tui_settings(args, tui):
     )
 
 
+TUI_DEPENDENCIES = ("prompt_toolkit", "rich")
+
+
+def _import_tui():
+    """
+    Return the :mod:`neurolang.utils.tui` module of the interactive REPL.
+
+    If its optional dependencies are missing, exit with status 1 and a
+    message telling how to install them.
+    """
+    try:
+        from neurolang.utils import tui
+    except ImportError as exc:
+        if (exc.name or "").split(".")[0] not in TUI_DEPENDENCIES:
+            raise
+        print(
+            "Error: the interactive mode needs the optional dependencies "
+            f"{' and '.join(TUI_DEPENDENCIES)}. Install them with:\n"
+            '    pip install "neurolang[tui]"',
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return tui
+
+
 def _program_argument(args) -> str:
     """Return the query given as argument or with ``--file``, or ''."""
     if args.file:
@@ -911,7 +936,7 @@ def _run_interactive(args) -> None:
     _check_interactive_flags(args)
     _check_flag_dependencies(args)
     _check_engine_name(args)
-    from neurolang.utils import tui
+    tui = _import_tui()
 
     program = _program_argument(args)
     nl = engine_registry.build_engine(

@@ -44,8 +44,6 @@ dependencies = [
     "sqlalchemy>=1.4",
     "siibra>=1.0.1a15",
     "pyyaml>=6.0",
-    "prompt-toolkit>=3.0.52",
-    "rich>=15.0.0",
 ]
 
 [project.scripts]
@@ -65,7 +63,7 @@ ras-polars = [
 ]
 
 tui = [
-    "prompt-toolkit>=3.0",
+    "prompt-toolkit>=3.0.36",
     "rich>=13.0",
 ]
 

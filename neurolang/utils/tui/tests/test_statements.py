@@ -2,7 +2,13 @@
 
 import pytest
 
-from neurolang.utils.tui.statements import is_complete, split_statements
+pytest.importorskip("prompt_toolkit")
+pytest.importorskip("rich")
+
+from neurolang.utils.tui.statements import (  # noqa: E402
+    is_complete,
+    split_statements,
+)
 
 
 @pytest.mark.parametrize("text, squall, complete", [

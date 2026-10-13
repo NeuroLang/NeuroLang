@@ -1484,3 +1484,26 @@ def test_squall_obtain_relation_uses_declared_column_names(
     main(["--squall", "obtain every peak_reported."])
     header = capsys.readouterr().out.splitlines()[0].split()
     assert header == ["i", "j", "k", "study_id"]
+
+
+@pytest.mark.parametrize("missing", ["prompt_toolkit", "rich"])
+def test_interactive_without_tui_dependencies(missing, monkeypatch, capsys):
+    """Check that -i without the tui extra exits with an install hint."""
+    import sys
+
+    import neurolang.utils
+
+    monkeypatch.setitem(sys.modules, missing, None)
+    for name in list(sys.modules):
+        if name.startswith("neurolang.utils.tui"):
+            monkeypatch.delitem(sys.modules, name)
+    monkeypatch.delattr(neurolang.utils, "tui", raising=False)
+
+    def fail_build(*args, **kwargs):
+        raise AssertionError("the engine must not be built")
+
+    monkeypatch.setattr(engine_registry, "build_engine", fail_build)
+    with pytest.raises(SystemExit) as exc_info:
+        main(["-i"])
+    assert exc_info.value.code == 1
+    assert 'pip install "neurolang[tui]"' in capsys.readouterr().err
