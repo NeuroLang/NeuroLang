@@ -183,7 +183,7 @@ def test_toolbar(app):
     app._make_session()
     assert toolbar(app) == (
         " neurosynth · Datalog · page 20 · emacs · .help · "
-        "Tab completes · Ctrl-D quits"
+        "Tab completes · Ctrl+D quits"
     )
     app._handle_dot_command(".mode squall")
     app._handle_dot_command(".sort x:desc")
@@ -191,7 +191,7 @@ def test_toolbar(app):
     app._handle_dot_command(".head 5")
     assert toolbar_text(app.settings, 200) == (
         " neurosynth · SQUALL · page 5 · sort x:desc · csv · emacs · "
-        ".help · Tab completes · Ctrl-D quits"
+        ".help · Tab completes · Ctrl+D quits"
     )
 
 
@@ -407,3 +407,26 @@ def test_argument_context():
     assert argument_context("ans(x) :- p(a, (b), ") == ("p", 2)
     assert argument_context("ans(x) :- p(a)") is None
     assert argument_context("ans(x) :- (x ") is None
+
+
+def test_help_lists_key_bindings(app):
+    app._handle_dot_command(".help")
+    out = app.console.file.getvalue()
+    for key in (
+        "Tab", "Alt+Enter", "Ctrl+X Ctrl+E", "$EDITOR", "Ctrl+C", "Ctrl+D",
+        "Up/Down", "Ctrl+R",
+    ):
+        assert key in out, key
+
+
+def test_ctrl_x_ctrl_e_opens_the_editor(app):
+    from prompt_toolkit.keys import Keys
+
+    session = app._make_session()
+    assert session.enable_open_in_editor
+    bindings = session.app.key_bindings.get_bindings_for_keys(
+        (Keys.ControlX, Keys.ControlE)
+    )
+    assert any(
+        b.handler.__name__ == "edit_and_execute" for b in bindings
+    )

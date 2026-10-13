@@ -161,7 +161,7 @@ def make_completer(app) -> NeuroLangReplCompleter:
     )
 
 
-TOOLBAR_HINTS = (".help", "Tab completes", "Ctrl-D quits")
+TOOLBAR_HINTS = (".help", "Tab completes", "Ctrl+D quits")
 
 
 def toolbar_fields(settings) -> list:

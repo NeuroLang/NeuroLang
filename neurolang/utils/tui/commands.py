@@ -110,8 +110,14 @@ KEYS_HELP = """
   Enter                run the statement; an unfinished one (open bracket,
                        trailing ',' or ':-', SQUALL without its final '.')
                        continues on a new line, an empty line runs it
-  Tab                  complete commands, predicates and Datalog syntax
-  Alt+Enter            insert a newline
+  Alt+Enter, Ctrl+J    insert a newline (write a multi-line statement)
+  Tab                  complete commands, predicates, their columns and
+                       the Datalog syntax; Shift+Tab goes back
+  Right arrow          accept the suggestion from the history (grey text)
+  Up/Down              previous/next line or history entry
+  Ctrl+R               search the history backwards (Ctrl+S forwards)
+  Ctrl+X Ctrl+E        edit the input in $EDITOR, then run it (v in vi
+                       normal mode)
   Ctrl+C               discard the input, or interrupt a running query
   Ctrl+D               exit
 """
