@@ -206,6 +206,20 @@ def _emit(df, fmt, sort_by=None):
     return df.to_string(index=False)
 
 
+def _set_frame(ra_set, columns: list) -> pd.DataFrame:
+    """
+    Return the rows of *ra_set*, whose columns are *columns*, as a DataFrame.
+
+    The backend's own DataFrame is used, when it has these columns,
+    rather than copying the rows one by one.
+    """
+    if hasattr(ra_set, "as_pandas_dataframe"):
+        df = ra_set.as_pandas_dataframe()
+        if list(df.columns) == columns:
+            return df.copy(deep=False)
+    return pd.DataFrame(iter(ra_set), columns=columns)
+
+
 def result_to_dataframe(result, column_names=None) -> pd.DataFrame:
     """
     Return the rows of a query *result* as a DataFrame.
@@ -218,10 +232,11 @@ def result_to_dataframe(result, column_names=None) -> pd.DataFrame:
         result = result.value.unwrap()
         if hasattr(result, "as_pandas_dataframe"):
             return _rename_unnamed_columns(
-                result.as_pandas_dataframe(), column_names
+                result.as_pandas_dataframe().copy(deep=False), column_names
             )
-    if hasattr(result, "columns") and len(result.columns) > 0:
-        df = pd.DataFrame(iter(result), columns=result.columns)
+    columns = list(getattr(result, "columns", ()))
+    if columns:
+        df = _set_frame(result, columns)
     else:
         rows = list(iter(result))
         arity = getattr(result, "arity", len(rows[0]) if rows else 0)

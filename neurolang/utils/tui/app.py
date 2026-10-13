@@ -253,6 +253,8 @@ class InteractiveTuiApp:
         t0 = time.perf_counter()
         try:
             result = self._execute_noting_warnings(program)
+            if not self.settings.show_ra:
+                self._show_result(result, self._column_names(program))
         except KeyboardInterrupt:
             self.failed = True
             self.err_console.print("[yellow]Query interrupted[/yellow]")
@@ -261,8 +263,6 @@ class InteractiveTuiApp:
             self._report_error(exc, program)
             return
         elapsed = time.perf_counter() - t0
-        if not self.settings.show_ra:
-            self._show_result(result, self._column_names(program))
         self.err_console.print(
             f"[dim]Query completed in {elapsed:.2f} s[/dim]"
         )

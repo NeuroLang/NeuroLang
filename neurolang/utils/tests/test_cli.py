@@ -1507,3 +1507,56 @@ def test_interactive_without_tui_dependencies(missing, monkeypatch, capsys):
         main(["-i"])
     assert exc_info.value.code == 1
     assert 'pip install "neurolang[tui]"' in capsys.readouterr().err
+
+
+class TestResultToDataFrameUsesBackendFrame:
+
+    def test_named_set_not_iterated(self, monkeypatch):
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a"), (2, "b")]
+        )
+
+        def no_iteration(self):
+            raise AssertionError("rows must not be iterated")
+
+        monkeypatch.setattr(
+            NamedRelationalAlgebraFrozenSet, "__iter__", no_iteration
+        )
+        df = result_to_dataframe(nras)
+        assert list(df.columns) == ["x", "y"]
+        assert len(df) == 2
+
+    def test_renaming_does_not_change_the_set(self):
+        from neurolang import expressions as ir
+        from neurolang.datalog import WrappedRelationalAlgebraSet
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            RelationalAlgebraSet,
+        )
+
+        inner = RelationalAlgebraSet([(1,)])
+        result_to_dataframe(
+            ir.Constant(WrappedRelationalAlgebraSet(inner)), ["val"]
+        )
+        assert list(inner.as_pandas_dataframe().columns) == [0]
+
+    def test_polars_empty_named_set_keeps_columns(self):
+        pytest.importorskip("polars")
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.polars import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        empty = NamedRelationalAlgebraFrozenSet(columns=("x", "y"))
+        df = result_to_dataframe(empty)
+        assert list(df.columns) == ["x", "y"]
+        assert df.empty
+        full = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a")]
+        )
+        assert result_to_dataframe(full).values.tolist() == [[1, "a"]]
