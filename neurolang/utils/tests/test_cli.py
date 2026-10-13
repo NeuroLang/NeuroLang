@@ -1121,3 +1121,104 @@ class TestExecuteSquallProgram:
             nl, "define as Active every person that plays."
         )
         assert _format_result(result) == ""
+
+
+# ---------------------------------------------------------------------------
+# Error reporting
+# ---------------------------------------------------------------------------
+
+
+class TestErrorReporting:
+    """Errors are reported as formatted messages with exit status 1."""
+
+    @pytest.fixture(autouse=True)
+    def engine(self, monkeypatch):
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([("a",), ("b",)], name="item")
+        nl.add_tuple_set([("a",)], name="plays")
+        monkeypatch.setattr(
+            engine_registry, "build_engine", lambda *args, **kwargs: nl
+        )
+        monkeypatch.delenv("NEUROLANG_DEBUG", raising=False)
+        return nl
+
+    @staticmethod
+    def run_failing(capsys, *argv):
+        with pytest.raises(SystemExit) as exc_info:
+            main(list(argv))
+        assert exc_info.value.code == 1
+        return capsys.readouterr().err
+
+    def test_datalog_parse_error(self, capsys):
+        err = self.run_failing(capsys, "ans(x) <- item(x)")
+        assert err.startswith("Datalog parse error — unexpected token")
+        assert "Did you mean ':-' (or '←') instead of '<-'?" in err
+        assert "Traceback" not in err
+
+    def test_trailing_dot_is_valid(self, capsys):
+        main(["ans(x) :- item(x)."])
+        captured = capsys.readouterr()
+        assert "a" in captured.out
+        assert "error" not in captured.err.lower()
+
+    def test_squall_flag_selects_squall_hints(self, capsys):
+        err = self.run_failing(capsys, "--squall", "get every item.")
+        assert err.startswith("SQUALL parse error")
+        assert "Use 'obtain' instead of 'get' in SQUALL." in err
+        assert "':-'" not in err
+
+    def test_squall_unexpected_end_of_input(self, capsys):
+        err = self.run_failing(
+            capsys, "--squall", "obtain every item that plays and"
+        )
+        assert err.startswith("SQUALL parse error — unexpected end of input")
+        assert len(err.splitlines()) < 10
+
+    def test_multiline_program_with_leading_blank_lines(self, capsys):
+        program = "\n\nA(x) :- item(x)\nB(x) :- A(x)\nans(x) :- B(x), not plays(x)"
+        err = self.run_failing(capsys, program)
+        lines = err.splitlines()
+        error_line = lines.index("    5 | ans(x) :- B(x), not plays(x)")
+        assert lines[error_line + 1] == "      |" + " " * 21 + "^~~~"
+        assert "Location: line 5, column 21" in err
+        assert "Use '~' for negation" in err
+
+    def test_did_you_mean_uses_engine_symbols(self, capsys):
+        err = self.run_failing(capsys, "A(x) :- itme(x)\nans(x) :- A(x)")
+        assert err.startswith("Undefined symbol")
+        assert "Did you mean: item" in err
+
+    def test_arity_mismatch(self, capsys):
+        err = self.run_failing(capsys, "ans(x) :- item(x, y)")
+        assert err.startswith("Arity mismatch")
+
+    def test_show_rewritten_reports_errors(self, capsys):
+        err = self.run_failing(capsys, "--show-rewritten", "ans(x) <- item(x)")
+        assert err.startswith("Datalog parse error")
+
+    def test_show_datalog_reports_errors(self, capsys):
+        err = self.run_failing(
+            capsys, "--squall", "--show-datalog", "get every item."
+        )
+        assert err.startswith("SQUALL parse error")
+
+    def test_debug_flag_prints_traceback(self, capsys):
+        err = self.run_failing(capsys, "--debug", "ans(x) <- item(x)")
+        assert err.startswith("Traceback (most recent call last)")
+        assert "Datalog parse error" in err
+
+    def test_debug_environment_variable(self, capsys, monkeypatch):
+        monkeypatch.setenv("NEUROLANG_DEBUG", "1")
+        err = self.run_failing(capsys, "ans(x) <- item(x)")
+        assert err.startswith("Traceback (most recent call last)")
+
+    def test_internal_error_suggests_debug(self, capsys, monkeypatch):
+        def broken(*args, **kwargs):
+            raise ValueError("boom")
+
+        monkeypatch.setattr("neurolang.utils.cli._execute_program", broken)
+        err = self.run_failing(capsys, "ans(x) :- item(x)")
+        assert err.startswith("Internal error — ValueError: boom")
+        assert "--debug" in err

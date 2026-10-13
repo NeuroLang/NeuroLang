@@ -28,51 +28,28 @@ from neurolang.probabilistic.exceptions import (
 )
 
 
-class TestNeuroLangException:
-    """Tests for the base NeuroLangException enhancements."""
-
-    def test_base_has_no_suggestion(self):
-        assert NeuroLangException("test error").suggestion is None
+def test_base_exception_has_no_suggestion():
+    assert NeuroLangException("test error").suggestion is None
 
 
-class TestConcreteSuggestions:
-    """Test that each exception class has a meaningful suggestion."""
-
-    def test_symbol_not_found(self):
-        exc = SymbolNotFoundError("unknown")
-        assert "spelling" in exc.suggestion.lower()
-
-    def test_wrong_arguments(self):
-        exc = WrongArgumentsInPredicateError()
-        assert "arguments" in exc.suggestion.lower()
-
-    def test_forbidden_disjunction(self):
-        exc = ForbiddenDisjunctionError()
-        assert "single rule" in exc.suggestion.lower()
-
-    def test_forbidden_recursivity(self):
-        exc = ForbiddenRecursivityError()
-        assert "cycle" in exc.suggestion.lower()
-
-    def test_forbidden_unstratified_aggregation(self):
-        exc = ForbiddenUnstratifiedAggregation()
-        assert "aggregation" in exc.suggestion.lower()
-
-    def test_protected_keyword(self):
-        exc = ProtectedKeywordError()
-        assert "keyword" in exc.suggestion.lower()
-
-    def test_not_conjunctive_nested(self):
-        exc = NotConjunctiveExpressionNestedPredicates()
-        assert "separate rule" in exc.suggestion.lower()
-
-    def test_negative_formula_not_safe_range(self):
-        exc = NegativeFormulaNotSafeRangeException("p(x)")
-        assert "non-negated" in exc.suggestion.lower()
-
-    def test_negative_formula_not_named(self):
-        exc = NegativeFormulaNotNamedRelationException("p(x)")
-        assert "named" in exc.suggestion.lower()
+@pytest.mark.parametrize(
+    "exc, keyword",
+    [
+        (SymbolNotFoundError("unknown"), "spelling"),
+        (WrongArgumentsInPredicateError(), "number of arguments"),
+        (ForbiddenDisjunctionError(), "single rule"),
+        (ForbiddenRecursivityError(), "cycle"),
+        (ForbiddenUnstratifiedAggregation(), "aggregation"),
+        (ProtectedKeywordError(), "reserved"),
+        (NotConjunctiveExpressionNestedPredicates(), "separate rule"),
+        (CouldNotTranslateConjunctionException("f"), "normal form"),
+        (NegativeFormulaNotSafeRangeException("p(x)"), "non-negated"),
+        (NegativeFormulaNotNamedRelationException("p(x)"), "own rule"),
+    ],
+    ids=lambda v: type(v).__name__ if isinstance(v, Exception) else v,
+)
+def test_actionable_suggestion(exc, keyword):
+    assert keyword in exc.suggestion
 
 
 class TestParserError:

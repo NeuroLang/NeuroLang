@@ -1,467 +1,277 @@
 """
 Tests for the error formatting module.
 
-Generates a variety of real Datalog and SQUALL errors and verifies
-that the formatting produces readable, helpful output.
+Real Datalog and SQUALL errors are produced with the actual parsers and the
+formatted output is checked for location, hints and suggestions.
 """
 
-import sys
+import io
 
 import pytest
-from lark.exceptions import UnexpectedToken, UnexpectedCharacters
+from lark import Lark
+from lark.exceptions import UnexpectedInput
 
-from neurolang.exceptions import (
+from ...exceptions import (
     NeuroLangException,
     ParserError,
     SquallSemanticError,
     SymbolNotFoundError,
-    UnexpectedTokenError,
-    UnexpectedCharactersError,
     WrongArgumentsInPredicateError,
 )
-from neurolang.frontend.error_formatting import (
-    _HINTS,
-    _did_you_mean,
-    _suggest_fixes,
-    format_error,
+from ..datalog.squall_syntax_lark import parser as squall_parser
+from ..datalog.standard_syntax import parser as datalog_parser
+from ..error_formatting import format_error, print_formatted_error, use_color
+
+PARSERS = {"Datalog": datalog_parser, "SQUALL": squall_parser}
+
+
+def _format_parse_error(code, language):
+    """Parse *code*, expect a failure and return the formatted error."""
+    with pytest.raises(NeuroLangException) as exc_info:
+        PARSERS[language](code)
+    return format_error(exc_info.value, code, language=language)
+
+
+# ── Syntax hints ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "language, wrong, hint, fixed",
+    [
+        ("Datalog", "ans(x) :- ", "body is empty", "ans(x) :- R(x)"),
+        ("Datalog", "ans(x) <- R(x)", "instead of '<-'", "ans(x) :- R(x)"),
+        ("Datalog", "ans(x) <- R(x)", "instead of '<-'", "ans(x) ← R(x)"),
+        ("Datalog", "R(x) => ans(x)", "head first", "ans(x) :- R(x)"),
+        ("Datalog", "SELECT x FROM R", "not SQL", "ans(x) :- R(x)"),
+        (
+            "Datalog", "ans(x) :- R(x) WHERE x > 0", "with WHERE",
+            "ans(x) :- R(x), (x > 0)",
+        ),
+        (
+            "Datalog", "ans(x) :- R(x), not S(x)", "Use '~'",
+            "ans(x) :- R(x), ~S(x)",
+        ),
+        (
+            "SQUALL", "select every item.", "instead of 'select'",
+            "obtain every item that plays.",
+        ),
+        (
+            "SQUALL", "get every item.", "instead of 'get'",
+            "obtain every item that plays.",
+        ),
+        (
+            "SQUALL", "find every item that plays.", "instead of 'find'",
+            "obtain every item that plays.",
+        ),
+    ],
 )
+def test_hint_shown_and_suggested_fix_parses(language, wrong, hint, fixed):
+    out = _format_parse_error(wrong, language)
+    assert out.startswith(f"{language} parse error")
+    assert "Suggestions:" in out
+    assert hint in out
+    PARSERS[language](fixed)
+
+
+@pytest.mark.parametrize(
+    "language, code",
+    [
+        ("Datalog", "ans(x) :- R(x)."),
+        ("SQUALL", "obtain every item which plays."),
+        (
+            "SQUALL",
+            "define as Voxel_reported with a probability of the "
+            "Proximity_indicator of the Peak_reported (?x2; ?y2; ?z2; ?s) "
+            "for each ?x, ?y, ?z and for each ?s "
+            "where (?x; ?y; ?z) is a Voxel.",
+        ),
+    ],
+)
+def test_valid_syntax_formerly_flagged_by_hints(language, code):
+    """Trailing dots, 'which' and 'for each' are valid syntax."""
+    PARSERS[language](code)
+
+
+def test_hints_only_match_the_error_line():
+    code = "A(x) :- R(x) % not where\nans(x) <- A(x)"
+    out = _format_parse_error(code, "Datalog")
+    assert "instead of '<-'" in out
+    assert "Use '~'" not in out
+    assert "with WHERE" not in out
+
+
+def test_squall_errors_get_squall_hints_only():
+    out = _format_parse_error("get every item.", "SQUALL")
+    assert out.startswith("SQUALL parse error")
+    assert "Datalog" not in out
+    assert "':-'" not in out
+
+
+def test_datalog_identifiers_are_not_taken_for_squall():
+    out = _format_parse_error("ans(x) :- defined_region(x) <- R", "Datalog")
+    assert out.startswith("Datalog parse error")
+
+
+# ── Locations ──────────────────────────────────────────────────────────────
+
+
+def test_caret_on_error_line_of_multiline_program():
+    code = "A(x) :- R(x)\nB(x) :- A(x)\nans(x) <- B(x)"
+    out = _format_parse_error(code, "Datalog")
+    lines = out.splitlines()
+    error_line = lines.index("    3 | ans(x) <- B(x)")
+    assert lines[error_line + 1] == "      |        ^~~~"
+    assert "Location: line 3, column 8" in out
+
+
+@pytest.mark.parametrize(
+    "language, code, location",
+    [
+        ("Datalog", "\n\nans(x) <- R(x)", "line 3, column 8"),
+        ("SQUALL", "\n\nget every item.", "line 3, column 5"),
+    ],
+)
+def test_leading_blank_lines_keep_line_numbers(language, code, location):
+    out = _format_parse_error(code, language)
+    assert f"Location: {location}" in out
+    assert "    3 | " in out
+
+
+def test_squall_semantic_error_keeps_line_numbers():
+    code = "\n\ndefine as V for every Voxel ?v where a Study reports the Term"
+    with pytest.raises(SquallSemanticError) as exc_info:
+        squall_parser(code)
+    out = format_error(exc_info.value, code, language="SQUALL")
+    assert out.startswith("SQUALL semantic error")
+    assert "    3 | define as V" in out
+    assert "Location: line 3" in out
+
+
+def test_unexpected_end_of_input():
+    code = "obtain every item that plays and"
+    out = _format_parse_error(code, "SQUALL")
+    assert out.startswith("SQUALL parse error — unexpected end of input")
+    assert f"Location: line 1, column {len(code) + 1}" in out
+    expected = next(
+        line for line in out.splitlines() if "Expected:" in line
+    )
+    assert expected.endswith("…")
+    assert len(expected.split(", ")) == 9
+    assert "_THAT" not in out
+    assert len(out.splitlines()) < 10
+
+
+def test_expected_terminals_shown_as_literals():
+    out = _format_parse_error("ans(x) :- R(x) S(x)", "Datalog")
+    assert "Expected: one of '::', ':='" in out
+    assert "PROBA_OP" not in out
+
 
+def test_raw_lark_error_is_formatted():
+    with pytest.raises(UnexpectedInput) as exc_info:
+        Lark('start: "hello" "world"', parser="lalr").parse("hello there")
+    out = format_error(exc_info.value, "hello there")
+    assert out.startswith("Datalog parse error — unexpected character")
+    assert "Location: line 1, column 6" in out
+    assert "Found: ' '" in out
 
-def _suggest_datalog_fixes(text):
-    return _suggest_fixes(text, _HINTS["Datalog"])
 
-
-def _suggest_squall_fixes(text):
-    return _suggest_fixes(text, _HINTS["SQUALL"])
+# ── NeuroLang exceptions ───────────────────────────────────────────────────
 
-
-class TestSourceContext:
-    """Test source context extraction and pointer formatting."""
-
-    def test_caret_under_column(self):
-        exc = NeuroLangException("boom")
-        exc.line, exc.column = 2, 8
-        result = format_error(exc, "line one\nans(x) :- R(x)\nline three")
-        assert "ans(x)" in result
-        assert "      |        ^~~~" in result
-
-    def test_out_of_range_line_has_no_window(self):
-        exc = NeuroLangException("boom")
-        exc.line, exc.column = 5, 1
-        assert "^~~~" not in format_error(exc, "")
-
-
-class TestDatalogSuggestions:
-    """Test suggestion generation for Datalog queries."""
-
-    def test_empty_body(self):
-        suggestions = _suggest_datalog_fixes("ans(x) :- ")
-        assert len(suggestions) > 0
-        assert any("empty" in s.lower() for s in suggestions)
-
-    def test_arrow_instead(self):
-        suggestions = _suggest_datalog_fixes("ans(x) <- R(x)")
-        assert len(suggestions) > 0
-        assert any("<-" in s for s in suggestions)
-
-    def test_select_keyword(self):
-        suggestions = _suggest_datalog_fixes("SELECT x FROM R")
-        assert len(suggestions) > 0
-        assert any("SQL" in s for s in suggestions)
-
-    def test_not_keyword(self):
-        suggestions = _suggest_datalog_fixes("ans(x) :- R(x), not S(x)")
-        assert len(suggestions) > 0
-        assert any("'~'" in s for s in suggestions)
-
-    def test_clean_query_no_suggestions(self):
-        suggestions = _suggest_datalog_fixes("ans(x) :- R(x)")
-        assert len(suggestions) == 0
-
-
-class TestSquallSuggestions:
-    """Test suggestion generation for SQUALL queries."""
-
-    def test_select_instead(self):
-        suggestions = _suggest_squall_fixes("select every study")
-        assert len(suggestions) > 0
-        assert any("obtain" in s.lower() for s in suggestions)
-
-    def test_get_instead(self):
-        suggestions = _suggest_squall_fixes("get every study")
-        assert len(suggestions) > 0
-        assert any("obtain" in s.lower() for s in suggestions)
-
-    def test_clean_squall_no_suggestions(self):
-        suggestions = _suggest_squall_fixes("obtain every study that reports")
-        assert len(suggestions) == 0
-
-
-class TestFormatError:
-    """Test the main format_error function with various exception types."""
-
-    def test_squall_semantic_error_with_source(self):
-        exc = SquallSemanticError(
-            "Unresolved anaphora: 'the term' has no matching 'for every term' in scope",
-            line=1,
-            column=20,
-            source_line="define as V for every Voxel ?v where a Study reports the Term",
-        )
-        result = format_error(exc)
-        assert "SQUALL semantic error" in result
-        assert "the term" in result.lower() or "Term" in result
-        assert "^~~~" in result
-
-    def test_squall_semantic_error_no_source(self):
-        exc = SquallSemanticError("Some error", line=5, column=10)
-        result = format_error(exc)
-        assert "SQUALL semantic error" in result
-        assert "line 5" in result
-
-    def test_squall_semantic_error_minimal(self):
-        exc = SquallSemanticError("Some error")
-        result = format_error(exc)
-        assert "SQUALL semantic error" in result
-        assert "Some error" in result
-
-    def test_unexpected_token_error(self):
-        exc = UnexpectedTokenError(
-            "Unexpected token 'foo'",
-            line=1,
-            column=5,
-        )
-        result = format_error(exc)
-        assert "parse error" in result.lower() or "Error" in result
-
-    def test_unexpected_characters_error(self):
-        exc = UnexpectedCharactersError(
-            "Unexpected character '!'",
-            line=1,
-            column=10,
-        )
-        result = format_error(exc)
-        assert "parse error" in result.lower() or "Error" in result
-
-    def test_generic_neurolang_exception(self):
-        exc = NeuroLangException("Something went wrong")
-        result = format_error(exc)
-        assert "Something went wrong" in result
-
-    def test_parser_error(self):
-        exc = ParserError("Parse failure", line=2, column=3)
-        result = format_error(exc)
-        assert "Parse failure" in result
-
-    def test_lark_unexpected_token(self):
-        # Simulate a Lark UnexpectedToken — use a grammar that will produce one
-        try:
-            from lark import Lark
-            # LALR parser raises UnexpectedCharacters for unknown chars
-            # Use a grammar that will produce UnexpectedToken
-            g = Lark("start: \"hello\" \"world\"", parser="lalr")
-            g.parse("hello there")
-        except UnexpectedToken as e:
-            result = format_error(e)
-            assert "parse error" in result.lower() or "Error" in result
-        except UnexpectedCharacters:
-            # Some Lark versions raise UnexpectedCharacters instead
-            pass
-
-    def test_lark_unexpected_characters(self):
-        try:
-            from lark import Lark
-            g = Lark("start: /[a-z]+/", parser="lalr")
-            g.parse("123")
-        except UnexpectedCharacters as e:
-            result = format_error(e)
-            assert "parse error" in result.lower() or "Error" in result
-
-
-class TestUndefinedPredicateError:
-    """Test formatting of SymbolNotFoundError."""
-
-    def test_basic_symbol_not_found(self):
-        exc = SymbolNotFoundError("Symbol Q not found")
-        result = format_error(exc, "ans(x) :- R(x), Q(x)")
-        assert "Undefined symbol" in result
-        assert "Symbol Q not found" in result
-
-    def test_symbol_not_found_with_line(self):
-        exc = SymbolNotFoundError("Symbol foo not found")
-        exc.line = 1
-        exc.column = 12
-        result = format_error(exc, "ans(x) :- foo(x)")
-        assert "line 1" in result
-        assert "^~~~" in result
-
-    def test_symbol_not_found_format_not_found(self):
-        exc = SymbolNotFoundError("Symbol not found foo")
-        result = format_error(exc, "ans(x) :- foo(x)")
-        assert "Undefined symbol" in result
-
-    def test_symbol_not_found_predicate_format(self):
-        exc = SymbolNotFoundError("Predicate foo not found")
-        result = format_error(exc, "ans(x) :- foo(x)")
-        assert "Undefined symbol" in result
-
-    def test_did_you_mean_suggestion(self):
-        exc = SymbolNotFoundError("Symbol regin_reported not found")
-        result = format_error(
-            exc, "ans(x) :- regin_reported(x)",
-            known_symbols=["region_reported", "peak_reported"],
-        )
-        assert "Did you mean" in result
-        assert "region_reported" in result
-
-    def test_no_suggestion_for_unknown_predicate(self):
-        exc = SymbolNotFoundError("Symbol XyzzyNotFound not found")
-        result = format_error(exc, "ans(x) :- XyzzyNotFound(x)")
-        assert "Undefined symbol" in result
-
-
-class TestArityMismatchError:
-    """Test formatting of WrongArgumentsInPredicateError."""
-
-    def test_basic_arity_mismatch(self):
-        exc = WrongArgumentsInPredicateError(
-            "There is a predicate in the query with the wrong number of arguments."
-        )
-        result = format_error(exc, "ans(x, y, z) :- R(x, y, z)")
-        assert "Arity mismatch" in result
-        assert "wrong number of arguments" in result
-
-    def test_arity_mismatch_with_line(self):
-        exc = WrongArgumentsInPredicateError(
-            "Predicate R expects 2 arguments but got 3"
-        )
-        exc.line = 1
-        exc.column = 18
-        result = format_error(exc, "ans(x) :- R(x, y, z)")
-        assert "Arity mismatch" in result
-        assert "^~~~" in result
-
-
-class TestSimilarNames:
-    """Test the similar-name suggestion utility."""
-
-    def test_suggests_similar(self):
-        names = {"term_in_study_tfidf", "region_reported", "peak_reported"}
-        result = _did_you_mean("regin_reported", names)
-        assert "region_reported" in result
-
-    def test_does_not_suggest_dissimilar(self):
-        names = {"term_in_study_tfidf", "peak_reported"}
-        result = _did_you_mean("xyz", names)
-        assert len(result) == 0
-
-    def test_empty_input(self):
-        result = _did_you_mean("", {"foo", "bar"})
-        assert len(result) == 0
-
-
-class TestRealDatalogErrors:
-    """Test formatting of real Datalog parse errors."""
-
-    def test_missing_implication(self):
-        """Datalog without :- should produce a parse error."""
-        from neurolang.frontend.datalog.standard_syntax import parser as dl_parser
-        try:
-            dl_parser("ans(x) R(x)")
-            pytest.fail("Expected parse error")
-        except (UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException) as e:
-            result = format_error(e, "ans(x) R(x)")
-            assert result
-            assert "parse error" in result.lower() or "Error" in result or "error" in result.lower()
-
-    def test_gibberish_datalog(self):
-        from neurolang.frontend.datalog.standard_syntax import parser as dl_parser
-        try:
-            dl_parser("!@#$%")
-            pytest.fail("Expected parse error")
-        except (UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException) as e:
-            result = format_error(e, "!@#$%")
-            assert result
-
-    def test_incomplete_rule(self):
-        from neurolang.frontend.datalog.standard_syntax import parser as dl_parser
-        try:
-            dl_parser("ans(x) :- ")
-            pytest.fail("Expected parse error")
-        except (UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException) as e:
-            result = format_error(e, "ans(x) :- ")
-            assert result
-
-    def test_wrong_arrow(self):
-        from neurolang.frontend.datalog.standard_syntax import parser as dl_parser
-        try:
-            dl_parser("ans(x) <- R(x)")
-            pytest.fail("Expected parse error")
-        except (UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException) as e:
-            result = format_error(e, "ans(x) <- R(x)")
-            assert result
-
-    def test_trailing_dot(self):
-        # The _preprocess function strips trailing dots from each line.
-        # Test a case with a dot mid-expression that won't be stripped.
-        from neurolang.frontend.datalog.standard_syntax import parser as dl_parser
-        try:
-            dl_parser("ans(x) :- R(x) .and. S(x)")
-            pytest.fail("Expected parse error")
-        except (UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException) as e:
-            result = format_error(e, "ans(x) :- R(x) .and. S(x)")
-            assert result
-
-
-class TestRealSquallErrors:
-    """Test formatting of real SQUALL parse and semantic errors."""
-
-    def test_gibberish_squall(self):
-        from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
-        try:
-            squall_parser("foo bar baz qux")
-            pytest.fail("Expected parse error")
-        except (UnexpectedTokenError, UnexpectedCharactersError, SquallSemanticError, NeuroLangException) as e:
-            result = format_error(e, "foo bar baz qux")
-            assert result
-
-    def test_gibberish_after_define(self):
-        from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
-        try:
-            squall_parser("define as Verb ~!@#$%")
-            pytest.fail("Expected parse error")
-        except (UnexpectedTokenError, UnexpectedCharactersError, SquallSemanticError, NeuroLangException) as e:
-            result = format_error(e, "define as Verb ~!@#$%")
-            assert result
-
-    def test_the_anaphora_error(self):
-        from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
-        # 'the' with no matching 'for every' in scope — should still fail
-        code = "define as V for every Voxel ?v where a Study reports the Term and the Term is in the Study"
-        try:
-            squall_parser(code)
-            pytest.fail("Expected parse error")
-        except (UnexpectedTokenError, UnexpectedCharactersError, SquallSemanticError, NeuroLangException) as e:
-            result = format_error(e, code)
-            assert result
-
-    def test_the_in_subject_position(self):
-        from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
-        # Incomplete rule body — should produce a parse error
-        code = "define as V for every Voxel ?v where"
-        try:
-            squall_parser(code)
-            pytest.fail("Expected parse error")
-        except (UnexpectedTokenError, UnexpectedCharactersError, SquallSemanticError, NeuroLangException) as e:
-            result = format_error(e, code)
-            assert result
-
-    def test_the_anaphora_different_noun(self):
-        from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
-        # Missing determiner before noun — should produce a parse error
-        code = "define as V for every Voxel ?v where Study reports Term"
-        try:
-            squall_parser(code)
-            pytest.fail("Expected parse error")
-        except (UnexpectedTokenError, UnexpectedCharactersError, SquallSemanticError, NeuroLangException) as e:
-            result = format_error(e, code)
-            assert result
-
-
-class TestCLIErrorHandling:
-    """Test that the CLI properly catches and formats errors."""
-
-    def test_datalog_parse_error_in_cli(self):
-        """Simulate what happens when CLI gets a bad Datalog query."""
-        from neurolang.frontend.datalog.standard_syntax import parser as dl_parser
-        from neurolang.frontend.error_formatting import print_formatted_error
-        import io
-
-        bad_query = "ans(x) R(x)"
-        try:
-            dl_parser(bad_query)
-        except (UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException) as e:
-            # Capture stderr
-            stderr = io.StringIO()
-            old_stderr = sys.stderr
-            sys.stderr = stderr
-            try:
-                print_formatted_error(e, bad_query)
-            finally:
-                sys.stderr = old_stderr
-            output = stderr.getvalue()
-            assert output
-            assert "parse error" in output.lower() or "Error" in output or "error" in output.lower()
-
-    def test_squall_parse_error_in_cli(self):
-        """Simulate what happens when CLI gets a bad SQUALL query."""
-        from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
-        from neurolang.frontend.error_formatting import print_formatted_error
-        import io
-
-        bad_query = "foo bar baz"
-        try:
-            squall_parser(bad_query)
-        except (UnexpectedTokenError, UnexpectedCharactersError, SquallSemanticError, NeuroLangException) as e:
-            stderr = io.StringIO()
-            old_stderr = sys.stderr
-            sys.stderr = stderr
-            try:
-                print_formatted_error(e, bad_query)
-            finally:
-                sys.stderr = old_stderr
-            output = stderr.getvalue()
-            assert output
-
-
-if __name__ == "__main__":
-    # Run a quick demo of error formatting
-    print("=" * 60)
-    print("NeuroLang Error Formatting Demo")
-    print("=" * 60)
-
-    # 1. Datalog: missing implication
-    print("\n--- Datalog: missing ':-' ---")
-    from neurolang.frontend.datalog.standard_syntax import parser as dl_parser
-    try:
-        dl_parser("ans(x) R(x)")
-    except (UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException) as e:
-        print(format_error(e, "ans(x) R(x)"))
-
-    # 2. Datalog: wrong arrow
-    print("\n--- Datalog: '<-' instead of ':-' ---")
-    try:
-        dl_parser("ans(x) <- R(x)")
-    except (UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException) as e:
-        print(format_error(e, "ans(x) <- R(x)"))
-
-    # 3. Datalog: trailing dot
-    print("\n--- Datalog: trailing '.' ---")
-    try:
-        dl_parser("ans(x) :- R(x).")
-    except (UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException) as e:
-        print(format_error(e, "ans(x) :- R(x)."))
-
-    # 4. Datalog: incomplete rule
-    print("\n--- Datalog: empty body ---")
-    try:
-        dl_parser("ans(x) :- ")
-    except (UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException) as e:
-        print(format_error(e, "ans(x) :- "))
-
-    # 5. SQUALL: anaphora error
-    print("\n--- SQUALL: unresolved 'the Term' ---")
-    from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
-    try:
-        squall_parser("define as V for every Voxel ?v where a Study reports the Term")
-    except SquallSemanticError as e:
-        print(format_error(e, "define as V for every Voxel ?v where a Study reports the Term"))
-
-    # 6. SQUALL: gibberish
-    print("\n--- SQUALL: gibberish ---")
-    try:
-        squall_parser("foo bar baz qux")
-    except (UnexpectedTokenError, UnexpectedCharactersError, SquallSemanticError, NeuroLangException) as e:
-        print(format_error(e, "foo bar baz qux"))
-
-    print("\n" + "=" * 60)
-    print("Demo complete!")
+
+def test_did_you_mean_uses_known_symbols():
+    exc = SymbolNotFoundError("Symbol not found regin_reported")
+    out = format_error(
+        exc, "ans(x) :- regin_reported(x)",
+        known_symbols=["region_reported", "Region_Reported", "peak"],
+    )
+    assert out.startswith("Undefined symbol")
+    assert "Did you mean: region_reported" in out
+    assert "Region_Reported" not in out
+
+
+def test_symbol_not_found_without_close_match_gives_tip():
+    exc = SymbolNotFoundError("Symbol xyzzy not found")
+    out = format_error(exc, "ans(x) :- xyzzy(x)", known_symbols=["item"])
+    assert "Did you mean" not in out
+    assert f"Tip: {SymbolNotFoundError.suggestion}" in out
+
+
+def test_arity_mismatch():
+    exc = WrongArgumentsInPredicateError("wrong number of arguments")
+    out = format_error(exc, "ans(x) :- R(x, y, z)")
+    assert out.startswith("Arity mismatch")
+    assert f"Tip: {WrongArgumentsInPredicateError.suggestion}" in out
+
+
+def test_neurolang_exception_with_location():
+    exc = ParserError("Parse failure", line=2, column=3)
+    out = format_error(exc, "first\nsecond line")
+    assert out.startswith("Error — ParserError")
+    assert "    2 | second line\n      |   ^~~~" in out
+    assert "Error: Parse failure" in out
+    assert "Tip:" not in out
+
+
+def test_squall_semantic_error_from_source_line_only():
+    exc = SquallSemanticError(
+        "Unresolved anaphora", line=4, column=3,
+        source_line="where the Term",
+    )
+    out = format_error(exc)
+    assert "    4 | where the Term\n      |   ^~~~" in out
+    assert "Error: Unresolved anaphora" in out
+
+
+def test_squall_semantic_error_without_location():
+    out = format_error(SquallSemanticError("Some error"))
+    assert out == "SQUALL semantic error\n  Error: Some error"
+
+
+def test_non_neurolang_exception():
+    out = format_error(ValueError("boom"))
+    assert out == "Internal error — ValueError: boom"
+
+
+# ── Colour ─────────────────────────────────────────────────────────────────
+
+
+class _Terminal(io.StringIO):
+    def isatty(self):
+        return True
+
+
+def test_color_only_on_terminals(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    assert use_color(_Terminal())
+    assert not use_color(io.StringIO())
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert not use_color(_Terminal())
+
+
+@pytest.mark.parametrize(
+    "stream_type, no_color, coloured",
+    [
+        (_Terminal, None, True),
+        (_Terminal, "1", False),
+        (io.StringIO, None, False),
+    ],
+)
+def test_print_formatted_error_colour(
+    monkeypatch, stream_type, no_color, coloured
+):
+    if no_color is None:
+        monkeypatch.delenv("NO_COLOR", raising=False)
+    else:
+        monkeypatch.setenv("NO_COLOR", no_color)
+    stream = stream_type()
+    print_formatted_error(NeuroLangException("boom"), file=stream)
+    assert ("\033[" in stream.getvalue()) is coloured
+    assert "boom" in stream.getvalue()
+
+
+def test_print_formatted_error_defaults_to_stderr(capsys):
+    print_formatted_error(NeuroLangException("boom"))
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Error: boom" in captured.err
