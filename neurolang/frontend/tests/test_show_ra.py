@@ -517,20 +517,46 @@ def test_postprobabilistic_rules_and_plans_are_printed(capsys):
     assert "└─ ans^cond_den(p_den)\n" in post
 
 
-def test_postprobabilistic_chain_of_rules(capsys):
+def _two_choices_engine():
+    """Return an engine with uniform choices P over a, b and Q over a, c."""
     nl = NeurolangPDL()
-    P = nl.add_uniform_probabilistic_choice_over_set(
+    nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("b",)], name="P"
     )
-    Q = nl.add_uniform_probabilistic_choice_over_set(
+    nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("c",)], name="Q"
     )
+    return nl
+
+
+def test_probabilistic_stratum_header(capsys):
+    nl = _two_choices_engine()
     with nl.scope as e:
-        e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
+        e.Z[e.PROB[e.x], e.x] = e.P[e.x] & e.Q[e.x]
+        nl.execute_datalog_program("ans(p, x) :- Z(p, x).", show_ra=True)
+    out = capsys.readouterr().out
+    assert "── deterministic stratum ──" in out
+    assert "── probabilistic stratum ──" in out
+
+
+def test_postprobabilistic_chain_of_rules(capsys):
+    """
+    Check that the post-probabilistic stratum prints its rules.
+
+    ``ans`` uses the result of the probabilistic rule ``Z`` and ``ans2``
+    uses ``ans``, so both land in the post-probabilistic stratum.
+    """
+    nl = _two_choices_engine()
+    with nl.scope as e:
+        e.Z[e.PROB[e.x], e.x] = e.P[e.x] & e.Q[e.x]
         e.ans[e.x, e.p] = e.Z[e.p, e.x]
         e.ans2[e.x] = e.ans[e.x, e.p] & (e.p > 0.1)
         nl.query((e.x,), e.ans2[e.x], show_ra=True)
-    post = capsys.readouterr().out.split("── post-probabilistic stratum ──")
+    out = capsys.readouterr().out
+    assert "── deterministic stratum ──" in out
+    assert "── probabilistic stratum ──" in out
+    assert "── post-probabilistic stratum ──" in out
+    post = out.split("── post-probabilistic stratum ──")
     assert "── rule ans(x, p) :-\n    Z(p, x) ──\nZ(p, x)\n" in post[1]
     assert "── rule ans2(x) :-" in post[1]
     assert "σ[p > 0.1]" in post[1]

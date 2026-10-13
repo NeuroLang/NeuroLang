@@ -748,22 +748,21 @@ OPERATOR_SYMBOLS = {
 
 
 def _populate_operator_symbols():
-    import operator as op
     mapping = {
-        op.add: "+",
-        op.sub: "-",
-        op.mul: "*",
-        op.truediv: "/",
-        op.eq: "==",
-        op.ne: "!=",
-        op.gt: ">",
-        op.lt: "<",
-        op.ge: ">=",
-        op.le: "<=",
-        op.pow: "**",
-        op.and_: "and",
-        op.or_: "or",
-        op.not_: "not",
+        operator.add: "+",
+        operator.sub: "-",
+        operator.mul: "*",
+        operator.truediv: "/",
+        operator.eq: "==",
+        operator.ne: "!=",
+        operator.gt: ">",
+        operator.lt: "<",
+        operator.ge: ">=",
+        operator.le: "<=",
+        operator.pow: "**",
+        operator.and_: "and",
+        operator.or_: "or",
+        operator.not_: "not",
     }
     OPERATOR_SYMBOLS.update(mapping)
 

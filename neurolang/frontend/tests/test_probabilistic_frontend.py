@@ -102,48 +102,6 @@ def test_show_ra_deterministic_stratum(capsys):
     assert "P" in captured.out
 
 
-def test_show_ra_postprobabilistic_stratum(capsys):
-    """
-    Check that show_ra prints the post-probabilistic stratum.
-
-    ``ans`` uses the result of the probabilistic rule ``Z`` and ``ans2``
-    uses ``ans``, so both land in the post-probabilistic stratum.
-    """
-    nl = NeurolangPDL()
-    P = nl.add_uniform_probabilistic_choice_over_set(
-        [("a",), ("b",)], name="P"
-    )
-    Q = nl.add_uniform_probabilistic_choice_over_set(
-        [("a",), ("c",)], name="Q"
-    )
-    with nl.scope as e:
-        e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
-        e.ans[e.x, e.p] = e.Z[e.p, e.x]
-        e.ans2[e.x] = e.ans[e.x, e.p] & (e.p > 0.1)
-        nl.query((e.x,), e.ans2[e.x], show_ra=True)
-    captured = capsys.readouterr()
-    assert "── deterministic stratum ──" in captured.out
-    assert "── probabilistic stratum ──" in captured.out
-    assert "── post-probabilistic stratum ──" in captured.out
-
-
-def test_show_ra_probabilistic_stratum(capsys):
-    from neurolang.frontend import NeurolangPDL
-    nl = NeurolangPDL()
-    P = nl.add_uniform_probabilistic_choice_over_set(
-        [("a",), ("b",)], name="P"
-    )
-    Q = nl.add_uniform_probabilistic_choice_over_set(
-        [("a",), ("c",)], name="Q"
-    )
-    with nl.scope as e:
-        e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
-        nl.execute_datalog_program("ans(p, x) :- Z(p, x).", show_ra=True)
-    captured = capsys.readouterr()
-    assert "── deterministic stratum ──" in captured.out
-    assert "── probabilistic stratum ──" in captured.out
-
-
 def test_show_ra_conditional_query_provenance():
     """
     Check that show-ra builds the plan of a conditional (MARG) rule.

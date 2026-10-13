@@ -31,17 +31,7 @@ def named(relation, *names):
 
 
 def test_nary_join_one_operand_per_branch():
-    plan = NaryNaturalJoin((
-        named(Symbol("edge"), "x", "y"),
-        named(Symbol("label"), "y", "l"),
-        Selection(
-            named(Symbol("weight"), "l", "w"),
-            FunctionApplication(
-                Constant(operator.gt),
-                (str2columnstr_constant("w"), Constant(15)),
-            ),
-        ),
-    ))
+    plan = three_way_join()
     assert pretty_repr(plan).splitlines() == [
         "⋈",
         "├─ ρ[x, y]",
