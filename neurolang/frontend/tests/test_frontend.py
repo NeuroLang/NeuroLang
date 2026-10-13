@@ -766,6 +766,34 @@ def test_frontend_operators():
     assert c.expression.args == (exp.Constant(1), a.expression)
 
 
+@pytest.mark.parametrize(
+    "aggregate, expected",
+    [("count", {("a", 2), ("b", 1)}), ("max", {("a", 2), ("b", 5)})],
+)
+def test_query_with_aggregation_in_head(aggregate, expected):
+    neurolang = frontend.NeurolangPDL()
+    neurolang.add_tuple_set([(1, "a"), (2, "a"), (5, "b")], name="hits")
+    sol = neurolang.execute_datalog_program(
+        f"ans(t, {aggregate}(s)) :- hits(s, t)"
+    )
+    assert sol.columns == ("t", aggregate)
+    assert sol.to_unnamed() == expected
+    with neurolang.scope as e:
+        sol = neurolang.query(
+            (e.t, getattr(e, aggregate)(e.s)), e.hits(e.s, e.t)
+        )
+    assert sol.columns == ("t", aggregate)
+    assert sol.to_unnamed() == expected
+
+
+def test_query_head_with_repeated_variable():
+    neurolang = frontend.NeurolangDL()
+    neurolang.add_tuple_set([(1, "a"), (2, "b")], name="hits")
+    sol = neurolang.execute_datalog_program("ans(t, t) :- hits(s, t)")
+    assert sol.columns == ("t", "t_1")
+    assert sol.to_unnamed() == {("a", "a"), ("b", "b")}
+
+
 def test_neurolang_dl_attribute_access():
     neurolang = frontend.NeurolangDL()
     one_element = namedtuple("t", ("x", "y"))(1, 2)

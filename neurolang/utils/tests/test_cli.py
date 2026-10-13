@@ -1373,6 +1373,35 @@ class TestExecuteSquallProgram:
 
 
 # ---------------------------------------------------------------------------
+# Aggregations in the head of the query
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "aggregate, rows",
+    [
+        ("count", [["a", 2], ["b", 1]]),
+        ("sum", [["a", 3], ["b", 5]]),
+        ("max", [["a", 2], ["b", 5]]),
+    ],
+)
+def test_query_with_aggregation_in_head(aggregate, rows, monkeypatch, capsys):
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "a"), (2, "a"), (5, "b")], name="hits")
+    monkeypatch.setattr(
+        engine_registry, "build_engine", lambda *args, **kwargs: nl
+    )
+    main([
+        "--format", "json", "--sort", "t",
+        f"ans(t, {aggregate}(s)) :- hits(s, t)",
+    ])
+    out = json.loads(capsys.readouterr().out)
+    assert [[r["t"], r[aggregate]] for r in out] == rows
+
+
+# ---------------------------------------------------------------------------
 # Error reporting
 # ---------------------------------------------------------------------------
 
@@ -1509,6 +1538,27 @@ class TestResultToDataFrame:
         )
         df = result_to_dataframe(nras)
         assert list(df.columns) == ["x", "y"]
+
+    @pytest.mark.parametrize(
+        "columns, renamed",
+        [
+            (("fresh_00000002",), ["term"]),
+            (("0", "1"), ["term", "weight"]),
+            (("fresh_00000002", "y"), ["fresh_00000002", "y"]),
+        ],
+    )
+    def test_generated_columns_renamed(self, columns, renamed):
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=columns, iterable=[tuple(range(len(columns)))]
+        )
+        names = ["term", "weight"][:len(columns)]
+        df = result_to_dataframe(nras, names)
+        assert list(df.columns) == renamed
 
     def test_sort_dataframe_warns_on_unknown_column(self, capsys):
         from neurolang.utils.cli import sort_dataframe
