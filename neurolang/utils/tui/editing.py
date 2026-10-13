@@ -10,13 +10,12 @@ modes (``.mode vi|emacs``).
 """
 
 import re
-from html import escape
 from typing import Callable, Optional
 
+from prompt_toolkit.application.current import get_app
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.document import Document
 from prompt_toolkit.enums import EditingMode
-from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 
@@ -24,7 +23,7 @@ from neurolang.frontend.datalog.standard_syntax import COMPILED_GRAMMAR
 from neurolang.utils.cli import _declared_columns
 from neurolang.utils.interactive_parsing import LarkCompleter
 
-from .commands import MODES
+from .commands import MODES, sort_spec_text
 from .completion import (
     KEYWORDS as DATALOG_KEYWORDS,
     NeuroLangReplCompleter,
@@ -162,16 +161,58 @@ def make_completer(app) -> NeuroLangReplCompleter:
     )
 
 
-def toolbar(app) -> HTML:
-    """Return the bottom toolbar: engine, mode, sizes and editing mode."""
-    mode = "SQ" if app.settings.squall else "DL"
-    rows = sum(len(block.frame) for block in app.results)
-    result = f"rows:{rows}" if app.results else "—"
-    editing = "VI" if app.settings.vi_mode else "EM"
-    return HTML(
-        f"<b>nl({escape(app.settings.engine_name)}:{mode})</b>  "
-        f"{result}  [{editing}]"
-    )
+TOOLBAR_HINTS = (".help", "Tab completes", "Ctrl-D quits")
+
+
+def toolbar_fields(settings) -> list:
+    """
+    Return the settings shown in the toolbar.
+
+    They are the engine, the language, the page size, the sort if set,
+    the output format if not ``table`` and the editing mode.
+    """
+    fields = [
+        settings.engine_name or "NeuroLang",
+        "SQUALL" if settings.squall else "Datalog",
+        f"page {settings.page_size}",
+    ]
+    if settings.sort_by:
+        fields.append(f"sort {sort_spec_text(settings.sort_by, ' ')}")
+    if settings.output_format != "table":
+        fields.append(settings.output_format)
+    fields.append("vi" if settings.vi_mode else "emacs")
+    return fields
+
+
+def toolbar_text(settings, width: int = 80) -> str:
+    """
+    Return the toolbar of the session *settings* fitting in *width*.
+
+    The :data:`TOOLBAR_HINTS` are dropped from the last one until it
+    fits, then the text is cut with an ellipsis.
+    """
+    fields = toolbar_fields(settings)
+    hints = list(TOOLBAR_HINTS)
+    text = " · ".join(fields + hints)
+    while hints and len(text) > width - 1:
+        hints.pop()
+        text = " · ".join(fields + hints)
+    if len(text) > width - 1:
+        text = text[:max(width - 2, 0)] + "…"
+    return " " + text
+
+
+def _terminal_width() -> int:
+    """Return the width of the running prompt's terminal, or 80."""
+    try:
+        return get_app().output.get_size().columns
+    except Exception:
+        return 80
+
+
+def toolbar(app) -> str:
+    """Return the bottom toolbar of the REPL *app*: its settings and keys."""
+    return toolbar_text(app.settings, _terminal_width())
 
 
 def session_options(app) -> dict:

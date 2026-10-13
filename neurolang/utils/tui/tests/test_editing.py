@@ -31,6 +31,7 @@ from neurolang.utils.tui.editing import (  # noqa: E402
     STYLE,
     NeuroLangReplCompleter,
     toolbar,
+    toolbar_text,
 )
 
 
@@ -180,21 +181,35 @@ def test_session_completes_engine_predicates(app):
 
 def test_toolbar(app):
     app._make_session()
-    assert "nl(neurosynth:DL)" in toolbar(app).value
-    assert "—" in toolbar(app).value
-    app._execute_and_display("ans(x) :- P(x)")
+    assert toolbar(app) == (
+        " neurosynth · Datalog · page 20 · emacs · .help · "
+        "Tab completes · Ctrl-D quits"
+    )
     app._handle_dot_command(".mode squall")
-    text = toolbar(app).value
-    assert "nl(neurosynth:SQ)" in text
-    assert "rows:2" in text
-    assert "[EM]" in text
+    app._handle_dot_command(".sort x:desc")
+    app._handle_dot_command(".format csv")
+    app._handle_dot_command(".head 5")
+    assert toolbar_text(app.settings, 200) == (
+        " neurosynth · SQUALL · page 5 · sort x:desc · csv · emacs · "
+        ".help · Tab completes · Ctrl-D quits"
+    )
+
+
+def test_toolbar_fits_the_terminal(app):
+    app.settings.sort_by = [("study_id", True), ("term", False)]
+    text = toolbar_text(app.settings, 80)
+    assert len(text) <= 80
+    assert text.endswith("emacs · .help")
+    narrow = toolbar_text(app.settings, 30)
+    assert len(narrow) == 30 and narrow.endswith("…")
+    assert "neurosynth · Datalog" in narrow
 
 
 def test_vi_and_emacs_modes(app):
     app.session = app._make_session()
     app._handle_dot_command(".mode vi")
     assert app.session.editing_mode == EditingMode.VI
-    assert "[VI]" in toolbar(app).value
+    assert " vi · " in toolbar(app)
     app._handle_dot_command(".mode emacs")
     assert app.session.editing_mode == EditingMode.EMACS
     app._handle_dot_command(".mode nano")
