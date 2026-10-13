@@ -1,5 +1,6 @@
 import logging
-from collections.abc import Mapping
+import threading
+from collections import OrderedDict
 from functools import reduce
 from itertools import chain, combinations
 from typing import AbstractSet
@@ -9,7 +10,8 @@ import numpy as np
 from .. import relational_algebra_provenance as rap
 from ..config import config
 from ..datalog.expression_processing import (
-    UnifyVariableEqualities, flatten_query
+    UnifyVariableEqualities,
+    flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..exceptions import (
@@ -18,17 +20,20 @@ from ..exceptions import (
     NotInFONegE,
     NotRankedException,
     NotUnateException,
-    UnsupportedSolverError,
+    UnsupportedSolverError
 )
 from ..expression_walker import (
     ExpressionWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     add_match,
-    expression_iterator,
+    expression_iterator
 )
 from ..expressions import (
-    Constant, FunctionApplication, Symbol, TypedSymbolTableMixin
+    Constant,
+    FunctionApplication,
+    Symbol,
+    TypedSymbolTableMixin
 )
 from ..logic import (
     FALSE,
@@ -40,12 +45,12 @@ from ..logic import (
     Negation,
     Quantifier,
     Union,
-    UniversalPredicate,
+    UniversalPredicate
 )
 from ..logic.expression_processing import (
     extract_logic_atoms,
     extract_logic_free_variables,
-    extract_logic_predicates,
+    extract_logic_predicates
 )
 from ..logic.transformations import (
     ExtractConjunctiveQueryWithNegation,
@@ -59,7 +64,7 @@ from ..logic.transformations import (
     RemoveExistentialOnVariables,
     RemoveTrivialOperations,
     RemoveUniversalPredicates,
-    convert_to_pnf_with_dnf_matrix,
+    convert_to_pnf_with_dnf_matrix
 )
 from ..relational_algebra import (
     BinaryRelationalAlgebraOperation,
@@ -67,25 +72,31 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
     UnaryRelationalAlgebraOperation,
-    str2columnstr_constant,
+    str2columnstr_constant
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
-from .expression_processing import is_builtin, lift_optimization_for_choice_predicates
+from .expression_processing import (
+    is_builtin,
+    lift_optimization_for_choice_predicates
+)
 from .probabilistic_ra_utils import (
+    GetProbabilisticSetAtom,
     NonLiftable,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_deterministic_relation,
-    is_atom_a_probabilistic_choice_relation,
+    is_atom_a_probabilistic_choice_relation
 )
-from .probabilistic_semiring_solver import ProbSemiringToRelationalAlgebraSolver
+from .probabilistic_semiring_solver import (
+    ProbSemiringToRelationalAlgebraSolver
+)
 from .query_resolution import (
     compute_projections_needed_to_reintroduce_head_terms,
     generate_provenance_query_solver,
-    lift_solve_marg_query,
+    lift_solve_marg_query
 )
 from .ranking import partially_rank_query, verify_that_the_query_is_ranked
 from .shattering import shatter_constants
@@ -96,7 +107,7 @@ from .transforms import (
     convert_to_dnf_existential_ucq,
     minimize_ucq_in_cnf,
     minimize_ucq_in_dnf,
-    unify_existential_variables,
+    unify_existential_variables
 )
 
 LOG = logging.getLogger(__name__)
@@ -111,18 +122,12 @@ __all__ = [
 
 
 # Bound cache to avoid unbounded memory growth in long-running processes.
-_MAX_DALVI_SUCU_CACHE_SIZE = config.getint(
+_MAX_DALVI_SUCIU_CACHE_SIZE = config.getint(
     "probabilistic.cache", "dalvi_suciu_max_size", fallback=4096
 )
 
-# Thread-safe LRU cache: OrderedDict keys are (id(rule), st_key).
-# id(rule) is unique among simultaneously-live objects in CPython.
-# st_key (stored in the value) guards against id reuse after GC.
-import threading
-from collections import OrderedDict
-
 _dalvi_suciu_lift_cache = OrderedDict()
-_dalvi_suciu_lift_cache_lock = threading.RLock()
+_dalvi_suciu_lift_cache_lock = threading.Lock()
 
 
 def clear_cache():
@@ -131,42 +136,23 @@ def clear_cache():
         _dalvi_suciu_lift_cache.clear()
 
 
-def _get_from_cache(cache_key):
-    """Try to get a value from the cache."""
-    with _dalvi_suciu_lift_cache_lock:
-        try:
-            return _dalvi_suciu_lift_cache[cache_key]
-        except KeyError:
-            return None
+def _lift_cache_key(rule, symbol_table):
+    """
+    Key a lifted plan by the rule and the kind of each of its symbols.
 
-
-def _add_to_cache(cache_key, value):
-    """Add a value to the cache with LRU eviction."""
-    with _dalvi_suciu_lift_cache_lock:
-        _dalvi_suciu_lift_cache[cache_key] = value
-        while len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCU_CACHE_SIZE:
-            _dalvi_suciu_lift_cache.popitem(last=False)
-
-
-def _make_symbol_table_key(symbol_table):
-    """Convert a symbol table mapping into an immutable, hashable key."""
-    key_items = []
-    for symb, value in symbol_table.items():
-        try:
-            value_hash = hash(value)
-        except TypeError:
-            # Constants wrapping large/unhashable RAS sets cannot be hashed.
-            # Fall back to object identity for caching purposes.
-            if isinstance(value, Constant):
-                value_hash = id(value.value)
-            else:
-                value_hash = id(value)
-        key_items.append((
-            symb,
-            type(value).__name__,
-            value_hash,
-        ))
-    return tuple(sorted(key_items, key=lambda kv: id(kv[0])))
+    The plan only refers to the relational symbols of the rule, and only
+    depends on the symbol table through whether each symbol is a
+    deterministic, probabilistic fact or probabilistic choice relation.
+    Keying on that, rather than on the tables themselves, avoids hashing
+    the data and lets queries with fresh table symbols share plans.
+    """
+    gpsa = GetProbabilisticSetAtom(symbol_table)
+    kinds = frozenset(
+        (symbol, type(symbol_table[symbol]), type(gpsa.walk(symbol)))
+        for symbol in rule._symbols
+        if symbol in symbol_table
+    )
+    return rule, kinds
 
 
 GC = GuaranteeConjunction()
@@ -376,77 +362,61 @@ def dalvi_suciu_lift(rule, symbol_table):
     '''
     Translation from a datalog rule which allows disjunctions in the body
     to a safe plan according to [1]. Non-liftable segments are identified
-    by the `NonLiftable` expression.
+    by the `NonLiftable` expression. Plans are cached, see `clear_cache`.
     [1] Dalvi, N. & Suciu, D. The dichotomy of probabilistic inference
     for unions of conjunctive queries. J. ACM 59, 1–87 (2012).
     '''
-    # Compute an immutable cache key for the symbol table.
-    if isinstance(symbol_table, Mapping):
-        st_key = _make_symbol_table_key(symbol_table)
-    else:
-        st_key = tuple(
-            (symb, type(value).__name__, hash(value))
-            for symb, value in sorted(
-                symbol_table.items(), key=lambda kv: hash(kv[0])
-            )
-        )
-    # id(rule) is unique among simultaneously-live objects in CPython.
-    # st_key (stored alongside the value) guards against id reuse on
-    # objects that have already been garbage-collected.
-    cache_key = (id(rule), st_key)
+    key = _lift_cache_key(rule, symbol_table)
+    with _dalvi_suciu_lift_cache_lock:
+        if key in _dalvi_suciu_lift_cache:
+            _dalvi_suciu_lift_cache.move_to_end(key)
+            return _dalvi_suciu_lift_cache[key]
 
-    # Check cache first
-    cached_result = _get_from_cache(cache_key)
-    if cached_result is not None:
-        return cached_result
+    plan = _dalvi_suciu_lift(rule, symbol_table)
 
+    with _dalvi_suciu_lift_cache_lock:
+        _dalvi_suciu_lift_cache[key] = plan
+        if len(_dalvi_suciu_lift_cache) > _MAX_DALVI_SUCIU_CACHE_SIZE:
+            _dalvi_suciu_lift_cache.popitem(last=False)
+    return plan
+
+
+def _dalvi_suciu_lift(rule, symbol_table):
     #  rule = RemoveUniversalPredicates().walk(rule)
     rule = RTO.walk(rule)
 
     has_safe_plan, res = symbol_or_deterministic_plan(rule, symbol_table)
     if has_safe_plan:
-        plan = res
-        _add_to_cache(cache_key, plan)
-        return plan
+        return res
 
     rule_cnf = convert_ucq_to_ccq(rule, transformation='CNF')
     connected_components = symbol_connected_components(rule_cnf)
     if len(connected_components) > 1:
-        res = components_plan(
+        return components_plan(
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
         )
-        _add_to_cache(cache_key, res)
-        return res
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
     connected_components = symbol_connected_components(rule_dnf)
     if len(connected_components) > 1:
-        res = components_plan(
+        return components_plan(
             connected_components, rap.Union, symbol_table
         )
-        _add_to_cache(cache_key, res)
-        return res
 
     rule_pdnf = convert_to_pnf_with_dnf_matrix(rule_dnf)
     has_svs, plan = has_separator_variables(rule_pdnf, symbol_table)
     if has_svs:
-        _add_to_cache(cache_key, plan)
         return plan
 
     has_safe_plan, plan = disjoint_project(rule_dnf, symbol_table)
     if has_safe_plan:
-        _add_to_cache(cache_key, plan)
         return plan
 
     if len(rule_cnf.formulas) > 1:
-        res = inclusion_exclusion_conjunction(rule_cnf, symbol_table)
-        _add_to_cache(cache_key, res)
-        return res
+        return inclusion_exclusion_conjunction(rule_cnf, symbol_table)
 
-    res = NonLiftable(rule)
-    _add_to_cache(cache_key, res)
-    return res
+    return NonLiftable(rule)
 
 
 def symbol_or_deterministic_plan(rule, symbol_table):
@@ -726,9 +696,7 @@ def connected_components(adjacency_matrix):
         component_follow = [idx]
         while component_follow:
             idx = component_follow.pop()
-            idxs = set(
-                np.atleast_1d(adjacency_matrix[idx]).nonzero()[0]
-            ) - component
+            idxs = set(np.atleast_1d(adjacency_matrix[idx]).nonzero()[0]) - component
             component |= idxs
             component_follow += idxs
         components.append(component)

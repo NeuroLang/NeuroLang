@@ -1,5 +1,4 @@
 import operator as op
-import unittest
 from typing import (AbstractSet, Any, Callable, Generic, Mapping, Set,
                     SupportsInt, T, Tuple, Union)
 
@@ -11,39 +10,35 @@ from .. import (NeuroLangTypeException, Unknown, get_args, get_origin,
                 typing_callable_from_annotated_function)
 
 
-class TestGradualTyping(unittest.TestCase):
-    """Test gradual typing functionality."""
-
-    def test_parametrical(self):
-        self.assertTrue(is_parametrical(Set))
-        self.assertTrue(is_parametrical(AbstractSet))
-        self.assertTrue(is_parametrical(Union))
-        self.assertTrue(is_parametrical(Callable))
-        self.assertFalse(is_parametrical(Set[int]))
-        self.assertFalse(is_parametrical(AbstractSet[int]))
-        self.assertFalse(is_parametrical(Union[int, float]))
-        self.assertFalse(is_parametrical(Callable[[int], float]))
-        self.assertFalse(is_parametrical(int))
-        self.assertFalse(is_parametrical(T))
-        self.assertFalse(is_parametrical(SupportsInt))
+def test_parametrical():
+    assert is_parametrical(Set)
+    assert is_parametrical(AbstractSet)
+    assert is_parametrical(Union)
+    assert is_parametrical(Callable)
+    assert not is_parametrical(Set[int])
+    assert not is_parametrical(AbstractSet[int])
+    assert not is_parametrical(Union[int, float])
+    assert not is_parametrical(Callable[[int], float])
+    assert not is_parametrical(int)
+    assert not is_parametrical(T)
+    assert not is_parametrical(SupportsInt)
 
 
-    def test_parameterized(self):
-        self.assertFalse(is_parameterized(Set))
-        self.assertFalse(is_parameterized(AbstractSet))
-        self.assertFalse(is_parameterized(Union))
-        self.assertFalse(is_parameterized(Callable))
-        self.assertTrue(is_parameterized(Set[int]))
-        self.assertTrue(is_parameterized(AbstractSet[int]))
-        self.assertTrue(is_parameterized(Union[int, float]))
-        self.assertTrue(is_parameterized(Callable[[int], float]))
-        self.assertFalse(is_parameterized(int))
-        self.assertFalse(is_parameterized(T))
-        self.assertFalse(is_parameterized(SupportsInt))
+def test_parameterized():
+    assert not is_parameterized(Set)
+    assert not is_parameterized(AbstractSet)
+    assert not is_parameterized(Union)
+    assert not is_parameterized(Callable)
+    assert is_parameterized(Set[int])
+    assert is_parameterized(AbstractSet[int])
+    assert is_parameterized(Union[int, float])
+    assert is_parameterized(Callable[[int], float])
+    assert not is_parameterized(int)
+    assert not is_parameterized(T)
+    assert not is_parameterized(SupportsInt)
 
 
 def test_get_type_args():
-    """Test getting type arguments from parametric types."""
     args = get_args(AbstractSet)
     assert args == tuple()
 
@@ -52,7 +47,6 @@ def test_get_type_args():
 
 
 def test_is_leq_informative_type():
-    """Test if types are less informative than others."""
     assert is_leq_informative(Unknown, int)
     assert not is_leq_informative(int, Unknown)
     assert not is_leq_informative(Any, int)
@@ -71,7 +65,6 @@ def test_is_leq_informative_type():
 
 
 def test_is_leq_informative_base_types():
-    """Test if base types are less informative than others."""
     assert is_leq_informative(int, int)
     assert is_leq_informative(int, float)
     assert is_leq_informative(str, str)
@@ -102,7 +95,6 @@ def test_is_leq_informative_base_types():
 
 
 def test_typing_callable_from_annotated_function():
-    """Test creating callable types from annotated functions."""
     def fun(a: int, b: str) -> float:
         pass
 
@@ -116,7 +108,6 @@ def test_typing_callable_from_annotated_function():
 
 
 def test_replace_subtype():
-    """Test replacing type variables in types."""
     assert (
         Set is replace_type_variable(
             int, Set, T
@@ -148,7 +139,6 @@ def test_replace_subtype():
 
 
 def test_infer_type():
-    """Test type inference for various expressions."""
 
     def a(x: int, y: str) -> bool:
         return False

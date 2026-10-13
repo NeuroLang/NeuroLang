@@ -13,7 +13,7 @@ from ..datalog.expression_processing import (
     conjunct_formulas,
     extract_logic_atoms,
     extract_logic_predicates,
-    reachable_code,
+    reachable_code
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
@@ -22,12 +22,7 @@ from ..logic.transformations import GuaranteeConjunction
 from ..relational_algebra import Projection, RelationalAlgebraSolver
 from ..utils import OrderedSet
 from .exceptions import DistributionDoesNotSumToOneError
-from .expressions import (
-    PROB,
-    ProbabilisticFact,
-    ProbabilisticPredicate,
-    ProbabilisticQuery,
-)
+from .expressions import PROB, ProbabilisticPredicate, ProbabilisticFact, ProbabilisticQuery
 
 
 def is_probabilistic_fact(expression):

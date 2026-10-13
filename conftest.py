@@ -1,6 +1,7 @@
-"""Pytest configuration file.
+"""
+Pytest configuration file.
 
-NOTE: Do not remove the unused dask_sql import!
+NOTE: Do not remove the unused dask_sql import !
 
 The dask_sql library uses jpype to start a JVM and access Java objects
 from python. This JVM needs to be started before we import neurolang,
@@ -8,12 +9,9 @@ otherwise it can cause major side-effects which are hard to track. See
 https://github.com/jpype-project/jpype/issues/933 for reference.
 """
 import warnings
-
 import pytest
-
 try:
     import dask_sql
-
     from neurolang.utils.relational_algebra_set.dask_helpers import (
         DaskContextManager,
     )
@@ -25,19 +23,16 @@ from neurolang import config
 
 
 def pytest_addoption(parser):
-    """Add command-line options for pytest."""
     parser.addoption(
         "--runslow", action="store_true", default=False, help="run slow tests"
     )
 
 
 def pytest_configure(config):
-    """Configure pytest settings."""
     config.addinivalue_line("markers", "slow: mark test as slow to run")
 
 
 def pytest_collection_modifyitems(config, items):
-    """Modify test items based on configuration."""
     if config.getoption("--runslow"):
         # --runslow given in cli: do not skip slow tests
         return
@@ -54,12 +49,11 @@ def pytest_sessionstart(session: pytest.Session):
 
     The dask-sql library uses the jpype library which starts a JVM and allows
     us to use Java classes from Python. But the JVM will trigger a
-    segmentation fault when starting and when interrupting threads and Python's
+    segmentation fault when starting and when interrupting threads and Pythons
     fault handler can intercept these operations and interpret these as
     real faults. So we need to disable faulthandlers which pytest starts
     otherwise we get segmentation faults when running the tests.
-    See (https://jpype.readthedocs.io/en/latest/userguide.html#
-errors-reported-by-python-fault-handler)
+    See (https://jpype.readthedocs.io/en/latest/userguide.html#errors-reported-by-python-fault-handler)
     """
     try:
         import faulthandler
@@ -74,8 +68,8 @@ errors-reported-by-python-fault-handler)
 def clear_dask_context_after_test_module():
     """
     We use only one DaskContextManager for the application and its context gets
-    clustered with objects quite fast when running the tests, so this fixture 
-    clears the context after each test function.
+    clustered with objects quite fast when running the tests, so this fixture clears
+    the context after each test function.
     """
     yield 0
 
@@ -84,14 +78,8 @@ def clear_dask_context_after_test_module():
 
 @pytest.fixture(autouse=True)
 def clear_probabilistic_caches():
-    """Clear probabilistic resolution caches before each test.
-
-    This avoids stale state across test boundaries.
-    """
+    """Clear the probabilistic plan caches so that tests are independent."""
     from neurolang.probabilistic import containment, dalvi_suciu_lift
 
-    dalvi_suciu_lift.clear_cache()
     containment.clear_cache()
-    yield
     dalvi_suciu_lift.clear_cache()
-    containment.clear_cache()

@@ -7,14 +7,15 @@ from ..expressions import Constant, Symbol
 from ..logic import Disjunction, Implication, Union
 from ..logic.expression_processing import (
     extract_logic_atoms,
-    extract_logic_free_variables,
+    extract_logic_free_variables
 )
 from ..logic.transformations import (
     MakeExistentialsImplicit,
     PushExistentialsDown,
     RemoveUniversalPredicates,
-    convert_to_pnf_with_dnf_matrix,
+    convert_to_pnf_with_dnf_matrix
 )
+
 
 LOG = logging.getLogger(__name__)
 
@@ -77,6 +78,7 @@ def is_contained_rule(q1, q2):
     return frozen_head in solution.as_set()
 
 
+@lru_cache(maxsize=4096)
 def is_contained(q1, q2):
     '''
     Computes if q1 is contained in q2. Specifically,
@@ -108,11 +110,8 @@ def is_contained(q1, q2):
     return True
 
 
-is_contained = lru_cache(maxsize=4096)(is_contained)
-
-
 def clear_cache():
-    """Clear the internal LRU cache used by `is_contained`."""
+    """Clear the cache of `is_contained`."""
     is_contained.cache_clear()
 
 
