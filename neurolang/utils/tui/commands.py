@@ -77,10 +77,10 @@ def cmd_mode(app, arg: str) -> None:
     """Switch between Datalog and SQUALL input."""
     mode = arg.strip().lower()
     if mode == "datalog":
-        app.squall_mode = False
+        app.settings.squall = False
         app.console.print("[green]Mode: Datalog[/green]")
     elif mode == "squall":
-        app.squall_mode = True
+        app.settings.squall = True
         app.console.print("[green]Mode: SQUALL[/green]")
     else:
         app.console.print(

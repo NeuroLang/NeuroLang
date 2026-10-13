@@ -13,6 +13,6 @@ The REPL is organised in modules:
 - :mod:`.results`: conversion and display of query results.
 """
 
-from .app import InteractiveTuiApp, main
+from .app import InteractiveTuiApp, TuiSettings, main
 
-__all__ = ["InteractiveTuiApp", "main"]
+__all__ = ["InteractiveTuiApp", "TuiSettings", "main"]

@@ -45,6 +45,9 @@ Usage
 
     # ... annotated with the number of rows each plan node produces
     neurolang-query --show-ra --ra-analyze "ans(x) :- P(x)"
+
+    # Interactive REPL (needs ``pip install "neurolang[tui]"``)
+    neurolang-query -i --engine neurosynth
 """
 
 import argparse
@@ -344,8 +347,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "-i",
         action="store_true",
         dest="interactive",
-        help="Start an interactive REPL rendering the query results "
-        "as tables.",
+        help="Start an interactive REPL on the engine, rendering the "
+        "query results as tables. A query given as argument or with "
+        "--file is run first; --show-ra and --show-rewritten apply to "
+        "every query of the session.",
     )
     parser.add_argument(
         "--debug",
@@ -763,17 +768,6 @@ def _run_query(args) -> None:
         _list_sets(nl)
         return
 
-    if args.interactive:
-        from neurolang.utils.tui import main as tui_main
-        tui_main(
-            engine_name=args.engine,
-            data_dir=args.data_dir,
-            resolution=args.resolution,
-            squall_mode=args.squall,
-            sort_specs=args.sort,
-        )
-        return
-
     program = _read_query_or_exit(args)
 
     t0 = time.perf_counter()
@@ -788,11 +782,73 @@ def _run_query(args) -> None:
     print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)
 
 
+_NOT_INTERACTIVE_FLAGS = (
+    ("--list-engines", "list_engines"),
+    ("--grammar-json", "grammar_json"),
+    ("--show-datalog", "show_datalog"),
+    ("--list-predicates", "list_predicates"),
+    ("--list-sets", "list_sets"),
+)
+
+
+def _check_interactive_flags(args) -> None:
+    """Exit with an error when ``args`` combines -i with a listing flag."""
+    for flag, dest in _NOT_INTERACTIVE_FLAGS:
+        if getattr(args, dest):
+            print(
+                f"Error: {flag} cannot be used with --interactive.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+
+def _tui_settings(args, tui):
+    """Return the REPL settings ``tui.TuiSettings`` requested by ``args``."""
+    return tui.TuiSettings(
+        engine_name=args.engine,
+        squall=args.squall,
+        sort_by=_parse_sort_spec(args.sort),
+        show_ra=_show_ra_options(args) if args.show_ra else None,
+        show_rewritten=args.show_rewritten,
+        history_path=str(Path.home() / ".neurolang_query_history"),
+    )
+
+
+def _program_argument(args) -> str:
+    """Return the query given as argument or with ``--file``, or ''."""
+    if args.file:
+        return Path(args.file).read_text(encoding="utf-8")
+    return args.query or ""
+
+
+def _run_interactive(args) -> None:
+    """
+    Build the engine once and start the interactive REPL on it.
+
+    A query given as argument or with ``--file`` is run in the session
+    before the first prompt. ``--show-ra`` and ``--show-rewritten``
+    apply to every query of the session.
+    """
+    _check_interactive_flags(args)
+    _check_flag_dependencies(args)
+    _check_engine_name(args)
+    from neurolang.utils import tui
+
+    program = _program_argument(args)
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution
+    )
+    tui.main(nl, _tui_settings(args, tui), initial_program=program)
+
+
 def main(argv: Optional[list] = None) -> None:
     """CLI entry point: parse arguments, build engine, run query."""
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    if args.interactive:
+        _run_interactive(args)
+        return
     if _run_engineless_command(args):
         return
     _check_flag_dependencies(args)

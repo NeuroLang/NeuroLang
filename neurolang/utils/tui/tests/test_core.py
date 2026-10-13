@@ -6,7 +6,7 @@ import pytest
 pytest.importorskip("prompt_toolkit")
 pytest.importorskip("rich")
 
-from neurolang.utils.tui import InteractiveTuiApp  # noqa: E402
+from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
 from neurolang.utils.tui.results import _df_to_rich_table  # noqa: E402
 
 
@@ -28,46 +28,60 @@ class TestDfToRichTable:
         assert [c.header for c in table.columns] == ["a", "b", "c"]
 
 
-class TestInteractiveTuiApp:
-    def test_datalog_prompt(self, tmp_path):
-        app = InteractiveTuiApp(
-            engine_name="neurosynth", history_path=str(tmp_path / "h")
-        )
-        assert app._get_prompt() == "nl(neurosynth:DL)> "
-
-    def test_squall_prompt(self, tmp_path):
-        app = InteractiveTuiApp(
-            engine_name="destrieux", squall_mode=True,
-            history_path=str(tmp_path / "h"),
-        )
-        assert app._get_prompt() == "nl(destrieux:SQ)> "
-
-    def test_mode_switch(self, tmp_path):
-        app = InteractiveTuiApp(history_path=str(tmp_path / "h"))
-        app._handle_dot_command(".mode squall")
-        assert app.squall_mode
-        app._handle_dot_command(".mode datalog")
-        assert not app.squall_mode
-
-
-def test_query_result_sorted_with_cli_helpers(tmp_path):
+def _console():
     import io
 
     from rich.console import Console
 
+    return Console(file=io.StringIO(), width=100)
+
+
+def _output(app):
+    return app.console.file.getvalue()
+
+
+@pytest.fixture
+def engine():
+    """Return a small engine holding the relation ``P``."""
     from neurolang.frontend import NeurolangPDL
 
     nl = NeurolangPDL()
-    nl.add_tuple_set([(1,), (3,), (2,)], name="P")
-    out = io.StringIO()
+    nl.add_tuple_set([(1,), (2,)], name="P")
+    return nl
+
+
+@pytest.fixture
+def small_app(engine):
+    """Return a REPL on a small engine, printing to a string buffer."""
+    return InteractiveTuiApp(engine, console=_console())
+
+
+class TestInteractiveTuiApp:
+    def test_datalog_prompt(self, engine):
+        app = InteractiveTuiApp(engine, TuiSettings(engine_name="neurosynth"))
+        assert app._get_prompt() == "nl(neurosynth:DL)> "
+
+    def test_squall_prompt(self, engine):
+        app = InteractiveTuiApp(
+            engine, TuiSettings(engine_name="destrieux", squall=True)
+        )
+        assert app._get_prompt() == "nl(destrieux:SQ)> "
+
+    def test_mode_switch(self, small_app):
+        small_app._handle_dot_command(".mode squall")
+        assert small_app.settings.squall
+        small_app._handle_dot_command(".mode datalog")
+        assert not small_app.settings.squall
+
+
+def test_query_result_sorted_with_cli_helpers(engine):
+    engine.add_tuple_set([(1,), (3,), (2,)], name="Q")
     app = InteractiveTuiApp(
-        history_path=str(tmp_path / "h"), sort_specs=["x:desc"],
-        console=Console(file=out, width=80),
+        engine, TuiSettings(sort_by=[("x", False)]), console=_console()
     )
-    app._nl = nl
-    app._execute_and_display("ans(x) :- P(x)")
+    app._execute_and_display("ans(x) :- Q(x)")
     assert list(app._last_df["x"]) == [3, 2, 1]
-    text = out.getvalue()
+    text = _output(app)
     assert text.index("3") < text.index("2") < text.index("1 ")
 
 
@@ -83,29 +97,6 @@ def pipe_session():
             pipe.send_text(keys)
             return PromptSession(input=pipe, output=DummyOutput())
         yield make
-
-
-@pytest.fixture
-def small_app(tmp_path):
-    """Return a REPL on a small engine, printing to a string buffer."""
-    import io
-
-    from rich.console import Console
-
-    from neurolang.frontend import NeurolangPDL
-
-    nl = NeurolangPDL()
-    nl.add_tuple_set([(1,), (2,)], name="P")
-    app = InteractiveTuiApp(
-        history_path=str(tmp_path / "h"),
-        console=Console(file=io.StringIO(), width=100),
-    )
-    app._nl = nl
-    return app
-
-
-def _output(app):
-    return app.console.file.getvalue()
 
 
 def test_ctrl_c_at_prompt_keeps_session(small_app, pipe_session):

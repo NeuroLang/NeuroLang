@@ -1,21 +1,21 @@
 """The interactive REPL loop and the execution of the queries it reads."""
 
 import time
-from pathlib import Path
+from dataclasses import dataclass, field
 from typing import Optional
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.filters import HasSearch
-from prompt_toolkit.history import FileHistory
+from prompt_toolkit.history import FileHistory, InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
 from rich.panel import Panel
 
+from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.utils import engine_registry
 from neurolang.utils.cli import (
     _execute_program,
     _execute_squall_program,
-    _parse_sort_spec,
     result_to_dataframe,
     sort_dataframe,
 )
@@ -36,54 +36,56 @@ def _newline_bindings() -> KeyBindings:
     return bindings
 
 
+@dataclass
+class TuiSettings:
+    """
+    Settings of a REPL session.
+
+    They are initialised from the command line options and some of them
+    can be changed with dot-commands during the session.
+    """
+
+    engine_name: str = ""
+    squall: bool = False
+    sort_by: list = field(default_factory=list)
+    show_ra: Optional[ShowRAOptions] = None
+    show_rewritten: bool = False
+    history_path: Optional[str] = None
+
+
 class InteractiveTuiApp:
     """Interactive NeuroLang REPL rendering query results as tables."""
 
     def __init__(
         self,
-        engine_name: str = "neurosynth",
-        data_dir: str = "neurolang_data",
-        resolution: Optional[float] = None,
-        history_path: Optional[str] = None,
-        squall_mode: bool = False,
-        sort_specs: Optional[list] = None,
+        nl,
+        settings: Optional[TuiSettings] = None,
         console: Optional[Console] = None,
     ):
-        self.engine_name = engine_name
-        self.data_dir = Path(data_dir)
-        self.resolution = resolution
-        self.squall_mode = squall_mode
-        self.sort_by = _parse_sort_spec(sort_specs or [])
+        self._nl = nl
+        self.settings = settings or TuiSettings()
         self.console = console or Console()
-        self._nl = None
         self._last_df = None
-        history_path = history_path or str(
-            Path.home() / ".neurolang_query_history"
-        )
-        self._history = FileHistory(history_path)
-
-    def _ensure_engine(self) -> None:
-        """Build the engine on first use."""
-        if self._nl is not None:
-            return
-        self.console.print(
-            f"[dim]Building engine {self.engine_name!r} ...[/dim]"
-        )
-        self._nl = engine_registry.build_engine(
-            self.engine_name, self.data_dir, self.resolution
-        )
-        self.console.print("[green]Engine ready.[/green]")
+        if self.settings.history_path:
+            self._history = FileHistory(self.settings.history_path)
+        else:
+            self._history = InMemoryHistory()
 
     def _execute(self, program: str):
         """Run *program* in the current language and return its result."""
         execute = (
-            _execute_squall_program if self.squall_mode else _execute_program
+            _execute_squall_program if self.settings.squall
+            else _execute_program
         )
-        return execute(self._nl, program)
+        return execute(
+            self._nl, program,
+            show_rewritten=self.settings.show_rewritten,
+            show_ra=self.settings.show_ra or False,
+        )
 
     def _show_frame(self, result, title: str = "") -> None:
         """Sort and print the rows of a query *result*."""
-        df = sort_dataframe(result_to_dataframe(result), self.sort_by)
+        df = sort_dataframe(result_to_dataframe(result), self.settings.sort_by)
         if df.empty:
             self.console.print("[dim](empty)[/dim]")
         else:
@@ -113,7 +115,6 @@ class InteractiveTuiApp:
 
     def _execute_and_display(self, program: str) -> None:
         """Run a Datalog or SQUALL query and print its result."""
-        self._ensure_engine()
         self.console.print("[dim]Running query...[/dim]")
         t0 = time.perf_counter()
         try:
@@ -125,7 +126,8 @@ class InteractiveTuiApp:
             self.console.print(f"[red]Query error:[/red] {exc}")
             return
         elapsed = time.perf_counter() - t0
-        self._show_result(result)
+        if self.settings.show_ra is None:
+            self._show_result(result)
         self.console.print(f"\n[dim]Query completed in {elapsed:.2f} s[/dim]")
 
     def _handle_dot_command(self, line: str) -> None:
@@ -141,8 +143,8 @@ class InteractiveTuiApp:
 
     def _get_prompt(self) -> str:
         """Return the prompt showing the engine and the language."""
-        mode = "SQ" if self.squall_mode else "DL"
-        return f"nl({self.engine_name}:{mode})> "
+        mode = "SQ" if self.settings.squall else "DL"
+        return f"nl({self.settings.engine_name}:{mode})> "
 
     def _print_banner(self) -> None:
         """Print the welcome banner and the engine description."""
@@ -152,12 +154,13 @@ class InteractiveTuiApp:
             "Ctrl+D or [green].quit[/green] to exit.",
             border_style="cyan",
         ))
-        cfg = engine_registry.get_engine_config(self.engine_name)
+        name = self.settings.engine_name
+        cfg = engine_registry.get_engine_config(name) if name else {}
         self.console.print(
-            f"[dim]Engine: {self.engine_name} — "
+            f"[dim]Engine: {name} — "
             f"{cfg.get('description', '')}[/dim]"
         )
-        mode = "SQUALL" if self.squall_mode else "Datalog"
+        mode = "SQUALL" if self.settings.squall else "Datalog"
         self.console.print(f"[dim]Mode: {mode}[/dim]")
 
     def _make_session(self) -> PromptSession:
@@ -197,27 +200,22 @@ class InteractiveTuiApp:
             self.console.print("[yellow]Interrupted[/yellow]")
         return True
 
-    def run(self, session=None) -> None:
-        """Start the interactive REPL, reading from *session* if given."""
+    def run(self, session=None, initial_program: str = "") -> None:
+        """
+        Start the interactive REPL, reading from *session* if given.
+
+        A non-empty *initial_program* is run as a query before the first
+        prompt.
+        """
         self._print_banner()
-        self._ensure_engine()
+        if initial_program.strip():
+            self._execute_and_display(initial_program)
         session = session or self._make_session()
         while self._read_and_run(session):
             pass
         self.console.print("[dim]Goodbye.[/dim]")
 
-def main(
-    engine_name: str = "neurosynth",
-    data_dir: str = "neurolang_data",
-    resolution: Optional[float] = None,
-    squall_mode: bool = False,
-    sort_specs: Optional[list] = None,
-) -> None:
-    """Entry point for the interactive TUI launched from the CLI."""
-    InteractiveTuiApp(
-        engine_name=engine_name,
-        data_dir=data_dir,
-        resolution=resolution,
-        squall_mode=squall_mode,
-        sort_specs=sort_specs,
-    ).run()
+
+def main(nl, settings: TuiSettings, initial_program: str = "") -> None:
+    """Run the interactive REPL on the engine *nl*, as the CLI does."""
+    InteractiveTuiApp(nl, settings).run(initial_program=initial_program)
