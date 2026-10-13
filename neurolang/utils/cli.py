@@ -594,6 +594,36 @@ def _debug_enabled(args) -> bool:
     )
 
 
+def report_error(
+    exc: Exception, program: str, *, squall: bool, debug: bool, nl=None,
+    file=None,
+) -> None:
+    """
+    Print the query error *exc* as a formatted message.
+
+    The message shows the location of the error in *program*, hints and
+    the symbols of the engine *nl* close to an unknown one. In *debug*
+    mode the traceback is printed first; otherwise unexpected errors get
+    a hint to use ``--debug``. *file* defaults to ``sys.stderr``.
+    """
+    stream = sys.stderr if file is None else file
+    if debug:
+        traceback.print_exception(
+            type(exc), exc, exc.__traceback__, file=stream
+        )
+    print_formatted_error(
+        exc, program,
+        language="SQUALL" if squall else "Datalog",
+        known_symbols=_known_symbol_names(nl),
+        file=stream,
+    )
+    if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
+        print(
+            "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
+            "traceback.", file=stream,
+        )
+
+
 def _run_reporting_errors(action, program: str, args, nl=None):
     """
     Run *action* and report any failure as a formatted error.
@@ -605,19 +635,10 @@ def _run_reporting_errors(action, program: str, args, nl=None):
     try:
         return action()
     except Exception as exc:
-        debug = _debug_enabled(args)
-        if debug:
-            traceback.print_exc()
-        print_formatted_error(
-            exc, program,
-            language="SQUALL" if args.squall else "Datalog",
-            known_symbols=_known_symbol_names(nl),
+        report_error(
+            exc, program, squall=args.squall, debug=_debug_enabled(args),
+            nl=nl,
         )
-        if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
-            print(
-                "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
-                "traceback.", file=sys.stderr,
-            )
         sys.exit(1)
 
 
@@ -810,6 +831,7 @@ def _tui_settings(args, tui):
         sort_by=_parse_sort_spec(args.sort),
         show_ra=_show_ra_options(args) if args.show_ra else None,
         show_rewritten=args.show_rewritten,
+        debug=_debug_enabled(args),
         history_path=str(Path.home() / ".neurolang_query_history"),
     )
 

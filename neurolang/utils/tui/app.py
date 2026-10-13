@@ -1,6 +1,9 @@
 """The interactive REPL loop and the execution of the queries it reads."""
 
+import difflib
+import re
 import time
+import warnings
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -16,6 +19,8 @@ from neurolang.utils import engine_registry
 from neurolang.utils.cli import (
     _execute_program,
     _execute_squall_program,
+    _known_symbol_names,
+    report_error,
     result_to_dataframe,
     sort_dataframe,
 )
@@ -50,7 +55,31 @@ class TuiSettings:
     sort_by: list = field(default_factory=list)
     show_ra: Optional[ShowRAOptions] = None
     show_rewritten: bool = False
+    debug: bool = False
     history_path: Optional[str] = None
+
+
+_UNDEFINED_PREDICATE = re.compile(
+    r"Symbol (\S+) used in rule body has no entry in the symbol table"
+)
+
+
+def warning_note(message: str, known_symbols) -> str:
+    """
+    Return a one-line note for a warning *message* raised by a query.
+
+    A predicate used without facts or rules is reported with the closest
+    of the *known_symbols*, if any.
+    """
+    match = _UNDEFINED_PREDICATE.match(message)
+    if match is None:
+        return f"note: {message.strip().splitlines()[0]}"
+    name = match.group(1)
+    note = f"note: predicate {name} has no facts or rules"
+    close = difflib.get_close_matches(name, known_symbols, n=1)
+    if close:
+        note += f" — did you mean {close[0]}?"
+    return note
 
 
 class InteractiveTuiApp:
@@ -61,10 +90,12 @@ class InteractiveTuiApp:
         nl,
         settings: Optional[TuiSettings] = None,
         console: Optional[Console] = None,
+        err_console: Optional[Console] = None,
     ):
         self._nl = nl
         self.settings = settings or TuiSettings()
         self.console = console or Console()
+        self.err_console = err_console or Console(stderr=True)
         self._last_df = None
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
@@ -81,6 +112,32 @@ class InteractiveTuiApp:
             self._nl, program,
             show_rewritten=self.settings.show_rewritten,
             show_ra=self.settings.show_ra or False,
+        )
+
+    def _execute_noting_warnings(self, program: str):
+        """Run *program* and print the warnings it raises as short notes."""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                return self._execute(program)
+            finally:
+                self._print_notes(caught)
+
+    def _print_notes(self, caught) -> None:
+        """Print one note per distinct warning in *caught*."""
+        known = _known_symbol_names(self._nl)
+        notes = dict.fromkeys(
+            warning_note(str(w.message), known) for w in caught
+        )
+        for note in notes:
+            self.err_console.print(note, style="yellow", markup=False)
+
+    def _report_error(self, exc: Exception, program: str) -> None:
+        """Print the error *exc* of *program* as the CLI does."""
+        report_error(
+            exc, program, squall=self.settings.squall,
+            debug=self.settings.debug, nl=self._nl,
+            file=self.err_console.file,
         )
 
     def _show_frame(self, result, title: str = "") -> None:
@@ -118,12 +175,12 @@ class InteractiveTuiApp:
         self.console.print("[dim]Running query...[/dim]")
         t0 = time.perf_counter()
         try:
-            result = self._execute(program)
+            result = self._execute_noting_warnings(program)
         except KeyboardInterrupt:
             self.console.print("[yellow]Query interrupted[/yellow]")
             return
         except Exception as exc:
-            self.console.print(f"[red]Query error:[/red] {exc}")
+            self._report_error(exc, program)
             return
         elapsed = time.perf_counter() - t0
         if self.settings.show_ra is None:

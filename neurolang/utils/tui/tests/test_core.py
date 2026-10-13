@@ -50,10 +50,19 @@ def engine():
     return nl
 
 
+def _app(engine, **settings):
+    """Return a REPL on *engine* printing everything to one buffer."""
+    console = _console()
+    return InteractiveTuiApp(
+        engine, TuiSettings(**settings), console=console,
+        err_console=console,
+    )
+
+
 @pytest.fixture
 def small_app(engine):
     """Return a REPL on a small engine, printing to a string buffer."""
-    return InteractiveTuiApp(engine, console=_console())
+    return _app(engine)
 
 
 class TestInteractiveTuiApp:
@@ -140,3 +149,42 @@ def test_quit_commands_end_session(small_app, pipe_session, quit_command):
 def test_ctrl_d_ends_session(small_app, pipe_session):
     small_app.run(pipe_session("\x04"))
     assert "Goodbye" in _output(small_app)
+
+
+def test_parse_error_is_formatted(small_app):
+    small_app._execute_and_display("ans(x) :- P(x")
+    out = _output(small_app)
+    assert "Datalog parse error" in out
+    assert "^" in out
+    assert "Location: line 1, column 14" in out
+    assert "Traceback" not in out
+
+
+def test_squall_error_is_formatted(engine):
+    engine.add_tuple_set([(1,)], name="person")
+    app = _app(engine, squall=True)
+    app._execute_and_display("obtain every persn.")
+    out = _output(app)
+    assert "Undefined symbol" in out
+    assert "Did you mean: person" in out
+
+
+def test_debug_shows_traceback(engine):
+    app = _app(engine, debug=True)
+    app._execute_and_display("ans(x) :- P(x")
+    out = _output(app)
+    assert "Traceback (most recent call last)" in out
+    assert "Datalog parse error" in out
+
+
+def test_undefined_predicate_warning_is_a_short_note(engine):
+    engine.add_tuple_set([(1,)], name="person")
+    app = _app(engine)
+    app._execute_and_display("ans(x) :- persn(x)")
+    out = _output(app)
+    assert (
+        "note: predicate persn has no facts or rules — "
+        "did you mean person?"
+    ) in out
+    assert ".py" not in out
+    assert "warnings.warn" not in out
