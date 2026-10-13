@@ -128,3 +128,18 @@ def test_piped_stdin_failure_exits_with_1(built, monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "Datalog parse error" in captured.err
     assert re.search(r"│\s*2\s*│", captured.out)
+
+
+def test_piped_stdin_writes_transcript(built, monkeypatch, tmp_path):
+    path = tmp_path / "session.md"
+    monkeypatch.setattr(
+        sys, "stdin", io.StringIO(f"ans(x) :- P(x)\n.transcript {path}\n")
+    )
+    main(["-i", "-d", str(tmp_path), "--format", "csv"])
+    text = path.read_text()
+    assert f"- Data directory: {tmp_path.resolve()}\n" in text
+    assert (
+        f"- Command line: `neurolang-query -i -d {tmp_path} --format csv`"
+    ) in text
+    assert "```datalog\nans(x) :- P(x)\n```\n\n```text\n" in text
+    assert "x\n1\n2\n" in text

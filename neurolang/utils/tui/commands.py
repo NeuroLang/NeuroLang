@@ -166,6 +166,13 @@ def cmd_mode(app, arg: str) -> None:
         )
 
 
+def sort_spec_text(sort_by, separator: str = ", ") -> str:
+    """Return the ``COL:asc|desc`` specs of the sort order *sort_by*."""
+    return separator.join(
+        f"{col}:{'asc' if asc else 'desc'}" for col, asc in sort_by
+    )
+
+
 @command(
     ".sort", "Show or set the sort of the results (none: unsorted)",
     ".sort [COL[:asc|desc] ...|none]",
@@ -174,10 +181,7 @@ def cmd_sort(app, arg: str) -> None:
     """Set the sort order of the results and re-sort the last one."""
     specs = arg.split()
     if not specs:
-        sort_by = app.settings.sort_by
-        current = ", ".join(
-            f"{col}:{'asc' if asc else 'desc'}" for col, asc in sort_by
-        )
+        current = sort_spec_text(app.settings.sort_by)
         app.console.print(f"Sort: {current or 'none'}", markup=False)
         return
     if specs == ["none"]:

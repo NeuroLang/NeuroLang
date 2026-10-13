@@ -5,6 +5,7 @@ import re
 import sys
 import time
 import warnings
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -37,6 +38,7 @@ from .interrupt import call_interruptibly
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 from .session import open_session_scope
 from .statements import is_complete, split_statements
+from .transcript import Transcript, is_transcript_command
 
 
 def _input_bindings(is_squall) -> KeyBindings:
@@ -75,7 +77,9 @@ class TuiSettings:
     Settings of a REPL session.
 
     They are initialised from the command line options and some of them
-    can be changed with dot-commands during the session.
+    can be changed with dot-commands during the session. The data
+    directory and the command line describe the session in its
+    transcript.
     """
 
     engine_name: str = ""
@@ -88,6 +92,8 @@ class TuiSettings:
     page_size: int = DEFAULT_PAGE_SIZE
     debug: bool = False
     history_path: Optional[str] = None
+    data_dir: str = ""
+    command_line: str = ""
 
 
 _UNDEFINED_PREDICATE = re.compile(
@@ -128,11 +134,14 @@ class InteractiveTuiApp:
 
         Results are printed on *console* (default: stdout) and progress
         messages, notes and errors on *err_console* (default: stderr).
+        What they print is recorded in the session's transcript.
         """
         self._nl = nl
         self.settings = settings or TuiSettings()
+        self.transcript = Transcript(self.settings)
         self.console = console or Console()
         self.err_console = err_console or Console(stderr=True)
+        self._tee_consoles(console, err_console)
         self.results: list = []
         self.last_query = None
         self.failed = False
@@ -143,6 +152,19 @@ class InteractiveTuiApp:
             self._history = FileHistory(self.settings.history_path)
         else:
             self._history = InMemoryHistory()
+
+    def _tee_consoles(self, *consoles) -> None:
+        """
+        Tee the files of the given *consoles* into the transcript.
+
+        The default consoles write to ``sys.stdout`` and ``sys.stderr``,
+        which the transcript tees while it records an entry.
+        """
+        teed = []
+        for console in consoles:
+            if console is not None and console not in teed:
+                console.file = self.transcript.tee(console.file)
+                teed.append(console)
 
     def _execute(self, program: str):
         """Run *program* in the current language and return its result."""
@@ -332,14 +354,35 @@ class InteractiveTuiApp:
             prompt_continuation=lambda width, *_: "." * (width - 1) + " ",
         )
 
+    @contextmanager
+    def _recording(self, text: str, kind: str):
+        """Record the entry *text* of *kind* run in the block."""
+        failed = self.failed
+        self.failed = False
+        with self.transcript.record(text, kind, self.settings.squall) as entry:
+            try:
+                yield
+            finally:
+                entry.failed = self.failed
+                self.failed = failed or self.failed
+
     def _run_line(self, line: str) -> None:
-        """Run the dot-command or the query on *line*."""
-        if not line.strip():
+        """
+        Run the dot-command or the query on *line*.
+
+        It is recorded in the transcript, unless it is ``.transcript``.
+        """
+        text = line.strip()
+        if not text:
             return
-        if line.lstrip().startswith("."):
-            self._handle_dot_command(line)
+        if is_transcript_command(text):
+            self._handle_dot_command(text)
+        elif text.startswith("."):
+            with self._recording(text, "command"):
+                self._handle_dot_command(text)
         else:
-            self._execute_and_display(line.strip())
+            with self._recording(text, "statement"):
+                self._execute_and_display(text)
 
     def _read_and_run(self, session) -> bool:
         """
@@ -363,6 +406,12 @@ class InteractiveTuiApp:
             self.console.print("[yellow]Interrupted[/yellow]")
         return True
 
+    def _run_initial_program(self, program: str) -> None:
+        """Run the query *program* given on the command line, if any."""
+        if program.strip():
+            with self._recording(program.strip(), "statement"):
+                self._execute_and_display(program.strip())
+
     def run(self, session=None, initial_program: str = "") -> None:
         """
         Start the interactive REPL, reading from *session* if given.
@@ -371,8 +420,7 @@ class InteractiveTuiApp:
         prompt.
         """
         self._print_banner()
-        if initial_program.strip():
-            self._execute_and_display(initial_program)
+        self._run_initial_program(initial_program)
         session = session or self._make_session()
         while self._read_and_run(session):
             pass
@@ -386,8 +434,7 @@ class InteractiveTuiApp:
         *initial_program* is run first. Return the exit status: 1 if a
         statement failed, 0 otherwise.
         """
-        if initial_program.strip():
-            self._execute_and_display(initial_program)
+        self._run_initial_program(initial_program)
         for statement in split_statements(lines, lambda: self.settings.squall):
             try:
                 self._run_line(statement)
