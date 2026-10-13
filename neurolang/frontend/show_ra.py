@@ -214,9 +214,16 @@ class PlanDisplay:
             return str(symbol)
         return symbol.name
 
-    def rule_text(self, rule):
-        """Return the Datalog text of ``rule``."""
-        return DatalogPrettyPrinter().walk(self.display_expression(rule))
+    def rule_text(self, rule, fresh_map=None):
+        """
+        Return the Datalog text of ``rule``.
+
+        The display names of its fresh variables are added to
+        ``fresh_map``.
+        """
+        return DatalogPrettyPrinter(fresh_map).walk(
+            self.display_expression(rule)
+        )
 
     def name_map(self, conjunction, symbol_table):
         """
@@ -241,12 +248,18 @@ class PlanDisplay:
         followed by the pretty-printed RA plan ``ra_code``, whose tables
         are named after the predicates of ``conjunction`` and the
         relations of ``symbol_table``. ``leaf_sizes`` maps the predicate
-        symbols of the plan whose size is known to their size.
+        symbols of the plan whose size is known to their size. Columns
+        named after a variable of the rule are displayed as the variable
+        is in the rule header.
         """
+        fresh_map = {}
         if rule is not None:
-            print(f"── rule {self.rule_text(rule)} ──")
+            print(f"── rule {self.rule_text(rule, fresh_map)} ──")
         name_map = self.name_map(conjunction, symbol_table)
-        print(pretty_repr(ra_code, name_map=name_map, leaf_sizes=leaf_sizes))
+        print(pretty_repr(
+            ra_code, name_map=name_map, leaf_sizes=leaf_sizes,
+            fresh_map=fresh_map,
+        ))
 
 
 @lru_cache(maxsize=None)

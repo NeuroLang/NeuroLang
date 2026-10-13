@@ -5,6 +5,7 @@ import pytest
 
 from .. import NeurolangDL, NeurolangPDL
 from ..show_ra import ShowRAOptions, show_ra_options
+from .test_probabilistic_frontend import build_neurosynth_like_engine
 
 
 def build_engine():
@@ -138,3 +139,69 @@ def test_probabilistic_leaves_named_after_their_predicate(capsys):
     assert "picked ‹3 rows›" in out
     assert "label ‹3 rows›" in out
     assert "Table" not in out
+
+
+def rule_blocks(out):
+    """Split show-ra output into (rule header, plan) pairs."""
+    blocks = []
+    for chunk in out.split("── rule ")[1:]:
+        header, _, plan = chunk.partition(" ──\n")
+        blocks.append((header, plan.split("──")[0]))
+    return blocks
+
+
+def test_plan_columns_use_rule_variable_names(capsys):
+    """
+    Check that plan columns of fresh rule variables match the rule.
+
+    SQUALL rules have fresh variables, displayed s₀, s₁, … in the rule;
+    the plan columns that are those variables must be displayed the same.
+    """
+    nl = build_engine()
+    nl.add_tuple_set([("a",), ("b",)], name="person")
+    nl.add_tuple_set([("a", "b")], name="knows")
+    nl.execute_squall_program(
+        "obtain every Person that knows a Person.", show_ra=True
+    )
+    (header, plan), = rule_blocks(capsys.readouterr().out)
+    assert "knows(s₀, s₁)" in header
+    assert "ρ[s₀, s₁]" in plan
+    assert "fresh_" not in plan
+
+
+NEUROSYNTH_INIT = (
+    "schaefer_label(l) :- schaefer(l, r).\n"
+    "labels(l, i, j, k) :- voxel(i, j, k), schaefer(l, r).\n"
+    "mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03).\n"
+    "reports(s, i, j, k) :- peak_reported(i, j, k, s).\n"
+)
+
+FORWARD_INFERENCE = (
+    "define as Label_reports with inferred probability every "
+    "Schaefer_label that labels a Voxel in 3D that a Selected_study "
+    "reports given the Selected_study mentions 'memory'. "
+    "obtain every Label_reports ."
+)
+
+
+def forward_inference_output(capsys, show_ra=True):
+    """Display the plans of a SQUALL forward inference query."""
+    nl = build_neurosynth_like_engine()
+    nl.execute_datalog_program(NEUROSYNTH_INIT)
+    nl.execute_squall_program(FORWARD_INFERENCE, show_ra=show_ra)
+    return capsys.readouterr().out
+
+
+def test_fresh_plan_columns_do_not_collide_with_rule_variables(capsys):
+    """Check that fresh columns that are no rule variable are c₀, c₁, …."""
+    blocks = rule_blocks(forward_inference_output(capsys))
+    probabilistic = [
+        (header, plan) for header, plan in blocks if "PROB" in header
+    ]
+    assert len(probabilistic) == 2
+    for header, plan in probabilistic:
+        rule_vars = set(re.findall(r"s[₀-₉]+", header))
+        assert rule_vars
+        assert set(re.findall(r"s[₀-₉]+", plan)) <= rule_vars
+        assert "fresh_" not in plan
+        assert re.search(r"c[₀-₉]+", plan)

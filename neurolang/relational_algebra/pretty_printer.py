@@ -77,6 +77,14 @@ def _is_cross_product(expr):
         return False
 
 
+_FRESH_NAME = re.compile(r"^fresh_\d+$")
+
+
+def _subscript(number):
+    """Return ``number`` written with subscript digits."""
+    return "".join(chr(0x2080 + int(digit)) for digit in str(number))
+
+
 def _relation_size(value):
     """Return the number of rows of a relation, or None if unknown."""
     try:
@@ -107,9 +115,12 @@ class PrettyPrinter:
     width : int, optional
         Target line width, reserved for future wrapping support (default 80).
     fresh_map : dict, optional
-        Mapping from fresh variable names to short display names.
+        Mapping from fresh variable names to their display names, e.g.
+        the ``s₀``, ``s₁``, … the rule the plan evaluates is printed with.
+        Other fresh column names are displayed as ``c₀``, ``c₁``, ….
     counter : list, optional
-        Mutable counter (list with one int) for generating short names.
+        Mutable counter (list with one int) numbering the ``c₀``, ``c₁``,
+        … columns.
     leaf_sizes : dict, optional
         Mapping from `Symbol` leaves to the number of rows of the relation
         they stand for. Leaves found in it, and named `Constant` leaves,
@@ -129,6 +140,7 @@ class PrettyPrinter:
         self.indent = indent
         self.width = width
         self._fresh_map = fresh_map if fresh_map is not None else {}
+        self._column_map = {}
         self._counter = counter if counter is not None else [0]
 
     def format(self, expression, level=0):
@@ -323,18 +335,22 @@ class PrettyPrinter:
     )
 
     def _shorten_fresh(self, name):
-        """Shorten fresh variable names like fresh_00000007 to s₀, s₁, etc."""
-        m = re.match(r'^fresh_(\d+)$', name)
-        if not m:
+        """
+        Return the display name of a column or variable named ``name``.
+
+        Fresh names (``fresh_00000007``) found in ``fresh_map`` take the
+        name mapped there (that of the rule variable they are); the other
+        fresh names are numbered ``c₀``, ``c₁``, …, a prefix and digits
+        no variable name can have.
+        """
+        if not _FRESH_NAME.match(name):
             return name
-        if name not in self._fresh_map:
-            n = self._counter[0]
-            if n < 10:
-                self._fresh_map[name] = f"s{chr(0x2080 + n)}"
-            else:
-                self._fresh_map[name] = f"s{n}"
+        if name in self._fresh_map:
+            return self._fresh_map[name]
+        if name not in self._column_map:
+            self._column_map[name] = "c" + _subscript(self._counter[0])
             self._counter[0] += 1
-        return self._fresh_map[name]
+        return self._column_map[name]
 
     def _lookup_name(self, expression):
         """
@@ -603,9 +619,12 @@ def pretty_repr(
     width : int, optional
         Target line width (default 80).
     fresh_map : dict, optional
-        Mapping from fresh variable names to short display names.
+        Mapping from fresh variable names to their display names, e.g.
+        the ``s₀``, ``s₁``, … the rule the plan evaluates is printed with.
+        Other fresh column names are displayed as ``c₀``, ``c₁``, ….
     counter : list, optional
-        Mutable counter (list with one int) for generating short names.
+        Mutable counter (list with one int) numbering the ``c₀``, ``c₁``,
+        … columns.
     leaf_sizes : dict, optional
         Mapping from `Symbol` leaves to the number of rows of their
         relation, printed next to them.
