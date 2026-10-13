@@ -158,23 +158,3 @@ def test_probabilistic_choice_empty_does_not_sum_to_one(backend):
     with pytest.raises(DistributionDoesNotSumToOneError, match="Got 0"):
         check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
 
-
-def test_probabilistic_choice_sum_falls_back_to_iteration():
-    class NoArraySet(frozenset):
-        def is_empty(self):
-            return len(self) == 0
-
-        def as_numpy_array(self):
-            raise NotImplementedError()
-
-    tuples = NoArraySet(
-        Constant((Constant(0.25), Constant(i))) for i in range(4)
-    )
-    check_probabilistic_choice_set_probabilities_sum_to_one(Constant(tuples))
-    tuples = NoArraySet(
-        Constant((Constant(0.25), Constant(i))) for i in range(3)
-    )
-    with pytest.raises(DistributionDoesNotSumToOneError):
-        check_probabilistic_choice_set_probabilities_sum_to_one(
-            Constant(tuples)
-        )

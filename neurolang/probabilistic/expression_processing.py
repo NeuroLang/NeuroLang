@@ -94,11 +94,10 @@ def _probability_column_sum(ras):
     """
     Sum the first column of a relational algebra set.
 
-    The sum is computed on a numpy view of the deduplicated set, which is
-    available on every backend, instead of iterating over the (wrapped)
-    tuples one by one. Named sets are first converted to unnamed ones so
-    that the first column follows the order of ``ras.columns``. If the
-    vectorised path is not supported by the set, the tuples are iterated.
+    The sum is computed on the numpy array of the deduplicated set, which
+    every backend provides, instead of iterating over the (wrapped) tuples
+    one by one. Named sets are first converted to unnamed ones so that the
+    first column follows the order of ``ras.columns``.
 
     Parameters
     ----------
@@ -113,13 +112,9 @@ def _probability_column_sum(ras):
     """
     if ras.is_empty():
         return 0.
-    try:
-        unnamed = ras.to_unnamed() if hasattr(ras, "to_unnamed") else ras
-        array = numpy.asarray(unnamed.as_numpy_array())
-        return float(array[:, 0].astype(float).sum())
-    except (AttributeError, IndexError, NotImplementedError, TypeError,
-            ValueError):
-        return sum(v.value[0].value for v in ras)
+    if hasattr(ras, "to_unnamed"):
+        ras = ras.to_unnamed()
+    return float(ras.as_numpy_array()[:, 0].astype(float).sum())
 
 
 def check_probabilistic_choice_set_probabilities_sum_to_one(ra_set):

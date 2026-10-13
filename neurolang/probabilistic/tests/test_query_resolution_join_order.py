@@ -9,6 +9,7 @@ from ...relational_algebra import (
     Projection,
     str2columnstr_constant,
 )
+from ...relational_algebra.optimisers import _estimated_size
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from ..probabilistic_ra_utils import (
@@ -90,4 +91,5 @@ def test_goo_optimiser_resolves_provenance_sets():
         NamedRelationalAlgebraFrozenSet(("p", "a"), [(0.5, 1), (0.5, 2)])
     )
     prov_set = ProvenanceAlgebraSet(relation, str2columnstr_constant("p"))
-    assert RAQueryGOOOptimiser().operand_size(prov_set) == 2
+    resolve = RAQueryGOOOptimiser().resolve_relation
+    assert _estimated_size(prov_set, resolve) == 2

@@ -107,72 +107,57 @@ def _estimated_size(expression, resolve=None):
     return None
 
 
-def _known_sizes(sizes):
-    """Return ``sizes`` if at least two of them are known, else ``None``."""
-    if sizes is None or sum(size is not None for size in sizes) < 2:
-        return None
-    return sizes
+def _sizes_known(sizes):
+    """Whether the sizes of at least two operands are known."""
+    return sum(size is not None for size in sizes) >= 2
 
 
-def _smallest_first(sizes, degrees):
+def _smallest_connected(indices, sizes, overlap):
     """
-    Choose the starting operand of a size-aware greedy ordering.
+    Pick the smallest connected operand of known size.
 
-    Return the index of the smallest operand of known size overlapping
-    with at least one other operand, preferring the most connected one
-    among equally small operands, or ``None`` if there is no such operand.
+    Among ``indices`` of known size with a positive ``overlap``, return the
+    one of smallest size and then of largest overlap, ``None`` if there is
+    none.
     """
-    candidates = [
-        i for i, size in enumerate(sizes)
-        if size is not None and degrees[i] > 0
-    ]
-    if not candidates:
-        return None
-    return min(candidates, key=lambda i: (sizes[i], -degrees[i]))
-
-
-def _smallest_connected(remaining, col_sets, placed, sizes):
-    """
-    Pick the smallest operand of known size joining the placed operands.
-
-    Among the ``remaining`` indices whose columns overlap with the
-    ``placed`` columns and whose size is known, return the one with the
-    smallest size, and then the largest overlap. Return ``None`` when
-    sizes are not used or no such index exists.
-    """
-    if sizes is None:
-        return None
-    candidates = [
-        j for j in sorted(remaining)
-        if sizes[j] is not None and col_sets[j] & placed
-    ]
-    if not candidates:
-        return None
+    candidates = [i for i in indices if sizes[i] is not None and overlap(i)]
     return min(
-        candidates, key=lambda j: (sizes[j], -len(col_sets[j] & placed))
+        candidates, key=lambda i: (sizes[i], -overlap(i)), default=None
     )
 
 
-def _greedy_chain(col_sets, first, cumulative, sizes=None):
+def _greedy_chain(col_sets, sizes, start, cumulative):
     """
     Order indices of ``col_sets`` by nearest-neighbour expansion.
 
-    Start at ``first`` and repeatedly append the remaining index whose
-    columns overlap most with the reference column set. The reference is
-    the union of all placed column sets when ``cumulative`` is true, and
-    the column set of the last placed index otherwise.
+    When at least two ``sizes`` are known, the chain starts at the smallest
+    operand sharing columns with the others and, at each step, appends the
+    smallest operand sharing columns with the placed ones: cross products
+    are avoided first, then small operands are joined first.
 
-    When ``sizes`` is given, the remaining index of smallest known size
-    among those overlapping with the placed column sets is appended
-    first; the overlap criterion is used when there is none.
+    Otherwise, or when no such operand has a known size, the chain starts
+    at the operand chosen by ``start`` (``max`` or ``min``) on the overlap
+    degrees, and appends the operand whose columns overlap most with the
+    reference column set: the union of all placed column sets when
+    ``cumulative`` is true, the column set of the last placed one otherwise.
     """
+    if not _sizes_known(sizes):
+        sizes = [None] * len(col_sets)
+    degrees = _overlap_degrees(col_sets)
+    first = _smallest_connected(
+        range(len(col_sets)), sizes, degrees.__getitem__
+    )
+    if first is None:
+        first = start(range(len(col_sets)), key=degrees.__getitem__)
     remaining = set(range(len(col_sets)))
     remaining.remove(first)
     order = [first]
     reference = set(col_sets[first])
     placed = set(col_sets[first])
     while remaining:
-        best = _smallest_connected(remaining, col_sets, placed, sizes)
+        best = _smallest_connected(
+            sorted(remaining), sizes, lambda j: len(col_sets[j] & placed)
+        )
         if best is None:
             best = max(remaining, key=lambda j: len(col_sets[j] & reference))
         order.append(best)
@@ -185,29 +170,20 @@ def _greedy_chain(col_sets, first, cumulative, sizes=None):
     return order
 
 
-def _sort_join_operands(operands, sizes=None):
+def _sort_join_operands(operands, sizes=()):
     """
     Greedy sort to minimise cross products.
 
     Repeatedly pick the operand with the most column overlap with the
     cumulative column set of already-placed operands. This maximises
     shared columns at each join boundary, eliminating cross products
-    unless the join graph is truly disconnected.
-
-    When the estimated ``sizes`` of at least two operands are known, start
-    from the smallest connected operand and, among the operands sharing
-    columns with the placed ones, pick the smallest known one first.
-    Operands of unknown size are placed by column overlap.
+    unless the join graph is truly disconnected. Estimated operand
+    ``sizes`` are used as described in :func:`_greedy_chain`.
     """
     if len(operands) <= 2:
         return operands
     col_sets = [_ra_columns(op) for op in operands]
-    degrees = _overlap_degrees(col_sets)
-    sizes = _known_sizes(sizes)
-    first = None if sizes is None else _smallest_first(sizes, degrees)
-    if first is None:
-        first = max(range(len(operands)), key=degrees.__getitem__)
-    return [operands[i] for i in _greedy_chain(col_sets, first, True, sizes)]
+    return [operands[i] for i in _greedy_chain(col_sets, sizes, max, True)]
 
 
 def _connected_components(col_sets):
@@ -238,7 +214,7 @@ def _connected_components(col_sets):
     return components
 
 
-def _group_operands_by_overlap(operands, sizes=None):
+def _group_operands_by_overlap(operands, sizes):
     """
     Greedy operator ordering (GOO) by pairwise column-name overlap.
 
@@ -247,12 +223,10 @@ def _group_operands_by_overlap(operands, sizes=None):
     :func:`_order_component_greedily` so that adjacent operands overlap.
 
     The cost model uses column names: two sub-plans overlap when their
-    column sets intersect. Estimated operand ``sizes``, when given, are
-    used to join the smallest connected operands first.
+    column sets intersect. Estimated operand ``sizes`` are used as
+    described in :func:`_greedy_chain`.
     """
     col_sets = [set(_ra_columns(op)) for op in operands]
-    if sizes is None:
-        sizes = [None] * len(operands)
     return [
         _order_component_greedily(
             [operands[i] for i in component],
@@ -263,29 +237,19 @@ def _group_operands_by_overlap(operands, sizes=None):
     ]
 
 
-def _order_component_greedily(operands, col_sets, sizes=None):
+def _order_component_greedily(operands, col_sets, sizes):
     """
     Greedily order operands in one connected component.
 
     Builds a path through the overlap graph using nearest-neighbour
     expansion from a low-degree endpoint. This places bridge operands
     between otherwise disconnected sub-graphs, avoiding adjacent operands
-    that share no columns.
-
-    When the ``sizes`` of at least two operands are known, start from the
-    smallest operand and join the smallest operands sharing columns with
-    the placed ones first, as in :func:`_sort_join_operands`.
+    that share no columns. Estimated operand ``sizes`` are used as
+    described in :func:`_greedy_chain`.
     """
     if len(operands) <= 2:
         return list(operands)
-    degrees = _overlap_degrees(col_sets)
-    sizes = _known_sizes(sizes)
-    first = None if sizes is None else _smallest_first(sizes, degrees)
-    if first is None:
-        first = min(range(len(operands)), key=degrees.__getitem__)
-    return [
-        operands[i] for i in _greedy_chain(col_sets, first, False, sizes)
-    ]
+    return [operands[i] for i in _greedy_chain(col_sets, sizes, min, False)]
 
 
 class FlattenAndReorderJoins(ew.PatternWalker):
@@ -453,23 +417,22 @@ class GreedyJoinOrdering(ew.PatternWalker):
         """
         Reorder a NaturalJoin chain using estimated operand sizes.
 
-        The chain is flattened and rebuilt as a left-deep NaturalJoin tree
-        ordered by :func:`_sort_join_operands`, which joins the smallest
-        connected operands first. When fewer than two operand sizes are
-        known, only the children are walked.
+        A chain of more than two operands, at least two of known size, is
+        rebuilt as a left-deep NaturalJoin tree ordered by
+        :func:`_sort_join_operands`. Otherwise, only the children are walked.
         """
         operands = _flatten_joins(expression)
-        sizes = None
         if len(operands) > 2:
-            sizes = _known_sizes([self.operand_size(op) for op in operands])
-        if sizes is None:
-            return self.fallthrough(expression)
-        ordered = [
-            self.walk(op) for op in _sort_join_operands(operands, sizes)
-        ]
-        if _is_left_deep_join_of(expression, ordered):
-            return expression
-        return reduce(NaturalJoin, ordered)
+            sizes = self._sizes(operands)
+            if _sizes_known(sizes):
+                ordered = [
+                    self.walk(op)
+                    for op in _sort_join_operands(operands, sizes)
+                ]
+                if _is_left_deep_join_of(expression, ordered):
+                    return expression
+                return reduce(NaturalJoin, ordered)
+        return self.fallthrough(expression)
 
     @ew.add_match(ew.Expression)
     def fallthrough(self, expression):
@@ -516,27 +479,12 @@ class GreedyJoinOrdering(ew.PatternWalker):
         """
         return None
 
-    def operand_size(self, operand):
-        """
-        Estimate the number of rows of a join operand.
-
-        Parameters
-        ----------
-        operand : Expression
-            Join operand.
-
-        Returns
-        -------
-        int or None
-            Estimated number of rows, ``None`` when unknown.
-
-        """
-        return _estimated_size(operand, self.resolve_relation)
+    def _sizes(self, operands):
+        """Estimate the sizes of ``operands`` with :func:`_estimated_size`."""
+        return [_estimated_size(op, self.resolve_relation) for op in operands]
 
     def _build_reordered(self, operands):
-        groups = _group_operands_by_overlap(
-            operands, [self.operand_size(op) for op in operands]
-        )
+        groups = _group_operands_by_overlap(operands, self._sizes(operands))
         join_groups = [reduce(NaturalJoin, g) for g in groups if len(g) > 1]
         singletons = [g[0] for g in groups if len(g) == 1]
         if len(join_groups) == 1 and not singletons:
