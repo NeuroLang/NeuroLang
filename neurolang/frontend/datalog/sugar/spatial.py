@@ -12,6 +12,7 @@ from ....datalog.expression_processing import (
 )
 from ....exceptions import UnsupportedProgramError
 from ....expression_pattern_matching import add_match
+from . import delegate_to_next_match
 from ....expression_walker import ExpressionWalker, IdentityWalker, PatternWalker
 from ....expressions import Constant, Expression, FunctionApplication, Symbol
 from ....logic import Conjunction, Implication
@@ -322,7 +323,9 @@ class TranslateRegionDestroy(PatternWalker):
                 continue
             region_var = atom.args[0]
             self._convert_region_edb_column(atoms, region_var)
-        return self._delegate_to_next_match(implication)
+        return delegate_to_next_match(
+            self, implication, type(self).region_destroy
+        )
 
     def _convert_region_edb_column(self, formulas, region_var):
         for formula in formulas:
@@ -397,16 +400,3 @@ class TranslateRegionDestroy(PatternWalker):
             return None
 
         return type(ras)(iterable=new_rows)
-
-    def _delegate_to_next_match(self, expression):
-        skip = type(self).region_destroy
-        for pattern, guard, action in self.patterns:
-            if action is skip:
-                continue
-            if self.pattern_match(pattern, expression) and (
-                guard is None or guard(expression)
-            ):
-                return action(self, expression)
-        raise NeuroLangPatternMatchingNoMatch(
-            f"No match for {expression}"
-        )

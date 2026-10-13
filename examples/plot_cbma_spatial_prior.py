@@ -1,8 +1,7 @@
 # %%
 """
-Example where a spatial prior is defined based on the distance between voxels \
-and foci in a coordinate-based meta-analysis database
-============================================================================
+Spatial prior from voxel-to-focus distances in a coordinate-based meta-analysis
+===============================================================================
 
 Each voxel's probability of being reported by a study is calculated based on
 whether that particular study reports a focus (peak activation) near the voxel.

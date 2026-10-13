@@ -1,5 +1,7 @@
 """Tests for the neurolang-query CLI module."""
 
+import json
+
 import pytest
 
 from neurolang.exceptions import NeuroLangException
@@ -7,13 +9,18 @@ from neurolang.expressions import Constant, Symbol
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
 from neurolang.logic import Conjunction, ExistentialPredicate
+from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.utils.cli import (
     _build_parser,
     _execute_program,
     _execute_squall_program,
     _format_result,
+    main,
 )
 
+from neurolang.frontend.tests.test_probabilistic_frontend import (
+    build_neurosynth_like_engine,
+)
 from neurolang.utils import engine_registry
 
 # ---------------------------------------------------------------------------
@@ -101,11 +108,54 @@ class TestBuildParser:
         args = parser.parse_args(["--list-engines"])
         assert args.list_engines is True
 
+    def test_grammar_json_flag(self):
+        parser = _build_parser()
+        args = parser.parse_args(["--grammar-json"])
+        assert args.grammar_json is True
+
+    def test_grammar_json_output(self, capsys):
+        """main(["--grammar-json"]) prints the SQUALL grammar as JSON."""
+        main(["--grammar-json"])
+        captured = capsys.readouterr()
+        info = json.loads(captured.out)
+        assert info["name"] == "neurolang_natural.lark"
+        assert "squall" in info["grammar"]
+        assert info["parser"]["library"] == "lark"
+        assert info["parser"]["version"]
+        assert info["parser"]["mode"] == "earley"
+
     def test_engine_not_rejected_by_parser_anymore(self):
         """The parser no longer validates engine names; main() does."""
         parser = _build_parser()
         args = parser.parse_args(["--engine", "unknown"])
         assert args.engine == "unknown"
+
+    def test_show_ra_defaults_to_false(self):
+        parser = _build_parser()
+        args = parser.parse_args([])
+        assert args.show_ra is False
+
+    def test_show_ra_flag_long(self):
+        parser = _build_parser()
+        args = parser.parse_args(["--show-ra", "ans(x) :- P(x)"])
+        assert args.show_ra is True
+
+    def test_show_ra_flag_short(self):
+        parser = _build_parser()
+        args = parser.parse_args(["-Q", "ans(x) :- P(x)"])
+        assert args.show_ra is True
+
+    def test_ra_verbose_and_analyze_default_to_false(self):
+        args = _build_parser().parse_args([])
+        assert args.ra_verbose is False
+        assert args.ra_analyze is False
+
+    def test_ra_verbose_and_analyze_flags(self):
+        args = _build_parser().parse_args(
+            ["--show-ra", "--ra-verbose", "--ra-analyze", "ans(x) :- P(x)"]
+        )
+        assert args.ra_verbose is True
+        assert args.ra_analyze is True
 
 
 # ---------------------------------------------------------------------------
@@ -932,6 +982,174 @@ class TestShowRewrittenFlag:
 
 
 # ---------------------------------------------------------------------------
+# --show-ra flag
+# ---------------------------------------------------------------------------
+
+
+class TestShowRAFlag:
+
+    @staticmethod
+    def _use_engine(monkeypatch, nl):
+        """Make the CLI use ``nl`` as the engine it builds."""
+        def fake_build_engine(name, data_dir, resolution=None):
+            return nl
+
+        monkeypatch.setattr(
+            engine_registry, "build_engine", fake_build_engine
+        )
+
+    @pytest.fixture
+    def engine_with_p(self, monkeypatch):
+        """Make the CLI build an engine holding the relation ``P``."""
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([(1,), (2,)], name="P")
+        self._use_engine(monkeypatch, nl)
+        return nl
+
+    def test_show_ra_dry_run_no_query_completed(self, engine_with_p, capsys):
+        """
+        Check that --show-ra prints the RA plan without running the query.
+
+        --show-ra builds the engine, prints the RA plan, and exits
+        without printing 'Query completed'.
+        """
+        main(["--show-ra", "ans(x) :- P(x)"])
+
+        captured = capsys.readouterr()
+        assert "── deterministic stratum ──" in captured.out
+        assert "Query completed" not in captured.err
+
+    def test_show_ra_does_not_print_rewritten_program(
+        self, engine_with_p, capsys
+    ):
+        """Check that --show-ra alone prints no rewritten program."""
+        main(["--show-ra", "ans(x) :- P(x)"])
+        out = capsys.readouterr().out
+        assert "── deterministic stratum ──" in out
+        assert "rewritten program" not in out
+
+    @pytest.mark.parametrize("squall", [False, True])
+    def test_show_ra_with_show_rewritten_prints_both(
+        self, squall, engine_with_p, capsys
+    ):
+        """Check that --show-ra --show-rewritten prints program and plans."""
+        if squall:
+            engine_with_p.add_tuple_set([(1,), (2,)], name="p")
+            query = ["--squall", "obtain every P."]
+        else:
+            query = ["ans(x) :- P(x)"]
+        main(["--show-ra", "--show-rewritten"] + query)
+        out = capsys.readouterr().out
+        assert "── rewritten program ──" in out
+        assert "── deterministic stratum ──" in out
+        assert out.index("rewritten program") < out.index("deterministic")
+
+    def test_ra_verbose_prints_full_plans(self, engine_with_p, capsys):
+        main(["--show-ra", "ans(x) :- P(x)"])
+        assert "P(x) ‹2 rows›" in capsys.readouterr().out
+        main(["--show-ra", "--ra-verbose", "ans(x) :- P(x)"])
+        out = capsys.readouterr().out
+        assert "ρ[x]\n└─ π[#0]\n   └─ P ‹2 rows›" in out
+
+    def test_ra_analyze_counts_rows(self, engine_with_p, capsys):
+        main(["--show-ra", "--ra-analyze", "ans(x) :- P(x), (x > 1)"])
+        out = capsys.readouterr().out
+        assert "σ[x > 1] ‹1 row›" in out
+
+    @pytest.mark.parametrize("flag", ["--ra-verbose", "--ra-analyze"])
+    def test_ra_flags_require_show_ra(self, flag, engine_with_p, capsys):
+        """Check that --ra-verbose and --ra-analyze need --show-ra."""
+        with pytest.raises(SystemExit) as exc_info:
+            main([flag, "ans(x) :- P(x)"])
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert f"{flag} requires --show-ra" in captured.err
+        assert "── deterministic stratum ──" not in captured.out
+
+    @pytest.mark.parametrize(
+        "flags,options",
+        [
+            ([], ShowRAOptions()),
+            (["--ra-verbose"], ShowRAOptions(collapse=False)),
+            (["--ra-analyze"], ShowRAOptions(analyze=True)),
+            (
+                ["--ra-verbose", "--ra-analyze"],
+                ShowRAOptions(collapse=False, analyze=True),
+            ),
+        ],
+    )
+    def test_show_ra_flags_build_options(
+        self, flags, options, engine_with_p, monkeypatch
+    ):
+        """Check that the CLI passes the ShowRAOptions of its flags."""
+        calls = []
+
+        def fake_execute_program(nl, program, **kwargs):
+            calls.append(kwargs)
+
+        monkeypatch.setattr(
+            "neurolang.utils.cli._execute_program", fake_execute_program
+        )
+        main(["--show-ra"] + flags + ["ans(x) :- P(x)"])
+        assert calls[0]["show_ra"] == options
+
+    def test_show_ra_squall_dry_run(self, engine_with_p, capsys):
+        """
+        Check that --show-ra with --squall prints the RA plan only.
+
+        --show-ra with --squall builds the engine, prints the RA plan,
+        and exits without printing 'Query completed'.
+        """
+        # SQUALL lower-cases the noun ``P`` into the predicate ``p``.
+        engine_with_p.add_tuple_set([(1,), (2,)], name="p")
+        main(["--squall", "--show-ra", "obtain every P."])
+
+        captured = capsys.readouterr()
+        assert "── deterministic stratum ──" in captured.out
+        assert "Query completed" not in captured.err
+
+    def test_show_ra_neurosynth_prob_query(self, monkeypatch, capsys):
+        """
+        Check --show-ra --squall on the Neurosynth conditional MARG query.
+
+        --show-ra --squall with the original Neurosynth conditional MARG
+        query crashes with IndexError at
+        relational_algebra_provenance.py:423 before the fix.
+        """
+        nl = build_neurosynth_like_engine()
+        # datalog_init rules from engines.yaml for the neurosynth engine
+        nl.execute_datalog_program(
+            "study_with_peaks(S) :- peak_reported(I, J, K, S)."
+        )
+        nl.execute_datalog_program("schaefer_label(l) :- schaefer(l, r).")
+        nl.execute_datalog_program(
+            "labels(l, i, j, k) :- voxel(i, j, k), schaefer(l, r)."
+        )
+        nl.execute_datalog_program(
+            "mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)."
+        )
+        nl.execute_datalog_program(
+            "reports(s, i, j, k) :- peak_reported(i, j, k, s)."
+        )
+
+        self._use_engine(monkeypatch, nl)
+
+        # Before the fix this raises IndexError; after the fix it prints the
+        # RA plan and exits cleanly.
+        main([
+            "--show-ra", "--squall",
+            "define as Label_reports with inferred probability every "
+            "Schaefer_label that labels a Voxel in 3D that a Selected_study "
+            "reports given the Selected_study mentions 'memory'. "
+            "obtain every Label_reports .",
+        ])
+        captured = capsys.readouterr()
+        assert "── probabilistic stratum ──" in captured.out
+
+
+# ---------------------------------------------------------------------------
 # --show-datalog flag
 # ---------------------------------------------------------------------------
 
@@ -1102,3 +1320,107 @@ class TestExecuteSquallProgram:
             nl, "define as Active every person that plays."
         )
         assert _format_result(result) == ""
+
+
+# ---------------------------------------------------------------------------
+# Error reporting
+# ---------------------------------------------------------------------------
+
+
+class TestErrorReporting:
+    """Errors are reported as formatted messages with exit status 1."""
+
+    @pytest.fixture(autouse=True)
+    def engine(self, monkeypatch):
+        from neurolang.frontend import NeurolangPDL
+
+        nl = NeurolangPDL()
+        nl.add_tuple_set([("a",), ("b",)], name="item")
+        nl.add_tuple_set([("a",)], name="plays")
+        monkeypatch.setattr(
+            engine_registry, "build_engine", lambda *args, **kwargs: nl
+        )
+        monkeypatch.delenv("NEUROLANG_DEBUG", raising=False)
+        return nl
+
+    @staticmethod
+    def run_failing(capsys, *argv):
+        with pytest.raises(SystemExit) as exc_info:
+            main(list(argv))
+        assert exc_info.value.code == 1
+        return capsys.readouterr().err
+
+    def test_datalog_parse_error(self, capsys):
+        err = self.run_failing(capsys, "ans(x) <- item(x)")
+        assert err.startswith("Datalog parse error — unexpected token")
+        assert "Did you mean ':-' (or '←') instead of '<-'?" in err
+        assert "Traceback" not in err
+
+    def test_trailing_dot_is_valid(self, capsys):
+        main(["ans(x) :- item(x)."])
+        captured = capsys.readouterr()
+        assert "a" in captured.out
+        assert "error" not in captured.err.lower()
+
+    def test_squall_flag_selects_squall_hints(self, capsys):
+        err = self.run_failing(capsys, "--squall", "get every item.")
+        assert err.startswith("SQUALL parse error")
+        assert "Use 'obtain' instead of 'get' in SQUALL." in err
+        assert "':-'" not in err
+
+    def test_squall_unexpected_end_of_input(self, capsys):
+        err = self.run_failing(
+            capsys, "--squall", "obtain every item that plays and"
+        )
+        assert err.startswith("SQUALL parse error — unexpected end of input")
+        assert len(err.splitlines()) < 10
+
+    def test_multiline_program_with_leading_blank_lines(self, capsys):
+        program = (
+            "\n\nA(x) :- item(x)\nB(x) :- A(x)\n"
+            "ans(x) :- B(x), not plays(x)"
+        )
+        err = self.run_failing(capsys, program)
+        lines = err.splitlines()
+        error_line = lines.index("    5 | ans(x) :- B(x), not plays(x)")
+        assert lines[error_line + 1] == "      |" + " " * 21 + "^~~~"
+        assert "Location: line 5, column 21" in err
+        assert "Use '~' for negation" in err
+
+    def test_did_you_mean_uses_engine_symbols(self, capsys):
+        err = self.run_failing(capsys, "A(x) :- itme(x)\nans(x) :- A(x)")
+        assert err.startswith("Undefined symbol")
+        assert "Did you mean: item" in err
+
+    def test_arity_mismatch(self, capsys):
+        err = self.run_failing(capsys, "ans(x) :- item(x, y)")
+        assert err.startswith("Arity mismatch")
+
+    def test_show_rewritten_reports_errors(self, capsys):
+        err = self.run_failing(capsys, "--show-rewritten", "ans(x) <- item(x)")
+        assert err.startswith("Datalog parse error")
+
+    def test_show_datalog_reports_errors(self, capsys):
+        err = self.run_failing(
+            capsys, "--squall", "--show-datalog", "get every item."
+        )
+        assert err.startswith("SQUALL parse error")
+
+    def test_debug_flag_prints_traceback(self, capsys):
+        err = self.run_failing(capsys, "--debug", "ans(x) <- item(x)")
+        assert err.startswith("Traceback (most recent call last)")
+        assert "Datalog parse error" in err
+
+    def test_debug_environment_variable(self, capsys, monkeypatch):
+        monkeypatch.setenv("NEUROLANG_DEBUG", "1")
+        err = self.run_failing(capsys, "ans(x) <- item(x)")
+        assert err.startswith("Traceback (most recent call last)")
+
+    def test_internal_error_suggests_debug(self, capsys, monkeypatch):
+        def broken(*args, **kwargs):
+            raise ValueError("boom")
+
+        monkeypatch.setattr("neurolang.utils.cli._execute_program", broken)
+        err = self.run_failing(capsys, "ans(x) :- item(x)")
+        assert err.startswith("Internal error — ValueError: boom")
+        assert "--debug" in err

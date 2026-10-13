@@ -15,6 +15,17 @@ class RelationalAlgebraStringExpression(str):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
+# Set difference strategy for unnamed relations. The element-wise path
+# (``collections.abc.Set.__sub__``) runs one ``__contains__`` scan per row
+# of the left operand: about 0.28 ms per row, almost independent of the
+# size of the right operand. The merge in ``_anti_join`` costs a flat
+# ~6 ms. Measured on two-column relations (pandas 3.0, Python 3.12), they
+# break even at about 20 rows of the left operand, so the merge is used
+# above that. ``benchmarks/ras_operations.py::TimeUnnamedDifference``
+# tracks both regimes.
+_ANTI_JOIN_MIN_ROWS = 20
+
+
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     """
     RelationalAlgebraFrozenSet implementation using in-memory pandas.DataFrame
@@ -405,7 +416,41 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 if other.is_dee():
                     return self.dum()
                 return self.dee()
+            if other.is_dee():
+                return self.copy()
+            if len(self._container) > _ANTI_JOIN_MIN_ROWS:
+                try:
+                    return self._anti_join(other)
+                except (TypeError, ValueError):
+                    # e.g. unhashable values: fall back to element-wise
+                    # membership tests
+                    pass
         return super().__sub__(other)
+
+    def _anti_join(self, other):
+        """
+        Compute the rows of ``self`` not in ``other`` with a single merge.
+
+        The generic ``Set.__sub__`` iterates over ``self`` and tests each
+        row with ``__contains__``, which scans ``other`` every time.
+        """
+        self._drop_duplicates_if_needed()
+        col_types = self._extract_unified_column_types(other)
+        new_container = self._container.astype(col_types).merge(
+            other._container.astype(col_types),
+            indicator="_merge_indicator_", how="left",
+        )
+        new_container = new_container.loc[
+            new_container["_merge_indicator_"] == "left_only",
+            self._container.columns,
+        ]
+        new_container = new_container.astype(
+            self._container.dtypes.to_dict()
+        )
+        output = self._empty_set_same_structure()
+        output._container = new_container.reset_index(drop=True)
+        output._might_have_duplicates = False
+        return output
 
     def __or__(self, other):
         if self is other:

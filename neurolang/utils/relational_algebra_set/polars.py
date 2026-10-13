@@ -569,7 +569,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         left_lf = left_lf.with_columns(pl.lit(1).alias(tmp_col))
         right_lf = right_lf.with_columns(pl.lit(1).alias(tmp_col))
 
-        merged = left_lf.join(right_lf, on=tmp_col, how="inner")
+        merged = left_lf.join(
+            right_lf, on=tmp_col, how="inner", maintain_order="left_right"
+        )
 
         for lc, rc in zip(left_on, right_on):
             merged = merged.filter(pl.col(lc) == pl.col(rc))
@@ -606,7 +608,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         right_rename = dict(zip(right_cols, shifted_cols))
         right_lf = oc.rename(right_rename)
 
-        merged = sc.join(right_lf, how="cross")
+        merged = sc.join(right_lf, how="cross", maintain_order="left_right")
 
         total_cols = self.arity + other.arity
         merged = merged.rename(
@@ -685,7 +687,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             oc = _strip_sentinel(other._container)
             if sc is None or oc is None:
                 return self._empty_set_same_structure()
-            merged = sc.join(oc, how="inner", on=_lf_names(sc))
+            merged = sc.join(
+                oc, how="inner", on=_lf_names(sc), maintain_order="left"
+            )
             output = self._empty_set_same_structure()
             output._container = merged
             output._might_have_duplicates = (
@@ -1015,7 +1019,9 @@ class NamedRelationalAlgebraFrozenSet(
             return type(self)(new_columns)
 
         sc, oc = self._unify_join_types(sc, oc, on)
-        new_container = sc.join(oc, on=on, how="inner")
+        new_container = sc.join(
+            oc, on=on, how="inner", maintain_order="left_right"
+        )
         new_container = new_container.select(*[pl.col(c) for c in new_columns])
 
         return self._light_init_same_structure(
@@ -1080,7 +1086,9 @@ class NamedRelationalAlgebraFrozenSet(
                         new_container = new_container.with_columns(pl.lit(None).alias(c))
             else:
                 sc, oc = self._unify_join_types(sc, oc, on)
-                new_container = sc.join(oc, on=on, how="left")
+                new_container = sc.join(
+                    oc, on=on, how="left", maintain_order="left_right"
+                )
 
         new_columns = self.columns + tuple(
             c for c in other.columns if c not in self.columns
@@ -1201,7 +1209,9 @@ class NamedRelationalAlgebraFrozenSet(
         if sc is None or oc is None:
             return type(self)(new_columns)
 
-        new_container = sc.join(oc, how="cross")
+        new_container = sc.join(
+            oc, how="cross", maintain_order="left_right"
+        )
         new_container = new_container.select(*[pl.col(c) for c in new_columns])
 
         return self._light_init_same_structure(
@@ -1464,9 +1474,17 @@ class NamedRelationalAlgebraFrozenSet(
         if self._container is None:
             return NamedRelationalAlgebraFrozenSet(columns=proj_columns, iterable=[])
 
-        c = _strip_sentinel(self._container)
-        if c is None:
-            return NamedRelationalAlgebraFrozenSet(columns=proj_columns, iterable=[])
+        # Keep the dee sentinel column while computing the new columns:
+        # a frame with no columns has no rows in polars >= 2, so stripping
+        # it first would turn dee (one empty tuple) into an empty set. The
+        # final ``select`` drops it.
+        c = self._container
+        data_names = [n for n in _lf_names(c) if n != _SENTINEL]
+
+        def data_rows(eager):
+            if not data_names:
+                return [()] * eager.height
+            return eager.select(data_names).iter_rows()
 
         new_container = c
         seen_pure_columns: SetType[abc.RelationalAlgebraColumn] = set()
@@ -1487,10 +1505,9 @@ class NamedRelationalAlgebraFrozenSet(
                     except Exception:
                         # Fall back to eager row-by-row
                         eager = new_container.collect()
-                        c_names = _lf_names(c)
-                        col_names = c_names
+                        col_names = data_names
                         values = []
-                        for row in eager.iter_rows():
+                        for row in data_rows(eager):
                             values.append(
                                 _eval_row_with_builtins(
                                     op_str, col_names, row
@@ -1508,13 +1525,13 @@ class NamedRelationalAlgebraFrozenSet(
             elif callable(operation):
                 # Need eager for callable
                 eager = new_container.collect()
-                col_names = _lf_names(c)
+                col_names = data_names
                 Row = self._make_named_row_class(col_names)
                 values = [
                     operation(Row(*(
                         _DictWrapper(v) if isinstance(v, dict) else v
                         for v in row
-                    ))) for row in eager.iter_rows()
+                    ))) for row in data_rows(eager)
                 ]
                 eager = eager.with_columns(
                     pl.Series(name=dst_column, values=values)
@@ -1709,7 +1726,10 @@ class NamedRelationalAlgebraFrozenSet(
             o_unified,
             list(self.columns),
         )
-        new_container = s_unified.join(o_unified, on=_lf_names(s_unified), how="inner")
+        new_container = s_unified.join(
+            o_unified, on=_lf_names(s_unified), how="inner",
+            maintain_order="left",
+        )
 
         return self._light_init_same_structure(
             new_container,

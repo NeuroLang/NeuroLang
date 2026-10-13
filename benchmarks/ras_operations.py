@@ -81,3 +81,37 @@ class TimeRASOperations:
         ras = self.RAS
         sa = self._named_xy_label(ras, self.tuples_a)
         sa.extended_projection({"x": "x", "double_x": "x * 2"})
+
+
+class TimeUnnamedDifference:
+
+    """
+    Time set difference of unnamed relations on the pandas backend.
+
+    The pandas backend switches from element-wise membership tests to a
+    merge above ``_ANTI_JOIN_MIN_ROWS`` rows of the left operand; these
+    sizes cover both sides of that threshold.
+    """
+
+    params = ([5, 20, 100, 1000], [10, 1000])
+    param_names = ["n_left", "n_right"]
+
+    def setup(self, n_left, n_right):
+        """Build the two relations, deduplicated, on the pandas backend."""
+        config.set_query_backend("pandas")
+
+        import neurolang.utils.relational_algebra_set as ras_mod
+        importlib.reload(ras_mod)
+        self.left = ras_mod.RelationalAlgebraFrozenSet(
+            [(i, f"s{i % 7}") for i in range(n_left)]
+        )
+        start = n_left // 2
+        self.right = ras_mod.RelationalAlgebraFrozenSet(
+            [(i, f"s{i % 7}") for i in range(start, start + n_right)]
+        )
+        len(self.left)
+        len(self.right)
+
+    def time_difference(self, n_left, n_right):
+        """Time ``left - right``."""
+        _ = self.left - self.right

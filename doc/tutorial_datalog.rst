@@ -1,14 +1,14 @@
 Datalog: A Rule-Based Query Language for NeuroLang
 ====================================================
 
-In addition to NSQUALL's controlled-English frontend, NeuroLang accepts a
+In addition to the SQUALL controlled-English frontend, NeuroLang accepts a
 standard text Datalog syntax parsed by the ``standard_syntax.py`` module.
 This syntax is closer to the logical core of the system — it uses rule-based
 notation with ``:-`` (implication) instead of English sentences.
 
 This tutorial mirrors the Bayes Factor decoding example from the
 :doc:`tutorial_squall` tutorial, showing the same problem expressed in text
-Datalog.  Read the two side by side to see how NSQUALL sentences map to
+Datalog.  Read the two side by side to see how SQUALL sentences map to
 Datalog rules.
 
 The full program we will build:
@@ -33,9 +33,9 @@ The full program we will build:
         joint_probability(r, t, p_rt),
         region_probability(r, p_r),
         term_probability(t, p_t),
-        bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)).
+        (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r))).
 
-    ans(r, t, bf) :- bayes_factor(r, t, bf), r == 'right fusiform gyrus'.
+    ans(r, t, bf) :- bayes_factor(r, t, bf), (r == 'right fusiform gyrus').
 
 .. contents:: Contents
    :local:
@@ -112,7 +112,7 @@ Part 2: Datalog Preliminaries
 ----------------------------
 
 A **predicate** in Datalog names a relation — it is the equivalent of a table
-name in SQL or a noun in NSQUALL.  A predicate is written as an identifier
+name in SQL or a noun in SQUALL.  A predicate is written as an identifier
 followed by parenthesised arguments:
 
 .. code-block:: none
@@ -171,7 +171,11 @@ constants by case — the same identifier can be used in predicate position
 
     region(r)        % r is a variable in argument position
     term(t)          % t is a variable in argument position
-    bigger(x, y) :- x > y.
+    Region(R)        % upper-case identifiers work the same way
+    bigger(x, y) :- size(x, a), size(y, b), (a > b).
+
+Note that in ``bigger``, ``x`` and ``y`` are bound by the ``size`` atoms:
+a comparison alone cannot bind a head variable (range restriction, §2.2).
 
 For clarity, convention uses short lowercase names for variables that
 correspond to columns (``r`` for region, ``t`` for term, ``s`` for study).
@@ -181,7 +185,7 @@ creates a fresh anonymous variable for each unique name):
 
 .. code-block:: none
 
-    ans(r, t) :- cooccurrence(r, t, _study).
+    ans(r) :- activates(_study, r).
 
 Here ``_study`` appears only once and is treated as a wildcard.
 
@@ -192,11 +196,12 @@ Constants are written inline:
 
 .. code-block:: none
 
-    ans(x) :- region(x), x == 'right fusiform gyrus'.
+    ans(x) :- region(x), (x == 'right fusiform gyrus').
 
 String literals use single quotes ``'...'``.  Numeric constants are written
 directly: ``42``, ``3.14``.  The ``==`` operator tests equality and works for
-both strings and numbers (see Part 8 for more comparisons).
+both strings and numbers (see Part 8 for more comparisons).  Comparisons in a
+rule body must be enclosed in parentheses.
 
 
 Part 3: Predicates and Simple Rules
@@ -205,8 +210,8 @@ Part 3: Predicates and Simple Rules
 3.1 The Bayes Factor Relations
 -------------------------------
 
-The Bayes Factor problem needs three binary EDB relations and three unary
-EDB relations:
+The Bayes Factor problem needs two binary EDB relations, three unary EDB
+relations and one probabilistic choice:
 
 .. code-block:: none
 
@@ -293,7 +298,7 @@ Multiple conditions in a rule body are joined with commas ``,`` (or the
 Both forms are equivalent.  The comma form is more common in Datalog
 literature.
 
-In the Bayes Factor program, all five intermediate deterministic rules
+In the Bayes Factor program, the three intermediate deterministic rules
 are passed as a single program string:
 
 .. code-block:: none
@@ -349,45 +354,41 @@ The equivalent in the Bayes Factor program:
     term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t.
     joint_probability(r, t, p_rt) :- PROB[cooccurrence(r, t)] = p_rt.
 
-A conditioning filter can be added with ``//``:
+A conditioning filter can be added with ``//`` (``|`` is accepted as a
+synonym):
 
 .. code-block:: none
 
-    ans(r, p) :- PROB[activates(s, r) // filter(s)] = p.
+    ans(r, p) :- PROB[active_region(r) // mentioned_term('face')] = p.
 
-This computes :math:`P(\mathtt{activates} \mid \mathtt{filter})`.
+This computes the conditional probability
+:math:`P(\mathtt{active\_region}(r) \mid \mathtt{mentioned\_term}(\mathit{face}))`,
+i.e. the fraction of the studies mentioning *face* that activate ``r``.
 
-5.3 MARG — Conditional Probability
-------------------------------------
+5.3 MARG — Marginal Probability of a Conjunction
+--------------------------------------------------
 
-``MARG[pred(x)] = p`` computes the marginal (unconditional) probability,
-identical to PROB when no condition is supplied:
-
-.. code-block:: none
-
-    ans(r, p) :- MARG[active_region(r)] = p.
-
-With ``//`` it computes the conditional probability:
+``MARG[...] = p`` computes the same probability as ``PROB``; it is mostly
+used with a conjunction inside the brackets:
 
 .. code-block:: none
 
-    ans(r, p) :- MARG[activates(s, r) // selected_study(s)] = p.
+    ans(r, p) :- MARG[selected_study(s), activates(s, r)] = p.
 
-This computes :math:`P(\mathtt{activates} \mid \mathtt{selected\_study})`.
-The engine solves it as two PROB queries and a division.
+This computes :math:`P(\exists s.\ \mathtt{selected\_study}(s) \land
+\mathtt{activates}(s, r))` for each region ``r``.  As with ``PROB``, adding
+``//`` gives a conditional probability:
+
+.. code-block:: none
+
+    ans(r, p) :- MARG[active_region(r) // mentioned_term('face')] = p.
 
 5.4 SUCC — Success Probability
 -------------------------------
 
-``SUCC[pred(x)] = p`` is a synonym for PROB.  For positive CP-Logic
-programs, success probability (the probability that a query has at least
-one proof) equals the marginal probability:
-
-.. code-block:: none
-
-    ans(r, p) :- SUCC[active_region(r)] = p.
-
-It supports the same ``//`` conditional syntax as PROB and MARG.
+The parser accepts ``SUCC[...] = p`` (and ``SUCC[...] :- body``) for
+compatibility, but these atoms are currently discarded before execution.
+Use ``PROB`` instead.
 
 
 Part 6: Connectives
@@ -420,7 +421,8 @@ Datalog expresses disjunction through multiple rules with the same head:
 6.3 Negation
 -------------
 
-Negation-as-failure uses the ``~`` prefix (or the Unicode ``\u00AC``):
+Negation-as-failure uses the ``~`` prefix (the grammar also lists the
+Unicode ``¬``, but ``~`` is the recommended form):
 
 .. code-block:: none
 
@@ -441,10 +443,11 @@ Datalog rules support arithmetic expressions with ``+``, ``-``, ``*``,
 
 .. code-block:: none
 
-    bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r))
+    (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
 
-Parentheses control grouping.  The ``==`` operator binds the result of the
-expression to the variable on the left.
+Parentheses control grouping, and the whole comparison is itself enclosed in
+parentheses.  The ``==`` operator binds the result of the expression to the
+variable on the left.
 
 7.2 The Complete Bayes Factor Rule
 ------------------------------------
@@ -457,7 +460,7 @@ The BF formula combines the three probability distributions with arithmetic:
         joint_probability(r, t, p_rt),
         region_probability(r, p_r),
         term_probability(t, p_t),
-        bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)).
+        (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r))).
 
 Each ``probability`` atom provides a probability column (``p_rt``, ``p_r``,
 ``p_t``) that was created by the PROB construct in Part 5.  The last line
@@ -478,7 +481,7 @@ immediately and its result returned:
 
     ans(r, t, bf) :-
         bayes_factor(r, t, bf),
-        r == 'right fusiform gyrus'.
+        (r == 'right fusiform gyrus').
 
 .. code-block:: python
 
@@ -490,8 +493,9 @@ immediately and its result returned:
 8.2 Filtering with Comparisons
 --------------------------------
 
-The ``r == 'right fusiform gyrus'`` filter uses the equality comparison
-operator.  Text Datalog supports the full comparison suite:
+The ``(r == 'right fusiform gyrus')`` filter uses the equality comparison
+operator.  Text Datalog supports the full comparison suite (always written
+between parentheses in a rule body):
 
 ========= =================
 Operator  Meaning
@@ -509,7 +513,7 @@ Comparisons work on both numeric and string arguments.
 8.3 Magic-Sets Optimization
 -----------------------------
 
-The ``r == 'right fusiform gyrus'`` filter does more than just post-process
+The ``(r == 'right fusiform gyrus')`` filter does more than just post-process
 — NeuroLang's **magic-sets** optimisation pushes the constant backwards
 through all the rules in the chain:
 
@@ -560,13 +564,14 @@ Putting it all together:
         joint_probability(r, t, p_rt),
         region_probability(r, p_r),
         term_probability(t, p_t),
-        bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)).
+        (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r))).
 
     % Query — filter for the target region
-    ans(r, t, bf) :- bayes_factor(r, t, bf), r == 'right fusiform gyrus'.
+    ans(r, t, bf) :- bayes_factor(r, t, bf), (r == 'right fusiform gyrus').
 
-Running this on real Neurosynth data produces the same results shown in
-:doc:`tutorial_squall` (Part 9):
+Running this on real Neurosynth data produces the same results as the
+SQUALL program in :doc:`tutorial_squall` (Part 9); the top 10 terms are
+shown here:
 
 .. list-table:: Top terms by Bayes Factor for the right fusiform gyrus
    :header-rows: 1
@@ -665,26 +670,30 @@ Besides equality (``==``), the full comparison suite is available:
 
 .. code-block:: none
 
-    large_items(x) :- item(x), item_count(x, c), c >= 2.
-    not_empty(x) :- item_count(x, c), c != 0.
-    small(x) :- item(x), item_count(x, c), c < 10.
+    large_items(x) :- item(x), item_count(x, c), (c >= 2).
+    not_empty(x) :- item_count(x, c), (c != 0).
+    small(x) :- item(x), item_count(x, c), (c < 10).
 
 Comparisons can be combined with conjunction in the same rule body.
 
 10.4 Commands and Directives
 -----------------------------
 
-Commands use the ``.`` prefix and follow the Prolog convention:
+Commands use the ``.`` prefix and follow the Prolog convention.  The text
+Datalog frontend currently executes two commands, which load external data
+into a relation:
 
 .. code-block:: none
 
-    .set_backend('pandas')
+    .load_csv(study_metadata, "https://example.com/metadata.tsv", sep="\t")
+    .load_atlas(destrieux, "atlas.nii.gz", "labels.csv", "https://example.com/destrieux.tgz")
 
-This switches the relational algebra backend at runtime.  Currently
-supported backends are ``'pandas'``, ``'dask'``, and ``'duckdb'``.
-
-Commands are processed before rule evaluation and unknown commands are
-silently ignored.
+Any other command (for instance ``.set_backend('polars')``) is rejected with
+an ``UnsupportedProgramError``.  To change the relational algebra backend
+(``'pandas'``, ``'dask'`` or ``'polars'``) from Datalog code, use the SQUALL
+``#set_backend`` directive or, from Python,
+``neurolang.config.config.set_query_backend(...)``; see :doc:`performance`.
+Note that the backend is a process-wide setting.
 
 10.5 Probabilistic Facts
 -------------------------
@@ -702,7 +711,7 @@ probability) also exist:
 
 .. code-block:: none
 
-    p(x) :: exp(-d / 5.0) :- a(x, d), d < 0.8.
+    p(x) :: exp(-d / 5.0) :- a(x, d), (d < 0.8).
 
 
 10.6 Probabilistic Choices
@@ -730,15 +739,17 @@ probabilities in a choice group must sum to 1.
 
 .. code-block:: none
 
-    study_region(s, r) ^ (1 / c) :- study(s), region(r).
+    n_studies(n) :- AGGREGATE[](study(s) @ count(s)) = n.
+    picked_study(s) ^ (1 / n) :- study(s), n_studies(n).
 
-Here the probability expression ``(1 / c)`` is evaluated at runtime; each
-tuple in the body produces one arm of the choice.  The ``:~:`` operator can
-be used interchangeably:
+Here the probability expression ``(1 / n)`` is evaluated at runtime, with
+``n`` bound in the body to the number of studies; each tuple in the body
+produces one arm of the choice, so ``picked_study`` is a uniform choice over
+studies.  The ``:~:`` operator can be used interchangeably:
 
 .. code-block:: none
 
-    study_region(s, r) :~: (1 / c) :- study(s), region(r).
+    picked_study(s) :~: (1 / n) :- study(s), n_studies(n).
 
 
 .. _appendix-a-datalog:
@@ -748,7 +759,7 @@ Appendix A: Running Datalog from Python
 
 All of the Datalog syntax shown in this tutorial can be executed from Python
 using the ``NeurolangPDL`` frontend.  The general workflow follows the same
-pattern as NSQUALL (see :ref:`part-9-appendix-a`), but using
+pattern as SQUALL (see :ref:`part-9-appendix-a`), but using
 ``execute_datalog_program`` instead of ``execute_squall_program``.
 
 The steps are:
@@ -767,10 +778,10 @@ Registering facts and running a simple rule
 .. code-block:: python
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("alice",), ("bob",), ("carol",)], name="person"
     ... )
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("alice",), ("carol",)], name="plays"
     ... )
     >>> nl.execute_datalog_program(
@@ -799,14 +810,19 @@ returns the result directly:
 Multiple rules
 ---------------
 
+Each rule goes on its own line:
+
 .. code-block:: python
 
-    >>> nl.execute_datalog_program(
-    ...     "player(x) :- person(x), plays(x). "
-    ...     "runner(x) :- person(x), runs(x). "
-    ...     "ans(x) :- player(x)."
+    >>> result = nl.execute_datalog_program(
+    ...     """
+    ...     player(x) :- person(x), plays(x).
+    ...     non_player(x) :- person(x), ~plays(x).
+    ...     ans(x) :- player(x).
+    ...     """
     ... )
-    >>> # or: nl.solve_all()["player"]
+    >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    ['alice', 'carol']
 
 Binary predicates
 ------------------
@@ -814,9 +830,9 @@ Binary predicates
 .. code-block:: python
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> nl.add_tuple_set([("jazz",)], name="genre")
-    >>> nl.add_tuple_set([("alice", "jazz")], name="sings")
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("jazz",)], name="genre")
+    >>> _ = nl.add_tuple_set([("alice", "jazz")], name="sings")
     >>> nl.execute_datalog_program(
     ...     "performer(x) :- person(x), sings(x, g)."
     ... )
@@ -832,8 +848,8 @@ Negation
 .. code-block:: python
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("alice",), ("bob",)], name="person")
-    >>> nl.add_tuple_set([("alice",)], name="plays")
+    >>> _ = nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    >>> _ = nl.add_tuple_set([("alice",)], name="plays")
     >>> nl.execute_datalog_program(
     ...     "not_playing(x) :- person(x), ~plays(x)."
     ... )
@@ -849,14 +865,14 @@ Filtering with comparisons
 .. code-block:: python
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("a",), ("b",), ("c",), ("d",)], name="item"
     ... )
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
     ... )
     >>> nl.execute_datalog_program(
-    ...     "large(x) :- item(x), item_count(x, c), c >= 2."
+    ...     "large(x) :- item(x), item_count(x, c), (c >= 2)."
     ... )
     >>> sorted(
     ...     nl.solve_all()["large"]
@@ -870,14 +886,17 @@ Aggregation
 .. code-block:: python
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("a",), ("b",), ("c",), ("d",)], name="item"
     ... )
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set(
     ...     [("a", 0), ("a", 1), ("b", 2), ("c", 3)], name="item_count"
     ... )
     >>> result = nl.execute_datalog_program(
-    ...     "ans(x, m) :- AGGREGATE[x](item_count(x, c) @ max(c)) = m."
+    ...     """
+    ...     max_count(x, m) :- AGGREGATE[x](item_count(x, c) @ max(c)) = m.
+    ...     ans(x, m) :- max_count(x, m).
+    ...     """
     ... )
     >>> sorted(
     ...     result.as_pandas_dataframe().apply(tuple, axis=1).tolist()
@@ -890,11 +909,11 @@ Probabilistic query (PROB)
 .. code-block:: python
 
     >>> nl = NeurolangPDL()
-    >>> nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
-    >>> nl.add_tuple_set(
+    >>> _ = nl.add_tuple_set([("s1",), ("s2",), ("s3",)], name="study")
+    >>> _ = nl.add_tuple_set(
     ...     [("s1", "A"), ("s2", "A"), ("s3", "B")], name="activates"
     ... )
-    >>> nl.add_uniform_probabilistic_choice_over_set(
+    >>> _ = nl.add_uniform_probabilistic_choice_over_set(
     ...     [("s1",), ("s2",), ("s3",)], name="selected_study"
     ... )
     >>> result = nl.execute_datalog_program(
@@ -930,18 +949,65 @@ Listing available engines and predicates::
 Running a Datalog query inline::
 
     neurolang-query --engine neurosynth \
-        "ans(t) :- term_in_study_tfidf(t, w, s)"
+        "ans(t) :- term_in_study_tfidf(s, t, w)"
 
 Running a query from a file::
 
     neurolang-query --engine neurosynth -f query.dl
 
-Sorting and column selection::
+Sorting the output by a column of the answer (``--sort`` can be repeated;
+append ``:desc`` for descending order)::
 
     neurolang-query --engine neurosynth \
-        --sort "tfidf:desc" \
-        --columns term,tfidf \
-        "ans(t, w) :- term_in_study_tfidf(t, w, s)"
+        --sort "w:desc" \
+        "ans(t, w) :- term_in_study_tfidf(s, t, w)"
+
+Inspecting query plans
+----------------------
+
+``--show-ra`` (``-Q``) prints, instead of the answer, the relational algebra
+plan each rule of the query is evaluated with, stratum by stratum
+(deterministic, probabilistic and post-probabilistic).  Plans are drawn as
+trees; base relations are shown as atoms with their number of rows, the
+predicate generated for the query is shown as ``ans``, probabilistic plans
+name the solver that produced them (small dichotomy theorem, Dalvi–Suciu
+lifted inference or weighted model counting) and label their probability
+columns ``p``, and recursive rules are shown once, followed by the number of
+iterations the fixpoint took.  The rewritten program is printed too when
+``--show-rewritten`` is given.  Two flags refine the display:
+
+* ``--ra-verbose`` prints the plans in full, without collapsing the renames
+  and projections of base relations into atoms (``ρ[x, y](π[#0, #1](edge))``
+  instead of ``edge(x, y)``);
+* ``--ra-analyze`` runs the query and annotates every plan node with the
+  number of rows it produced, like SQL's ``EXPLAIN ANALYZE``.  Counts that
+  would require removing duplicates of values that are expensive to compare,
+  such as regions, are upper bounds, printed ``‹≤N rows›``.
+
+For instance::
+
+    $ neurolang-query --engine neurosynth --show-ra --ra-analyze \
+        "ans(l, s) :- reports(s, i, j, k), schaefer_voxels(i, j, k, l)."
+    ── deterministic stratum ──
+    ── rule reports(s, i, j, k) :-
+        peak_reported(i, j, k, s) ──
+    peak_reported(i, j, k, s) ‹447,477 rows›
+    ── rule schaefer_voxels(I, J, K, l) :-
+        schaefer(l, r),
+        ⟨contains⟩(r, (I, J, K)) ──
+    δ[r→('I', 'J', 'K')] ‹≤132,032 rows›
+    └─ schaefer(l, r) ‹100 rows›
+    ── rule ans(l, s) :-
+        reports(s, i, j, k),
+        schaefer_voxels(i, j, k, l) ──
+    ⋈ ‹10,190 rows›
+    ├─ reports(s, i, j, k) ‹447,477 rows›
+    └─ schaefer_voxels(i, j, k, l) ‹132,032 rows›
+
+From Python, pass ``show_ra=True`` to ``execute_datalog_program``,
+``execute_squall_program`` or ``query``, or a
+:class:`~neurolang.frontend.show_ra.ShowRAOptions` such as
+``ShowRAOptions(collapse=False, analyze=True)``.
 
 For the full list of options, see ``neurolang-query --help`` or the
 :py:mod:`neurolang.utils.cli` module documentation.

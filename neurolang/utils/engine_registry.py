@@ -74,12 +74,10 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import nibabel as nib
 import numpy as np
 import yaml
-from nilearn import datasets, image
 
-try:
-    from nilearn.datasets.utils import _fetch_files
-except ImportError:
-    from nilearn.datasets._utils import fetch_files as _fetch_files
+from .nilearn_compat import fetch_files as _fetch_files
+from .nilearn_compat import nilearn_datasets as _nilearn_datasets
+from .nilearn_compat import nilearn_image as _nilearn_image
 
 if TYPE_CHECKING:
     from neurolang.frontend import NeurolangPDL
@@ -317,27 +315,27 @@ def get_predicates(
 
 _NILEARN_TEMPLATES: Dict[str, Dict[str, Any]] = {
     "brain_mask": {
-        "func": datasets.load_mni152_brain_mask,
+        "func": "load_mni152_brain_mask",
         "kind": "mask",
     },
     "gm_mask": {
-        "func": datasets.load_mni152_gm_mask,
+        "func": "load_mni152_gm_mask",
         "kind": "mask",
     },
     "wm_mask": {
-        "func": datasets.load_mni152_wm_mask,
+        "func": "load_mni152_wm_mask",
         "kind": "mask",
     },
     "template": {
-        "func": datasets.load_mni152_template,
+        "func": "load_mni152_template",
         "kind": "anatomical",
     },
     "gm_template": {
-        "func": datasets.load_mni152_gm_template,
+        "func": "load_mni152_gm_template",
         "kind": "anatomical",
     },
     "wm_template": {
-        "func": datasets.load_mni152_wm_template,
+        "func": "load_mni152_wm_template",
         "kind": "anatomical",
     },
 }
@@ -392,7 +390,7 @@ def _fetch_nilearn_template(
     elif variant in ("brain_mask", "gm_mask", "wm_mask"):
         kwargs["resolution"] = params.get("resolution")
 
-    img = info["func"](**kwargs)
+    img = getattr(_nilearn_datasets(), info["func"])(**kwargs)
 
     pred_name = params.get("predicate")
     if pred_name:
@@ -472,15 +470,15 @@ def _load_template(
 # ---------------------------------------------------------------------------
 
 def _fetch_atlas_destrieux(**kwargs):
-    return datasets.fetch_atlas_destrieux_2009(**kwargs)
+    return _nilearn_datasets().fetch_atlas_destrieux_2009(**kwargs)
 
 
 def _fetch_atlas_schaefer(**kwargs):
-    return datasets.fetch_atlas_schaefer_2018(**kwargs)
+    return _nilearn_datasets().fetch_atlas_schaefer_2018(**kwargs)
 
 
 def _fetch_atlas_difumo(**kwargs):
-    return datasets.fetch_atlas_difumo(**kwargs)
+    return _nilearn_datasets().fetch_atlas_difumo(**kwargs)
 
 
 _ATLAS_REGISTRY = {
@@ -537,12 +535,11 @@ def _load_deterministic_atlas(
 
     img = nib.load(atl_data["maps"])
     pred_name = params.get("predicate_name", atlas_name)
-    rows = []
-    for k, v in _parse_labels(atl_data["labels"]):
-        if k == 0:
-            continue
-        name = _label_name(v)
-        rows.append((name, ExplicitVBR.from_spatial_image_label(img, k)))
+    labels = [(k, v) for k, v in _parse_labels(atl_data["labels"]) if k != 0]
+    regions = ExplicitVBR.from_spatial_image_labels(
+        img, [k for k, _ in labels]
+    )
+    rows = [(_label_name(v), regions[k]) for k, v in labels]
 
     nl.add_tuple_set(rows, name=pred_name)
 
@@ -567,10 +564,12 @@ def _load_probabilistic_atlas(
     fetch_kw["data_dir"] = str(data_dir)
     atl_data = info["fetch"](**fetch_kw)
 
+    import pandas as pd
+
     from neurolang.regions import ExplicitVBR
 
     img = nib.load(atl_data["maps"])
-    data = img.get_fdata()
+    n_components = img.shape[-1]
     labels = list(atl_data["labels"])
     threshold = float(params.get("threshold", 0.5))
     prob_threshold = float(params.get("prob_threshold", 0.01))
@@ -579,32 +578,43 @@ def _load_probabilistic_atlas(
         "prob_predicate_name", f"{pred_name}_prob"
     )
 
-    # ── Binary region predicate (thresholded) ──
+    # Read one component at a time: loading the whole 4D image with
+    # ``get_fdata`` takes several GB for large atlases such as DiFuMo.
     region_rows = []
-    for i in range(data.shape[-1]):
-        mask = data[..., i] > threshold
-        if not mask.any():
-            continue
-        voxels = np.argwhere(mask)
-        region = ExplicitVBR(voxels, img.affine, image_dim=img.shape[:3])
+    prob_frames = []
+    for i in range(n_components):
+        prob_map = np.asarray(img.dataobj[..., i])
         label = _label_name(labels[i] if i < len(labels) else f"component_{i}")
-        region_rows.append((label, region))
+
+        # ── Binary region predicate (thresholded) ──
+        mask = prob_map > threshold
+        if mask.any():
+            voxels = np.argwhere(mask)
+            region = ExplicitVBR(voxels, img.affine, image_dim=img.shape[:3])
+            region_rows.append((label, region))
+
+        # ── Probability predicate (component, i, j, k, prob) ──
+        mask = prob_map > prob_threshold
+        if mask.any():
+            indices = np.argwhere(mask)
+            prob_frames.append(
+                pd.DataFrame(
+                    {
+                        "component": label,
+                        "i": indices[:, 0],
+                        "j": indices[:, 1],
+                        "k": indices[:, 2],
+                        "prob": prob_map[mask].astype(float),
+                    }
+                )
+            )
 
     nl.add_tuple_set(region_rows, name=pred_name)
 
-    # ── Probability predicate (component, i, j, k, prob) ──
-    prob_rows = []
-    for i in range(data.shape[-1]):
-        prob_map = data[..., i]
-        mask = prob_map > prob_threshold
-        if not mask.any():
-            continue
-        indices = np.argwhere(mask)
-        values = prob_map[mask]
-        label = _label_name(labels[i] if i < len(labels) else f"component_{i}")
-        for (j_idx, k_idx, l_idx), prob in zip(indices, values):
-            prob_rows.append((label, int(j_idx), int(k_idx), int(l_idx), float(prob)))
-
+    if prob_frames:
+        prob_rows = pd.concat(prob_frames, ignore_index=True)
+    else:
+        prob_rows = []
     nl.add_tuple_set(prob_rows, name=prob_pred_name)
 
 
@@ -626,7 +636,7 @@ def _load_atlas(
 
 def _get_mni_mask(data_dir: Path) -> nib.Nifti1Image:
     return nib.load(
-        datasets.fetch_icbm152_2009(
+        _nilearn_datasets().fetch_icbm152_2009(
             data_dir=str(data_dir / "icbm")
         )["t1"]
     )
@@ -640,7 +650,9 @@ def _resolve_mask(
         return None
     mask = _get_mni_mask(data_dir)
     if resolution is not None:
-        mask = image.resample_img(mask, np.eye(4) * resolution)
+        # A 3x3 target affine keeps the original origin; scaling a 4x4
+        # identity would also scale its homogeneous coordinate.
+        mask = _nilearn_image().resample_img(mask, np.eye(3) * resolution)
     return mask
 
 
@@ -725,9 +737,7 @@ def _phase_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
                 "Supported: .csv, .tsv, .csv.gz, .tsv.gz"
             )
         df = pd.read_csv(rel_path, sep=sep)
-        nl.add_tuple_set(
-            [tuple(row) for row in df.to_numpy()], name=rel_name
-        )
+        nl.add_tuple_set(df, name=rel_name)
 
 
 def _phase_probabilistic_choices(nl, cfg):

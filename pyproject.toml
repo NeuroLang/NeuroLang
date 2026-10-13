@@ -60,7 +60,7 @@ dev = [
 ]
 
 ras-polars = [
-    "polars>=1.0",
+    "polars>=1.17",
     "pyarrow",
 ]
 

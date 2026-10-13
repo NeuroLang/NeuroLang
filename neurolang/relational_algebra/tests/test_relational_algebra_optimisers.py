@@ -1,3 +1,4 @@
+import contextlib
 import operator
 from typing import AbstractSet, Tuple
 
@@ -9,11 +10,14 @@ from ...expressions import Constant, FunctionApplication, Symbol
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..optimisers import (
     EliminateTrivialProjections,
+    GreedyJoinOrdering,
     PushInSelections,
+    PushProjectionsDown,
     RelationalAlgebraOptimiser,
     RenameOptimizations,
     RewriteSelections,
-    SimplifyExtendedProjectionsWithConstants
+    SimplifyExtendedProjectionsWithConstants,
+    _ra_columns
 )
 from ..relational_algebra import (
     ColumnInt,
@@ -28,6 +32,7 @@ from ..relational_algebra import (
     NaturalJoin,
     Product,
     Projection,
+    RelationalAlgebraSolver,
     RenameColumn,
     RenameColumns,
     ReplaceNull,
@@ -1040,3 +1045,297 @@ def test_push_unnamed_selections_up(r1):
     )
 
     assert raop.walk(s) == res
+
+
+def _has_cross_product(expr):
+    """
+    Check whether a binary join tree joins operands sharing no column.
+
+    Operands whose columns cannot be computed are not counted as cross
+    products.
+    """
+    if not (hasattr(expr, 'relation_left') and hasattr(expr, 'relation_right')):
+        return False
+    with contextlib.suppress(Exception):
+        lc = _ra_columns(expr.relation_left)
+        rc = _ra_columns(expr.relation_right)
+        if len(lc & rc) == 0:
+            return True
+    return (
+        _has_cross_product(expr.relation_left)
+        or _has_cross_product(expr.relation_right)
+    )
+
+
+def _named_constant(columns, row):
+    """Build a one-row named relation constant with integer columns."""
+    return C_[AbstractSet[Tuple[(int,) * len(columns)]]](
+        NamedRelationalAlgebraFrozenSet(columns, [row])
+    )
+
+
+def _cross_product_under_projection():
+    """
+    Build ``π[s1,s5](A(s5) ⋈ B(s1))`` and the constant ``C(s1, s5)``.
+
+    A ⋈ B is a cross product since A and B share no columns.
+    """
+    A = _named_constant(('s5',), (5,))
+    B = _named_constant(('s1',), (1,))
+    C = _named_constant(('s1', 's5'), (1, 5))
+    proj = Projection(NaturalJoin(A, B), (
+        str2columnstr_constant('s1'),
+        str2columnstr_constant('s5'),
+    ))
+    return proj, C
+
+
+def _optimise_to_fixpoint(expression, max_iterations=10):
+    """Apply RelationalAlgebraOptimiser until the plan stops changing."""
+    for _ in range(max_iterations):
+        prev_repr = repr(expression)
+        expression = RelationalAlgebraOptimiser().walk(expression)
+        if repr(expression) == prev_repr:
+            break
+    return expression
+
+
+def _named_symbol(name, column_names):
+    """Build ``NameColumns(Symbol(name), column_names)`` with str columns."""
+    return NameColumns(
+        Symbol[AbstractSet](name),
+        tuple(Constant[ColumnStr](ColumnStr(c)) for c in column_names),
+    )
+
+
+def test_push_projection_into_join_operands(r1, r2, str_columns):
+    """
+    Check that PushProjectionsDown pushes projections into join operands.
+
+    PushProjectionsDown pushes the projection down into join operands
+    and eliminates the outer projection boundary.
+
+    π[b,d](R(a,b)⋈S(c,b)) ⋈ T(b,d)
+    → after pipeline: all operands flattened in an NaryNaturalJoin
+      with column-a pruned from R.
+    """
+    a, b, c, d, _ = str_columns
+
+    # Build π[b,d](R⋈S) ⋈ T(b,d)
+    # R(a,b) ⋈ S(c,b) — shared=b, cols={b,d}. Guard: shared={b} ⊆ cols={b,d} ✓
+    # T(b,d) shares {b,d} with inner result {a,b,c}. Both ⊆ cols ✓
+    r_named = NameColumns(C_(r1), (a, b))
+    s_named = NameColumns(C_(r2), (c, b))
+    t_named = NameColumns(C_(r2), (b, d))
+
+    proj = Projection(NaturalJoin(r_named, s_named), (b, d))
+    tree = NaturalJoin(proj, t_named)
+
+    raop = RelationalAlgebraOptimiser()
+    result = raop.walk(tree)
+
+    # Verify no cross products in result — all NaturalJoin children
+    # share at least one column after optimisation.
+    assert not _has_cross_product(result), (
+        "Cross product still present after optimisation"
+    )
+
+    # Verify the tree converged to an NaryNaturalJoin (the flattening
+    # step absorbed the projection barrier into the join operands).
+    assert type(result).__name__ == "NaryNaturalJoin", (
+        "Expected flattened NaryNaturalJoin, got " + type(result).__name__
+    )
+
+
+def test_push_projection_eliminates_cross_product_across_projection():
+    """
+    Check that pushing projections removes a trapped cross product.
+
+    Integration: PushProjectionIntoJoinOperands + FlattenAndReorderJoins
+    eliminates a cross product trapped inside a projection.
+
+    Tree: π[s₁,s₅](A(s₅) ⋈ B(s₁)) ⋈ C(s₁,s₅)
+    A⋈B is a cross product (no shared columns).
+    C has both columns — absorbing C enables natural joins throughout.
+    """
+    proj, C = _cross_product_under_projection()
+    tree = NaturalJoin(proj, C)  # C can be absorbed (C.columns ⊆ proj.columns)
+
+    curr = _optimise_to_fixpoint(tree)
+
+    assert not _has_cross_product(curr), (
+        "Cross product still present after optimisation"
+    )
+
+
+def test_push_projections_down_through_join(r1, str_columns):
+    """Check that PushProjectionsDown prunes join inputs with projections."""
+    a, b, c, _, _ = str_columns
+    # R1 has columns (int, int) → name them a, b
+    # R2 has columns (int, int) → name them c, b (shares b)
+    r_named = NameColumns(C_(r1), (a, b))
+    s_named = NameColumns(C_(r2), (c, b))
+
+    join = NaturalJoin(r_named, s_named)  # natural join on b
+    proj = Projection(join, (b, c))        # output needs b, c (drops a from R1)
+
+    pj = PushProjectionsDown()
+    result = pj.walk(proj)
+
+    # result should be Projection(NaturalJoin(Projection(R1, (b,)), Projection(R2, (b, c))))
+    assert type(result).__name__ == "Projection"
+    assert tuple(result.attributes) == (b, c)
+
+    inner = result.relation
+    assert type(inner).__name__ == "NaturalJoin"
+
+    left = inner.relation_left
+    right = inner.relation_right
+
+    # R1 should be projected to only (b) — column a is dropped
+    # R2 should be projected to (b, c) — shared + output columns
+    if type(left).__name__ == "Projection":
+        r1_proj = left
+    else:
+        r1_proj = right
+
+    assert type(r1_proj).__name__ == "Projection"
+    # The projected attributes for R1: should only contain 'b' (shared column)
+    proj_attrs = tuple(c.value for c in r1_proj.attributes)
+    assert 'b' in proj_attrs
+    assert 'a' not in proj_attrs, (
+        "Column 'a' should have been pruned from R1 input"
+    )
+
+
+def test_push_projections_down_full_pipeline():
+    """
+    Check that the full optimiser pipeline leaves no cross products.
+
+    End-to-end: the full RelationalAlgebraOptimiser pipeline
+    (push projections into join operands → flatten/reorder → push projections)
+    produces a plan with no cross products.
+    """
+    # π[s₁,s₅](A⋈B) ⋈ C ⋈ D
+    # A⋈B is cross product, C provides s₁/s₅ to join with A/B, D provides s₄
+    proj, C = _cross_product_under_projection()
+    D = _named_constant(('s4', 's1', 's5'), (4, 1, 5))
+    tree = NaturalJoin(NaturalJoin(proj, C), D)
+
+    curr = _optimise_to_fixpoint(tree)
+
+    # At minimum the pipeline should not crash and should eliminate cross
+    # products. Projection pushdown is a best-effort optimisation — the
+    # exact shape depends on what EliminateTrivialProjections cleans up.
+    assert not _has_cross_product(curr), f"Cross product still present:\n{curr!r}"
+
+
+def test_greedy_join_ordering_reorders_mixed_product_join():
+    """
+    Check that greedy join ordering joins shared-column operands first.
+
+    Regression test: GreedyJoinOrdering reorders a mixed Product/NaturalJoin
+    chain so operands with shared ColumnStr names are joined first.
+
+    Tree: NaturalJoin(Product(R1[a,b], R2[c,d]), R3[b,c])
+    R1 and R2 share no columns → Product.
+    R3 shares 'b' with R1 and 'c' with R2.
+    After GOO: R1 and R3 should be joined first (share 'b'),
+    then R2 (shares 'c' with the result).
+    Expected: nested NaturalJoin tree with no bare Product between
+    operands that share columns.
+    """
+    r1_named = _named_symbol('R1', 'ab')
+    r2_named = _named_symbol('R2', 'cd')
+    r3_named = _named_symbol('R3', 'bc')
+
+    # NaturalJoin(Product(R1[a,b], R2[c,d]), R3[b,c])
+    tree = NaturalJoin(Product((r1_named, r2_named)), r3_named)
+
+    opt = GreedyJoinOrdering()
+    result = opt.walk(tree)
+
+    # The result must NOT be a bare Product — the cross product should
+    # have been eliminated by reordering.
+    assert type(result).__name__ != "Product", (
+        "Expected join (NaturalJoin), got Product — cross product not eliminated"
+    )
+
+    # The result should be a NaturalJoin (nested tree), not NaryNaturalJoin,
+    # not Product.
+    assert type(result).__name__ == "NaturalJoin", (
+        "Expected NaturalJoin, got " + type(result).__name__
+    )
+
+    # Verify no cross product remains: walk the tree and check that
+    # no Product node exists between operands that share columns.
+    def _check_no_product(expr):
+        if isinstance(expr, Product):
+            # Product is only OK if its operands truly share no columns
+            ops = list(expr.relations)
+            for i, op_i in enumerate(ops):
+                for op_j in ops[i + 1:]:
+                    lc = _ra_columns(op_i)
+                    rc = _ra_columns(op_j)
+                    assert len(lc & rc) == 0, (
+                        f"Cross product between operands that share columns: "
+                        f"{lc} ∩ {rc} ≠ ∅"
+                    )
+        elif isinstance(expr, NaturalJoin):
+            _check_no_product(expr.relation_left)
+            _check_no_product(expr.relation_right)
+
+    _check_no_product(result)
+
+
+def test_greedy_join_ordering_preserves_disconnected_product():
+    """
+    Check that greedy join ordering keeps a disconnected product.
+
+    Regression test: GreedyJoinOrdering must NOT convert a Product of
+    two operands with NO shared column names into a NaturalJoin.
+
+    Tree: Product(R1[a,b], R2[c,d])
+    R1 and R2 share no columns → must remain Product.
+    """
+    tree = Product((_named_symbol('R1', 'ab'), _named_symbol('R2', 'cd')))
+
+    opt = GreedyJoinOrdering()
+    result = opt.walk(tree)
+
+    # Must remain a Product — no shared columns means no join possible.
+    assert type(result).__name__ == "Product", (
+        "Expected Product (no shared columns), got " + type(result).__name__
+    )
+
+
+def test_push_projections_down_terminates_when_nothing_to_push():
+    """
+    Check that the optimiser stops when a projection cannot be pushed.
+
+    In ``π[b](π[b](R(b, g)) ⋈ S(c))`` the left side is already narrowed
+    and ``S`` needs no column, so pushing the projection changes nothing.
+    PushProjectionsDown used to rebuild an equal expression in that case,
+    and together with FlattenAndReorderJoins the walker rewrote the plan
+    forever (RecursionError).
+    """
+    r = _named_constant(("b", "g"), (0, 1))
+    s = _named_constant(("c",), (0,))
+    t = _named_constant(("f", "a", "c"), (0, 1, 2))
+    u = _named_constant(("c", "e", "f"), (2, 3, 0))
+    plan = Product((
+        Projection(NaturalJoin(r, s), (str2columnstr_constant("b"),)),
+        NaturalJoin(
+            Projection(
+                t,
+                (str2columnstr_constant("a"), str2columnstr_constant("f")),
+            ),
+            u,
+        ),
+    ))
+
+    optimised = RelationalAlgebraOptimiser().walk(plan)
+
+    expected = RelationalAlgebraSolver().walk(plan).value
+    result = RelationalAlgebraSolver().walk(optimised).value
+    assert result == expected

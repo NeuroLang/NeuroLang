@@ -10,11 +10,14 @@ from .... import expression_walker as ew
 from .... import expressions as ir
 from ....datalog.expression_processing import (
     conjunct_formulas,
+    conjunction_needs_reordering,
     extract_logic_atoms,
     extract_logic_free_variables,
+    order_conjunction_by_shared_variables,
 )
 from ....datalog.expressions import AdornedSymbol
 from ....exceptions import ForbiddenExpressionError, SymbolNotFoundError
+from ....expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ....expression_walker import ReplaceExpressionWalker, ReplaceSymbolWalker
 from ....expressions import Constant, FunctionApplication, Symbol
 from ....logic import TRUE, Conjunction, Implication, ExistentialPredicate
@@ -386,7 +389,58 @@ class TranslateHeadConstantsToEqualities(ew.PatternWalker):
         return self.walk(new_implication)
 
 
+def delegate_to_next_match(walker, expression, skip_action):
+    """
+    Re-dispatch `expression` through `walker`'s patterns, skipping `skip_action`.
+
+    `skip_action` is the match currently executing. Lets a handler
+    that decided not to transform an expression hand it to whichever
+    pattern would have matched next, instead of returning it unchanged
+    (which would re-trigger its own guard forever) or re-walking it
+    (same problem). Shared by every mixin in this package that needs
+    this "decline and fall through" behavior -- see also
+    `TranslateRegionDestroy._delegate_to_next_match`'s former local
+    copy in spatial.py, now using this one.
+    """
+    for pattern, guard, action in walker.patterns:
+        if action is skip_action:
+            continue
+        if walker.pattern_match(pattern, expression) and (
+            guard is None or guard(expression)
+        ):
+            return action(walker, expression)
+    raise NeuroLangPatternMatchingNoMatch(f"No match for {expression}")
+
+
 class TranslateProbabilisticQueryMixin(ew.PatternWalker):
+
+    @ew.add_match(
+        Implication(..., Conjunction),
+        lambda impl: order_conjunction_by_shared_variables(
+            impl.antecedent.formulas
+        ) != impl.antecedent.formulas,
+    )
+    def order_conjunction_for_join(self, impl):
+        """
+        Order implication-conjunction bodies to avoid cross products.
+
+        Relational algebra plans evaluate a conjunction as a left-deep
+        natural join in atom order; joining two atoms that share no
+        variable first materialises their cross product.  The order is
+        only changed when the current one contains such a cross product
+        (see ``conjunction_needs_reordering``), so already-efficient
+        conjunctions are left untouched and handled by the other rules.
+        """
+        return self.walk(
+            impl.apply(
+                impl.consequent,
+                Conjunction(
+                    order_conjunction_by_shared_variables(
+                        impl.antecedent.formulas
+                    )
+                ),
+            )
+        )
 
     @ew.add_match(Implication(..., Condition(ExistentialPredicate(..., ...), ...)))
     def lift_ep_from_conditioned(self, impl):
@@ -506,10 +560,11 @@ class TranslateProbabilisticQueryMixin(ew.PatternWalker):
         num_head = AdornedSymbol(
             impl.consequent.functor, "cond_num", None
         )(*impl.consequent.args)
+        num_body = conjunct_formulas(left, right)
         new_num = self.walk(
             Implication(
                 num_head,
-                conjunct_formulas(left, right),
+                num_body,
             )
         )
 

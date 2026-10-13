@@ -6,11 +6,11 @@ Registers the following predicates:
 * ``peak_reported(i, j, k, study_id)`` — reported activation peaks
   converted to voxel coordinates.
 * ``study(study_id)`` — all study identifiers.
-* ``term_in_study_tfidf(term, tfidf, study_id)`` — term frequency–inverse
+* ``term_in_study_tfidf(study_id, term, tfidf)`` — term frequency–inverse
   document frequency values.
 * ``selected_study(study_id)`` — uniform probabilistic choice over
   studies.
-* ``voxel(i, j, k)`` — every voxel inside the MNI mask.
+* ``voxel(i, j, k)`` — every voxel index of the MNI template grid.
 
 Predicate names are lowercase to match SQUALL's case-folding convention
 (see ``intransitive`` in ``squall_syntax_lark.py``).
@@ -53,19 +53,15 @@ def init_engine(
         data_dir, verbose=0, convert_study_ids=True, tfidf_threshold=1e-3
     )
     term_data = term_data.rename(columns={"id": "study_id"})
+    term_data["study_id"] = term_data["study_id"].astype(StudyID)
 
     nl.add_tuple_set(peak_data, name="peak_reported")
     nl.add_tuple_set(study_ids, name="study")
     nl.add_tuple_set(term_data, name="term_in_study_tfidf")
+    # Every (i, j, k) index of the mask grid. Use the image shape only:
+    # ``get_fdata`` would load the full image as float64 to read it.
     nl.add_tuple_set(
-        np.hstack(
-            np.meshgrid(
-                *(np.arange(0, dim) for dim in mask.get_fdata().shape)
-            )
-        )
-        .swapaxes(0, 1)
-        .reshape(3, -1)
-        .T,
+        np.indices(mask.shape[:3]).reshape(3, -1).T,
         name="voxel",
     )
     nl.add_uniform_probabilistic_choice_over_set(study_ids, name="selected_study")
@@ -104,12 +100,12 @@ def _process_peaks(
     )
     projected_df = pd.DataFrame(
         np.hstack(
-            [projected, non_mni_peaks[["study_id"]].values]
+            [projected, non_mni_peaks[["study_id"]].values.astype(StudyID)]
         ),
         columns=["x", "y", "z", "study_id"],
     )
     peak_data = pd.concat([projected_df, mni_peaks]).astype(
-        {"x": int, "y": int, "z": int}
+        {"x": int, "y": int, "z": int, "study_id": StudyID}
     )
 
     ijk_positions = np.round(

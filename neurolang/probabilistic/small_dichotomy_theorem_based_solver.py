@@ -212,7 +212,10 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         shattered_query_probabilistic_body = Conjunction(
             tuple(probabilistic_predicates)
         )
-        if not is_hierarchical_without_self_joins(
+        deterministic_negated_atoms = _extract_deterministic_negated_atoms(
+            shattered_query, probabilistic_predicates
+        )
+        if deterministic_negated_atoms or not is_hierarchical_without_self_joins(
             shattered_query_probabilistic_body
         ):
             LOG.info(
@@ -285,6 +288,36 @@ def _extract_antecedent_probabilistic_predicates(datalog_rule, symbol_table):
         ):
             probabilistic_predicates.append(predicate)
     return probabilistic_predicates
+
+
+def _extract_deterministic_negated_atoms(datalog_rule, probabilistic_predicates):
+    """Negated predicates in `datalog_rule` whose underlying atom is NOT
+    probabilistic (i.e. not already counted in `probabilistic_predicates`).
+
+    `is_hierarchical_without_self_joins` is only ever applied to the
+    probabilistic-only sub-conjunction of the query
+    (`shattered_query_probabilistic_body`), so it can only ever see a
+    `Negation` when it wraps a probabilistic atom. A `Negation` wrapping
+    a deterministic atom -- e.g. `~Active(s, r)` where `Active` is a
+    plain tuple set, joined with a probabilistic predicate through a
+    shared variable like `s` -- never reaches that check and is
+    silently treated as safe, even though the small-dichotomy
+    provenance-propagation formula this solver builds is not valid for
+    that shape. Every existing test in this module that negates a
+    probabilistic predicate already expects
+    `NotHierarchicalQueryException` here; this extends the same
+    rejection to a negated deterministic one.
+    """
+    probabilistic_negations = {
+        predicate
+        for predicate in probabilistic_predicates
+        if isinstance(predicate, Negation)
+    }
+    return {
+        predicate
+        for predicate in extract_logic_predicates(datalog_rule)
+        if isinstance(predicate, Negation)
+    } - probabilistic_negations
 
 
 def _project_on_query_head(provset, query):

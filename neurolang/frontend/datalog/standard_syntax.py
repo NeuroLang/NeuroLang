@@ -1,15 +1,14 @@
+import functools
 import json
 import os
 from typing import Tuple
 
 from lark import Lark, Transformer
-from lark.exceptions import UnexpectedToken, UnexpectedCharacters, LarkError
 from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
 from ...datalog.expressions import AggregationApplication
-from ...exceptions import UnexpectedTokenError, UnexpectedCharactersError, NeuroLangException
 from ...expressions import (
     Command,
     Constant,
@@ -30,6 +29,7 @@ from ...probabilistic.expressions import (
 )
 from ...type_system import Unknown
 from ...utils.interactive_parsing import LarkCompleter
+from .lark_errors import lark_errors_as_neurolang
 
 # Aggregation function names recognised in rule head arguments.
 AGGREGATION_FUNCS = frozenset({"count", "sum", "max", "min", "mean", "avg", "std"})
@@ -113,7 +113,7 @@ marg_body_predicate : "MARG" "[" conjunction "]" "=" argument
 
 // SUCC[...] = var  —  success probability query (skipped in execution)
 succ_body_predicate : "SUCC" "[" SUCC_INNER "]" "=" argument
-SUCC_INNER : /[a-zA-Z_*+.,()&@\/ \t-]+/
+SUCC_INNER : /[a-zA-Z_*+.,()&@\\/ \t-]+/
 
 // Separator inside PROB/MARG for the conditional form: accepts both // and |
 PROB_SEP : "//" | "|"
@@ -243,7 +243,18 @@ OPERATOR = {
 }
 
 
-COMPILED_GRAMMAR = Lark(GRAMMAR, parser='lalr', debug=True)
+@functools.lru_cache(maxsize=None)
+def compiled_grammar():
+    """Compile the Datalog grammar on first use (it takes ~0.15 s)."""
+    return Lark(GRAMMAR, parser='lalr')
+
+
+def __getattr__(name):
+    # Lazily expose the compiled grammar as the ``COMPILED_GRAMMAR``
+    # module attribute, kept for backwards compatibility.
+    if name == "COMPILED_GRAMMAR":
+        return compiled_grammar()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class ExternalSymbol(Symbol):
@@ -1226,21 +1237,16 @@ def _preprocess(code):
 
 def parser(code, locals=None, globals=None, interactive=False):
 
-    try:
+    with lark_errors_as_neurolang():
         if (interactive):
-            completer = LarkCompleter(COMPILED_GRAMMAR)
+            completer = LarkCompleter(compiled_grammar())
             res = completer.complete(code.strip())
             return res.token_options
         else:
             code = _preprocess(code)
-            jp = COMPILED_GRAMMAR.parse(code.strip())
+            # Keep leading blank lines so error positions match the input.
+            jp = compiled_grammar().parse(code.rstrip())
             return DatalogTransformer().transform(jp)
-    except UnexpectedToken as e:
-        raise UnexpectedTokenError(str(e), line=e.line - 1, column=e.column - 1) from e
-    except UnexpectedCharacters as e:
-        raise UnexpectedCharactersError(str(e), line=e.line - 1, column=e.column - 1) from e
-    except LarkError as e:
-        raise NeuroLangException from e
 
 
 def parse_rules():
