@@ -1245,7 +1245,8 @@ def parser(code, locals=None, globals=None, interactive=False):
             return res.token_options
         else:
             code = _preprocess(code)
-            jp = compiled_grammar().parse(code.strip())
+            # Keep leading blank lines so error positions match the input.
+            jp = compiled_grammar().parse(code.rstrip())
             return DatalogTransformer().transform(jp)
     except UnexpectedToken as e:
         raise UnexpectedTokenError(

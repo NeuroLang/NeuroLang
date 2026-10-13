@@ -110,7 +110,9 @@ class LarkCompleter:
             except UnexpectedCharacters as e:
                 return self.compute_options_unexpected_char(interactive, text, e)
             except UnexpectedToken as e:
-                raise UnexpectedTokenError(str(e), line=e.line - 1, column=e.column - 1) from e
+                raise UnexpectedTokenError(
+                    str(e), line=e.line, column=e.column
+                ) from e
             interactive.feed_token(token)
         return self.compute_options_no_error(interactive, text)
 

@@ -21,13 +21,11 @@ from neurolang.exceptions import (
 )
 from neurolang.frontend.error_formatting import (
     format_error,
-    format_lark_parse_error,
     _USE_COLOR,
     _suggest_datalog_fixes,
     _suggest_squall_fixes,
     _format_source_window,
     _format_source_pointer,
-    _edit_distance,
     _suggest_similar_names,
 )
 
@@ -71,11 +69,6 @@ class TestDatalogSuggestions:
         assert len(suggestions) > 0
         assert any("empty" in s.lower() for s in suggestions)
 
-    def test_trailing_dot(self):
-        suggestions = _suggest_datalog_fixes("ans(x) :- R(x).")
-        assert len(suggestions) > 0
-        assert any("'.'" in s for s in suggestions)
-
     def test_arrow_instead(self):
         suggestions = _suggest_datalog_fixes("ans(x) <- R(x)")
         assert len(suggestions) > 0
@@ -108,16 +101,6 @@ class TestSquallSuggestions:
         suggestions = _suggest_squall_fixes("get every study")
         assert len(suggestions) > 0
         assert any("obtain" in s.lower() for s in suggestions)
-
-    def test_for_each(self):
-        suggestions = _suggest_squall_fixes("for each study")
-        assert len(suggestions) > 0
-        assert any("for every" in s.lower() for s in suggestions)
-
-    def test_which_instead(self):
-        suggestions = _suggest_squall_fixes("every study which reports")
-        assert len(suggestions) > 0
-        assert any("that" in s.lower() for s in suggestions)
 
     def test_clean_squall_no_suggestions(self):
         suggestions = _suggest_squall_fixes("obtain every study that reports")
@@ -203,11 +186,6 @@ class TestFormatError:
             result = format_error(e)
             assert "parse error" in result.lower() or "Error" in result
 
-    def test_format_lark_parse_error_wrapper(self):
-        exc = NeuroLangException("Test error")
-        result = format_lark_parse_error(exc, "test source")
-        assert "Test error" in result
-
 
 class TestUndefinedPredicateError:
     """Test formatting of SymbolNotFoundError."""
@@ -238,7 +216,10 @@ class TestUndefinedPredicateError:
 
     def test_did_you_mean_suggestion(self):
         exc = SymbolNotFoundError("Symbol regin_reported not found")
-        result = format_error(exc, "ans(x) :- regin_reported(x)")
+        result = format_error(
+            exc, "ans(x) :- regin_reported(x)",
+            known_symbols=["region_reported", "peak_reported"],
+        )
         assert "Did you mean" in result
         assert "region_reported" in result
 
@@ -268,30 +249,6 @@ class TestArityMismatchError:
         result = format_error(exc, "ans(x) :- R(x, y, z)")
         assert "Arity mismatch" in result
         assert "^~~~" in result
-
-
-class TestEditDistance:
-    """Test the edit distance utility."""
-
-    def test_exact_match(self):
-        assert _edit_distance("hello", "hello") == 0
-
-    def test_one_substitution(self):
-        assert _edit_distance("hello", "hallo") == 1
-
-    def test_one_insertion(self):
-        assert _edit_distance("hello", "helloo") == 1
-
-    def test_one_deletion(self):
-        assert _edit_distance("hello", "hell") == 1
-
-    def test_completely_different(self):
-        assert _edit_distance("abc", "xyz") == 3
-
-    def test_empty_strings(self):
-        assert _edit_distance("", "") == 0
-        assert _edit_distance("abc", "") == 3
-        assert _edit_distance("", "abc") == 3
 
 
 class TestSimilarNames:

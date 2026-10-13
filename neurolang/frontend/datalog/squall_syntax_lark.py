@@ -2875,7 +2875,8 @@ def parser(code, local_vars=None, global_vars=None):
         unsupported construction (empty body, unresolved anaphora, etc.).
 
     """
-    source_code = code.strip()
+    # Keep leading blank lines so error positions match the user's text.
+    source_code = code.rstrip()
     try:
         tree = compiled_grammar().parse(source_code)
     except UnexpectedToken as e:

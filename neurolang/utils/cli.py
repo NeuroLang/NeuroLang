@@ -43,6 +43,8 @@ Usage
 
 import argparse
 import json
+import os
+import re
 import sys
 import time
 import traceback
@@ -50,7 +52,8 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from lark.exceptions import LarkError, VisitError
+
+from lark.exceptions import LarkError
 
 from neurolang.datalog import WrappedRelationalAlgebraSet
 from neurolang.exceptions import NeuroLangException
@@ -59,10 +62,7 @@ from neurolang.frontend.datalog import (
     squall_grammar_metadata,
 )
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
-from neurolang.frontend.error_formatting import (
-    print_formatted_error,
-    _USE_COLOR,
-)
+from neurolang.frontend.error_formatting import print_formatted_error
 from neurolang.utils import engine_registry
 
 
@@ -303,6 +303,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "Append ':desc' for descending, ':asc' for ascending. "
         "Repeatable for multi-key sorts (first key has highest priority).",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="On errors, also print the Python traceback (same as setting "
+        "the NEUROLANG_DEBUG=1 environment variable).",
+    )
 
     return parser
 
@@ -509,6 +515,51 @@ def _list_sets(nl: NeurolangPDL) -> None:
 
 
 
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+def _known_symbol_names(nl: Optional[NeurolangPDL]) -> list:
+    """Return the identifier-like symbol names defined in *nl*."""
+    if nl is None:
+        return []
+    names = {getattr(s, "name", str(s)) for s in nl.symbol_table}
+    return sorted(n for n in names if _IDENTIFIER.match(n))
+
+
+def _debug_enabled(args) -> bool:
+    """Return True if ``--debug`` or ``NEUROLANG_DEBUG`` is set."""
+    return args.debug or os.environ.get("NEUROLANG_DEBUG", "0") not in (
+        "", "0"
+    )
+
+
+def _run_reporting_errors(action, program: str, args, nl=None):
+    """
+    Run *action* and report any failure as a formatted error.
+
+    On error, prints a readable message (source context, location and
+    hints) to stderr and exits with status 1. In debug mode
+    (``--debug`` or ``NEUROLANG_DEBUG=1``) the traceback is printed first.
+    """
+    try:
+        return action()
+    except Exception as exc:
+        debug = _debug_enabled(args)
+        if debug:
+            traceback.print_exc()
+        print_formatted_error(
+            exc, program,
+            language="SQUALL" if args.squall else "Datalog",
+            known_symbols=_known_symbol_names(nl),
+        )
+        if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
+            print(
+                "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
+                "traceback.", file=sys.stderr,
+            )
+        sys.exit(1)
+
+
 def main(argv: Optional[list] = None) -> None:
     """CLI entry point: parse arguments, build engine, run query."""
     parser = _build_parser()
@@ -535,7 +586,9 @@ def main(argv: Optional[list] = None) -> None:
                 "Error: --show-datalog requires --squall.", file=sys.stderr
             )
             sys.exit(1)
-        _show_squall_datalog(program)
+        _run_reporting_errors(
+            lambda: _show_squall_datalog(program), program, args
+        )
         return
 
     if args.engine not in engine_registry.list_engine_names():
@@ -546,6 +599,8 @@ def main(argv: Optional[list] = None) -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+
+    execute = _execute_squall_program if args.squall else _execute_program
 
     # --show-rewritten requires the requested engine because probabilistic
     # SQUALL programs depend on engine data and the CP-Logic solver.
@@ -558,10 +613,9 @@ def main(argv: Optional[list] = None) -> None:
         nl = engine_registry.build_engine(
             args.engine, Path(args.data_dir), args.resolution
         )
-        if args.squall:
-            _execute_squall_program(nl, program, dry_run=True)
-        else:
-            _execute_program(nl, program, dry_run=True)
+        _run_reporting_errors(
+            lambda: execute(nl, program, dry_run=True), program, args, nl
+        )
         return
 
     # Predicate metadata comes from the YAML config: no need to build
@@ -586,50 +640,27 @@ def main(argv: Optional[list] = None) -> None:
     t0 = time.perf_counter()
     sort_by = _parse_sort_spec(args.sort)
 
-    try:
-        if args.squall:
-            result = _execute_squall_program(nl, program, show_rewritten=args.show_rewritten)
-            if isinstance(result, dict):
-                for key, sub_result in result.items():
-                    output = _format_result(
-                        sub_result, fmt=args.format, column_names=None,
-                        sort_by=sort_by,
-                    )
-                    if output:
-                        print(f"── {key} ──")
-                        print(output)
-                        print()
-            else:
-                output = _format_result(
-                    result, fmt=args.format, column_names=None,
-                    sort_by=sort_by,
-                )
-                if output:
-                    print(output)
-        else:
-            result = _execute_program(nl, program, show_rewritten=args.show_rewritten)
-            if isinstance(result, tuple):
-                result, column_names = result
-            else:
-                column_names = None
+    result = _run_reporting_errors(
+        lambda: execute(nl, program, show_rewritten=args.show_rewritten),
+        program, args, nl,
+    )
+    if isinstance(result, dict):
+        for key, sub_result in result.items():
             output = _format_result(
-                result, fmt=args.format, column_names=column_names,
+                sub_result, fmt=args.format, column_names=None,
                 sort_by=sort_by,
             )
             if output:
+                print(f"── {key} ──")
                 print(output)
-    except (LarkError, NeuroLangException) as exc:
-        print_formatted_error(exc, program)
-        sys.exit(1)
-    except Exception as exc:
-        # For unexpected errors, show traceback in debug mode
-        print(
-            f"Unexpected error: {type(exc).__name__}: {exc}",
-            file=sys.stderr,
+                print()
+    else:
+        output = _format_result(
+            result, fmt=args.format, column_names=None,
+            sort_by=sort_by,
         )
-        if _USE_COLOR:
-            traceback.print_exc()
-        sys.exit(1)
+        if output:
+            print(output)
 
     elapsed = time.perf_counter() - t0
     print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)
