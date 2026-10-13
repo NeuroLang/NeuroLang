@@ -229,3 +229,16 @@ def test_collapse_skips_trivial_projection_and_identity_members():
     verbose = pretty_repr(plan).splitlines()
     assert verbose[0] == "π_ext[x -> x, y * 2 -> z]"
     assert verbose[1] == "└─ π[x, y, l]"
+
+
+def test_nary_cross_product():
+    plan = NaryNaturalJoin((
+        named(Symbol("a"), "x"), named(Symbol("b"), "y"),
+        named(Symbol("c"), "z"),
+    ))
+    assert pretty_repr(plan, collapse=True).splitlines()[0] == "×"
+    plan = NaryNaturalJoin((
+        named(Symbol("a"), "x"), named(Symbol("b"), "y"),
+        named(Symbol("c"), "x"),
+    ))
+    assert pretty_repr(plan, collapse=True).splitlines()[0] == "⋈"

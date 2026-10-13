@@ -187,6 +187,20 @@ def rows_label(rows):
     return f"‹{rows:,} row{'' if rows == 1 else 's'}›"
 
 
+def _is_nary_cross_product(expression):
+    """Check if no two operands of an NaryNaturalJoin share a column."""
+    try:
+        columns = [_columns_as_str_set(r) for r in expression.relations]
+    except Exception:
+        return False
+    seen = set()
+    for relation_columns in columns:
+        if seen & relation_columns:
+            return False
+        seen |= relation_columns
+    return True
+
+
 class PrettyPrinter:
     """
     Recursive pretty-printer for named relational algebra expressions.
@@ -387,8 +401,9 @@ class PrettyPrinter:
         return self._binary(op, expression)
 
     def _format_nary_natural_join(self, expression):
-        """Format an NaryNaturalJoin node."""
-        return "⋈", tuple(expression.relations)
+        """Format an NaryNaturalJoin node, marking cross products with ×."""
+        op = "×" if _is_nary_cross_product(expression) else "⋈"
+        return op, tuple(expression.relations)
 
     def _format_equijoin(self, expression):
         """Format an EquiJoin node."""

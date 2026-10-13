@@ -1,4 +1,5 @@
 """Tests for the relational algebra plan display (``show_ra``)."""
+import operator
 import re
 from typing import AbstractSet
 
@@ -6,6 +7,7 @@ import pytest
 
 from .. import NeurolangDL, NeurolangPDL
 from ...datalog import Implication
+from ...datalog.expressions import AdornedSymbol
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction
 from ...probabilistic import dalvi_suciu_lift
@@ -17,6 +19,7 @@ from ...relational_algebra import (
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..show_ra import (
     ShowRAOptions,
+    conditional_division_names,
     iterations_label,
     probability_column_roles,
     show_ra_options,
@@ -486,3 +489,66 @@ def test_query_on_a_probabilistic_predicate_has_no_size(capsys):
         "ans(x, q) :- z(x, q).",
     )
     assert out.endswith("── query ans(x, q) :-\n    z(x, q) ──\nz(x, q)\n")
+
+
+CONDITIONAL = (
+    "al(x, l) :- active(x), label(x, l).\n"
+    "ans(l, p) :- PROB[al(x, l) // picked(x)] = p."
+)
+
+
+def test_postprobabilistic_rules_and_plans_are_printed(capsys):
+    """Check the division of a conditional query is printed with a plan."""
+    out = show_ra_output(capsys, CONDITIONAL)
+    post = out.split("── post-probabilistic stratum ──\n")[1]
+    assert post.startswith(
+        "── rule ans(l, p) :-\n"
+        "    p = p_num ÷ p_den,\n"
+        "    ans^cond_num(l, p_num),\n"
+        "    ans^cond_den(p_den) ──\n"
+    )
+    assert "π_ext[p_num / p_den -> p" in post
+    assert "\n└─ ×\n" in post
+    # The probabilistic results are not computed: no size is shown.
+    assert "├─ ans^cond_num(l, p_num)\n" in post
+    assert "└─ ans^cond_den(p_den)\n" in post
+
+
+def test_postprobabilistic_chain_of_rules(capsys):
+    nl = NeurolangPDL()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("c",)], name="Q"
+    )
+    with nl.scope as e:
+        e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
+        e.ans[e.x, e.p] = e.Z[e.p, e.x]
+        e.ans2[e.x] = e.ans[e.x, e.p] & (e.p > 0.1)
+        nl.query((e.x,), e.ans2[e.x], show_ra=True)
+    post = capsys.readouterr().out.split("── post-probabilistic stratum ──")
+    assert "── rule ans(x, p) :-\n    Z(p, x) ──\nZ(p, x)\n" in post[1]
+    assert "── rule ans2(x) :-" in post[1]
+    assert "σ[p > 0.1]" in post[1]
+
+
+def test_division_names_need_fresh_unused_names():
+    p, p1, p2, l = (Symbol.fresh() for _ in range(4))
+    num = AdornedSymbol(Symbol("q"), "cond_num", None)
+    den = AdornedSymbol(Symbol("q"), "cond_den", None)
+    body = (
+        num(l, p1), den(p2),
+        Constant(operator.eq)(p, Constant(operator.truediv)(p1, p2)),
+    )
+    rule = Implication(Symbol("q")(l, p), Conjunction(body))
+    assert conditional_division_names(rule) == {
+        p.name: "p", p1.name: "p_num", p2.name: "p_den"
+    }
+    user_p = Symbol("p")
+    clash = Implication(
+        Symbol("q")(user_p, p), Conjunction(body + (Symbol("r")(user_p),))
+    )
+    assert conditional_division_names(clash) == {}
+    plain = Implication(Symbol("q")(l), Conjunction((num(l, p1),)))
+    assert conditional_division_names(plain) == {}

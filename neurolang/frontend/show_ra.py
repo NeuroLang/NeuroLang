@@ -5,14 +5,14 @@ Machinery behind ``show_ra=True`` (``--show-ra`` in the CLI): instead of
 reporting a query's answer, print the named relational algebra plan each
 rule is evaluated with, stratum by stratum.
 """
+import operator
 import re
 from dataclasses import dataclass
 from functools import lru_cache
 
-from ..datalog.expression_processing import is_aggregation_rule
+from ..datalog.expression_processing import is_aggregation_rule, stratify
 from ..datalog.expressions import AdornedSymbol, AggregationApplication
 from ..datalog.chase import ChaseNaive, ChaseSemiNaive
-from ..datalog.instance import MapInstance
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..datalog import Implication
 from ..exceptions import UnsupportedSolverError
@@ -106,6 +106,8 @@ def show_ra_options(show_ra):
 
 QUERY_DISPLAY_NAMES = ("ans", "query", "ans_query")
 
+_FRESH_NAME = re.compile(r"^fresh_\d+$")
+
 _GENERATED_NAME = re.compile(
     r"^(fresh_\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$"
 )
@@ -154,6 +156,63 @@ def query_display_name(symbol_table):
     return QUERY_DISPLAY_NAMES[-1]
 
 
+def conditional_division_names(rule):
+    """
+    Name the probabilities of the rule dividing a conditional's parts.
+
+    A conditional probability query ``P(A | B)`` is solved as the
+    numerator ``P(A, B)`` (``cond_num``) and the denominator ``P(B)``
+    (``cond_den``), divided by the rule
+    ``q(…, p) :- q^cond_num(…, p1), q^cond_den(…, p2), p == p1 / p2``.
+    For that rule, return the display names ``p``, ``p_num`` and
+    ``p_den`` of its fresh variables ``p``, ``p1`` and ``p2``; for other
+    rules, or should the rule use one of these names, an empty dict.
+    """
+    formulas = getattr(rule.antecedent, "formulas", ())
+    roles = {}
+    for formula in formulas:
+        functor = getattr(formula, "functor", None)
+        if isinstance(functor, AdornedSymbol) and functor.adornment in (
+            "cond_num", "cond_den"
+        ):
+            for argument in formula.args:
+                roles[argument] = functor.adornment
+    variables = extract_logic_free_variables(
+        rule.antecedent
+    ) | extract_logic_free_variables(rule.consequent)
+    used = {symbol.name for symbol in variables}
+    for formula in formulas:
+        names = _division_names(formula, roles)
+        if names and not set(names.values()) & used:
+            return names
+    return {}
+
+
+def _division_names(formula, roles):
+    """Match ``p == p1 / p2``, ``p1`` (``p2``) of the numerator (denominator)."""
+    if not (
+        isinstance(formula, FunctionApplication)
+        and formula.functor == Constant(operator.eq)
+        and isinstance(formula.args[1], FunctionApplication)
+        and formula.args[1].functor == Constant(operator.truediv)
+    ):
+        return {}
+    result = formula.args[0]
+    numerator, denominator = formula.args[1].args
+    if (
+        roles.get(numerator) != "cond_num"
+        or roles.get(denominator) != "cond_den"
+        or not all(
+            isinstance(symbol, Symbol) and _FRESH_NAME.match(symbol.name)
+            for symbol in (result, numerator, denominator)
+        )
+    ):
+        return {}
+    return {
+        result.name: "p", numerator.name: "p_num", denominator.name: "p_den"
+    }
+
+
 class RenameSymbolsForDisplay(ExpressionWalker):
     """
     Rename predicate symbols, including adorned ones, for display.
@@ -199,12 +258,6 @@ class PlanDisplay:
     symbol_table : Mapping, optional
         symbol table of the program.
 
-    Attributes
-    ----------
-    unknown_size_symbols : set
-        predicate symbols whose relation is a placeholder, not printed
-        with a size.
-
     """
 
     def __init__(self, options=None, query_symbol=None, symbol_table=None):
@@ -214,7 +267,6 @@ class PlanDisplay:
         self.renames = {}
         if query_symbol is not None:
             self.renames[query_symbol] = Symbol(self.query_name)
-        self.unknown_size_symbols = set()
 
     def display_expression(self, expression):
         """Return ``expression`` with its symbols renamed for display."""
@@ -274,6 +326,7 @@ class PlanDisplay:
         """
         fresh_map = {}
         if rule is not None:
+            fresh_map.update(conditional_division_names(rule))
             print(f"── rule {self.rule_text(rule, fresh_map)} ──")
         for note in notes:
             print(note)
@@ -496,9 +549,35 @@ class ShowRAChaseMixin:
             iter(predicates), instance, restriction_instance
         )
 
+    def print_rule_plan(self, rule, symbol_table):
+        """
+        Print the plan ``rule`` would be evaluated with, without running it.
+
+        The plan is the one the chase builds for ``rule``; the sizes of
+        its leaves are those of the relations of ``symbol_table``.
+        """
+        rewritten = self.rewrite_antecedent_equalities(
+            self.rewrite_constants_in_consequent(rule)
+        )
+        predicates = getattr(
+            rewritten.antecedent, "formulas", (rewritten.antecedent,)
+        )
+        self._show_ra_current_rule = rule
+        self._show_ra_plans = None
+        self._record_show_ra_plan(predicates, symbol_table, {})
+
     def _is_iterative(self):
         """Return whether the chase iterates up to a fixpoint."""
         return isinstance(self, (ChaseNaive, ChaseSemiNaive))
+
+    def _is_recursive(self):
+        """Return whether the chase iterates over recursive rules."""
+        derived = {rule.consequent.functor for rule in self.rules}
+        return self._is_iterative() and any(
+            atom.functor in derived
+            for rule in self.rules
+            for atom in extract_logic_atoms(rule.antecedent)
+        )
 
     def _record_show_ra_plan(
         self, predicates, symbol_table, restriction_instance
@@ -548,9 +627,10 @@ class ShowRAChaseMixin:
             return
         for rule, variants in plans.items():
             self._print_rule_plans(rule, variants)
-        if self._is_iterative():
+        if self._is_recursive():
             iterations = max(self._show_ra_evaluations.values(), default=0)
-            print(f"(fixpoint reached after {iterations} iterations)")
+            plural = "s" if iterations > 1 else ""
+            print(f"(fixpoint reached after {iterations} iteration{plural})")
         deltas = set().union(*(
             plan.deltas for variants in plans.values() for plan in variants
         ))
@@ -583,14 +663,13 @@ class ShowRAChaseMixin:
         Return the sizes of the relations of ``predicates`` known for sure.
 
         The relations are those of ``symbol_table``, the one the plan is
-        evaluated on. Placeholder relations, and in iterative (recursive)
-        strata the relations derived by the stratum, which grow at each
-        iteration, are left out.
+        evaluated on. In iterative (recursive) strata, the relations
+        derived by the stratum, which grow at each iteration, are left
+        out.
         """
         varying = set()
         if self._is_iterative():
             varying = {rule.consequent.functor for rule in self.rules}
-        varying |= self.show_ra_display.unknown_size_symbols
         sizes = {}
         for predicate in extract_logic_atoms(Conjunction(predicates)):
             functor = predicate.functor
@@ -790,9 +869,9 @@ class ShowRAStratumSolver(StratumSolver):
     Print the RA plans of each stratum instead of evaluating it.
 
     The deterministic stratum is run with a show-ra chase, so that the
-    probabilistic plans can be built over its solution. The probabilistic
-    and post-probabilistic strata are only printed, and an empty
-    ``MapInstance`` is returned for them.
+    probabilistic plans can be built over its solution. The plans of the
+    probabilistic queries are not run, so those of the post-probabilistic
+    stratum, which uses their results, are printed without being run.
 
     Parameters
     ----------
@@ -855,7 +934,7 @@ class ShowRAStratumSolver(StratumSolver):
                 )
         for rule in queries:
             self.print_probabilistic_plan(rule, plans[rule], solver, cpl)
-        return MapInstance()
+        return solution
 
     def print_probabilistic_plan(self, rule, plan, solver, cpl):
         """Print the plan ``plan`` of the query ``rule`` solved by ``solver``."""
@@ -931,30 +1010,35 @@ class ShowRAStratumSolver(StratumSolver):
             if symbol in atom.args
         ))
         ra_code = RelationalAlgebraOptimiser().walk(ra_code)
-        symbol_table = {
-            symbol: relation for symbol, relation in solution.items()
-            if symbol not in self.display.unknown_size_symbols
-        }
         fresh_map = {}
         print(f"── query {self.display.rule_text(rule, fresh_map)} ──")
         self.display.print_plan(
             conjunction, solution, ra_code,
-            leaf_sizes=_leaf_sizes((atom,), symbol_table),
+            leaf_sizes=_leaf_sizes((atom,), solution),
             leaf_arities=_leaf_arities((atom,), solution),
             fresh_map=fresh_map,
         )
 
     def postprobabilistic(self, solution, postprob_idb):
-        """Print the RA plan of every post-probabilistic rule."""
+        """
+        Print the RA plan of every post-probabilistic rule.
+
+        The relations of the probabilistic queries are not computed, so
+        the rules cannot be run: their plans, those the chase would run
+        them with, are printed stratum by stratum.
+        """
         print("── post-probabilistic stratum ──")
-        solver = self.engine._build_postprobabilistic_solver(
+        program = self.engine._build_postprobabilistic_solver(
             solution, postprob_idb
         )
         chase = show_ra_chase(
-            self.engine.chase_class, solver, postprob_idb, self.display
+            self.engine.chase_class, program, postprob_idb, self.display
         )
-        chase.build_chase_solution()
-        return MapInstance()
+        strata, _ = stratify(postprob_idb, program)
+        for stratum in strata:
+            for rule in stratum:
+                chase.print_rule_plan(rule, solution)
+        return solution
 
     def rule_provenance_set(self, rule, cpl):
         """
