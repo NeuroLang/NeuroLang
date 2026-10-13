@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from pysdd import sdd
 
-from ..config import config
 from ..datalog.expression_processing import (
     extract_logic_predicates,
     flatten_query
@@ -934,10 +933,7 @@ def generate_probability_table(solver):
     return ids_with_probs
 
 
-if 'RAS' in config and config["RAS"].get("backend", "pandas") == "dask":
-    solve_succ_query = solve_succ_query_boolean_diagram
-else:
-    solve_succ_query = solve_succ_query_sdd_direct
+solve_succ_query = solve_succ_query_sdd_direct
 
 
 def solve_marg_query(rule, cpl):

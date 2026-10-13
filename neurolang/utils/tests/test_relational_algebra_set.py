@@ -8,13 +8,10 @@ from ..relational_algebra_set import (
 )
 
 try:
-    from ..relational_algebra_set import dask_sql
-    HAS_DASK = True
-    fixture_ids = ["pandas", "dask_sql"]
-    fixture_params = [(pandas,), (dask_sql,)]
-
+    from ..relational_algebra_set import polars
+    fixture_ids = ["pandas", "polars"]
+    fixture_params = [(pandas,), (polars,)]
 except ImportError:
-    HAS_DASK = False
     fixture_ids = ["pandas"]
     fixture_params = [(pandas,)]
 

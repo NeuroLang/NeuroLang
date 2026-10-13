@@ -1176,8 +1176,8 @@ walking.
 Currently supported:
 
 ``#set_backend('backend')``
-    Switch the relational algebra backend.  ``backend`` may be ``'pandas'``,
-    ``'dask'``, or ``'polars'``.  This calls
+    Switch the relational algebra backend.  ``backend`` may be ``'pandas'``
+    or ``'polars'``.  This calls
     ``neurolang.config.config.set_query_backend`` and therefore changes the
     backend **process-wide**, for every engine, not only for the current
     program (see :doc:`performance`).
