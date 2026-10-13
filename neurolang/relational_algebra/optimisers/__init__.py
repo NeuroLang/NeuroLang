@@ -74,16 +74,17 @@ class RelationalAlgebraOptimiser(
     ew.ExpressionWalker,
 ):
     """
-    Mixing that optimises through relational algebra expressions by
-    rewriting.
-    equi-selection/product compositions into equijoins.
+    Optimise relational algebra expressions by rewriting them.
+
+    Rewrites equi-selections over products into equijoins, pushes
+    selections and projections down, simplifies renames and products,
+    and reorders joins.
 
     Pipeline order within each convergence pass:
-      1. Existing optimisers (selection pushdown, projection elimination, …)
-      2. PushProjectionsDown            — push projections through
-         NaryNaturalJoin operands to reduce join sizes
-      3. FlattenAndReorderJoins        — flatten join tree into
-         NaryNaturalJoin, greedily reorder to minimise cross products
+      1. Selection pushdown, projection elimination, rename and product
+         simplification.
+      2. PushProjectionsDown — push projections through NaryNaturalJoin
+         operands to reduce join sizes.
+      3. FlattenAndReorderJoins — flatten join trees into an
+         NaryNaturalJoin and greedily reorder them to avoid cross products.
     """
-
-    pass
