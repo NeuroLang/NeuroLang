@@ -1556,3 +1556,30 @@ def test_rename_not_pushed_below_projection_dropping_its_target():
     assert result == RenameColumns(tree.relation, ((c, g),))
     assert _same_result(tree, result)
 
+
+class GreedyJoinOrderingWalker(GreedyJoinOrdering, ExpressionWalker):
+    """GreedyJoinOrdering walking the expressions it does not rewrite."""
+
+
+def test_greedy_join_ordering_keeps_projection_not_distributing():
+    """
+    Check that a projection which does not distribute is kept whole.
+
+    In ``π[e](F(f, g) ⋈ G(g, e)) ⋈ (H(e, f) × K(b))`` the projection drops
+    the column ``f`` of ``F`` which ``H`` also has: pushing it onto the
+    join operands would join ``F`` and ``H`` on ``f``.
+    """
+    e = str2columnstr_constant("e")
+    left = Projection(
+        NaturalJoin(_relation("fg", [(0, 0)]), _relation("ge", [(0, 1)])),
+        (e,)
+    )
+    h = _relation("ef", [(1, 5)])
+    k = _relation("b", [(7,)])
+    tree = NaturalJoin(left, Product((h, k)))
+
+    result = GreedyJoinOrderingWalker().walk(tree)
+
+    assert result == Product((NaturalJoin(left, h), k))
+    assert _same_result(tree, result)
+

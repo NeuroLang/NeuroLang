@@ -25,6 +25,39 @@ class ProductSimplification(ew.ExpressionWalker):
         return self.walk(product.relations[0])
 
 
+def _projection_distributes(operands, attributes):
+    """
+    Check that a projection of the join of ``operands`` distributes.
+
+    Projecting the join on ``attributes`` equals joining the operands
+    projected on ``attributes`` when the projection keeps the columns
+    shared by operands and at least one column of each operand. The
+    projected operands then hold no dropped column which could join them
+    with other operands.
+    """
+    attributes = set(attributes)
+    col_sets = [set(_ra_columns(op)) for op in operands]
+    return all(cols & attributes for cols in col_sets) and all(
+        a & b <= attributes for a, b in combinations(col_sets, 2)
+    )
+
+
+def _distributed_projection_operands(projection):
+    """
+    Return the join operands a projection is pushed onto when flattening.
+
+    Return the operands of the joins and products below ``projection``
+    when there are several and the projection distributes over them,
+    ``None`` otherwise.
+    """
+    inner = _flatten_joins(projection.relation, with_products=True)
+    if len(inner) <= 1 or not _projection_distributes(
+        inner, projection.attributes
+    ):
+        return None
+    return inner
+
+
 def _flatten_joins(expr, with_products=False):
     """
     Collect all join operands into a flat list.
@@ -33,13 +66,14 @@ def _flatten_joins(expr, with_products=False):
     that nested join trees are fully unwound in one pass. When
     ``with_products`` is set, also recurse through Product and through
     Projection wrappers sitting between join nodes, pushing each such
-    projection down onto the individual operands. This lets a mixed tree
+    projection down onto the individual operands when it distributes
+    over them (see :func:`_projection_distributes`). This lets a mixed tree
     such as ``NaturalJoin(Projection(Product(A, B)), C)`` be reordered
     globally when the operands share column names.
     """
     if with_products and isinstance(expr, Projection):
-        inner = _flatten_joins(expr.relation, with_products)
-        if len(inner) <= 1:
+        inner = _distributed_projection_operands(expr)
+        if inner is None:
             return [expr]
         return [_project_onto_operand(op, expr.attributes) for op in inner]
     flattened_types = (NaturalJoin, NaryNaturalJoin)
