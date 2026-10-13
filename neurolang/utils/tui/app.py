@@ -140,6 +140,8 @@ class InteractiveTuiApp:
         self.completer = None
         self.last_query = None
         self.failed = False
+        # The columns of the relations loaded with .load, by name.
+        self.loaded_relations: dict = {}
         open_session_scope(nl)
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
@@ -249,10 +251,19 @@ class InteractiveTuiApp:
             self.print_block(block)
 
     def _column_names(self, program: str) -> dict:
-        """Return the declared column names of the results of *program*."""
-        if not (self.settings.squall and self.settings.engine_name):
+        """
+        Return the declared column names of the results of *program*.
+
+        They are those the engine declares and those of the header of
+        the files loaded with ``.load``.
+        """
+        if not self.settings.squall:
             return {}
-        return squall_column_names(self.settings.engine_name, program)
+        if not (self.settings.engine_name or self.loaded_relations):
+            return {}
+        return squall_column_names(
+            self.settings.engine_name, program, self.loaded_relations
+        )
 
     def _execute_and_display(self, program: str) -> None:
         """Run a Datalog or SQUALL query and print its result."""

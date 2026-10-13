@@ -1,19 +1,32 @@
 """
 Session commands of the interactive REPL.
 
-The rules defined during a session go to a scope of the engine's program
-opened when the REPL starts (:func:`open_session_scope`), so that
-``.idb`` lists them and ``.clear`` removes them. The other commands list
-the engines and the engine's sets and predicates, and show how the last
-query is rewritten (``.rewritten``) or translated from SQUALL to Datalog
-(``.datalog``).
+The rules defined during a session, and the relations loaded with
+``.load``, go to a scope of the engine's program opened when the REPL
+starts (:func:`open_session_scope`), so that ``.idb`` lists the rules,
+``.drop`` removes a rule, a predicate or a relation, and ``.clear``
+removes them all. The columns of the loaded relations, named by the
+header of their file, are kept in the application's ``loaded_relations``
+to name the columns of the results and of ``.sets``. The other commands
+list the engines and the engine's sets and predicates, and show how the
+last query is rewritten (``.rewritten``) or translated from SQUALL to
+Datalog (``.datalog``).
 """
 
+import re
+import shlex
+import traceback
+from pathlib import Path
+
+import pandas as pd
 from rich import box
 from rich.table import Table
 
 from neurolang.datalog import Union as DatalogUnion
+from neurolang.datalog.basic_representation import UnionOfConjunctiveQueries
+from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.expressions import Symbol
+from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.utils import engine_registry
 from neurolang.utils.cli import (
     _execute_program,
@@ -24,7 +37,6 @@ from neurolang.utils.cli import (
 )
 
 from .commands import _switch, command
-
 
 def open_session_scope(nl) -> None:
     """Open the scope of the program of *nl* holding the session's rules."""
@@ -44,8 +56,22 @@ def session_idb_symbols(nl) -> set:
     }
 
 
-@command(".idb", "List the predicates defined in this session")
-def cmd_idb(app, arg: str) -> None:
+def _warn(app, message: str) -> None:
+    """Print *message*, which tells why a command did nothing."""
+    app.console.print(message, style="yellow", markup=False)
+
+
+def _plural(count: int, noun: str) -> str:
+    """Return *count* and *noun*, e.g. ``1 rule`` or ``2 rules``."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def rule_text(rule) -> str:
+    """Return the Datalog text of *rule* on one line."""
+    return re.sub(r"\s*\n\s*", " ", DatalogPrettyPrinter().walk(rule))
+
+
+def _print_idb_table(app) -> None:
     """Print the session's predicates with their number of rules."""
     symbols = session_idb_symbols(app._nl)
     if not symbols:
@@ -68,47 +94,307 @@ def cmd_idb(app, arg: str) -> None:
     )
 
 
-def _clear_predicate(app, name: str) -> None:
-    """Remove the session predicate *name*, if it is one."""
-    symbol = Symbol(name)
+def _print_rules(app, name: str) -> None:
+    """Print the rules of the IDB predicate *name*, numbered from 1."""
     symbol_table = app._nl.program_ir.symbol_table
-    if symbol not in symbol_table:
-        message = f"Predicate {name!r} is not defined."
-    elif symbol not in symbol_table._symbols:
-        message = (
-            f"Predicate {name!r} is part of the engine; only "
-            "session-defined IDB predicates can be cleared."
-        )
-    elif not isinstance(symbol_table[symbol], DatalogUnion):
-        message = f"Predicate {name!r} is not an IDB predicate."
-    else:
-        del symbol_table[symbol]
-        app.console.print(f"[green]IDB predicate {name!r} cleared.[/green]")
+    symbol = Symbol(name)
+    value = symbol_table[symbol] if symbol in symbol_table else None
+    if not isinstance(value, DatalogUnion):
+        _warn(app, f"{name!r} is not an IDB predicate.")
         return
-    app.console.print(message, style="yellow", markup=False)
+    width = len(str(len(value.formulas)))
+    for number, rule in enumerate(value.formulas, 1):
+        app.console.print(
+            f"{number:>{width}}  {rule_text(rule)}", markup=False,
+            highlight=False,
+        )
 
 
 @command(
-    ".clear", "Clear the predicates defined in this session, or one",
-    ".clear [PREDICATE]",
+    ".idb", "List the predicates defined in this session, or the rules "
+    "of one", ".idb [PREDICATE]",
 )
-def cmd_clear(app, arg: str) -> None:
-    """Remove the session's predicates, or only the one named in *arg*."""
+def cmd_idb(app, arg: str) -> None:
+    """Print the session's predicates, or the rules of the one in *arg*."""
     name = arg.strip()
     if name:
-        _clear_predicate(app, name)
+        _print_rules(app, name)
+    else:
+        _print_idb_table(app)
+
+
+def _session_value(app, name: str):
+    """
+    Return the value of *name* in the session's scope.
+
+    If *name* is not defined in this session, print why and return None.
+    """
+    symbol = Symbol(name)
+    symbol_table = app._nl.program_ir.symbol_table
+    if symbol in symbol_table._symbols:
+        return symbol_table[symbol]
+    if symbol in symbol_table:
+        _warn(
+            app, f"Predicate {name!r} is part of the engine; only the "
+            "session's predicates and relations can be removed.",
+        )
+    else:
+        _warn(app, f"Predicate {name!r} is not defined.")
+    return None
+
+
+def _engine_rules(app, name: str) -> tuple:
+    """Return the rules of *name* defined outside the session's scope."""
+    enclosing = app._nl.program_ir.symbol_table.enclosing_scope
+    if enclosing is None or Symbol(name) not in enclosing:
+        return ()
+    value = enclosing[Symbol(name)]
+    return value.formulas if isinstance(value, DatalogUnion) else ()
+
+
+def _drop_all_rules(app, name: str, rules: tuple) -> None:
+    """Remove the session's rules of the predicate *name*."""
+    del app._nl.program_ir.symbol_table[Symbol(name)]
+    kept = len(_engine_rules(app, name))
+    message = f"removed {name} ({_plural(len(rules) - kept, 'rule')})"
+    if kept:
+        message += f"; its {_plural(kept, 'engine rule')} remain"
+    app.console.print(message, style="green", markup=False)
+
+
+def _drop_rule(app, name: str, rules: tuple, number: int) -> None:
+    """Remove the rule *number*, counted from 1, of the predicate *name*."""
+    if not 1 <= number <= len(rules):
+        _warn(
+            app, f"{name} has {_plural(len(rules), 'rule')}; there is no "
+            f"rule {number}. See .idb {name}.",
+        )
         return
-    app._nl.program_ir.pop_scope()
-    open_session_scope(app._nl)
+    if rules[number - 1] in _engine_rules(app, name):
+        _warn(app, f"Rule {number} of {name} is part of the engine.")
+        return
+    remaining = rules[:number - 1] + rules[number:]
+    symbol_table = app._nl.program_ir.symbol_table
+    if remaining:
+        symbol = Symbol(name).cast(UnionOfConjunctiveQueries)
+        symbol_table[symbol] = DatalogUnion(remaining)
+        left = f"{_plural(len(remaining), 'rule')} left"
+    else:
+        del symbol_table[Symbol(name)]
+        left = f"no rules left: {name} removed"
     app.console.print(
-        "[green]All session-defined IDB predicates cleared.[/green]"
+        f"removed rule {number} of {name} ({left})", style="green",
+        markup=False,
     )
 
 
-@command(".sets", "List the engine's sets (EDB relations)")
+def drop(app, name: str, number=None) -> None:
+    """
+    Remove the session predicate or relation *name*.
+
+    With a rule *number*, counted from 1 as ``.idb NAME`` shows them,
+    remove only that rule of the predicate *name*.
+    """
+    value = _session_value(app, name)
+    if value is None:
+        return
+    if isinstance(value, DatalogUnion):
+        if number is None:
+            _drop_all_rules(app, name, value.formulas)
+        else:
+            _drop_rule(app, name, value.formulas, number)
+    elif not isinstance(
+        getattr(value, "value", None), WrappedRelationalAlgebraSet
+    ):
+        _warn(app, f"{name!r} is neither an IDB predicate nor a relation.")
+    elif number is not None:
+        _warn(app, f"{name!r} is a relation, it has no rules.")
+    else:
+        del app._nl.program_ir.symbol_table[Symbol(name)]
+        app.loaded_relations.pop(name, None)
+        app.console.print(
+            f"removed relation {name}", style="green", markup=False
+        )
+
+
+def _rule_number(text: str):
+    """Return the rule number *text*, or None if it is not one."""
+    return int(text) if text.isdigit() and int(text) > 0 else None
+
+
+@command(
+    ".drop", "Remove rule N of a session predicate, all its rules, or a "
+    "loaded relation", ".drop PREDICATE [N]",
+)
+def cmd_drop(app, arg: str) -> None:
+    """Remove the session predicate, rule or relation named in *arg*."""
+    words = arg.split()
+    if not 1 <= len(words) <= 2:
+        _warn(app, "Usage: .drop PREDICATE [N]")
+        return
+    if len(words) == 1:
+        drop(app, words[0])
+        return
+    number = _rule_number(words[1])
+    if number is None:
+        _warn(
+            app, f"The rule number must be a positive integer, "
+            f"not {words[1]!r}.",
+        )
+        return
+    drop(app, words[0], number)
+
+
+@command(
+    ".clear", "Clear the predicates and relations of this session, or one",
+    ".clear [PREDICATE]",
+)
+def cmd_clear(app, arg: str) -> None:
+    """Remove the session's predicates and relations, or the one in *arg*."""
+    name = arg.strip()
+    if name:
+        drop(app, name)
+        return
+    app._nl.program_ir.pop_scope()
+    open_session_scope(app._nl)
+    app.loaded_relations.clear()
+    app.console.print(
+        "[green]All session-defined IDB predicates and loaded relations "
+        "cleared.[/green]"
+    )
+
+
+def default_relation_name(path) -> str:
+    """
+    Return the default name of the relation loaded from *path*.
+
+    It is the file name without its ``.csv``/``.tsv`` and ``.gz``
+    extensions, in lower case, with the characters other than letters
+    and digits replaced by ``_`` and ``rel_`` prepended if it would start
+    with a digit.
+    """
+    stem = re.sub(r"(\.(csv|tsv))?(\.gz)?$", "", Path(path).name.lower())
+    name = re.sub(r"[^a-z0-9]", "_", stem)
+    return f"rel_{name}" if not name or name[0].isdigit() else name
+
+
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+def _name_problem(app, name: str, explicit: bool):
+    """
+    Return why *name* cannot name a loaded relation, or None.
+
+    Only a relation loaded in this session can be replaced, and only
+    when its name is given *explicit*-ly.
+    """
+    if not _IDENTIFIER.match(name):
+        return (
+            f"Invalid relation name {name!r}: use letters, digits and "
+            "'_', not starting with a digit."
+        )
+    if Symbol(name) not in app._nl.program_ir.symbol_table:
+        return None
+    if name not in app.loaded_relations:
+        return (
+            f"{name!r} is already defined; give another name: "
+            ".load PATH NAME"
+        )
+    if not explicit:
+        return (
+            f"Relation {name!r} is already loaded; to replace it, give "
+            f"its name: .load PATH {name}"
+        )
+    return None
+
+
+def _read_rows(path: Path) -> pd.DataFrame:
+    """Return the rows of the relation file *path*, which must have some."""
+    df = engine_registry.read_relation_file(path)
+    if df.empty:
+        raise pd.errors.EmptyDataError("no rows")
+    return df
+
+
+def _load_error_message(path: Path, exc: Exception) -> str:
+    """Return the one-line message of the error *exc* loading *path*."""
+    if isinstance(exc, FileNotFoundError):
+        return f"No such file: {path}"
+    if isinstance(exc, engine_registry.UnsupportedRelationFile):
+        return str(exc)
+    if isinstance(exc, pd.errors.EmptyDataError):
+        return f"Cannot load {path}: the file is empty (no rows)."
+    lines = str(exc).strip().splitlines() or [type(exc).__name__]
+    return f"Cannot load {path}: {lines[0]}"
+
+
+def _load_failed(app, message: str, exc=None) -> None:
+    """Report that ``.load`` failed with *message* and the error *exc*."""
+    app.failed = True
+    if exc is not None and app.settings.debug:
+        traceback.print_exception(
+            type(exc), exc, exc.__traceback__, file=app.err_console.file
+        )
+    app.err_console.print(message, style="red", markup=False)
+
+
+def _add_relation(app, name: str, df: pd.DataFrame, path: Path) -> None:
+    """Add the rows *df* read from *path* as the session relation *name*."""
+    replaced = name in app.loaded_relations
+    if replaced:
+        del app._nl.program_ir.symbol_table[Symbol(name)]
+    app._nl.add_tuple_set(df, name=name)
+    columns = [str(column) for column in df.columns]
+    app.loaded_relations[name] = columns
+    message = (
+        f"loaded {name}({', '.join(columns)}): "
+        f"{_plural(len(df), 'row')} from {path}"
+    )
+    if replaced:
+        message += f" (replaces the previous {name})"
+    app.console.print(message, style="green", markup=False)
+
+
+def _load_arguments(arg: str):
+    """Return the words ``PATH [NAME]`` of *arg*, or None if malformed."""
+    try:
+        words = shlex.split(arg)
+    except ValueError:
+        return None
+    return words if 1 <= len(words) <= 2 else None
+
+
+@command(
+    ".load", "Load a CSV or TSV file (optionally gzipped) as a relation",
+    ".load PATH [NAME]",
+)
+def cmd_load(app, arg: str) -> None:
+    """Load the file named in *arg* as a relation of the session."""
+    words = _load_arguments(arg)
+    if words is None:
+        _load_failed(app, "Usage: .load PATH [NAME]")
+        return
+    path = Path(words[0]).expanduser()
+    name = words[1] if len(words) == 2 else default_relation_name(path)
+    try:
+        df = _read_rows(path)
+    except Exception as exc:
+        _load_failed(app, _load_error_message(path, exc), exc)
+        return
+    problem = _name_problem(app, name, explicit=len(words) == 2)
+    if problem:
+        _load_failed(app, problem)
+        return
+    try:
+        _add_relation(app, name, df, path)
+    except Exception as exc:
+        _load_failed(app, _load_error_message(path, exc), exc)
+
+
+@command(".sets", "List the engine's sets (EDB relations) and the loaded ones")
 def cmd_sets(app, arg: str) -> None:
     """Print the relational algebra sets of the engine."""
-    _list_sets(app._nl)
+    _list_sets(app._nl, app.loaded_relations)
 
 
 @command(".predicates", "List the predicates the engine declares")

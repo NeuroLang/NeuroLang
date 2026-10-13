@@ -80,6 +80,8 @@ from .nilearn_compat import nilearn_datasets as _nilearn_datasets
 from .nilearn_compat import nilearn_image as _nilearn_image
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from neurolang.frontend import NeurolangPDL
 
 _ENGINES_DIR = Path(__file__).parent / "engines"
@@ -713,30 +715,61 @@ def _phase_datalog_init(nl, cfg):
         nl.execute_datalog_program(datalog_init)
 
 
-def _phase_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
-    relations = cfg.get("relations", {})
-    if not relations:
-        return
+RELATION_FILE_SEPARATORS = {".csv": ",", ".tsv": "\t"}
+
+
+class UnsupportedRelationFile(ValueError):
+    """Raised for a relation file whose extension is not supported."""
+
+
+def relation_file_separator(path) -> str:
+    """
+    Return the column separator of the relation file *path*.
+
+    It follows from the extension: ``.csv`` or ``.tsv``, optionally
+    followed by ``.gz``. Other extensions raise
+    :class:`UnsupportedRelationFile`.
+    """
+    suffixes = [s.lower() for s in Path(path).suffixes]
+    if suffixes[-1:] == [".gz"]:
+        suffixes = suffixes[:-1]
+    sep = RELATION_FILE_SEPARATORS.get(suffixes[-1] if suffixes else "")
+    if sep is None:
+        raise UnsupportedRelationFile(
+            f"Unsupported relation file format: {Path(path).name}. "
+            "Supported: .csv, .tsv, .csv.gz, .tsv.gz"
+        )
+    return sep
+
+
+def read_relation_file(path) -> pd.DataFrame:
+    """
+    Return the rows of the CSV or TSV file *path* as a DataFrame.
+
+    The first line of the file is the header. ``~`` in *path* is
+    expanded and the separator follows from the extension (see
+    :func:`relation_file_separator`); gzipped files are decompressed.
+    """
     import pandas as pd
 
+    path = Path(path).expanduser()
+    return pd.read_csv(path, sep=relation_file_separator(path))
+
+
+def _phase_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
+    relations = cfg.get("relations", {})
     for rel_name, rel_cfg in relations.items():
         if isinstance(rel_cfg, str):
             rel_cfg = {"file": rel_cfg}
         rel_path = _resolve_relation_file(
             rel_cfg, engine_name, data_dir, base_dir=rel_base_dir
         )
-        name_lower = rel_path.name.lower()
-        if name_lower.endswith(".csv") or name_lower.endswith(".csv.gz"):
-            sep = ","
-        elif name_lower.endswith(".tsv") or name_lower.endswith(".tsv.gz"):
-            sep = "\t"
-        else:
-            raise ValueError(
-                f"Unsupported relation file format: {rel_path.suffix} "
-                f"for relation {rel_name!r}. "
-                "Supported: .csv, .tsv, .csv.gz, .tsv.gz"
-            )
-        df = pd.read_csv(rel_path, sep=sep)
+        try:
+            df = read_relation_file(rel_path)
+        except UnsupportedRelationFile as exc:
+            raise UnsupportedRelationFile(
+                f"Relation {rel_name!r}: {exc}"
+            ) from exc
         nl.add_tuple_set(df, name=rel_name)
 
 

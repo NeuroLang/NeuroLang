@@ -185,6 +185,56 @@ class TestEngineRegistry:
         with pytest.raises(ValueError, match="Unknown engine"):
             engine_registry.get_engine_config("nonexistent")
 
+    @pytest.mark.parametrize(
+        "name, text",
+        [
+            ("r.csv", "a,b\n1,x\n2,y\n"),
+            ("r.TSV", "a\tb\n1\tx\n2\ty\n"),
+            ("r.csv.gz", "a,b\n1,x\n2,y\n"),
+            ("r.tsv.gz", "a\tb\n1\tx\n2\ty\n"),
+        ],
+    )
+    def test_read_relation_file(self, tmp_path, name, text):
+        import gzip
+
+        path = tmp_path / name
+        if name.endswith(".gz"):
+            path.write_bytes(gzip.compress(text.encode()))
+        else:
+            path.write_text(text)
+        df = engine_registry.read_relation_file(path)
+        assert list(df.columns) == ["a", "b"]
+        assert df.values.tolist() == [[1, "x"], [2, "y"]]
+
+    def test_read_relation_file_expands_home(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        (tmp_path / "r.csv").write_text("a\n1\n")
+        df = engine_registry.read_relation_file("~/r.csv")
+        assert df["a"].tolist() == [1]
+
+    def test_read_relation_file_unsupported(self, tmp_path):
+        with pytest.raises(
+            engine_registry.UnsupportedRelationFile,
+            match="Unsupported relation file format: r.xlsx",
+        ):
+            engine_registry.read_relation_file(tmp_path / "r.xlsx")
+
+    def test_phase_relations(self, tmp_path):
+        from neurolang.frontend import NeurolangPDL
+
+        (tmp_path / "r.tsv").write_text("a\tb\n1\tx\n")
+        nl = NeurolangPDL()
+        cfg = {"relations": {"rel": {"file": "r.tsv"}}}
+        engine_registry._phase_relations(nl, cfg, "e", tmp_path, tmp_path)
+        assert set(nl.symbols["rel"].value) == {(1, "x")}
+
+    def test_phase_relations_unsupported(self, tmp_path):
+        cfg = {"relations": {"rel": "r.txt"}}
+        with pytest.raises(ValueError, match="Relation 'rel': Unsupported"):
+            engine_registry._phase_relations(
+                None, cfg, "e", tmp_path, tmp_path
+            )
+
     def test_datalog_init_in_config(self):
         """Every engine with python_init should have inline datalog_init."""
         for name in engine_registry.list_engine_names():
