@@ -117,10 +117,10 @@ class TimeRegionComparisons:
     timeout = 10 * 60
 
     def setup(self, direction, backend):
+        # Skipped (asv skips a benchmark whose setup raises
+        # NotImplementedError): it downloads the Destrieux atlas and takes
+        # minutes. To run it, call use_backend(backend) and self.setup_().
         raise NotImplementedError("Skip benchmark")
-        use_backend(backend)
-        if not hasattr(self, 'nl'):
-            self.setup_()
 
     def setup_(self):
         from neurolang import frontend as fe
