@@ -328,7 +328,10 @@ def test_banner_lists_relations_and_example(peaks_engine):
     app._print_banner()
     out = _output(app)
     assert "Engine: neurosynth" in out
-    assert "Mode: Datalog · .help for help · Ctrl+D or .quit to exit" in out
+    assert (
+        "Mode: Datalog · .help for help · Tab completes · "
+        "Ctrl+D or .quit to exit"
+    ) in out
     assert "term_in_study_tfidf(study_id, term, tfidf)" in out
     example = "ans(i, j, k, study_id) :- peak_reported(i, j, k, study_id)"
     assert f"Try: {example}" in out

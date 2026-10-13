@@ -109,6 +109,7 @@ KEYS_HELP = """
   Enter                run the statement; an unfinished one (open bracket,
                        trailing ',' or ':-', SQUALL without its final '.')
                        continues on a new line, an empty line runs it
+  Tab                  complete commands, predicates and Datalog syntax
   Alt+Enter            insert a newline
   Ctrl+C               discard the input, or interrupt a running query
   Ctrl+D               exit
@@ -148,21 +149,32 @@ def cmd_help(app, arg: str) -> None:
     )
 
 
-@command(".mode", "Switch the query language", ".mode datalog|squall")
+def _language(squall: bool):
+    """Return the ``.mode`` setter of the SQUALL or Datalog language."""
+    def set_mode(app) -> str:
+        app.settings.squall = squall
+        return "SQUALL" if squall else "Datalog"
+    return set_mode
+
+
+MODES = {"datalog": _language(False), "squall": _language(True)}
+
+
+@command(
+    ".mode", "Switch the query language or the editing mode",
+    ".mode datalog|squall|vi|emacs",
+)
 def cmd_mode(app, arg: str) -> None:
-    """Switch between Datalog and SQUALL input."""
+    """Switch between Datalog and SQUALL input, or vi and emacs editing."""
     mode = arg.strip().lower()
-    if mode == "datalog":
-        app.settings.squall = False
-        app.console.print("[green]Mode: Datalog[/green]")
-    elif mode == "squall":
-        app.settings.squall = True
-        app.console.print("[green]Mode: SQUALL[/green]")
-    else:
+    set_mode = MODES.get(mode)
+    if set_mode is None:
         app.console.print(
-            f"[yellow]Unknown mode {mode!r}. "
-            "Use 'datalog' or 'squall'.[/yellow]"
+            f"Unknown mode {mode!r}. Use one of: {', '.join(MODES)}.",
+            style="yellow", markup=False,
         )
+        return
+    app.console.print(f"[green]Mode: {set_mode(app)}[/green]")
 
 
 @command(

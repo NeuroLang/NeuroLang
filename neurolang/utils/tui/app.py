@@ -33,6 +33,7 @@ from .commands import (
     engine_relations,
     run_command,
 )
+from .editing import session_options
 from .interrupt import call_interruptibly
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 from .session import open_session_scope
@@ -86,6 +87,7 @@ class TuiSettings:
     ra_options: ShowRAOptions = field(default_factory=ShowRAOptions)
     show_rewritten: bool = False
     page_size: int = DEFAULT_PAGE_SIZE
+    vi_mode: bool = False
     debug: bool = False
     history_path: Optional[str] = None
 
@@ -134,6 +136,8 @@ class InteractiveTuiApp:
         self.console = console or Console()
         self.err_console = err_console or Console(stderr=True)
         self.results: list = []
+        self.session = None
+        self.completer = None
         self.last_query = None
         self.failed = False
         open_session_scope(nl)
@@ -295,6 +299,7 @@ class InteractiveTuiApp:
             self.console.print(f"Engine: [bold]{name}[/bold] — {description}")
         self.console.print(
             f"Mode: {mode} · [green].help[/green] for help · "
+            "[green]Tab[/green] completes · "
             "[green]Ctrl+D[/green] or [green].quit[/green] to exit"
         )
         relations = engine_relations(name)
@@ -315,6 +320,7 @@ class InteractiveTuiApp:
         """
         return PromptSession(
             **kwargs,
+            **session_options(self),
             history=self._history,
             key_bindings=_input_bindings(lambda: self.settings.squall),
             multiline=True,
@@ -363,6 +369,7 @@ class InteractiveTuiApp:
         if initial_program.strip():
             self._execute_and_display(initial_program)
         session = session or self._make_session()
+        self.session = session
         while self._read_and_run(session):
             pass
         self.console.print("[dim]Goodbye.[/dim]")
