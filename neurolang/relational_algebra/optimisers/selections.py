@@ -32,7 +32,7 @@ AND = Constant(operator.and_)
 EQ = Constant(operator.eq)
 
 
-class RewriteSelections(ew.ExpressionWalker):
+class RewriteSelections(ew.PatternWalker):
     """
     Mixing that optimises through relational algebra expressions.
 

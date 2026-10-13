@@ -19,7 +19,7 @@ from ..relational_algebra import (
 from .columns import _project_onto_operand, _ra_columns
 
 
-class ProductSimplification(ew.ExpressionWalker):
+class ProductSimplification(ew.PatternWalker):
     @ew.add_match(Product, lambda x: len(x.relations) == 1)
     def single_product(self, product):
         return self.walk(product.relations[0])
