@@ -45,7 +45,19 @@ engines:
       voxel:
         arity: 3
         columns: [i, j, k]
-        description: "Every voxel inside the MNI mask"
+        description: "Every voxel index (i, j, k) of the MNI template grid"
+      term:
+        arity: 1
+        columns: [term]
+        description: "Every term of the TF-IDF vocabulary"
+      mentions:
+        arity: 2
+        columns: [study_id, term]
+        description: "Studies mentioning a term (TF-IDF above 0.03)"
+      reports:
+        arity: 4
+        columns: [study_id, i, j, k]
+        description: "Studies reporting an activation peak at a voxel"
 
   destrieux:
     description: >
