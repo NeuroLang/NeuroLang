@@ -17,6 +17,7 @@ from rich.panel import Panel
 from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.utils import engine_registry
 from neurolang.utils.cli import (
+    _emit,
     _execute_program,
     _execute_squall_program,
     _known_symbol_names,
@@ -52,8 +53,10 @@ class TuiSettings:
 
     engine_name: str = ""
     squall: bool = False
+    output_format: str = "table"
     sort_by: list = field(default_factory=list)
-    show_ra: Optional[ShowRAOptions] = None
+    show_ra: bool = False
+    ra_options: ShowRAOptions = field(default_factory=ShowRAOptions)
     show_rewritten: bool = False
     debug: bool = False
     history_path: Optional[str] = None
@@ -111,7 +114,7 @@ class InteractiveTuiApp:
         return execute(
             self._nl, program,
             show_rewritten=self.settings.show_rewritten,
-            show_ra=self.settings.show_ra or False,
+            show_ra=self.settings.show_ra and self.settings.ra_options,
         )
 
     def _execute_noting_warnings(self, program: str):
@@ -143,11 +146,18 @@ class InteractiveTuiApp:
     def _show_frame(self, result, title: str = "") -> None:
         """Sort and print the rows of a query *result*."""
         df = sort_dataframe(result_to_dataframe(result), self.settings.sort_by)
+        self._last_df = df
+        self.print_frame(df, title)
+
+    def print_frame(self, df, title: str = "") -> None:
+        """Print the DataFrame *df* in the output format of the session."""
+        fmt = self.settings.output_format
         if df.empty:
             self.console.print("[dim](empty)[/dim]")
-        else:
+        elif fmt == "table":
             self.console.print(_df_to_rich_table(df, title=title))
-        self._last_df = df
+        else:
+            self.console.out(_emit(df, fmt), highlight=False)
 
     def _show_result(self, result) -> None:
         """Print a query *result*, keeping the last table shown."""
@@ -183,7 +193,7 @@ class InteractiveTuiApp:
             self._report_error(exc, program)
             return
         elapsed = time.perf_counter() - t0
-        if self.settings.show_ra is None:
+        if not self.settings.show_ra:
             self._show_result(result)
         self.console.print(f"\n[dim]Query completed in {elapsed:.2f} s[/dim]")
 

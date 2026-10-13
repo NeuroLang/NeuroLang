@@ -828,8 +828,10 @@ def _tui_settings(args, tui):
     return tui.TuiSettings(
         engine_name=args.engine,
         squall=args.squall,
+        output_format=args.format,
         sort_by=_parse_sort_spec(args.sort),
-        show_ra=_show_ra_options(args) if args.show_ra else None,
+        show_ra=args.show_ra,
+        ra_options=_show_ra_options(args),
         show_rewritten=args.show_rewritten,
         debug=_debug_enabled(args),
         history_path=str(Path.home() / ".neurolang_query_history"),

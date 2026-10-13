@@ -88,3 +88,10 @@ def test_interactive_rejects_listing_flags(built, flag, capsys):
         capsys.readouterr().err
     )
     assert built == []
+
+
+def test_interactive_passes_format_and_sort(built, keys, capsys):
+    keys("\x04")
+    main(["-i", "--format", "csv", "--sort", "x:desc", "ans(x) :- P(x)"])
+    out = capsys.readouterr().out.splitlines()
+    assert out[out.index("x"):out.index("x") + 3] == ["x", "2", "1"]

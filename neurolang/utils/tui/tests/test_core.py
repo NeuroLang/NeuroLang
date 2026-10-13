@@ -188,3 +188,50 @@ def test_undefined_predicate_warning_is_a_short_note(engine):
     ) in out
     assert ".py" not in out
     assert "warnings.warn" not in out
+
+
+def _lines(app):
+    return [line.strip() for line in _output(app).splitlines()]
+
+
+def test_sort_command_resorts_last_result(small_app, capsys):
+    small_app._execute_and_display("ans(x) :- P(x)")
+    small_app._handle_dot_command(".sort x:desc")
+    assert small_app.settings.sort_by == [("x", False)]
+    assert list(small_app._last_df["x"]) == [2, 1]
+    small_app._handle_dot_command(".sort")
+    assert "Sort: x:desc" in _output(small_app)
+    small_app._handle_dot_command(".sort x:sideways")
+    assert "invalid sort direction 'sideways'" in capsys.readouterr().err
+    small_app._handle_dot_command(".sort none")
+    assert small_app.settings.sort_by == []
+
+
+def test_format_command(small_app):
+    small_app._handle_dot_command(".format csv")
+    small_app._execute_and_display("ans(x) :- P(x)")
+    lines = _lines(small_app)
+    assert lines[lines.index("x"):lines.index("x") + 3] == ["x", "1", "2"]
+    small_app._handle_dot_command(".format xml")
+    assert "Unknown format 'xml'" in _output(small_app)
+    assert small_app.settings.output_format == "csv"
+
+
+def test_ra_toggle_prints_plans_instead_of_results(small_app, capsys):
+    small_app._handle_dot_command(".ra on")
+    small_app._execute_and_display("ans(x) :- P(x)")
+    assert "── deterministic stratum ──" in capsys.readouterr().out
+    assert small_app._last_df is None
+    small_app._handle_dot_command(".ra off")
+    small_app._execute_and_display("ans(x) :- P(x)")
+    assert "deterministic stratum" not in capsys.readouterr().out
+    assert list(small_app._last_df["x"]) == [1, 2]
+
+
+def test_rewritten_toggle(small_app, capsys):
+    small_app._handle_dot_command(".rewritten on")
+    small_app._execute_and_display("ans(x) :- P(x)")
+    assert "── rewritten program ──" in capsys.readouterr().out
+    assert list(small_app._last_df["x"]) == [1, 2]
+    small_app._handle_dot_command(".rewritten")
+    assert "Rewritten program: on" in _output(small_app)
