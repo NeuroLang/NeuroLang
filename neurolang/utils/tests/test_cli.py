@@ -1177,7 +1177,10 @@ class TestErrorReporting:
         assert len(err.splitlines()) < 10
 
     def test_multiline_program_with_leading_blank_lines(self, capsys):
-        program = "\n\nA(x) :- item(x)\nB(x) :- A(x)\nans(x) :- B(x), not plays(x)"
+        program = (
+            "\n\nA(x) :- item(x)\nB(x) :- A(x)\n"
+            "ans(x) :- B(x), not plays(x)"
+        )
         err = self.run_failing(capsys, program)
         lines = err.splitlines()
         error_line = lines.index("    5 | ans(x) :- B(x), not plays(x)")

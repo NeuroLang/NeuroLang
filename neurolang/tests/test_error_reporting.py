@@ -4,7 +4,7 @@ import pickle
 
 import pytest
 
-from neurolang.exceptions import (
+from ..exceptions import (
     CouldNotTranslateConjunctionException,
     ForbiddenDisjunctionError,
     ForbiddenRecursivityError,
@@ -20,8 +20,8 @@ from neurolang.exceptions import (
     SymbolNotFoundError,
     WrongArgumentsInPredicateError,
 )
-from neurolang.datalog.exceptions import InvalidMagicSetError
-from neurolang.probabilistic.exceptions import (
+from ..datalog.exceptions import InvalidMagicSetError
+from ..probabilistic.exceptions import (
     DistributionDoesNotSumToOneError,
     RepeatedTuplesInProbabilisticRelationError,
     UnsupportedProbabilisticQueryError,

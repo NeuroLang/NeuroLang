@@ -241,7 +241,7 @@ def _format_lark_error(exc: UnexpectedInput, ctx: _Context) -> str:
 
 
 def _did_you_mean(name: str, known_symbols: Iterable[str]) -> list:
-    """Return up to three *known_symbols* close to *name* (case-insensitive)."""
+    """Return up to three *known_symbols* close to *name*, ignoring case."""
     by_lower = {}
     for symbol in known_symbols:
         by_lower.setdefault(symbol.lower(), symbol)
@@ -368,6 +368,7 @@ def format_error(
     -------
     str
         A formatted, human-readable error message.
+
     """
     if source_lines is None:
         source_lines = source_text.splitlines()
@@ -408,6 +409,7 @@ def print_formatted_error(
         Symbol names defined in the engine, see :func:`format_error`.
     file : file-like, optional
         Stream to print to; defaults to ``sys.stderr``.
+
     """
     stream = sys.stderr if file is None else file
     msg = format_error(
