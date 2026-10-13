@@ -1,6 +1,7 @@
 """Pretty-printer for named Relational Algebra expressions."""
 
 import collections.abc
+import operator
 import re
 
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -80,6 +81,92 @@ def _is_cross_product(expr):
 _FRESH_NAME = re.compile(r"^fresh_\d+$")
 
 
+def _is_column_int(value):
+    """Return whether ``value`` is a constant column index."""
+    return isinstance(value, Constant) and value.type is ColumnInt
+
+
+def _column_index(value):
+    """Return the index of a constant column index, None for others."""
+    if _is_column_int(value) or (
+        isinstance(value, Constant) and type(value.value) in (int, ColumnInt)
+        and not isinstance(value.value, bool)
+    ):
+        return int(value.value)
+    return None
+
+
+def _atom_pattern(expression):
+    """
+    Match a rename of (a projection and selection of) a base relation.
+
+    Return ``(leaf, names, columns, selections)`` for
+    ``ρ[names](π[columns](σ…(leaf)))`` or ``ρ[names](leaf)``, where
+    the selections are equalities of a column with a constant or another
+    column, or None when ``expression`` has another form.
+    """
+    if not isinstance(expression, NameColumns):
+        return None
+    names = tuple(expression.column_names)
+    relation = expression.relation
+    if isinstance(relation, (Constant, Symbol)):
+        return relation, names, tuple(range(len(names))), ()
+    if not isinstance(relation, Projection):
+        return None
+    columns = tuple(_column_index(c) for c in relation.attributes)
+    if None in columns or len(columns) != len(names):
+        return None
+    selections = []
+    relation = relation.relation
+    while isinstance(relation, Selection):
+        selection = _equality_selection(relation.formula)
+        if selection is None:
+            return None
+        selections.append(selection)
+        relation = relation.relation
+    if not isinstance(relation, (Constant, Symbol)):
+        return None
+    return relation, names, columns, tuple(selections)
+
+
+def _equality_selection(formula):
+    """
+    Match ``#i == value`` where ``value`` is a constant or a column index.
+
+    Return ``(i, value)`` with ``value`` the constant, or the index of
+    the other column; None for other formulas.
+    """
+    if not (
+        isinstance(formula, FunctionApplication)
+        and isinstance(formula.functor, Constant)
+        and formula.functor.value is operator.eq
+        and len(formula.args) == 2
+    ):
+        return None
+    left, right = formula.args
+    if not _is_column_int(left):
+        return None
+    if _is_column_int(right):
+        return int(left.value), int(right.value)
+    if isinstance(right, Constant):
+        return int(left.value), right
+    return None
+
+
+def _is_trivial_projection(expression):
+    """Return whether a projection keeps all the columns of its operand."""
+    try:
+        attributes = _columns_as_str_set_of(expression.attributes)
+        return attributes == _columns_as_str_set(expression.relation)
+    except Exception:
+        return False
+
+
+def _columns_as_str_set_of(columns):
+    """Return a set of column references as strings."""
+    return {_column_name(c) for c in columns}
+
+
 def subscript(number):
     """Return ``number`` written with subscript digits."""
     return "".join(chr(0x2080 + int(digit)) for digit in str(number))
@@ -128,12 +215,23 @@ class PrettyPrinter:
     column_roles : dict, optional
         Mapping from column names to the label they are displayed with,
         e.g. ``p`` for a probability column.
+    collapse : bool, optional
+        If True, trivial wrappers are collapsed: a rename of (a selection
+        and projection of) a base relation is printed as a Datalog atom,
+        e.g. ``edge(x, y)`` for ``ρ[x, y](π[#0, #1](edge))``, projections
+        on all the columns of their operand are skipped and identity
+        members of extended projections are printed as their column.
+        Default False.
+    leaf_arities : dict, optional
+        Mapping from `Symbol` leaves to the number of columns of their
+        relation, used to print the atoms of collapsed plans.
 
     """
 
     def __init__(
         self, name_map=None, indent=2, width=80, fresh_map=None,
-        counter=None, leaf_sizes=None, column_roles=None,
+        counter=None, leaf_sizes=None, column_roles=None, collapse=False,
+        leaf_arities=None,
     ):
         """Initialise the printer; see the class docstring for parameters."""
         if name_map is None:
@@ -141,6 +239,8 @@ class PrettyPrinter:
         self.name_map = name_map
         self.leaf_sizes = leaf_sizes if leaf_sizes is not None else {}
         self.column_roles = column_roles if column_roles is not None else {}
+        self.collapse = collapse
+        self.leaf_arities = leaf_arities if leaf_arities is not None else {}
         self.indent = indent
         self.width = width
         self._fresh_map = fresh_map if fresh_map is not None else {}
@@ -173,10 +273,93 @@ class PrettyPrinter:
 
     def _node(self, expression):
         """Return the header line and the operands of ``expression``."""
+        if self.collapse:
+            collapsed = self._collapsed_node(expression)
+            if collapsed is not None:
+                return collapsed
         for expression_type, formatter_name in self._FORMATTERS:
             if isinstance(expression, expression_type):
                 return getattr(self, formatter_name)(expression)
         return repr(expression), ()
+
+    def _collapsed_node(self, expression):
+        """
+        Return the collapsed form of ``expression``, None if it has none.
+
+        A rename of (a projection and selection of) a base relation is
+        written as a Datalog atom, e.g. ``edge(x, y)``, and a projection
+        on all the columns of its operand is skipped.
+        """
+        atom = _atom_pattern(expression)
+        if atom is not None:
+            return self._format_atom(*atom), ()
+        if isinstance(expression, Projection) and _is_trivial_projection(
+            expression
+        ):
+            return self._node(expression.relation)
+        return None
+
+    def _format_atom(self, leaf, names, columns, selections):
+        """
+        Format a base relation ``leaf`` filtered and named as an atom.
+
+        ``names`` are the names given to its ``columns`` (indices), and
+        ``selections`` the ``(column, value)`` equalities it is filtered
+        with, ``value`` being a constant or another column index.
+        """
+        arguments = self._atom_arguments(
+            names, columns, selections, self._leaf_arity(leaf)
+        )
+        name, size = self._leaf_name_and_size(leaf)
+        text = f"{name}({', '.join(arguments)})"
+        pure = not selections and list(columns) == list(range(len(arguments)))
+        if size is None:
+            return text
+        if pure:
+            return f"{text} {rows_label(size)}"
+        return f"{text} ‹from {rows_label(size)[1:]}"
+
+    def _atom_arguments(self, names, columns, selections, arity):
+        """Return the displayed arguments of an atom, ``_`` if unnamed."""
+        used = set(columns)
+        for column, value in selections:
+            used.add(column)
+            if isinstance(value, int):
+                used.add(value)
+        # A plan may use more columns than the relation has, e.g. for a
+        # predicate used with the wrong arity: evaluating it fails then.
+        arity = max(arity or 0, 1 + max(used, default=-1))
+        arguments = ["_"] * arity
+        for name, column in zip(names, columns):
+            arguments[column] = self._format_column(name)
+        for column, value in selections:
+            if isinstance(value, Constant):
+                arguments[column] = self._format_value(value)
+            elif arguments[column] == "_":
+                arguments[column] = arguments[value]
+            elif arguments[value] == "_":
+                arguments[value] = arguments[column]
+        return arguments
+
+    def _leaf_name_and_size(self, leaf):
+        """Return the display name of a leaf and its size (or None)."""
+        name = self._lookup_name(leaf)
+        if isinstance(leaf, Constant):
+            if name is None:
+                return self._format_constant(leaf), None
+            return name, _relation_size(leaf.value)
+        if name is None:
+            name = leaf.name
+        return name, self.leaf_sizes.get(leaf)
+
+    def _leaf_arity(self, leaf):
+        """Return the number of columns of a leaf's relation, or None."""
+        if isinstance(leaf, Constant):
+            try:
+                return leaf.value.arity
+            except Exception:
+                return None
+        return self.leaf_arities.get(leaf)
 
     def _format_selection(self, expression):
         """Format a Selection node."""
@@ -472,6 +655,8 @@ class PrettyPrinter:
         return repr(functor)
 
     def _format_value(self, value):
+        if _is_column_int(value):
+            return f"#{value.value}"
         if isinstance(value, Constant):
             value = value.value
         if isinstance(value, ColumnStr):
@@ -483,6 +668,8 @@ class PrettyPrinter:
         return repr(value)
 
     def _format_column(self, col):
+        if _is_column_int(col):
+            return f"#{col.value}"
         if isinstance(col, Constant):
             col = col.value
         if isinstance(col, ColumnStr):
@@ -506,6 +693,8 @@ class PrettyPrinter:
         if isinstance(member, FunctionApplicationListMember):
             fun = self._format_formula(member.fun_exp)
             dst = self._format_column(member.dst_column)
+            if self.collapse and fun == dst:
+                return dst
             return f"{fun} -> {dst}"
         return repr(member)
 
@@ -616,7 +805,8 @@ def _collect_edb_names(symbol_table, name_map):
 
 def pretty_repr(
     expression, name_map=None, indent=2, width=80, fresh_map=None,
-    counter=None, leaf_sizes=None, column_roles=None,
+    counter=None, leaf_sizes=None, column_roles=None, collapse=False,
+    leaf_arities=None,
 ):
     """
     Return a pretty representation of an RA expression.
@@ -643,6 +833,11 @@ def pretty_repr(
         relation, printed next to them.
     column_roles : dict, optional
         Mapping from column names to the label they are displayed with.
+    collapse : bool, optional
+        If True, collapse trivial wrappers (see `PrettyPrinter`).
+    leaf_arities : dict, optional
+        Mapping from `Symbol` leaves to the number of columns of their
+        relation.
 
     Returns
     -------
@@ -653,6 +848,7 @@ def pretty_repr(
     printer = PrettyPrinter(
         name_map=name_map, indent=indent, width=width,
         fresh_map=fresh_map, counter=counter, leaf_sizes=leaf_sizes,
-        column_roles=column_roles,
+        column_roles=column_roles, collapse=collapse,
+        leaf_arities=leaf_arities,
     )
     return printer.format(expression)

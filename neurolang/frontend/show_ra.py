@@ -250,7 +250,7 @@ class PlanDisplay:
 
     def print_rule(
         self, rule, conjunction, symbol_table, ra_code, leaf_sizes=None,
-        column_roles=None,
+        column_roles=None, leaf_arities=None,
     ):
         """
         Print the ``--show-ra`` block of a rule.
@@ -262,7 +262,8 @@ class PlanDisplay:
         symbols of the plan whose size is known to their size. Columns
         named after a variable of the rule are displayed as the variable
         is in the rule header, and those in ``column_roles`` with the
-        label it maps them to.
+        label it maps them to. ``leaf_arities`` maps predicate symbols of
+        the plan to the number of columns of their relation.
         """
         fresh_map = {}
         if rule is not None:
@@ -271,6 +272,7 @@ class PlanDisplay:
         print(pretty_repr(
             ra_code, name_map=name_map, leaf_sizes=leaf_sizes,
             fresh_map=fresh_map, column_roles=column_roles,
+            collapse=self.options.collapse, leaf_arities=leaf_arities,
         ))
 
 
@@ -315,6 +317,16 @@ def show_ra_chase(chase_class, program, rules, display=None):
     return chase
 
 
+def _leaf_arities(predicates, symbol_table):
+    """Return the arities of the relations of the ``predicates``' symbols."""
+    arities = {}
+    for predicate in extract_logic_atoms(Conjunction(predicates)):
+        functor = predicate.functor
+        if isinstance(functor, Symbol) and functor in symbol_table:
+            arities[functor] = symbol_table[functor].value.arity
+    return arities
+
+
 class ShowRAChaseMixin:
     """
     Chase mixin printing the named RA expression of each rule.
@@ -356,6 +368,7 @@ class ShowRAChaseMixin:
             getattr(self, "datalog_program", None),
             ra_code,
             self._show_ra_leaf_sizes(predicates, symbol_table),
+            leaf_arities=_leaf_arities(predicates, symbol_table),
         )
         return super().obtain_substitutions(
             iter(predicates), instance, restriction_instance

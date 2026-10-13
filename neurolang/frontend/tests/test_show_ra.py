@@ -124,9 +124,9 @@ def test_deterministic_leaves_show_their_size(capsys):
     out = show_ra_output(
         capsys, "ans(x, w) :- edge(x, y), label(y, l), weight(l, w)."
     )
-    assert "edge ‹3 rows›" in out
-    assert "label ‹3 rows›" in out
-    assert "weight ‹2 rows›" in out
+    assert "edge(x, y) ‹3 rows›" in out
+    assert "label(y, l) ‹3 rows›" in out
+    assert "weight(l, w) ‹2 rows›" in out
 
 
 def test_recursive_leaves_have_no_size(capsys):
@@ -137,9 +137,9 @@ def test_recursive_leaves_have_no_size(capsys):
         "reach(x, y) :- reach(x, z), edge(z, y).\n"
         "ans(x, y) :- reach(x, y).",
     )
-    assert "edge ‹3 rows›" in out
-    assert re.search(r"reach\b(?! ‹)", out)
-    assert "reach ‹" not in out
+    assert "edge(z, y) ‹3 rows›" in out
+    assert "├─ reach(x, z)\n" in out
+    assert "reach(x, z) ‹" not in out
 
 
 def test_probabilistic_leaves_named_after_their_predicate(capsys):
@@ -149,9 +149,9 @@ def test_probabilistic_leaves_named_after_their_predicate(capsys):
         "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
         "ans(x, q) :- z(x, q).",
     )
-    assert "active ‹3 rows›" in out
-    assert "picked ‹3 rows›" in out
-    assert "label ‹3 rows›" in out
+    assert "active(p(active), x) ‹3 rows›" in out
+    assert "picked(p(picked), x) ‹3 rows›" in out
+    assert "label(x, l) ‹3 rows›" in out
     assert "Table" not in out
 
 
@@ -179,7 +179,7 @@ def test_plan_columns_use_rule_variable_names(capsys):
     )
     (header, plan), = rule_blocks(capsys.readouterr().out)
     assert "knows(s₀, s₁)" in header
-    assert "ρ[s₀, s₁]" in plan
+    assert "knows(s₀, s₁)" in plan
     assert "fresh_" not in plan
 
 
@@ -230,8 +230,8 @@ def test_probability_columns_labelled_by_role(capsys):
     assert "σ[p > 0.0]" in out
     assert "γ[by=(x), p = sum(p)]" in out
     assert "π_ext[p(active) * p(picked) * 1.0 -> p" in out
-    assert "ρ[p(active), x]" in out
-    assert "ρ[p(picked), x]" in out
+    assert "active(p(active), x)" in out
+    assert "picked(p(picked), x)" in out
 
 
 def test_probability_label_avoids_rule_variable_p(capsys):
@@ -265,3 +265,42 @@ def test_probability_columns_of_a_repeated_table_are_numbered():
         "fresh_1": "p(active)₁",
         "fresh_2": "p(active)₂",
     }
+
+
+THREE_WAY_JOIN = (
+    "ans(x, w) :- edge(x, y), label(y, l), weight(l, w), (w > 15)."
+)
+
+
+def test_collapse_is_the_default(capsys):
+    out = show_ra_output(capsys, THREE_WAY_JOIN)
+    assert "├─ edge(x, y) ‹3 rows›" in out
+    assert "weight(l, w) ‹2 rows›" in out
+    assert "ρ[" not in out
+    assert "π[" not in out
+
+
+def test_collapse_false_prints_full_plans(capsys):
+    out = show_ra_output(
+        capsys, THREE_WAY_JOIN, show_ra=ShowRAOptions(collapse=False)
+    )
+    assert "ρ[x, y]" in out
+    assert "π[#0, #1]" in out
+    assert "edge ‹3 rows›" in out
+    assert "edge(x, y)" not in out.split("──\n", 2)[-1]
+
+
+def test_collapse_probabilistic_tables(capsys):
+    out = show_ra_output(
+        capsys,
+        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(x, q) :- z(x, q).",
+    )
+    assert "active(p(active), x) ‹3 rows›" in out
+    assert "π_ext[p(active) * p(picked) * 1.0 -> p, " in out
+    assert "x -> x" not in out
+
+
+def test_collapse_constant_argument(capsys):
+    out = show_ra_output(capsys, "ans(x) :- edge(x, 2).")
+    assert "edge(x, 2) ‹from 3 rows›" in out
