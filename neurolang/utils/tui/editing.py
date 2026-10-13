@@ -2,13 +2,13 @@
 Line editing of the interactive REPL.
 
 It provides the completion of predicates, their columns and the
-grammar (:class:`~.completion.NeuroLangReplCompleter`), with a keyword
-fallback for SQUALL, whose Earley parser cannot complete interactively,
+Datalog and SQUALL grammars (:class:`~.completion.NeuroLangReplCompleter`),
 syntax highlighting (:class:`NeuroLangLexer`), the bottom toolbar,
-suggestions from the history and the vi and emacs editing
-modes (``.mode vi|emacs``).
+suggestions from the history and the vi and emacs editing modes
+(``.mode vi|emacs``).
 """
 
+import functools
 import re
 from typing import Callable, Optional
 
@@ -29,18 +29,8 @@ from .completion import (
     NeuroLangReplCompleter,
     predicate_catalog,
 )
+from .squall_completion import SquallGrammarOptions, squall_keywords
 
-SQUALL_KEYWORDS = list(dict.fromkeys([
-    "define", "as", "obtain", "every", "a", "an", "the",
-    "in", "where", "that", "with", "without", "if", "then",
-    "and", "or", "not", "for", "of", "from", "to", "by",
-    "at", "on", "is", "are", "has", "have", "there",
-    "probability", "conditioned", "inferred", "choose",
-    "peaks", "voxels", "studies", "terms", "experiments",
-    "reported", "which", "atlas",
-    "all", "each", "some", "no", "any",
-    "most", "few", "both", "neither",
-]))
 
 
 _TOKEN = re.compile(
@@ -65,10 +55,11 @@ class NeuroLangLexer(Lexer):
     *is_squall* tells whether the input is SQUALL. In Datalog, the
     grammar's keywords (``PROB``, ``EXISTS``…), its operators (``:-``,
     ``~``, ``//``, comparisons…) and the predicates applied to arguments
-    are highlighted; in SQUALL, the :data:`SQUALL_KEYWORDS`. Strings and
-    numbers are highlighted in both. The fragments are styled with the
-    classes ``keyword``, ``operator``, ``predicate``, ``string`` and
-    ``number`` of :data:`STYLE`.
+    are highlighted; in SQUALL, the keywords of its grammar
+    (:func:`~.squall_completion.squall_keywords`), which its completion
+    offers. Strings and numbers are highlighted in both. The fragments
+    are styled with the classes ``keyword``, ``operator``, ``predicate``,
+    ``string`` and ``number`` of :data:`STYLE`.
     """
 
     def __init__(self, is_squall: Optional[Callable[[], bool]] = None):
@@ -103,7 +94,7 @@ class NeuroLangLexer(Lexer):
 def _word_style(word: str, call: bool, squall: bool) -> str:
     """Return the style of *word*, followed by ``(`` if *call*."""
     if squall:
-        return "class:keyword" if word in _SQUALL_WORDS else ""
+        return "class:keyword" if word in _squall_words() else ""
     if word in DATALOG_KEYWORDS:
         return "class:keyword"
     return "class:predicate" if call else ""
@@ -126,7 +117,11 @@ def _styled(match, squall: bool):
         yield f"class:{kind}", match.group(0)
 
 
-_SQUALL_WORDS = frozenset(SQUALL_KEYWORDS)
+@functools.lru_cache(maxsize=None)
+def _squall_words() -> frozenset:
+    """Return the keywords of the SQUALL grammar, as a set."""
+    return frozenset(squall_keywords())
+
 
 # Readable on light and dark terminals: ANSI colours, no hex.
 STYLE = Style.from_dict({
@@ -156,8 +151,9 @@ def make_completer(app) -> NeuroLangReplCompleter:
         predicates=lambda: predicate_catalog(
             app._nl, declared, app.loaded_relations
         ),
-        squall_keywords=SQUALL_KEYWORDS,
+        squall_keywords=squall_keywords(),
         is_squall=lambda: app.settings.squall,
+        squall_grammar=SquallGrammarOptions(),
     )
 
 
@@ -221,6 +217,9 @@ def session_options(app) -> dict:
     return dict(
         completer=app.completer,
         complete_while_typing=True,
+        # The SQUALL grammar can take tens of milliseconds to complete a
+        # long sentence: complete without blocking the typing.
+        complete_in_thread=True,
         lexer=NeuroLangLexer(lambda: app.settings.squall),
         auto_suggest=AutoSuggestFromHistory(),
         bottom_toolbar=lambda: toolbar(app),

@@ -26,12 +26,16 @@ from neurolang.utils.tui.completion import (  # noqa: E402
     argument_context,
 )
 from neurolang.utils.tui.editing import (  # noqa: E402
-    SQUALL_KEYWORDS,
     NeuroLangLexer,
     STYLE,
     NeuroLangReplCompleter,
     toolbar,
     toolbar_text,
+)
+from neurolang.utils.tui.squall_completion import (  # noqa: E402
+    SquallGrammarOptions,
+    current_sentence,
+    squall_keywords,
 )
 
 
@@ -73,14 +77,14 @@ class TestNeuroLangReplCompleter:
         assert ":-" in _texts(completer, "ans(x) ")
 
     def test_squall_keywords(self):
-        completer = NeuroLangReplCompleter(squall_keywords=SQUALL_KEYWORDS)
+        completer = NeuroLangReplCompleter(squall_keywords=squall_keywords())
         assert "obtain" in _texts(completer, "ob")
 
     def test_squall_mode_uses_keywords(self):
         squall = {"on": False}
         completer = NeuroLangReplCompleter(
             lark_completer=LarkCompleter(COMPILED_GRAMMAR),
-            squall_keywords=SQUALL_KEYWORDS,
+            squall_keywords=squall_keywords(),
             is_squall=lambda: squall["on"],
         )
         assert "obtain" not in _texts(completer, "ob")
@@ -133,7 +137,7 @@ def test_lexer_squall_keywords():
         assert styles[word] == "class:keyword", word
     assert styles["Active"] == styles["study"] == ""
     assert styles['"x"'] == "class:string"
-    assert all(word in SQUALL_KEYWORDS for word in ("every", "the", "a"))
+    assert all(word in squall_keywords() for word in ("every", "the", "a"))
 
 
 def test_lexer_follows_mode():
@@ -383,10 +387,9 @@ class TestDynamicCompletion:
 
     def test_squall_offers_predicates_and_keywords(self, neurosynth_app):
         neurosynth_app.settings.squall = True
-        texts = _words(neurosynth_app, "obtain every pe")
-        assert texts[0] == "peak_reported"
-        assert "peaks" in texts
-        assert _completions(neurosynth_app, "obtain ") == []
+        metas = _metas(neurosynth_app, "obtain every pe")
+        assert list(metas)[0] == "peak_reported"
+        assert metas["peak_reported"].endswith("· stored")
 
     def test_completion_is_fast(self, neurosynth_app):
         # On the full neurosynth engine a completion takes about 1 ms.
@@ -430,3 +433,91 @@ def test_ctrl_x_ctrl_e_opens_the_editor(app):
     assert any(
         b.handler.__name__ == "edit_and_execute" for b in bindings
     )
+
+
+@pytest.fixture
+def squall_app(neurosynth_app):
+    neurosynth_app.settings.squall = True
+    return neurosynth_app
+
+
+class TestSquallGrammarCompletion:
+    def test_sentence_start(self, squall_app):
+        words = _words(squall_app, "")
+        assert {"obtain", "define", "every", "the"} <= set(words)
+        assert "is" not in words
+
+    def test_after_obtain(self, squall_app):
+        words = _words(squall_app, "obtain ")
+        assert words[0] == "mentions"
+        assert {"every", "the", "a"} <= set(words)
+        assert _words(squall_app, "obtain ev") == ["every"]
+
+    def test_after_every_predicates_first(self, squall_app):
+        words = _words(squall_app, "obtain every ")
+        assert words.index("peak_reported") < words.index("top")
+        assert "every" not in words
+
+    def test_verbs_after_that(self, squall_app):
+        words = _words(squall_app, "obtain every study that ")
+        assert {"mentions", "has", "is", "does"} <= set(words)
+        assert "." not in words
+
+    def test_end_of_sentence(self, squall_app):
+        completions = _completions(squall_app, "obtain every study that is ")
+        assert "." not in [c.text for c in completions]
+        metas = _metas(squall_app, "obtain every study that mentions ")
+        assert metas["."] == "end of the sentence"
+
+    def test_next_sentence(self, squall_app):
+        assert "obtain" in _words(squall_app, "obtain every study. ob")
+
+    def test_no_punctuation(self, squall_app):
+        for text in ("", "obtain ", "obtain every study that mentions "):
+            for word in _words(squall_app, text):
+                assert word == "." or word[0].isalpha(), (text, word)
+
+    def test_invalid_sentence_falls_back(self, squall_app):
+        # "count" is reserved: after "the" a noun is expected.
+        words = _words(squall_app, "obtain the count of every pe")
+        assert words[0] == "peak_reported"
+        assert _words(squall_app, "obtain the count of ev") == ["every"]
+        assert _words(squall_app, "obtain the count of every ") == []
+
+    def test_options_are_cached(self):
+        options = SquallGrammarOptions()
+        first = options.options("obtain every ")
+        assert options.options("obtain every ") is first
+        assert options.options("obtain every x. obtain every ") == first
+
+    def test_latency(self, squall_app):
+        clause = "that mentions a term and "
+        sentence = "obtain every study that reports a peak and " + clause * 4
+        assert 140 < len(sentence) <= 200
+        start = time.perf_counter()
+        words = _words(squall_app, sentence)
+        _words(squall_app, "obtain every study that ")
+        assert (time.perf_counter() - start) / 2 < 0.2
+        assert "mentions" in words and "has" in words
+
+    def test_long_sentence_falls_back(self, squall_app):
+        sentence = "obtain every study that " + "mentions a term and " * 10
+        assert len(sentence) > 200
+        start = time.perf_counter()
+        assert _words(squall_app, sentence) == []
+        assert _words(squall_app, sentence + "ha") == ["had", "has", "have"]
+        assert time.perf_counter() - start < 0.05
+
+
+def test_current_sentence():
+    assert current_sentence("obtain a. obtain every ") == "obtain every "
+    assert current_sentence("obtain a.") == ""
+    assert current_sentence("obtain x greater than 0.5 ") == (
+        "obtain x greater than 0.5 "
+    )
+
+
+def test_squall_keywords_from_grammar():
+    words = squall_keywords()
+    assert {"obtain", "every", "all", "an", "count", "probably"} <= set(words)
+    assert not {"(", "D", "_", "--", "n't"} & set(words)

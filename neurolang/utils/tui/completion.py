@@ -21,6 +21,7 @@ from neurolang.frontend.datalog.standard_syntax import AGGREGATION_FUNCS
 from neurolang.utils.interactive_parsing import LarkCompleter
 
 from .commands import COMMANDS
+from .squall_completion import SquallGrammarOptions
 
 
 class PredicateInfo(NamedTuple):
@@ -269,15 +270,26 @@ def wants_completion(text: str, prefix: str, complete_event) -> bool:
     return requested and not text[-1:].isdigit()
 
 
+def _keyword_completions(words, prefix: str):
+    """Yield the keywords of *words* starting with *prefix*."""
+    for word in words:
+        if word.startswith(prefix):
+            yield Completion(
+                word, start_position=-len(prefix), display_meta="keyword"
+            )
+
+
 class NeuroLangReplCompleter(Completer):
     """
     Complete dot-commands, predicates, their columns and the grammar.
 
     *predicates* returns the :class:`PredicateInfo` of the engine's
     predicates, by name; it is called at each completion. Datalog input
-    is completed with the LALR grammar's *lark_completer*; SQUALL input,
-    or any input without *lark_completer*, with the *squall_keywords*.
-    *is_squall* tells whether the input is SQUALL.
+    is completed with the LALR grammar's *lark_completer*, SQUALL input
+    with the Earley grammar's *squall_grammar* (see
+    :mod:`~.squall_completion`). Without them, or where the input is
+    invalid, the predicates and *squall_keywords* starting with the word
+    being typed are offered. *is_squall* tells whether the input is SQUALL.
 
     While typing, completions are offered only for a word being typed;
     Tab also offers them after a space or an opening bracket.
@@ -289,12 +301,14 @@ class NeuroLangReplCompleter(Completer):
         predicates: Optional[Callable[[], dict]] = None,
         squall_keywords: Optional[list] = None,
         is_squall: Optional[Callable[[], bool]] = None,
+        squall_grammar: Optional[SquallGrammarOptions] = None,
     ):
         """Set up the completion sources."""
         self._lark = lark_completer
         self._predicates = predicates or dict
         self._squall_keywords = squall_keywords or []
         self._is_squall = is_squall or (lambda: False)
+        self._squall_grammar = squall_grammar
 
     def get_completions(self, document, complete_event):
         """Yield the completions of the text before the cursor."""
@@ -308,7 +322,7 @@ class NeuroLangReplCompleter(Completer):
         catalog = self._predicates()
         context = argument_context(text)
         if self._is_squall() or self._lark is None:
-            yield from self._squall_completions(catalog, prefix)
+            yield from self._squall_completions(text, prefix, catalog)
         elif context is not None:
             yield from self._argument_completions(
                 text, prefix, catalog, context
@@ -337,16 +351,35 @@ class NeuroLangReplCompleter(Completer):
                 display_meta=info.meta(),
             )
 
-    def _squall_completions(self, catalog: dict, prefix: str):
-        """Yield the predicates, then the SQUALL keywords."""
-        if not prefix:
-            return
-        yield from self._predicate_completions(catalog, prefix)
-        for word in self._squall_keywords:
-            if word.startswith(prefix):
-                yield Completion(
-                    word, start_position=-len(prefix), display_meta="keyword"
+    def _squall_options(self, text: str, prefix: str):
+        """Return what SQUALL accepts before *prefix*, or None."""
+        if self._squall_grammar is None:
+            return None
+        try:
+            return self._squall_grammar.options(text[:len(text) - len(prefix)])
+        except Exception:
+            return None
+
+    def _squall_completions(self, text: str, prefix: str, catalog: dict):
+        """
+        Yield the predicates and keywords SQUALL accepts before *prefix*.
+
+        If the sentence is invalid, yield the predicates and the
+        *squall_keywords* starting with *prefix*, if any.
+        """
+        options = self._squall_options(text, prefix)
+        if options is None:
+            if prefix:
+                yield from self._predicate_completions(catalog, prefix)
+                yield from _keyword_completions(
+                    self._squall_keywords, prefix
                 )
+            return
+        if options.names:
+            yield from self._predicate_completions(catalog, prefix)
+        yield from _keyword_completions(options.keywords, prefix)
+        if options.end and not prefix:
+            yield Completion(".", display_meta="end of the sentence")
 
     @staticmethod
     def _argument_completions(text, prefix, catalog, context):
