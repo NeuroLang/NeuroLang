@@ -9,9 +9,12 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 
-from ..datalog.expressions import AdornedSymbol
+from ..datalog.expression_processing import is_aggregation_rule
+from ..datalog.expressions import AdornedSymbol, AggregationApplication
 from ..datalog.chase import ChaseNaive, ChaseSemiNaive
 from ..datalog.instance import MapInstance
+from ..datalog.translate_to_named_ra import TranslateToNamedRA
+from ..datalog import Implication
 from ..exceptions import UnsupportedSolverError
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
@@ -37,8 +40,12 @@ from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..relational_algebra import (
     ColumnStr,
     FunctionApplicationListMember,
+    GroupByAggregation,
     NameColumns,
+    Projection,
     RelationalAlgebraOperation,
+    RelationalAlgebraOptimiser,
+    str2columnstr_constant,
 )
 from ..relational_algebra.pretty_printer import (
     build_name_map_from_conjunction,
@@ -203,11 +210,10 @@ class PlanDisplay:
     def __init__(self, options=None, query_symbol=None, symbol_table=None):
         """Initialise the display; see the class docstring."""
         self.options = options or ShowRAOptions()
+        self.query_name = query_display_name(symbol_table)
         self.renames = {}
         if query_symbol is not None:
-            self.renames[query_symbol] = Symbol(
-                query_display_name(symbol_table)
-            )
+            self.renames[query_symbol] = Symbol(self.query_name)
         self.unknown_size_symbols = set()
 
     def display_expression(self, expression):
@@ -271,6 +277,23 @@ class PlanDisplay:
             print(f"── rule {self.rule_text(rule, fresh_map)} ──")
         for note in notes:
             print(note)
+        self.print_plan(
+            conjunction, symbol_table, ra_code, leaf_sizes=leaf_sizes,
+            column_roles=column_roles, leaf_arities=leaf_arities,
+            delta_symbols=delta_symbols, fresh_map=fresh_map,
+        )
+
+    def print_plan(
+        self, conjunction, symbol_table, ra_code, leaf_sizes=None,
+        column_roles=None, leaf_arities=None, delta_symbols=(),
+        fresh_map=None,
+    ):
+        """
+        Print the RA plan ``ra_code`` (see :meth:`print_rule`).
+
+        ``fresh_map`` maps the fresh variables of the rule the plan
+        evaluates to their display name.
+        """
         name_map = self.name_map(conjunction, symbol_table)
         for symbol in delta_symbols:
             name_map[symbol] = "Δ" + self.symbol_name(symbol)
@@ -322,6 +345,15 @@ def show_ra_chase(chase_class, program, rules, display=None):
     return chase
 
 
+def _leaf_sizes(predicates, symbol_table):
+    """Return the sizes of the relations of the ``predicates``' symbols."""
+    return {
+        atom.functor: len(symbol_table[atom.functor].value)
+        for atom in extract_logic_atoms(Conjunction(predicates))
+        if isinstance(atom.functor, Symbol) and atom.functor in symbol_table
+    }
+
+
 def _leaf_arities(predicates, symbol_table):
     """Return the arities of the relations of the ``predicates``' symbols."""
     arities = {}
@@ -361,6 +393,33 @@ class RulePlan:
     leaf_arities: dict
     deltas: frozenset
     iterations: list
+
+
+def aggregation_plan(rule, ra_code):
+    """
+    Return the plan of the aggregation rule ``rule`` over its body's plan.
+
+    The chase evaluates the body with ``ra_code`` and groups the result
+    by the variables of the consequent, applying its aggregations: this
+    is shown as a ``γ`` node whose aggregate columns are named after the
+    aggregations, e.g. ``γ[by=(l), count(x)]``.
+    """
+    printer = DatalogPrettyPrinter()
+    groupby = []
+    aggregates = []
+    for argument in rule.consequent.args:
+        if isinstance(argument, AggregationApplication):
+            aggregates.append(FunctionApplicationListMember(
+                argument.functor(*(
+                    str2columnstr_constant(a.name)
+                    if isinstance(a, Symbol) else a
+                    for a in argument.args
+                )),
+                str2columnstr_constant(printer.walk(argument)),
+            ))
+        elif isinstance(argument, Symbol):
+            groupby.append(str2columnstr_constant(argument.name))
+    return GroupByAggregation(ra_code, tuple(groupby), tuple(aggregates))
 
 
 def iterations_label(iterations):
@@ -460,9 +519,12 @@ class ShowRAChaseMixin:
                 plan.iterations.append(iteration)
                 return
         conjunction = Conjunction(predicates)
+        ra_code = self.translate_conjunction_to_named_ra(conjunction)
+        if rule is not None and is_aggregation_rule(rule):
+            ra_code = aggregation_plan(rule, ra_code)
         variants.append(RulePlan(
             conjunction,
-            self.translate_conjunction_to_named_ra(conjunction),
+            ra_code,
             self._show_ra_leaf_sizes(predicates, symbol_table),
             _leaf_arities(predicates, symbol_table),
             deltas,
@@ -844,6 +906,43 @@ class ShowRAStratumSolver(StratumSolver):
             except UnsupportedSolverError:
                 if index == len(solvers) - 1:
                     raise
+
+    def print_query(self, head_symbols, atom, solution):
+        """
+        Print the restriction of a query predicate's relation to the query.
+
+        The query ``ans(head_symbols) :- atom`` selects and projects the
+        relation ``solution`` holds for the predicate of ``atom``. Nothing
+        is printed when that predicate is the one generated for the query,
+        already displayed as ``ans``.
+        """
+        functor = atom.functor
+        while isinstance(functor, AdornedSymbol):
+            functor = functor.expression
+        if is_generated_symbol(functor):
+            return
+        rule = Implication(
+            Symbol(self.display.query_name)(*head_symbols), atom
+        )
+        conjunction = Conjunction((atom,))
+        ra_code = TranslateToNamedRA().walk(conjunction)
+        ra_code = Projection(ra_code, tuple(
+            str2columnstr_constant(symbol.name) for symbol in head_symbols
+            if symbol in atom.args
+        ))
+        ra_code = RelationalAlgebraOptimiser().walk(ra_code)
+        symbol_table = {
+            symbol: relation for symbol, relation in solution.items()
+            if symbol not in self.display.unknown_size_symbols
+        }
+        fresh_map = {}
+        print(f"── query {self.display.rule_text(rule, fresh_map)} ──")
+        self.display.print_plan(
+            conjunction, solution, ra_code,
+            leaf_sizes=_leaf_sizes((atom,), symbol_table),
+            leaf_arities=_leaf_arities((atom,), solution),
+            fresh_map=fresh_map,
+        )
 
     def postprobabilistic(self, solution, postprob_idb):
         """Print the RA plan of every post-probabilistic rule."""

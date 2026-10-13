@@ -447,7 +447,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         options = show_ra_options(show_ra)
         if options is not None:
             return self._show_ra_query(
-                query, options, show_rewritten, dry_run
+                query, options, show_rewritten, dry_run,
+                (self._query_head_symbols(head)[0], query_pred_args),
             )
 
         try:
@@ -467,19 +468,26 @@ class NeurolangPDL(QueryBuilderDatalog):
                 return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
             solution = self._solve(query)
 
-        if not isinstance(head, tuple):
-            # assumes head is a predicate e.g. r(x, y)
-            head_symbols = tuple(head.expression.args)
-            functor_orig = head.expression.functor
-        else:
-            head_symbols = tuple(t.expression for t in head)
-            functor_orig = None
+        head_symbols, functor_orig = self._query_head_symbols(head)
         solution = self._restrict_to_query_solution(
             head_symbols, query_pred_symb, query_pred_args, solution
         )
         if functor_orig is None:
             solution = solution.value
         return solution, functor_orig
+
+    @staticmethod
+    def _query_head_symbols(head):
+        """
+        Return the symbols of a query's head and its functor, if any.
+
+        ``head`` is a tuple of expressions, or a predicate such as
+        ``r(x, y)``, whose functor is returned (None for a tuple).
+        """
+        if not isinstance(head, tuple):
+            # assumes head is a predicate e.g. r(x, y)
+            return tuple(head.expression.args), head.expression.functor
+        return tuple(t.expression for t in head), None
 
     def _magic_rewrite_query(self, query):
         """
@@ -499,31 +507,45 @@ class NeurolangPDL(QueryBuilderDatalog):
                 self.program_ir, magic_query, magic_rules
             )
 
-    def _show_ra_query(self, query, options, show_rewritten, dry_run):
+    def _show_ra_query(
+        self, query, options, show_rewritten, dry_run, query_atom
+    ):
         """
         Print the RA plans of ``query`` instead of solving it.
 
         As in :meth:`_execute_query`, the plans are those of the query
         rewritten with magic sets, or of ``query`` itself when the rewritten
-        query cannot be solved. Errors raised while building the plans of
-        ``query`` reach the caller. ``options`` is the
-        :class:`~neurolang.frontend.show_ra.ShowRAOptions` of the display.
-        An empty set is returned.
+        query cannot be solved, followed by the restriction of the query
+        predicate's relation to the query, whose head symbols and query
+        predicate arguments are ``query_atom``. Errors raised while
+        building the plans of ``query`` reach the caller. ``options`` is
+        the :class:`~neurolang.frontend.show_ra.ShowRAOptions` of the
+        display. An empty set is returned.
         """
         stratum_solver = ShowRAStratumSolver(
             self, options, generated_query_symbol(query)
         )
         try:
-            magic_query, _ = self._magic_rewrite_query(query)
+            magic_query, magic_rules = self._magic_rewrite_query(query)
             self._handle_rewritten_output(
                 magic_query, show_rewritten, dry_run, show_ra=True
             )
-            self._solve(magic_query, stratum_solver=stratum_solver)
+            with self.scope:
+                self.program_ir.walk(magic_rules)
+                solution = self._solve(
+                    magic_query, stratum_solver=stratum_solver
+                )
+                query_pred_symb = magic_query.consequent.functor
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
             self._handle_rewritten_output(
                 query, show_rewritten, dry_run, show_ra=True
             )
-            self._solve(query, stratum_solver=stratum_solver)
+            solution = self._solve(query, stratum_solver=stratum_solver)
+            query_pred_symb = query.consequent.functor
+        head_symbols, query_pred_args = query_atom
+        stratum_solver.print_query(
+            head_symbols, query_pred_symb(*query_pred_args), solution
+        )
         return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
 
     def solve_all(self, show_ra=False) -> Dict[str, NamedRelationalAlgebraFrozenSet]:

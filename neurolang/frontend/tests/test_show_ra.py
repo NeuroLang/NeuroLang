@@ -441,3 +441,48 @@ def test_non_recursive_stratum_has_no_fixpoint(capsys):
 ])
 def test_iterations_label(iterations, label):
     assert iterations_label(iterations) == label
+
+
+COUNT_PER_LABEL = (
+    "per_label(l, count(x)) :- label(x, l).\n"
+    "ans(l, n) :- per_label(l, n)."
+)
+
+
+def test_aggregation_rule_plan_includes_the_aggregation(capsys):
+    out = show_ra_output(capsys, COUNT_PER_LABEL)
+    plan = out.split("── rule per_label(l, count(x)) :-\n    label(x, l) ──\n")
+    assert plan[1].splitlines()[:2] == [
+        "γ[by=(l), count(x)]",
+        "└─ label(x, l) ‹3 rows›",
+    ]
+
+
+def test_query_on_a_named_predicate_is_printed(capsys):
+    """Check that the query over a user predicate is printed last."""
+    out = show_ra_output(capsys, COUNT_PER_LABEL)
+    assert out.endswith(
+        "── query ans(l, n) :-\n    per_label(l, n) ──\n"
+        "per_label(l, n) ‹2 rows›\n"
+    )
+
+
+def test_query_with_constant_on_a_named_predicate(capsys):
+    out = show_ra_output(
+        capsys,
+        "reach(x, y) :- edge(x, y).\n"
+        "reach(x, y) :- reach(x, z), edge(z, y).\n"
+        "ans(y) :- reach(1, y).",
+    )
+    assert "── query ans(y) :-\n    reach(1, y) ──" in out
+    assert "reach(1, y) ‹from 6 rows›" in out
+
+
+def test_query_on_a_probabilistic_predicate_has_no_size(capsys):
+    """Check that the query step over a probabilistic result has no size."""
+    out = show_ra_output(
+        capsys,
+        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(x, q) :- z(x, q).",
+    )
+    assert out.endswith("── query ans(x, q) :-\n    z(x, q) ──\nz(x, q)\n")
