@@ -1,10 +1,24 @@
 """Tests for the relational algebra plan display (``show_ra``)."""
 import re
+from typing import AbstractSet
 
 import pytest
 
 from .. import NeurolangDL, NeurolangPDL
-from ..show_ra import ShowRAOptions, show_ra_options
+from ...datalog import Implication
+from ...expressions import Constant, Symbol
+from ...logic import Conjunction
+from ...relational_algebra import (
+    NameColumns,
+    NaturalJoin,
+    str2columnstr_constant,
+)
+from ...utils import NamedRelationalAlgebraFrozenSet
+from ..show_ra import (
+    ShowRAOptions,
+    probability_column_roles,
+    show_ra_options,
+)
 from .test_probabilistic_frontend import build_neurosynth_like_engine
 
 
@@ -205,3 +219,49 @@ def test_fresh_plan_columns_do_not_collide_with_rule_variables(capsys):
         assert set(re.findall(r"s[₀-₉]+", plan)) <= rule_vars
         assert "fresh_" not in plan
         assert re.search(r"c[₀-₉]+", plan)
+
+
+def test_probability_columns_labelled_by_role(capsys):
+    out = show_ra_output(
+        capsys,
+        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(x, q) :- z(x, q).",
+    )
+    assert "σ[p > 0.0]" in out
+    assert "γ[by=(x), p = sum(p)]" in out
+    assert "π_ext[p(active) * p(picked) * 1.0 -> p" in out
+    assert "ρ[p(active), x]" in out
+    assert "ρ[p(picked), x]" in out
+
+
+def test_probability_label_avoids_rule_variable_p(capsys):
+    """Check that the probability column is not called like a variable."""
+    out = show_ra_output(
+        capsys,
+        "z(p, PROB) :- active(p), picked(p).\nans(x, q) :- z(x, q).",
+    )
+    assert "σ[prob > 0.0]" in out
+    assert "p(active) * p(picked) -> prob" in out
+
+
+def test_probability_columns_of_a_repeated_table_are_numbered():
+    table = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("p", "x"), [(0.5, 1)]),
+        verify_type=False,
+    )
+    x, y = Symbol("x"), Symbol("y")
+    plan = NaturalJoin(
+        NameColumns(table, (str2columnstr_constant("fresh_1"), str2columnstr_constant("x"))),
+        NameColumns(table, (str2columnstr_constant("fresh_2"), str2columnstr_constant("y"))),
+    )
+    rule = Implication(Symbol("z")(x), Conjunction((
+        Symbol("active")(x), Symbol("active")(y)
+    )))
+    roles = probability_column_roles(
+        plan, "fresh_0", {id(table): "active"}, rule
+    )
+    assert roles == {
+        "fresh_0": "p",
+        "fresh_1": "p(active)₁",
+        "fresh_2": "p(active)₂",
+    }

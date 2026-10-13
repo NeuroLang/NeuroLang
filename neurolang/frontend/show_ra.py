@@ -14,9 +14,12 @@ from ..datalog.chase import ChaseNaive, ChaseSemiNaive
 from ..datalog.instance import MapInstance
 from ..exceptions import UnsupportedSolverError
 from ..expression_walker import ExpressionWalker, add_match
-from ..expressions import Symbol
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import Conjunction, Union
-from ..logic.expression_processing import extract_logic_atoms
+from ..logic.expression_processing import (
+    extract_logic_atoms,
+    extract_logic_free_variables,
+)
 from ..logic.transformations import RemoveDuplicatedConjunctsDisjuncts
 from ..probabilistic.expression_processing import (
     is_within_language_prob_query,
@@ -32,9 +35,16 @@ from ..relational_algebra.optimisers import (
     GreedyJoinOrdering,
     RelationalAlgebraOptimiser,
 )
+from ..relational_algebra import (
+    ColumnStr,
+    FunctionApplicationListMember,
+    NameColumns,
+    RelationalAlgebraOperation,
+)
 from ..relational_algebra.pretty_printer import (
     build_name_map_from_conjunction,
     pretty_repr,
+    subscript,
 )
 from .datalog.pretty_printer import DatalogPrettyPrinter
 from .stratum_solver import StratumSolver
@@ -239,7 +249,8 @@ class PlanDisplay:
         return name_map
 
     def print_rule(
-        self, rule, conjunction, symbol_table, ra_code, leaf_sizes=None
+        self, rule, conjunction, symbol_table, ra_code, leaf_sizes=None,
+        column_roles=None,
     ):
         """
         Print the ``--show-ra`` block of a rule.
@@ -250,7 +261,8 @@ class PlanDisplay:
         relations of ``symbol_table``. ``leaf_sizes`` maps the predicate
         symbols of the plan whose size is known to their size. Columns
         named after a variable of the rule are displayed as the variable
-        is in the rule header.
+        is in the rule header, and those in ``column_roles`` with the
+        label it maps them to.
         """
         fresh_map = {}
         if rule is not None:
@@ -258,7 +270,7 @@ class PlanDisplay:
         name_map = self.name_map(conjunction, symbol_table)
         print(pretty_repr(
             ra_code, name_map=name_map, leaf_sizes=leaf_sizes,
-            fresh_map=fresh_map,
+            fresh_map=fresh_map, column_roles=column_roles,
         ))
 
 
@@ -390,6 +402,105 @@ class ShowRAChaseMixin:
         return wrapped
 
 
+def probabilistic_table_names(cpl):
+    """
+    Map the probabilistic tables of a CP-Logic program to their predicate.
+
+    The keys are the ``id`` of the constants holding the tables of the
+    probabilistic facts and choices of ``cpl``, whose first column is
+    the probability of each tuple.
+    """
+    return {
+        id(table): symbol.name
+        for tables in (cpl.probabilistic_facts(), cpl.probabilistic_choices())
+        for symbol, table in tables.items()
+    }
+
+
+def probability_column_roles(plan, provenance_column, tables, rule):
+    """
+    Return the labels of the probability columns of a probabilistic plan.
+
+    The provenance column of the result, ``provenance_column``, is
+    labelled ``p``. The probability column of each table of ``tables``
+    (see :func:`probabilistic_table_names`) named by ``plan`` is labelled
+    ``p(<predicate>)``, numbered when a table is named more than once.
+    Should the rule or the plan use ``p`` as a name, ``prob`` is used.
+    """
+    rule_variables = extract_logic_free_variables(
+        rule.antecedent
+    ) | extract_logic_free_variables(rule.consequent)
+    names = plan_column_names(plan) | {
+        symbol.name for symbol in rule_variables
+    }
+    label = next(
+        candidate for candidate in ("p", "prob", "p_", "prob_")
+        if candidate not in names
+    )
+    roles = {provenance_column: label}
+    per_table = {}
+    for node in plan_nodes(plan):
+        if (
+            isinstance(node, NameColumns)
+            and isinstance(node.relation, Constant)
+            and id(node.relation) in tables
+        ):
+            column = node.column_names[0].value
+            per_table.setdefault(tables[id(node.relation)], []).append(column)
+    for table, columns in per_table.items():
+        columns = list(dict.fromkeys(columns))
+        for number, column in enumerate(columns, start=1):
+            suffix = subscript(number) if len(columns) > 1 else ""
+            roles.setdefault(column, f"p({table}){suffix}")
+    return roles
+
+
+def plan_nodes(plan):
+    """Yield the relational algebra operations and leaves of ``plan``."""
+    yield plan
+    if not isinstance(plan, RelationalAlgebraOperation):
+        return
+    for child in plan_children(plan):
+        yield from plan_nodes(child)
+
+
+def plan_children(node):
+    """Return the operands of a relational algebra operation."""
+    children = []
+    for attribute in ("relation", "relation_left", "relation_right"):
+        child = getattr(node, attribute, None)
+        if isinstance(child, Expression):
+            children.append(child)
+    children.extend(getattr(node, "relations", ()))
+    return tuple(children)
+
+
+def plan_column_names(plan):
+    """Return the names of the columns named by a plan's operators."""
+    names = set()
+    for node in plan_nodes(plan):
+        if isinstance(node, RelationalAlgebraOperation):
+            for argument in _flatten(node.unapply()):
+                if isinstance(argument, Constant) and isinstance(
+                    argument.value, ColumnStr
+                ):
+                    names.add(str(argument.value))
+    return names
+
+
+def _flatten(arguments):
+    """Yield the arguments, and the items of tuple arguments, recursively."""
+    for argument in arguments:
+        if isinstance(argument, tuple):
+            yield from _flatten(argument)
+        elif isinstance(argument, FunctionApplicationListMember):
+            yield from _flatten(argument.unapply())
+        elif isinstance(argument, FunctionApplication):
+            yield from _flatten(argument.args)
+        else:
+            yield argument
+
+
 class ShowRAStratumSolver(StratumSolver):
     """
     Print the RA plans of each stratum instead of evaluating it.
@@ -439,13 +550,18 @@ class ShowRAStratumSolver(StratumSolver):
         )
         dedup = RemoveDuplicatedConjunctsDisjuncts()
         prob_idb = Union(tuple(dedup.walk(r) for r in prob_idb.formulas))
+        probability_tables = probabilistic_table_names(cpl)
         for rule in prob_idb.formulas:
+            provenance_set = self.rule_provenance_set(rule, cpl)
+            plan = self.optimise_plan(provenance_set.relation)
             self.display.print_rule(
                 rule,
                 rule.antecedent,
                 cpl.symbol_table,
-                self.optimise_plan(
-                    self.rule_provenance_set(rule, cpl).relation
+                plan,
+                column_roles=probability_column_roles(
+                    plan, provenance_set.provenance_column.value,
+                    probability_tables, rule,
                 ),
             )
         return MapInstance()

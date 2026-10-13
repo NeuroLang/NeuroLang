@@ -80,7 +80,7 @@ def _is_cross_product(expr):
 _FRESH_NAME = re.compile(r"^fresh_\d+$")
 
 
-def _subscript(number):
+def subscript(number):
     """Return ``number`` written with subscript digits."""
     return "".join(chr(0x2080 + int(digit)) for digit in str(number))
 
@@ -125,18 +125,22 @@ class PrettyPrinter:
         Mapping from `Symbol` leaves to the number of rows of the relation
         they stand for. Leaves found in it, and named `Constant` leaves,
         are printed with their size, e.g. ``edge ‹3 rows›``.
+    column_roles : dict, optional
+        Mapping from column names to the label they are displayed with,
+        e.g. ``p`` for a probability column.
 
     """
 
     def __init__(
         self, name_map=None, indent=2, width=80, fresh_map=None,
-        counter=None, leaf_sizes=None,
+        counter=None, leaf_sizes=None, column_roles=None,
     ):
         """Initialise the printer; see the class docstring for parameters."""
         if name_map is None:
             name_map = {}
         self.name_map = name_map
         self.leaf_sizes = leaf_sizes if leaf_sizes is not None else {}
+        self.column_roles = column_roles if column_roles is not None else {}
         self.indent = indent
         self.width = width
         self._fresh_map = fresh_map if fresh_map is not None else {}
@@ -259,13 +263,24 @@ class PrettyPrinter:
         return header, (expression.relation,)
 
     def _format_group_by_aggregation(self, expression):
-        """Format a GroupByAggregation node."""
+        """Format a GroupByAggregation node as ``γ[by=(…), dst = agg, …]``."""
         groupby = self._format_columns(expression.groupby)
-        aggs = self._format_aggregate_functions(
-            expression.aggregate_functions
+        aggregates = ", ".join(
+            self._format_aggregate(member)
+            for member in expression.aggregate_functions
         )
-        header = f"γ[groupby=({groupby}), agg=({aggs})]"
+        header = f"γ[by=({groupby}), {aggregates}]"
         return header, (expression.relation,)
+
+    def _format_aggregate(self, member):
+        """Format an aggregate ``dst = fun(…)``, or ``fun(…)`` if alike."""
+        if not isinstance(member, FunctionApplicationListMember):
+            return repr(member)
+        fun = self._format_formula(member.fun_exp)
+        dst = self._format_column(member.dst_column)
+        if dst == fun:
+            return fun
+        return f"{dst} = {fun}"
 
     def _format_replace_null(self, expression):
         """Format a ReplaceNull node."""
@@ -338,17 +353,20 @@ class PrettyPrinter:
         """
         Return the display name of a column or variable named ``name``.
 
+        Names found in ``column_roles`` take the label mapped there.
         Fresh names (``fresh_00000007``) found in ``fresh_map`` take the
         name mapped there (that of the rule variable they are); the other
         fresh names are numbered ``c₀``, ``c₁``, …, a prefix and digits
         no variable name can have.
         """
+        if name in self.column_roles:
+            return self.column_roles[name]
         if not _FRESH_NAME.match(name):
             return name
         if name in self._fresh_map:
             return self._fresh_map[name]
         if name not in self._column_map:
-            self._column_map[name] = "c" + _subscript(self._counter[0])
+            self._column_map[name] = "c" + subscript(self._counter[0])
             self._counter[0] += 1
         return self._column_map[name]
 
@@ -491,11 +509,6 @@ class PrettyPrinter:
             return f"{fun} -> {dst}"
         return repr(member)
 
-    def _format_aggregate_functions(self, agg_funcs):
-        return ", ".join(
-            self._format_projection_member(a) for a in agg_funcs
-        )
-
     def _format_renames(self, renames):
         return ", ".join(
             f"{self._format_column(src)}→{self._format_column(dst)}"
@@ -603,7 +616,7 @@ def _collect_edb_names(symbol_table, name_map):
 
 def pretty_repr(
     expression, name_map=None, indent=2, width=80, fresh_map=None,
-    counter=None, leaf_sizes=None,
+    counter=None, leaf_sizes=None, column_roles=None,
 ):
     """
     Return a pretty representation of an RA expression.
@@ -628,6 +641,8 @@ def pretty_repr(
     leaf_sizes : dict, optional
         Mapping from `Symbol` leaves to the number of rows of their
         relation, printed next to them.
+    column_roles : dict, optional
+        Mapping from column names to the label they are displayed with.
 
     Returns
     -------
@@ -638,5 +653,6 @@ def pretty_repr(
     printer = PrettyPrinter(
         name_map=name_map, indent=indent, width=width,
         fresh_map=fresh_map, counter=counter, leaf_sizes=leaf_sizes,
+        column_roles=column_roles,
     )
     return printer.format(expression)
