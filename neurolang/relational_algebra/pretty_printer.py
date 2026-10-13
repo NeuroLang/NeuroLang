@@ -105,177 +105,163 @@ class PrettyPrinter:
         self._counter = counter if counter is not None else [0]
 
     def format(self, expression, level=0):
-        """Return a multi-line pretty representation of an RA expression."""
+        """
+        Return a multi-line pretty representation of an RA expression.
+
+        The expression is drawn as a tree: each operator is printed on
+        its own line, followed by its operands, one per line, attached
+        with ``├─`` / ``└─`` branches. Every line is indented by
+        ``level`` indentation steps.
+        """
+        prefix = " " * (self.indent * level)
+        return "\n".join(prefix + line for line in self._render(expression))
+
+    def _render(self, expression):
+        """Return the lines of the tree drawing of ``expression``."""
+        header, children = self._node(expression)
+        lines = [header]
+        for position, child in enumerate(children):
+            last = position == len(children) - 1
+            child_lines = self._render(child)
+            lines.append(("└─ " if last else "├─ ") + child_lines[0])
+            padding = "   " if last else "│  "
+            lines.extend(padding + line for line in child_lines[1:])
+        return lines
+
+    def _node(self, expression):
+        """Return the header line and the operands of ``expression``."""
         for expression_type, formatter_name in self._FORMATTERS:
             if isinstance(expression, expression_type):
-                return getattr(self, formatter_name)(expression, level)
-        prefix = " " * (self.indent * level)
-        return f"{prefix}{repr(expression)}"
+                return getattr(self, formatter_name)(expression)
+        return repr(expression), ()
 
-    def _format_unary(self, header, relation, level):
-        """Format a unary operator as ``header(relation)`` over lines."""
-        prefix = " " * (self.indent * level)
-        return (
-            f"{prefix}{header}(\n"
-            f"{self.format(relation, level + 1)}\n"
-            f"{prefix})"
-        )
-
-    def _format_infix(self, expression, operator, level):
-        """Format a binary operator with its symbol between both operands."""
-        prefix = " " * (self.indent * level)
-        child_prefix = " " * (self.indent * (level + 1))
-        return (
-            f"{prefix}(\n"
-            f"{self.format(expression.relation_left, level + 1)}\n"
-            f"{child_prefix}{operator}\n"
-            f"{self.format(expression.relation_right, level + 1)}\n"
-            f"{prefix})"
-        )
-
-    def _format_selection(self, expression, level):
+    def _format_selection(self, expression):
         """Format a Selection node."""
         header = f"σ[{self._format_formula(expression.formula)}]"
-        return self._format_unary(header, expression.relation, level)
+        return header, (expression.relation,)
 
-    def _format_projection(self, expression, level):
+    def _format_projection(self, expression):
         """Format a Projection node."""
         header = f"π[{self._format_columns(expression.attributes)}]"
-        return self._format_unary(header, expression.relation, level)
+        return header, (expression.relation,)
 
-    def _format_extended_projection(self, expression, level):
+    def _format_extended_projection(self, expression):
         """Format an ExtendedProjection node."""
         proj = self._format_projection_list(expression.projection_list)
-        return self._format_unary(f"π_ext[{proj}]", expression.relation, level)
+        return f"π_ext[{proj}]", (expression.relation,)
 
-    def _format_natural_join(self, expression, level):
+    @staticmethod
+    def _binary(operator, expression):
+        """Format a binary operator with its two operands."""
+        return operator, (expression.relation_left, expression.relation_right)
+
+    def _format_natural_join(self, expression):
         """Format a NaturalJoin node, marking cross products with ×."""
         op = "×" if _is_cross_product(expression) else "⋈"
-        return self._format_infix(expression, op, level)
+        return self._binary(op, expression)
 
-    def _format_nary_natural_join(self, expression, level):
+    def _format_nary_natural_join(self, expression):
         """Format an NaryNaturalJoin node."""
-        prefix = " " * (self.indent * level)
-        child_prefix = " " * (self.indent * (level + 1))
-        parts = [
-            f"{self.format(r, level + 1)}"
-            for r in expression.relations
-        ]
-        op = " ⋈ "
-        indent = "\n" + child_prefix
-        return f"{prefix}({indent}{op.join(parts)}\n{prefix})"
+        return "⋈", tuple(expression.relations)
 
-    def _format_equijoin(self, expression, level):
+    def _format_equijoin(self, expression):
         """Format an EquiJoin node."""
-        prefix = " " * (self.indent * level)
-        return (
-            f"{prefix}⋈["
-            f"{self._format_columns(expression.columns_left)}="
-            f"{self._format_columns(expression.columns_right)}](\n"
-            f"{self.format(expression.relation_left, level + 1)},\n"
-            f"{self.format(expression.relation_right, level + 1)}\n"
-            f"{prefix})"
+        header = (
+            f"⋈[{self._format_columns(expression.columns_left)}="
+            f"{self._format_columns(expression.columns_right)}]"
         )
+        return self._binary(header, expression)
 
-    def _format_left_natural_join(self, expression, level):
+    def _format_left_natural_join(self, expression):
         """Format a LeftNaturalJoin node."""
-        return self._format_infix(expression, "⟕", level)
+        return self._binary("⟕", expression)
 
-    def _format_full_outer_natural_join(self, expression, level):
+    def _format_full_outer_natural_join(self, expression):
         """Format a FullOuterNaturalJoin node."""
-        return self._format_infix(expression, "⟗", level)
+        return self._binary("⟗", expression)
 
-    def _format_union(self, expression, level):
+    def _format_union(self, expression):
         """Format a Union node."""
-        return self._format_infix(expression, "∪", level)
+        return self._binary("∪", expression)
 
-    def _format_intersection(self, expression, level):
+    def _format_intersection(self, expression):
         """Format an Intersection node."""
-        return self._format_infix(expression, "∩", level)
+        return self._binary("∩", expression)
 
-    def _format_difference(self, expression, level):
+    def _format_difference(self, expression):
         """Format a Difference node."""
-        return self._format_infix(expression, "−", level)
+        return self._binary("−", expression)
 
-    def _format_product(self, expression, level):
-        """Format a Product node with comma-separated operands."""
-        prefix = " " * (self.indent * level)
-        lines = [f"{prefix}×("]
-        for i, relation in enumerate(expression.relations):
-            lines.append(self.format(relation, level + 1))
-            if i < len(expression.relations) - 1:
-                lines[-1] += ","
-        lines.append(f"{prefix})")
-        return "\n".join(lines)
+    def _format_product(self, expression):
+        """Format a Product node."""
+        return "×", tuple(expression.relations)
 
-    def _format_name_columns(self, expression, level):
+    def _format_name_columns(self, expression):
         """Format a NameColumns node."""
         names = self._format_columns(expression.column_names)
-        return self._format_unary(f"ρ[{names}]", expression.relation, level)
+        return f"ρ[{names}]", (expression.relation,)
 
-    def _format_number_columns(self, expression, level):
+    def _format_number_columns(self, expression):
         """Format a NumberColumns node."""
         names = self._format_columns(expression.column_names)
-        return self._format_unary(f"ν[{names}]", expression.relation, level)
+        return f"ν[{names}]", (expression.relation,)
 
-    def _format_rename_column(self, expression, level):
+    def _format_rename_column(self, expression):
         """Format a RenameColumn node."""
         header = (
             f"ρ[{self._format_column(expression.src)}→"
             f"{self._format_column(expression.dst)}]"
         )
-        return self._format_unary(header, expression.relation, level)
+        return header, (expression.relation,)
 
-    def _format_rename_columns(self, expression, level):
+    def _format_rename_columns(self, expression):
         """Format a RenameColumns node."""
         header = f"ρ[{self._format_renames(expression.renames)}]"
-        return self._format_unary(header, expression.relation, level)
+        return header, (expression.relation,)
 
-    def _format_group_by_aggregation(self, expression, level):
+    def _format_group_by_aggregation(self, expression):
         """Format a GroupByAggregation node."""
         groupby = self._format_columns(expression.groupby)
         aggs = self._format_aggregate_functions(
             expression.aggregate_functions
         )
         header = f"γ[groupby=({groupby}), agg=({aggs})]"
-        return self._format_unary(header, expression.relation, level)
+        return header, (expression.relation,)
 
-    def _format_replace_null(self, expression, level):
+    def _format_replace_null(self, expression):
         """Format a ReplaceNull node."""
         header = (
             f"κ[{self._format_column(expression.column)}, "
             f"NULL→{self._format_value(expression.value)}]"
         )
-        return self._format_unary(header, expression.relation, level)
+        return header, (expression.relation,)
 
-    def _format_concatenate_constant_column(self, expression, level):
+    def _format_concatenate_constant_column(self, expression):
         """Format a ConcatenateConstantColumn node."""
         header = (
             f"⊕[{self._format_column(expression.column_name)}="
             f"{self._format_value(expression.column_value)}]"
         )
-        return self._format_unary(header, expression.relation, level)
+        return header, (expression.relation,)
 
-    def _format_destroy(self, expression, level):
+    def _format_destroy(self, expression):
         """Format a Destroy node."""
         header = (
             f"δ[{self._format_column(expression.src_column)}→"
             f"{self._format_column(expression.dst_column)}]"
         )
-        return self._format_unary(header, expression.relation, level)
+        return header, (expression.relation,)
 
-    def _format_constant_leaf(self, expression, level):
+    def _format_constant_leaf(self, expression):
         """Format a Constant leaf."""
-        prefix = " " * (self.indent * level)
-        return f"{prefix}{self._format_constant(expression)}"
+        return self._format_constant(expression), ()
 
-    def _format_symbol_leaf(self, expression, level):
+    def _format_symbol_leaf(self, expression):
         """Format a Symbol leaf, using its display name when one is mapped."""
-        prefix = " " * (self.indent * level)
         name = self._lookup_name(expression)
         if name is not None:
-            return f"{prefix}{name}"
-        return f"{prefix}{expression.name}"
+            return name, ()
+        return expression.name, ()
 
     # Ordered dispatch table: the first matching type wins, as with the
     # original chain of ``isinstance`` checks.
