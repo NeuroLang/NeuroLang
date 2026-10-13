@@ -10,6 +10,7 @@ follows the command name.
 import difflib
 from typing import Callable, NamedTuple
 
+from rich.markup import escape
 from rich.panel import Panel
 
 from neurolang.utils import engine_registry
@@ -125,7 +126,7 @@ def help_text(engine_name: str = "") -> str:
         "[bold cyan]Dot commands:[/bold cyan]",
     ]
     lines += [
-        f"  [green]{cmd.usage:<20}[/green] {cmd.help}"
+        f"  [green]{escape(f'{cmd.usage:<20}')}[/green] {escape(cmd.help)}"
         for cmd in COMMANDS.values()
     ]
     examples = engine_examples(engine_name)

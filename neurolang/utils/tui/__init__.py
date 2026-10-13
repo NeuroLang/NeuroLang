@@ -17,7 +17,8 @@ The REPL is organised in modules:
 - :mod:`.commands`: the dot-command registry and the core commands,
 - :mod:`.interrupt`: interruption of long queries with Ctrl+C,
 - :mod:`.results`: paged display of query results,
-- :mod:`.session`: the session's scope and the session commands,
+- :mod:`.session`: the session's scope, holding its rules and the
+  relations loaded with ``.load``, and the session commands,
 - :mod:`.statements`: splitting of the input into statements.
 """
 

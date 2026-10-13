@@ -162,7 +162,20 @@ def sort_dataframe(df, sort_by):
     return df.sort_values(by=list(cols), ascending=list(asc))
 
 
-def squall_column_names(engine_name: str, program: str) -> dict:
+def _declared_columns(engine_name: str) -> dict:
+    """Return the columns the engine *engine_name* declares, by relation."""
+    if not engine_name:
+        return {}
+    return {
+        name: list(info["columns"])
+        for name, info in engine_registry.get_predicates(engine_name).items()
+        if info.get("columns")
+    }
+
+
+def squall_column_names(
+    engine_name: str, program: str, relations: Optional[dict] = None
+) -> dict:
     """
     Return the declared columns of the relations a SQUALL program obtains.
 
@@ -170,27 +183,29 @@ def squall_column_names(engine_name: str, program: str) -> dict:
     column names. The result is a dict from the key of each such
     ``obtain`` (as in the results of
     :meth:`~neurolang.frontend.QueryBuilderDatalog.execute_squall_program`)
-    to the columns that the engine configuration declares for ``R``.
+    to the columns that the engine configuration declares for ``R``, or
+    that *relations*, a dict from relation names to their columns, gives
+    for it.
     """
     from neurolang.frontend.datalog.squall_syntax_lark import (
         SquallProgram,
         parser as squall_parser,
     )
 
-    predicates = engine_registry.get_predicates(engine_name)
+    columns = {**_declared_columns(engine_name), **(relations or {})}
     try:
         parsed = squall_parser(program)
     except Exception:
         return {}
-    if not (predicates and isinstance(parsed, SquallProgram)):
+    if not (columns and isinstance(parsed, SquallProgram)):
         return {}
     names = {}
     for i, query in enumerate(parsed.queries):
         functor = getattr(query.body, "functor", None)
-        info = predicates.get(getattr(functor, "name", None))
-        if info and info.get("columns"):
+        declared = columns.get(getattr(functor, "name", None))
+        if declared:
             key = parsed.query_names.get(i, f"obtain_{i}")
-            names[key] = list(info["columns"])
+            names[key] = list(declared)
     return names
 
 
@@ -577,33 +592,42 @@ def _list_predicates(engine_name: str) -> None:
             print(f"    {desc}")
 
 
-def _list_sets(nl: NeurolangPDL) -> None:
+def _ra_sets(nl: NeurolangPDL, column_names: dict) -> list:
+    """
+    Return ``(name, columns, size, arity)`` for each RA set of *nl*.
+
+    *column_names* maps set names to the columns shown instead of the
+    set's own column names.
+    """
+    sets_found = []
+    for sym_name, sym_val in nl.program_ir.symbol_table.items():
+        val = getattr(sym_val, "value", sym_val)
+        if not isinstance(val, WrappedRelationalAlgebraSet):
+            continue
+        ra_set = val.unwrap()
+        clean_name = getattr(sym_name, "name", str(sym_name))
+        columns = column_names.get(clean_name, list(ra_set.columns))
+        try:
+            size = len(ra_set)
+        except Exception:
+            size = "?"
+        sets_found.append((clean_name, columns, size, ra_set.arity))
+    return sets_found
+
+
+def _list_sets(nl: NeurolangPDL, column_names: Optional[dict] = None) -> None:
     """
     Print the actual Relational Algebra sets registered in the engine.
 
     Iterates over the engine's symbol table and displays every entry backed
     by a :class:`~neurolang.datalog.WrappedRelationalAlgebraSet` — i.e.,
     concrete extensional (EDB) relations loaded from CSV/TSV files or added
-    via the Python API.
+    via the Python API. *column_names* maps set names to the columns
+    shown for them instead of the set's own column names.
 
     """
     print()
-    st = nl.program_ir.symbol_table
-    sets_found = []
-
-    for sym_name, sym_val in st.items():
-        val = getattr(sym_val, "value", sym_val)
-        if not isinstance(val, WrappedRelationalAlgebraSet):
-            continue
-        ra_set = val.unwrap()
-        arity = ra_set.arity
-        columns = list(ra_set.columns)
-        try:
-            size = len(ra_set)
-        except Exception:
-            size = "?"
-        clean_name = getattr(sym_name, "name", str(sym_name))
-        sets_found.append((clean_name, columns, size, arity))
+    sets_found = _ra_sets(nl, column_names or {})
 
     if not sets_found:
         print("  (no RA sets registered)")
