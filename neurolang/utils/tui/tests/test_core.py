@@ -414,3 +414,18 @@ def test_batch_failure_status(small_app, statement):
 
 def test_batch_stops_at_quit(small_app):
     assert small_app.run_batch([".quit\n", "ans(x) :- P(\n"]) == 0
+
+
+def test_banner_shows_relations_without_columns_by_name(engine):
+    from neurolang.utils.tui.commands import engine_relations
+
+    relations = engine_relations("neurosynth")
+    assert "schaefer" in relations
+    assert "schaefer()" not in relations
+
+
+def test_no_sort_warning_on_empty_result(engine, capsys):
+    app = _app(engine, sort_by=[("term", True)])
+    app._execute_and_display("ans(x) :- P(x), Q(x)")
+    assert "(empty)" in _output(app)
+    assert "sort column" not in capsys.readouterr().err

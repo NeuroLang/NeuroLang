@@ -189,9 +189,9 @@ class InteractiveTuiApp:
 
     def _result_block(self, result, title: str, column_names) -> ResultBlock:
         """Return the sorted rows of a query *result* as a block."""
-        df = sort_dataframe(
-            result_to_dataframe(result, column_names), self.settings.sort_by
-        )
+        df = result_to_dataframe(result, column_names)
+        if not df.empty:
+            df = sort_dataframe(df, self.settings.sort_by)
         return ResultBlock(df, title)
 
     def print_block(self, block: ResultBlock) -> None:

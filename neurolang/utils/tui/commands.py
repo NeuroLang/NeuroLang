@@ -69,11 +69,16 @@ def run_command(app, line: str) -> None:
 
 
 def engine_relations(engine_name: str) -> list:
-    """Return ``name(col, ...)`` for each relation declared by the engine."""
+    """
+    Return ``name(col, ...)`` for each relation declared by the engine.
+
+    Relations whose columns are not declared are shown by name only.
+    """
     if not engine_name:
         return []
     return [
-        f"{name}({', '.join(info.get('columns', []))})"
+        f"{name}({', '.join(info['columns'])})" if info.get("columns")
+        else name
         for name, info in engine_registry.get_predicates(engine_name).items()
     ]
 
