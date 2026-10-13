@@ -210,7 +210,7 @@ class RangeRestrictedVariables(WalkLogicProgramAggregatingSets):
 
     @add_match(FunctionApplication)
     def function(self, exp):
-        return set([a for a in exp.args if isinstance(a, Symbol)])
+        return set([a for a in extract_logic_free_variables(exp) if isinstance(a, Symbol)])
 
     @add_match(Negation)
     def negation(self, exp):
@@ -272,7 +272,7 @@ def convert_srnf_to_horn_clauses(head, expression):
         raise NeuroLangTranslateToHornClauseException(
             "Expression is not safe range: {}".format(expression)
         )
-    if not set(head.args) <= range_restricted_variables(expression):
+    if not extract_logic_free_variables(head) <= range_restricted_variables(expression):
         raise NeuroLangTranslateToHornClauseException(
             "Variables in head ({}) must be present in body ({})".format(
                 head, expression
@@ -305,8 +305,8 @@ def _to_horn_clause(head, body):
 
 
 def _restrict_variables(head, body, restrictive_atoms):
-    while not set(head.args).issubset(_restricted_variables(body)):
-        uv = set(head.args) - _restricted_variables(body)
+    while not extract_logic_free_variables(head).issubset(_restricted_variables(body)):
+        uv = extract_logic_free_variables(head) - _restricted_variables(body)
         new_atoms = _choose_restriction_atoms(uv, restrictive_atoms, head)
         body = new_atoms + body
     return body
@@ -315,10 +315,14 @@ def _restrict_variables(head, body, restrictive_atoms):
 def _choose_restriction_atoms(unrestricted_variables, available_atoms, head):
     x = list(unrestricted_variables)[0]
     valid_choices = [
-        (a, (set(a.args) - set(head.args)))
+        (a, (extract_logic_free_variables(a) - extract_logic_free_variables(head)))
         for a in available_atoms
-        if (x in a.args) and (a != head)
+        if (x in extract_logic_free_variables(a)) and (a != head)
     ]
+    if not valid_choices:
+        raise NeuroLangTranslateToHornClauseException(
+            f"No valid restriction atoms found for unrestricted variables: {unrestricted_variables}"
+        )
     valid_choices = sorted(valid_choices, key=lambda t: t[1])
     a, _variables_not_in_head = valid_choices[0]
     return (a,)
@@ -348,7 +352,7 @@ def _is_restriction(atom):
 
 
 def _atom_variables(atom):
-    return set(s for s in atom.args if isinstance(s, Symbol))
+    return extract_logic_free_variables(atom)
 
 
 class ConvertSRNFToHornClause(PatternWalker):

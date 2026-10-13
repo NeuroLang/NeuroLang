@@ -1216,6 +1216,95 @@ def test_simple_negation(solver):
     small_dichotomy_theorem_based_solver,
     dalvi_suciu_lift,
 ])
+def test_negation_of_deterministic_relation_sharing_choice_variable(solver):
+    """
+    Regression test: negating a plain DETERMINISTIC relation (`Active`,
+    added via `Fact`, not a probabilistic fact or choice) that shares
+    its existentially-quantified variable with a probabilistic choice
+    (`Selected`) used to be silently accepted by
+    `small_dichotomy_theorem_based_solver` and produce a wrong
+    probability, instead of raising `NotHierarchicalQueryException` the
+    way every OTHER negation test in this module already does.
+
+    The solver's hierarchical-query safety check only ever examined the
+    probabilistic-only sub-conjunction of the query
+    (`_extract_antecedent_probabilistic_predicates`), so a `Negation`
+    wrapping a deterministic atom was invisible to it: `Active` isn't a
+    probabilistic predicate, so it was dropped before the check ever
+    ran, even though it shares the study variable with `Selected`.
+
+    Studies 0-5, uniformly selected. Active(s, "A") for s in {0,1,2},
+    Active(s, "B") for s in {3,4,5}. Mentions(s, "pain") for
+    s in {0,1,5}, Mentions(s, "joy") for s in {2,3,4}.
+    P(mentions t & not active in r) = (# qualifying studies) / 6.
+    """
+    Mentions = Symbol("Mentions")
+    Active = Symbol("Active")
+    TrainStudy = Symbol("TrainStudy")
+    RegionPred = Symbol("RegionPred")
+    Selected = Symbol("Selected")
+    t = Symbol("t")
+    r = Symbol("r")
+    s = Symbol("s")
+
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        Selected, [(1 / 6, i) for i in range(6)]
+    )
+    facts = (
+        [Fact(TrainStudy(Constant(i))) for i in range(6)]
+        + [Fact(Active(Constant(i), a)) for i in (0, 1, 2)]
+        + [Fact(Active(Constant(i), b)) for i in (3, 4, 5)]
+        + [
+            Fact(Mentions(Constant(i), Constant("pain")))
+            for i in (0, 1, 5)
+        ]
+        + [
+            Fact(Mentions(Constant(i), Constant("joy")))
+            for i in (2, 3, 4)
+        ]
+        + [Fact(RegionPred(a)), Fact(RegionPred(b))]
+    )
+    cpl.walk(Union(tuple(facts)))
+    rule = Implication(
+        P(t, r),
+        Conjunction((
+            Mentions(s, t),
+            Selected(s),
+            Negation(Active(s, r)),
+            RegionPred(r),
+            TrainStudy(s),
+        )),
+    )
+    cpl.walk(rule)
+    query = Implication(ans(t, r), P(t, r))
+
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(query, cpl)
+        expected = testing.make_prov_set(
+            [
+                (1 / 6, "pain", "a"),
+                (2 / 6, "joy", "a"),
+                (2 / 6, "pain", "b"),
+                (1 / 6, "joy", "b"),
+            ],
+            ("_p_", "t", "r"),
+        )
+        assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.parametrize("solver", [
+    pytest.param(weighted_model_counting, marks=pytest.mark.xfail(
+        reason="WMC issue to be resolved"
+    )),
+    small_dichotomy_theorem_based_solver,
+    dalvi_suciu_lift,
+])
 def test_program_with_probchoice_selfjoin(solver):
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(

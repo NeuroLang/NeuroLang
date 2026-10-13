@@ -1,7 +1,8 @@
 class NeuroLangException(Exception):
     """Base class for NeuroLang Exceptions"""
 
-    pass
+    #: Actionable hint shown to users by the error formatter, if any.
+    suggestion = None
 
 
 class UnexpectedExpressionError(NeuroLangException):
@@ -30,7 +31,7 @@ class ForbiddenDisjunctionError(ForbiddenExpressionError):
     predicate.
 
     Examples
-    ----------
+    --------
     ProbActivation(r, PROB(r)) :- RegionReported(r, s) & SelectedStudy(s)
     ProbActivation(r, PROB(r)) :- ~RegionReported(r, s) & SelectedStudy(s)
 
@@ -38,7 +39,10 @@ class ForbiddenDisjunctionError(ForbiddenExpressionError):
     not allowed.
     """
 
-    pass
+    suggestion = (
+        "A probabilistic predicate can be defined by a single rule or set "
+        "of facts: give each probabilistic rule its own head predicate."
+    )
 
 
 class ForbiddenExistentialError(ForbiddenExpressionError):
@@ -56,9 +60,10 @@ class RelationalAlgebraError(NeuroLangException):
 class NotConjunctiveExpression(NeuroLangException):
     """
     This expression is not conjunctive. In this case, an expression is
-    conjunctive if it is a conjunction of
-      - Constant
-      - A function or predicate of constants
+    conjunctive if it is a conjunction of:
+
+    - Constant
+    - A function or predicate of constants
     """
 
     pass
@@ -67,10 +72,11 @@ class NotConjunctiveExpression(NeuroLangException):
 class NotConjunctiveExpressionNegation(NotConjunctiveExpression):
     """
     This expression is not conjunctive. In this case, an expression is
-    conjunctive if it is a conjunction of
-      - Constant
-      - A function or predicate of conjunctive arguments
-      - A negated predicate of conjunctive arguments
+    conjunctive if it is a conjunction of:
+
+    - Constant
+    - A function or predicate of conjunctive arguments
+    - A negated predicate of conjunctive arguments
     """
 
     pass
@@ -79,10 +85,11 @@ class NotConjunctiveExpressionNegation(NotConjunctiveExpression):
 class NotConjunctiveExpressionNestedPredicates(NotConjunctiveExpression):
     """
     This expression is not conjunctive. In this case, an expression is
-    conjunctive if it is a conjunction of
-      - Constant
-      - A function or predicate of conjunctive arguments
-      - A quantifier of conjunctive arguments
+    conjunctive if it is a conjunction of:
+
+    - Constant
+    - A function or predicate of conjunctive arguments
+    - A quantifier of conjunctive arguments
 
     Note that in this case, negated predicates are not valid (negation and
     aggregation cannot be used in the same rule).
@@ -98,7 +105,10 @@ class NotConjunctiveExpressionNestedPredicates(NotConjunctiveExpression):
     `~RegionReported`.
     """
 
-    pass
+    suggestion = (
+        "Negation and aggregation cannot be used in the same rule: "
+        "compute the negated part in a separate rule first."
+    )
 
 
 class ProjectionOverMissingColumnsError(RelationalAlgebraError):
@@ -139,7 +149,10 @@ class SymbolNotFoundError(NeuroLangException):
     defined.
     """
 
-    pass
+    suggestion = (
+        "Check the spelling, or define the symbol before using it "
+        "(e.g. with nl.add_tuple_set)."
+    )
 
 
 class RuleNotFoundError(NeuroLangException):
@@ -169,7 +182,9 @@ class ProtectedKeywordError(NeuroLangException):
     One of the predicates in the program uses a reserved keyword.
     Reserved keywords include : {PROB, with, exists}
     """
-    pass
+    suggestion = (
+        "Rename the predicate: PROB, with and exists are reserved keywords."
+    )
 
 
 class ForbiddenRecursivityError(UnsupportedProgramError):
@@ -197,7 +212,11 @@ class ForbiddenRecursivityError(UnsupportedProgramError):
     the `B(x)` predicate.
     """
 
-    pass
+    suggestion = (
+        "Break the dependency cycle: predicates used under negation, "
+        "aggregation or probabilistic queries must not depend on the head "
+        "of the rule using them."
+    )
 
 
 class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
@@ -226,7 +245,10 @@ class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
        FNT in Databases. 5, 105–195 (2012).
     """
 
-    pass
+    suggestion = (
+        "The predicates in the body of an aggregation rule must not depend "
+        "on its head (no recursion through aggregation)."
+    )
 
 
 class WrongArgumentsInPredicateError(NeuroLangException):
@@ -238,16 +260,21 @@ class WrongArgumentsInPredicateError(NeuroLangException):
     NetworkReported is defined with two variables but used with three
     in the second rule:
 
-    NetworkReported(n, s) :- RegionReported(
-        r, s
-    ) & RegionInNetwork(r, n)
-    StudyMatchingNetworkQuery(s, n) :- (
-        RegionReported("VWFA", s)
-        & NetworkReported(n, s, r)
-    )
+    .. code-block:: text
+
+        NetworkReported(n, s) :- RegionReported(
+            r, s
+        ) & RegionInNetwork(r, n)
+        StudyMatchingNetworkQuery(s, n) :- (
+            RegionReported("VWFA", s)
+            & NetworkReported(n, s, r)
+        )
     """
 
-    pass
+    suggestion = (
+        "Use every predicate with the same number of arguments as in its "
+        "definition."
+    )
 
 
 class TranslateToNamedRAException(NeuroLangException):
@@ -290,26 +317,35 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
 
     Examples
     --------
-    PositiveReverseInferenceSegregationQuery(
-        t, n, PROB(t, n)
-    ) :- (TopicAssociation(t, s) // SelectedStudy(s)) // (
-        StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
-    )
+    .. code-block:: text
+
+        PositiveReverseInferenceSegregationQuery(
+            t, n, PROB(t, n)
+        ) :- (TopicAssociation(t, s) // SelectedStudy(s)) // (
+            StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
+        )
 
     This formula is not in DNF since it is a disjunction of a disjunction
     (TopicAssociation(t, s) // SelectedStudy(s)) and a conjunction
     (StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)).
-    A valid query would be :
+    A valid query would be:
 
-    PositiveReverseInferenceSegregationQuery(
-        t, n, PROB(t, n)
-    ) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (
-        StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
-    )
+    .. code-block:: text
+
+        PositiveReverseInferenceSegregationQuery(
+            t, n, PROB(t, n)
+        ) :- (TopicAssociation(t, s) & SelectedStudy(s)) // (
+            StudyMatchingNetworkQuery(s, n) & SelectedStudy(s)
+        )
 
     .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
         (Addison Wesley, 1995), Addison-Wesley.
     """
+
+    suggestion = (
+        "Rewrite the formula in conjunctive or disjunctive normal form "
+        "(CNF or DNF)."
+    )
 
     def __init__(self, output):
         super().__init__(f"Could not translate conjunction: {output}")
@@ -330,23 +366,32 @@ class NegativeFormulaNotSafeRangeException(TranslateToNamedRAException):
 
     Examples
     --------
-    StudyNotMatchingSegregationQuery(s, n) :- (
-        ~StudyMatchingNetworkQuery(s, n)
-        & Network(n)
-    )
+    .. code-block:: text
 
-    Variable `s` is present in the negated `StudyMatchingNetworkQuery`
+        StudyNotMatchingSegregationQuery(s, n) :- (
+            ~StudyMatchingNetworkQuery(s, n)
+            & Network(n)
+        )
+
+    Variable ``s`` is present in the negated ``StudyMatchingNetworkQuery``
     literal but is not present in a non-negated literal. A valid query body
-    would be :
+    would be:
 
-    StudyNotMatchingSegregationQuery(s, n) :- (
-        ~StudyMatchingNetworkQuery(s, n)
-        & Study(s) & Network(n)
-    )
+    .. code-block:: text
+
+        StudyNotMatchingSegregationQuery(s, n) :- (
+            ~StudyMatchingNetworkQuery(s, n)
+            & Study(s) & Network(n)
+        )
 
     .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
         (Addison Wesley, 1995), Addison-Wesley.
     """
+
+    suggestion = (
+        "Every variable of a negated predicate must also appear in a "
+        "non-negated predicate of the same rule body."
+    )
 
     def __init__(self, formula):
         super().__init__(f"Negative predicate {formula} is not safe range")
@@ -363,6 +408,11 @@ class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
     t(x, y) :- r(x, y) & q(y, z)
     s(x, y, prob(x, y)) :- ~t(x, x) & q(x, y)
     """
+
+    suggestion = (
+        "Negate only named predicates: define the negated formula as its "
+        "own rule first."
+    )
 
     def __init__(self, formula):
         super().__init__(f"Negative formula {formula} is not a named relation")
@@ -390,6 +440,7 @@ class InvalidCommandExpression(ForbiddenExpressionError):
 
 class ParserError(NeuroLangException):
     def __init__(self, message, line=None, column=None):
+        super().__init__(message)
         self.message = message
         self.line = line
         self.column = column
@@ -404,3 +455,52 @@ class UnexpectedTokenError(ParserError):
 
 class UnexpectedCharactersError(ParserError):
     pass
+
+
+class SquallSemanticError(NeuroLangException):
+
+    """Semantic error in a SQUALL program — parse succeeded but semantics invalid.
+
+    Raised when the SQUALL transformer encounters a valid parse tree that
+    represents a logically invalid or unsupported construction, such as:
+    - a rule with an empty body
+    - an anaphoric ``the Noun`` with no matching ``for every Noun`` in scope
+    - an unrecognised comparison or aggregation function
+    - a missing determiner or noun group in a rule body
+
+    Parameters
+    ----------
+    message : str
+        Human-readable description of the error.
+    line : int, optional
+        1-based source line number where the error was detected.
+    column : int, optional
+        1-based source column number where the error was detected.
+    source_line : str, optional
+        The full source line text for context display.
+
+    """
+
+    def __init__(self, message, *, line=None, column=None, source_line=None):
+        """Initialise with message and optional source location."""
+        super().__init__(message)
+        self.message = message
+        self.line = line
+        self.column = column
+        self.source_line = source_line
+
+    def __str__(self):
+        if self.source_line and self.column is not None:
+            pointer = " " * (max(0, self.column - 1)) + "^~~~~~"
+            return (
+                f"SQUALL semantic error (line {self.line}):\n"
+                f"    {self.source_line.strip()}\n"
+                f"    {pointer}\n"
+                f"{self.message}"
+            )
+        if self.line is not None:
+            return (
+                f"SQUALL semantic error (line {self.line}, "
+                f"col {self.column}): {self.message}"
+            )
+        return f"SQUALL semantic error: {self.message}"

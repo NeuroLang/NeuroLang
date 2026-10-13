@@ -188,6 +188,26 @@ class NaturalJoin(BinaryRelationalAlgebraOperation):
         return f"[{self.relation_left}" f"\N{JOIN}" f"{self.relation_right}]"
 
 
+class NaryNaturalJoin(NAryRelationalAlgebraOperation):
+    """
+    N-ary natural join holding N operands in a flat tuple.
+
+    Unlike a left-deep tree of *NaturalJoin* nodes, this preserves the
+    full set of operands so that join-reordering optimisers can reorder
+    them globally without rebuilding pairwise trees.
+    """
+
+    def __init__(self, relations):
+        self.relations = tuple(relations)
+
+    def __repr__(self):
+        return (
+            "["
+            + (" \N{JOIN} ".join(repr(r) for r in self.relations))
+            + "]"
+        )
+
+
 class LeftNaturalJoin(BinaryRelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
@@ -498,16 +518,17 @@ class FunctionApplicationListMember(Definition):
     Notes
     -----
     In the case of an extended projection operation, as described in [1]_,
-    a function application list member can either be
-        - a single attribute (column) name in the relation, resulting in a
-          normal non-extended projection,
-        - an expression `x -> y` where `x` and `y` are both attribute (column)
-          names, `x` effectively being rename as `y`,
-        - or an expression `E -> z` where `E` is an expression involving
-          attributes of the relation, arithmetic operators, and string
-          operators, and `z` is a new name for the attribute that results from
-          the calculation implied by `E`. For example, `a + b -> x` represents
-          the sum of the attributes `a` and `b`, renamed `x`.
+    a function application list member can either be:
+
+    - a single attribute (column) name in the relation, resulting in a
+      normal non-extended projection,
+    - an expression `x -> y` where `x` and `y` are both attribute (column)
+      names, `x` effectively being rename as `y`,
+    - or an expression `E -> z` where `E` is an expression involving
+      attributes of the relation, arithmetic operators, and string
+      operators, and `z` is a new name for the attribute that results from
+      the calculation implied by `E`. For example, `a + b -> x` represents
+      the sum of the attributes `a` and `b`, renamed `x`.
 
     .. [1] Garcia-Molina, Hector, Jeffrey D. Ullman, and Jennifer Widom.
        "Database systems: the complete book." (2009).
@@ -552,6 +573,7 @@ class Destroy(UnaryRelationalAlgebraOperation):
         self.dst_column = dst_column
 
     def __repr__(self):
+        """Return a string representation of the set destruction."""
         return (
             f"set_destroy[{self.relation}, "
             "{self.src_column} -> {src.dst_column}]"
@@ -799,6 +821,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     _fa_2_lambda = ew.FunctionApplicationToPythonLambda()
 
     def __init__(self, symbol_table=None):
+        """Initialise the solver with an optional symbol table."""
         self.symbol_table = symbol_table
 
     @ew.add_match(
@@ -893,6 +916,15 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         row_type = self._compute_join_type(naturaljoin, res, left, right)
 
         return self._build_relation_constant(res, type_=AbstractSet[row_type])
+
+    @ew.add_match(NaryNaturalJoin, lambda expr: all(
+        isinstance(r, Constant) for r in expr.relations
+    ))
+    def ra_nary_naturaljoin(self, nary_join):
+        result = nary_join.relations[0]
+        for rel in nary_join.relations[1:]:
+            result = self.walk(NaturalJoin(result, rel))
+        return result
 
     def _compute_join_type(self, join, res, left, right):
         left_type_args = type_system.get_args(type_system.get_args(
@@ -1215,7 +1247,10 @@ def _infer_relation_type(relation):
     if hasattr(relation, "row_type"):
         return AbstractSet[relation.row_type]
     tuple_type = Tuple[tuple(
-        Unknown if issubclass(type(arg), SupportsFloat) and math.isnan(arg)
+        Unknown
+        if issubclass(type(arg), SupportsFloat)
+        and not isinstance(arg, numpy.ndarray)
+        and math.isnan(arg)
         else type(arg)
         for arg in relation.fetch_one()
     )]

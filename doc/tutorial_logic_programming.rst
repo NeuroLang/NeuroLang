@@ -3,7 +3,8 @@ NeuroLang for Logic Programmers
 
 
 NeuroLang is implemented on top of Datalog+/- with probabilistic extensions.
-The primary way to use it is the :ref:`python_embedded` Python-embedded frontend.
+The primary way to use it is the Python-embedded frontend described in
+:ref:`python_embedded`.
 
 .. _python_embedded:
 
@@ -27,32 +28,33 @@ Then, we can add some facts (connected) and rules (reachable)::
 please note how the environment ``e`` allows for the creation of logic programming symbols
 dynamically.
 
-With this we now have program loaded in memory which can be explored as::
+With this we now have a program loaded in memory which can be explored as::
 
   >>> print(nl.symbols['connected'])
-  connected: typing.AbstractSet[typing.Tuple[int, int]] = [(0, 1), (1, 2), (2, 3)]
+  connected: typing.AbstractSet[typing.Tuple[int, int]] = (0, 1) ...
   >>> for rule in nl.current_program:
   ...   print(rule)
   reachable(x, y) ← connected(x, y)
-  reachable(x, y) ← ( reachable(x, z) ) ∧ ( reachable(z, y) )
+  reachable(x, y) ← ( reachable(x, z) ) ∧ ( connected(z, y) )
 
 Finally, we can solve the query::
 
   >>> with nl.environment as e:
   ...   res = nl.query((e.x, e.y), e.reachable(e.x, e.y))
   >>> print(res)
-     0  1
+     x  y
   0  0  1
-  1  1  2
-  2  2  3
-  3  0  2
+  1  0  2
+  2  0  3
+  3  1  2
   4  1  3
-  5  0  3
+  5  2  3
 
 Alternatively the `connected` table can be added more efficiently
 from a tuple iterable or a `numpy.array` as follows::
 
   >>> nl.add_tuple_set([(0, 1), (1, 2), (2, 3)], name='connected')
+  connected: typing.AbstractSet[typing.Tuple[int, int]] = (0, 1) ...
 
 
 Including Aggregations and Builtin Functions
@@ -71,9 +73,10 @@ function that counts the number of distinct elements. Specifically::
   >>> from neurolang import frontend
   >>> nl = frontend.NeurolangDL()
   >>> nl.add_tuple_set([(0, 1), (1, 2), (2, 3)], name='connected')
+  connected: typing.AbstractSet[typing.Tuple[int, int]] = (0, 1) ...
   >>> @nl.add_symbol
-  >>> def agg_count(x: Iterable) -> int:
-  >>>   return len(set(x))
+  ... def agg_count(x: Iterable) -> int:
+  ...   return len(set(x))
   >>> with nl.environment as e:
   ...   e.reachable[e.x, e.y] = e.connected[e.x, e.y]
   ...   e.reachable[e.x, e.y] = e.reachable[e.x, e.z] & e.connected[e.z, e.y]
@@ -81,13 +84,13 @@ function that counts the number of distinct elements. Specifically::
 
 This adds a new function `agg_count` to the NeuroLang interpreter,
 any built-in or aggregation function is added in the same manner. Then,
-we can then count all arrivals for starts `0` and `1`::
+we can count all arrivals for starts `0` and `1`::
 
   >>> with nl.environment as e:
-  >>>   e.count_arrivals[e.x, agg_count(e.y)] = e.reachable(e.x, e.y)
-  >>>   counts = nl.query((e.x, e.c), e.count_arrivals(e.x, e.c) & (e.x < 2))
+  ...   e.count_arrivals[e.x, agg_count(e.y)] = e.reachable(e.x, e.y)
+  ...   counts = nl.query((e.x, e.c), e.count_arrivals(e.x, e.c) & (e.x < 2))
   >>> print(counts)
-     0  1
+     x  c
   0  0  3
   1  1  2
 
@@ -95,8 +98,11 @@ we can then count all arrivals for starts `0` and `1`::
 Adding Constraints and Open Knowledge Rules
 -------------------------------------------
 
-NeuroLang also supports tuple-generating dependencies (TGDs).
-We can say that a person is a parent if they have a child::
+NeuroLang also supports tuple-generating dependencies (TGDs), which are
+added with ``add_constraint(antecedent, consequent)``. Variables appearing only
+in the consequent are existentially quantified. For instance, we can state
+that every person has a parent, even if that parent is not in the data
+(:math:`\forall x\, \mathrm{person}(x) \rightarrow \exists y\, \mathrm{parent}(y, x)`)::
 
   >>> from neurolang.frontend import NeurolangPDL
   >>> nl = NeurolangPDL()
@@ -107,29 +113,42 @@ We can say that a person is a parent if they have a child::
   ...   e.parent['Anna', 'Pete'] = True
   ...   e.person[e.x] = e.parent[e.x, ...]
   ...   e.person[e.x] = e.parent[..., e.x]
-  ...   nl.add_constraint(e.person[e.x], e.person[e.y] & e.parent[e.y, e.x])
-  ...   e.has_parent[e.x] = e.person[e.x] & e.parent[e.x, e.y]
-  >>> res = nl.solve_all()
+  ...   _ = nl.add_constraint(e.person[e.x], e.parent[e.y, e.x])
+  ...   e.has_parent[e.x] = e.person[e.x] & e.parent[e.y, e.x]
+  ...   res = nl.query((e.x,), e.has_parent(e.x))
   >>> print(res)
+        x
+  0  Anna
+  1  Carl
+  2  John
+  3  Mary
+  4   Pat
+  5  Pete
 
+Although only Carl, Anna and Pete have a parent in the data, the constraint
+entails that John, Mary and Pat have one too. This holds even when no
+``parent`` fact is given at all::
 
   >>> from neurolang.frontend import NeurolangPDL
   >>> nl = NeurolangPDL()
   >>> with nl.environment as e:
   ...   e.person['Pat'] = True
   ...   e.person['Chris'] = True
-  ...   nl.add_constraint(e.person[e.x], e.parent[e.y, e.x])
-  ...   e.has_grand_parent[e.x] = e.person[e.x] & e.person[e.y] & e.parent[e.y, e.x] & e.parent[e.z, e.y]
-  >>> res = nl.solve_all()
+  ...   _ = nl.add_constraint(e.person[e.x], e.parent[e.y, e.x])
+  ...   e.has_parent[e.x] = e.person[e.x] & e.parent[e.y, e.x]
+  ...   res = nl.query((e.x,), e.has_parent(e.x))
   >>> print(res)
+         x
+  0    Pat
+  1  Chris
 
 
 .. Adding Probabilistic Facts, Choices and Querying Them
 .. --------------------------------------------
 
-.. Neurolang can also handle probabilistic facts, and choices. In the
+.. NeuroLang can also handle probabilistic facts, and choices. In the
 .. probabilistic facts, each tuple of a certain set is considered an
 .. independent random variable that can exist or not in a possible world
-.. independently with a given probability. For this we need to use Neurolang's
+.. independently with a given probability. For this we need to use NeuroLang's
 .. probabilistic solver. For instance::
   
