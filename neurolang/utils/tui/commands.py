@@ -176,19 +176,23 @@ def cmd_sort(app, arg: str) -> None:
         app.console.print("Sort: none")
         return
     app.settings.sort_by = _parse_sort_spec(specs)
-    if app.result is not None:
-        frame = sort_dataframe(app.result.frame, app.settings.sort_by)
-        app.result = ResultBlock(frame, app.result.title)
-        app.print_block(app.result)
+    app.results = [
+        ResultBlock(sort_dataframe(block.frame, app.settings.sort_by),
+                    block.title)
+        for block in app.results
+    ]
+    for block in app.results:
+        app.print_block(block)
 
 
 @command(".more", "Show the next page of the last result")
 def cmd_more(app, arg: str) -> None:
-    """Print the next page of the last result."""
-    if app.result is None or app.result.remaining <= 0:
+    """Print the next page of each block of the last result."""
+    blocks = [block for block in app.results if block.remaining > 0]
+    if not blocks:
         app.console.print("[dim]No more rows.[/dim]")
-        return
-    app.print_block(app.result)
+    for block in blocks:
+        app.print_block(block)
 
 
 @command(
@@ -209,16 +213,16 @@ def cmd_head(app, arg: str) -> None:
             )
             return
         app.settings.page_size = size
-    if app.result is not None:
-        app.result.shown = 0
-        app.print_block(app.result)
+    for block in app.results:
+        block.shown = 0
+        app.print_block(block)
 
 
 @command(".all", "Show all the rows of the last result (in a pager)")
 def cmd_all(app, arg: str) -> None:
     """Print all the rows of the last result."""
-    if app.result is not None:
-        print_all(app.console, app.result)
+    for block in app.results:
+        print_all(app.console, block)
 
 
 FORMATS = ("table", "csv", "json")

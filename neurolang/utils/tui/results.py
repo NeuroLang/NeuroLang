@@ -11,7 +11,11 @@ DEFAULT_PAGE_SIZE = 20
 
 @dataclass
 class ResultBlock:
-    """The rows of a query result and how many of them have been shown."""
+    """
+    The rows of a query result and how many of them have been shown.
+
+    The title names the ``obtain`` of a SQUALL program with several.
+    """
 
     frame: pd.DataFrame
     title: str = ""
@@ -23,14 +27,9 @@ class ResultBlock:
         return len(self.frame) - self.shown
 
 
-def rows_table(df: pd.DataFrame, title: str = "") -> Table:
+def rows_table(df: pd.DataFrame) -> Table:
     """Return a rich Table with all the rows of *df*."""
-    table = Table(
-        title=title or None,
-        box=box.ROUNDED,
-        header_style="bold cyan",
-        title_style="bold magenta",
-    )
+    table = Table(box=box.ROUNDED, header_style="bold cyan")
     for col in df.columns:
         table.add_column(str(col), overflow="fold")
     for row in df.itertuples(index=False):
@@ -59,7 +58,7 @@ def print_next_page(console, block: ResultBlock, page_size: int) -> None:
         return
     start = block.shown
     stop = min(start + page_size, total)
-    console.print(rows_table(block.frame.iloc[start:stop], block.title))
+    console.print(rows_table(block.frame.iloc[start:stop]))
     console.print(
         page_caption(total, start, stop), style="dim", markup=False,
         no_wrap=True, overflow="ellipsis",
@@ -69,7 +68,7 @@ def print_next_page(console, block: ResultBlock, page_size: int) -> None:
 
 def print_all(console, block: ResultBlock) -> None:
     """Print all the rows of *block*, through a pager on a terminal."""
-    table = rows_table(block.frame, block.title)
+    table = rows_table(block.frame)
     if console.is_terminal:
         with console.pager(styles=True):
             console.print(table)

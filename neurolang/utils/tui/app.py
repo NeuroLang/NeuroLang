@@ -105,7 +105,7 @@ class InteractiveTuiApp:
         self.settings = settings or TuiSettings()
         self.console = console or Console()
         self.err_console = err_console or Console(stderr=True)
-        self.result: Optional[ResultBlock] = None
+        self.results: list = []
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
         else:
@@ -149,20 +149,24 @@ class InteractiveTuiApp:
             file=self.err_console.file,
         )
 
-    def _show_frame(self, result, title: str, column_names=None) -> None:
-        """Sort and print the first page of the rows of a query *result*."""
+    def _result_block(self, result, title: str, column_names) -> ResultBlock:
+        """Return the sorted rows of a query *result* as a block."""
         df = sort_dataframe(
             result_to_dataframe(result, column_names), self.settings.sort_by
         )
-        self.result = ResultBlock(df, title)
-        self.print_block(self.result)
+        return ResultBlock(df, title)
 
     def print_block(self, block: ResultBlock) -> None:
         """
         Print the next page of *block* in the output format of the session.
 
-        The csv and json formats print all the rows at once.
+        The block's title, if any, is printed first. The csv and json
+        formats print all the rows at once.
         """
+        if block.title:
+            self.console.print(
+                f"── {block.title} ──", style="bold magenta", markup=False
+            )
         fmt = self.settings.output_format
         if fmt == "table":
             print_next_page(self.console, block, self.settings.page_size)
@@ -174,29 +178,30 @@ class InteractiveTuiApp:
 
     def _show_result(self, result, column_names: dict) -> None:
         """
-        Print a query *result*, keeping the last table shown.
+        Print a query *result*, keeping its blocks for the commands.
 
-        *column_names* maps result keys to their column names, as
+        A dict result, from a SQUALL program with several ``obtain``,
+        gives a block per ``obtain``. *column_names* maps result keys to
+        their column names, as
         :func:`~neurolang.utils.cli.squall_column_names` returns them.
         """
+        self.results = []
         if result is None:
             self.console.print("[dim](no result)[/dim]")
-            self.result = None
-            return
-        if isinstance(result, bool):
+        elif isinstance(result, bool):
             self.console.print(
                 "[green]true[/green]" if result else "[red]false[/red]"
             )
-            self.result = None
-            return
-        if isinstance(result, dict):
-            for key, sub_result in result.items():
-                self.console.print(
-                    f"\n[bold magenta]── {key} ──[/bold magenta]"
-                )
-                self._show_frame(sub_result, key, column_names.get(key))
-            return
-        self._show_frame(result, "", next(iter(column_names.values()), None))
+        elif isinstance(result, dict):
+            self.results = [
+                self._result_block(value, key, column_names.get(key))
+                for key, value in result.items()
+            ]
+        else:
+            names = next(iter(column_names.values()), None)
+            self.results = [self._result_block(result, "", names)]
+        for block in self.results:
+            self.print_block(block)
 
     def _column_names(self, program: str) -> dict:
         """Return the declared column names of the results of *program*."""

@@ -13,8 +13,7 @@ from neurolang.utils.tui.results import rows_table  # noqa: E402
 class TestDfToRichTable:
     def test_basic_table(self):
         df = pd.DataFrame({"x": [1, 2], "y": ["a", "b"]})
-        table = rows_table(df, title="Test")
-        assert table.title == "Test"
+        table = rows_table(df)
         assert [c.header for c in table.columns] == ["x", "y"]
 
     def test_empty_dataframe(self):
@@ -89,7 +88,7 @@ def test_query_result_sorted_with_cli_helpers(engine):
         engine, TuiSettings(sort_by=[("x", False)]), console=_console()
     )
     app._execute_and_display("ans(x) :- Q(x)")
-    assert list(app.result.frame["x"]) == [3, 2, 1]
+    assert list(app.results[0].frame["x"]) == [3, 2, 1]
     text = _output(app)
     assert text.index("3") < text.index("2") < text.index("1 ")
 
@@ -198,7 +197,7 @@ def test_sort_command_resorts_last_result(small_app, capsys):
     small_app._execute_and_display("ans(x) :- P(x)")
     small_app._handle_dot_command(".sort x:desc")
     assert small_app.settings.sort_by == [("x", False)]
-    assert list(small_app.result.frame["x"]) == [2, 1]
+    assert list(small_app.results[0].frame["x"]) == [2, 1]
     small_app._handle_dot_command(".sort")
     assert "Sort: x:desc" in _output(small_app)
     small_app._handle_dot_command(".sort x:sideways")
@@ -221,18 +220,18 @@ def test_ra_toggle_prints_plans_instead_of_results(small_app, capsys):
     small_app._handle_dot_command(".ra on")
     small_app._execute_and_display("ans(x) :- P(x)")
     assert "── deterministic stratum ──" in capsys.readouterr().out
-    assert small_app.result is None
+    assert small_app.results == []
     small_app._handle_dot_command(".ra off")
     small_app._execute_and_display("ans(x) :- P(x)")
     assert "deterministic stratum" not in capsys.readouterr().out
-    assert list(small_app.result.frame["x"]) == [1, 2]
+    assert list(small_app.results[0].frame["x"]) == [1, 2]
 
 
 def test_rewritten_toggle(small_app, capsys):
     small_app._handle_dot_command(".rewritten on")
     small_app._execute_and_display("ans(x) :- P(x)")
     assert "── rewritten program ──" in capsys.readouterr().out
-    assert list(small_app.result.frame["x"]) == [1, 2]
+    assert list(small_app.results[0].frame["x"]) == [1, 2]
     small_app._handle_dot_command(".rewritten")
     assert "Rewritten program: on" in _output(small_app)
 
@@ -284,7 +283,7 @@ def test_head_sets_page_size(long_app):
 def test_all_shows_every_row(long_app):
     long_app._handle_dot_command(".all")
     assert set(_shown_numbers(_output(long_app))) == set(range(45))
-    assert long_app.result.remaining == 0
+    assert long_app.results[0].remaining == 0
 
 
 def test_caption_is_one_line_on_narrow_tables(long_app):
@@ -335,8 +334,8 @@ def test_banner_lists_relations_and_example(peaks_engine):
     example = "ans(i, j, k, study_id) :- peak_reported(i, j, k, study_id)"
     assert f"Try: {example}" in out
     app._execute_and_display(example)
-    assert list(app.result.frame.columns) == ["i", "j", "k", "study_id"]
-    assert len(app.result.frame) == 2
+    assert list(app.results[0].frame.columns) == ["i", "j", "k", "study_id"]
+    assert len(app.results[0].frame) == 2
 
 
 def test_banner_squall_example(peaks_engine):
@@ -357,5 +356,24 @@ def test_help_examples_match_engine_columns(small_app):
 def test_squall_obtain_shows_declared_column_names(peaks_engine):
     app = _app(peaks_engine, engine_name="neurosynth", squall=True)
     app._execute_and_display("obtain every peak_reported.")
-    assert list(app.result.frame.columns) == ["i", "j", "k", "study_id"]
+    assert list(app.results[0].frame.columns) == ["i", "j", "k", "study_id"]
     assert "study_id" in _output(app)
+
+
+def test_several_obtain_blocks_are_all_kept(peaks_engine):
+    peaks_engine.add_tuple_set([(i,) for i in range(30)], name="many")
+    app = _app(peaks_engine, engine_name="neurosynth", squall=True)
+    app._execute_and_display(
+        "obtain every peak_reported as Peaks. obtain every many."
+    )
+    titles = [block.title for block in app.results]
+    assert titles == ["peaks", "obtain_1"]
+    assert list(app.results[0].frame.columns) == [
+        "i", "j", "k", "study_id"
+    ]
+    out = _output(app)
+    assert "── peaks ──" in out and "── obtain_1 ──" in out
+    assert "30 rows · showing 1–20 · .more for next" in out
+    app._handle_dot_command(".more")
+    assert "30 rows · showing 21–30 · end" in _output(app)
+    assert app.results[0].remaining == 0
