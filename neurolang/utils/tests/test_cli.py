@@ -1539,6 +1539,27 @@ class TestResultToDataFrame:
         df = result_to_dataframe(nras)
         assert list(df.columns) == ["x", "y"]
 
+    @pytest.mark.parametrize(
+        "columns, renamed",
+        [
+            (("fresh_00000002",), ["term"]),
+            (("0", "1"), ["term", "weight"]),
+            (("fresh_00000002", "y"), ["fresh_00000002", "y"]),
+        ],
+    )
+    def test_generated_columns_renamed(self, columns, renamed):
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=columns, iterable=[tuple(range(len(columns)))]
+        )
+        names = ["term", "weight"][:len(columns)]
+        df = result_to_dataframe(nras, names)
+        assert list(df.columns) == renamed
+
     def test_sort_dataframe_warns_on_unknown_column(self, capsys):
         from neurolang.utils.cli import sort_dataframe
 

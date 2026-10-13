@@ -226,6 +226,46 @@ def test_load_and_query(app, tmp_path, file_name, text):
     assert list(app.results[0].frame.columns) == ["Name", "Score"]
 
 
+@pytest.mark.parametrize(
+    "text, columns",
+    [
+        ("term\nmemory\npain\n", ["term"]),
+        ("term,weight\nmemory,1\npain,2\n", ["term", "weight"]),
+        ("term,weight,n\nmemory,1,3\npain,2,4\n", ["term", "weight", "n"]),
+    ],
+)
+def test_loaded_relation_keeps_its_header(
+    app, tmp_path, capsys, text, columns
+):
+    path = _write(tmp_path / "myterms.csv", text)
+    app._handle_dot_command(f".load {path}")
+    variables = ", ".join(columns)
+    app._execute_and_display(f"ans({variables}) :- myterms({variables})")
+    assert list(app.results[0].frame.columns) == columns
+    app._handle_dot_command(".sets")
+    assert str(columns) in capsys.readouterr().out
+    app._handle_dot_command(".mode squall")
+    app._execute_and_display("obtain every myterms.")
+    frame = app.results[0].frame
+    assert list(frame.columns) == columns
+    assert sorted(frame[columns[0]]) == ["memory", "pain"]
+
+
+@pytest.mark.parametrize(
+    "aggregate, rows",
+    [
+        ("count", {("a", 2), ("b", 1)}),
+        ("sum", {("a", 3), ("b", 5)}),
+        ("max", {("a", 2), ("b", 5)}),
+    ],
+)
+def test_query_with_aggregation_in_head(app, aggregate, rows):
+    app._nl.add_tuple_set([(1, "a"), (2, "a"), (5, "b")], name="hits")
+    assert _query(app, f"ans(t, {aggregate}(s)) :- hits(s, t)") == rows
+    assert list(app.results[0].frame.columns) == ["t", aggregate]
+    assert not app.failed
+
+
 def test_sets_shows_loaded_columns(app, tmp_path, capsys):
     path = _write(tmp_path / "scores.csv", "Name,Score\nalice,3\n")
     app._handle_dot_command(f".load {path}")

@@ -128,15 +128,25 @@ def _read_query(args) -> str:
     sys.exit(1)
 
 
+def _is_generated_column(column) -> bool:
+    """
+    Return whether *column* is an auto-generated column name.
+
+    These are positions, ``c0``-like names, and the names of fresh
+    variables, such as the one SQUALL gives the column of
+    ``obtain every R.`` for a unary ``R``.
+    """
+    if isinstance(column, int):
+        return True
+    return isinstance(column, str) and (
+        column.startswith(("c", "fresh_")) or column.isdigit()
+    )
+
+
 def _rename_unnamed_columns(df, column_names):
     """Replace auto-generated column names with *column_names* when safe."""
     if column_names is not None and len(column_names) == len(df.columns):
-        unnamed = all(
-            isinstance(c, int)
-            or (isinstance(c, str) and (c.startswith("c") or c.isdigit()))
-            for c in df.columns
-        )
-        if unnamed:
+        if all(_is_generated_column(c) for c in df.columns):
             df.columns = column_names
     return df
 
