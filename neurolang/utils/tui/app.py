@@ -33,8 +33,8 @@ from .commands import (
     engine_relations,
     run_command,
 )
-from .statements import is_complete, split_statements
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
+from .statements import is_complete, split_statements
 
 
 def _input_bindings(is_squall) -> KeyBindings:
@@ -121,6 +121,12 @@ class InteractiveTuiApp:
         console: Optional[Console] = None,
         err_console: Optional[Console] = None,
     ):
+        """
+        Set up a REPL on the engine *nl*.
+
+        Results are printed on *console* (default: stdout) and progress
+        messages, notes and errors on *err_console* (default: stderr).
+        """
         self._nl = nl
         self.settings = settings or TuiSettings()
         self.console = console or Console()
@@ -247,7 +253,9 @@ class InteractiveTuiApp:
         elapsed = time.perf_counter() - t0
         if not self.settings.show_ra:
             self._show_result(result, self._column_names(program))
-        self.err_console.print(f"[dim]Query completed in {elapsed:.2f} s[/dim]")
+        self.err_console.print(
+            f"[dim]Query completed in {elapsed:.2f} s[/dim]"
+        )
 
     def _handle_dot_command(self, line: str) -> None:
         """Run the dot-command on *line*."""
