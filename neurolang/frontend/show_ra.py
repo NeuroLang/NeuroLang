@@ -10,11 +10,13 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from ..datalog.expressions import AdornedSymbol
+from ..datalog.chase import ChaseNaive, ChaseSemiNaive
 from ..datalog.instance import MapInstance
 from ..exceptions import UnsupportedSolverError
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Symbol
 from ..logic import Conjunction, Union
+from ..logic.expression_processing import extract_logic_atoms
 from ..logic.transformations import RemoveDuplicatedConjunctsDisjuncts
 from ..probabilistic.expression_processing import (
     is_within_language_prob_query,
@@ -181,6 +183,12 @@ class PlanDisplay:
     symbol_table : Mapping, optional
         symbol table of the program.
 
+    Attributes
+    ----------
+    unknown_size_symbols : set
+        predicate symbols whose relation is a placeholder, not printed
+        with a size.
+
     """
 
     def __init__(self, options=None, query_symbol=None, symbol_table=None):
@@ -191,6 +199,7 @@ class PlanDisplay:
             self.renames[query_symbol] = Symbol(
                 query_display_name(symbol_table)
             )
+        self.unknown_size_symbols = set()
 
     def display_expression(self, expression):
         """Return ``expression`` with its symbols renamed for display."""
@@ -200,7 +209,10 @@ class PlanDisplay:
 
     def symbol_name(self, symbol):
         """Return the name ``symbol`` is displayed with."""
-        return str(self.display_expression(symbol))
+        symbol = self.display_expression(symbol)
+        if isinstance(symbol, AdornedSymbol):
+            return str(symbol)
+        return symbol.name
 
     def rule_text(self, rule):
         """Return the Datalog text of ``rule``."""
@@ -219,18 +231,22 @@ class PlanDisplay:
                 name_map[symbol] = self.symbol_name(symbol)
         return name_map
 
-    def print_rule(self, rule, conjunction, symbol_table, ra_code):
+    def print_rule(
+        self, rule, conjunction, symbol_table, ra_code, leaf_sizes=None
+    ):
         """
         Print the ``--show-ra`` block of a rule.
 
         The block is the rule header (skipped when ``rule`` is None)
         followed by the pretty-printed RA plan ``ra_code``, whose tables
-        are named after the predicates of ``conjunction``.
+        are named after the predicates of ``conjunction`` and the
+        relations of ``symbol_table``. ``leaf_sizes`` maps the predicate
+        symbols of the plan whose size is known to their size.
         """
         if rule is not None:
             print(f"── rule {self.rule_text(rule)} ──")
         name_map = self.name_map(conjunction, symbol_table)
-        print(pretty_repr(ra_code, name_map=name_map))
+        print(pretty_repr(ra_code, name_map=name_map, leaf_sizes=leaf_sizes))
 
 
 @lru_cache(maxsize=None)
@@ -306,15 +322,43 @@ class ShowRAChaseMixin:
             return []
         conjunction = Conjunction(predicates)
         ra_code = self.translate_conjunction_to_named_ra(conjunction)
+        symbol_table = self.ra_symbol_table(
+            predicates, instance, restriction_instance
+        )
         self.show_ra_display.print_rule(
             getattr(self, "_show_ra_current_rule", None),
             conjunction,
             getattr(self, "datalog_program", None),
             ra_code,
+            self._show_ra_leaf_sizes(predicates, symbol_table),
         )
         return super().obtain_substitutions(
             iter(predicates), instance, restriction_instance
         )
+
+    def _show_ra_leaf_sizes(self, predicates, symbol_table):
+        """
+        Return the sizes of the relations of ``predicates`` known for sure.
+
+        The relations are those of ``symbol_table``, the one the plan is
+        evaluated on. Placeholder relations, and in iterative (recursive)
+        strata the relations derived by the stratum, which grow at each
+        iteration, are left out.
+        """
+        varying = set()
+        if isinstance(self, (ChaseNaive, ChaseSemiNaive)):
+            varying = {rule.consequent.functor for rule in self.rules}
+        varying |= self.show_ra_display.unknown_size_symbols
+        sizes = {}
+        for predicate in extract_logic_atoms(Conjunction(predicates)):
+            functor = predicate.functor
+            if (
+                isinstance(functor, Symbol)
+                and functor in symbol_table
+                and functor not in varying
+            ):
+                sizes[functor] = len(symbol_table[functor].value)
+        return sizes
 
     def pick_chase_instance_for_stratum(self, stratum, instance_update):
         """Wrap the inner per-stratum chase so its rules print RA too."""
@@ -386,7 +430,7 @@ class ShowRAStratumSolver(StratumSolver):
             self.display.print_rule(
                 rule,
                 rule.antecedent,
-                engine.program_ir.symbol_table,
+                cpl.symbol_table,
                 self.optimise_plan(
                     self.rule_provenance_set(rule, cpl).relation
                 ),

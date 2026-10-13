@@ -103,3 +103,38 @@ def test_conditional_query_head_displayed_as_ans(capsys):
     assert "ans^cond_num(l, PROB(l))" in out
     assert "ans^cond_den(PROB())" in out
     assert "fresh_" not in out
+
+
+def test_deterministic_leaves_show_their_size(capsys):
+    out = show_ra_output(
+        capsys, "ans(x, w) :- edge(x, y), label(y, l), weight(l, w)."
+    )
+    assert "edge ‹3 rows›" in out
+    assert "label ‹3 rows›" in out
+    assert "weight ‹2 rows›" in out
+
+
+def test_recursive_leaves_have_no_size(capsys):
+    """Check that relations growing at each iteration show no size."""
+    out = show_ra_output(
+        capsys,
+        "reach(x, y) :- edge(x, y).\n"
+        "reach(x, y) :- reach(x, z), edge(z, y).\n"
+        "ans(x, y) :- reach(x, y).",
+    )
+    assert "edge ‹3 rows›" in out
+    assert re.search(r"reach\b(?! ‹)", out)
+    assert "reach ‹" not in out
+
+
+def test_probabilistic_leaves_named_after_their_predicate(capsys):
+    """Check that CP-Logic tables are shown by predicate name and size."""
+    out = show_ra_output(
+        capsys,
+        "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
+        "ans(x, q) :- z(x, q).",
+    )
+    assert "active ‹3 rows›" in out
+    assert "picked ‹3 rows›" in out
+    assert "label ‹3 rows›" in out
+    assert "Table" not in out

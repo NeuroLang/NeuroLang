@@ -77,6 +77,21 @@ def _is_cross_product(expr):
         return False
 
 
+def _relation_size(value):
+    """Return the number of rows of a relation, or None if unknown."""
+    try:
+        return len(value)
+    except Exception:
+        return None
+
+
+def rows_label(rows):
+    """Return the ``‹N rows›`` annotation of a relation of ``rows`` rows."""
+    if rows is None:
+        return "‹? rows›"
+    return f"‹{rows:,} row{'' if rows == 1 else 's'}›"
+
+
 class PrettyPrinter:
     """
     Recursive pretty-printer for named relational algebra expressions.
@@ -91,14 +106,26 @@ class PrettyPrinter:
         Number of spaces to indent per nesting level (default 2).
     width : int, optional
         Target line width, reserved for future wrapping support (default 80).
+    fresh_map : dict, optional
+        Mapping from fresh variable names to short display names.
+    counter : list, optional
+        Mutable counter (list with one int) for generating short names.
+    leaf_sizes : dict, optional
+        Mapping from `Symbol` leaves to the number of rows of the relation
+        they stand for. Leaves found in it, and named `Constant` leaves,
+        are printed with their size, e.g. ``edge ‹3 rows›``.
 
     """
 
-    def __init__(self, name_map=None, indent=2, width=80, fresh_map=None, counter=None):
+    def __init__(
+        self, name_map=None, indent=2, width=80, fresh_map=None,
+        counter=None, leaf_sizes=None,
+    ):
         """Initialise the printer; see the class docstring for parameters."""
         if name_map is None:
             name_map = {}
         self.name_map = name_map
+        self.leaf_sizes = leaf_sizes if leaf_sizes is not None else {}
         self.indent = indent
         self.width = width
         self._fresh_map = fresh_map if fresh_map is not None else {}
@@ -253,15 +280,20 @@ class PrettyPrinter:
         return header, (expression.relation,)
 
     def _format_constant_leaf(self, expression):
-        """Format a Constant leaf."""
-        return self._format_constant(expression), ()
+        """Format a Constant leaf, with its size when it is named."""
+        name = self._lookup_name(expression)
+        if name is None:
+            return self._format_constant(expression), ()
+        return f"{name} {rows_label(_relation_size(expression.value))}", ()
 
     def _format_symbol_leaf(self, expression):
         """Format a Symbol leaf, using its display name when one is mapped."""
         name = self._lookup_name(expression)
-        if name is not None:
-            return name, ()
-        return expression.name, ()
+        if name is None:
+            name = expression.name
+        if expression in self.leaf_sizes:
+            name = f"{name} {rows_label(self.leaf_sizes[expression])}"
+        return name, ()
 
     # Ordered dispatch table: the first matching type wins, as with the
     # original chain of ``isinstance`` checks.
@@ -309,35 +341,28 @@ class PrettyPrinter:
         Look up a display name for a Constant or Symbol leaf.
 
         The map may use the object itself (identity) or its ``id()`` as key,
-        which is useful when the wrapped value is unhashable.
+        which is useful when the wrapped value is unhashable. Symbols are
+        also matched by name.
         """
+        candidates = (expression,)
+        if isinstance(expression, Constant):
+            candidates += (expression.value,)
         for key, name in self.name_map.items():
-            if expression is key:
+            if any(
+                candidate is key
+                or (isinstance(key, int) and id(candidate) == key)
+                for candidate in candidates
+            ):
                 return name
-            if isinstance(expression, Constant) and expression.value is key:
-                return name
-            if isinstance(key, int) and id(expression) == key:
-                return name
-            if isinstance(key, int) and isinstance(expression, Constant) and id(expression.value) == key:
-                return name
-        # Fallback: match NamedRelationalAlgebraFrozenSet by columns.
-        # The CP-Logic program builder creates new instances, so identity
-        # checks above may fail even though the columns are the same.
-        if isinstance(expression, Constant) and isinstance(
-            expression.value, NamedRelationalAlgebraFrozenSet
-        ):
-            expr_cols = expression.value.columns
-            for key, name in self.name_map.items():
-                if isinstance(key, Constant) and isinstance(
-                    key.value, NamedRelationalAlgebraFrozenSet
-                ):
-                    if key.value.columns == expr_cols:
-                        return name
-        # Fallback: match Symbol by name.
         if isinstance(expression, Symbol):
-            for key, name in self.name_map.items():
-                if isinstance(key, Symbol) and key.name == expression.name:
-                    return name
+            return self._lookup_symbol_name(expression)
+        return None
+
+    def _lookup_symbol_name(self, symbol):
+        """Look up the display name of a symbol with the same name."""
+        for key, name in self.name_map.items():
+            if isinstance(key, Symbol) and key.name == symbol.name:
+                return name
         return None
 
     def _format_constant(self, expression):
@@ -360,24 +385,16 @@ class PrettyPrinter:
         return repr(value)
 
     def _format_named_set(self, value):
+        """Format an unnamed-by-the-map named set with its columns, size."""
         try:
             columns = [self._format_column_name(c) for c in value.columns]
         except Exception:
             columns = []
-        try:
-            rows = len(value)
-        except Exception:
-            rows = "?"
-        if rows == 0:
-            rows = "unknown"
-        return f"Table(columns={columns}, rows={rows})"
+        return f"Table(columns={columns}) {rows_label(_relation_size(value))}"
 
     def _format_unnamed_set(self, value):
-        try:
-            rows = len(value)
-        except Exception:
-            rows = "?"
-        return f"Table(rows={rows})"
+        """Format a set not named by the map with its size."""
+        return f"Table {rows_label(_relation_size(value))}"
 
     def _format_column_name(self, col):
         if isinstance(col, str):
@@ -565,10 +582,13 @@ def _collect_edb_names(symbol_table, name_map):
             value.value,
             (NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet),
         ):
-            name_map[value] = name
+            name_map[id(value)] = name
 
 
-def pretty_repr(expression, name_map=None, indent=2, width=80, fresh_map=None, counter=None):
+def pretty_repr(
+    expression, name_map=None, indent=2, width=80, fresh_map=None,
+    counter=None, leaf_sizes=None,
+):
     """
     Return a pretty representation of an RA expression.
 
@@ -586,6 +606,9 @@ def pretty_repr(expression, name_map=None, indent=2, width=80, fresh_map=None, c
         Mapping from fresh variable names to short display names.
     counter : list, optional
         Mutable counter (list with one int) for generating short names.
+    leaf_sizes : dict, optional
+        Mapping from `Symbol` leaves to the number of rows of their
+        relation, printed next to them.
 
     Returns
     -------
@@ -595,6 +618,6 @@ def pretty_repr(expression, name_map=None, indent=2, width=80, fresh_map=None, c
     """
     printer = PrettyPrinter(
         name_map=name_map, indent=indent, width=width,
-        fresh_map=fresh_map, counter=counter,
+        fresh_map=fresh_map, counter=counter, leaf_sizes=leaf_sizes,
     )
     return printer.format(expression)

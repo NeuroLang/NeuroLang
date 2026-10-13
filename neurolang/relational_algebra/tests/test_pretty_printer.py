@@ -4,7 +4,7 @@ from typing import AbstractSet
 
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...utils import NamedRelationalAlgebraFrozenSet
-from ..pretty_printer import PrettyPrinter, pretty_repr
+from ..pretty_printer import PrettyPrinter, pretty_repr, rows_label
 from ..relational_algebra import (
     NameColumns,
     NaturalJoin,
@@ -85,4 +85,30 @@ def test_unnamed_table_leaf():
         NamedRelationalAlgebraFrozenSet(("a",), [(1,), (2,)]),
         verify_type=False,
     )
-    assert pretty_repr(table) == "Table(columns=['a'], rows=2)"
+    assert pretty_repr(table) == "Table(columns=['a']) ‹2 rows›"
+
+
+def test_named_leaves_show_their_size():
+    table = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("a",), [(1,), (2,), (3,)]),
+        verify_type=False,
+    )
+    plan = Product((table, Symbol("edge"), Symbol("other")))
+    printed = pretty_repr(
+        plan,
+        name_map={id(table): "voxel", Symbol("edge"): "edge"},
+        leaf_sizes={Symbol("edge"): 1234567},
+    )
+    assert printed.splitlines() == [
+        "×",
+        "├─ voxel ‹3 rows›",
+        "├─ edge ‹1,234,567 rows›",
+        "└─ other",
+    ]
+
+
+def test_rows_label():
+    assert rows_label(1) == "‹1 row›"
+    assert rows_label(0) == "‹0 rows›"
+    assert rows_label(8675289) == "‹8,675,289 rows›"
+    assert rows_label(None) == "‹? rows›"
