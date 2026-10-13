@@ -48,6 +48,9 @@ Usage
 
     # Interactive REPL (needs ``pip install "neurolang[tui]"``)
     neurolang-query -i --engine neurosynth
+
+    # ... or run REPL statements and dot-commands from a pipe
+    echo 'ans(x) :- study(x)' | neurolang-query -i
 """
 
 import argparse
@@ -382,7 +385,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Start an interactive REPL on the engine, rendering the "
         "query results as tables. A query given as argument or with "
         "--file is run first; --show-ra and --show-rewritten apply to "
-        "every query of the session.",
+        "every query of the session. If stdin is not a terminal, its "
+        "statements and dot-commands are run as a batch (exit status 1 "
+        "if one fails).",
     )
     parser.add_argument(
         "--debug",
@@ -899,7 +904,9 @@ def _run_interactive(args) -> None:
 
     A query given as argument or with ``--file`` is run in the session
     before the first prompt. ``--show-ra`` and ``--show-rewritten``
-    apply to every query of the session.
+    apply to every query of the session. When the standard input is not
+    a terminal, its statements are run as a batch and the CLI exits with
+    status 1 if one of them failed.
     """
     _check_interactive_flags(args)
     _check_flag_dependencies(args)
@@ -910,7 +917,9 @@ def _run_interactive(args) -> None:
     nl = engine_registry.build_engine(
         args.engine, Path(args.data_dir), args.resolution
     )
-    tui.main(nl, _tui_settings(args, tui), initial_program=program)
+    status = tui.main(nl, _tui_settings(args, tui), initial_program=program)
+    if status:
+        sys.exit(status)
 
 
 def main(argv: Optional[list] = None) -> None:

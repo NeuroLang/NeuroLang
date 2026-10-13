@@ -94,16 +94,15 @@ def test_query_result_sorted_with_cli_helpers(engine):
 
 
 @pytest.fixture
-def pipe_session():
-    """Yield a function making a prompt session fed with the given keys."""
-    from prompt_toolkit import PromptSession
+def pipe_session(small_app):
+    """Yield a function making the REPL session fed with the given keys."""
     from prompt_toolkit.input import create_pipe_input
     from prompt_toolkit.output import DummyOutput
 
     with create_pipe_input() as pipe:
         def make(keys):
             pipe.send_text(keys)
-            return PromptSession(input=pipe, output=DummyOutput())
+            return small_app._make_session(input=pipe, output=DummyOutput())
         yield make
 
 
@@ -377,3 +376,41 @@ def test_several_obtain_blocks_are_all_kept(peaks_engine):
     app._handle_dot_command(".more")
     assert "30 rows · showing 21–30 · end" in _output(app)
     assert app.results[0].remaining == 0
+
+
+def test_enter_continues_incomplete_statement(small_app, pipe_session):
+    calls = []
+    original = small_app._execute
+
+    def recording(program):
+        calls.append(program)
+        return original(program)
+
+    small_app._execute = recording
+    small_app.run(pipe_session("ans(x) :-\r  P(x)\r\x04"))
+    assert calls == ["ans(x) :-\n  P(x)"]
+
+
+def test_enter_on_empty_line_submits_incomplete_statement(
+    small_app, pipe_session
+):
+    small_app.run(pipe_session("ans(x) :- P(x,\r\r\x04"))
+    assert "Datalog parse error" in _output(small_app)
+
+
+def test_batch_runs_statements_and_reports_status(small_app):
+    lines = ["ans(x) :-\n", "  P(x)\n", ".format csv\n", "ans(x) :- P(x)\n"]
+    assert small_app.run_batch(lines) == 0
+    assert "2 rows" in _output(small_app)
+    assert "x\n1\n2" in _output(small_app)
+
+
+@pytest.mark.parametrize("statement", ["ans(x) :- P(x", ".nosuchcommand"])
+def test_batch_failure_status(small_app, statement):
+    lines = [statement + "\n", "\n", "ans(x) :- P(x)\n"]
+    assert small_app.run_batch(lines) == 1
+    assert "2 rows" in _output(small_app)
+
+
+def test_batch_stops_at_quit(small_app):
+    assert small_app.run_batch([".quit\n", "ans(x) :- P(\n"]) == 0

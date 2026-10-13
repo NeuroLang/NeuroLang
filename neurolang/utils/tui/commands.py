@@ -60,6 +60,7 @@ def run_command(app, line: str) -> None:
     name, _, arg = line.strip().partition(" ")
     cmd = COMMANDS.get(name.lower())
     if cmd is None:
+        app.failed = True
         app.console.print(
             unknown_command_message(name), style="yellow", markup=False
         )
@@ -100,7 +101,9 @@ def engine_examples(engine_name: str) -> dict:
 
 KEYS_HELP = """
 [bold cyan]Keys:[/bold cyan]
-  Enter                run the statement (continues an unfinished one)
+  Enter                run the statement; an unfinished one (open bracket,
+                       trailing ',' or ':-', SQUALL without its final '.')
+                       continues on a new line, an empty line runs it
   Alt+Enter            insert a newline
   Ctrl+C               discard the input, or interrupt a running query
   Ctrl+D               exit

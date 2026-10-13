@@ -2,6 +2,7 @@
 
 import difflib
 import re
+import sys
 import time
 import warnings
 from dataclasses import dataclass, field
@@ -32,12 +33,31 @@ from .commands import (
     engine_relations,
     run_command,
 )
+from .statements import is_complete, split_statements
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 
 
-def _newline_bindings() -> KeyBindings:
-    """Return key bindings inserting a newline on Alt+Enter and Ctrl+J."""
+def _input_bindings(is_squall) -> KeyBindings:
+    """
+    Return the key bindings of the prompt.
+
+    Enter runs the input when it is a complete statement (see
+    :func:`~.statements.is_complete`, *is_squall* tells the current
+    language) or when the current line is empty, and otherwise starts a
+    new line; Alt+Enter and Ctrl+J always insert a newline.
+    """
     bindings = KeyBindings()
+
+    @bindings.add("enter", filter=~HasSearch())
+    def _(event):
+        buffer = event.current_buffer
+        if (
+            is_complete(buffer.text, is_squall())
+            or not buffer.document.current_line.strip()
+        ):
+            buffer.validate_and_handle()
+        else:
+            buffer.insert_text("\n")
 
     @bindings.add("escape", "enter")
     @bindings.add("c-j", filter=~HasSearch())
@@ -106,6 +126,7 @@ class InteractiveTuiApp:
         self.console = console or Console()
         self.err_console = err_console or Console(stderr=True)
         self.results: list = []
+        self.failed = False
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
         else:
@@ -143,6 +164,7 @@ class InteractiveTuiApp:
 
     def _report_error(self, exc: Exception, program: str) -> None:
         """Print the error *exc* of *program* as the CLI does."""
+        self.failed = True
         report_error(
             exc, program, squall=self.settings.squall,
             debug=self.settings.debug, nl=self._nl,
@@ -211,12 +233,13 @@ class InteractiveTuiApp:
 
     def _execute_and_display(self, program: str) -> None:
         """Run a Datalog or SQUALL query and print its result."""
-        self.console.print("[dim]Running query...[/dim]")
+        self.err_console.print("[dim]Running query...[/dim]")
         t0 = time.perf_counter()
         try:
             result = self._execute_noting_warnings(program)
         except KeyboardInterrupt:
-            self.console.print("[yellow]Query interrupted[/yellow]")
+            self.failed = True
+            self.err_console.print("[yellow]Query interrupted[/yellow]")
             return
         except Exception as exc:
             self._report_error(exc, program)
@@ -224,7 +247,7 @@ class InteractiveTuiApp:
         elapsed = time.perf_counter() - t0
         if not self.settings.show_ra:
             self._show_result(result, self._column_names(program))
-        self.console.print(f"\n[dim]Query completed in {elapsed:.2f} s[/dim]")
+        self.err_console.print(f"[dim]Query completed in {elapsed:.2f} s[/dim]")
 
     def _handle_dot_command(self, line: str) -> None:
         """Run the dot-command on *line*."""
@@ -261,10 +284,19 @@ class InteractiveTuiApp:
         if example:
             self.console.print(f"Try: {example}", markup=False)
 
-    def _make_session(self) -> PromptSession:
-        """Return the prompt session reading the REPL input."""
+    def _make_session(self, **kwargs) -> PromptSession:
+        """
+        Return the prompt session reading the REPL input.
+
+        *kwargs* are passed to :class:`~prompt_toolkit.PromptSession`,
+        e.g. the ``input`` and ``output`` to use.
+        """
         return PromptSession(
-            history=self._history, key_bindings=_newline_bindings(),
+            **kwargs,
+            history=self._history,
+            key_bindings=_input_bindings(lambda: self.settings.squall),
+            multiline=True,
+            prompt_continuation=lambda width, *_: "." * (width - 1) + " ",
         )
 
     def _run_line(self, line: str) -> None:
@@ -313,7 +345,33 @@ class InteractiveTuiApp:
             pass
         self.console.print("[dim]Goodbye.[/dim]")
 
+    def run_batch(self, lines, initial_program: str = "") -> int:
+        """
+        Run the statements of *lines* without prompting, as a script.
 
-def main(nl, settings: TuiSettings, initial_program: str = "") -> None:
-    """Run the interactive REPL on the engine *nl*, as the CLI does."""
-    InteractiveTuiApp(nl, settings).run(initial_program=initial_program)
+        Statements are split as at the prompt; a non-empty
+        *initial_program* is run first. Return the exit status: 1 if a
+        statement failed, 0 otherwise.
+        """
+        if initial_program.strip():
+            self._execute_and_display(initial_program)
+        for statement in split_statements(lines, lambda: self.settings.squall):
+            try:
+                self._run_line(statement)
+            except QuitRepl:
+                break
+        return 1 if self.failed else 0
+
+
+def main(nl, settings: TuiSettings, initial_program: str = "") -> int:
+    """
+    Run the REPL on the engine *nl*, as the CLI does, and return its status.
+
+    When the standard input is not a terminal, its statements are run as
+    a batch (see :meth:`InteractiveTuiApp.run_batch`).
+    """
+    app = InteractiveTuiApp(nl, settings)
+    if not sys.stdin.isatty():
+        return app.run_batch(sys.stdin, initial_program)
+    app.run(initial_program=initial_program)
+    return 0
