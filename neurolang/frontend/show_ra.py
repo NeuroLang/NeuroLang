@@ -249,7 +249,7 @@ class PlanDisplay:
 
     def print_rule(
         self, rule, conjunction, symbol_table, ra_code, leaf_sizes=None,
-        column_roles=None, leaf_arities=None, notes=(),
+        column_roles=None, leaf_arities=None, notes=(), delta_symbols=(),
     ):
         """
         Print the ``--show-ra`` block of a rule.
@@ -263,6 +263,8 @@ class PlanDisplay:
         variable is in the rule header, and those in ``column_roles``
         with the label it maps them to. ``leaf_arities`` maps predicate
         symbols of the plan to the number of columns of their relation.
+        Leaves of ``delta_symbols`` are bound to the tuples derived in the
+        current iteration and printed as ``Δp``.
         """
         fresh_map = {}
         if rule is not None:
@@ -270,6 +272,8 @@ class PlanDisplay:
         for note in notes:
             print(note)
         name_map = self.name_map(conjunction, symbol_table)
+        for symbol in delta_symbols:
+            name_map[symbol] = "Δ" + self.symbol_name(symbol)
         print(pretty_repr(
             ra_code, name_map=name_map, leaf_sizes=leaf_sizes,
             fresh_map=fresh_map, column_roles=column_roles,
@@ -328,15 +332,66 @@ def _leaf_arities(predicates, symbol_table):
     return arities
 
 
+@dataclass
+class RulePlan:
+    """
+    A plan a rule was evaluated with, and when.
+
+    Parameters
+    ----------
+    conjunction : Conjunction
+        body of the rule the plan evaluates.
+    ra_code : Expression
+        relational algebra plan.
+    leaf_sizes : dict
+        sizes of the relations of the plan's leaves, when fixed.
+    leaf_arities : dict
+        arities of the relations of the plan's leaves.
+    deltas : frozenset
+        predicate symbols bound to the tuples derived in the current
+        iteration only (semi-naive evaluation).
+    iterations : list
+        iterations of the chase the plan was evaluated in.
+
+    """
+
+    conjunction: Conjunction
+    ra_code: Expression
+    leaf_sizes: dict
+    leaf_arities: dict
+    deltas: frozenset
+    iterations: list
+
+
+def iterations_label(iterations):
+    """Return ``iteration 1`` / ``iterations 2–4, 6`` for the iterations."""
+    ranges = []
+    for iteration in iterations:
+        if ranges and iteration == ranges[-1][1] + 1:
+            ranges[-1][1] = iteration
+        else:
+            ranges.append([iteration, iteration])
+    text = ", ".join(
+        str(first) if first == last else f"{first}–{last}"
+        for first, last in ranges
+    )
+    plural = "s" if len(iterations) > 1 else ""
+    return f"iteration{plural} {text}"
+
+
 class ShowRAChaseMixin:
     """
     Chase mixin printing the named RA expression of each rule.
 
-    Before each rule is evaluated, the named RA expression it is
-    evaluated with is printed. Errors raised while evaluating a rule
-    (e.g. a predicate used with the wrong arity) reach the caller, as
-    they do without show-ra. The plans are printed with the
-    :class:`PlanDisplay` ``show_ra_display``.
+    The named RA plan each rule is evaluated with is recorded and, once
+    the stratum is evaluated, printed: each rule once, with its plan, or
+    with each of its plans and the iterations they were used in when the
+    semi-naive evaluation binds predicates to their delta (``Δp``) in
+    some iterations only. Iterative strata end with the number of
+    iterations needed to reach the fixpoint. Errors raised while
+    evaluating a rule (e.g. a predicate used with the wrong arity) reach
+    the caller, as they do without show-ra. The plans are printed with
+    the :class:`PlanDisplay` ``show_ra_display``.
     """
 
     show_ra_display = PlanDisplay()
@@ -345,35 +400,121 @@ class ShowRAChaseMixin:
         """Initialise the chase with no current rule."""
         super().__init__(*args, **kwargs)
         self._show_ra_current_rule = None
+        self._show_ra_evaluations = {}
+        self._show_ra_plans = None
+
+    def execute_chase(self, rules, instance_update, instance):
+        """Run the chase of a stratum, then print its rules' plans."""
+        self._show_ra_plans = {}
+        self._show_ra_evaluations = {}
+        try:
+            return super().execute_chase(rules, instance_update, instance)
+        finally:
+            self._print_show_ra_plans()
 
     def chase_step(self, instance, rule, restriction_instance=None):
         """Record ``rule`` as the current rule, then run the step."""
         self._show_ra_current_rule = rule
+        self._show_ra_evaluations[rule] = (
+            self._show_ra_evaluations.get(rule, 0) + 1
+        )
         return super().chase_step(instance, rule, restriction_instance)
 
     def obtain_substitutions(
         self, rule_predicates_iterator, instance, restriction_instance
     ):
-        """Print the RA plan of the current rule, then evaluate it."""
+        """Record the RA plan of the current rule, then evaluate it."""
         predicates = tuple(rule_predicates_iterator)
         if not predicates:
             return []
-        conjunction = Conjunction(predicates)
-        ra_code = self.translate_conjunction_to_named_ra(conjunction)
         symbol_table = self.ra_symbol_table(
             predicates, instance, restriction_instance
         )
-        self.show_ra_display.print_rule(
-            getattr(self, "_show_ra_current_rule", None),
-            conjunction,
-            getattr(self, "datalog_program", None),
-            ra_code,
-            self._show_ra_leaf_sizes(predicates, symbol_table),
-            leaf_arities=_leaf_arities(predicates, symbol_table),
+        self._record_show_ra_plan(
+            predicates, symbol_table, restriction_instance
         )
         return super().obtain_substitutions(
             iter(predicates), instance, restriction_instance
         )
+
+    def _is_iterative(self):
+        """Return whether the chase iterates up to a fixpoint."""
+        return isinstance(self, (ChaseNaive, ChaseSemiNaive))
+
+    def _record_show_ra_plan(
+        self, predicates, symbol_table, restriction_instance
+    ):
+        """Record the plan of the current rule evaluated on ``predicates``."""
+        rule = self._show_ra_current_rule
+        deltas = frozenset()
+        if self._is_iterative() and restriction_instance:
+            deltas = frozenset(
+                predicate.functor for predicate in predicates
+                if isinstance(predicate, FunctionApplication)
+                and predicate.functor in restriction_instance
+            )
+        iteration = self._show_ra_evaluations.get(rule, 1)
+        variants = self._show_ra_plans_of(rule)
+        for plan in variants:
+            if plan.deltas == deltas:
+                plan.iterations.append(iteration)
+                return
+        conjunction = Conjunction(predicates)
+        variants.append(RulePlan(
+            conjunction,
+            self.translate_conjunction_to_named_ra(conjunction),
+            self._show_ra_leaf_sizes(predicates, symbol_table),
+            _leaf_arities(predicates, symbol_table),
+            deltas,
+            [iteration],
+        ))
+        if self._show_ra_plans is None:
+            # Evaluated outside execute_chase: print right away.
+            self._print_rule_plans(rule, variants)
+            variants.clear()
+
+    def _show_ra_plans_of(self, rule):
+        """Return the list of plans recorded for ``rule``."""
+        if self._show_ra_plans is None:
+            return []
+        return self._show_ra_plans.setdefault(rule, [])
+
+    def _print_show_ra_plans(self):
+        """Print the recorded plans of the stratum's rules."""
+        plans, self._show_ra_plans = self._show_ra_plans, None
+        if not plans:
+            return
+        for rule, variants in plans.items():
+            self._print_rule_plans(rule, variants)
+        if self._is_iterative():
+            iterations = max(self._show_ra_evaluations.values(), default=0)
+            print(f"(fixpoint reached after {iterations} iterations)")
+        deltas = set().union(*(
+            plan.deltas for variants in plans.values() for plan in variants
+        ))
+        for symbol in sorted(deltas, key=lambda symbol: symbol.name):
+            name = self.show_ra_display.symbol_name(symbol)
+            print(
+                f"(Δ{name}: only the {name} tuples derived in the current "
+                "iteration)"
+            )
+
+    def _print_rule_plans(self, rule, variants):
+        """Print ``rule`` with its plans, labelled when there are many."""
+        for position, plan in enumerate(variants):
+            notes = ()
+            if len(variants) > 1:
+                notes = (f"{iterations_label(plan.iterations)}:",)
+            self.show_ra_display.print_rule(
+                rule if position == 0 else None,
+                plan.conjunction,
+                getattr(self, "datalog_program", None),
+                plan.ra_code,
+                plan.leaf_sizes,
+                leaf_arities=plan.leaf_arities,
+                notes=notes,
+                delta_symbols=plan.deltas,
+            )
 
     def _show_ra_leaf_sizes(self, predicates, symbol_table):
         """
@@ -385,7 +526,7 @@ class ShowRAChaseMixin:
         iteration, are left out.
         """
         varying = set()
-        if isinstance(self, (ChaseNaive, ChaseSemiNaive)):
+        if self._is_iterative():
             varying = {rule.consequent.functor for rule in self.rules}
         varying |= self.show_ra_display.unknown_size_symbols
         sizes = {}

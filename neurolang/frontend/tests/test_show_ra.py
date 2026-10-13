@@ -17,6 +17,7 @@ from ...relational_algebra import (
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..show_ra import (
     ShowRAOptions,
+    iterations_label,
     probability_column_roles,
     show_ra_options,
 )
@@ -395,3 +396,48 @@ def test_non_query_probabilistic_rules_are_inlined(capsys):
     assert block.split("──\n")[1].startswith(
         "(probabilistic rule: inlined into the queries using it"
     )
+
+
+TRANSITIVE_CLOSURE = (
+    "reach(x, y) :- edge(x, y).\n"
+    "reach(x, y) :- reach(x, z), edge(z, y).\n"
+    "ans(x, y) :- reach(x, y)."
+)
+
+
+def test_recursive_rules_printed_once_with_fixpoint(capsys):
+    out = show_ra_output(capsys, TRANSITIVE_CLOSURE)
+    assert out.count("── rule reach(x, y) :-\n    edge(x, y) ──") == 1
+    assert out.count("── rule reach(x, y) :-\n    reach(x, z),") == 1
+    assert "(fixpoint reached after 3 iterations)" in out
+
+
+def test_recursive_rule_delta_plan_marked(capsys):
+    """Check that plans binding a predicate to its delta are marked Δ."""
+    out = show_ra_output(capsys, TRANSITIVE_CLOSURE)
+    recursive = out.split("    reach(x, z),\n    edge(z, y) ──\n")[1]
+    assert recursive.splitlines()[:6] == [
+        "iteration 1:",
+        "⋈",
+        "├─ Δreach(x, z)",
+        "└─ edge(z, y) ‹3 rows›",
+        "iterations 2–3:",
+        "⋈",
+    ]
+    assert "(Δreach: only the reach tuples derived in the current " \
+        "iteration)" in out
+
+
+def test_non_recursive_stratum_has_no_fixpoint(capsys):
+    out = show_ra_output(capsys, THREE_WAY_JOIN)
+    assert "fixpoint" not in out
+    assert "iteration" not in out
+
+
+@pytest.mark.parametrize("iterations,label", [
+    ([1], "iteration 1"),
+    ([2, 3], "iterations 2–3"),
+    ([1, 2, 3, 5], "iterations 1–3, 5"),
+])
+def test_iterations_label(iterations, label):
+    assert iterations_label(iterations) == label
