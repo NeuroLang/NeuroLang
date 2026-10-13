@@ -2,12 +2,14 @@
 
 import io
 import threading
+import time
 
 import pytest
 
 pytest.importorskip("prompt_toolkit")
 pytest.importorskip("rich")
 
+from prompt_toolkit.completion import CompleteEvent  # noqa: E402
 from prompt_toolkit.document import Document  # noqa: E402
 from prompt_toolkit.enums import EditingMode  # noqa: E402
 from rich.console import Console  # noqa: E402
@@ -19,6 +21,10 @@ from neurolang.frontend.datalog.standard_syntax import (  # noqa: E402
 from neurolang.utils.interactive_parsing import LarkCompleter  # noqa: E402
 from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
 from neurolang.utils.tui.commands import COMMANDS  # noqa: E402
+from neurolang.utils.tui.completion import (  # noqa: E402
+    PredicateInfo,
+    argument_context,
+)
 from neurolang.utils.tui.editing import (  # noqa: E402
     SQUALL_KEYWORDS,
     NeuroLangLexer,
@@ -29,6 +35,11 @@ from neurolang.utils.tui.editing import (  # noqa: E402
 
 def _texts(completer, text):
     return [c.text for c in completer.get_completions(Document(text), None)]
+
+
+def _catalog(*names):
+    infos = {name: PredicateInfo(name, "stored") for name in names}
+    return lambda: infos
 
 
 @pytest.fixture
@@ -76,14 +87,14 @@ class TestNeuroLangReplCompleter:
 
     def test_engine_predicates(self):
         completer = NeuroLangReplCompleter(
-            engine_predicates={"term", "study", "peak"}
+            predicates=_catalog("term", "study", "peak")
         )
         texts = _texts(completer, "st")
         assert "study" in texts
         assert "term" not in texts
 
     def test_predicates_skipped_for_non_identifiers(self):
-        completer = NeuroLangReplCompleter(engine_predicates={"term"})
+        completer = NeuroLangReplCompleter(predicates=_catalog("term"))
         assert "term" not in _texts(completer, "12")
 
 
@@ -115,7 +126,7 @@ def app():
 def test_session_completes_engine_predicates(app):
     session = app._make_session()
     assert session.completer is app.completer
-    assert {"P", "peak_reported"} <= app.completer.predicates
+    assert "P" in _texts(app.completer, "ans(x) :- ")
 
 
 def test_toolbar(app):
@@ -165,3 +176,170 @@ def test_tab_completes_at_the_prompt(app):
         for timer in timers:
             timer.join()
     assert "Dot commands:" in app.console.file.getvalue()
+
+
+@pytest.fixture
+def neurosynth_app():
+    """Return a REPL on a small engine named like neurosynth's."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, 2, 3, "s1")], name="peak_reported")
+    nl.add_tuple_set([("s1", "pain", 0.5)], name="term_in_study_tfidf")
+    nl.execute_datalog_program(
+        "mentions(s, t) :- term_in_study_tfidf(s, t, v)"
+    )
+    console = Console(file=io.StringIO(), width=100)
+    app = InteractiveTuiApp(
+        nl, TuiSettings(engine_name="neurosynth"), console=console,
+        err_console=console,
+    )
+    app._make_session()
+    return app
+
+
+def _completions(app, text, requested=True):
+    event = CompleteEvent(
+        text_inserted=not requested, completion_requested=requested
+    )
+    return list(app.completer.get_completions(Document(text), event))
+
+
+def _words(app, text):
+    return [c.text for c in _completions(app, text)]
+
+
+def _metas(app, text):
+    return {c.text: c.display_meta_text for c in _completions(app, text)}
+
+
+class TestDynamicCompletion:
+    def test_predicate_ranked_before_grammar(self, neurosynth_app):
+        texts = _words(neurosynth_app, "ans(x) :- pe")
+        assert texts[0] == "peak_reported"
+        assert "(" not in texts
+
+    def test_no_placeholders_or_punctuation(self, neurosynth_app):
+        for text in ("ans(x) :- ", "ans(x) :- peak_reported(", "ans(x) "):
+            for completion in _completions(neurosynth_app, text):
+                word = completion.text
+                assert not word.startswith("<"), (text, word)
+                assert word not in {"(", ")", "@", "...", "-", ",", "lambda"}
+
+    def test_grammar_operator_after_head(self, neurosynth_app):
+        assert _words(neurosynth_app, "ans(x) ") == [
+            ":-"
+        ]
+
+    def test_keywords_after_predicates(self, neurosynth_app):
+        texts = _words(neurosynth_app, "ans(x) :- ")
+        assert texts.index("peak_reported") < texts.index("EXISTS")
+        assert texts.index("PROB") < texts.index("~")
+
+    def test_engine_idb_offered(self, neurosynth_app):
+        metas = _metas(neurosynth_app, "ans(x) :- me")
+        assert metas["mentions"] == "mentions(s, t) · derived"
+
+    def test_session_rule_offered_once_defined(self, neurosynth_app):
+        assert "myp" not in _metas(neurosynth_app, "ans(x) :- my")
+        neurosynth_app._execute_and_display(
+            "myp(x) :- peak_reported(x, y, z, s)"
+        )
+        metas = _metas(neurosynth_app, "ans(x) :- my")
+        assert metas["myp"] == "myp(x) · session"
+
+    def test_loaded_relation_offered(self, neurosynth_app, tmp_path):
+        path = tmp_path / "regions.csv"
+        path.write_text("region,label\n1,amygdala\n")
+        neurosynth_app._handle_dot_command(f".load {path}")
+        metas = _metas(neurosynth_app, "ans(x) :- reg")
+        assert metas["regions"] == "regions(region, label) · loaded"
+        assert _metas(neurosynth_app, "ans(x) :- regions(1, ")["label"] == (
+            "column 2 of regions"
+        )
+
+    def test_declared_columns_and_meta(self, neurosynth_app):
+        metas = _metas(neurosynth_app, "ans(x) :- pe")
+        assert metas["peak_reported"] == (
+            "peak_reported(i, j, k, study_id) · stored"
+        )
+        assert _metas(neurosynth_app, "ans(x) :- te")[
+            "term_in_study_tfidf"
+        ] == "term_in_study_tfidf(study_id, term, tfidf) · stored"
+
+    def test_unknown_columns_shown_as_arity(self, neurosynth_app):
+        neurosynth_app._nl.add_tuple_set([(1, 2)], name="pairs")
+        assert _metas(neurosynth_app, "ans(x) :- pa")["pairs"] == (
+            "pairs/2 · stored"
+        )
+
+    def test_yaml_predicates_absent_from_engine_not_offered(
+        self, neurosynth_app
+    ):
+        texts = _words(neurosynth_app, "ans(x) :- ")
+        assert "voxel" not in texts and "selected_study" not in texts
+
+    def test_column_names_inside_arguments(self, neurosynth_app):
+        completions = _completions(
+            neurosynth_app, "ans(x) :- peak_reported(x, "
+        )
+        assert completions[0].text == "j"
+        assert completions[0].display_meta_text == (
+            "column 2 of peak_reported"
+        )
+        texts = [c.text for c in completions]
+        assert {"x", "i", "k", "study_id"} <= set(texts)
+        assert "peak_reported" not in texts
+
+    def test_idb_parameters_as_columns(self, neurosynth_app):
+        texts = _words(neurosynth_app, "q(y) :- mentions(")
+        assert texts[:2] == ["s", "y"]
+
+    def test_aggregations_in_rule_head(self, neurosynth_app):
+        metas = _metas(neurosynth_app, "q(x, co")
+        assert metas["count"] == "aggregation"
+        assert "count" not in _metas(neurosynth_app, "q(x) :- p(x, co")
+
+    def test_functions_ranked_after_relations(self, neurosynth_app):
+        texts = _words(neurosynth_app, "ans(x) :- me")
+        assert texts == ["mentions", "mean"]
+
+    def test_probabilistic_choice(self, neurosynth_app):
+        neurosynth_app._nl.add_uniform_probabilistic_choice_over_set(
+            [("s1",), ("s2",)], name="selected_study"
+        )
+        assert _metas(neurosynth_app, "ans(x) :- sel")["selected_study"] == (
+            "selected_study(study_id) · probabilistic"
+        )
+
+    def test_no_popup_while_typing_without_a_word(self, neurosynth_app):
+        assert _completions(neurosynth_app, "ans(x) :- ", False) == []
+        assert _completions(neurosynth_app, "ans(x) :- pe", False)
+
+    def test_invalid_prefix_still_offers_predicates(self, neurosynth_app):
+        assert "peak_reported" in _words(neurosynth_app, "ans(x) :- ) pe")
+
+    def test_squall_offers_predicates_and_keywords(self, neurosynth_app):
+        neurosynth_app.settings.squall = True
+        texts = _words(neurosynth_app, "obtain every pe")
+        assert texts[0] == "peak_reported"
+        assert "peaks" in texts
+        assert _completions(neurosynth_app, "obtain ") == []
+
+    def test_completion_is_fast(self, neurosynth_app):
+        # On the full neurosynth engine a completion takes about 1 ms.
+        start = time.perf_counter()
+        for _ in range(20):
+            _completions(neurosynth_app, "ans(x) :- peak_reported(x, y")
+            _completions(neurosynth_app, "ans(x) :- pe")
+        assert (time.perf_counter() - start) / 40 < 0.05
+
+
+def test_predicate_info_signature():
+    assert PredicateInfo("f", "function").signature() == "f"
+    assert PredicateInfo("p", "stored", None, 2).signature() == "p/2"
+    assert PredicateInfo("p", "stored", ("a",), 1).meta() == "p(a) · stored"
+
+
+def test_argument_context():
+    assert argument_context("ans(x) :- p(a, (b), ") == ("p", 2)
+    assert argument_context("ans(x) :- p(a)") is None
+    assert argument_context("ans(x) :- (x ") is None

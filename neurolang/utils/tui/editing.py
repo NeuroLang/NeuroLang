@@ -1,30 +1,29 @@
 """
 Line editing of the interactive REPL.
 
-It provides grammar-aware completion (:class:`NeuroLangReplCompleter`),
-with a keyword fallback for SQUALL, whose Earley parser cannot complete
-interactively, syntax highlighting (:class:`NeuroLangLexer`), the bottom
-toolbar, suggestions from the history and the vi and emacs editing
+It provides the completion of predicates, their columns and the
+grammar (:class:`~.completion.NeuroLangReplCompleter`), with a keyword
+fallback for SQUALL, whose Earley parser cannot complete interactively,
+syntax highlighting (:class:`NeuroLangLexer`), the bottom toolbar,
+suggestions from the history and the vi and emacs editing
 modes (``.mode vi|emacs``).
 """
 
 from html import escape
-from typing import Callable, Optional
 
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
-from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 
-from neurolang.datalog import WrappedRelationalAlgebraSet
 from neurolang.frontend.datalog.standard_syntax import COMPILED_GRAMMAR
-from neurolang.utils import engine_registry
+from neurolang.utils.cli import _declared_columns
 from neurolang.utils.interactive_parsing import LarkCompleter
 
-from .commands import COMMANDS, MODES
+from .commands import MODES
+from .completion import NeuroLangReplCompleter, predicate_catalog
 
 SQUALL_KEYWORDS = list(dict.fromkeys([
     "define", "as", "obtain", "every", "a", "an", "the",
@@ -37,88 +36,6 @@ SQUALL_KEYWORDS = list(dict.fromkeys([
     "all", "each", "some", "no", "any",
     "most", "few", "both", "neither",
 ]))
-
-
-def _word_prefix(text: str) -> str:
-    """Return the word being typed at the end of *text*."""
-    return text[text.rfind(" ") + 1:]
-
-
-class NeuroLangReplCompleter(Completer):
-    """
-    Complete dot-commands, the Datalog grammar and engine predicates.
-
-    Datalog input is completed with the LALR grammar's *lark_completer*;
-    SQUALL input, or any input without *lark_completer*, with the
-    *squall_keywords*. *is_squall* tells whether the input is SQUALL.
-    """
-
-    def __init__(
-        self,
-        lark_completer: Optional[LarkCompleter] = None,
-        engine_predicates: Optional[set] = None,
-        squall_keywords: Optional[list] = None,
-        is_squall: Optional[Callable[[], bool]] = None,
-    ):
-        """Set up the completion sources."""
-        self._lark = lark_completer
-        self.predicates = engine_predicates or set()
-        self._squall_keywords = squall_keywords or []
-        self._is_squall = is_squall or (lambda: False)
-
-    def get_completions(self, document, complete_event):
-        """Yield the completions of the text before the cursor."""
-        text = document.text_before_cursor
-        if text.startswith("."):
-            yield from self._command_completions(text)
-            return
-        use_grammar = self._lark is not None and not self._is_squall()
-        if use_grammar:
-            yield from self._grammar_completions(text)
-        prefix = _word_prefix(text)
-        if prefix[:1].isalpha() or prefix[:1] == "_":
-            yield from self._completions(
-                sorted(self.predicates), prefix, "predicate"
-            )
-        if not use_grammar:
-            yield from self._completions(
-                self._squall_keywords, prefix, "keyword"
-            )
-
-    @staticmethod
-    def _command_completions(text: str):
-        """Yield the dot-commands starting with *text*."""
-        for name in COMMANDS:
-            if name.startswith(text):
-                yield Completion(name, start_position=-len(text))
-
-    @staticmethod
-    def _completions(words, prefix: str, meta: str):
-        """Yield the *words* starting with *prefix*, described by *meta*."""
-        for word in words:
-            if word.startswith(prefix):
-                yield Completion(
-                    word, start_position=-len(prefix), display_meta=meta
-                )
-
-    def _grammar_completions(self, text: str):
-        """Yield the tokens the Datalog grammar accepts after *text*."""
-        try:
-            result = self._lark.complete(text)
-        except Exception:
-            return
-        seen = set()
-        for category, container in result.token_options.items():
-            for value in container.get("values", set()):
-                if not value or value in seen:
-                    continue
-                seen.add(value)
-                yield Completion(
-                    value,
-                    start_position=-len(result.prefix),
-                    display=value.strip("<>"),
-                    display_meta=category,
-                )
 
 
 OPERATOR_CHARS = frozenset(":-+~¬(),.=!|&")
@@ -182,30 +99,23 @@ def _run_end(line: str, start: int, accept) -> int:
 STYLE = Style([("keyword", "bold #ff8800")])
 
 
-def engine_predicates(nl, engine_name: str) -> set:
-    """Return the names of the engine's sets and declared predicates."""
-    names = {
-        getattr(symbol, "name", str(symbol))
-        for symbol, value in nl.program_ir.symbol_table.items()
-        if isinstance(
-            getattr(value, "value", value), WrappedRelationalAlgebraSet
-        )
-    }
-    if engine_name:
-        names.update(engine_registry.get_predicates(engine_name))
-    return names
-
-
 def make_completer(app) -> NeuroLangReplCompleter:
-    """Return the completer of the REPL *app*."""
+    """
+    Return the completer of the REPL *app*.
+
+    It reads the predicates from the engine at each completion, naming
+    their columns with those the engine declares and those of the
+    relations loaded with ``.load``.
+    """
     try:
         lark = LarkCompleter(COMPILED_GRAMMAR)
     except Exception:
         lark = None
+    declared = _declared_columns(app.settings.engine_name)
     return NeuroLangReplCompleter(
         lark_completer=lark,
-        engine_predicates=engine_predicates(
-            app._nl, app.settings.engine_name
+        predicates=lambda: predicate_catalog(
+            app._nl, declared, app.loaded_relations
         ),
         squall_keywords=SQUALL_KEYWORDS,
         is_squall=lambda: app.settings.squall,
@@ -220,7 +130,7 @@ def toolbar(app) -> HTML:
     editing = "VI" if app.settings.vi_mode else "EM"
     return HTML(
         f"<b>nl({escape(app.settings.engine_name)}:{mode})</b>  "
-        f"preds:{len(app.completer.predicates)}  {result}  [{editing}]"
+        f"{result}  [{editing}]"
     )
 
 
