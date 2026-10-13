@@ -55,7 +55,11 @@ from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
 from ..logic.horn_clauses import Fol2DatalogTranslationException
 from . import query_resolution_expressions as fe
-from .show_ra import print_deterministic_ra_plan, show_ra_options
+from .show_ra import (
+    generated_query_symbol,
+    print_deterministic_ra_plan,
+    show_ra_options,
+)
 
 __all__ = ["QueryBuilderDatalog"]
 
@@ -943,6 +947,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 print_deterministic_ra_plan(
                     self.chase_class, self.program_ir, reachable_rules,
                     show_ra_options(show_ra),
+                    generated_query_symbol(magic_query_expression),
                 )
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
             else:

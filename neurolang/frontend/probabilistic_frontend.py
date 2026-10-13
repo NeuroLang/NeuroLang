@@ -105,7 +105,11 @@ from .type_resolution import TypeResolutionMixin
 from .datalog.squall import ResolveInvertedFunctionApplicationMixin, StripDimensionTypePredicatesMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
-from .show_ra import ShowRAStratumSolver, show_ra_options
+from .show_ra import (
+    ShowRAStratumSolver,
+    generated_query_symbol,
+    show_ra_options,
+)
 from .stratum_solver import StratumSolver
 
 
@@ -506,14 +510,17 @@ class NeurolangPDL(QueryBuilderDatalog):
         :class:`~neurolang.frontend.show_ra.ShowRAOptions` of the display.
         An empty set is returned.
         """
+        stratum_solver = ShowRAStratumSolver(
+            self, options, generated_query_symbol(query)
+        )
         try:
             magic_query, _ = self._magic_rewrite_query(query)
             self._handle_rewritten_output(
                 magic_query, show_rewritten, dry_run
             )
-            self._solve(magic_query, show_ra=options)
+            self._solve(magic_query, stratum_solver=stratum_solver)
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
-            self._solve(query, show_ra=options)
+            self._solve(query, stratum_solver=stratum_solver)
         return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
 
     def solve_all(self, show_ra=False) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
@@ -554,16 +561,20 @@ class NeurolangPDL(QueryBuilderDatalog):
         solution_ir = self._solve(show_ra=show_ra)
         return self._solution_to_named_sets(solution_ir)
 
-    def _solve(self, query=None, show_ra=False):
+    def _solve(self, query=None, show_ra=False, stratum_solver=None):
+        """
+        Solve the program, restricted to ``query`` when given.
+
+        The strata are solved by ``stratum_solver``; when it is None, a
+        :class:`StratumSolver` or, if ``show_ra`` requests it, a
+        :class:`~neurolang.frontend.show_ra.ShowRAStratumSolver`.
+        """
         idbs = stratify_program(query, self.program_ir)
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         postprob_idb = idbs.get("post_probabilistic", Union(tuple()))
-        options = show_ra_options(show_ra)
-        if options is None:
-            stratum_solver = StratumSolver(self)
-        else:
-            stratum_solver = ShowRAStratumSolver(self, options)
+        if stratum_solver is None:
+            stratum_solver = self._stratum_solver(show_ra_options(show_ra))
         solution = stratum_solver.deterministic(det_idb)
         if prob_idb.formulas:
             solution = stratum_solver.probabilistic(solution, prob_idb)
@@ -572,6 +583,12 @@ class NeurolangPDL(QueryBuilderDatalog):
                 solution, postprob_idb
             )
         return solution
+
+    def _stratum_solver(self, show_ra_opts):
+        """Return the stratum solver for the ShowRAOptions (or None)."""
+        if show_ra_opts is None:
+            return StratumSolver(self)
+        return ShowRAStratumSolver(self, show_ra_opts)
 
     def _solve_deterministic_stratum(self, det_idb):
         '''Resolution of the deterministic stratum. In case there

@@ -1,4 +1,6 @@
 """Tests for the relational algebra plan display (``show_ra``)."""
+import re
+
 import pytest
 
 from .. import NeurolangDL, NeurolangPDL
@@ -65,3 +67,39 @@ def test_show_ra_accepts_options(show_ra, engine_class, capsys):
     nl.add_tuple_set([(1,), (2,)], name="p")
     nl.execute_datalog_program("ans(x) :- p(x).", show_ra=show_ra)
     assert "── deterministic stratum ──" in capsys.readouterr().out
+
+
+UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}")
+
+
+@pytest.mark.parametrize("engine_class", [NeurolangDL, NeurolangPDL])
+def test_query_head_displayed_as_ans(engine_class, capsys):
+    """Check that the predicate generated for a query is shown as ans."""
+    nl = engine_class()
+    nl.add_tuple_set([(1,), (2,)], name="p")
+    out = show_ra_output(capsys, "ans(x) :- p(x).", engine=nl)
+    assert "── rule ans(x) :-" in out
+    assert not UUID.search(out)
+
+
+def test_query_head_displayed_as_query_when_ans_exists(capsys):
+    """Check that the query is shown as query when ans is a predicate."""
+    nl = build_engine()
+    nl.add_tuple_set([(1,)], name="ans")
+    with nl.scope as e:
+        nl.query((e.x,), e.p[e.x], show_ra=True)
+    out = capsys.readouterr().out
+    assert "── rule query(x) :-" in out
+    assert not UUID.search(out)
+
+
+def test_conditional_query_head_displayed_as_ans(capsys):
+    """Check that the fresh predicate of a ``//`` query is shown as ans."""
+    out = show_ra_output(
+        capsys,
+        "al(x, l) :- active(x), label(x, l).\n"
+        "ans(l, p) :- PROB[al(x, l) // picked(x)] = p.",
+    )
+    assert "ans^cond_num(l, PROB(l))" in out
+    assert "ans^cond_den(PROB())" in out
+    assert "fresh_" not in out
