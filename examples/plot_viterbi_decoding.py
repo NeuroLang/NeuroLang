@@ -246,12 +246,13 @@ print("✅  Viterbi decoding complete using MaxProductSemiring")
 # What's happening under the hood
 # --------------------------------
 #
-# The key mechanism is in
-# :class:`~neurolang.relational_algebra_provenance.IndependentDisjointProjectionsAndUnionMixin`.
-# When processing ``independent_projection`` (the existential quantifier),
-# the solver checks which semiring is active:
+# The provenance solvers in :mod:`neurolang.relational_algebra_provenance`
+# delegate every provenance operation to the active
+# :class:`~neurolang.provenance_semiring.Semiring`. When processing
+# ``independent_projection`` (the existential quantifier), the semiring
+# builds the aggregation:
 #
-# - **ProbabilitySemiring** → ``GROUP BY state, AGG=sum``
+# - **ProbabilitySemiring** → ``GROUP BY state``, :math:`1 - \prod(1 - p)`
 # - **MaxProductSemiring** → ``GROUP BY state, AGG=max``
 #
 # The backpointer query ``bp(z, y) :- v1(y), trans(y, z)`` keeps both

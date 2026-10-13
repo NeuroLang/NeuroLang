@@ -51,7 +51,8 @@ Intermediate Language Representations
    datalog
    probabilistic
    relational_algebra
-   relational_algebra_provenance 
+   relational_algebra_provenance
+   provenance_semiring
 
 
 Command-line Interface & Engine Registry

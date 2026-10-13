@@ -1,4 +1,3 @@
-import math
 import operator
 
 from .exceptions import RelationalAlgebraError
@@ -39,22 +38,12 @@ from .relational_algebra import (
     int2columnint_constant,
     str2columnstr_constant
 )
+from .provenance_semiring import ProbabilitySemiring
 from .utils import OrderedSet
-from .probabilistic.semiring import (
-    MaxProductSemiring,
-    ProbabilitySemiring,
-)
 
 ADD = Constant(operator.add)
-MUL = Constant(operator.mul)
-SUB = Constant(operator.sub)
-LT = Constant(operator.lt)
-EQ = Constant(operator.eq)
 SUM = Constant(sum)
-EXP = Constant(math.exp)
-LOG = Constant(math.log)
-ONE = Constant[float](1.)
-LARGE_NEG = Constant[float](-1e20)
+DEFAULT_SEMIRING = ProbabilitySemiring()
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -173,6 +162,8 @@ class DisjointProjection(LiftedPlanProjection):
 
 
 class WeightedNaturalJoinSolverMixin(PatternWalker):
+    semiring = DEFAULT_SEMIRING
+
     @add_match(
         WeightedNaturalJoin,
         lambda join_op: all(
@@ -216,17 +207,7 @@ class WeightedNaturalJoinSolverMixin(PatternWalker):
             relation = NaturalJoin(relation, relation_)
 
         prov_col = str2columnstr_constant(Symbol.fresh().name)
-        semiring = getattr(self, 'semiring', ProbabilitySemiring())
-        if isinstance(semiring, MaxProductSemiring) and prov_columns:
-            agg_fn = Constant(semiring.agg_add())
-            if len(prov_columns) == 1:
-                dst_prov_expr = prov_columns[0]
-            else:
-                dst_prov_expr = FunctionApplication(
-                    agg_fn, tuple(prov_columns)
-                )
-        else:
-            dst_prov_expr = sum(prov_columns[1:], prov_columns[0])
+        dst_prov_expr = self.semiring.add_expression(prov_columns)
         relation = ExtendedProjection(
             relation,
             (FunctionApplicationListMember(
@@ -247,141 +228,37 @@ class WeightedNaturalJoinSolverMixin(PatternWalker):
 
 
 class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
+    semiring = DEFAULT_SEMIRING
+
     @add_match(IndependentProjection(ProvenanceAlgebraSet, ...))
     def independent_projection(self, proj_op):
         prov_set = proj_op.relation
-        prov_col = prov_set.provenance_column
-
-        semiring = getattr(self, 'semiring', ProbabilitySemiring())
-        if isinstance(semiring, MaxProductSemiring):
-            agg_fn = Constant(semiring.agg_add())
-            aggregate_functions = (
-                FunctionApplicationListMember(
-                    FunctionApplication(agg_fn, (prov_col,)),
-                    prov_col,
-                ),
-            )
-            operation = GroupByAggregation(
-                prov_set.relation,
-                proj_op.attributes,
-                aggregate_functions,
-            )
-            return ProvenanceAlgebraSet(operation, prov_col)
-
-        # Probability semiring: 1 - ∏ (1 - p) via log-space
-        proj_list = [
-            FunctionApplicationListMember(col, col)
-            for col in prov_set.non_provenance_columns
-        ]
-        proj_list_log = proj_list + [
-            FunctionApplicationListMember(
-                LOG(ONE - prov_col),
-                prov_col,
-            )
-        ]
-        proj_list_0 = proj_list + [
-            FunctionApplicationListMember(
-                LARGE_NEG,
-                prov_col,
-            )
-        ]
-        relation_log = ExtendedProjection(
-            Selection(prov_set.relation, FunctionApplication(LT, (prov_col, ONE))),
-            proj_list_log
+        relation = self.semiring.independent_projection(
+            prov_set.relation,
+            prov_set.provenance_column,
+            prov_set.non_provenance_columns,
+            proj_op.attributes,
         )
-        relation_zero = ExtendedProjection(
-            Selection(prov_set.relation, FunctionApplication(EQ, (prov_col, ONE))),
-            proj_list_0
-        )
-        relation = Union(relation_log, relation_zero)
-        relation = GroupByAggregation(
-            relation,
-            groupby=proj_op.attributes,
-            aggregate_functions=(
-                FunctionApplicationListMember(
-                    FunctionApplication(Constant(sum), (prov_col,)),
-                    prov_col,
-                ),
-            ),
-        )
-        proj_list = [
-            FunctionApplicationListMember(col, col)
-            for col in relation.groupby
-        ]
-        proj_list.append(
-            FunctionApplicationListMember(
-               ONE - EXP(prov_col),
-               prov_col,
-            )
-        )
-
-        relation = ExtendedProjection(relation, proj_list)
-        return ProvenanceAlgebraSet(relation, prov_col)
+        return ProvenanceAlgebraSet(relation, prov_set.provenance_column)
 
     @add_match(IndependentProjectionUniversal(ProvenanceAlgebraSet, ...))
     def independent_projection_universal(self, proj_op):
         prov_set = proj_op.relation
-        prov_col = prov_set.provenance_column
-
-        semiring = getattr(self, 'semiring', ProbabilitySemiring())
-        if isinstance(semiring, MaxProductSemiring):
-            agg_fn = Constant(semiring.agg_add())
-            aggregate_functions = (
-                FunctionApplicationListMember(
-                    FunctionApplication(agg_fn, (prov_col,)),
-                    prov_col,
-                ),
-            )
-            operation = GroupByAggregation(
-                prov_set.relation,
-                proj_op.attributes,
-                aggregate_functions,
-            )
-            return ProvenanceAlgebraSet(operation, prov_col)
-
-        proj_list = [
-            FunctionApplicationListMember(col, col)
-            for col in prov_set.non_provenance_columns
-        ]
-        proj_list.append(
-            FunctionApplicationListMember(
-                LOG(prov_col),
-                prov_col,
-            )
+        relation = self.semiring.independent_projection_universal(
+            prov_set.relation,
+            prov_set.provenance_column,
+            prov_set.non_provenance_columns,
+            proj_op.attributes,
         )
-        relation = ExtendedProjection(prov_set.relation, proj_list)
-        relation = GroupByAggregation(
-            relation,
-            groupby=proj_op.attributes,
-            aggregate_functions=(
-                FunctionApplicationListMember(
-                    FunctionApplication(Constant(sum), (prov_col,)),
-                    prov_col,
-                ),
-            ),
-        )
-        proj_list = [
-            FunctionApplicationListMember(col, col)
-            for col in relation.groupby
-        ]
-        proj_list.append(
-            FunctionApplicationListMember(
-               EXP(prov_col),
-               prov_col,
-            )
-        )
-        relation = ExtendedProjection(relation, proj_list)
-        return ProvenanceAlgebraSet(relation, prov_col)
+        return ProvenanceAlgebraSet(relation, prov_set.provenance_column)
 
     @add_match(DisjointProjection(ProvenanceAlgebraSet, ...))
     def disjoint_projection(self, proj_op):
         prov_set = proj_op.relation
         prov_col = prov_set.provenance_column
-        semiring = getattr(self, 'semiring', ProbabilitySemiring())
-        agg_fn = Constant(semiring.agg_add())
         aggregate_functions = [
             FunctionApplicationListMember(
-                FunctionApplication(agg_fn, (prov_col,)),
+                self.semiring.agg_add_expression((prov_col,)),
                 prov_col,
             ),
         ]
@@ -704,6 +581,8 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
     ProvenanceColumnManipulationMixin,
     ProvenanceSetOperationsMixin,
 ):
+    semiring = DEFAULT_SEMIRING
+
     @add_match(NaturalJoin(
         ProvenanceAlgebraSet, ProvenanceAlgebraSet
     ))
@@ -784,7 +663,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         return self.walk(rel_res)
 
     def _semiring_mul(self, left, right):
-        return left * right
+        return self.semiring.mul_expression(left, right)
 
     @add_match(
         Projection(ProvenanceAlgebraSet, ...),
@@ -878,10 +757,8 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         return res
 
     def _semiring_agg_sum(self, args):
-        semiring = getattr(self, 'semiring', ProbabilitySemiring())
-        agg_fn = Constant(semiring.agg_add())
-        return FunctionApplication(
-            agg_fn, args, validate_arguments=False, verify_type=False
+        return self.semiring.agg_add_expression(
+            args, validate_arguments=False, verify_type=False
         )
 
     @add_match(
@@ -933,10 +810,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
         ))
 
     def _semiring_monus(self, left, right):
-        return MUL(
-            left,
-            SUB(Constant(1), right)
-        )
+        return self.semiring.monus_expression(left, right)
 
 
 class RelationalAlgebraProvenanceCountingSolverMixin(
