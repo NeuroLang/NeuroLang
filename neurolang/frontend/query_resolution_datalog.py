@@ -55,6 +55,11 @@ from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
 from ..logic.horn_clauses import Fol2DatalogTranslationException
 from . import query_resolution_expressions as fe
+from .show_ra import (
+    generated_query_symbol,
+    print_deterministic_ra_plan,
+    show_ra_options,
+)
 
 __all__ = ["QueryBuilderDatalog"]
 
@@ -176,21 +181,24 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         print()
 
     def _handle_rewritten_output(
-        self, query_expression, show_rewritten: bool, dry_run: bool
+        self, query_expression, show_rewritten: bool, dry_run: bool,
+        show_ra=False,
     ) -> bool:
         """Print rewritten program if requested and return True if dry-running.
 
-        Returns True when dry_run is active (caller should short-circuit),
-        False when execution should continue.
+        Returns True when dry_run is active and show_ra is not active
+        (caller should short-circuit), False when execution should continue.
+        When show_ra is True, the caller still needs to build the RA plan,
+        and the rewritten program is only printed if show_rewritten is.
         """
-        if show_rewritten or dry_run:
+        if show_rewritten or (dry_run and not show_ra):
             reachable_rules = reachable_code(
                 query_expression, self.program_ir
             )
             self._print_rewritten_program(
                 query_expression, reachable_rules
             )
-        return dry_run
+        return dry_run and not show_ra
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -314,7 +322,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return rule
 
     def execute_datalog_program(
-        self, code: str, show_rewritten: bool = False, dry_run: bool = False
+        self, code: str, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra=False,
     ) -> Union[None, bool, RelationalAlgebraFrozenSet]:
         """
         Execute a Datalog program in classical syntax.
@@ -331,6 +340,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return None without
             running the chase.
+        show_ra : bool or ShowRAOptions
+            If True, print the named relational algebra expression
+            of each rule instead of evaluating it. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects
+            how the plans are displayed.
 
         Examples
         --------
@@ -369,6 +383,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             return self.query(
                 query.head.arguments, query.body,
                 show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
             )
         else:
             raise UnsupportedProgramError(
@@ -434,7 +449,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self._walk_squall_rule(rule)
 
     def _execute_single_squall_query(self, query, rules_and_choice_defs,
-                                     show_rewritten=False, dry_run=False):
+                                     show_rewritten=False, dry_run=False,
+                                     show_ra=False):
         """Execute one obtain clause from a SQUALL program.
 
         Builds a fresh helper predicate h(head_vars) :- query.body and
@@ -495,13 +511,15 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             ra, _ = self._execute_query(
                 fe_head, fe_pred,
                 show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
             )
         finally:
             self.program_ir.pop_scope()
         return ra
 
     def execute_squall_program(
-        self, code: str, show_rewritten: bool = False, dry_run: bool = False
+        self, code: str, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra=False,
     ) -> Union[None, NamedRelationalAlgebraFrozenSet, Dict[str, NamedRelationalAlgebraFrozenSet]]:
         """
         Execute a SQUALL (controlled English) program.
@@ -522,6 +540,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return None without
             running the chase.
+        show_ra : bool or ShowRAOptions
+            If True, print the named relational algebra expression
+            of each rule instead of evaluating it. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects
+            how the plans are displayed.
 
         Returns
         -------
@@ -569,6 +592,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             ra = self._execute_single_squall_query(
                 q, parsed.rules_and_choice_defs,
                 show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
             )
             if not dry_run:
                 results[key] = ra
@@ -704,7 +728,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
     def query(
-        self, *args, show_rewritten: bool = False, dry_run: bool = False
+        self, *args, show_rewritten: bool = False, dry_run: bool = False,
+        show_ra=False,
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
         """
         Performs an inferential query on the database.
@@ -725,6 +750,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return immediately
             without running the chase.
+        show_ra : bool or ShowRAOptions
+            If True, print the named relational algebra expression
+            of each rule instead of evaluating it. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects
+            how the plans are displayed.
 
         Returns
         -------
@@ -758,7 +788,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             raise ValueError("query takes 1 or 2 arguments")
 
         solution_set, functor_orig = self._execute_query(
-            head, predicate, show_rewritten=show_rewritten, dry_run=dry_run
+            head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
+            show_ra=show_ra,
         )
 
         if not isinstance(head, tuple):
@@ -823,6 +854,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         predicate: fe.Expression,
         show_rewritten: bool = False,
         dry_run: bool = False,
+        show_ra=False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]
@@ -845,6 +877,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return immediately
             without running the chase.
+        show_ra : bool or ShowRAOptions
+            If True, print the named relational algebra expression
+            of each rule instead of evaluating it. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects
+            how the plans are displayed.
 
         Returns
         -------
@@ -904,8 +941,15 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 head, predicate
             )
             if self._handle_rewritten_output(
-                magic_query_expression, show_rewritten, dry_run
+                magic_query_expression, show_rewritten, dry_run, show_ra
             ):
+                solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
+            elif show_ra:
+                print_deterministic_ra_plan(
+                    self.chase_class, self.program_ir, reachable_rules,
+                    show_ra_options(show_ra),
+                    generated_query_symbol(magic_query_expression),
+                )
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
             else:
                 solution = self.chase_class(
@@ -958,7 +1002,17 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ...     solution = nl.solve_all()
         """
         solution_ir = self.chase_class(self.program_ir).build_chase_solution()
+        return self._solution_to_named_sets(solution_ir)
 
+    def _solution_to_named_sets(
+        self, solution_ir
+    ) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
+        """
+        Convert a chase solution to named sets keyed by predicate name.
+
+        Each relation is wrapped in a ``NamedRelationalAlgebraFrozenSet``
+        whose columns are the predicate's parameter names.
+        """
         solution = {}
         for k, v in solution_ir.items():
             solution[predicate_identity(k)] = NamedRelationalAlgebraFrozenSet(

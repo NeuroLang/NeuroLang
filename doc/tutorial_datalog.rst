@@ -962,6 +962,53 @@ append ``:desc`` for descending order)::
         --sort "w:desc" \
         "ans(t, w) :- term_in_study_tfidf(s, t, w)"
 
+Inspecting query plans
+----------------------
+
+``--show-ra`` (``-Q``) prints, instead of the answer, the relational algebra
+plan each rule of the query is evaluated with, stratum by stratum
+(deterministic, probabilistic and post-probabilistic).  Plans are drawn as
+trees; base relations are shown as atoms with their number of rows, the
+predicate generated for the query is shown as ``ans``, probabilistic plans
+name the solver that produced them (small dichotomy theorem, Dalvi–Suciu
+lifted inference or weighted model counting) and label their probability
+columns ``p``, and recursive rules are shown once, followed by the number of
+iterations the fixpoint took.  The rewritten program is printed too when
+``--show-rewritten`` is given.  Two flags refine the display:
+
+* ``--ra-verbose`` prints the plans in full, without collapsing the renames
+  and projections of base relations into atoms (``ρ[x, y](π[#0, #1](edge))``
+  instead of ``edge(x, y)``);
+* ``--ra-analyze`` runs the query and annotates every plan node with the
+  number of rows it produced, like SQL's ``EXPLAIN ANALYZE``.  Counts that
+  would require removing duplicates of values that are expensive to compare,
+  such as regions, are upper bounds, printed ``‹≤N rows›``.
+
+For instance::
+
+    $ neurolang-query --engine neurosynth --show-ra --ra-analyze \
+        "ans(l, s) :- reports(s, i, j, k), schaefer_voxels(i, j, k, l)."
+    ── deterministic stratum ──
+    ── rule reports(s, i, j, k) :-
+        peak_reported(i, j, k, s) ──
+    peak_reported(i, j, k, s) ‹447,477 rows›
+    ── rule schaefer_voxels(I, J, K, l) :-
+        schaefer(l, r),
+        ⟨contains⟩(r, (I, J, K)) ──
+    δ[r→('I', 'J', 'K')] ‹≤132,032 rows›
+    └─ schaefer(l, r) ‹100 rows›
+    ── rule ans(l, s) :-
+        reports(s, i, j, k),
+        schaefer_voxels(i, j, k, l) ──
+    ⋈ ‹10,190 rows›
+    ├─ reports(s, i, j, k) ‹447,477 rows›
+    └─ schaefer_voxels(i, j, k, l) ‹132,032 rows›
+
+From Python, pass ``show_ra=True`` to ``execute_datalog_program``,
+``execute_squall_program`` or ``query``, or a
+:class:`~neurolang.frontend.show_ra.ShowRAOptions` such as
+``ShowRAOptions(collapse=False, analyze=True)``.
+
 For the full list of options, see ``neurolang-query --help`` or the
 :py:mod:`neurolang.utils.cli` module documentation.
 

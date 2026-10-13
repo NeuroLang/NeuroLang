@@ -9,9 +9,12 @@ from ...exceptions import (
     NegativeFormulaNotNamedRelationException,
     NegativeFormulaNotSafeRangeException,
     NeuroLangException,
+    SymbolNotFoundError,
     UnsupportedProgramError,
-    UnsupportedQueryError
+    UnsupportedQueryError,
+    WrongArgumentsInPredicateError
 )
+from ...logic import Union
 from ...logic.horn_clauses import Fol2DatalogTranslationException
 from ...probabilistic import dalvi_suciu_lift
 from ...probabilistic.exceptions import (
@@ -63,6 +66,154 @@ def test_add_uniform_probabilistic_choice_set():
 
     assert data2.type is AbstractSet[Tuple[float, str]]
     assert res_d2.type is AbstractSet[Tuple[float, str]]
+
+
+def build_neurosynth_like_engine():
+    """
+    Build a small engine with the EDB of the neurosynth engine.
+
+    It holds a few studies, peaks, terms and (label, region) Schaefer
+    pairs, and a uniform probabilistic choice over the studies.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [(10, 20, 30, "s1"), (11, 21, 31, "s2")], name="peak_reported"
+    )
+    nl.add_tuple_set([("s1",), ("s2",)], name="study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="selected_study"
+    )
+    nl.add_tuple_set(
+        [("memory", "s1", 0.5), ("memory", "s2", 0.6)],
+        name="term_in_study_tfidf",
+    )
+    nl.add_tuple_set([("A", "rA"), ("B", "rB")], name="schaefer")
+    nl.add_tuple_set([(10, 20, 30), (11, 21, 31)], name="voxel")
+    return nl
+
+
+def test_show_ra_deterministic_stratum(capsys):
+    from neurolang.frontend import NeurolangPDL
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="P")
+    nl.execute_datalog_program("ans(x) :- P(x).", show_ra=True)
+    captured = capsys.readouterr()
+    assert "── deterministic stratum ──" in captured.out
+    assert "P" in captured.out
+
+
+def test_show_ra_conditional_query_provenance():
+    """
+    Check that show-ra builds the plan of a conditional (MARG) rule.
+
+    The frontend usually rewrites ``//`` into SUCC queries, but a rule
+    whose body is still a ``Condition`` (e.g. one built directly in the
+    IR) reaches the show-ra MARG branch, which referenced an unbound
+    solver and failed.
+    """
+    from ...datalog import Implication
+    from ...datalog.instance import MapInstance
+    from ...expressions import Symbol
+    from ...probabilistic.expressions import (
+        PROB,
+        Condition,
+        ProbabilisticQuery,
+    )
+    from ...probabilistic.query_resolution import (
+        _build_probabilistic_program,
+    )
+    from ...relational_algebra_provenance import ProvenanceAlgebraSet
+    from ..show_ra import ShowRAStratumSolver
+
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",)], name="P"
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "a"), (0.3, "b")], name="Q"
+    )
+    x = Symbol("x")
+    rule = Implication(
+        Symbol("Z")(x, ProbabilisticQuery(PROB, (x,))),
+        Condition(Symbol("P")(x), Symbol("Q")(x)),
+    )
+    cpl, prob_idb = _build_probabilistic_program(
+        MapInstance(),
+        nl.program_ir.probabilistic_facts(),
+        nl.program_ir.probabilistic_choices(),
+        Union((rule,)),
+        nl.check_qbased_pfact_tuple_unicity,
+    )
+    provset = ShowRAStratumSolver(nl).rule_provenance_set(
+        prob_idb.formulas[0], cpl
+    )
+    assert isinstance(provset, ProvenanceAlgebraSet)
+
+
+def test_show_ra_probabilistic_with_det_idb():
+    """
+    Regression: --show-ra with a conditional query over deterministic IDB.
+
+    --show-ra crashed with IndexError at
+    relational_algebra_provenance.py:423 when a conditional MARG query
+    depends on deterministic IDB rules and magic rewrite fails.
+    """
+    nl = build_neurosynth_like_engine()
+    with nl.scope as e:
+        e.schaefer_label[e.l] = e.schaefer[e.l, e.r]
+        e.labels[e.l, e.x, e.y, e.z] = (
+            e.voxel[e.x, e.y, e.z] & e.schaefer[e.l, e.r]
+        )
+        e.reports[e.s, e.x, e.y, e.z] = e.peak_reported[e.x, e.y, e.z, e.s]
+        e.mentions[e.s, e.t] = (
+            e.term_in_study_tfidf[e.s, e.t, e.v] & (e.v > 0.03)
+        )
+        nl.execute_squall_program(
+            "define as Label_reports with inferred probability every "
+            "Schaefer_label that labels a Voxel in 3D that a Selected_study "
+            "reports given the Selected_study mentions 'memory'."
+        )
+        # Direct query on the WLQ predicate (no ans(...) wrapper) hits the
+        # probabilistic IDB path, which falls back to _solve after magic
+        # rewrite fails and crashes in selection_rap_eq_columnint.
+        # Before the fix this raises IndexError; after the fix it returns
+        # without error and the probabilistic stratum is printed.
+        res = nl.query(
+            (e.l, e.p), e.label_reports[e.l, e.p], show_ra=True
+        )
+        assert res is not None
+
+
+@pytest.mark.parametrize("show_ra", [False, True])
+def test_show_ra_reports_wrong_arity_error(show_ra):
+    """
+    Check that show-ra reports an arity error as evaluation does.
+
+    ``schaefer`` has one column but the rule uses two. The show-ra chase
+    used to swallow the error and print the plan of an empty relation.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("A",), ("B",)], name="schaefer")
+    with pytest.raises(WrongArgumentsInPredicateError):
+        nl.execute_datalog_program(
+            "label(l) :- schaefer(l, r).\nans(l) :- label(l).",
+            show_ra=show_ra,
+        )
+
+
+@pytest.mark.parametrize("show_ra", [False, True])
+def test_show_ra_reports_unsolvable_query_error(show_ra, capsys):
+    """
+    Check that show-ra reports why a query without magic sets fails.
+
+    SQUALL turns the noun ``P`` into the predicate ``p``, which does not
+    exist. Show-ra used to hide the error and print a deterministic plan.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="P")
+    with pytest.raises(SymbolNotFoundError, match="Symbol not found p"):
+        nl.execute_squall_program("obtain every P.", show_ra=show_ra)
+    assert "── deterministic stratum ──" not in capsys.readouterr().out
 
 
 def test_show_rewritten_datalog_prints_all_rules(capsys):
