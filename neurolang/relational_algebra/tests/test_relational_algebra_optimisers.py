@@ -10,6 +10,7 @@ from ...expressions import Constant, FunctionApplication, Symbol
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..optimisers import (
     EliminateTrivialProjections,
+    FlattenAndReorderJoins,
     GreedyJoinOrdering,
     PushInSelections,
     PushProjectionsDown,
@@ -31,6 +32,7 @@ from ..relational_algebra import (
     GroupByAggregation,
     LeftNaturalJoin,
     NameColumns,
+    NaryNaturalJoin,
     NaturalJoin,
     Product,
     Projection,
@@ -1118,8 +1120,8 @@ def test_push_projection_into_join_operands(r1, r2, str_columns):
     and eliminates the outer projection boundary.
 
     π[b,d](R(a,b)⋈S(c,b)) ⋈ T(b,d)
-    → after pipeline: all operands flattened in an NaryNaturalJoin
-      with column-a pruned from R.
+    → after pipeline: π[b,d](π[b](R)⋈π[b](S)) ⋈ T with column-a pruned
+      from R.
     """
     a, b, c, d, _ = str_columns
 
@@ -1142,11 +1144,19 @@ def test_push_projection_into_join_operands(r1, r2, str_columns):
         "Cross product still present after optimisation"
     )
 
-    # Verify the tree converged to an NaryNaturalJoin (the flattening
-    # step absorbed the projection barrier into the join operands).
-    assert type(result).__name__ == "NaryNaturalJoin", (
-        "Expected flattened NaryNaturalJoin, got " + type(result).__name__
+    # Verify the tree converged to a join of T and of the projection of
+    # R⋈S with column a pruned from R. Joins of two operands are not
+    # flattened.
+    assert type(result).__name__ == "NaturalJoin", (
+        "Expected NaturalJoin, got " + type(result).__name__
     )
+    inner = result.relation_left
+    assert type(inner).__name__ == "Projection"
+    assert type(inner.relation).__name__ == "NaturalJoin"
+    assert all(
+        a not in _ra_columns(op)
+        for op in (inner.relation.relation_left, inner.relation.relation_right)
+    ), "Column a should have been pruned from R"
 
 
 def test_push_projection_eliminates_cross_product_across_projection():
@@ -1232,6 +1242,10 @@ def test_push_projections_down_full_pipeline():
     assert not _has_cross_product(curr), f"Cross product still present:\n{curr!r}"
 
 
+class GreedyJoinOrderingWalker(GreedyJoinOrdering, ExpressionWalker):
+    """GreedyJoinOrdering walking the expressions it does not rewrite."""
+
+
 def test_greedy_join_ordering_reorders_mixed_product_join():
     """
     Check that greedy join ordering joins shared-column operands first.
@@ -1254,7 +1268,7 @@ def test_greedy_join_ordering_reorders_mixed_product_join():
     # NaturalJoin(Product(R1[a,b], R2[c,d]), R3[b,c])
     tree = NaturalJoin(Product((r1_named, r2_named)), r3_named)
 
-    opt = GreedyJoinOrdering()
+    opt = GreedyJoinOrderingWalker()
     result = opt.walk(tree)
 
     # The result must NOT be a bare Product — the cross product should
@@ -1302,7 +1316,7 @@ def test_greedy_join_ordering_preserves_disconnected_product():
     """
     tree = Product((_named_symbol('R1', 'ab'), _named_symbol('R2', 'cd')))
 
-    opt = GreedyJoinOrdering()
+    opt = GreedyJoinOrderingWalker()
     result = opt.walk(tree)
 
     # Must remain a Product — no shared columns means no join possible.
@@ -1423,14 +1437,14 @@ def test_greedy_join_ordering_joins_small_relation_first():
     l_ = _sized_constant(("b", "c"), 5)
     tree = NaturalJoin(NaturalJoin(r, v), l_)
 
-    result = GreedyJoinOrdering().walk(tree)
+    result = GreedyJoinOrderingWalker().walk(tree)
 
     assert _left_deep_operands(result) == [l_, r, v]
     assert (
         RelationalAlgebraSolver().walk(result).value
         == RelationalAlgebraSolver().walk(tree).value
     )
-    assert GreedyJoinOrdering().walk(result) is result
+    assert GreedyJoinOrderingWalker().walk(result) is result
 
 
 def test_greedy_join_ordering_unknown_sizes_keep_order():
@@ -1444,13 +1458,13 @@ def test_greedy_join_ordering_unknown_sizes_keep_order():
         NaturalJoin(_named_symbol("R", "ab"), _named_symbol("V", "b")),
         _named_symbol("L", "bc"),
     )
-    assert GreedyJoinOrdering().walk(tree) is tree
+    assert GreedyJoinOrderingWalker().walk(tree) is tree
 
     tree = NaturalJoin(
         NaturalJoin(_named_symbol("R", "ab"), _named_symbol("V", "b")),
         _sized_constant(("b", "c"), 5),
     )
-    assert GreedyJoinOrdering().walk(tree) is tree
+    assert GreedyJoinOrderingWalker().walk(tree) is tree
 
 
 def test_greedy_join_ordering_resolves_symbol_sizes():
@@ -1494,13 +1508,14 @@ def test_greedy_join_ordering_sizes_order_product_components():
     d = _sized_constant(("b",), 3)
     tree = NaturalJoin(NaturalJoin(Product((a, b)), c), d)
 
-    result = GreedyJoinOrdering().walk(tree)
+    result = GreedyJoinOrderingWalker().walk(tree)
 
     assert _left_deep_operands(result) == [d, c, b, a]
     assert (
         RelationalAlgebraSolver().walk(result).value
         == RelationalAlgebraSolver().walk(tree).value
     )
+
 
 def _relation(columns, rows):
     """Build a named relation constant with integer columns."""
@@ -1557,10 +1572,6 @@ def test_rename_not_pushed_below_projection_dropping_its_target():
     assert _same_result(tree, result)
 
 
-class GreedyJoinOrderingWalker(GreedyJoinOrdering, ExpressionWalker):
-    """GreedyJoinOrdering walking the expressions it does not rewrite."""
-
-
 def test_greedy_join_ordering_keeps_projection_not_distributing():
     """
     Check that a projection which does not distribute is kept whole.
@@ -1583,3 +1594,26 @@ def test_greedy_join_ordering_keeps_projection_not_distributing():
     assert result == Product((NaturalJoin(left, h), k))
     assert _same_result(tree, result)
 
+
+def test_flatten_and_reorder_joins_only_rewrites_nested_joins():
+    """
+    Check that only nested joins are flattened and reordered.
+
+    A join of two relations is left untouched, a join chain becomes an
+    NaryNaturalJoin, which is a fixpoint of the optimiser.
+    """
+    class Opt(FlattenAndReorderJoins, ExpressionWalker):
+        pass
+
+    a = _relation("ab", [(0, 1)])
+    b = _relation("bc", [(1, 2)])
+    c = _relation("cd", [(2, 3)])
+    binary = NaturalJoin(a, b)
+    assert Opt().walk(binary) is binary
+
+    chain = NaturalJoin(NaturalJoin(a, b), c)
+    result = Opt().walk(chain)
+    assert isinstance(result, NaryNaturalJoin)
+    assert sorted(map(id, result.relations)) == sorted(map(id, (a, b, c)))
+    assert Opt().walk(result) is result
+    assert _same_result(chain, result)

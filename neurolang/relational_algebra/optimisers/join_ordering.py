@@ -286,12 +286,57 @@ def _order_component_greedily(operands, col_sets, sizes):
     return [operands[i] for i in _greedy_chain(col_sets, sizes, min, False)]
 
 
+def _is_join(expression):
+    """Whether ``expression`` is a binary or an n-ary natural join."""
+    return isinstance(expression, (NaturalJoin, NaryNaturalJoin))
+
+
+def _has_join_operand(expression):
+    """Guard: True if a NaturalJoin has a join operand to flatten."""
+    return (
+        _is_join(expression.relation_left)
+        or _is_join(expression.relation_right)
+    )
+
+
+def _has_single_operand(expression):
+    """Guard: True if an NaryNaturalJoin has a single operand."""
+    return len(expression.relations) == 1
+
+
+def _has_nested_join(expression):
+    """Guard: True if an NaryNaturalJoin has a join operand to flatten."""
+    return any(_is_join(op) for op in expression.relations)
+
+
+def _sorted_by_estimated_size(operands):
+    """Sort join operands as :class:`FlattenAndReorderJoins` does."""
+    return _sort_join_operands(
+        operands, [_estimated_size(op) for op in operands]
+    )
+
+
+def _operands_out_of_order(expression):
+    """
+    Guard: True if the operands of an NaryNaturalJoin are not sorted.
+
+    The operands are compared with their order by
+    :func:`_sort_join_operands`, which is a fixpoint of the sort.
+    """
+    operands = expression.relations
+    return any(
+        a is not b
+        for a, b in zip(operands, _sorted_by_estimated_size(operands))
+    )
+
+
 class FlattenAndReorderJoins(ew.PatternWalker):
     """
-    Flatten joins into an NaryNaturalJoin and reorder its operands.
+    Flatten nested joins into an NaryNaturalJoin and reorder its operands.
 
-    Flatten NaturalJoins and NaryNaturalJoins into a flat
-    NaryNaturalJoin, then greedily reorder to minimise cross products.
+    Only joins which need it are rewritten: a NaturalJoin with a join
+    operand, or an NaryNaturalJoin with a join operand, a single operand
+    or operands out of order. A join of two relations is left untouched.
 
     1. **Flatten**: Collect all join operands by recursing through
        NaturalJoin and NaryNaturalJoin structure.
@@ -299,43 +344,36 @@ class FlattenAndReorderJoins(ew.PatternWalker):
        overlap at each join boundary (avoids cross products by keeping
        related tables adjacent).
     3. **Wrap**: Produce an NaryNaturalJoin holding all operands.
+
+    The rewritten join is walked again, so that its operands are
+    optimised: a walker does not descend into the result of a rule.
     """
 
-    @ew.add_match(NaturalJoin)
-    def flatten_and_reorder(self, expression):
-        # Walk children first so PushProjectionsDown can process inner
-        # Projection(NaturalJoin, ...) patterns before we flatten.
-        left = self.walk(expression.relation_left)
-        right = self.walk(expression.relation_right)
-        walked = NaturalJoin(left, right)
-        operands = _flatten_joins(walked)
-        if len(operands) <= 1:
-            return operands[0] if operands else walked
-        return NaryNaturalJoin(_sort_join_operands(
-            operands, [_estimated_size(op) for op in operands]
+    # Changes the expression: a NaturalJoin becomes an NaryNaturalJoin.
+    @ew.add_match(NaturalJoin, _has_join_operand)
+    def flatten_join(self, expression):
+        return self._flatten_and_sort(expression)
+
+    # Changes the expression: the join is replaced by its operand.
+    @ew.add_match(NaryNaturalJoin, _has_single_operand)
+    def single_operand_join(self, expression):
+        return self.walk(expression.relations[0])
+
+    # Changes the expression: a join operand is replaced by its operands.
+    @ew.add_match(NaryNaturalJoin, _has_nested_join)
+    def flatten_nary_join(self, expression):
+        return self._flatten_and_sort(expression)
+
+    # Changes the expression: the operands are reordered.
+    @ew.add_match(NaryNaturalJoin, _operands_out_of_order)
+    def reorder_nary_join(self, expression):
+        return self.walk(NaryNaturalJoin(
+            tuple(_sorted_by_estimated_size(expression.relations))
         ))
 
-    @ew.add_match(NaryNaturalJoin)
-    def reorder_nary(self, expression):
-        operands = expression.relations
-        if len(operands) <= 1:
-            return operands[0] if operands else expression
-        flat_ops = [
-            relation for op in operands
-            for relation in (
-                op.relations if isinstance(op, NaryNaturalJoin) else (op,)
-            )
-        ]
-        sorted_ops = _sort_join_operands(
-            flat_ops, [_estimated_size(op) for op in flat_ops]
-        )
-        if any(a is not b for a, b in zip(flat_ops, sorted_ops)):
-            return NaryNaturalJoin(sorted_ops)
-        # Walk operands so inner Projection patterns are reachable
-        new_ops = tuple(self.walk(op) for op in flat_ops)
-        if any(a is not b for a, b in zip(new_ops, flat_ops)):
-            return NaryNaturalJoin(new_ops)
-        return expression
+    def _flatten_and_sort(self, expression):
+        operands = _sorted_by_estimated_size(_flatten_joins(expression))
+        return self.walk(NaryNaturalJoin(tuple(operands)))
 
 
 def _tree_contains_product(expr):
@@ -404,6 +442,80 @@ class DegenerateNaturalJoinToProduct(ew.PatternWalker):
         return Product((left, right))
 
 
+def _join_spine_has_product(expr):
+    """
+    Check whether a Product is flattened by ``_flatten_joins``.
+
+    Follow the nodes that :func:`_flatten_joins` recurses through when
+    ``with_products`` is set, that is joins, products, and projections
+    distributing over several operands, and look for a Product among
+    them.
+    """
+    if isinstance(expr, Product):
+        return True
+    if isinstance(expr, Projection):
+        return (
+            _distributed_projection_operands(expr) is not None
+            and _join_spine_has_product(expr.relation)
+        )
+    if isinstance(expr, NaturalJoin):
+        children = (expr.relation_left, expr.relation_right)
+    elif isinstance(expr, NaryNaturalJoin):
+        children = expr.relations
+    else:
+        return False
+    return any(_join_spine_has_product(child) for child in children)
+
+
+def _join_with_eliminable_product(expression):
+    """
+    Guard: True if a NaturalJoin has a cross product to eliminate.
+
+    The operands flattened through joins, products and projections
+    include a Product, which reordering removes, and some of them share
+    columns while others do not.
+    """
+    return _join_spine_has_product(expression) and (
+        _has_eliminable_cross_product(
+            _flatten_joins(expression, with_products=True)
+        )
+    )
+
+
+def _is_product_free_join_chain(expression):
+    """Guard: True if a NaturalJoin chains 3+ operands and no Product."""
+    return (
+        not _tree_contains_product(expression)
+        and len(_flatten_joins(expression)) > 2
+    )
+
+
+def _walk_join_chain_operands(walker, expression):
+    """
+    Walk the operands of a join chain, keeping the shape of the chain.
+
+    Return ``expression`` itself when no operand changes.
+    """
+    if isinstance(expression, NaturalJoin):
+        left = _walk_join_chain_operands(walker, expression.relation_left)
+        right = _walk_join_chain_operands(walker, expression.relation_right)
+        if (
+            left is expression.relation_left
+            and right is expression.relation_right
+        ):
+            return expression
+        return NaturalJoin(left, right)
+    if isinstance(expression, NaryNaturalJoin):
+        relations = tuple(
+            _walk_join_chain_operands(walker, relation)
+            for relation in expression.relations
+        )
+        if all(a is b for a, b in zip(relations, expression.relations)):
+            return expression
+        return NaryNaturalJoin(relations)
+    return walker.walk(expression)
+
+
 class GreedyJoinOrdering(ew.PatternWalker):
     """
     Reorder mixed Product/NaturalJoin chains with greedy ordering.
@@ -411,10 +523,10 @@ class GreedyJoinOrdering(ew.PatternWalker):
     Flatten mixed Product/NaturalJoin chains and reorder by pairwise
     ColumnStr overlap using a greedy operator ordering (GOO).
 
-    Only triggers when the expression is a NaturalJoin that contains a
-    Product, or a Product whose operands have an eliminable cross product.
-    This prevents infinite re-entry: once the cross product is eliminated,
-    the guard no longer matches.
+    Only triggers when the expression is a NaturalJoin whose flattened
+    operands include a Product, or a Product, with an eliminable cross
+    product. This prevents infinite re-entry: once the cross product is
+    eliminated, the guards no longer match.
 
     Emits nested NaturalJoin trees (not NaryNaturalJoin) for connected
     groups and Product for disconnected groups.
@@ -426,72 +538,51 @@ class GreedyJoinOrdering(ew.PatternWalker):
     its operands have a known size. Subclasses can resolve leaves which
     are not constants, such as symbols, by overriding
     :meth:`resolve_relation`.
+
+    The rules walk the operands they keep, and leave walking any other
+    expression to the walker it is composed with, such as
+    :class:`~neurolang.expression_walker.ExpressionWalker`.
     """
 
-    @ew.add_match(NaturalJoin, _tree_contains_product)
+    # Changes the expression: the Product found by the guard is removed.
+    @ew.add_match(NaturalJoin, _join_with_eliminable_product)
     def reorder_join(self, expression):
-        left = self.walk(expression.relation_left)
-        right = self.walk(expression.relation_right)
-        expression = NaturalJoin(left, right)
-        operands = _flatten_joins(expression, with_products=True)
-        if not _has_eliminable_cross_product(operands):
-            return expression
-        return self._build_reordered(operands)
+        return self._build_reordered(
+            _flatten_joins(expression, with_products=True)
+        )
 
+    # Changes the expression: operands sharing columns are joined.
     @ew.add_match(
         Product, lambda e: _has_eliminable_cross_product(e.relations)
     )
     def reorder_product(self, expression):
-        new_rels = tuple(self.walk(r) for r in expression.relations)
-        operands = _flatten_joins(Product(new_rels), with_products=True)
-        return self._build_reordered(operands)
+        return self._build_reordered(
+            _flatten_joins(expression, with_products=True)
+        )
 
-    @ew.add_match(NaturalJoin, lambda e: not _tree_contains_product(e))
+    # Sizes are resolved by the walker, out of reach of the guard. When
+    # they do not change the order, the chain is returned with its walked
+    # operands, itself if they are unchanged, which ends the rewriting.
+    @ew.add_match(NaturalJoin, _is_product_free_join_chain)
     def reorder_join_by_size(self, expression):
         """
         Reorder a NaturalJoin chain using estimated operand sizes.
 
         A chain of more than two operands, at least two of known size, is
         rebuilt as a left-deep NaturalJoin tree ordered by
-        :func:`_sort_join_operands`. Otherwise, only the children are walked.
+        :func:`_sort_join_operands`. Otherwise, only its operands are
+        walked.
         """
         operands = _flatten_joins(expression)
-        if len(operands) > 2:
-            sizes = self._sizes(operands)
-            if _sizes_known(sizes):
-                ordered = [
-                    self.walk(op)
-                    for op in _sort_join_operands(operands, sizes)
-                ]
-                if _is_left_deep_join_of(expression, ordered):
-                    return expression
-                return reduce(NaturalJoin, ordered)
-        return self.fallthrough(expression)
-
-    @ew.add_match(ew.Expression)
-    def fallthrough(self, expression):
-        """
-        Recursively walk children of non-matching expressions.
-
-        Recursively walk children for expressions that don't match
-        the reorder patterns. This replaces the old walk() override.
-        """
-        args = expression.unapply()
-        new_args = tuple()
-        changed = False
-        for arg in args:
-            if isinstance(arg, ew.Expression):
-                new_arg = self.walk(arg)
-                changed |= new_arg is not arg
-            elif isinstance(arg, tuple) and len(arg) > 0 and isinstance(arg[0], ew.Expression):
-                new_arg = tuple(self.walk(sub) for sub in arg)
-                changed |= any(a is not b for a, b in zip(new_arg, arg))
-            else:
-                new_arg = arg
-            new_args += (new_arg,)
-        if changed:
-            return expression.apply(*new_args)
-        return expression
+        sizes = self._sizes(operands)
+        if not _sizes_known(sizes):
+            return _walk_join_chain_operands(self, expression)
+        ordered = [
+            self.walk(op) for op in _sort_join_operands(operands, sizes)
+        ]
+        if _is_left_deep_join_of(expression, ordered):
+            return expression
+        return reduce(NaturalJoin, ordered)
 
     def resolve_relation(self, expression):
         """
@@ -518,6 +609,7 @@ class GreedyJoinOrdering(ew.PatternWalker):
         return [_estimated_size(op, self.resolve_relation) for op in operands]
 
     def _build_reordered(self, operands):
+        operands = [self.walk(op) for op in operands]
         groups = _group_operands_by_overlap(operands, self._sizes(operands))
         join_groups = [reduce(NaturalJoin, g) for g in groups if len(g) > 1]
         singletons = [g[0] for g in groups if len(g) == 1]
