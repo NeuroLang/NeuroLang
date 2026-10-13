@@ -9,7 +9,9 @@ suggestions from the history and the vi and emacs editing
 modes (``.mode vi|emacs``).
 """
 
+import re
 from html import escape
+from typing import Callable, Optional
 
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.document import Document
@@ -23,7 +25,11 @@ from neurolang.utils.cli import _declared_columns
 from neurolang.utils.interactive_parsing import LarkCompleter
 
 from .commands import MODES
-from .completion import NeuroLangReplCompleter, predicate_catalog
+from .completion import (
+    KEYWORDS as DATALOG_KEYWORDS,
+    NeuroLangReplCompleter,
+    predicate_catalog,
+)
 
 SQUALL_KEYWORDS = list(dict.fromkeys([
     "define", "as", "obtain", "every", "a", "an", "the",
@@ -38,65 +44,99 @@ SQUALL_KEYWORDS = list(dict.fromkeys([
 ]))
 
 
-OPERATOR_CHARS = frozenset(":-+~¬(),.=!|&")
+_TOKEN = re.compile(
+    r"""(?P<string>"[^"]*"?|'[^']*'?)"""
+    r"|(?P<number>\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)"
+    r"|(?P<word>[A-Za-z_][A-Za-z0-9_]*)(?P<call>\s*\()?"
+    r"|(?P<operator>:~:|:-|::|:=|-:|//|==|<=|>=|!=|\*\*|[^\w\s])"
+)
+
+# The operators of the Datalog grammar that are highlighted.
+DATALOG_OPERATORS = frozenset({
+    ":-", "\N{LEFTWARDS ARROW}", "-:", "\N{RIGHTWARDS ARROW}", "~",
+    "\N{NOT SIGN}", "//", "|", "::", ":~:", "^", ":=", "==", "!=", "<",
+    "<=", ">", ">=", "=", "&", "\N{LOGICAL AND}", "\N{THERE EXISTS}",
+})
 
 
 class NeuroLangLexer(Lexer):
-    """Highlight the keywords, operators and capitalised words of a line."""
+    """
+    Highlight a line of Datalog or SQUALL.
 
-    KEYWORDS = frozenset({
-        "ans", "define", "as", "obtain", "every", "a", "an", "the",
-        "where", "that", "with", "without", "if", "then",
-        "and", "or", "not", "for", "of", "from", "to", "by",
-        "exists", "EXISTS", "MARG", "PROB", "SUCC",
-        "lambda", "True", "False",
-    })
+    *is_squall* tells whether the input is SQUALL. In Datalog, the
+    grammar's keywords (``PROB``, ``EXISTS``…), its operators (``:-``,
+    ``~``, ``//``, comparisons…) and the predicates applied to arguments
+    are highlighted; in SQUALL, the :data:`SQUALL_KEYWORDS`. Strings and
+    numbers are highlighted in both. The fragments are styled with the
+    classes ``keyword``, ``operator``, ``predicate``, ``string`` and
+    ``number`` of :data:`STYLE`.
+    """
 
-    OPERATORS = frozenset({":-", ":-~", "::", ":=", "->", "||"})
+    def __init__(self, is_squall: Optional[Callable[[], bool]] = None):
+        """Set up the lexer of the language *is_squall* tells."""
+        self._is_squall = is_squall or (lambda: False)
 
     def lex_document(self, document: Document):
         """Return the function giving the styled fragments of a line."""
+        squall = self._is_squall()
+
         def get_line(lineno: int):
             if lineno >= len(document.lines):
                 return []
-            return list(self.tokens(document.lines[lineno]))
+            return list(self.tokens(document.lines[lineno], squall))
 
         return get_line
 
-    def tokens(self, line: str):
+    def tokens(self, line: str, squall: Optional[bool] = None):
         """Yield the ``(style, text)`` fragments of *line*."""
-        i = 0
-        while i < len(line):
-            if line[i].isalnum() or line[i] == "_":
-                j = _run_end(line, i, lambda c: c.isalnum() or c == "_")
-                yield self._word_style(line[i:j]), line[i:j]
-            elif line[i] in OPERATOR_CHARS:
-                j = _run_end(line, i, OPERATOR_CHARS.__contains__)
-                token = line[i:j]
-                yield ("#888888" if token in self.OPERATORS else ""), token
-            else:
-                j = i + 1
-                yield "", line[i]
-            i = j
-
-    def _word_style(self, word: str) -> str:
-        """Return the style of *word*: keyword, capitalised or plain."""
-        if word in self.KEYWORDS:
-            return "bold #ff8800"
-        if word[0].isupper():
-            return "#44ff44"
-        return ""
+        if squall is None:
+            squall = self._is_squall()
+        end = 0
+        for match in _TOKEN.finditer(line):
+            if match.start() > end:
+                yield "", line[end:match.start()]
+            yield from _styled(match, squall)
+            end = match.end()
+        if end < len(line):
+            yield "", line[end:]
 
 
-def _run_end(line: str, start: int, accept) -> int:
-    """Return the end of the run of characters of *line* from *start*."""
-    end = start
-    while end < len(line) and accept(line[end]):
-        end += 1
-    return end
+def _word_style(word: str, call: bool, squall: bool) -> str:
+    """Return the style of *word*, followed by ``(`` if *call*."""
+    if squall:
+        return "class:keyword" if word in _SQUALL_WORDS else ""
+    if word in DATALOG_KEYWORDS:
+        return "class:keyword"
+    return "class:predicate" if call else ""
 
 
-STYLE = Style([("keyword", "bold #ff8800")])
+def _styled(match, squall: bool):
+    """Yield the styled fragments of a token *match* of :data:`_TOKEN`."""
+    kind = match.lastgroup
+    if kind == "call":
+        word = match.group("word")
+        yield _word_style(word, True, squall), word
+        yield "", match.group("call")
+    elif kind == "word":
+        yield _word_style(match.group(0), False, squall), match.group(0)
+    elif kind == "operator":
+        operator = match.group(0)
+        highlighted = not squall and operator in DATALOG_OPERATORS
+        yield ("class:operator" if highlighted else ""), operator
+    else:
+        yield f"class:{kind}", match.group(0)
+
+
+_SQUALL_WORDS = frozenset(SQUALL_KEYWORDS)
+
+# Readable on light and dark terminals: ANSI colours, no hex.
+STYLE = Style.from_dict({
+    "keyword": "bold ansimagenta",
+    "operator": "bold ansiblue",
+    "predicate": "ansiblue",
+    "string": "ansigreen",
+    "number": "ansicyan",
+})
 
 
 def make_completer(app) -> NeuroLangReplCompleter:
@@ -140,7 +180,7 @@ def session_options(app) -> dict:
     return dict(
         completer=app.completer,
         complete_while_typing=True,
-        lexer=NeuroLangLexer(),
+        lexer=NeuroLangLexer(lambda: app.settings.squall),
         auto_suggest=AutoSuggestFromHistory(),
         bottom_toolbar=lambda: toolbar(app),
         style=STYLE,

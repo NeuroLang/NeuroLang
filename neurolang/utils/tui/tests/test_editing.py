@@ -28,6 +28,7 @@ from neurolang.utils.tui.completion import (  # noqa: E402
 from neurolang.utils.tui.editing import (  # noqa: E402
     SQUALL_KEYWORDS,
     NeuroLangLexer,
+    STYLE,
     NeuroLangReplCompleter,
     toolbar,
 )
@@ -98,18 +99,60 @@ class TestNeuroLangReplCompleter:
         assert "term" not in _texts(completer, "12")
 
 
-def test_lexer_styles():
-    tokens = list(NeuroLangLexer().tokens("ans(X) :- P(x)"))
-    assert ("bold #ff8800", "ans") in tokens
-    assert ("#44ff44", "X") in tokens
-    assert ("#888888", ":-") in tokens
-    assert "".join(text for _, text in tokens) == "ans(X) :- P(x)"
+def _styles(line, squall=False):
+    return dict(
+        (text, style)
+        for style, text in NeuroLangLexer(lambda: squall).tokens(line)
+    )
 
 
-def test_lexer_lines():
-    get_line = NeuroLangLexer().lex_document(Document("a\nobtain b"))
-    assert get_line(1)[0] == ("bold #ff8800", "obtain")
+def test_lexer_datalog_styles():
+    line = 'ans(X, PROB) :- the(a), ~every(a), p(a, "s t", 0.5) // q(X)'
+    tokens = list(NeuroLangLexer().tokens(line))
+    assert "".join(text for _, text in tokens) == line
+    styles = _styles(line)
+    assert styles["ans"] == styles["PROB"] == "class:keyword"
+    assert styles[":-"] == styles["~"] == styles["//"] == "class:operator"
+    assert styles["the"] == styles["every"] == "class:predicate"
+    assert styles["a"] == ""
+    assert styles['"s t"'] == "class:string"
+    assert styles["0.5"] == "class:number"
+
+
+def test_lexer_no_capitalised_word_style():
+    styles = _styles("ans(X) :- P(X, Y), Y > 2")
+    assert styles["X"] == styles["Y"] == ""
+    assert styles[">"] == "class:operator"
+
+
+def test_lexer_squall_keywords():
+    line = 'define as Active every study that the a "x" mentions.'
+    styles = _styles(line, squall=True)
+    for word in ("define", "as", "every", "that", "the", "a"):
+        assert styles[word] == "class:keyword", word
+    assert styles["Active"] == styles["study"] == ""
+    assert styles['"x"'] == "class:string"
+    assert all(word in SQUALL_KEYWORDS for word in ("every", "the", "a"))
+
+
+def test_lexer_follows_mode():
+    squall = {"on": False}
+    lexer = NeuroLangLexer(lambda: squall["on"])
+    assert lexer.lex_document(Document("the(a)"))(0)[0] == (
+        "class:predicate", "the"
+    )
+    squall["on"] = True
+    get_line = lexer.lex_document(Document("x\nobtain b"))
+    assert get_line(1)[0] == ("class:keyword", "obtain")
     assert get_line(5) == []
+
+
+def test_style_uses_ansi_colours():
+    rules = dict(STYLE.style_rules)
+    assert {"keyword", "operator", "predicate", "string", "number"} <= set(
+        rules
+    )
+    assert not any("#" in value for value in rules.values())
 
 
 @pytest.fixture
@@ -126,6 +169,12 @@ def app():
 def test_session_completes_engine_predicates(app):
     session = app._make_session()
     assert session.completer is app.completer
+    assert session.style is STYLE
+    app.settings.squall = True
+    assert session.lexer.lex_document(Document("the"))(0) == [
+        ("class:keyword", "the")
+    ]
+    app.settings.squall = False
     assert "P" in _texts(app.completer, "ans(x) :- ")
 
 
