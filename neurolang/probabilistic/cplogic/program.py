@@ -333,7 +333,23 @@ class CPLogicMixin(PatternWalker):
         pred_symb = implication.consequent.functor.cast(
             UnionOfConjunctiveQueries
         )
-        if pred_symb in self.symbol_table:
+        # Check only the *local* scope for duplicates so that scoped re-walks
+        # (e.g. push_scope() in execute_squall_program) do not falsely report a
+        # disjunction when the rule was already stored in an enclosing scope.
+        local_table = getattr(self.symbol_table, '_symbols', self.symbol_table)
+        if pred_symb in local_table:
+            # If the existing entry is a Union, append to it (SRNF conversion
+            # creates multiple Horn clauses for a single rule).
+            # Skip exact duplicates that arise from ExpressionBlock re-walking
+            # in build_conjunction_from_expression_block.
+            existing = local_table[pred_symb]
+            if isinstance(existing, Union):
+                if implication in existing.formulas:
+                    return implication
+                raise ForbiddenDisjunctionError(
+                    "Disjunctive within-language probabilistic queries "
+                    "are not allowed"
+                )
             raise ForbiddenDisjunctionError(
                 "Disjunctive within-language probabilistic queries "
                 "are not allowed"

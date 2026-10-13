@@ -340,8 +340,9 @@ class ChaseGeneral():
                     return 0
             return 0
 
-        restricted_predicates.sort(key=_get_predicate_size)
-        nonrestricted_predicates.sort(key=_get_predicate_size)
+        if config.get_chase_sort_join_predicates():
+            restricted_predicates.sort(key=_get_predicate_size)
+            nonrestricted_predicates.sort(key=_get_predicate_size)
 
         return (
             restricted_predicates, nonrestricted_predicates, builtin_predicates

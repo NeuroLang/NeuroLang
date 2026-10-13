@@ -720,9 +720,12 @@ class RegionMixin:
             see description
         """
         atlas_set = list()
+        regions = ExplicitVBR.from_spatial_image_labels(
+            spatial_image, atlas_labels.keys()
+        )
         for label_number, label_name in atlas_labels.items():
-            region = self.create_region(spatial_image, label=label_number)
-            if region is None:
+            region = regions[label_number]
+            if not isinstance(region, ExplicitVBR):
                 continue
             atlas_set.append((label_name, region))
         return self.add_tuple_set(
@@ -859,7 +862,7 @@ class NeuroSynthMixin:
             name = str(uuid1())
         if convert_study_ids:
             return self.add_tuple_set(
-                metadata["id"].apply(StudyID).values,
+                metadata["id"].astype(StudyID).values,
                 type_=Tuple[StudyID],
                 name=name,
             )
