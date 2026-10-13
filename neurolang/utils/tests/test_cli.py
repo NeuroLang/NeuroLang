@@ -1424,3 +1424,48 @@ class TestErrorReporting:
         err = self.run_failing(capsys, "ans(x) :- item(x)")
         assert err.startswith("Internal error — ValueError: boom")
         assert "--debug" in err
+
+
+# ---------------------------------------------------------------------------
+# Result helpers shared with the interactive REPL
+# ---------------------------------------------------------------------------
+
+
+class TestResultToDataFrame:
+
+    def test_wrapped_constant_renamed(self):
+        from neurolang import expressions as ir
+        from neurolang.datalog import WrappedRelationalAlgebraSet
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            RelationalAlgebraSet,
+        )
+
+        inner = RelationalAlgebraSet([(42,)])
+        df = result_to_dataframe(
+            ir.Constant(WrappedRelationalAlgebraSet(inner)), ["val"]
+        )
+        assert list(df.columns) == ["val"]
+        assert df.iloc[0, 0] == 42
+
+    def test_named_set(self):
+        from neurolang.utils.cli import result_to_dataframe
+        from neurolang.utils.relational_algebra_set.pandas import (
+            NamedRelationalAlgebraFrozenSet,
+        )
+
+        nras = NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(1, "a")]
+        )
+        df = result_to_dataframe(nras)
+        assert list(df.columns) == ["x", "y"]
+
+    def test_sort_dataframe_warns_on_unknown_column(self, capsys):
+        from neurolang.utils.cli import sort_dataframe
+
+        import pandas as pd
+
+        df = pd.DataFrame({"x": [1, 3, 2]})
+        out = sort_dataframe(df, [("y", True), ("x", False)])
+        assert list(out["x"]) == [3, 2, 1]
+        assert "sort column 'y' not found" in capsys.readouterr().err

@@ -12,9 +12,16 @@ from rich.console import Console
 from rich.panel import Panel
 
 from neurolang.utils import engine_registry
+from neurolang.utils.cli import (
+    _execute_program,
+    _execute_squall_program,
+    _parse_sort_spec,
+    result_to_dataframe,
+    sort_dataframe,
+)
 
 from .commands import COMMANDS
-from .results import _df_to_rich_table, _format_as_df, _sort
+from .results import _df_to_rich_table
 
 
 def _newline_bindings() -> KeyBindings:
@@ -46,7 +53,7 @@ class InteractiveTuiApp:
         self.data_dir = Path(data_dir)
         self.resolution = resolution
         self.squall_mode = squall_mode
-        self.sort_specs = sort_specs or []
+        self.sort_by = _parse_sort_spec(sort_specs or [])
         self.console = console or Console()
         self._nl = None
         self._last_df = None
@@ -69,13 +76,14 @@ class InteractiveTuiApp:
 
     def _execute(self, program: str):
         """Run *program* in the current language and return its result."""
-        if self.squall_mode:
-            return self._nl.execute_squall_program(program)
-        return self._nl.execute_datalog_program(program)
+        execute = (
+            _execute_squall_program if self.squall_mode else _execute_program
+        )
+        return execute(self._nl, program)
 
-    def _show_frame(self, df, title: str = "") -> None:
-        """Sort and print the DataFrame *df* of a result."""
-        df = _sort(df, self.sort_specs)
+    def _show_frame(self, result, title: str = "") -> None:
+        """Sort and print the rows of a query *result*."""
+        df = sort_dataframe(result_to_dataframe(result), self.sort_by)
         if df.empty:
             self.console.print("[dim](empty)[/dim]")
         else:
@@ -92,18 +100,16 @@ class InteractiveTuiApp:
             self.console.print(
                 "[green]true[/green]" if result else "[red]false[/red]"
             )
-            self._last_df = _format_as_df(result)
+            self._last_df = None
             return
         if isinstance(result, dict):
             for key, sub_result in result.items():
-                df = _format_as_df(sub_result)
-                if df is not None and not df.empty:
-                    self.console.print(
-                        f"\n[bold magenta]── {key} ──[/bold magenta]"
-                    )
-                    self._show_frame(df, title=key)
+                self.console.print(
+                    f"\n[bold magenta]── {key} ──[/bold magenta]"
+                )
+                self._show_frame(sub_result, title=key)
             return
-        self._show_frame(_format_as_df(result))
+        self._show_frame(result)
 
     def _execute_and_display(self, program: str) -> None:
         """Run a Datalog or SQUALL query and print its result."""

@@ -134,28 +134,61 @@ def _rename_unnamed_columns(df, column_names):
     return df
 
 
-def _emit(df, fmt, sort_by=None):
-    """Format a DataFrame in *fmt* mode (table, csv, or json)."""
-    if df.empty:
-        return "(empty)"
-    if sort_by:
-        columns, ascending = zip(*sort_by)
-        valid = [(c, a) for c, a in sort_by if c in df.columns]
-        invalid = [c for c, _ in sort_by if c not in df.columns]
-        for col in invalid:
+def sort_dataframe(df, sort_by):
+    """
+    Return *df* sorted by the ``(column, ascending)`` pairs of *sort_by*.
+
+    Columns that *df* lacks are ignored with a warning on stderr.
+    """
+    if not sort_by:
+        return df
+    for col, _ in sort_by:
+        if col not in df.columns:
             print(
                 f"Warning: sort column {col!r} not found in result, "
                 f"ignoring.",
                 file=sys.stderr,
             )
-        if valid:
-            cols, asc = zip(*valid)
-            df = df.sort_values(by=list(cols), ascending=list(asc))
+    valid = [(c, a) for c, a in sort_by if c in df.columns]
+    if not valid:
+        return df
+    cols, asc = zip(*valid)
+    return df.sort_values(by=list(cols), ascending=list(asc))
+
+
+def _emit(df, fmt, sort_by=None):
+    """Format a DataFrame in *fmt* mode (table, csv, or json)."""
+    if df.empty:
+        return "(empty)"
+    df = sort_dataframe(df, sort_by)
     if fmt == "csv":
         return df.to_csv(index=False)
     if fmt == "json":
         return df.to_json(orient="records", indent=2)
     return df.to_string(index=False)
+
+
+def result_to_dataframe(result, column_names=None) -> pd.DataFrame:
+    """
+    Return the rows of a query *result* as a DataFrame.
+
+    *result* is a relational algebra set, possibly wrapped in a
+    ``Constant``. Auto-generated column names are replaced by
+    *column_names* when given.
+    """
+    if hasattr(result, "value") and hasattr(result.value, "unwrap"):
+        result = result.value.unwrap()
+        if hasattr(result, "as_pandas_dataframe"):
+            return _rename_unnamed_columns(
+                result.as_pandas_dataframe(), column_names
+            )
+    if hasattr(result, "columns") and len(result.columns) > 0:
+        df = pd.DataFrame(iter(result), columns=result.columns)
+    else:
+        rows = list(iter(result))
+        arity = getattr(result, "arity", len(rows[0]) if rows else 0)
+        df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
+    return _rename_unnamed_columns(df, column_names)
 
 
 def _format_result(
@@ -167,34 +200,9 @@ def _format_result(
         return ""
     if isinstance(result, bool):
         return "true" if result else "false"
-
     try:
-        # Unwrap Constant -> concrete set when chase produced wrapped result
-        if hasattr(result, "value") and hasattr(result.value, "unwrap"):
-            inner = result.value.unwrap()
-            if hasattr(inner, "as_pandas_dataframe"):
-                return _emit(
-                    _rename_unnamed_columns(
-                        inner.as_pandas_dataframe(), column_names
-                    ),
-                    fmt,
-                    sort_by=sort_by,
-                )
-            result = inner
-
-        # Get a DataFrame from the bare set (named or unnamed columns)
-        if hasattr(result, "columns") and len(result.columns) > 0:
-            df = pd.DataFrame(iter(result), columns=result.columns)
-        else:
-            rows = list(iter(result))
-            if not rows:
-                return "(empty)"
-            arity = result.arity if hasattr(result, "arity") else len(rows[0])
-            df = pd.DataFrame(rows, columns=[f"c{i}" for i in range(arity)])
-
-        return _emit(
-            _rename_unnamed_columns(df, column_names), fmt, sort_by=sort_by
-        )
+        df = result_to_dataframe(result, column_names)
+        return _emit(df, fmt, sort_by=sort_by)
     except Exception as exc:
         print(f"Warning: result formatting failed: {exc}", file=sys.stderr)
         return str(result)

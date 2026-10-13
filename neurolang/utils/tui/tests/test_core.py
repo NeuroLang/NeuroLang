@@ -6,18 +6,8 @@ import pytest
 pytest.importorskip("prompt_toolkit")
 pytest.importorskip("rich")
 
-from neurolang import expressions as ir  # noqa: E402
-from neurolang.datalog import WrappedRelationalAlgebraSet  # noqa: E402
-from neurolang.utils.relational_algebra_set.pandas import (  # noqa: E402
-    NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraSet,
-)
 from neurolang.utils.tui import InteractiveTuiApp  # noqa: E402
-from neurolang.utils.tui.results import (  # noqa: E402
-    _df_to_rich_table,
-    _format_as_df,
-    _rename_unnamed_columns,
-)
+from neurolang.utils.tui.results import _df_to_rich_table  # noqa: E402
 
 
 class TestDfToRichTable:
@@ -36,50 +26,6 @@ class TestDfToRichTable:
         df = pd.DataFrame({"a": [1], "b": [2.5], "c": ["x"]})
         table = _df_to_rich_table(df)
         assert [c.header for c in table.columns] == ["a", "b", "c"]
-
-
-class TestRenameUnnamedColumns:
-    def test_renames_int_columns(self):
-        df = pd.DataFrame({0: [1, 2], 1: [3, 4]})
-        result = _rename_unnamed_columns(df, ["x", "y"])
-        assert list(result.columns) == ["x", "y"]
-
-    def test_preserves_named_columns(self):
-        df = pd.DataFrame({"name": [1], "value": [2]})
-        result = _rename_unnamed_columns(df, ["x", "y"])
-        assert list(result.columns) == ["name", "value"]
-
-    def test_ignores_wrong_length(self):
-        df = pd.DataFrame({0: [1]})
-        result = _rename_unnamed_columns(df, ["a", "b", "c"])
-        assert list(result.columns) == [0]
-
-
-class TestFormatAsDf:
-    def test_none_returns_none(self):
-        assert _format_as_df(None) is None
-
-    def test_true_returns_df(self):
-        assert _format_as_df(True).iloc[0, 0] == "true"
-
-    def test_empty_result(self):
-        assert _format_as_df(RelationalAlgebraSet()).empty
-
-    def test_named_set(self):
-        nras = NamedRelationalAlgebraFrozenSet(
-            columns=("x", "y"), iterable=[(1, "a")]
-        )
-        df = _format_as_df(nras)
-        assert list(df.columns) == ["x", "y"]
-        assert df.iloc[0, 0] == 1
-
-    def test_wrapped_constant(self):
-        inner = RelationalAlgebraSet()
-        inner.add((42,))
-        result = ir.Constant(WrappedRelationalAlgebraSet(inner))
-        df = _format_as_df(result, column_names=["val"])
-        assert df.iloc[0, 0] == 42
-        assert "val" in df.columns
 
 
 class TestInteractiveTuiApp:
@@ -102,3 +48,24 @@ class TestInteractiveTuiApp:
         assert app.squall_mode
         app._handle_dot_command(".mode datalog")
         assert not app.squall_mode
+
+
+def test_query_result_sorted_with_cli_helpers(tmp_path):
+    import io
+
+    from rich.console import Console
+
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (3,), (2,)], name="P")
+    out = io.StringIO()
+    app = InteractiveTuiApp(
+        history_path=str(tmp_path / "h"), sort_specs=["x:desc"],
+        console=Console(file=out, width=80),
+    )
+    app._nl = nl
+    app._execute_and_display("ans(x) :- P(x)")
+    assert list(app._last_df["x"]) == [3, 2, 1]
+    text = out.getvalue()
+    assert text.index("3") < text.index("2") < text.index("1 ")
