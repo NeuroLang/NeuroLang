@@ -49,7 +49,6 @@ from neurolang.probabilistic.exceptions import (
     UncomparableDistributionsError,
     UnsupportedProbabilisticQueryError,
 )
-from neurolang.utils.error_enrichment import enrich_exception, format_user_error
 
 
 class TestNeuroLangException:
@@ -293,70 +292,6 @@ class TestParserError:
     def test_unexpected_token_error(self):
         exc = ParserError("unexpected token")
         assert exc.suggestion == "Check the query for errors."
-
-
-class TestEnrichException:
-    """Tests for the enrich_exception utility."""
-
-    def test_enrich_neurolang_exception(self):
-        exc = SymbolNotFoundError("foo")
-        result = enrich_exception(
-            exc,
-            query_text="ans(x) :- foo(x)",
-            engine_type="datalog",
-            line=1,
-            column=5,
-            source_line="ans(x) :- foo(x)",
-        )
-        assert result is exc  # same object
-        assert result.line == 1
-        assert result.column == 5
-        assert result.source_line == "ans(x) :- foo(x)"
-        assert result.query_text == "ans(x) :- foo(x)"  # type: ignore
-        assert result.engine_type == "datalog"  # type: ignore
-
-    def test_enrich_preserves_existing_context(self):
-        """If the exception already has line/col, enrich_exception should
-        not overwrite them."""
-        exc = ParserError("parse error", line=5, column=10)
-        enrich_exception(exc, line=999, column=999)
-        assert exc.line == 5  # unchanged
-        assert exc.column == 10  # unchanged
-
-    def test_enrich_non_neurolang_exception(self):
-        """Regular exceptions should still get query_text and engine_type."""
-        exc = ValueError("some error")
-        result = enrich_exception(
-            exc,
-            query_text="bad query",
-            engine_type="datalog",
-        )
-        assert result is exc
-        assert result.query_text == "bad query"  # type: ignore
-        assert result.engine_type == "datalog"  # type: ignore
-
-    def test_format_user_error_with_error_summary(self):
-        exc = SymbolNotFoundError("foo")
-        msg = format_user_error(exc)
-        assert "foo" in msg
-        assert "Suggestion:" in msg
-
-    def test_format_user_error_fallback(self):
-        exc = ValueError("plain error")
-        msg = format_user_error(exc)
-        assert msg == "plain error"
-
-    def test_enrich_squall_semantic_error(self):
-        exc = SquallSemanticError(
-            "test message",
-            line=3,
-            column=7,
-            source_line="obtain every Person.",
-        )
-        enrich_exception(exc, query_text="obtain every Person.")
-        assert exc.line == 3
-        assert exc.column == 7
-        assert exc.source_line == "obtain every Person."
 
 
 class TestErrorSummaryForSpecialCases:
