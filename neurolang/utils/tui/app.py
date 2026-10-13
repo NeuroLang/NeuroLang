@@ -27,7 +27,7 @@ from neurolang.utils.cli import (
 )
 
 from .commands import COMMANDS, QuitRepl
-from .results import _df_to_rich_table
+from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 
 
 def _newline_bindings() -> KeyBindings:
@@ -58,6 +58,7 @@ class TuiSettings:
     show_ra: bool = False
     ra_options: ShowRAOptions = field(default_factory=ShowRAOptions)
     show_rewritten: bool = False
+    page_size: int = DEFAULT_PAGE_SIZE
     debug: bool = False
     history_path: Optional[str] = None
 
@@ -99,7 +100,7 @@ class InteractiveTuiApp:
         self.settings = settings or TuiSettings()
         self.console = console or Console()
         self.err_console = err_console or Console(stderr=True)
-        self._last_df = None
+        self.result: Optional[ResultBlock] = None
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
         else:
@@ -144,32 +145,37 @@ class InteractiveTuiApp:
         )
 
     def _show_frame(self, result, title: str = "") -> None:
-        """Sort and print the rows of a query *result*."""
+        """Sort and print the first page of the rows of a query *result*."""
         df = sort_dataframe(result_to_dataframe(result), self.settings.sort_by)
-        self._last_df = df
-        self.print_frame(df, title)
+        self.result = ResultBlock(df, title)
+        self.print_block(self.result)
 
-    def print_frame(self, df, title: str = "") -> None:
-        """Print the DataFrame *df* in the output format of the session."""
+    def print_block(self, block: ResultBlock) -> None:
+        """
+        Print the next page of *block* in the output format of the session.
+
+        The csv and json formats print all the rows at once.
+        """
         fmt = self.settings.output_format
-        if df.empty:
+        if fmt == "table":
+            print_next_page(self.console, block, self.settings.page_size)
+        elif block.frame.empty:
             self.console.print("[dim](empty)[/dim]")
-        elif fmt == "table":
-            self.console.print(_df_to_rich_table(df, title=title))
         else:
-            self.console.out(_emit(df, fmt), highlight=False)
+            self.console.out(_emit(block.frame, fmt), highlight=False)
+            block.shown = len(block.frame)
 
     def _show_result(self, result) -> None:
         """Print a query *result*, keeping the last table shown."""
         if result is None:
             self.console.print("[dim](no result)[/dim]")
-            self._last_df = None
+            self.result = None
             return
         if isinstance(result, bool):
             self.console.print(
                 "[green]true[/green]" if result else "[red]false[/red]"
             )
-            self._last_df = None
+            self.result = None
             return
         if isinstance(result, dict):
             for key, sub_result in result.items():

@@ -7,24 +7,24 @@ pytest.importorskip("prompt_toolkit")
 pytest.importorskip("rich")
 
 from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
-from neurolang.utils.tui.results import _df_to_rich_table  # noqa: E402
+from neurolang.utils.tui.results import rows_table  # noqa: E402
 
 
 class TestDfToRichTable:
     def test_basic_table(self):
         df = pd.DataFrame({"x": [1, 2], "y": ["a", "b"]})
-        table = _df_to_rich_table(df, title="Test")
+        table = rows_table(df, title="Test")
         assert table.title == "Test"
         assert [c.header for c in table.columns] == ["x", "y"]
 
     def test_empty_dataframe(self):
         df = pd.DataFrame({"x": pd.Series([], dtype=int)})
-        table = _df_to_rich_table(df)
+        table = rows_table(df)
         assert [c.header for c in table.columns] == ["x"]
 
     def test_multiple_columns(self):
         df = pd.DataFrame({"a": [1], "b": [2.5], "c": ["x"]})
-        table = _df_to_rich_table(df)
+        table = rows_table(df)
         assert [c.header for c in table.columns] == ["a", "b", "c"]
 
 
@@ -89,7 +89,7 @@ def test_query_result_sorted_with_cli_helpers(engine):
         engine, TuiSettings(sort_by=[("x", False)]), console=_console()
     )
     app._execute_and_display("ans(x) :- Q(x)")
-    assert list(app._last_df["x"]) == [3, 2, 1]
+    assert list(app.result.frame["x"]) == [3, 2, 1]
     text = _output(app)
     assert text.index("3") < text.index("2") < text.index("1 ")
 
@@ -198,7 +198,7 @@ def test_sort_command_resorts_last_result(small_app, capsys):
     small_app._execute_and_display("ans(x) :- P(x)")
     small_app._handle_dot_command(".sort x:desc")
     assert small_app.settings.sort_by == [("x", False)]
-    assert list(small_app._last_df["x"]) == [2, 1]
+    assert list(small_app.result.frame["x"]) == [2, 1]
     small_app._handle_dot_command(".sort")
     assert "Sort: x:desc" in _output(small_app)
     small_app._handle_dot_command(".sort x:sideways")
@@ -221,17 +221,79 @@ def test_ra_toggle_prints_plans_instead_of_results(small_app, capsys):
     small_app._handle_dot_command(".ra on")
     small_app._execute_and_display("ans(x) :- P(x)")
     assert "── deterministic stratum ──" in capsys.readouterr().out
-    assert small_app._last_df is None
+    assert small_app.result is None
     small_app._handle_dot_command(".ra off")
     small_app._execute_and_display("ans(x) :- P(x)")
     assert "deterministic stratum" not in capsys.readouterr().out
-    assert list(small_app._last_df["x"]) == [1, 2]
+    assert list(small_app.result.frame["x"]) == [1, 2]
 
 
 def test_rewritten_toggle(small_app, capsys):
     small_app._handle_dot_command(".rewritten on")
     small_app._execute_and_display("ans(x) :- P(x)")
     assert "── rewritten program ──" in capsys.readouterr().out
-    assert list(small_app._last_df["x"]) == [1, 2]
+    assert list(small_app.result.frame["x"]) == [1, 2]
     small_app._handle_dot_command(".rewritten")
     assert "Rewritten program: on" in _output(small_app)
+
+
+@pytest.fixture
+def long_app(engine):
+    """Return a REPL whose last result has the 45 rows 0..44."""
+    engine.add_tuple_set([(i,) for i in range(45)], name="R")
+    app = _app(engine)
+    app._execute_and_display("ans(x) :- R(x)")
+    return app
+
+
+def _shown_numbers(text):
+    import re
+
+    return [int(n) for n in re.findall(r"│\s*(\d+)\s*│", text)]
+
+
+def test_result_shows_first_page_with_caption(long_app):
+    out = _output(long_app)
+    assert _shown_numbers(out) == list(range(20))
+    assert "45 rows · showing 1–20 · .more for next" in out
+
+
+def test_more_shows_next_pages(long_app):
+    console = long_app.console
+    console.file.truncate(0)
+    console.file.seek(0)
+    long_app._handle_dot_command(".more")
+    out = _output(long_app)
+    assert _shown_numbers(out) == list(range(20, 40))
+    assert "45 rows · showing 21–40 · .more for next" in out
+    long_app._handle_dot_command(".more")
+    assert "45 rows · showing 41–45 · end" in _output(long_app)
+    long_app._handle_dot_command(".more")
+    assert "No more rows." in _output(long_app)
+
+
+def test_head_sets_page_size(long_app):
+    long_app._handle_dot_command(".head 5")
+    assert long_app.settings.page_size == 5
+    assert "45 rows · showing 1–5 · .more for next" in _output(long_app)
+    long_app._handle_dot_command(".head many")
+    assert "Page size must be a positive integer" in _output(long_app)
+    assert long_app.settings.page_size == 5
+
+
+def test_all_shows_every_row(long_app):
+    long_app._handle_dot_command(".all")
+    assert set(_shown_numbers(_output(long_app))) == set(range(45))
+    assert long_app.result.remaining == 0
+
+
+def test_caption_is_one_line_on_narrow_tables(long_app):
+    caption = [
+        line for line in _output(long_app).splitlines() if "rows" in line
+    ]
+    assert caption == ["45 rows · showing 1–20 · .more for next"]
+
+
+def test_small_result_caption(small_app):
+    small_app._execute_and_display("ans(x) :- P(x)")
+    assert "2 rows" in _lines(small_app)

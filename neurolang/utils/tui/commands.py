@@ -13,6 +13,8 @@ from rich.panel import Panel
 
 from neurolang.utils.cli import _parse_sort_spec, sort_dataframe
 
+from .results import ResultBlock, print_all
+
 
 class QuitRepl(Exception):
     """Raised by a command to end the REPL."""
@@ -110,9 +112,49 @@ def cmd_sort(app, arg: str) -> None:
         app.console.print("Sort: none")
         return
     app.settings.sort_by = _parse_sort_spec(specs)
-    if app._last_df is not None:
-        app._last_df = sort_dataframe(app._last_df, app.settings.sort_by)
-        app.print_frame(app._last_df)
+    if app.result is not None:
+        frame = sort_dataframe(app.result.frame, app.settings.sort_by)
+        app.result = ResultBlock(frame, app.result.title)
+        app.print_block(app.result)
+
+
+@command(".more", "Show the next page of the last result")
+def cmd_more(app, arg: str) -> None:
+    """Print the next page of the last result."""
+    if app.result is None or app.result.remaining <= 0:
+        app.console.print("[dim]No more rows.[/dim]")
+        return
+    app.print_block(app.result)
+
+
+@command(
+    ".head", "Set the page size to N and show the first page again",
+    ".head [N]",
+)
+def cmd_head(app, arg: str) -> None:
+    """Set the page size and print the first page of the last result."""
+    if arg.strip():
+        try:
+            size = int(arg)
+        except ValueError:
+            size = 0
+        if size <= 0:
+            app.console.print(
+                f"[yellow]Page size must be a positive integer, "
+                f"not {arg.strip()!r}.[/yellow]"
+            )
+            return
+        app.settings.page_size = size
+    if app.result is not None:
+        app.result.shown = 0
+        app.print_block(app.result)
+
+
+@command(".all", "Show all the rows of the last result (in a pager)")
+def cmd_all(app, arg: str) -> None:
+    """Print all the rows of the last result."""
+    if app.result is not None:
+        print_all(app.console, app.result)
 
 
 FORMATS = ("table", "csv", "json")
