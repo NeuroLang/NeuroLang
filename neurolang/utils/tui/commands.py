@@ -7,6 +7,7 @@ text. A handler is called with the REPL application and the text that
 follows the command name.
 """
 
+import difflib
 from typing import Callable, NamedTuple
 
 from rich.panel import Panel
@@ -42,6 +43,27 @@ def command(name: str, help: str, usage: str = ""):
         COMMANDS[name] = Command(handler, usage or name, help)
         return handler
     return register
+
+
+def unknown_command_message(name: str) -> str:
+    """Return the error message for the unknown command *name*."""
+    message = f"Unknown command {name}."
+    close = difflib.get_close_matches(name, COMMANDS, n=1)
+    if close:
+        message += f" Did you mean {close[0]}?"
+    return message + " Type .help for the list of commands."
+
+
+def run_command(app, line: str) -> None:
+    """Run the dot-command on *line*, reporting unknown commands."""
+    name, _, arg = line.strip().partition(" ")
+    cmd = COMMANDS.get(name.lower())
+    if cmd is None:
+        app.console.print(
+            unknown_command_message(name), style="yellow", markup=False
+        )
+        return
+    cmd.handler(app, arg)
 
 
 HELP_EXAMPLES = """

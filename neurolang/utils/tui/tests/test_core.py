@@ -297,3 +297,19 @@ def test_caption_is_one_line_on_narrow_tables(long_app):
 def test_small_result_caption(small_app):
     small_app._execute_and_display("ans(x) :- P(x)")
     assert "2 rows" in _lines(small_app)
+
+
+@pytest.mark.parametrize("typed, suggestion", [
+    (".hlep", ".help"), (".mroe", ".more"), (".quti", ".quit"),
+])
+def test_unknown_command_suggests_closest(small_app, typed, suggestion):
+    small_app._handle_dot_command(typed)
+    out = " ".join(_output(small_app).split())
+    assert f"Unknown command {typed}. Did you mean {suggestion}?" in out
+
+
+def test_unknown_command_without_close_match(small_app):
+    small_app._handle_dot_command(".zzzzzz")
+    out = _output(small_app)
+    assert "Unknown command .zzzzzz." in out
+    assert "Did you mean" not in out

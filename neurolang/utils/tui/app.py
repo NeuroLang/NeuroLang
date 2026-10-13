@@ -26,7 +26,7 @@ from neurolang.utils.cli import (
     sort_dataframe,
 )
 
-from .commands import COMMANDS, QuitRepl
+from .commands import QuitRepl, run_command
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
 
 
@@ -205,14 +205,7 @@ class InteractiveTuiApp:
 
     def _handle_dot_command(self, line: str) -> None:
         """Run the dot-command on *line*."""
-        verb, _, rest = line.strip().partition(" ")
-        cmd = COMMANDS.get(verb.lower())
-        if cmd is None:
-            self.console.print(
-                f"[yellow]Unknown command: {verb}. Try .help[/yellow]"
-            )
-            return
-        cmd.handler(self, rest)
+        run_command(self, line)
 
     def _get_prompt(self) -> str:
         """Return the prompt showing the engine and the language."""
