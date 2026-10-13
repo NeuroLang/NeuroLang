@@ -69,3 +69,83 @@ def test_query_result_sorted_with_cli_helpers(tmp_path):
     assert list(app._last_df["x"]) == [3, 2, 1]
     text = out.getvalue()
     assert text.index("3") < text.index("2") < text.index("1 ")
+
+
+@pytest.fixture
+def pipe_session():
+    """Yield a function making a prompt session fed with the given keys."""
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.input import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+
+    with create_pipe_input() as pipe:
+        def make(keys):
+            pipe.send_text(keys)
+            return PromptSession(input=pipe, output=DummyOutput())
+        yield make
+
+
+@pytest.fixture
+def small_app(tmp_path):
+    """Return a REPL on a small engine, printing to a string buffer."""
+    import io
+
+    from rich.console import Console
+
+    from neurolang.frontend import NeurolangPDL
+
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="P")
+    app = InteractiveTuiApp(
+        history_path=str(tmp_path / "h"),
+        console=Console(file=io.StringIO(), width=100),
+    )
+    app._nl = nl
+    return app
+
+
+def _output(app):
+    return app.console.file.getvalue()
+
+
+def test_ctrl_c_at_prompt_keeps_session(small_app, pipe_session):
+    session = pipe_session("ans(\x03ans(x) :- P(x)\r\x04")
+    small_app.run(session)
+    out = _output(small_app)
+    assert "Query completed" in out
+    assert out.count("Query completed") == 1
+    assert "Goodbye" in out
+
+
+def test_ctrl_c_during_query_keeps_session(
+    small_app, pipe_session, monkeypatch
+):
+    calls = []
+    original = small_app._execute
+
+    def interrupted_once(program):
+        calls.append(program)
+        if len(calls) == 1:
+            raise KeyboardInterrupt()
+        return original(program)
+
+    monkeypatch.setattr(small_app, "_execute", interrupted_once)
+    session = pipe_session("ans(x) :- P(x)\rans(x) :- P(x)\r\x04")
+    small_app.run(session)
+    out = _output(small_app)
+    assert "Query interrupted" in out
+    assert len(calls) == 2
+    assert "Query completed" in out
+
+
+@pytest.mark.parametrize("quit_command", [".quit", ".exit"])
+def test_quit_commands_end_session(small_app, pipe_session, quit_command):
+    session = pipe_session(f"{quit_command}\rans(x) :- P(x)\r")
+    small_app.run(session)
+    assert "Query completed" not in _output(small_app)
+    assert "Goodbye" in _output(small_app)
+
+
+def test_ctrl_d_ends_session(small_app, pipe_session):
+    small_app.run(pipe_session("\x04"))
+    assert "Goodbye" in _output(small_app)

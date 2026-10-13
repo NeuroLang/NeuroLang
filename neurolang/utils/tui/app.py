@@ -20,7 +20,7 @@ from neurolang.utils.cli import (
     sort_dataframe,
 )
 
-from .commands import COMMANDS
+from .commands import COMMANDS, QuitRepl
 from .results import _df_to_rich_table
 
 
@@ -118,6 +118,9 @@ class InteractiveTuiApp:
         t0 = time.perf_counter()
         try:
             result = self._execute(program)
+        except KeyboardInterrupt:
+            self.console.print("[yellow]Query interrupted[/yellow]")
+            return
         except Exception as exc:
             self.console.print(f"[red]Query error:[/red] {exc}")
             return
@@ -157,26 +160,51 @@ class InteractiveTuiApp:
         mode = "SQUALL" if self.squall_mode else "Datalog"
         self.console.print(f"[dim]Mode: {mode}[/dim]")
 
-    def run(self) -> None:
-        """Start the interactive REPL."""
-        self._print_banner()
-        self._ensure_engine()
-        session = PromptSession(
+    def _make_session(self) -> PromptSession:
+        """Return the prompt session reading the REPL input."""
+        return PromptSession(
             history=self._history, key_bindings=_newline_bindings(),
         )
-        while True:
-            try:
-                line = session.prompt(self._get_prompt())
-            except (EOFError, KeyboardInterrupt):
-                self.console.print("\n[dim]Goodbye.[/dim]")
-                break
-            if not line.strip():
-                continue
-            if line.startswith("."):
-                self._handle_dot_command(line)
-            else:
-                self._execute_and_display(line.strip())
 
+    def _run_line(self, line: str) -> None:
+        """Run the dot-command or the query on *line*."""
+        if not line.strip():
+            return
+        if line.lstrip().startswith("."):
+            self._handle_dot_command(line)
+        else:
+            self._execute_and_display(line.strip())
+
+    def _read_and_run(self, session) -> bool:
+        """
+        Read one input from *session* and run it.
+
+        Ctrl+C at the prompt discards the input and Ctrl+C while running
+        interrupts it; both keep the session. Return False when the REPL
+        must end, on Ctrl+D or ``.quit``.
+        """
+        try:
+            line = session.prompt(self._get_prompt())
+        except KeyboardInterrupt:
+            return True
+        except EOFError:
+            return False
+        try:
+            self._run_line(line)
+        except QuitRepl:
+            return False
+        except KeyboardInterrupt:
+            self.console.print("[yellow]Interrupted[/yellow]")
+        return True
+
+    def run(self, session=None) -> None:
+        """Start the interactive REPL, reading from *session* if given."""
+        self._print_banner()
+        self._ensure_engine()
+        session = session or self._make_session()
+        while self._read_and_run(session):
+            pass
+        self.console.print("[dim]Goodbye.[/dim]")
 
 def main(
     engine_name: str = "neurosynth",

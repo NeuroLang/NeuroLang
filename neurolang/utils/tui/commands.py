@@ -7,10 +7,13 @@ text. A handler is called with the REPL application and the text that
 follows the command name.
 """
 
-import sys
 from typing import Callable, NamedTuple
 
 from rich.panel import Panel
+
+
+class QuitRepl(Exception):
+    """Raised by a command to end the REPL."""
 
 
 class Command(NamedTuple):
@@ -86,13 +89,13 @@ def cmd_mode(app, arg: str) -> None:
         )
 
 
-@command(".quit", "Exit the REPL (also Ctrl+D / Ctrl+C)")
+@command(".quit", "Exit the REPL (also Ctrl+D)")
 def cmd_quit(app, arg: str) -> None:
     """Exit the REPL."""
-    sys.exit(0)
+    raise QuitRepl()
 
 
 @command(".exit", "Exit the REPL")
 def cmd_exit(app, arg: str) -> None:
     """Exit the REPL."""
-    sys.exit(0)
+    raise QuitRepl()
