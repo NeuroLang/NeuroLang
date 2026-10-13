@@ -1,13 +1,27 @@
-import operator
+"""Semirings for provenance computation in probabilistic queries."""
+
 from abc import ABC, abstractmethod
 
 
 class Semiring(ABC):
-    """Abstract base for (T, ⊕, ⊗, 0, 1) semirings used in provenance
-    computation over probabilistic relational algebra.
+
+    """
+    Abstract base for (T, ⊕, ⊗, 0, 1) semirings.
+
+    Semirings are used in provenance computation over probabilistic
+    relational algebra.
     """
 
     def __init__(self, name=None):
+        """
+        Create the semiring.
+
+        Parameters
+        ----------
+        name : str, optional
+            Name of the semiring, defaults to the class name.
+
+        """
         self._name = name or self.__class__.__name__
 
     @property
@@ -35,10 +49,12 @@ class Semiring(ABC):
         """Return the aggregation callable (e.g. ``sum`` or ``max``)."""
 
     def __repr__(self):
+        """Return the representation of the semiring."""
         return f"<Semiring: {self._name}>"
 
 
 class ProbabilitySemiring(Semiring):
+
     """Probability semiring: (+, ×) over [0, 1]."""
 
     def add(self, a, b):
@@ -58,6 +74,7 @@ class ProbabilitySemiring(Semiring):
 
 
 class MaxProductSemiring(Semiring):
+
     """Max-product semiring: (max, ×) over [0, 1]."""
 
     def add(self, a, b):

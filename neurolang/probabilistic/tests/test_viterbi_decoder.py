@@ -1,11 +1,7 @@
 """Tests for the Viterbi decoder (backpointer tracking)."""
-import operator
-
-from ...datalog import Fact
-from ...expressions import Constant, Symbol
+from ...expressions import Symbol
 from ...logic import Conjunction, Implication, Union
 from .. import dalvi_suciu_lift
-from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
 from ..semiring import MaxProductSemiring
 from ..viterbi import compute_backpointers, decode_viterbi, trace_path
@@ -56,7 +52,7 @@ def _make_hmm():
 
 def test_compute_backpointers_simple():
     """Recover argmax for a one-step transition."""
-    cpl, init, trans, emit1, emit2 = _make_hmm()
+    cpl, init, trans, emit1, _ = _make_hmm()
 
     v1 = Symbol("viterbi_1")
 

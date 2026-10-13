@@ -41,9 +41,8 @@ from .relational_algebra import (
 )
 from .utils import OrderedSet
 from .probabilistic.semiring import (
-    ProbabilitySemiring,
     MaxProductSemiring,
-    Semiring,
+    ProbabilitySemiring,
 )
 
 ADD = Constant(operator.add)

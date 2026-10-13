@@ -18,7 +18,8 @@ def compute_backpointers(
     prev_symbol,
     transition_symbol,
 ):
-    """Build and solve a backpointer query for a transition step.
+    """
+    Build and solve a backpointer query for a transition step.
 
     Walks *bp(z, y) :- prev(y), trans(y, z)* into the program then
     solves it with MaxProductSemiring, returning one row per result
@@ -108,8 +109,10 @@ def extract_backpointers(
     state_col=1,
     backpointer_col=2,
 ):
-    """For each result state, find which existential gave the max score.
-    Returns {state: argmax_value}.
+    """
+    Find, for each result state, which existential gave the max score.
+
+    Returns ``{state: argmax_value}``.
     """
     backpointers = {}
     data = max_product_result.relation.value

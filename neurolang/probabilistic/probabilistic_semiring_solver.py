@@ -35,7 +35,9 @@ class ProbSemiringSolverMixin(
     PatternWalker
 ):
     def __init__(self, *args, semiring=None, **kwargs):
-        self.semiring = semiring if semiring is not None else ProbabilitySemiring()
+        if semiring is None:
+            semiring = ProbabilitySemiring()
+        self.semiring = semiring
         super().__init__(*args, **kwargs)
         self.translated_probfact_sets = dict()
 

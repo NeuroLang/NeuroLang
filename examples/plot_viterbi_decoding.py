@@ -1,6 +1,6 @@
-"""
-Viterbi Decoding with Max-Product Semiring
-===========================================
+r"""
+Viterbi Decoding with Max-Product Semiring.
+============================================
 
 This example shows how to perform Viterbi-style decoding — finding the most
 likely sequence of hidden states in an HMM — using NeuroLang's
@@ -17,9 +17,7 @@ We'll walk through a 2-state, 2-step HMM example step by step.
 """
 
 # %%
-import math
-
-from neurolang.expressions import Constant, Symbol
+from neurolang.expressions import Symbol
 from neurolang.logic import Conjunction, Implication, Union
 from neurolang.probabilistic import MaxProductSemiring, dalvi_suciu_lift
 from neurolang.probabilistic.cplogic.program import CPLogicProgram
@@ -75,7 +73,11 @@ cpl.add_probabilistic_facts_from_tuples(
 #    :math:`\alpha_1(s) \;:=\; \texttt{init}(s) \wedge \texttt{emit1}(s)`
 #
 # **Step 2** — recursive update:
-#    :math:`\alpha_2(z) \;:=\; \texttt{viterbi\_1}(y) \wedge \texttt{trans}(y, z) \wedge \texttt{emit2}(z)`
+#
+# .. math::
+#
+#    \alpha_2(z) \;:=\; \texttt{viterbi\_1}(y) \wedge \texttt{trans}(y, z)
+#    \wedge \texttt{emit2}(z)
 #
 # The existential quantifier over :math:`y` in Step 2 is where the
 # max-product semiring makes the difference — it uses **max** instead of
@@ -104,8 +106,9 @@ cpl.walk(Union((
 # **Approach A:** Solve each step individually, then extract backpointers
 # using :func:`~neurolang.probabilistic.viterbi.compute_backpointers`.
 #
-# **Approach B:** Use the convenience :func:`~neurolang.probabilistic.viterbi.decode_viterbi`
-# helper which does it all in one call.
+# **Approach B:** Use the convenience
+# :func:`~neurolang.probabilistic.viterbi.decode_viterbi` helper which does
+# it all in one call.
 #
 # Let's do both to show how they relate.
 
@@ -228,8 +231,14 @@ print(f"Most likely state sequence: {path}")
 
 print(f"\nα₁(s1) = 0.6 × 0.7 = {0.6*0.7:.4f}")
 print(f"α₁(s2) = 0.4 × 0.2 = {0.4*0.2:.4f}")
-print(f"α₂(s1) = max({0.42*0.8:.4f}, {0.08*0.3:.4f}) × 0.1 = {max(0.42*0.8, 0.08*0.3)*0.1:.4f}")
-print(f"α₂(s2) = max({0.42*0.2:.4f}, {0.08*0.7:.4f}) × 0.8 = {max(0.42*0.2, 0.08*0.7)*0.8:.4f}")
+print(
+    f"α₂(s1) = max({0.42*0.8:.4f}, {0.08*0.3:.4f}) × 0.1 = "
+    f"{max(0.42*0.8, 0.08*0.3)*0.1:.4f}"
+)
+print(
+    f"α₂(s2) = max({0.42*0.2:.4f}, {0.08*0.7:.4f}) × 0.8 = "
+    f"{max(0.42*0.2, 0.08*0.7)*0.8:.4f}"
+)
 print(f"\nMost likely path: {path}")
 print("✅  Viterbi decoding complete using MaxProductSemiring")
 

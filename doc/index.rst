@@ -84,6 +84,7 @@ a guided walkthrough.
    tutorial
    tutorial_squall
    tutorial_datalog
+   tutorials/viterbi
    concepts
    engine_configuration
    performance

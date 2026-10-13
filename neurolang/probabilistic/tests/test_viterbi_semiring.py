@@ -1,14 +1,7 @@
 """Tests for the max-product semiring and Viterbi-style queries."""
 
-from typing import AbstractSet
-
-import pytest
-
-from ...datalog import Fact
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
-from ...relational_algebra import NamedRelationalAlgebraFrozenSet
-from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import dalvi_suciu_lift
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
@@ -53,7 +46,7 @@ def test_probability_semiring_regression():
 
 
 def test_probability_semiring_default():
-    """Default (semiring=None) must behave identically to ProbabilitySemiring."""
+    """Default (semiring=None) must behave like ProbabilitySemiring."""
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         P, {(0.7, 1, 2), (0.9, 1, 3), (0.88, 2, 4)}
@@ -73,7 +66,8 @@ def test_probability_semiring_default():
 
 
 def test_maxproduct_existential():
-    """MaxProductSemiring on an existential query yields max, not 1-∏(1-p).
+    """
+    Check that max-product existentials yield max, not 1-∏(1-p).
 
     Query:  ans(x) :- P(x, y)
     Meaning: find the max-probability y for each x (MAP over existential).
@@ -133,7 +127,8 @@ def test_maxproduct_conjunction():
 
 
 def test_viterbi_forward_2step():
-    """Simulate a 2-step HMM Viterbi forward pass.
+    """
+    Simulate a 2-step HMM Viterbi forward pass.
 
     The query structure mimics:
 
@@ -222,8 +217,10 @@ def test_viterbi_forward_2step():
     # For s1: max(score1(s1)*trans(s1,s1), score1(s2)*trans(s2,s1)) * emit2(s1)
     v1_s1 = 0.6 * 0.7  # 0.42
     v1_s2 = 0.4 * 0.2  # 0.08
-    score_s1 = max(v1_s1 * 0.8, v1_s2 * 0.3) * 0.1  # max(0.336, 0.024) * 0.1 = 0.0336
-    score_s2 = max(v1_s1 * 0.2, v1_s2 * 0.7) * 0.8  # max(0.084, 0.056) * 0.8 = 0.0672
+    # max(0.336, 0.024) * 0.1 = 0.0336
+    score_s1 = max(v1_s1 * 0.8, v1_s2 * 0.3) * 0.1
+    # max(0.084, 0.056) * 0.8 = 0.0672
+    score_s2 = max(v1_s1 * 0.2, v1_s2 * 0.7) * 0.8
     expected2 = testing.make_prov_set(
         [
             (score_s1, "s1"),
