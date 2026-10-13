@@ -8,14 +8,16 @@ from ...datalog.wrapped_collections import (
 )
 from ...exceptions import UnexpectedExpressionError
 from ...expressions import Constant, Symbol
-from ...logic import Union
+from ...logic import Conjunction, Implication, Union
 from ...utils.relational_algebra_set import pandas as pandas_ras
+from ..cplogic.program import CPLogicProgram
 from ..exceptions import DistributionDoesNotSumToOneError
 from ..expression_processing import (
     add_to_union,
     check_probabilistic_choice_set_probabilities_sum_to_one,
     get_probchoice_variable_equalities,
     group_preds_by_functor,
+    is_probabilistic_predicate_symbol,
 )
 
 P = Symbol("P")
@@ -158,3 +160,20 @@ def test_probabilistic_choice_empty_does_not_sum_to_one(backend):
     with pytest.raises(DistributionDoesNotSumToOneError, match="Got 0"):
         check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
 
+
+
+def test_is_probabilistic_predicate_symbol_recursive_rules():
+    """Recursive rules terminate whether or not they reach a pfact."""
+    edge, reach, pedge, preach = map(
+        Symbol, ("edge", "reach", "pedge", "preach")
+    )
+    cpl = CPLogicProgram()
+    cpl.add_extensional_predicate_from_tuples(edge, {(1, 2), (2, 3)})
+    cpl.add_probabilistic_facts_from_tuples(pedge, {(0.5, 1, 2)})
+    for head, base in ((reach, edge), (preach, pedge)):
+        cpl.walk(Implication(head(x, y), base(x, y)))
+        cpl.walk(
+            Implication(head(x, y), Conjunction((head(x, z), head(z, y))))
+        )
+    assert not is_probabilistic_predicate_symbol(reach, cpl)
+    assert is_probabilistic_predicate_symbol(preach, cpl)
