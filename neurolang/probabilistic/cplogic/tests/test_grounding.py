@@ -14,7 +14,12 @@ from ...expressions import (
     ProbabilisticChoiceGrounding,
     ProbabilisticFact,
 )
-from ..grounding import ground_cplogic_program, ground_cplogic_program_for_query
+from ..grounding import (
+    get_grounding_pred_symb,
+    get_query_reachable_predicates,
+    ground_cplogic_program,
+    ground_cplogic_program_for_query,
+)
 from ..program import CPLogicProgram
 
 P = Symbol("P")
@@ -22,6 +27,8 @@ Q = Symbol("Q")
 R = Symbol("R")
 Z = Symbol("Z")
 W = Symbol("W")
+Y = Symbol("Y")
+V = Symbol("V")
 x = Symbol("x")
 y = Symbol("y")
 p = Symbol("p")
@@ -133,8 +140,24 @@ def test_forbidden_disjunction():
         ground_cplogic_program(cpl)
 
 
-def test_ground_cplogic_program_for_query_restricts_to_reachable():
-    """Grounding with a query predicate should skip unreachable predicates."""
+def _groundings_by_pred_symb(grounded):
+    return {
+        get_grounding_pred_symb(grounding.expression): (
+            type(grounding),
+            set(grounding.relation.value.to_unnamed()),
+        )
+        for grounding in grounded.expressions
+    }
+
+
+def _build_program_with_unreachable_rules():
+    """
+    Build a program with rules unrelated to the query ``Z``.
+
+    ``Z`` depends on ``Y``, ``Q``, ``R`` and ``V``, while ``W`` and ``P``
+    are unrelated to it.
+
+    """
     cpl_program = CPLogicProgram()
     cpl_program.add_probabilistic_facts_from_tuples(
         Q, {(1.0, "a"), (0.5, "b")}
@@ -142,26 +165,48 @@ def test_ground_cplogic_program_for_query_restricts_to_reachable():
     cpl_program.add_probabilistic_facts_from_tuples(
         P, {(0.8, "a"), (0.2, "c")}
     )
-    rule = Implication(Z(x), Conjunction((Q(x),)))
-    unreachable_rule = Implication(W(x), Conjunction((P(x), Q(x))))
-    code = Union((rule, unreachable_rule))
+    cpl_program.add_probabilistic_choice_from_tuples(
+        R, {(0.3, "a"), (0.7, "b")}
+    )
+    cpl_program.add_extensional_predicate_from_tuples(V, {("a",), ("b",)})
+    code = Union((
+        Implication(Z(x), Conjunction((Y(x), V(x)))),
+        Implication(Y(x), Conjunction((Q(x), R(x)))),
+        Implication(W(x), Conjunction((P(x), Q(x)))),
+    ))
     cpl_program.walk(code)
+    return cpl_program
 
-    full_grounded = ground_cplogic_program(cpl_program)
-    full_predicates = {
-        grounding.expression.consequent.functor
-        for grounding in full_grounded.expressions
+
+def test_ground_cplogic_program_for_query_restricts_to_reachable():
+    """Grounding with a query predicate should skip unreachable predicates."""
+    cpl_program = _build_program_with_unreachable_rules()
+
+    full = _groundings_by_pred_symb(ground_cplogic_program(cpl_program))
+    assert set(full) == {Z, Y, W, P, Q, R, V}
+
+    restricted = _groundings_by_pred_symb(
+        ground_cplogic_program_for_query(cpl_program, Z(x))
+    )
+    assert set(restricted) == {Z, Y, Q, R, V}
+    for pred_symb, grounding in restricted.items():
+        assert grounding == full[pred_symb]
+
+
+def test_query_reachable_predicates():
+    cpl_program = _build_program_with_unreachable_rules()
+    assert get_query_reachable_predicates(cpl_program, Z(x)) == {
+        Z, Y, Q, R, V
     }
-    assert W in full_predicates
-    assert P in full_predicates
+    assert get_query_reachable_predicates(cpl_program, W(x)) == {W, P, Q}
+    assert get_query_reachable_predicates(cpl_program, P(x)) == {P}
+    assert get_query_reachable_predicates(cpl_program, V(x)) == {V}
 
-    restricted_grounded = ground_cplogic_program_for_query(cpl_program, Z(x))
-    restricted_predicates = {
-        grounding.expression.consequent.functor
-        for grounding in restricted_grounded.expressions
-    }
 
-    assert Z in restricted_predicates
-    assert Q in restricted_predicates
-    assert W not in restricted_predicates
-    assert P not in restricted_predicates
+def test_ground_cplogic_program_for_query_on_probabilistic_fact():
+    cpl_program = _build_program_with_unreachable_rules()
+    full = _groundings_by_pred_symb(ground_cplogic_program(cpl_program))
+    restricted = _groundings_by_pred_symb(
+        ground_cplogic_program_for_query(cpl_program, P(x))
+    )
+    assert restricted == {P: full[P]}
