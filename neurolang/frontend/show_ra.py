@@ -7,12 +7,16 @@ rule is evaluated with, stratum by stratum.
 """
 import operator
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import AbstractSet
+
+import numpy as np
 
 from ..datalog.expression_processing import is_aggregation_rule, stratify
 from ..datalog.expressions import AdornedSymbol, AggregationApplication
 from ..datalog.chase import ChaseNaive, ChaseSemiNaive
+from ..datalog.instance import MapInstance
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..datalog import Implication
 from ..exceptions import UnsupportedSolverError
@@ -30,12 +34,15 @@ from ..probabilistic.expression_processing import (
 from ..probabilistic.expressions import Condition, ProbabilisticQuery
 from ..probabilistic.query_resolution import (
     _build_probabilistic_program,
+    _solve_within_language_prob_query,
+    construct_within_language_succ_result,
     lift_solve_marg_query,
     within_language_succ_query_to_intensional_rule,
 )
 from ..probabilistic.weighted_model_counting import (
     _prepare_and_translate_query as wmc_prepare_and_translate_query,
 )
+from ..relational_algebra import RelationalAlgebraSolver
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..relational_algebra import (
     ColumnStr,
@@ -48,6 +55,7 @@ from ..relational_algebra import (
     str2columnstr_constant,
 )
 from ..relational_algebra.pretty_printer import (
+    UpperBound,
     build_name_map_from_conjunction,
     pretty_repr,
     subscript,
@@ -343,7 +351,7 @@ class PlanDisplay:
     def print_rule(
         self, rule, conjunction, symbol_table, ra_code, leaf_sizes=None,
         column_roles=None, leaf_arities=None, notes=(), delta_symbols=(),
-        fresh_map=None,
+        fresh_map=None, row_counts=None,
     ):
         """
         Print the ``--show-ra`` block of a rule.
@@ -360,6 +368,8 @@ class PlanDisplay:
         Leaves of ``delta_symbols`` are bound to the tuples derived in the
         current iteration and printed as ``Δp``. ``fresh_map`` maps fresh
         variables to the names they are already displayed with.
+        ``row_counts`` maps the ``id`` of plan nodes to the number of rows
+        they produced.
         """
         fresh_map = dict(fresh_map or {})
         if rule is not None:
@@ -371,6 +381,7 @@ class PlanDisplay:
             conjunction, symbol_table, ra_code, leaf_sizes=leaf_sizes,
             column_roles=column_roles, leaf_arities=leaf_arities,
             delta_symbols=delta_symbols, fresh_map=fresh_map,
+            row_counts=row_counts,
         )
 
     def conditional_text(self, numerator, denominator, fresh_map):
@@ -421,7 +432,7 @@ class PlanDisplay:
     def print_plan(
         self, conjunction, symbol_table, ra_code, leaf_sizes=None,
         column_roles=None, leaf_arities=None, delta_symbols=(),
-        fresh_map=None,
+        fresh_map=None, row_counts=None,
     ):
         """
         Print the RA plan ``ra_code`` (see :meth:`print_rule`).
@@ -436,6 +447,7 @@ class PlanDisplay:
             ra_code, name_map=name_map, leaf_sizes=leaf_sizes,
             fresh_map=fresh_map, column_roles=column_roles,
             collapse=self.options.collapse, leaf_arities=leaf_arities,
+            row_counts=row_counts,
         ))
 
 
@@ -519,6 +531,12 @@ class RulePlan:
         iteration only (semi-naive evaluation).
     iterations : list
         iterations of the chase the plan was evaluated in.
+    body_code : Expression
+        plan of the rule's body: ``ra_code`` but for the aggregation of
+        aggregation rules.
+    rows : dict
+        number of rows each node of the plan produced, by ``id`` of the
+        node, summed over the iterations (``analyze`` mode only).
 
     """
 
@@ -528,6 +546,8 @@ class RulePlan:
     leaf_arities: dict
     deltas: frozenset
     iterations: list
+    body_code: Expression = None
+    rows: dict = field(default_factory=dict)
 
 
 def aggregation_plan(rule, ra_code):
@@ -555,6 +575,96 @@ def aggregation_plan(rule, ra_code):
         elif isinstance(argument, Symbol):
             groupby.append(str2columnstr_constant(argument.name))
     return GroupByAggregation(ra_code, tuple(groupby), tuple(aggregates))
+
+
+def plan_rows(plan, symbol_table):
+    """
+    Evaluate ``plan`` and return the number of rows of each of its nodes.
+
+    Each node is evaluated once, by the relational algebra solver over
+    ``symbol_table``, on the results of its operands, as SQL's
+    ``EXPLAIN ANALYZE`` does. The counts are keyed by the ``id`` of the
+    nodes.
+    """
+    rows = {}
+    plan_results(plan, symbol_table, rows)
+    return rows
+
+
+def plan_results(plan, symbol_table, rows=None):
+    """
+    Evaluate ``plan`` node by node, returning its result.
+
+    The number of rows of each node's result is stored in ``rows``, by
+    ``id`` of the node, when given.
+    """
+    solver = RelationalAlgebraSolver(symbol_table)
+    results = {}
+
+    def evaluate(node):
+        if id(node) not in results:
+            if isinstance(node, RelationalAlgebraOperation):
+                operands = {
+                    id(child): evaluate(child)
+                    for child in plan_children(node)
+                }
+                node_on_results = type(node)(*(
+                    _replace_operands(argument, operands)
+                    for argument in node.unapply()
+                ))
+                result = solver.walk(node_on_results)
+            else:
+                result = solver.walk(node)
+            results[id(node)] = result
+            if rows is not None:
+                rows[id(node)] = relation_rows(result.value)
+        return results[id(node)]
+
+    return evaluate(plan)
+
+
+def _replace_operands(argument, operands):
+    """Replace the operands found in ``argument`` by their result."""
+    if isinstance(argument, tuple):
+        return tuple(_replace_operands(item, operands) for item in argument)
+    return operands.get(id(argument), argument)
+
+
+_CHEAPLY_HASHED = (str, bytes, int, float, bool, np.generic, type(None))
+
+
+def relation_rows(relation):
+    """
+    Return the number of rows of ``relation``.
+
+    Counting the rows of a set may require removing its duplicates. When
+    it holds values that are expensive to compare, such as regions, the
+    rows are counted with their possible duplicates: the count, an
+    :class:`UpperBound`, is printed ``‹≤N rows›``.
+    """
+    container = getattr(relation, "_container", None)
+    if (
+        getattr(relation, "_might_have_duplicates", False)
+        and container is not None
+        and len(container) > 0
+        and not all(
+            isinstance(value, _CHEAPLY_HASHED)
+            for value in container.iloc[0]
+        )
+    ):
+        return UpperBound(len(container))
+    return len(relation)
+
+
+def add_rows(total, rows):
+    """Add the row counts ``rows`` to those of ``total``."""
+    for node, count in rows.items():
+        added = total.get(node, 0) + count
+        if isinstance(count, UpperBound) or isinstance(
+            total.get(node), UpperBound
+        ):
+            added = UpperBound(added)
+        total[node] = added
 
 
 def iterations_label(iterations):
@@ -624,12 +734,35 @@ class ShowRAChaseMixin:
         symbol_table = self.ra_symbol_table(
             predicates, instance, restriction_instance
         )
-        self._record_show_ra_plan(
+        plan = self._record_show_ra_plan(
             predicates, symbol_table, restriction_instance
         )
-        return super().obtain_substitutions(
+        substitutions = super().obtain_substitutions(
             iter(predicates), instance, restriction_instance
         )
+        if self.show_ra_display.options.analyze:
+            self._count_show_ra_rows(plan, symbol_table, substitutions)
+        if self._show_ra_plans is None:
+            # Evaluated outside execute_chase: print right away.
+            self._print_rule_plans(self._show_ra_current_rule, [plan])
+        return substitutions
+
+    def _count_show_ra_rows(self, plan, symbol_table, substitutions):
+        """
+        Add the rows each node of ``plan`` produced to its counts.
+
+        The body plan is evaluated node by node on ``symbol_table``; the
+        aggregation of an aggregation rule produced one row per group of
+        the ``substitutions`` the body evaluated to.
+        """
+        add_rows(plan.rows, plan_rows(plan.body_code, symbol_table))
+        if plan.ra_code is not plan.body_code:
+            groups, aggregations = self._get_groups_and_aggregations(
+                self._show_ra_current_rule
+            )
+            add_rows(plan.rows, {id(plan.ra_code): relation_rows(
+                substitutions.aggregate(groups, aggregations)
+            )})
 
     def print_rule_plan(self, rule, symbol_table):
         """
@@ -646,7 +779,8 @@ class ShowRAChaseMixin:
         )
         self._show_ra_current_rule = rule
         self._show_ra_plans = None
-        self._record_show_ra_plan(predicates, symbol_table, {})
+        plan = self._record_show_ra_plan(predicates, symbol_table, {})
+        self._print_rule_plans(rule, [plan])
 
     def _is_iterative(self):
         """Return whether the chase iterates up to a fixpoint."""
@@ -664,7 +798,12 @@ class ShowRAChaseMixin:
     def _record_show_ra_plan(
         self, predicates, symbol_table, restriction_instance
     ):
-        """Record the plan of the current rule evaluated on ``predicates``."""
+        """
+        Record the plan of the current rule evaluated on ``predicates``.
+
+        The :class:`RulePlan` recorded, or found recorded for the same
+        delta bindings, is returned.
+        """
         rule = self._show_ra_current_rule
         deltas = frozenset()
         if self._is_iterative() and restriction_instance:
@@ -678,23 +817,23 @@ class ShowRAChaseMixin:
         for plan in variants:
             if plan.deltas == deltas:
                 plan.iterations.append(iteration)
-                return
+                return plan
         conjunction = Conjunction(predicates)
-        ra_code = self.translate_conjunction_to_named_ra(conjunction)
+        body_code = self.translate_conjunction_to_named_ra(conjunction)
+        ra_code = body_code
         if rule is not None and is_aggregation_rule(rule):
-            ra_code = aggregation_plan(rule, ra_code)
-        variants.append(RulePlan(
+            ra_code = aggregation_plan(rule, body_code)
+        plan = RulePlan(
             conjunction,
             ra_code,
             self._show_ra_leaf_sizes(predicates, symbol_table),
             _leaf_arities(predicates, symbol_table),
             deltas,
             [iteration],
-        ))
-        if self._show_ra_plans is None:
-            # Evaluated outside execute_chase: print right away.
-            self._print_rule_plans(rule, variants)
-            variants.clear()
+            body_code,
+        )
+        variants.append(plan)
+        return plan
 
     def _show_ra_plans_of(self, rule):
         """Return the list of plans recorded for ``rule``."""
@@ -725,10 +864,15 @@ class ShowRAChaseMixin:
 
     def _print_rule_plans(self, rule, variants):
         """Print ``rule`` with its plans, labelled when there are many."""
+        analyze = self.show_ra_display.options.analyze
         for position, plan in enumerate(variants):
             notes = ()
             if len(variants) > 1:
                 notes = (f"{iterations_label(plan.iterations)}:",)
+            if analyze and len(plan.iterations) > 1:
+                notes += (
+                    f"(rows summed over {len(plan.iterations)} iterations)",
+                )
             self.show_ra_display.print_rule(
                 rule if position == 0 else None,
                 plan.conjunction,
@@ -738,6 +882,7 @@ class ShowRAChaseMixin:
                 leaf_arities=plan.leaf_arities,
                 notes=notes,
                 delta_symbols=plan.deltas,
+                row_counts=plan.rows,
             )
 
     def _show_ra_leaf_sizes(self, predicates, symbol_table):
@@ -923,7 +1068,7 @@ def is_wmc_solver(solver):
     return module.rsplit(".", 1)[-1] == "weighted_model_counting"
 
 
-@dataclass(frozen=True)
+@dataclass
 class ProbabilisticPlan:
     """
     The plan of a probabilistic query.
@@ -938,12 +1083,16 @@ class ProbabilisticPlan:
         whether ``relation`` is a lineage plan, whose provenance is
         compiled to compute the probabilities, rather than a plan
         computing them.
+    rows : dict
+        number of rows each node of ``relation`` produced, by ``id`` of
+        the node (``analyze`` mode only).
 
     """
 
     relation: Expression
     provenance_column: object
     lineage: bool
+    rows: dict = field(default_factory=dict)
 
 
 class ShowRAStratumSolver(StratumSolver):
@@ -1007,6 +1156,10 @@ class ShowRAStratumSolver(StratumSolver):
             if is_within_language_prob_query(rule)
         )
         solver, plans = self.stratum_plans(queries, cpl)
+        if self.display.options.analyze:
+            solution = self.evaluate_probabilistic_plans(
+                solution, plans, solver, cpl
+            )
         for rule in prob_idb.formulas:
             if rule not in plans:
                 print(f"── rule {self.display.rule_text(rule)} ──")
@@ -1022,6 +1175,37 @@ class ShowRAStratumSolver(StratumSolver):
             elif parts not in printed:
                 printed.add(parts)
                 self.print_conditional_plans(parts, plans, solver, cpl)
+        return solution
+
+    def evaluate_probabilistic_plans(self, solution, plans, solver, cpl):
+        """
+        Evaluate the probabilistic queries' plans, counting their rows.
+
+        The rows each plan node produced are stored in the plans; the
+        returned solution is ``solution`` with the queries' results, as
+        :func:`compute_probabilistic_solution` builds it. Lineage plans
+        are not evaluated: their query is solved by ``solver`` instead.
+        """
+        solution = MapInstance(solution)
+        for rule, plan in plans.items():
+            if plan.lineage:
+                marg_solver = self.engine.probabilistic_marg_solvers[
+                    self.engine.probabilistic_solvers.index(solver)
+                ]
+                relation = _solve_within_language_prob_query(
+                    cpl, rule, solver, marg_solver
+                )
+            else:
+                result = plan_results(plan.relation, {}, plan.rows)
+                relation = construct_within_language_succ_result(
+                    ProvenanceAlgebraSet(
+                        result, str2columnstr_constant(plan.provenance_column)
+                    ),
+                    rule,
+                )
+            solution[rule.consequent.functor] = Constant[AbstractSet](
+                relation.value.to_unnamed()
+            )
         return solution
 
     def print_conditional_plans(self, parts, plans, solver, cpl):
@@ -1062,6 +1246,11 @@ class ShowRAStratumSolver(StratumSolver):
                 "(lineage plan: its provenance is compiled into a decision "
                 "diagram to compute the probabilities)"
             )
+            if self.display.options.analyze:
+                notes.append(
+                    "(no row counts: weighted model counting evaluates the "
+                    "query as a whole)"
+                )
             column_roles = {}
             leaf_sizes, leaf_arities = lineage_leaf_sizes_and_arities(
                 plan.relation, cpl
@@ -1082,6 +1271,7 @@ class ShowRAStratumSolver(StratumSolver):
             leaf_arities=leaf_arities,
             notes=notes,
             fresh_map=fresh_map,
+            row_counts=plan.rows,
         )
 
     def stratum_plans(self, queries, cpl):
@@ -1104,6 +1294,25 @@ class ShowRAStratumSolver(StratumSolver):
             except UnsupportedSolverError:
                 if index == len(solvers) - 1:
                     raise
+
+    def run_postprobabilistic(self, solution, postprob_idb):
+        """
+        Run the post-probabilistic stratum, printing its rules' plans.
+
+        The stratum is solved as in the evaluation, with show-ra chases.
+        """
+        display = self.display
+        chase_class = self.engine.chase_class
+
+        def make_chase(program, rules):
+            return show_ra_chase(chase_class, program, rules, display)
+
+        result = self.engine._solve_postprobabilistic_deterministic_stratum(
+            solution, postprob_idb, make_chase
+        )
+        solution = MapInstance(solution)
+        solution.update(result)
+        return solution
 
     def print_query(self, head_symbols, atom, solution):
         """
@@ -1136,6 +1345,10 @@ class ShowRAStratumSolver(StratumSolver):
             leaf_sizes=_leaf_sizes((atom,), solution),
             leaf_arities=_leaf_arities((atom,), solution),
             fresh_map=fresh_map,
+            row_counts=(
+                plan_rows(ra_code, solution)
+                if self.display.options.analyze else None
+            ),
         )
 
     def postprobabilistic(self, solution, postprob_idb):
@@ -1147,6 +1360,8 @@ class ShowRAStratumSolver(StratumSolver):
         them with, are printed stratum by stratum.
         """
         print("── post-probabilistic stratum ──")
+        if self.display.options.analyze:
+            return self.run_postprobabilistic(solution, postprob_idb)
         program = self.engine._build_postprobabilistic_solver(
             solution, postprob_idb
         )

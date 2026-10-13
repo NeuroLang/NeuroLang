@@ -17,8 +17,11 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ...utils import NamedRelationalAlgebraFrozenSet
+from ...relational_algebra.pretty_printer import UpperBound, rows_label
 from ..show_ra import (
     ShowRAOptions,
+    add_rows,
+    relation_rows,
     conditional_division_names,
     iterations_label,
     probability_column_roles,
@@ -578,3 +581,100 @@ def test_conditional_query_header_shares_variable_names(capsys):
     assert "schaefer_label(s₀)" in header
     assert "── rule label_reports^cond_den(PROB()) :-\n" \
         "    selected_study(s₁),\n" in out
+
+
+ANALYZE = ShowRAOptions(analyze=True)
+
+
+def test_analyze_annotates_deterministic_plan_rows(capsys):
+    out = show_ra_output(capsys, THREE_WAY_JOIN, show_ra=ANALYZE)
+    assert "⋈ ‹1 row›" in out
+    assert "└─ σ[w > 15] ‹1 row›" in out
+    assert "edge(x, y) ‹3 rows›" in out
+
+
+def test_analyze_partial_atom_rows(capsys):
+    out = show_ra_output(capsys, "ans(x) :- edge(x, 2).", show_ra=ANALYZE)
+    assert "edge(x, 2) ‹1 row from 3›" in out
+
+
+def test_analyze_recursive_rows_summed_over_iterations(capsys):
+    out = show_ra_output(capsys, TRANSITIVE_CLOSURE, show_ra=ANALYZE)
+    assert "iterations 2–3:\n(rows summed over 2 iterations)\n⋈ ‹" in out
+    assert "├─ Δreach(x, z) ‹3 rows›" in out
+    assert out.endswith("reach(x, y) ‹6 rows›\n")
+
+
+def test_analyze_aggregation_rows(capsys):
+    out = show_ra_output(capsys, COUNT_PER_LABEL, show_ra=ANALYZE)
+    assert "γ[by=(l), count(x)] ‹2 rows›" in out
+
+
+@pytest.mark.parametrize("program", [
+    "z(x, PROB) :- active(x), picked(x), label(x, l).\n"
+    "ans(x, q) :- z(x, q).",
+    CONDITIONAL,
+])
+def test_analyze_probabilistic_rows_match_evaluation(program, capsys):
+    """Check the analyzed query produces as many rows as evaluating it."""
+    expected = len(build_engine().execute_datalog_program(program))
+    out = show_ra_output(capsys, program, show_ra=ANALYZE)
+    final = [
+        line for line in out.splitlines()
+        if line.startswith(("π_ext[p_num / p_den", "z(x, q)"))
+    ]
+    assert final[-1].endswith(f"‹{expected} rows›")
+    assert "σ[p > 0.0] ‹" in out
+
+
+def test_analyze_conditional_parts_rows(capsys):
+    out = show_ra_output(capsys, CONDITIONAL, show_ra=ANALYZE)
+    assert "σ[p > 0.0] ‹2 rows›\n└─ γ[by=(l), p = sum(p)] ‹2 rows›" in out
+    assert "σ[p > 0.0] ‹1 row›\n└─ γ[by=(), p = sum(p)] ‹1 row›" in out
+    assert "├─ ans^cond_num(l, p_num) ‹2 rows›" in out
+
+
+def test_analyze_wmc_has_no_row_counts(capsys):
+    out = show_ra_output(
+        capsys, KNOWING + "ans(x, q) :- knowing(x, q).",
+        show_ra=ANALYZE, engine=knows_engine(),
+    )
+    assert "(no row counts: weighted model counting evaluates the " \
+        "query as a whole)" in out
+    assert out.endswith("knowing(x, q) ‹1 row›\n")
+
+
+def test_analyze_does_not_change_evaluation():
+    nl = build_engine()
+    before = nl.execute_datalog_program(CONDITIONAL)
+    nl.execute_datalog_program(CONDITIONAL, show_ra=ANALYZE)
+    after = nl.execute_datalog_program(CONDITIONAL)
+    assert before == after
+
+
+@pytest.mark.parametrize("show_ra", [True, ANALYZE])
+def test_show_ra_returns_empty_without_running_query(show_ra):
+    res = build_engine().execute_datalog_program(THREE_WAY_JOIN, show_ra=show_ra)
+    assert res.value.is_empty()
+
+
+def test_relation_rows_of_expensive_values_is_an_upper_bound():
+    class Region:
+        def __hash__(self):
+            return 0
+
+    region = Region()
+    relation = NamedRelationalAlgebraFrozenSet(
+        ("r", "x"), [(region, 1), (region, 1), (region, 2)]
+    )
+    relation = relation.projection("r")
+    rows = relation_rows(relation)
+    assert isinstance(rows, UpperBound)
+    assert rows >= 1
+    assert rows_label(UpperBound(3)) == "‹≤3 rows›"
+    plain = NamedRelationalAlgebraFrozenSet(("x",), [(1,), (2,)])
+    assert relation_rows(plain.projection("x")) == 2
+    total = {}
+    add_rows(total, {1: 2})
+    add_rows(total, {1: UpperBound(3)})
+    assert total == {1: 5} and isinstance(total[1], UpperBound)

@@ -706,8 +706,18 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solver
 
     def _solve_postprobabilistic_deterministic_stratum(
-        self, solution, postprob_idb
+        self, solution, postprob_idb, make_chase=None
     ):
+        """
+        Solve the post-probabilistic deterministic stratum.
+
+        The rules of ``postprob_idb`` are run over ``solution`` by the
+        chases ``make_chase(program, rules)`` returns, by default chases
+        of the engine's chase class.
+        """
+        if make_chase is None:
+            def make_chase(program, rules):
+                return self.chase_class(program, rules=rules)
         solver = self._build_postprobabilistic_solver(solution, postprob_idb)
         # Split plain Datalog rules from aggregation rules so that each
         # Chase stratum only contains rules of a single kind.  This can
@@ -738,8 +748,8 @@ class NeurolangPDL(QueryBuilderDatalog):
             # Pass 1: plain rules → activation_given_term and peers
             plain_solver1 = _make_solver(solution)
             plain_solver1.walk(plain_rules)
-            plain_sol1 = self.chase_class(
-                plain_solver1, rules=plain_rules
+            plain_sol1 = make_chase(
+                plain_solver1, plain_rules
             ).build_chase_solution()
             combined1 = dict(solution)
             combined1.update(plain_sol1)
@@ -747,8 +757,8 @@ class NeurolangPDL(QueryBuilderDatalog):
             # Pass 2: AGG rules → activation_given_term_image
             agg_solver = _make_solver(combined1)
             agg_solver.walk(agg_rules)
-            agg_sol = self.chase_class(
-                agg_solver, rules=agg_rules
+            agg_sol = make_chase(
+                agg_solver, agg_rules
             ).build_chase_solution()
             combined2 = dict(combined1)
             combined2.update(agg_sol)
@@ -768,12 +778,12 @@ class NeurolangPDL(QueryBuilderDatalog):
             if post_agg_rules.formulas:
                 plain_solver2 = _make_solver(combined2)
                 plain_solver2.walk(post_agg_rules)
-                plain_sol2 = self.chase_class(
-                    plain_solver2, rules=post_agg_rules
+                plain_sol2 = make_chase(
+                    plain_solver2, post_agg_rules
                 ).build_chase_solution()
                 combined2.update(plain_sol2)
             return combined2
-        chase = self.chase_class(solver, rules=postprob_idb)
+        chase = make_chase(solver, postprob_idb)
         solution = chase.build_chase_solution()
         return solution
 

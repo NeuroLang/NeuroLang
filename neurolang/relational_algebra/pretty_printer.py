@@ -180,11 +180,20 @@ def _relation_size(value):
         return None
 
 
+class UpperBound(int):
+    """A number of rows known to be an upper bound only."""
+
+
 def rows_label(rows):
-    """Return the ``‹N rows›`` annotation of a relation of ``rows`` rows."""
+    """
+    Return the ``‹N rows›`` annotation of a relation of ``rows`` rows.
+
+    An :class:`UpperBound` is printed ``‹≤N rows›``.
+    """
     if rows is None:
         return "‹? rows›"
-    return f"‹{rows:,} row{'' if rows == 1 else 's'}›"
+    bound = "≤" if isinstance(rows, UpperBound) else ""
+    return f"‹{bound}{rows:,} row{'' if rows == 1 else 's'}›"
 
 
 def _is_nary_cross_product(expression):
@@ -239,13 +248,16 @@ class PrettyPrinter:
     leaf_arities : dict, optional
         Mapping from `Symbol` leaves to the number of columns of their
         relation, used to print the atoms of collapsed plans.
+    row_counts : dict, optional
+        Mapping from the ``id`` of nodes of the expression to the number
+        of rows they produced, printed next to them (e.g. ``⋈ ‹12 rows›``).
 
     """
 
     def __init__(
         self, name_map=None, indent=2, width=80, fresh_map=None,
         counter=None, leaf_sizes=None, column_roles=None, collapse=False,
-        leaf_arities=None,
+        leaf_arities=None, row_counts=None,
     ):
         """Initialise the printer; see the class docstring for parameters."""
         if name_map is None:
@@ -255,6 +267,7 @@ class PrettyPrinter:
         self.column_roles = column_roles if column_roles is not None else {}
         self.collapse = collapse
         self.leaf_arities = leaf_arities if leaf_arities is not None else {}
+        self.row_counts = row_counts if row_counts is not None else {}
         self.indent = indent
         self.width = width
         self._fresh_map = fresh_map if fresh_map is not None else {}
@@ -276,6 +289,9 @@ class PrettyPrinter:
     def _render(self, expression):
         """Return the lines of the tree drawing of ``expression``."""
         header, children = self._node(expression)
+        rows = self.row_counts.get(id(expression))
+        if rows is not None and "‹" not in header:
+            header = f"{header} {rows_label(rows)}"
         lines = [header]
         for position, child in enumerate(children):
             last = position == len(children) - 1
@@ -306,20 +322,22 @@ class PrettyPrinter:
         """
         atom = _atom_pattern(expression)
         if atom is not None:
-            return self._format_atom(*atom), ()
+            rows = self.row_counts.get(id(expression))
+            return self._format_atom(*atom, rows=rows), ()
         if isinstance(expression, Projection) and _is_trivial_projection(
             expression
         ):
             return self._node(expression.relation)
         return None
 
-    def _format_atom(self, leaf, names, columns, selections):
+    def _format_atom(self, leaf, names, columns, selections, rows=None):
         """
         Format a base relation ``leaf`` filtered and named as an atom.
 
         ``names`` are the names given to its ``columns`` (indices), and
         ``selections`` the ``(column, value)`` equalities it is filtered
-        with, ``value`` being a constant or another column index.
+        with, ``value`` being a constant or another column index. The
+        atom produced ``rows`` rows, when known.
         """
         arguments = self._atom_arguments(
             names, columns, selections, self._leaf_arity(leaf)
@@ -327,11 +345,15 @@ class PrettyPrinter:
         name, size = self._leaf_name_and_size(leaf)
         text = f"{name}({', '.join(arguments)})"
         pure = not selections and list(columns) == list(range(len(arguments)))
-        if size is None:
-            return text
-        if pure:
+        if pure and size is not None:
             return f"{text} {rows_label(size)}"
-        return f"{text} ‹from {rows_label(size)[1:]}"
+        if rows is not None and size is not None:
+            return f"{text} {rows_label(rows)[:-1]} from {size:,}›"
+        if rows is not None:
+            return f"{text} {rows_label(rows)}"
+        if size is not None:
+            return f"{text} ‹from {rows_label(size)[1:]}"
+        return text
 
     def _atom_arguments(self, names, columns, selections, arity):
         """Return the displayed arguments of an atom, ``_`` if unnamed."""
@@ -821,7 +843,7 @@ def _collect_edb_names(symbol_table, name_map):
 def pretty_repr(
     expression, name_map=None, indent=2, width=80, fresh_map=None,
     counter=None, leaf_sizes=None, column_roles=None, collapse=False,
-    leaf_arities=None,
+    leaf_arities=None, row_counts=None,
 ):
     """
     Return a pretty representation of an RA expression.
@@ -853,6 +875,9 @@ def pretty_repr(
     leaf_arities : dict, optional
         Mapping from `Symbol` leaves to the number of columns of their
         relation.
+    row_counts : dict, optional
+        Mapping from the ``id`` of nodes to the number of rows they
+        produced.
 
     Returns
     -------
@@ -864,6 +889,6 @@ def pretty_repr(
         name_map=name_map, indent=indent, width=width,
         fresh_map=fresh_map, counter=counter, leaf_sizes=leaf_sizes,
         column_roles=column_roles, collapse=collapse,
-        leaf_arities=leaf_arities,
+        leaf_arities=leaf_arities, row_counts=row_counts,
     )
     return printer.format(expression)

@@ -1046,6 +1046,18 @@ class TestShowRAFlag:
         assert "── deterministic stratum ──" in out
         assert out.index("rewritten program") < out.index("deterministic")
 
+    def test_ra_verbose_prints_full_plans(self, engine_with_p, capsys):
+        main(["--show-ra", "ans(x) :- P(x)"])
+        assert "P(x) ‹2 rows›" in capsys.readouterr().out
+        main(["--show-ra", "--ra-verbose", "ans(x) :- P(x)"])
+        out = capsys.readouterr().out
+        assert "ρ[x]\n└─ π[#0]\n   └─ P ‹2 rows›" in out
+
+    def test_ra_analyze_counts_rows(self, engine_with_p, capsys):
+        main(["--show-ra", "--ra-analyze", "ans(x) :- P(x), (x > 1)"])
+        out = capsys.readouterr().out
+        assert "σ[x > 1] ‹1 row›" in out
+
     @pytest.mark.parametrize("flag", ["--ra-verbose", "--ra-analyze"])
     def test_ra_flags_require_show_ra(self, flag, engine_with_p, capsys):
         """Check that --ra-verbose and --ra-analyze need --show-ra."""
