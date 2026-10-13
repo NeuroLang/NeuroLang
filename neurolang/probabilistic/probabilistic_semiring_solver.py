@@ -35,6 +35,7 @@ class ProbSemiringSolverMixin(
     PatternWalker
 ):
     def __init__(self, *args, semiring=None, **kwargs):
+        """Create the solver, by default with a ``ProbabilitySemiring``."""
         if semiring is None:
             semiring = ProbabilitySemiring()
         self.semiring = semiring
