@@ -278,15 +278,6 @@ def cmd_ra(app, arg: str) -> None:
     _switch(app, arg, "show_ra", "RA plans")
 
 
-@command(
-    ".rewritten", "Print the magic-sets rewritten program of each query",
-    ".rewritten [on|off]",
-)
-def cmd_rewritten(app, arg: str) -> None:
-    """Toggle the display of the rewritten program."""
-    _switch(app, arg, "show_rewritten", "Rewritten program")
-
-
 @command(".quit", "Exit the REPL (also Ctrl+D)")
 def cmd_quit(app, arg: str) -> None:
     """Exit the REPL."""

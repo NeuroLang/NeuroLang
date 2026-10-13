@@ -35,6 +35,7 @@ from .commands import (
 )
 from .interrupt import call_interruptibly
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
+from .session import open_session_scope
 from .statements import is_complete, split_statements
 
 
@@ -133,7 +134,9 @@ class InteractiveTuiApp:
         self.console = console or Console()
         self.err_console = err_console or Console(stderr=True)
         self.results: list = []
+        self.last_query = None
         self.failed = False
+        open_session_scope(nl)
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
         else:
@@ -249,6 +252,7 @@ class InteractiveTuiApp:
 
     def _execute_and_display(self, program: str) -> None:
         """Run a Datalog or SQUALL query and print its result."""
+        self.last_query = (program, self.settings.squall)
         self.err_console.print("[dim]Running query...[/dim]")
         t0 = time.perf_counter()
         try:

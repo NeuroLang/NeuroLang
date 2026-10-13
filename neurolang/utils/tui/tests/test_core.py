@@ -231,8 +231,8 @@ def test_rewritten_toggle(small_app, capsys):
     small_app._execute_and_display("ans(x) :- P(x)")
     assert "── rewritten program ──" in capsys.readouterr().out
     assert list(small_app.results[0].frame["x"]) == [1, 2]
-    small_app._handle_dot_command(".rewritten")
-    assert "Rewritten program: on" in _output(small_app)
+    small_app._handle_dot_command(".rewritten off")
+    assert "Rewritten program: off" in _output(small_app)
 
 
 @pytest.fixture
