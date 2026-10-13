@@ -6,6 +6,7 @@ import re
 
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
+from .relational_algebra import OPERATOR_STRING
 from .relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -742,32 +743,8 @@ class PrettyPrinter:
         )
 
 
-OPERATOR_SYMBOLS = {
-    "__builtins__": None,
-}
-
-
-def _populate_operator_symbols():
-    mapping = {
-        operator.add: "+",
-        operator.sub: "-",
-        operator.mul: "*",
-        operator.truediv: "/",
-        operator.eq: "==",
-        operator.ne: "!=",
-        operator.gt: ">",
-        operator.lt: "<",
-        operator.ge: ">=",
-        operator.le: "<=",
-        operator.pow: "**",
-        operator.and_: "and",
-        operator.or_: "or",
-        operator.not_: "not",
-    }
-    OPERATOR_SYMBOLS.update(mapping)
-
-
-_populate_operator_symbols()
+# Operators printed infix: the ones the RA solver evaluates, plus ``not``.
+OPERATOR_SYMBOLS = {**OPERATOR_STRING, operator.not_: "not"}
 
 
 def build_name_map_from_conjunction(conjunction, symbol_table=None):
