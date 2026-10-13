@@ -6,61 +6,40 @@ from ..exceptions import (
 
 
 class DistributionDoesNotSumToOneError(NeuroLangException):
-    _suggestion = (
-        "Probability distribution values must sum to 1."
-    )
+    pass
 
 
 class MalformedProbabilisticTupleError(NeuroLangException):
-    _suggestion = (
-        "Check the format of probabilistic tuples."
-    )
+    pass
 
 
 class NotHierarchicalQueryException(UnsupportedSolverError):
-    _suggestion = (
-        "The query is not in hierarchical form."
-    )
+    pass
 
 
 class UncomparableDistributionsError(NeuroLangException):
-    _suggestion = (
-        "Cannot compare these probability distributions."
-    )
+    pass
 
 
 class NotEasilyShatterableError(UnsupportedSolverError):
-    _suggestion = (
-        "The probabilistic program could not be shattered."
-    )
+    pass
 
 
 class UnsupportedProbabilisticQueryError(UnsupportedQueryError):
-    _suggestion = (
-        "Probabilistic query type not supported."
-    )
+    pass
 
 
 class ForbiddenConditionalQueryNoProb(UnsupportedQueryError):
-    _suggestion = (
-        "Conditional query requires a probabilistic predicate."
-    )
+    pass
 
 
 class ForbiddenConditionalQueryNonConjunctive(UnsupportedQueryError):
-    _suggestion = (
-        "Conditional query must be conjunctive."
-    )
+    pass
 
 
 class RepeatedTuplesInProbabilisticRelationError(
     MalformedProbabilisticTupleError
 ):
-    _suggestion = (
-        "Check the format of probabilistic tuples. "
-        "Duplicate tuples are not allowed."
-    )
-
     def __init__(self, n_repeated_tuples, n_tuples, message):
         self.n_repeated_tuples = n_repeated_tuples
         self.n_tuples = n_tuples

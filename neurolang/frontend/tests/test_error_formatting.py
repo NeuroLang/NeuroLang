@@ -20,45 +20,35 @@ from neurolang.exceptions import (
     WrongArgumentsInPredicateError,
 )
 from neurolang.frontend.error_formatting import (
+    _HINTS,
+    _did_you_mean,
+    _suggest_fixes,
     format_error,
-    _USE_COLOR,
-    _suggest_datalog_fixes,
-    _suggest_squall_fixes,
-    _format_source_window,
-    _format_source_pointer,
-    _suggest_similar_names,
 )
+
+
+def _suggest_datalog_fixes(text):
+    return _suggest_fixes(text, _HINTS["Datalog"])
+
+
+def _suggest_squall_fixes(text):
+    return _suggest_fixes(text, _HINTS["SQUALL"])
 
 
 class TestSourceContext:
     """Test source context extraction and pointer formatting."""
 
-    def test_format_source_pointer_basic(self):
-        result = _format_source_pointer("ans(x) :- R(x)", 1)
-        assert "^~~~" in result
-
-    def test_format_source_pointer_mid_line(self):
-        result = _format_source_pointer("ans(x) :- R(x)", 8)
-        assert " " * 7 in result
-        assert "^~~~" in result
-
-    def test_format_source_pointer_none_column(self):
-        result = _format_source_pointer("ans(x) :- R(x)", None)
-        assert result == ""
-
-    def test_format_source_window_basic(self):
-        lines = [
-            "line one",
-            "ans(x) :- R(x)",
-            "line three",
-        ]
-        result = _format_source_window(lines, 2, 1)
+    def test_caret_under_column(self):
+        exc = NeuroLangException("boom")
+        exc.line, exc.column = 2, 8
+        result = format_error(exc, "line one\nans(x) :- R(x)\nline three")
         assert "ans(x)" in result
-        assert "^~~~" in result
+        assert "      |        ^~~~" in result
 
-    def test_format_source_window_out_of_range(self):
-        result = _format_source_window([], 1, 1)
-        assert result == ""
+    def test_out_of_range_line_has_no_window(self):
+        exc = NeuroLangException("boom")
+        exc.line, exc.column = 5, 1
+        assert "^~~~" not in format_error(exc, "")
 
 
 class TestDatalogSuggestions:
@@ -193,7 +183,7 @@ class TestUndefinedPredicateError:
     def test_basic_symbol_not_found(self):
         exc = SymbolNotFoundError("Symbol Q not found")
         result = format_error(exc, "ans(x) :- R(x), Q(x)")
-        assert "Undefined predicate" in result
+        assert "Undefined symbol" in result
         assert "Symbol Q not found" in result
 
     def test_symbol_not_found_with_line(self):
@@ -207,12 +197,12 @@ class TestUndefinedPredicateError:
     def test_symbol_not_found_format_not_found(self):
         exc = SymbolNotFoundError("Symbol not found foo")
         result = format_error(exc, "ans(x) :- foo(x)")
-        assert "Undefined predicate" in result
+        assert "Undefined symbol" in result
 
     def test_symbol_not_found_predicate_format(self):
         exc = SymbolNotFoundError("Predicate foo not found")
         result = format_error(exc, "ans(x) :- foo(x)")
-        assert "Undefined predicate" in result
+        assert "Undefined symbol" in result
 
     def test_did_you_mean_suggestion(self):
         exc = SymbolNotFoundError("Symbol regin_reported not found")
@@ -226,7 +216,7 @@ class TestUndefinedPredicateError:
     def test_no_suggestion_for_unknown_predicate(self):
         exc = SymbolNotFoundError("Symbol XyzzyNotFound not found")
         result = format_error(exc, "ans(x) :- XyzzyNotFound(x)")
-        assert "Undefined predicate" in result
+        assert "Undefined symbol" in result
 
 
 class TestArityMismatchError:
@@ -256,16 +246,16 @@ class TestSimilarNames:
 
     def test_suggests_similar(self):
         names = {"term_in_study_tfidf", "region_reported", "peak_reported"}
-        result = _suggest_similar_names("regin_reported", names)
+        result = _did_you_mean("regin_reported", names)
         assert "region_reported" in result
 
     def test_does_not_suggest_dissimilar(self):
         names = {"term_in_study_tfidf", "peak_reported"}
-        result = _suggest_similar_names("xyz", names)
+        result = _did_you_mean("xyz", names)
         assert len(result) == 0
 
     def test_empty_input(self):
-        result = _suggest_similar_names("", {"foo", "bar"})
+        result = _did_you_mean("", {"foo", "bar"})
         assert len(result) == 0
 
 
