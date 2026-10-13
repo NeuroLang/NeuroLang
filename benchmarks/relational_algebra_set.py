@@ -94,7 +94,7 @@ class TimeLeftNaturalJoins:
         [10 ** 4, 10 ** 5],
         [10],
         [3],
-        [6, 12],
+        [6],
         [0.75],
         BACKENDS,
     ]
@@ -163,7 +163,7 @@ class TimeRawMerge:
 
     """Baseline: the same chained joins on bare pandas / polars frames."""
 
-    params = [[10 ** 4, 10 ** 5], [10], [3], [6, 12], [0.75], BACKENDS]
+    params = [[10 ** 4, 10 ** 5], [10], [3], [6], [0.75], BACKENDS]
 
     param_names = [
         "rows",
@@ -196,7 +196,7 @@ class TimeEquiJoin:
         [10 ** 4, 10 ** 5],
         [10],
         [3],
-        [6, 12],
+        [6],
         [0.75],
         BACKENDS,
     ]
