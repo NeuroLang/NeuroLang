@@ -552,3 +552,29 @@ def test_division_names_need_fresh_unused_names():
     assert conditional_division_names(clash) == {}
     plain = Implication(Symbol("q")(l), Conjunction((num(l, p1),)))
     assert conditional_division_names(plain) == {}
+
+
+def test_conditional_query_header(capsys):
+    out = show_ra_output(capsys, CONDITIONAL)
+    prob = out.split("── probabilistic stratum ──\n")[1]
+    conditional = prob.split(
+        "── conditional query ans(l, p) = P(al(x, l) | picked(x)) ──\n"
+    )[1]
+    assert conditional.startswith(
+        "numerator:\n── rule ans^cond_num(l, PROB(l)) :-"
+    )
+    assert "\ndenominator:\n── rule ans^cond_den(PROB()) :-" in conditional
+    assert conditional.index("numerator:") < conditional.index(
+        "denominator:"
+    )
+
+
+def test_conditional_query_header_shares_variable_names(capsys):
+    """Check the header and both parts name fresh variables alike."""
+    out = forward_inference_output(capsys)
+    header = out.split("── conditional query ")[1].split(" ──\n")[0]
+    assert header.startswith("label_reports(s₀, p) = P(\n")
+    assert "  | selected_study(s₁), mentions(s₁, 'memory')\n)" in header
+    assert "schaefer_label(s₀)" in header
+    assert "── rule label_reports^cond_den(PROB()) :-\n" \
+        "    selected_study(s₁),\n" in out

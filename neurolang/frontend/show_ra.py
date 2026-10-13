@@ -27,7 +27,7 @@ from ..logic.transformations import RemoveDuplicatedConjunctsDisjuncts
 from ..probabilistic.expression_processing import (
     is_within_language_prob_query,
 )
-from ..probabilistic.expressions import Condition
+from ..probabilistic.expressions import Condition, ProbabilisticQuery
 from ..probabilistic.query_resolution import (
     _build_probabilistic_program,
     lift_solve_marg_query,
@@ -213,6 +213,41 @@ def _division_names(formula, roles):
     }
 
 
+def conditional_parts(rule, queries):
+    """
+    Return the numerator and denominator queries ``rule`` is one of.
+
+    A conditional query ``q`` is solved as the queries ``q^cond_num`` and
+    ``q^cond_den`` of ``queries``; None is returned when ``rule`` is not
+    one of them or the other one is missing.
+    """
+    functor = rule.consequent.functor
+    if not (
+        isinstance(functor, AdornedSymbol)
+        and functor.adornment in ("cond_num", "cond_den")
+    ):
+        return None
+    parts = {}
+    for query in queries:
+        other = query.consequent.functor
+        if (
+            isinstance(other, AdornedSymbol)
+            and other.expression == functor.expression
+            and other.adornment in ("cond_num", "cond_den")
+        ):
+            parts[other.adornment] = query
+    if len(parts) != 2:
+        return None
+    return parts["cond_num"], parts["cond_den"]
+
+
+def _conjuncts(formula):
+    """Return the conjuncts of ``formula``."""
+    if isinstance(formula, Conjunction):
+        return formula.formulas
+    return (formula,)
+
+
 class RenameSymbolsForDisplay(ExpressionWalker):
     """
     Rename predicate symbols, including adorned ones, for display.
@@ -308,6 +343,7 @@ class PlanDisplay:
     def print_rule(
         self, rule, conjunction, symbol_table, ra_code, leaf_sizes=None,
         column_roles=None, leaf_arities=None, notes=(), delta_symbols=(),
+        fresh_map=None,
     ):
         """
         Print the ``--show-ra`` block of a rule.
@@ -322,9 +358,10 @@ class PlanDisplay:
         with the label it maps them to. ``leaf_arities`` maps predicate
         symbols of the plan to the number of columns of their relation.
         Leaves of ``delta_symbols`` are bound to the tuples derived in the
-        current iteration and printed as ``Δp``.
+        current iteration and printed as ``Δp``. ``fresh_map`` maps fresh
+        variables to the names they are already displayed with.
         """
-        fresh_map = {}
+        fresh_map = dict(fresh_map or {})
         if rule is not None:
             fresh_map.update(conditional_division_names(rule))
             print(f"── rule {self.rule_text(rule, fresh_map)} ──")
@@ -334,6 +371,51 @@ class PlanDisplay:
             conjunction, symbol_table, ra_code, leaf_sizes=leaf_sizes,
             column_roles=column_roles, leaf_arities=leaf_arities,
             delta_symbols=delta_symbols, fresh_map=fresh_map,
+        )
+
+    def conditional_text(self, numerator, denominator, fresh_map):
+        """
+        Return ``q(…, p) = P(A | B)`` for a conditional query's parts.
+
+        ``numerator`` and ``denominator`` are the queries ``P(A, B)`` and
+        ``P(B)`` it is solved with: ``B`` is the body of the denominator
+        and ``A`` the conjuncts of the numerator's body not in it. Fresh
+        variables are named in ``fresh_map``.
+        """
+        printer = DatalogPrettyPrinter(fresh_map)
+        conditioning = _conjuncts(denominator.antecedent)
+        conditioned = tuple(
+            formula for formula in _conjuncts(numerator.antecedent)
+            if formula not in conditioning
+        )
+        consequent = self.display_expression(numerator.consequent)
+        functor = consequent.functor
+        while isinstance(functor, AdornedSymbol):
+            functor = functor.expression
+        variables = extract_logic_free_variables(numerator.antecedent)
+        probability = next(
+            name for name in ("p", "prob", "p_", "prob_")
+            if Symbol(name) not in variables
+        )
+        arguments = ", ".join(
+            probability if isinstance(argument, ProbabilisticQuery)
+            else printer.walk(argument)
+            for argument in consequent.args
+        )
+
+        def text(formulas):
+            return ", ".join(
+                printer.walk(self.display_expression(formula))
+                for formula in formulas
+            ) or "⊤"
+
+        head = f"{functor.name}({arguments}) = "
+        one_line = f"{head}P({text(conditioned)} | {text(conditioning)})"
+        if len(one_line) <= 60:
+            return one_line
+        return (
+            f"{head}P(\n    {text(conditioned)}\n"
+            f"  | {text(conditioning)}\n)"
         )
 
     def print_plan(
@@ -932,12 +1014,48 @@ class ShowRAStratumSolver(StratumSolver):
                     "(probabilistic rule: inlined into the queries using "
                     "it, it has no plan of its own)"
                 )
+        printed = set()
         for rule in queries:
-            self.print_probabilistic_plan(rule, plans[rule], solver, cpl)
+            parts = conditional_parts(rule, queries)
+            if parts is None:
+                self.print_probabilistic_plan(rule, plans[rule], solver, cpl)
+            elif parts not in printed:
+                printed.add(parts)
+                self.print_conditional_plans(parts, plans, solver, cpl)
         return solution
 
-    def print_probabilistic_plan(self, rule, plan, solver, cpl):
-        """Print the plan ``plan`` of the query ``rule`` solved by ``solver``."""
+    def print_conditional_plans(self, parts, plans, solver, cpl):
+        """
+        Print the numerator and denominator plans of a conditional query.
+
+        ``parts`` are the numerator (``cond_num``) and denominator
+        (``cond_den``) queries a conditional query ``P(A | B)`` is solved
+        with; a header shows the conditional query they compute.
+        """
+        numerator, denominator = parts
+        fresh_map = {}
+        print(
+            "── conditional query "
+            f"{self.display.conditional_text(numerator, denominator, fresh_map)}"
+            " ──"
+        )
+        for label, rule in (
+            ("numerator", numerator), ("denominator", denominator)
+        ):
+            print(f"{label}:")
+            self.print_probabilistic_plan(
+                rule, plans[rule], solver, cpl, dict(fresh_map)
+            )
+
+    def print_probabilistic_plan(
+        self, rule, plan, solver, cpl, fresh_map=None
+    ):
+        """
+        Print the plan ``plan`` of the query ``rule`` solved by ``solver``.
+
+        ``fresh_map`` maps fresh variables to the names they are already
+        displayed with.
+        """
         notes = [f"[solver: {solver_description(solver)}]"]
         if plan.lineage:
             notes.append(
@@ -963,6 +1081,7 @@ class ShowRAStratumSolver(StratumSolver):
             leaf_sizes=leaf_sizes,
             leaf_arities=leaf_arities,
             notes=notes,
+            fresh_map=fresh_map,
         )
 
     def stratum_plans(self, queries, cpl):
