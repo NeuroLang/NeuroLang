@@ -9,8 +9,10 @@ from ...exceptions import (
     NegativeFormulaNotNamedRelationException,
     NegativeFormulaNotSafeRangeException,
     NeuroLangException,
+    SymbolNotFoundError,
     UnsupportedProgramError,
-    UnsupportedQueryError
+    UnsupportedQueryError,
+    WrongArgumentsInPredicateError
 )
 from ...logic import Union
 from ...logic.horn_clauses import Fol2DatalogTranslationException
@@ -70,8 +72,8 @@ def build_neurosynth_like_engine():
     """
     Build a small engine with the EDB of the neurosynth engine.
 
-    It holds a few studies, peaks, terms and Schaefer labels, and a
-    uniform probabilistic choice over the studies.
+    It holds a few studies, peaks, terms and (label, region) Schaefer
+    pairs, and a uniform probabilistic choice over the studies.
     """
     nl = NeurolangPDL()
     nl.add_tuple_set(
@@ -85,7 +87,7 @@ def build_neurosynth_like_engine():
         [("memory", "s1", 0.5), ("memory", "s2", 0.6)],
         name="term_in_study_tfidf",
     )
-    nl.add_tuple_set([("A",), ("B",)], name="schaefer")
+    nl.add_tuple_set([("A", "rA"), ("B", "rB")], name="schaefer")
     nl.add_tuple_set([(10, 20, 30), (11, 21, 31)], name="voxel")
     return nl
 
@@ -163,6 +165,7 @@ def test_show_ra_conditional_query_provenance():
         _build_probabilistic_program,
     )
     from ...relational_algebra_provenance import ProvenanceAlgebraSet
+    from ..show_ra import ShowRAStratumSolver
 
     nl = NeurolangPDL()
     nl.add_uniform_probabilistic_choice_over_set(
@@ -183,7 +186,9 @@ def test_show_ra_conditional_query_provenance():
         Union((rule,)),
         nl.check_qbased_pfact_tuple_unicity,
     )
-    provset = nl._show_ra_rule_provenance_set(prob_idb.formulas[0], cpl)
+    provset = ShowRAStratumSolver(nl).rule_provenance_set(
+        prob_idb.formulas[0], cpl
+    )
     assert isinstance(provset, ProvenanceAlgebraSet)
 
 
@@ -199,7 +204,7 @@ def test_show_ra_probabilistic_with_det_idb():
     with nl.scope as e:
         e.schaefer_label[e.l] = e.schaefer[e.l, e.r]
         e.labels[e.l, e.x, e.y, e.z] = (
-            e.voxel[e.x, e.y, e.z] & e.schaefer[e.l]
+            e.voxel[e.x, e.y, e.z] & e.schaefer[e.l, e.r]
         )
         e.reports[e.s, e.x, e.y, e.z] = e.peak_reported[e.x, e.y, e.z, e.s]
         e.mentions[e.s, e.t] = (
@@ -219,6 +224,38 @@ def test_show_ra_probabilistic_with_det_idb():
             (e.l, e.p), e.label_reports[e.l, e.p], show_ra=True
         )
         assert res is not None
+
+
+@pytest.mark.parametrize("show_ra", [False, True])
+def test_show_ra_reports_wrong_arity_error(show_ra):
+    """
+    Check that show-ra reports an arity error as evaluation does.
+
+    ``schaefer`` has one column but the rule uses two. The show-ra chase
+    used to swallow the error and print the plan of an empty relation.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("A",), ("B",)], name="schaefer")
+    with pytest.raises(WrongArgumentsInPredicateError):
+        nl.execute_datalog_program(
+            "label(l) :- schaefer(l, r).\nans(l) :- label(l).",
+            show_ra=show_ra,
+        )
+
+
+@pytest.mark.parametrize("show_ra", [False, True])
+def test_show_ra_reports_unsolvable_query_error(show_ra, capsys):
+    """
+    Check that show-ra reports why a query without magic sets fails.
+
+    SQUALL turns the noun ``P`` into the predicate ``p``, which does not
+    exist. Show-ra used to hide the error and print a deterministic plan.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="P")
+    with pytest.raises(SymbolNotFoundError, match="Symbol not found p"):
+        nl.execute_squall_program("obtain every P.", show_ra=show_ra)
+    assert "── deterministic stratum ──" not in capsys.readouterr().out
 
 
 def test_show_rewritten_datalog_prints_all_rules(capsys):

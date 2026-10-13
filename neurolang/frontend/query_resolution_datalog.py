@@ -5,7 +5,6 @@ Complements QueryBuilderBase with query capabilities,
 as well as Region and Neurosynth capabilities
 """
 from collections import defaultdict
-from functools import lru_cache
 from ..datalog.magic_sets import magic_rewrite
 from ..exceptions import (
     ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
@@ -54,93 +53,11 @@ from .datalog.standard_syntax import parser as datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
-from ..logic import Conjunction
 from ..logic.horn_clauses import Fol2DatalogTranslationException
-from ..relational_algebra.pretty_printer import (
-    build_name_map_from_conjunction,
-    pretty_repr,
-)
 from . import query_resolution_expressions as fe
+from .show_ra import print_deterministic_ra_plan
 
 __all__ = ["QueryBuilderDatalog"]
-
-
-def _print_rule_ra_plan(rule, conjunction, symbol_table, build_ra_code):
-    """
-    Print the ``--show-ra`` block of a rule.
-
-    The block is the rule header (skipped when ``rule`` is None) followed
-    by the pretty-printed RA plan returned by ``build_ra_code``, whose
-    tables are named after the predicates of ``conjunction``.
-    """
-    if rule is not None:
-        rule_str = DatalogPrettyPrinter().walk(rule)
-        print(f"── rule {rule_str} ──")
-    name_map = build_name_map_from_conjunction(conjunction, symbol_table)
-    print(pretty_repr(build_ra_code(), name_map=name_map))
-
-
-@lru_cache(maxsize=None)
-def show_ra_chase_class(chase_class):
-    """Return ``chase_class`` extended with :class:`ShowRAChaseMixin`."""
-    return type(
-        f"ShowRA{chase_class.__name__}",
-        (ShowRAChaseMixin, chase_class),
-        {},
-    )
-
-
-class ShowRAChaseMixin:
-    """
-    Chase mixin printing the named RA expression of each rule.
-
-    Mixin for the chase that prints the named RA expression each rule
-    would evaluate, then returns an empty substitution list so the chase
-    terminates immediately without producing any tuples.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._show_ra_current_rule = None
-
-    def chase_step(self, instance, rule, restriction_instance=None):
-        self._show_ra_current_rule = rule
-        return super().chase_step(instance, rule, restriction_instance)
-
-    def obtain_substitutions(
-        self, rule_predicates_iterator, instance, restriction_instance
-    ):
-        predicates = tuple(rule_predicates_iterator)
-        if not predicates:
-            return []
-        conjunction = Conjunction(predicates)
-        ra_code = self.translate_conjunction_to_named_ra(conjunction)
-        _print_rule_ra_plan(
-            getattr(self, "_show_ra_current_rule", None),
-            conjunction,
-            getattr(self, "datalog_program", None),
-            lambda: ra_code,
-        )
-        try:
-            return super().obtain_substitutions(
-                iter(predicates), instance, restriction_instance
-            )
-        except Exception:
-            return []
-
-    def pick_chase_instance_for_stratum(self, stratum, instance_update):
-        """Wrap the inner per-stratum chase so its rules print RA too."""
-        chase_instance = super().pick_chase_instance_for_stratum(
-            stratum, instance_update
-        )
-        if chase_instance is None:
-            return None
-        wrapped = show_ra_chase_class(chase_instance.__class__)(
-            chase_instance.datalog_program,
-            rules=logic.Union(tuple(chase_instance.rules)),
-        )
-        wrapped.check_constraints(instance_update)
-        return wrapped
 
 
 def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exception:
@@ -1015,10 +932,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             ):
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
             elif show_ra:
-                print("── deterministic stratum ──")
-                show_ra_chase_class(self.chase_class)(
-                    self.program_ir, rules=reachable_rules
-                ).build_chase_solution()
+                print_deterministic_ra_plan(
+                    self.chase_class, self.program_ir, reachable_rules
+                )
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
             else:
                 solution = self.chase_class(

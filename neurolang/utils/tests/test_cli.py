@@ -1015,6 +1015,8 @@ class TestShowRAFlag:
         --show-ra with --squall builds the engine, prints the RA plan,
         and exits without printing 'Query completed'.
         """
+        # SQUALL lower-cases the noun ``P`` into the predicate ``p``.
+        engine_with_p.add_tuple_set([(1,), (2,)], name="p")
         main(["--squall", "--show-ra", "obtain every P."])
 
         captured = capsys.readouterr()
@@ -1036,7 +1038,7 @@ class TestShowRAFlag:
         )
         nl.execute_datalog_program("schaefer_label(l) :- schaefer(l, r).")
         nl.execute_datalog_program(
-            "labels(l, i, j, k) :- voxel(i, j, k), schaefer(l)."
+            "labels(l, i, j, k) :- voxel(i, j, k), schaefer(l, r)."
         )
         nl.execute_datalog_program(
             "mentions(s, t) :- term_in_study_tfidf(s, t, v), (v > 0.03)."
