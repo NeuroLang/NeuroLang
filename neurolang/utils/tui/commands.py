@@ -33,15 +33,15 @@ class Command(NamedTuple):
 COMMANDS = {}
 
 
-def command(name: str, help: str, usage: str = ""):
+def command(name: str, description: str, usage: str = ""):
     """
     Register the decorated function as the dot-command *name*.
 
     *usage* is the command line shown in the help (default: *name*) and
-    *help* its one-line description.
+    *description* its one-line description.
     """
     def register(handler):
-        COMMANDS[name] = Command(handler, usage or name, help)
+        COMMANDS[name] = Command(handler, usage or name, description)
         return handler
     return register
 
