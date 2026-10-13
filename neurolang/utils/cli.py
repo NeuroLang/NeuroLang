@@ -641,13 +641,17 @@ def _run_dry_run_command(args) -> bool:
     Both require the requested engine (probabilistic SQUALL programs
     depend on engine data and the CP-Logic solver): the engine is built,
     the rewritten program or the RA plans are printed, and the CLI exits
-    without running the query.
+    without running the query. With both flags, the rewritten program is
+    printed before the RA plans.
     """
+    if args.show_ra:
+        _dry_run_with_engine(
+            args, show_ra=_show_ra_options(args),
+            show_rewritten=args.show_rewritten,
+        )
+        return True
     if args.show_rewritten:
         _dry_run_with_engine(args)
-        return True
-    if args.show_ra:
-        _dry_run_with_engine(args, show_ra=_show_ra_options(args))
         return True
     return False
 

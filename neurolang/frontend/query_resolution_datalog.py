@@ -188,9 +188,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         Returns True when dry_run is active and show_ra is not active
         (caller should short-circuit), False when execution should continue.
-        When show_ra is True, the caller still needs to build the RA plan.
+        When show_ra is True, the caller still needs to build the RA plan,
+        and the rewritten program is only printed if show_rewritten is.
         """
-        if show_rewritten or dry_run:
+        if show_rewritten or (dry_run and not show_ra):
             reachable_rules = reachable_code(
                 query_expression, self.program_ir
             )

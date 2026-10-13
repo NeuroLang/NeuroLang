@@ -1021,6 +1021,31 @@ class TestShowRAFlag:
         assert "── deterministic stratum ──" in captured.out
         assert "Query completed" not in captured.err
 
+    def test_show_ra_does_not_print_rewritten_program(
+        self, engine_with_p, capsys
+    ):
+        """Check that --show-ra alone prints no rewritten program."""
+        main(["--show-ra", "ans(x) :- P(x)"])
+        out = capsys.readouterr().out
+        assert "── deterministic stratum ──" in out
+        assert "rewritten program" not in out
+
+    @pytest.mark.parametrize("squall", [False, True])
+    def test_show_ra_with_show_rewritten_prints_both(
+        self, squall, engine_with_p, capsys
+    ):
+        """Check that --show-ra --show-rewritten prints program and plans."""
+        if squall:
+            engine_with_p.add_tuple_set([(1,), (2,)], name="p")
+            query = ["--squall", "obtain every P."]
+        else:
+            query = ["ans(x) :- P(x)"]
+        main(["--show-ra", "--show-rewritten"] + query)
+        out = capsys.readouterr().out
+        assert "── rewritten program ──" in out
+        assert "── deterministic stratum ──" in out
+        assert out.index("rewritten program") < out.index("deterministic")
+
     @pytest.mark.parametrize("flag", ["--ra-verbose", "--ra-analyze"])
     def test_ra_flags_require_show_ra(self, flag, engine_with_p, capsys):
         """Check that --ra-verbose and --ra-analyze need --show-ra."""
