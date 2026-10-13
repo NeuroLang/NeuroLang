@@ -39,6 +39,12 @@ Usage
 
     # Show the Datalog IR for a SQUALL query (no execution)
     neurolang-query --squall --show-datalog "obtain every Voxel in 3D that a Study reported."
+
+    # Show the relational algebra plans of a query (no execution)
+    neurolang-query --show-ra "ans(x) :- P(x)"
+
+    # ... annotated with the number of rows each plan node produces
+    neurolang-query --show-ra --ra-analyze "ans(x) :- P(x)"
 """
 
 import argparse
@@ -56,6 +62,7 @@ from neurolang.frontend.datalog import (
     squall_grammar_metadata,
 )
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
+from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.utils import engine_registry
 
 
@@ -286,6 +293,27 @@ def _build_parser() -> argparse.ArgumentParser:
         "is rewritten before execution.",
     )
     parser.add_argument(
+        "--show-ra",
+        "-Q",
+        action="store_true",
+        help="Print the Relational Algebra plan that the Datalog "
+        "program compiles to, then exit without running the chase. "
+        "Useful for debugging and understanding the query compilation.",
+    )
+    parser.add_argument(
+        "--ra-verbose",
+        action="store_true",
+        help="When used with --show-ra, print the plans in full, without "
+        "collapsing trivial renames and projections of base relations.",
+    )
+    parser.add_argument(
+        "--ra-analyze",
+        action="store_true",
+        help="When used with --show-ra, run the query and annotate every "
+        "node of the plans with the number of rows it produced (like "
+        "SQL's EXPLAIN ANALYZE).",
+    )
+    parser.add_argument(
         "--sort",
         "-S",
         action="append",
@@ -302,7 +330,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _execute_program(
     nl: NeurolangPDL, program_text: str, show_rewritten: bool = False,
-    dry_run: bool = False,
+    show_ra=False, dry_run: bool = False,
 ):
     """
     Execute a Datalog program and return the result if a query is present.
@@ -322,6 +350,11 @@ def _execute_program(
     dry_run :
         If True, print the rewritten program and return None without
         running the chase.
+    show_ra :
+        If True, print the named relational algebra expression
+        of each rule instead of evaluating it. A
+        :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects how
+        the plans are displayed.
 
     Returns
     -------
@@ -335,12 +368,13 @@ def _execute_program(
     """
     return nl.execute_datalog_program(
         program_text, show_rewritten=show_rewritten, dry_run=dry_run,
+        show_ra=show_ra,
     )
 
 
 def _execute_squall_program(
     nl: NeurolangPDL, program_text: str, show_rewritten: bool = False,
-    dry_run: bool = False,
+    show_ra=False, dry_run: bool = False,
 ):
     """
     Execute a SQUALL (controlled English) program.
@@ -359,6 +393,11 @@ def _execute_squall_program(
     dry_run :
         If True, print the rewritten program and return None without
         running the chase.
+    show_ra :
+        If True, print the named relational algebra expression
+        of each rule instead of evaluating it. A
+        :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects how
+        the plans are displayed.
 
     Returns
     -------
@@ -372,6 +411,7 @@ def _execute_squall_program(
     """
     return nl.execute_squall_program(
         program_text, show_rewritten=show_rewritten, dry_run=dry_run,
+        show_ra=show_ra,
     )
 
 
@@ -502,35 +542,88 @@ def _list_sets(nl: NeurolangPDL) -> None:
 
 
 
-def main(argv: Optional[list] = None) -> None:
-    """CLI entry point: parse arguments, build engine, run query."""
-    parser = _build_parser()
-    args = parser.parse_args(argv)
+def _dry_run_with_engine(args, **flags) -> None:
+    """
+    Build the requested engine and dry-run the query on it.
 
+    The query is read from ``args`` and run as SQUALL or Datalog with
+    ``dry_run=True`` plus the extra keyword ``flags``.  Exits with status
+    1 when no query is provided.
+    """
+    program = _read_query(args)
+    if not program or not program.strip():
+        print("Error: no query provided.", file=sys.stderr)
+        sys.exit(1)
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution
+    )
+    if args.squall:
+        _execute_squall_program(nl, program, dry_run=True, **flags)
+    else:
+        _execute_program(nl, program, dry_run=True, **flags)
+
+
+def _show_ra_options(args):
+    """Return the :class:`ShowRAOptions` requested by the CLI ``args``."""
+    return ShowRAOptions(
+        collapse=not args.ra_verbose, analyze=args.ra_analyze
+    )
+
+
+def _check_flag_dependencies(args) -> None:
+    """
+    Exit with an error when a flag is used without the flag it needs.
+
+    ``--show-datalog`` needs ``--squall``, and ``--ra-verbose`` and
+    ``--ra-analyze`` need ``--show-ra``.
+    """
+    if args.show_datalog and not args.squall:
+        print("Error: --show-datalog requires --squall.", file=sys.stderr)
+        sys.exit(1)
+    for flag, used in (
+        ("--ra-verbose", args.ra_verbose),
+        ("--ra-analyze", args.ra_analyze),
+    ):
+        if used and not args.show_ra:
+            print(f"Error: {flag} requires --show-ra.", file=sys.stderr)
+            sys.exit(1)
+
+
+def _read_query_or_exit(args) -> str:
+    """Return the query given in ``args``, exiting when there is none."""
+    program = _read_query(args)
+    if not program or not program.strip():
+        print("Error: no query provided.", file=sys.stderr)
+        sys.exit(1)
+    return program
+
+
+def _run_engineless_command(args) -> bool:
+    """
+    Run the commands that need no engine, returning whether one ran.
+
+    These are ``--list-engines``, ``--grammar-json`` and
+    ``--show-datalog``, which are handled before the (expensive) engine
+    build.
+    """
     if args.list_engines:
         engine_registry.show_engines()
-        return
-
+        return True
     # --grammar-json only needs the parser, not an engine.
     if args.grammar_json:
         print(json.dumps(squall_grammar_metadata(), indent=2))
-        return
-
-    # --show-datalog only needs the parser, not an engine.  Handle it
-    # early to avoid the expensive engine build (which downloads data).
+        return True
+    # --show-datalog only needs the parser, not an engine.
     if args.show_datalog:
-        program = _read_query(args)
-        if not program or not program.strip():
-            print("Error: no query provided.", file=sys.stderr)
-            sys.exit(1)
-        if not args.squall:
-            print(
-                "Error: --show-datalog requires --squall.", file=sys.stderr
-            )
-            sys.exit(1)
+        program = _read_query_or_exit(args)
+        _check_flag_dependencies(args)
         _show_squall_datalog(program)
-        return
+        return True
+    return False
 
+
+def _check_engine_name(args) -> None:
+    """Exit with an error when ``args`` names an unknown engine."""
     if args.engine not in engine_registry.list_engine_names():
         available = ", ".join(engine_registry.list_engine_names())
         print(
@@ -540,29 +633,51 @@ def main(argv: Optional[list] = None) -> None:
         )
         sys.exit(1)
 
-    # --show-rewritten requires the requested engine because probabilistic
-    # SQUALL programs depend on engine data and the CP-Logic solver.
-    # Build the engine, print the rewritten program, and exit before the chase.
-    if args.show_rewritten:
-        program = _read_query(args)
-        if not program or not program.strip():
-            print("Error: no query provided.", file=sys.stderr)
-            sys.exit(1)
-        nl = engine_registry.build_engine(
-            args.engine, Path(args.data_dir), args.resolution
+
+def _run_dry_run_command(args) -> bool:
+    """
+    Run ``--show-rewritten`` or ``--show-ra``, returning whether one ran.
+
+    Both require the requested engine (probabilistic SQUALL programs
+    depend on engine data and the CP-Logic solver): the engine is built,
+    the rewritten program or the RA plans are printed, and the CLI exits
+    without running the query. With both flags, the rewritten program is
+    printed before the RA plans.
+    """
+    if args.show_ra:
+        _dry_run_with_engine(
+            args, show_ra=_show_ra_options(args),
+            show_rewritten=args.show_rewritten,
         )
-        if args.squall:
-            _execute_squall_program(nl, program, dry_run=True)
-        else:
-            _execute_program(nl, program, dry_run=True)
-        return
+        return True
+    if args.show_rewritten:
+        _dry_run_with_engine(args)
+        return True
+    return False
 
-    # Predicate metadata comes from the YAML config: no need to build
-    # (and download data for) the engine.
-    if args.list_predicates:
-        _list_predicates(args.engine)
-        return
 
+def _print_result(result, args, sort_by) -> None:
+    """Print a query ``result``, one block per ``obtain`` when a dict."""
+    if isinstance(result, dict):
+        for key, sub_result in result.items():
+            output = _format_result(
+                sub_result, fmt=args.format, column_names=None,
+                sort_by=sort_by,
+            )
+            if output:
+                print(f"── {key} ──")
+                print(output)
+                print()
+        return
+    output = _format_result(
+        result, fmt=args.format, column_names=None, sort_by=sort_by,
+    )
+    if output:
+        print(output)
+
+
+def _run_query(args) -> None:
+    """Build the engine and run the query of ``args``, printing its result."""
     nl = engine_registry.build_engine(
         args.engine, Path(args.data_dir), args.resolution
     )
@@ -571,44 +686,39 @@ def main(argv: Optional[list] = None) -> None:
         _list_sets(nl)
         return
 
-    program = _read_query(args)
-    if not program or not program.strip():
-        print("Error: no query provided.", file=sys.stderr)
-        sys.exit(1)
+    program = _read_query_or_exit(args)
 
     t0 = time.perf_counter()
     sort_by = _parse_sort_spec(args.sort)
-
     if args.squall:
-        result = _execute_squall_program(nl, program, show_rewritten=args.show_rewritten)
-        if isinstance(result, dict):
-            for key, sub_result in result.items():
-                output = _format_result(
-                    sub_result, fmt=args.format, column_names=None,
-                    sort_by=sort_by,
-                )
-                if output:
-                    print(f"── {key} ──")
-                    print(output)
-                    print()
-        else:
-            output = _format_result(
-                result, fmt=args.format, column_names=None,
-                sort_by=sort_by,
-            )
-            if output:
-                print(output)
+        result = _execute_squall_program(nl, program)
     else:
-        result = _execute_program(nl, program, show_rewritten=args.show_rewritten)
-        output = _format_result(
-            result, fmt=args.format, column_names=None,
-            sort_by=sort_by,
-        )
-        if output:
-            print(output)
+        result = _execute_program(nl, program)
+    _print_result(result, args, sort_by)
 
     elapsed = time.perf_counter() - t0
     print(f"Query completed in {elapsed:.2f} s", file=sys.stderr, flush=True)
+
+
+def main(argv: Optional[list] = None) -> None:
+    """CLI entry point: parse arguments, build engine, run query."""
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    if _run_engineless_command(args):
+        return
+    _check_flag_dependencies(args)
+    _check_engine_name(args)
+    if _run_dry_run_command(args):
+        return
+
+    # Predicate metadata comes from the YAML config: no need to build
+    # (and download data for) the engine.
+    if args.list_predicates:
+        _list_predicates(args.engine)
+        return
+
+    _run_query(args)
 
 
 if __name__ == "__main__":
