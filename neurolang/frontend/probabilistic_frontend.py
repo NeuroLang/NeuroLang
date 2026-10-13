@@ -105,7 +105,7 @@ from .type_resolution import TypeResolutionMixin
 from .datalog.squall import ResolveInvertedFunctionApplicationMixin, StripDimensionTypePredicatesMixin
 from .frontend_extensions import NumpyFunctionsMixin
 from .query_resolution_datalog import QueryBuilderDatalog
-from .show_ra import ShowRAStratumSolver
+from .show_ra import ShowRAStratumSolver, show_ra_options
 from .stratum_solver import StratumSolver
 
 
@@ -331,7 +331,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         predicate: fe.Expression,
         show_rewritten: bool = False,
         dry_run: bool = False,
-        show_ra: bool = False,
+        show_ra=False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]
@@ -359,9 +359,11 @@ class NeurolangPDL(QueryBuilderDatalog):
         dry_run : bool
             If True, print the rewritten program and return immediately
             without running the chase.
-        show_ra : bool
+        show_ra : bool or ShowRAOptions
             If True, print the named relational algebra expression
-            of each rule instead of evaluating it.
+            of each rule instead of evaluating it. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects
+            how the plans are displayed.
 
         Returns
         -------
@@ -438,8 +440,11 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
 
         query = symbol_entry.formulas[0]
-        if show_ra:
-            return self._show_ra_query(query, show_rewritten, dry_run)
+        options = show_ra_options(show_ra)
+        if options is not None:
+            return self._show_ra_query(
+                query, options, show_rewritten, dry_run
+            )
 
         try:
             magic_query, magic_rules = self._magic_rewrite_query(query)
@@ -490,26 +495,28 @@ class NeurolangPDL(QueryBuilderDatalog):
                 self.program_ir, magic_query, magic_rules
             )
 
-    def _show_ra_query(self, query, show_rewritten, dry_run):
+    def _show_ra_query(self, query, options, show_rewritten, dry_run):
         """
         Print the RA plans of ``query`` instead of solving it.
 
         As in :meth:`_execute_query`, the plans are those of the query
         rewritten with magic sets, or of ``query`` itself when the rewritten
         query cannot be solved. Errors raised while building the plans of
-        ``query`` reach the caller. An empty set is returned.
+        ``query`` reach the caller. ``options`` is the
+        :class:`~neurolang.frontend.show_ra.ShowRAOptions` of the display.
+        An empty set is returned.
         """
         try:
             magic_query, _ = self._magic_rewrite_query(query)
             self._handle_rewritten_output(
                 magic_query, show_rewritten, dry_run
             )
-            self._solve(magic_query, show_ra=True)
+            self._solve(magic_query, show_ra=options)
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
-            self._solve(query, show_ra=True)
+            self._solve(query, show_ra=options)
         return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
 
-    def solve_all(self, show_ra: bool = False) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
+    def solve_all(self, show_ra=False) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the Datalog program.
@@ -518,9 +525,11 @@ class NeurolangPDL(QueryBuilderDatalog):
 
         Parameters
         ----------
-        show_ra : bool, optional
-            If True, print the named RA expression for each rule in the
-            deterministic stratum and return an empty solution.
+        show_ra : bool or ShowRAOptions, optional
+            If True, print the named RA expression of each rule instead
+            of evaluating it, and return an empty solution. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects how
+            the plans are displayed.
 
         Returns
         -------
@@ -545,15 +554,16 @@ class NeurolangPDL(QueryBuilderDatalog):
         solution_ir = self._solve(show_ra=show_ra)
         return self._solution_to_named_sets(solution_ir)
 
-    def _solve(self, query=None, show_ra: bool = False):
+    def _solve(self, query=None, show_ra=False):
         idbs = stratify_program(query, self.program_ir)
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         postprob_idb = idbs.get("post_probabilistic", Union(tuple()))
-        stratum_solver_class = (
-            ShowRAStratumSolver if show_ra else StratumSolver
-        )
-        stratum_solver = stratum_solver_class(self)
+        options = show_ra_options(show_ra)
+        if options is None:
+            stratum_solver = StratumSolver(self)
+        else:
+            stratum_solver = ShowRAStratumSolver(self, options)
         solution = stratum_solver.deterministic(det_idb)
         if prob_idb.formulas:
             solution = stratum_solver.probabilistic(solution, prob_idb)

@@ -9,6 +9,7 @@ from neurolang.expressions import Constant, Symbol
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
 from neurolang.frontend.datalog.squall_syntax_lark import parser as squall_parser
 from neurolang.logic import Conjunction, ExistentialPredicate
+from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.utils.cli import (
     _build_parser,
     _execute_program,
@@ -143,6 +144,18 @@ class TestBuildParser:
         parser = _build_parser()
         args = parser.parse_args(["-Q", "ans(x) :- P(x)"])
         assert args.show_ra is True
+
+    def test_ra_verbose_and_analyze_default_to_false(self):
+        args = _build_parser().parse_args([])
+        assert args.ra_verbose is False
+        assert args.ra_analyze is False
+
+    def test_ra_verbose_and_analyze_flags(self):
+        args = _build_parser().parse_args(
+            ["--show-ra", "--ra-verbose", "--ra-analyze", "ans(x) :- P(x)"]
+        )
+        assert args.ra_verbose is True
+        assert args.ra_analyze is True
 
 
 # ---------------------------------------------------------------------------
@@ -1007,6 +1020,43 @@ class TestShowRAFlag:
         captured = capsys.readouterr()
         assert "── deterministic stratum ──" in captured.out
         assert "Query completed" not in captured.err
+
+    @pytest.mark.parametrize("flag", ["--ra-verbose", "--ra-analyze"])
+    def test_ra_flags_require_show_ra(self, flag, engine_with_p, capsys):
+        """Check that --ra-verbose and --ra-analyze need --show-ra."""
+        with pytest.raises(SystemExit) as exc_info:
+            main([flag, "ans(x) :- P(x)"])
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert f"{flag} requires --show-ra" in captured.err
+        assert "── deterministic stratum ──" not in captured.out
+
+    @pytest.mark.parametrize(
+        "flags,options",
+        [
+            ([], ShowRAOptions()),
+            (["--ra-verbose"], ShowRAOptions(collapse=False)),
+            (["--ra-analyze"], ShowRAOptions(analyze=True)),
+            (
+                ["--ra-verbose", "--ra-analyze"],
+                ShowRAOptions(collapse=False, analyze=True),
+            ),
+        ],
+    )
+    def test_show_ra_flags_build_options(
+        self, flags, options, engine_with_p, monkeypatch
+    ):
+        """Check that the CLI passes the ShowRAOptions of its flags."""
+        calls = []
+
+        def fake_execute_program(nl, program, **kwargs):
+            calls.append(kwargs)
+
+        monkeypatch.setattr(
+            "neurolang.utils.cli._execute_program", fake_execute_program
+        )
+        main(["--show-ra"] + flags + ["ans(x) :- P(x)"])
+        assert calls[0]["show_ra"] == options
 
     def test_show_ra_squall_dry_run(self, engine_with_p, capsys):
         """

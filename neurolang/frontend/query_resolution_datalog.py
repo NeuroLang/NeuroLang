@@ -55,7 +55,7 @@ from ..datalog import DatalogProgram
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
 from ..logic.horn_clauses import Fol2DatalogTranslationException
 from . import query_resolution_expressions as fe
-from .show_ra import print_deterministic_ra_plan
+from .show_ra import print_deterministic_ra_plan, show_ra_options
 
 __all__ = ["QueryBuilderDatalog"]
 
@@ -178,7 +178,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def _handle_rewritten_output(
         self, query_expression, show_rewritten: bool, dry_run: bool,
-        show_ra: bool = False,
+        show_ra=False,
     ) -> bool:
         """Print rewritten program if requested and return True if dry-running.
 
@@ -318,7 +318,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def execute_datalog_program(
         self, code: str, show_rewritten: bool = False, dry_run: bool = False,
-        show_ra: bool = False,
+        show_ra=False,
     ) -> Union[None, bool, RelationalAlgebraFrozenSet]:
         """
         Execute a Datalog program in classical syntax.
@@ -335,9 +335,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return None without
             running the chase.
-        show_ra : bool
+        show_ra : bool or ShowRAOptions
             If True, print the named relational algebra expression
-            of each rule instead of evaluating it.
+            of each rule instead of evaluating it. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects
+            how the plans are displayed.
 
         Examples
         --------
@@ -512,7 +514,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def execute_squall_program(
         self, code: str, show_rewritten: bool = False, dry_run: bool = False,
-        show_ra: bool = False,
+        show_ra=False,
     ) -> Union[None, NamedRelationalAlgebraFrozenSet, Dict[str, NamedRelationalAlgebraFrozenSet]]:
         """
         Execute a SQUALL (controlled English) program.
@@ -533,9 +535,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return None without
             running the chase.
-        show_ra : bool
+        show_ra : bool or ShowRAOptions
             If True, print the named relational algebra expression
-            of each rule instead of evaluating it.
+            of each rule instead of evaluating it. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects
+            how the plans are displayed.
 
         Returns
         -------
@@ -720,7 +724,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def query(
         self, *args, show_rewritten: bool = False, dry_run: bool = False,
-        show_ra: bool = False,
+        show_ra=False,
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
         """
         Performs an inferential query on the database.
@@ -741,9 +745,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return immediately
             without running the chase.
-        show_ra : bool
+        show_ra : bool or ShowRAOptions
             If True, print the named relational algebra expression
-            of each rule instead of evaluating it.
+            of each rule instead of evaluating it. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects
+            how the plans are displayed.
 
         Returns
         -------
@@ -843,7 +849,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         predicate: fe.Expression,
         show_rewritten: bool = False,
         dry_run: bool = False,
-        show_ra: bool = False,
+        show_ra=False,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
         [Internal usage - documentation for developers]
@@ -866,9 +872,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         dry_run : bool
             If True, print the rewritten program and return immediately
             without running the chase.
-        show_ra : bool
+        show_ra : bool or ShowRAOptions
             If True, print the named relational algebra expression
-            of each rule instead of evaluating it.
+            of each rule instead of evaluating it. A
+            :class:`~neurolang.frontend.show_ra.ShowRAOptions` selects
+            how the plans are displayed.
 
         Returns
         -------
@@ -933,7 +941,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
             elif show_ra:
                 print_deterministic_ra_plan(
-                    self.chase_class, self.program_ir, reachable_rules
+                    self.chase_class, self.program_ir, reachable_rules,
+                    show_ra_options(show_ra),
                 )
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
             else:

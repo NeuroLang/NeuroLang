@@ -1,0 +1,67 @@
+"""Tests for the relational algebra plan display (``show_ra``)."""
+import pytest
+
+from .. import NeurolangDL, NeurolangPDL
+from ..show_ra import ShowRAOptions, show_ra_options
+
+
+def build_engine():
+    """
+    Build a small engine to display plans on.
+
+    It holds deterministic relations ``p``, ``edge``, ``label`` and
+    ``weight``, the probabilistic facts ``active`` and the uniform
+    probabilistic choice ``picked``.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,), (3,)], name="p")
+    nl.add_tuple_set([(1, 2), (2, 3), (3, 4)], name="edge")
+    nl.add_tuple_set([(1, "a"), (2, "b"), (3, "a")], name="label")
+    nl.add_tuple_set([("a", 10), ("b", 20)], name="weight")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.8, 1), (0.4, 2), (0.6, 3)], name="active"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(1,), (2,), (3,)], name="picked"
+    )
+    return nl
+
+
+def show_ra_output(capsys, program, show_ra=True, engine=None):
+    """Return what displaying the plans of ``program`` prints."""
+    if engine is None:
+        engine = build_engine()
+    engine.execute_datalog_program(program, show_ra=show_ra)
+    return capsys.readouterr().out
+
+
+def test_show_ra_options_defaults():
+    options = ShowRAOptions()
+    assert options.collapse is True
+    assert options.analyze is False
+
+
+@pytest.mark.parametrize(
+    "show_ra,expected",
+    [
+        (False, None),
+        (None, None),
+        (True, ShowRAOptions()),
+        (ShowRAOptions(analyze=True), ShowRAOptions(analyze=True)),
+    ],
+)
+def test_show_ra_options(show_ra, expected):
+    assert show_ra_options(show_ra) == expected
+
+
+@pytest.mark.parametrize(
+    "show_ra",
+    [True, ShowRAOptions(), ShowRAOptions(collapse=False, analyze=True)],
+)
+@pytest.mark.parametrize("engine_class", [NeurolangDL, NeurolangPDL])
+def test_show_ra_accepts_options(show_ra, engine_class, capsys):
+    """Check that ``show_ra`` takes True or a ShowRAOptions."""
+    nl = engine_class()
+    nl.add_tuple_set([(1,), (2,)], name="p")
+    nl.execute_datalog_program("ans(x) :- p(x).", show_ra=show_ra)
+    assert "── deterministic stratum ──" in capsys.readouterr().out
