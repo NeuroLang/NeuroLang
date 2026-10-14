@@ -18,6 +18,7 @@ Datalog, and the Datalog rules of a predicate (``.datalog``).
 import re
 import shlex
 import traceback
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -563,15 +564,21 @@ def rerun_last_query(app, **flags) -> None:
     Run the last query again, in a scope, with the execution *flags*.
 
     The flags are those of :func:`~neurolang.utils.cli._execute_program`,
-    such as ``dry_run``; errors are reported as when it first ran.
+    such as ``dry_run``; errors and warnings are reported as when it
+    first ran.
     """
     if _no_last_query(app):
         return
     program, squall = app.last_query
     execute = _execute_squall_program if squall else _execute_program
     try:
-        with last_query_scope(app):
-            execute(app._nl, program, **flags)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                with last_query_scope(app):
+                    execute(app._nl, program, **flags)
+            finally:
+                app._print_notes(caught)
     except Exception as exc:
         app._report_error(exc, program)
 
