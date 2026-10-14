@@ -1038,6 +1038,31 @@ def test_execute_squall_issue879_anaphora_and_conjunction():
     assert df.shape == (24, 3), f"got {df.shape}"
 
 
+
+def test_execute_squall_derived_predicate_with_two_constants():
+    """'every Study that mentions 'pain' and that mentions 'fear'' over a
+    derived ``mentions`` relation completes instead of raising.
+
+    The second ``mentions`` call is adorned with the study bound by the
+    first one; the magic-sets rewrite used to seed it with a free study
+    variable and an empty antecedent, rejected by the negation mixin as
+    "All variables on the consequent need to be on the antecedent".
+    """
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [("s1", "pain", 0.5), ("s1", "fear", 0.2), ("s2", "pain", 0.3)],
+        name="tfidf",
+    )
+    engine.add_tuple_set([("s1",), ("s2",)], name="study")
+    engine.execute_datalog_program(
+        "mentions(s, t) :- tfidf(s, t, w), (w > 0.01)"
+    )
+    result = engine.execute_squall_program(
+        "obtain every Study that mentions 'pain' and that mentions 'fear'."
+    )
+    df = result.as_pandas_dataframe()
+    assert set(df.iloc[:, 0]) == {"s1"}
+
 # ---------------------------------------------------------------------------
 # Top / Bottom aggregations (percentile- and count-based thresholds)
 # ---------------------------------------------------------------------------
@@ -1278,3 +1303,43 @@ def test_execute_squall_issue877_overlay_program_scaled():
         "obtain every EmotionOverlay."
     )
     assert result.as_pandas_dataframe().shape == (1, 1)
+
+
+def test_where_anaphora_marginal_matches_relative_clause_form():
+    """
+    Check 'where … the Term' and 'that' give the same conditional marginal.
+
+    Before the anaphora fix the 'where' form recursed forever when the
+    rule had a 'conditioned to' clause.
+    """
+    def marginal(sentence):
+        nl = NeurolangPDL()
+        nl.add_tuple_set(
+            [("pain",), ("memory",), ("vision",)], name="term"
+        )
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(1,), (2,), (3,), (4,)], name="selected_study"
+        )
+        nl.add_tuple_set(
+            [
+                (1, "pain"), (1, "working memory"),
+                (2, "working memory"), (2, "memory"),
+                (3, "vision"),
+                (4, "working memory"), (4, "pain"),
+            ],
+            name="mentions",
+        )
+        nl.execute_squall_program(sentence)
+        df = nl.solve_all()["tm"].as_pandas_dataframe()
+        return {row[0]: round(row[1], 6) for row in df.values.tolist()}
+
+    condition = "conditioned to the Selected_study that mentions 'working memory'."
+    where_form = marginal(
+        "define as tm with inferred probability every Term where a "
+        f"Selected_study mentions the Term {condition}"
+    )
+    that_form = marginal(
+        "define as tm with inferred probability every Term that a "
+        f"Selected_study mentions {condition}"
+    )
+    assert where_form == that_form == {"pain": round(2 / 3, 6), "memory": round(1 / 3, 6)}
