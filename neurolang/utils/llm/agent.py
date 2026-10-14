@@ -225,7 +225,7 @@ class Toolbox:
             return f"The query fails:\n{check.message}", None
         preview = run_preview(
             self.context.nl, query, self.language, self.preview_rows,
-            self.context.engine_name,
+            self.context.engine_name if self.context.declared else "",
         )
         return preview.text, None
 
@@ -247,6 +247,11 @@ class Agent:
     configuration), *on_step* is called with each :class:`AgentStep` as
     it ends, and the examples whose question is *exclude_question* are
     left out of the prompt (to evaluate on the example bank).
+
+    The examples of the prompt are chosen among *examples*, a list of
+    :class:`~.examples.Example`, by default the engine's bank, and the
+    engine is described by *description*, by default the description
+    of its configuration.
     """
 
     strategy = ""
@@ -255,6 +260,7 @@ class Agent:
         self, nl, provider: ProviderConfig, config: AssistantConfig,
         language: str, engine_name: str = "", client=None, loaded=None,
         on_step: Optional[Callable] = None, exclude_question: str = "",
+        examples: Optional[list] = None, description: Optional[str] = None,
     ):
         self.nl = nl
         self.provider = provider
@@ -265,18 +271,25 @@ class Agent:
         self.context = EngineContext(nl, engine_name, loaded)
         self.on_step = on_step or (lambda step: None)
         self.exclude_question = exclude_question
+        self.examples = examples
+        self.description = description
 
     def system_prompt(self, question: str, text_tools: bool = False) -> str:
         """Return the system prompt for *question*."""
+        bank = self.examples
+        if bank is None:
+            bank = load_examples(self.engine_name)
         examples = select_examples(
-            load_examples(self.engine_name), question, self.language,
-            self.config.few_shot_k, exclude=self.exclude_question,
+            bank, question, self.language, self.config.few_shot_k,
+            exclude=self.exclude_question,
         )
-        description = ""
-        if self.engine_name in engine_registry.list_engine_names():
-            description = engine_registry.get_engine_config(
-                self.engine_name
-            ).get("description", "")
+        description = self.description
+        if description is None:
+            description = ""
+            if self.engine_name in engine_registry.list_engine_names():
+                description = engine_registry.get_engine_config(
+                    self.engine_name
+                ).get("description", "")
         return prompts.system_prompt(
             self.language, self.context.schema_summary(), examples,
             self.strategy, text_tools, description,

@@ -24,8 +24,12 @@ MAX_VALUES_SCANNED = 200_000
 
 
 def declared_predicates(engine_name: str) -> dict:
-    """Return the predicates the configuration of *engine_name* declares."""
-    if not engine_name:
+    """
+    Return the predicates the configuration of *engine_name* declares.
+
+    An engine that is not in the registry declares none.
+    """
+    if engine_name not in engine_registry.list_engine_names():
         return {}
     return engine_registry.get_predicates(engine_name)
 

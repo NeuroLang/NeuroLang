@@ -237,3 +237,17 @@ def test_make_agent(nl):
         make_agent(nl, provider(), config, "squall", "react", client=client),
         ReactAgent,
     )
+
+
+def test_examples_and_description_can_be_given(nl):
+    from ..examples import Example
+
+    examples = [Example("Which studies?", {"datalog": "ans(s) :- study(s)"})]
+    icl = IclAgent(
+        nl, provider(), assistant_config(), "datalog",
+        engine_name="not-registered", client=ScriptedClient([]),
+        examples=examples, description="A tiny engine.",
+    )
+    system = icl.system_prompt("Which studies?")
+    assert "Question: Which studies?\nans(s) :- study(s)" in system
+    assert "The engine: A tiny engine." in system
