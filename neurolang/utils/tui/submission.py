@@ -10,7 +10,6 @@ predicate (:meth:`Submission.definitions`).
 """
 
 from neurolang.datalog import Fact, Union as DatalogUnion
-from neurolang.datalog.expressions import AdornedSymbol
 from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.expressions import Constant, Query
 from neurolang.frontend.datalog.squall_syntax_lark import (
@@ -18,21 +17,7 @@ from neurolang.frontend.datalog.squall_syntax_lark import (
     parser as squall_parser,
 )
 
-
-def is_user_symbol(symbol) -> bool:
-    """
-    Return whether *symbol* names a predicate the user defined.
-
-    The symbols NeuroLang generates are left out: fresh symbols, the
-    adorned symbols of magic sets and of the helpers of a conditional
-    probability (``P^cond_num``), and private names such as
-    ``__constraints__``.
-    """
-    name = getattr(symbol, "name", "")
-    return not (
-        isinstance(symbol, AdornedSymbol)
-        or name.startswith(("_", "fresh_"))
-    )
+from .catalog import is_user_symbol
 
 
 def _plural(count: int, noun: str) -> str:

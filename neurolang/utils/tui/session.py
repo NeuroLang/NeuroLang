@@ -39,14 +39,15 @@ from neurolang.logic import Implication
 from neurolang.utils import engine_registry
 from neurolang.utils.cli import (
     _execute_program,
+    _declared_columns,
     _execute_squall_program,
-    _list_predicates,
     _list_sets,
     _show_squall_datalog,
 )
 
 from .commands import _switch, command
-from .submission import is_user_symbol, predicate_extent
+from .catalog import is_user_symbol, listed, predicate_catalog
+from .submission import predicate_extent
 
 def open_session_scope(nl) -> None:
     """Open the scope of the program of *nl* holding the session's rules."""
@@ -468,11 +469,46 @@ def cmd_sets(app, arg: str) -> None:
     _list_sets(app._nl, app.loaded_relations)
 
 
-@command(".predicates", "List the predicates the engine declares")
+def _print_predicates_table(app, infos) -> None:
+    """Print the predicates *infos* as a table."""
+    table = Table(box=box.ROUNDED, header_style="bold cyan")
+    for column in _PREDICATE_COLUMNS:
+        table.add_column(column)
+    for info in infos:
+        table.add_row(info.name, info.kind, info.signature())
+    app.console.print(table)
+
+
+def _print_predicates_text(app, infos) -> None:
+    """Print the predicates *infos* as plain aligned text."""
+    rows = [_PREDICATE_COLUMNS] + [
+        (info.name, info.kind, info.signature()) for info in infos
+    ]
+    widths = [max(len(row[i]) for row in rows) for i in range(2)]
+    for name, kind, signature in rows:
+        app.console.print(
+            f"{name:<{widths[0]}}  {kind:<{widths[1]}}  {signature}",
+            markup=False, highlight=False, soft_wrap=True,
+        )
+
+
+_PREDICATE_COLUMNS = ("Predicate", "Kind", "Columns")
+
+
+@command(
+    ".predicates", "List the predicates of the engine and of the session, "
+    "with their kind and columns",
+)
 def cmd_predicates(app, arg: str) -> None:
-    """Print the predicates declared in the engine's configuration."""
-    if app.settings.engine_name:
-        _list_predicates(app.settings.engine_name)
+    """Print the predicates of the engine, by kind and name."""
+    infos = listed(predicate_catalog(
+        app._nl, _declared_columns(app.settings.engine_name),
+        app.loaded_relations,
+    ))
+    if app.console.is_terminal:
+        _print_predicates_table(app, infos)
+    else:
+        _print_predicates_text(app, infos)
 
 
 @command(".engines", "List the available engines")
