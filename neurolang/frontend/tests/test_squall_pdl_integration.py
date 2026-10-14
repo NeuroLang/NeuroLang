@@ -845,6 +845,51 @@ def test_execute_squall_where_label_is_constant_multiple_predicates(nl):
 
 
 # ---------------------------------------------------------------------------
+# Constants in tuple labels
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def nl_tfidf():
+    """NeurolangPDL with a (study, term, weight) relation."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [
+            ("s1", "pain", 0.5), ("s2", "pain", 0.2),
+            ("s1", "memory", 0.3), ("s3", "reward", 0.1),
+        ],
+        name="term_in_study_tfidf",
+    )
+    return engine
+
+
+@pytest.mark.parametrize("literal", ["'pain'", '"pain"'])
+def test_execute_squall_tuple_label_string_constant(nl_tfidf, literal):
+    result = nl_tfidf.execute_squall_program(
+        f"obtain every Term_in_study_tfidf (?s; {literal}; ?w)."
+    )
+    rows = set(map(tuple, result.as_pandas_dataframe().values.tolist()))
+    assert rows == {("s1", 0.5), ("s2", 0.2)}
+
+
+def test_execute_squall_tuple_label_numeric_constant(nl_counts):
+    result = nl_counts.execute_squall_program(
+        "obtain every Item_count (?i; 2)."
+    )
+    rows = set(map(tuple, result.as_pandas_dataframe().values.tolist()))
+    assert rows == {("b",)}
+
+
+def test_execute_squall_tuple_label_constant_in_rule(nl_tfidf):
+    nl_tfidf.execute_squall_program(
+        "define as Pain_weight every Term_in_study_tfidf (?s; 'pain'; ?w)."
+    )
+    solution = nl_tfidf.solve_all()
+    df = solution["pain_weight"].as_pandas_dataframe()
+    assert set(map(tuple, df.values.tolist())) == {("s1", 0.5), ("s2", 0.2)}
+
+
+
+# ---------------------------------------------------------------------------
 # Probabilistic choice syntax
 # ---------------------------------------------------------------------------
 

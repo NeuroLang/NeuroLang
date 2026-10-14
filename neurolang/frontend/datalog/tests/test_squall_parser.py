@@ -1481,6 +1481,52 @@ def test_obtain_unnamed_with_tuple_label_parses():
     assert "t" in head_names and "p" in head_names, f"Expected t and p in head, got {head_names}"
 
 
+@pytest.mark.parametrize("literal,value", [
+    ("'pain'", "pain"),
+    ('"pain"', "pain"),
+    ("3", 3),
+    ("0.5", 0.5),
+])
+def test_obtain_tuple_label_with_constant_binds_column(literal, value):
+    """
+    A constant in a tuple label fixes that column and leaves the head.
+
+    ``(?s; 'pain'; ?w)`` means ``(?s; ?t; ?w) such that ?t is 'pain'``.
+    """
+    result = parser(
+        f"obtain every Term_in_study_tfidf (?s; {literal}; ?w)."
+    )
+    q = result.queries[0]
+    assert q.head == (Symbol("s"), Symbol("w"))
+    assert q.body == Symbol("term_in_study_tfidf")(
+        Symbol("s"), Constant(value), Symbol("w")
+    )
+
+
+def test_define_tuple_label_with_constant_binds_column():
+    result = parser(
+        "define as Pain_weight every Term_in_study_tfidf (?s; 'pain'; ?w)."
+    )
+    assert result.consequent == Symbol("pain_weight")(Symbol("s"), Symbol("w"))
+    assert result.antecedent == Symbol("term_in_study_tfidf")(
+        Symbol("s"), Constant("pain"), Symbol("w")
+    )
+
+
+def test_tuple_label_with_constant_and_relative_clause():
+    result = parser(
+        "obtain every Term_in_study_tfidf (?s; 'pain'; ?w) "
+        "such that ?w is greater than 0.1."
+    )
+    q = result.queries[0]
+    assert q.head == (Symbol("s"), Symbol("w"))
+    atoms = extract_logic_atoms(q.body)
+    assert Symbol("term_in_study_tfidf")(
+        Symbol("s"), Constant("pain"), Symbol("w")
+    ) in atoms
+
+
+
 def _functor_names(expression):
     return {
         a.functor.name
