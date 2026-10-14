@@ -343,8 +343,10 @@ class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
     """
 
     suggestion = (
-        "Rewrite the formula in conjunctive or disjunctive normal form "
-        "(CNF or DNF)."
+        "Check that each variable of a comparison or function call also "
+        "appears in a predicate of the rule body, or gets a constant from "
+        "the query, and that the formula is in conjunctive or disjunctive "
+        "normal form (CNF or DNF)."
     )
 
     def __init__(self, output):

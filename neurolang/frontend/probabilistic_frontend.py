@@ -56,7 +56,7 @@ from ..exceptions import (
     UnsupportedProgramError,
 )
 from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
-from ..logic import Union, Symbol
+from ..logic import Implication, Union, Symbol
 from ..probabilistic import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -443,15 +443,17 @@ class NeurolangPDL(QueryBuilderDatalog):
                 show_ra=show_ra,
             )
 
-        query = symbol_entry.formulas[0]
-        options = show_ra_options(show_ra)
-        if options is not None:
-            return self._show_ra_query(
-                query, options, show_rewritten, dry_run,
-                (self._query_head_symbols(head)[0], query_pred_args),
+        with self.scope:
+            query, query_pred_args = self._query_rule(
+                symbol_entry.formulas[0], query_pred_symb, query_pred_args
             )
-
-        solved = self._solve_rewritten(query, show_rewritten, dry_run)
+            options = show_ra_options(show_ra)
+            if options is not None:
+                return self._show_ra_query(
+                    query, options, show_rewritten, dry_run,
+                    (self._query_head_symbols(head)[0], query_pred_args),
+                )
+            solved = self._solve_rewritten(query, show_rewritten, dry_run)
         if solved is None:
             return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
         solution, query_pred_symb = solved
@@ -463,6 +465,28 @@ class NeurolangPDL(QueryBuilderDatalog):
         if functor_orig is None:
             solution = solution.value
         return solution, functor_orig
+
+    def _query_rule(self, rule, pred_symb, pred_args):
+        """
+        Return the rule to solve to query ``pred_symb(*pred_args)``.
+
+        It is ``rule``, a rule of ``pred_symb``, when no argument is a
+        constant. Otherwise it is a fresh rule ``q(x, ...) :-
+        pred_symb(*pred_args)`` over the variables of the arguments,
+        added to the current scope, so that magic sets propagate the
+        constants into the rules of ``pred_symb``. Return the rule and
+        the arguments of its head.
+        """
+        if not any(isinstance(arg, ir.Constant) for arg in pred_args):
+            return rule, pred_args
+        variables = tuple(dict.fromkeys(
+            arg for arg in pred_args if isinstance(arg, ir.Symbol)
+        ))
+        query = Implication(
+            ir.Symbol.fresh()(*variables), pred_symb(*pred_args)
+        )
+        self.program_ir.walk(query)
+        return query, variables
 
     def _solve_rewritten(self, query, show_rewritten, dry_run):
         """
@@ -537,15 +561,15 @@ class NeurolangPDL(QueryBuilderDatalog):
         the :class:`~neurolang.frontend.show_ra.ShowRAOptions` of the
         display. An empty set is returned.
         """
-        stratum_solver = ShowRAStratumSolver(
-            self, options, generated_query_symbol(query)
-        )
         try:
             magic_query, magic_rules = self._magic_rewrite_query(query)
             with self.scope:
                 self.program_ir.walk(magic_rules)
                 self._handle_rewritten_output(
                     magic_query, show_rewritten, dry_run, show_ra=True
+                )
+                stratum_solver = ShowRAStratumSolver(
+                    self, options, generated_query_symbol(magic_query)
                 )
                 solution = self._solve(
                     magic_query, stratum_solver=stratum_solver
@@ -554,6 +578,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
             self._handle_rewritten_output(
                 query, show_rewritten, dry_run, show_ra=True
+            )
+            stratum_solver = ShowRAStratumSolver(
+                self, options, generated_query_symbol(query)
             )
             solution = self._solve(query, stratum_solver=stratum_solver)
             query_pred_symb = query.consequent.functor

@@ -480,8 +480,9 @@ def test_query_with_constant_on_a_named_predicate(capsys):
         "reach(x, y) :- reach(x, z), edge(z, y).\n"
         "ans(y) :- reach(1, y).",
     )
-    assert "── query ans(y) :-\n    reach(1, y) ──" in out
-    assert "reach(1, y) ‹from 6 rows›" in out
+    assert "magic_reach^bf_0(1)" in out
+    assert "── rule ans(y) :-\n    reach^bf_0(1, y) ──" in out
+    assert "reach^bf_0(1, y) ‹from 3 rows›" in out
 
 
 def test_query_on_a_probabilistic_predicate_has_no_size(capsys):

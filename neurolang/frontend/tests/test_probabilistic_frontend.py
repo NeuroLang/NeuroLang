@@ -265,6 +265,29 @@ def test_show_rewritten_query_on_rule_with_constant(flags, capsys):
     assert "magic_talks" in out
 
 
+def test_query_constant_binds_function_argument_through_magic_sets():
+    """
+    Check that the constants of a query on a rule reach the rule.
+
+    ``w`` is only bound by the query's constant, through magic sets, so
+    ``scaled`` cannot be solved without it.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,), (3,)], name="item")
+
+    @nl.add_symbol
+    def times(w: int, x: int) -> int:
+        return w * x
+
+    nl.execute_datalog_program(
+        "scaled(w, x, y) :- item(x) & (y == times(w, x))"
+    )
+    res = nl.execute_datalog_program("ans(x, y) :- scaled(10, x, y)")
+    assert set(res) == {(1, 10), (2, 20), (3, 30)}
+    res = nl.execute_datalog_program("ans(y) :- scaled(2, 3, y)")
+    assert set(res) == {(6,)}
+
+
 def test_deterministic_query():
     nl = NeurolangPDL()
     d1 = [(1,), (2,), (3,), (4,), (5,)]
