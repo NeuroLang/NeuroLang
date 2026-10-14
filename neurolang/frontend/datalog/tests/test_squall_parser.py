@@ -1108,6 +1108,12 @@ def test_tuple_subject_is_a_noun_in_where_conjunction():
     )
 
 
+def test_tuple_subject_with_intransitive_verb():
+    """``(?s; ?t; ?w) weighs`` fills the verb's columns."""
+    res = parser("squall (?s; ?t; ?w) weighs")
+    assert res == Symbol("weighs")(Symbol("s"), Symbol("t"), Symbol("w"))
+
+
 def test_relative_clause_conjunction_with_bare_verb():
     """``that activates and that is a S`` keeps both conjuncts."""
     atoms = _query_atoms(

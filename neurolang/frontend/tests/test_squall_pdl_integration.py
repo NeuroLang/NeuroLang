@@ -490,6 +490,15 @@ def test_execute_squall_prepositional_ternary_verb(nl_ternary):
     assert _first_column(result) == {1, 2}
 
 
+def test_execute_squall_too_many_verb_objects_is_explained(nl_ternary):
+    """A ternary use of a binary relation names it and the noun form."""
+    nl_ternary.add_tuple_set([(1, "pain")], name="mentions")
+    with pytest.raises(SquallSemanticError, match=r"'mentions' has 2"):
+        nl_ternary.execute_squall_program(
+            "obtain every Study ?s that mentions 'pain' with ?w."
+        )
+
+
 def test_execute_squall_adjective_complement_and_noun(nl_ternary):
     """``that is reported by a Study and that is a S`` keeps both."""
     result = nl_ternary.execute_squall_program(
