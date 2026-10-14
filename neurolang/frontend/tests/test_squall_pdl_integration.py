@@ -1303,3 +1303,43 @@ def test_execute_squall_issue877_overlay_program_scaled():
         "obtain every EmotionOverlay."
     )
     assert result.as_pandas_dataframe().shape == (1, 1)
+
+
+def test_where_anaphora_marginal_matches_relative_clause_form():
+    """
+    Check 'where … the Term' and 'that' give the same conditional marginal.
+
+    Before the anaphora fix the 'where' form recursed forever when the
+    rule had a 'conditioned to' clause.
+    """
+    def marginal(sentence):
+        nl = NeurolangPDL()
+        nl.add_tuple_set(
+            [("pain",), ("memory",), ("vision",)], name="term"
+        )
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(1,), (2,), (3,), (4,)], name="selected_study"
+        )
+        nl.add_tuple_set(
+            [
+                (1, "pain"), (1, "working memory"),
+                (2, "working memory"), (2, "memory"),
+                (3, "vision"),
+                (4, "working memory"), (4, "pain"),
+            ],
+            name="mentions",
+        )
+        nl.execute_squall_program(sentence)
+        df = nl.solve_all()["tm"].as_pandas_dataframe()
+        return {row[0]: round(row[1], 6) for row in df.values.tolist()}
+
+    condition = "conditioned to the Selected_study that mentions 'working memory'."
+    where_form = marginal(
+        "define as tm with inferred probability every Term where a "
+        f"Selected_study mentions the Term {condition}"
+    )
+    that_form = marginal(
+        "define as tm with inferred probability every Term that a "
+        f"Selected_study mentions {condition}"
+    )
+    assert where_form == that_form == {"pain": round(2 / 3, 6), "memory": round(1 / 3, 6)}
