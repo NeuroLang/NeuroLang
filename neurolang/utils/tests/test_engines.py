@@ -398,6 +398,112 @@ class TestPredicateArguments:
         ] == ["name", "region"]
 
 
+_SORTED_ENGINE = (
+    "engines:\n  e:\n"
+    "    sorts:\n"
+    "      study: {columns: [study_id], type: int, description: a study}\n"
+    "      voxel:\n"
+    "        columns: [i, j, k]\n"
+    "        type: int\n"
+    "        description: a voxel of the MNI template grid, in 3D\n"
+    "    predicates:\n"
+    "      reports:\n"
+    "        arguments: [study, {sort: voxel}]\n"
+    "      peak:\n"
+    "        arguments:\n"
+    "          - {sort: voxel, columns: [x, y, z]}\n"
+    "          - {sort: study, columns: [s], type: int}\n"
+)
+
+
+class TestDeclaredSorts:
+    """Check the sorts an engine declares once, by name."""
+
+    def test_sorts_are_read(self, tmp_path):
+        """Check each sort keeps its columns, type and description."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(_SORTED_ENGINE)
+        sorts = engine_registry.get_sorts("e", path)
+        assert sorts["voxel"] == engine_registry.Sort(
+            "voxel", ("i", "j", "k"), "int",
+            "a voxel of the MNI template grid, in 3D",
+        )
+        assert sorts["study"].columns == ("study_id",)
+
+    def test_an_argument_names_its_sort(self, tmp_path):
+        """Check a reference to a sort takes its columns and type."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(_SORTED_ENGINE)
+        info = engine_registry.get_predicates("e", path)["reports"]
+        assert info["columns"] == ["study_id", "i", "j", "k"]
+        assert info["arity"] == 4 and info["entities"] == 2
+        reports = engine_registry.get_signatures("e", path)["reports"]
+        assert reports == (
+            engine_registry.Argument("study", ("study_id",), "int"),
+            engine_registry.Argument("voxel", ("i", "j", "k"), "int"),
+        )
+
+    def test_an_argument_may_rename_the_columns(self, tmp_path):
+        """Check a predicate may name the columns of a sort its own way."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(_SORTED_ENGINE)
+        peak = engine_registry.get_signatures("e", path)["peak"]
+        assert peak[0] == engine_registry.Argument(
+            "voxel", ("x", "y", "z"), "int"
+        )
+        assert peak[1].columns == ("s",)
+
+    def test_a_reference_names_a_declared_sort(self, tmp_path):
+        """Check a reference to an undeclared sort is rejected."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            _SORTED_ENGINE.replace("[study, {sort: voxel}]", "[study, place]")
+        )
+        with pytest.raises(ValueError, match="place"):
+            engine_registry.get_predicates("e", path)
+
+    def test_renamed_columns_keep_the_width_of_the_sort(self, tmp_path):
+        """Check renamed columns must span as many columns as the sort."""
+        from neurolang.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text(_SORTED_ENGINE.replace("[x, y, z]", "[x, y]"))
+        with pytest.raises(ValueError, match="voxel"):
+            engine_registry.get_signatures("e", path)
+
+    @pytest.mark.parametrize("engine", ["neurosynth", "destrieux"])
+    def test_the_engines_reference_their_sorts(self, engine):
+        """Check the shipped engines declare their arguments by sort."""
+        from neurolang.utils import engine_registry
+
+        config = engine_registry.get_engine_config(engine)
+        sorts = engine_registry.get_sorts(engine)
+        for name, info in config["predicates"].items():
+            for argument in info["arguments"]:
+                assert isinstance(argument, str), (name, argument)
+                assert argument in sorts, (name, argument)
+
+    def test_neurosynth_sorts(self):
+        """Check the voxel grids of neurosynth are 3D sorts."""
+        from neurolang.utils import engine_registry
+
+        sorts = engine_registry.get_sorts("neurosynth")
+        assert sorts["voxel"].columns == ("i", "j", "k")
+        assert sorts["atlas_voxel"].columns == ("i", "j", "k")
+        assert "3D" in sorts["voxel"].description
+        assert sorts["study"] == engine_registry.Sort(
+            "study", ("study_id",), "int", sorts["study"].description
+        )
+
+
 def _engine_yaml(tmp_path, extra: str, more: str = "") -> Path:
     """Write an engine ``e`` declaring ``p(s, i, j, k)`` with *extra*."""
     path = tmp_path / "engines.yaml"
