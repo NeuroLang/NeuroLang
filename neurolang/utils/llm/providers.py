@@ -61,6 +61,22 @@ def _parse_arguments(arguments) -> dict:
     return parsed if isinstance(parsed, dict) else {"_invalid": arguments}
 
 
+# Rate limits and transient server errors are retried, waiting as the
+# server asks (Retry-After) or longer and longer.
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+HTTP_ATTEMPTS = 6
+MAX_RETRY_SECONDS = 60.0
+
+
+def _retry_delay(response, attempt: int) -> float:
+    """Return the seconds to wait before retrying after *response*."""
+    try:
+        delay = float(response.headers.get("retry-after", ""))
+    except ValueError:
+        delay = 2.0 * 2 ** attempt
+    return min(max(delay, 1.0), MAX_RETRY_SECONDS)
+
+
 class ChatClient:
     """
     Base of the chat clients: HTTP session, errors and request loop.
@@ -77,6 +93,7 @@ class ChatClient:
         transport: Optional[httpx.BaseTransport] = None,
     ):
         self.provider = provider
+        self._last_request = None
         self._http = httpx.Client(
             base_url=provider.base_url,
             headers={**self._auth_headers(), **provider.headers},
@@ -102,14 +119,23 @@ class ChatClient:
     ) -> Reply:
         """Return the model's reply to the conversation *messages*."""
         name = self.provider.name
-        try:
-            response = self._http.post(
-                self.path, json=self._payload(messages, tools, temperature)
-            )
-        except httpx.TimeoutException as exc:
-            raise LLMError(f"{name}: the request timed out.") from exc
-        except httpx.HTTPError as exc:
-            raise LLMError(f"{name}: cannot reach the API ({exc}).") from exc
+        payload = self._payload(messages, tools, temperature)
+        for attempt in range(HTTP_ATTEMPTS):
+            self._pace()
+            try:
+                response = self._http.post(self.path, json=payload)
+            except httpx.TimeoutException as exc:
+                raise LLMError(f"{name}: the request timed out.") from exc
+            except httpx.HTTPError as exc:
+                raise LLMError(
+                    f"{name}: cannot reach the API ({exc})."
+                ) from exc
+            if (
+                response.status_code not in RETRY_STATUSES
+                or attempt == HTTP_ATTEMPTS - 1
+            ):
+                break
+            time.sleep(_retry_delay(response, attempt))
         if response.status_code >= 400:
             raise LLMError(
                 f"{name}: HTTP {response.status_code}: "
@@ -121,6 +147,15 @@ class ChatClient:
             raise LLMError(
                 f"{name}: unexpected reply: {response.text.strip()[:300]}"
             ) from exc
+
+    def _pace(self) -> None:
+        """Wait so as to keep to the provider's requests per minute."""
+        rate = self.provider.requests_per_minute
+        if rate and self._last_request is not None:
+            wait = 60.0 / rate - (time.monotonic() - self._last_request)
+            if wait > 0:
+                time.sleep(wait)
+        self._last_request = time.monotonic()
 
     def close(self) -> None:
         """Close the HTTP session."""

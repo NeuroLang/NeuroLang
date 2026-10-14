@@ -39,6 +39,7 @@ providers:
     api_key_env: ALBERT_API_KEY
     model: albert-large
     tool_calling: text
+    requests_per_minute: 20     # the key's rate limit, if any
 
   anthropic:
     api: anthropic

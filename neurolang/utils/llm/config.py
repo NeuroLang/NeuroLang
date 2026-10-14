@@ -51,7 +51,8 @@ class ProviderConfig:
     none). *tool_calling* tells
     whether the ReAct agent uses the provider's ``native`` tool calls or
     the ``text`` Thought/Action/Observation protocol, which any chat
-    model can follow.
+    model can follow. *requests_per_minute* spaces the requests to the
+    provider's rate limit, if any.
     """
 
     name: str
@@ -63,6 +64,7 @@ class ProviderConfig:
     tool_calling: str = "text"
     max_tokens: int = 2048
     command: tuple = ()
+    requests_per_minute: Optional[float] = None
 
     def api_key(self) -> Optional[str]:
         """Return the API key of the provider, read from the environment."""

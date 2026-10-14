@@ -233,3 +233,49 @@ def test_command_client_retries_os_errors(monkeypatch):
     with pytest.raises(LLMError, match="Exec format error"):
         chat.complete(CONVERSATION[:2])
     assert len(calls) == providers.COMMAND_ATTEMPTS
+
+
+def test_rate_limits_are_retried(monkeypatch):
+    from .. import providers
+
+    replies = [
+        httpx.Response(429, headers={"retry-after": "0"}, text="slow down"),
+        httpx.Response(503, text="busy"),
+        httpx.Response(
+            200, json={"choices": [{"message": {"content": "ok"}}]}
+        ),
+    ]
+    waits = []
+    monkeypatch.setattr(providers.time, "sleep", waits.append)
+    chat = client("openai", lambda request: replies.pop(0), monkeypatch)
+    assert chat.complete(CONVERSATION).text == "ok"
+    assert waits == [1.0, 4.0]
+
+
+def test_rate_limit_error_after_the_last_attempt(monkeypatch):
+    from .. import providers
+
+    monkeypatch.setattr(providers.time, "sleep", lambda seconds: None)
+    chat = client(
+        "openai", lambda request: httpx.Response(429, text="limit"),
+        monkeypatch,
+    )
+    with pytest.raises(LLMError, match="HTTP 429: limit"):
+        chat.complete(CONVERSATION)
+
+
+def test_requests_are_paced(monkeypatch):
+    from .. import providers
+
+    waits = []
+    monkeypatch.setattr(providers.time, "sleep", waits.append)
+    chat = client(
+        "openai",
+        lambda request: httpx.Response(
+            200, json={"choices": [{"message": {"content": "ok"}}]}
+        ),
+        monkeypatch, requests_per_minute=30,
+    )
+    chat.complete(CONVERSATION)
+    chat.complete(CONVERSATION)
+    assert len(waits) == 1 and 1.9 < waits[0] <= 2.0
