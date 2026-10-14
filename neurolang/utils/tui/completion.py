@@ -16,9 +16,11 @@ from typing import Callable, NamedTuple, Optional
 from prompt_toolkit.completion import Completer, Completion
 
 from neurolang.datalog.basic_representation import UnionOfConjunctiveQueries
+from neurolang.datalog.expressions import AdornedSymbol
 from neurolang.probabilistic.expressions import ProbabilisticQuery
 from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.frontend.datalog.standard_syntax import AGGREGATION_FUNCS
+from neurolang.utils.cli import _is_generated_column
 from neurolang.utils.interactive_parsing import LarkCompleter
 
 from .commands import COMMANDS
@@ -98,10 +100,18 @@ def _probabilistic_symbols(program_ir) -> set:
 
 
 def _rule_columns(union) -> Optional[tuple]:
-    """Return the parameter names of the first rule of *union*, if any."""
+    """
+    Return the parameter names of the first rule of *union*, if any.
+
+    A rule defined in SQUALL has generated names, such as
+    ``fresh_00000002``, which tell nothing: it has no column names then.
+    """
     args = union.formulas[0].consequent.args
     names = tuple(getattr(arg, "name", None) for arg in args)
-    if all(isinstance(name, str) for name in names):
+    if all(
+        isinstance(name, str) and not _is_generated_column(name)
+        for name in names
+    ):
         return names
     return None
 
@@ -174,9 +184,9 @@ class _CatalogBuilder:
 
     def info(self, symbol, value, session: bool):
         """Return the info of *symbol* defined as *value*, or None."""
-        name = getattr(symbol, "name", None)
-        if not name or name.startswith("_") or symbol in self.protected:
+        if not self._offered(symbol):
             return None
+        name = symbol.name
         inner = getattr(value, "value", None)
         if isinstance(inner, WrappedRelationalAlgebraSet):
             return _relation_info(
@@ -193,6 +203,21 @@ class _CatalogBuilder:
                 name, "function", None, _function_arity(symbol)
             )
         return None
+
+    def _offered(self, symbol) -> bool:
+        """
+        Return whether the completion offers *symbol*.
+
+        It leaves out private and protected symbols, and the helpers
+        NeuroLang compiles a predicate into, such as ``P^cond_num`` of a
+        conditional ``P``, which are named ``P`` too.
+        """
+        name = getattr(symbol, "name", None)
+        return bool(
+            name and not name.startswith("_")
+            and symbol not in self.protected
+            and not isinstance(symbol, AdornedSymbol)
+        )
 
     def _relation_kind(self, symbol) -> str:
         """Return the kind of the relation *symbol*."""
