@@ -216,3 +216,20 @@ def test_command_client_errors():
     ))
     with pytest.raises(LLMError, match="command not found"):
         missing.complete(CONVERSATION[:2])
+
+
+def test_command_client_retries_os_errors(monkeypatch):
+    from .. import providers
+
+    calls = []
+
+    def flaky(*args, **kwargs):
+        calls.append(1)
+        raise OSError(8, "Exec format error")
+
+    monkeypatch.setattr(providers.subprocess, "run", flaky)
+    monkeypatch.setattr(providers, "COMMAND_RETRY_SECONDS", 0)
+    chat = make_client(command_provider("print(1)"))
+    with pytest.raises(LLMError, match="Exec format error"):
+        chat.complete(CONVERSATION[:2])
+    assert len(calls) == providers.COMMAND_ATTEMPTS

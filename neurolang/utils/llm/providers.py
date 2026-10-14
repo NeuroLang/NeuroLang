@@ -17,6 +17,7 @@ format of its API.
 
 import json
 import subprocess
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -300,6 +301,8 @@ class AnthropicChatClient(ChatClient):
 
 
 SYSTEM_PLACEHOLDER = "{system}"
+COMMAND_ATTEMPTS = 3
+COMMAND_RETRY_SECONDS = 5
 
 
 def render_conversation(messages, with_system: bool) -> str:
@@ -358,15 +361,27 @@ class CommandChatClient:
             for arg in self.provider.command
         ]
         name = self.provider.name
-        try:
-            completed = subprocess.run(
-                args, input=render_conversation(messages, not placeholder),
-                capture_output=True, text=True, timeout=self.timeout,
-            )
-        except FileNotFoundError as exc:
-            raise LLMError(f"{name}: command not found: {args[0]}") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise LLMError(f"{name}: the command timed out.") from exc
+        text = render_conversation(messages, not placeholder)
+        for attempt in range(COMMAND_ATTEMPTS):
+            try:
+                completed = subprocess.run(
+                    args, input=text, capture_output=True, text=True,
+                    timeout=self.timeout,
+                )
+                break
+            except FileNotFoundError as exc:
+                raise LLMError(
+                    f"{name}: command not found: {args[0]}"
+                ) from exc
+            except subprocess.TimeoutExpired as exc:
+                raise LLMError(f"{name}: the command timed out.") from exc
+            except OSError as exc:
+                # e.g. the command's file being replaced by an update
+                if attempt == COMMAND_ATTEMPTS - 1:
+                    raise LLMError(
+                        f"{name}: cannot run the command: {exc}"
+                    ) from exc
+                time.sleep(COMMAND_RETRY_SECONDS)
         if completed.returncode != 0:
             raise LLMError(
                 f"{name}: the command failed with status "
