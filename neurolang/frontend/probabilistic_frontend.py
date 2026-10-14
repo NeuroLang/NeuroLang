@@ -56,7 +56,8 @@ from ..exceptions import (
     UnsupportedProgramError,
 )
 from ..expression_walker import ExpressionBasicEvaluator, TypedSymbolTableMixin
-from ..logic import Union, Symbol
+from ..logic import Implication, Union, Symbol
+from ..logic.expression_processing import extract_logic_free_variables
 from ..probabilistic import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -251,7 +252,10 @@ class NeurolangPDL(QueryBuilderDatalog):
     def load_ontology(
         self,
         paths: typing.Union[str, List[str]],
-        connector_symbol_name=None
+        connector_symbol_name=None,
+        format=None,
+        individuals=False,
+        names="local",
     ) -> None:
         """
         Loads and parses ontology stored at the specified paths, and
@@ -264,6 +268,20 @@ class NeurolangPDL(QueryBuilderDatalog):
         connector_symbol_name : str
             name to be used in the connector_symbol.
             if None, the name is randomly generated
+        format : str or list of str
+            rdflib format of the files (``xml``, ``turtle``, ``nt``…),
+            guessed from their extensions when None.
+        individuals : bool
+            also load every triple as a fact: ``s p o`` is ``p(s, o)``
+            and ``s rdf:type C`` is also ``C(s)``, IRIs being the
+            strings of their full IRI. The subclasses of the ontology
+            apply to these facts: ``Super(x)`` holds for an instance of
+            a subclass.
+        names : str
+            ``local`` names classes and properties by their local name
+            (``Dean``, ``rdf-schema:label``); ``prefixed`` by the
+            prefixes the files declare (``pv:name``, ``rdfs:label``),
+            else by their full IRI.
 
         Returns
         -------
@@ -275,7 +293,10 @@ class NeurolangPDL(QueryBuilderDatalog):
             self.connector_symbol = self.new_symbol()
         else:
             self.connector_symbol = self.new_symbol(name=connector_symbol_name)
-        onto = OntologyParser(paths, connector_symbol=self.connector_symbol.expression)
+        onto = OntologyParser(
+            paths, connector_symbol=self.connector_symbol.expression,
+            load_format=format, individuals=individuals, names=names,
+        )
         constraints, est_knowledge, entity_rules = onto.parse_ontology()
         self.program_ir.set_constraints(constraints)
         for name, expressions in constraints.items():
@@ -290,6 +311,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         for symbol, expressions in entity_rules.items():
             for e in expressions:
                 self.program_ir.walk(e)
+        if individuals:
+            for name, rows in onto.parse_individuals().items():
+                self.add_tuple_set(rows, name=name)
 
         self._rewrite_det_idb.cache_clear(self)
         return self.connector_symbol
@@ -438,6 +462,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         # implementation which creates a fresh query rule and runs chase.
         symbol_entry = self.program_ir.symbol_table.get(query_pred_symb, None)
         if symbol_entry is None or isinstance(symbol_entry, ir.Constant):
+            if "__constraints__" in self.symbol_table:
+                # The base implementation ignores the ontology's
+                # constraints: query a rule defined as the predicate.
+                return self._execute_query_through_rule(
+                    head, predicate, show_rewritten, dry_run, show_ra
+                )
             return super()._execute_query(
                 head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
                 show_ra=show_ra,
@@ -475,6 +505,31 @@ class NeurolangPDL(QueryBuilderDatalog):
         if functor_orig is None:
             solution = solution.value
         return solution, functor_orig
+
+    def _execute_query_through_rule(
+        self, head, predicate, show_rewritten, dry_run, show_ra
+    ):
+        """
+        Run the query of ``predicate`` through a fresh rule defining it.
+
+        The rule ``fresh(x, ...) :- predicate``, over the free variables
+        of ``predicate``, lives in a scope closed on return; querying it
+        rewrites the program with the ontology's constraints.
+        """
+        variables = tuple(sorted(
+            extract_logic_free_variables(predicate.expression),
+            key=lambda symbol: symbol.name,
+        ))
+        with self.scope:
+            fresh = ir.Symbol.fresh()
+            self.program_ir.walk(Union((
+                Implication(fresh(*variables), predicate.expression),
+            )))
+            return self._execute_query(
+                head, fe.Expression(self, fresh(*variables)),
+                show_rewritten=show_rewritten, dry_run=dry_run,
+                show_ra=show_ra,
+            )
 
     @staticmethod
     def _query_head_symbols(head):

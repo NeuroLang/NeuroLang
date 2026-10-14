@@ -815,3 +815,93 @@ def test_connector_edb_populated_for_word_lower():
     assert ('memory', 'Memory') in rows
     assert ('cognition', 'Cognition') in rows
     assert ('memory', 'Memory') in rows
+
+
+KNOWLEDGE_GRAPH = """
+@prefix pv: <http://ld.company.org/prod-vocab/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex: <http://example.org/> .
+
+pv:Employee a owl:Class ; rdfs:label "Employee"@en .
+pv:Manager a owl:Class ; rdfs:subClassOf pv:Employee ; rdfs:label "Manager" .
+ex:e1 a pv:Employee ; pv:name "Ann"@en ; pv:age 31 ;
+    pv:hired "2020-01-02"^^xsd:date ; pv:price [ pv:amount 2.5 ] .
+ex:m1 a pv:Manager ; pv:name "Bob" ; pv:age 40.5 ;
+    pv:manages ex:e1 .
+<http://other.org/thing> <http://other.org/rel> "x" .
+"""
+
+
+def _knowledge_graph_parser():
+    return OntologyParser(
+        io.StringIO(KNOWLEDGE_GRAPH), load_format="turtle",
+        individuals=True, names="prefixed",
+    )
+
+
+def test_individuals_are_facts_named_by_prefix():
+    parser = _knowledge_graph_parser()
+    parser.parse_ontology()
+    facts = parser.parse_individuals()
+    assert facts["pv:name"] == {
+        ("http://example.org/e1", "Ann"), ("http://example.org/m1", "Bob"),
+    }
+    assert facts["pv:Manager"] == {("http://example.org/m1",)}
+    assert ("http://example.org/m1", "http://ld.company.org/prod-vocab/Manager") \
+        in facts["rdf:type"]
+    assert facts["pv:manages"] == {
+        ("http://example.org/m1", "http://example.org/e1")
+    }
+    assert facts["pv:hired"] == {("http://example.org/e1", "2020-01-02")}
+    assert facts["pv:age"] == {
+        ("http://example.org/e1", 31.0), ("http://example.org/m1", 40.5)
+    }
+    (price,) = facts["pv:price"]
+    assert price[1].startswith("_:")
+    assert facts["pv:amount"] == {(price[1], 2.5)}
+    assert facts["http://other.org/rel"] == {("http://other.org/thing", "x")}
+    assert ("http://ld.company.org/prod-vocab/Employee", "Employee") \
+        in facts["rdfs:label"]
+
+
+def test_individuals_keep_subclasses_as_constraints_only():
+    parser = _knowledge_graph_parser()
+    constraints, _, entity_rules = parser.parse_ontology()
+    assert set(constraints) == {"pv:Employee"}
+    assert entity_rules == {}
+
+
+def test_ontology_format_is_guessed_from_the_extension(tmp_path):
+    path = tmp_path / "graph.ttl"
+    path.write_text(KNOWLEDGE_GRAPH)
+    parser = OntologyParser(
+        [path, str(path)], individuals=True, names="prefixed"
+    )
+    assert ("http://example.org/m1",) in parser.parse_individuals()[
+        "pv:Manager"
+    ]
+
+
+def test_load_individuals_with_subclass_reasoning():
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(KNOWLEDGE_GRAPH), format="turtle", individuals=True,
+        names="prefixed",
+    )
+    employees = nl.execute_datalog_program("ans(e) :- pv:Employee(e)")
+    assert set(employees) == {
+        ("http://example.org/e1",), ("http://example.org/m1",)
+    }
+    names = nl.execute_datalog_program(
+        "ans(n) :- pv:Employee(e), pv:name(e, n), (n != 'Ann')"
+    )
+    assert set(names) == {("Bob",)}
+    managed = nl.execute_datalog_program(
+        "ans(n) :- pv:manages(<http://example.org/m1>, e), pv:name(e, n)"
+    )
+    assert set(managed) == {("Ann",)}
+    assert not any(
+        getattr(s, "name", "").startswith("fresh") for s in nl.symbol_table
+    )

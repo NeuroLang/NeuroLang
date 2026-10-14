@@ -750,13 +750,45 @@ def _phase_probabilistic_choices(nl, cfg):
         )
 
 
-def _phase_ontologies(nl, cfg, data_dir, engine_name):
-    for onto_cfg in cfg.get("ontologies", []):
-        url = onto_cfg["url"]
+_ONTOLOGY_OPTIONS = ("format", "individuals", "names")
+
+
+def _ontology_file(source: str, engine_name, data_dir, base_dir) -> str:
+    """
+    Return the local path of the ontology file *source*.
+
+    A URL is downloaded (and cached) to ``{data_dir}/{engine_name}/``; a
+    local path is relative to *base_dir* (default: the built-in
+    ``engines/`` directory).
+    """
+    if source.startswith(("http://", "https://")):
         onto_dir = str(data_dir / engine_name)
-        onto_file = Path(url).name
-        result = _fetch_files(onto_dir, [(onto_file, url, {})], verbose=1)
-        nl.load_ontology(result[0])
+        result = _fetch_files(
+            onto_dir, [(Path(source).name, source, {})], verbose=1
+        )
+        return result[0]
+    return str((base_dir or _ENGINES_DIR) / Path(source).expanduser())
+
+
+def _phase_ontologies(nl, cfg, data_dir, engine_name, base_dir=None):
+    """
+    Load the engine's ``ontologies``.
+
+    Each entry gives a file with ``url`` (a URL or a local path), or
+    several, loaded together, with ``urls``. ``format``, ``individuals``
+    and ``names`` are passed to
+    :meth:`~neurolang.frontend.NeurolangPDL.load_ontology`.
+    """
+    for onto_cfg in cfg.get("ontologies", []):
+        sources = onto_cfg.get("urls") or [onto_cfg["url"]]
+        paths = [
+            _ontology_file(source, engine_name, data_dir, base_dir)
+            for source in sources
+        ]
+        options = {
+            key: onto_cfg[key] for key in _ONTOLOGY_OPTIONS if key in onto_cfg
+        }
+        nl.load_ontology(paths if len(paths) > 1 else paths[0], **options)
 
 
 def build_engine(
@@ -831,6 +863,6 @@ def build_engine(
     _phase_datalog_init(nl, cfg)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_probabilistic_choices(nl, cfg)
-    _phase_ontologies(nl, cfg, data_dir, name)
+    _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
 
     return nl

@@ -34,7 +34,10 @@ may specify the following keys, all of them optional:
 - ``probabilistic_choice`` — uniform probabilistic choices over an existing
   predicate, declared as YAML mappings (``source`` and an optional
   ``description``)
-- ``ontologies`` — list of ``{url}`` entries for OWL/RDF ontologies to load
+- ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
+  a local path) or ``urls`` (several files loaded together), and the
+  ``format``, ``individuals`` and ``names`` options of
+  :meth:`~neurolang.frontend.NeurolangPDL.load_ontology`
 - ``predicates`` — schema metadata (arity, column names, description) used
   by ``--list-predicates`` and the web UI
 - ``dimension_type_predicates`` — list of predicate names that SQUALL

@@ -84,3 +84,40 @@ class TestNeurosynthEngineStudyIdConsistency:
             assert np.issubdtype(dtype, np.integer), (
                 f"{name}.study_id has non-integer dtype: {dtype}"
             )
+
+
+GRAPH = """
+@prefix ex: <http://example.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+ex:Dog a owl:Class ; rdfs:subClassOf ex:Animal .
+ex:Animal a owl:Class .
+ex:rex a ex:Dog ; ex:name "Rex" .
+"""
+
+
+def test_ontologies_load_local_files_with_options(tmp_path):
+    """``ontologies`` loads local files together, with their options."""
+    from neurolang.utils import engine_registry
+
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "vocab.ttl").write_text(GRAPH)
+    (tmp_path / "data" / "more.nt").write_text(
+        '<http://example.org/rex> <http://example.org/age> "3" .\n'
+    )
+    config = tmp_path / "engines.yaml"
+    config.write_text(
+        "engines:\n"
+        "  pets:\n"
+        "    ontologies:\n"
+        "      - urls: [data/vocab.ttl, data/more.nt]\n"
+        "        individuals: true\n"
+        "        names: prefixed\n"
+    )
+    nl = engine_registry.build_engine(
+        "pets", tmp_path / "cache", yaml_path=config
+    )
+    animals = nl.execute_datalog_program(
+        "ans(n, a) :- ex:Animal(x), ex:name(x, n), ex:age(x, a)"
+    )
+    assert set(animals) == {("Rex", "3")}
