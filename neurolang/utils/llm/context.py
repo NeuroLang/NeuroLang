@@ -22,6 +22,11 @@ from neurolang.utils.predicate_catalog import predicate_catalog
 # Kinds of the predicates searched by search_values when none is given.
 SEARCHED_KINDS = frozenset({"stored", "loaded", "probabilistic"})
 MAX_FACTS_PER_COLUMN = 50
+# The rows of stored relations, kept across the questions on an engine:
+# id of the relation -> (relation, frame); the relation is kept so that
+# its id is not reused while cached.
+_STORED_FRAMES = {}
+MAX_CACHED_FRAMES = 512
 # Order in which the kinds of predicates are listed.
 KIND_ORDER = ("stored", "rule", "probabilistic", "loaded")
 RULE_KINDS = frozenset({"derived", "session"})
@@ -187,9 +192,16 @@ class EngineContext:
         columns = self.columns(name)
         relation = self._stored_relation(name)
         if relation is not None:
-            frame = result_to_dataframe(relation)
+            cached = _STORED_FRAMES.get(id(relation))
+            if cached is not None and cached[0] is relation:
+                frame = cached[1]
+            else:
+                frame = result_to_dataframe(relation)
+                if len(_STORED_FRAMES) >= MAX_CACHED_FRAMES:
+                    _STORED_FRAMES.pop(next(iter(_STORED_FRAMES)))
+                _STORED_FRAMES[id(relation)] = (relation, frame)
             if columns and len(columns) == frame.shape[1]:
-                frame.columns = columns
+                frame = frame.set_axis(columns, axis=1)
             return frame
         if columns is None:
             raise ValueError(f"Unknown predicate {name!r}.")
