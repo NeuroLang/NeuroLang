@@ -71,14 +71,32 @@ def test_sets_reuses_cli_listing(app, capsys):
     assert "person" in out and "Total RA sets" in out
 
 
-def test_predicates_reuses_cli_listing(app, capsys):
-    app._handle_dot_command(".predicates")
-    assert "peak_reported(i, j, k, study_id)" in capsys.readouterr().out
+def _plain_lines(out):
+    """Return the lines of *out* with their spaces collapsed."""
+    return [" ".join(line.split()) for line in out.splitlines()]
+
+
+def test_predicates_lists_the_session_and_loaded_ones(app, tmp_path):
+    path = _write(tmp_path / "scores.csv", "Name,Score\nalice,3\n")
+    app._handle_dot_command(f".load {path}")
+    app._execute_and_display("pair(x, y) :- person(x), scores(y, s)")
+    lines = _plain_lines(_command(app, ".predicates"))
+    assert lines[:4] == [
+        "Predicate Kind Columns",
+        "active session active(x)",
+        "pair session pair(x, y)",
+        "scores loaded scores(Name, Score)",
+    ]
+    assert "person stored person/1" in lines
 
 
 def test_engines(app, capsys):
     app._handle_dot_command(".engines")
-    assert "neurosynth" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Available engines:" in out
+    for name in ("destrieux", "neurosynth"):
+        assert f"  {name}\n" in out
+    assert "Destrieux 2009 cortical atlas" in out
 
 
 def test_rewritten_shows_last_query(app, capsys):
