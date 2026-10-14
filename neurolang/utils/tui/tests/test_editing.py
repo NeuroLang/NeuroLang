@@ -21,10 +21,8 @@ from neurolang.frontend.datalog.standard_syntax import (  # noqa: E402
 from neurolang.utils.interactive_parsing import LarkCompleter  # noqa: E402
 from neurolang.utils.tui import InteractiveTuiApp, TuiSettings  # noqa: E402
 from neurolang.utils.tui.commands import COMMANDS  # noqa: E402
-from neurolang.utils.tui.completion import (  # noqa: E402
-    PredicateInfo,
-    argument_context,
-)
+from neurolang.utils.tui.catalog import PredicateInfo  # noqa: E402
+from neurolang.utils.tui.completion import argument_context  # noqa: E402
 from neurolang.utils.tui.editing import (  # noqa: E402
     NeuroLangLexer,
     STYLE,
