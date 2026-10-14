@@ -1090,6 +1090,22 @@ being dropped:
 
 Each returns a single row with one column carrying the aggregate value.
 
+When the aggregated relation has several columns, name the column to
+aggregate with a tuple label and write ``_`` for the others; ``per``
+groups by a labelled column.  With ``term_in_study_tfidf(study, term,
+tfidf)``:
+
+.. code-block:: squall
+
+    obtain the Max of the Term_in_study_tfidf (_; _; ?w).
+    # the largest tf-idf
+    obtain every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s.
+    # one row per study: (study, its largest tf-idf)
+
+Without a label (``obtain the Max of the Term_in_study_tfidf.``) the
+column is ambiguous and the query is rejected with an error showing this
+form.
+
 In addition to these summary functions, **tail aggregations** select a
 threshold below (Top) or above (Bottom) which a quoted fraction or count
 of the values lie.  ``obtain the …`` reads like English here, so the

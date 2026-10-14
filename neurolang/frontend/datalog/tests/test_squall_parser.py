@@ -967,9 +967,13 @@ def test_det_every_agg_free_var_fallback():
 
 
 def _obtained_aggregation(code):
-    query = parser(code).formulas[0]
-    assert isinstance(query.head, AggregationApplication)
-    return query.head
+    head = parser(code).formulas[0].head
+    columns = head if isinstance(head, tuple) else (head,)
+    aggregations = [
+        c for c in columns if isinstance(c, AggregationApplication)
+    ]
+    assert len(aggregations) == 1
+    return aggregations[0]
 
 
 def test_agg_tuple_label_skips_anonymous_columns():
@@ -982,10 +986,10 @@ def test_agg_tuple_label_skips_anonymous_columns():
 
 def test_agg_tuple_label_per_aggregates_value_not_group():
     """With ``per ?s`` the aggregated column is the named non-group one."""
-    head = _obtained_aggregation(
-        "obtain every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s."
-    )
+    code = "obtain every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s."
+    head = _obtained_aggregation(code)
     assert head.args == (Symbol("w"),)
+    assert parser(code).formulas[0].head[0] == Symbol("s")
 
 
 def test_agg_tuple_label_per_in_rule_aggregates_value():

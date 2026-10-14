@@ -7,7 +7,8 @@ as well as Region and Neurosynth capabilities
 from collections import defaultdict
 from ..datalog.magic_sets import magic_rewrite
 from ..exceptions import (
-    ForbiddenDisjunctionError, NeuroLangException, UnsupportedProgramError,
+    ForbiddenDisjunctionError, NeuroLangException, SquallSemanticError,
+    UnsupportedProgramError,
 )
 from typing import (
     AbstractSet,
@@ -39,6 +40,7 @@ from ..datalog.expressions import (
     AggregationApplication,
     predicate_identity,
 )
+from ..logic.expression_processing import extract_logic_atoms
 from ..logic.transformations import RemoveTrivialOperations
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
@@ -81,6 +83,26 @@ def _wrap_fol_error_for_squall(exc: Fol2DatalogTranslationException) -> Exceptio
         )
         exc.args = (new_msg,)
     return exc
+
+
+def _aggregation_column_message(aggregation, functor, arity):
+    """
+    Explain how to name the aggregated column of a multi-column relation.
+    """
+    func = aggregation.functor
+    func = getattr(func, 'value', func)
+    func_name = getattr(func, '__name__', getattr(func, 'name', str(func)))
+    noun = functor.name[:1].upper() + functor.name[1:]
+    blanks = '; '.join(['_'] * (arity - 1))
+    return (
+        f"Cannot aggregate '{func_name}' over '{noun}': the relation has "
+        f"{arity} columns but the aggregation names a single one, so it "
+        "would silently aggregate the first column.  Name the column to "
+        "aggregate with a tuple label, using _ for the other columns, "
+        f"e.g. 'the {func_name.capitalize()} of the {noun} ({blanks}; ?v)'; "
+        "add 'per ?x' to aggregate per value of a labelled column, e.g. "
+        f"'every {func_name.capitalize()} of the {noun} (?x; ...; ?v) per ?x'."
+    )
 
 
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
@@ -421,8 +443,51 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                         "e.g. #set_backend('pandas')."
                     )
 
+    def _relation_arity(self, functor):
+        """
+        Return the number of columns of ``functor``, or 0 if unknown.
+        """
+        try:
+            return len(self.program_ir.predicate_terms(functor))
+        except NeuroLangException:
+            return 0
+
+    def _check_squall_aggregation_columns(self, head_args, body):
+        """
+        Reject a one-variable aggregation over a multi-column relation.
+
+        ``the Max of the R`` with a 3-column ``R`` binds only ``R``'s first
+        column, so the aggregate would be computed over it without warning.
+        """
+        for aggregation in head_args:
+            if not (
+                isinstance(aggregation, AggregationApplication)
+                and len(aggregation.args) == 1
+            ):
+                continue
+            for atom in extract_logic_atoms(body):
+                if atom.args != aggregation.args:
+                    continue
+                arity = self._relation_arity(atom.functor)
+                if arity > 1:
+                    raise SquallSemanticError(_aggregation_column_message(
+                        aggregation, atom.functor, arity
+                    ))
+
+    def _check_squall_rule_aggregation(self, rule):
+        """
+        Apply ``_check_squall_aggregation_columns`` to a SQUALL rule.
+        """
+        if isinstance(rule, datalog.Implication) and isinstance(
+            rule.consequent, ir.FunctionApplication
+        ):
+            self._check_squall_aggregation_columns(
+                rule.consequent.args, rule.antecedent
+            )
+
     def _walk_squall_rule(self, rule):
         """Walk a single SQUALL rule or choice definition into the engine."""
+        self._check_squall_rule_aggregation(rule)
         if isinstance(rule, EquiprobableChoiceDef):
             self._handle_equiprobable_choice(rule)
         elif isinstance(rule, WeightedChoiceDef):
@@ -468,6 +533,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             head_vars = tuple(head)
 
         body = query.body
+        self._check_squall_aggregation_columns(head_vars, body)
         if (
             len(head_vars) == 1
             and isinstance(head_vars[0], ir.Symbol)

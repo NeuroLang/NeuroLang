@@ -181,8 +181,10 @@ class _AnonymousVar:
     """
 
     def __init__(self):
-        # Allocate one fresh symbol per anonymous slot.
+        # Allocate one fresh symbol per anonymous slot, tagged so that
+        # aggregations can leave the column out of the aggregated values.
         self._sym = Symbol.fresh()
+        self._sym._squall_anonymous = True
 
     def as_symbol(self):
         return self._sym
@@ -926,12 +928,7 @@ class SquallTransformer(Transformer):
             # Determine aggregation arguments from captured variables.
             # tuple-labeled npc (e.g. "of the Foo (?i;?j;?k;?p)") captures
             # all column variables as a tuple in the first entry.
-            if captured and isinstance(captured[0], tuple):
-                agg_args = tuple(captured[0])
-            elif captured and isinstance(captured[0], Symbol):
-                agg_args = tuple(captured)
-            else:
-                agg_args = (Symbol.fresh(),)
+            agg_args = _rule_body_agg_vars(captured)
 
             agg_expr = _AggApp(agg_func_const, agg_args)
             head_args = [agg_expr]
@@ -1228,32 +1225,14 @@ class SquallTransformer(Transformer):
                     ):
                         bare_body = bare_body.formulas[0]
 
-                    if per_vars:
-                        # Explicit groupby: use the captured witness variable
-                        # (same as the original single-var path).
-                        if captured_flat:
-                            agg_args = (captured_flat[0],)
-                        elif isinstance(npc_formula, ExistentialPredicate):
-                            agg_args = (npc_formula.head,)
-                        else:
-                            agg_args = (Symbol.fresh(),)
-                    else:
-                        # No explicit groupby: use all captured vars (covers
-                        # tuple-labeled npcs such as "the Foo (?i;?j;?k;?p)").
-                        if captured_flat:
-                            agg_args = tuple(captured_flat)
-                        else:
-                            free_vars = extract_logic_free_variables(bare_body)
-                            if free_vars:
-                                agg_args = tuple(
-                                    sorted(free_vars, key=lambda s: s.name)
-                                )
-                            elif isinstance(npc_formula, ExistentialPredicate):
-                                agg_args = (npc_formula.head,)
-                            else:
-                                agg_args = (Symbol.fresh(),)
+                    agg_args = _named_agg_vars(
+                        captured_flat, per_vars
+                    ) or _fallback_agg_vars(
+                        captured_flat, per_vars, bare_body, npc_formula
+                    )
 
                     agg_expr = _AggApp(agg_func_const, agg_args)
+                    agg_expr._per_vars = list(per_vars)
                     d(agg_expr)  # adds agg_expr to head_args
 
                     # Conjoin any trailing relative clause (e.g. "such that Voxel(…)")
@@ -1350,17 +1329,9 @@ class SquallTransformer(Transformer):
                     ):
                         bare_body = bare_body.formulas[0]
 
-                    if per_vars:
-                        agg_args = (captured_flat[0],) if captured_flat else (Symbol.fresh(),)
-                    else:
-                        if captured_flat:
-                            agg_args = tuple(captured_flat)
-                        else:
-                            free_vars = extract_logic_free_variables(bare_body)
-                            if free_vars:
-                                agg_args = tuple(sorted(free_vars, key=lambda s: s.name))
-                            else:
-                                agg_args = (Symbol.fresh(),)
+                    agg_args = _named_agg_vars(
+                        captured_flat, per_vars
+                    ) or _fallback_agg_vars(captured_flat, per_vars, bare_body)
 
                     agg_expr = _AggApp(agg_func_const, agg_args)
                     agg_expr._per_vars = list(per_vars)
@@ -2381,10 +2352,10 @@ class SquallTransformer(Transformer):
         formula = ops(capturing_d)
 
         if captured_vars:
-            head_vars = [
+            head_vars = _with_group_vars([
                 v for v in captured_vars
                 if isinstance(v, (Symbol, _AggApp))
-            ]
+            ])
             while isinstance(formula, (UniversalPredicate, ExistentialPredicate)):
                 formula = formula.body
             if isinstance(formula, Implication):
@@ -2684,6 +2655,73 @@ def _extract_datalog_body(cps_np, head_args):
     extracted = _flatten_to_datalog(result)
     body_parts.extend(extracted)
     return body_parts
+
+
+def _with_group_vars(head_vars):
+    """
+    Prepend the ``per`` group variables of aggregations to obtained columns.
+
+    ``obtain every Max of the T (?s; _; ?w) per ?s`` yields one row per
+    ``?s`` with its maximum ``?w``.
+    """
+    groups = []
+    for v in head_vars:
+        for g in getattr(v, '_per_vars', ()):
+            if g not in groups and g not in head_vars:
+                groups.append(g)
+    return groups + list(head_vars)
+
+
+def _named_agg_vars(captured, per_vars):
+    """
+    Select the aggregated variables among the npc variables.
+
+    Columns labelled ``_`` are left out.  With ``per`` groups only the
+    first named non-group variable is aggregated, so that
+    ``the Max of the T (?s; _; ?w) per ?s`` aggregates ``?w``.  Returns an
+    empty tuple when nothing is left; callers then fall back to
+    ``_fallback_agg_vars``.
+    """
+    named = tuple(
+        v for v in captured
+        if isinstance(v, Symbol) and not getattr(v, '_squall_anonymous', False)
+    )
+    if per_vars:
+        return tuple(v for v in named if v not in per_vars)[:1]
+    return named
+
+
+def _rule_body_agg_vars(captured):
+    """
+    Aggregated variables of a ``define as X every Agg of the R`` body.
+
+    A tuple-labelled npc (``of the Foo (?i; ?j; _)``) captures all its
+    columns as one tuple; ``_`` columns are left out.
+    """
+    if captured and isinstance(captured[0], tuple):
+        agg_args = tuple(captured[0])
+    elif captured and isinstance(captured[0], Symbol):
+        agg_args = tuple(captured)
+    else:
+        return (Symbol.fresh(),)
+    return _named_agg_vars(agg_args, ()) or agg_args
+
+
+def _fallback_agg_vars(captured, per_vars, bare_body, npc_formula=None):
+    """
+    Aggregated variables when ``_named_agg_vars`` selected none.
+
+    Uses the first captured variable when grouping, otherwise all captured
+    variables or, failing that, the free variables of the npc body.
+    """
+    if captured:
+        return (captured[0],) if per_vars else tuple(captured)
+    free_vars = () if per_vars else extract_logic_free_variables(bare_body)
+    if free_vars:
+        return tuple(sorted(free_vars, key=lambda s: s.name))
+    if isinstance(npc_formula, ExistentialPredicate):
+        return (npc_formula.head,)
+    return (Symbol.fresh(),)
 
 
 def _agg_slot_var(agg_expr, bare_body):
