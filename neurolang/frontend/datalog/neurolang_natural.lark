@@ -83,6 +83,9 @@ THE : _THE
 det1 : SOME -> det1_some
      | AN   -> det1_some
      | NO   -> det1_no
+     | COUNT_COMPARISON number -> det1_count
+
+COUNT_COMPARISON : /(?<!\w)((more|fewer|less)\s+than|at\s+(least|most))(?!\w)/
 
 SOME : _SOME
 AN : _A

@@ -951,6 +951,22 @@ def test_execute_squall_counting_quantifier_object(
     assert _first_column(result) == expected
 
 
+@pytest.mark.parametrize("voxels", ["Voxels (?x; ?y; ?z)", "Voxels in 3D"])
+def test_execute_squall_counting_quantifier_counts_tuples(voxels):
+    """A counted noun with several columns counts distinct tuples."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([("s1",), ("s2",)], name="study")
+    engine.add_tuple_set([(0, 0, 0), (1, 1, 1), (2, 2, 2)], name="voxel")
+    engine.add_tuple_set(
+        [("s1", 0, 0, 0), ("s1", 1, 1, 1), ("s2", 2, 2, 2)],
+        name="reports",
+    )
+    result = engine.execute_squall_program(
+        f"obtain every Study that reports at least 2 {voxels}."
+    )
+    assert _first_column(result) == {"s1"}
+
+
 def test_execute_squall_counting_quantifier_in_rule(nl_mentions):
     result = nl_mentions.execute_squall_program(
         "define as Popular every Term that at least 2 Studies mention. "
