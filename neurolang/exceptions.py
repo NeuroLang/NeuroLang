@@ -294,7 +294,10 @@ class PredicateArityError(WrongArgumentsInPredicateError):
     -----
     The message only states the counts. When a single argument is used for
     a predicate with several columns, as a SQUALL noun without ``in ND``
-    does, `suggestion` tells how to use all its columns.
+    does, `suggestion` tells how to use all its columns; when more
+    arguments than columns are used, as a SQUALL verb with too many
+    objects does, it points to a tuple subject on the relation storing
+    the extra value.
     """
 
     def __init__(self, predicate, arity, used):
@@ -312,6 +315,14 @@ class PredicateArityError(WrongArgumentsInPredicateError):
                 f"of {arity} variables such as `("
                 + "; ".join(f"?x{i}" for i in range(1, arity + 1))
                 + ")`."
+            )
+        elif used > arity:
+            self.suggestion = (
+                f"If `{predicate}` is a verb with several objects, as in "
+                "`?s weighs ?t with ?w`, its relation needs one column per "
+                "argument. To use a value stored in another relation, "
+                "name that relation with a tuple subject, e.g. "
+                "`where (?s; ?t; ?w) is a Term_in_study_tfidf`."
             )
 
 
