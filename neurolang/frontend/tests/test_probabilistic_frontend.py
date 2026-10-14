@@ -235,6 +235,26 @@ def test_show_rewritten_datalog_prints_all_rules(capsys):
     assert "fanatic" in captured.out
 
 
+def test_dry_run_prints_magic_rules_of_a_bound_query(capsys):
+    """
+    A dry run of a query binding a rule's argument prints its magic rules.
+
+    They used to be missing from the program when the rewritten program
+    was printed, which made the dry run fail with a KeyError.
+    """
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,)], name="study")
+    nl.add_tuple_set([(1, "pain", 0.5), (2, "fear", 0.5)], name="tfidf")
+    nl.execute_datalog_program("mentions(s, t) :- tfidf(s, t, v), (v > 0.03)")
+    with nl.scope:
+        nl.execute_squall_program(
+            "obtain every Study that mentions 'pain'.", dry_run=True
+        )
+    out = capsys.readouterr().out
+    assert "magic_mentions" in out
+    assert "tfidf(s, t, v)" in out
+
+
 def test_deterministic_query():
     nl = NeurolangPDL()
     d1 = [(1,), (2,), (3,), (4,), (5,)]

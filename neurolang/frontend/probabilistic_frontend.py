@@ -453,12 +453,17 @@ class NeurolangPDL(QueryBuilderDatalog):
 
         try:
             magic_query, magic_rules = self._magic_rewrite_query(query)
-            if self._handle_rewritten_output(
-                magic_query, show_rewritten, dry_run
-            ):
-                return ir.Constant(WrappedRelationalAlgebraFrozenSet()), None
             with self.scope:
+                # The rewritten program printed is that reachable from
+                # the magic query: its rules must be in the program.
                 self.program_ir.walk(magic_rules)
+                if self._handle_rewritten_output(
+                    magic_query, show_rewritten, dry_run
+                ):
+                    return (
+                        ir.Constant(WrappedRelationalAlgebraFrozenSet()),
+                        None,
+                    )
                 solution = self._solve(magic_query)
                 query_pred_symb = magic_query.consequent.functor
         except (InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError):
@@ -527,11 +532,11 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         try:
             magic_query, magic_rules = self._magic_rewrite_query(query)
-            self._handle_rewritten_output(
-                magic_query, show_rewritten, dry_run, show_ra=True
-            )
             with self.scope:
                 self.program_ir.walk(magic_rules)
+                self._handle_rewritten_output(
+                    magic_query, show_rewritten, dry_run, show_ra=True
+                )
                 solution = self._solve(
                     magic_query, stratum_solver=stratum_solver
                 )
