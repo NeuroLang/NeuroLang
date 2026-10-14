@@ -469,7 +469,7 @@ def nl_ternary():
     return engine
 
 
-def _first_column_values(result):
+def _column0_set(result):
     return set(result.as_pandas_dataframe().iloc[:, 0].tolist())
 
 
@@ -479,7 +479,7 @@ def test_execute_squall_tuple_is_a_noun_in_where_conjunction(nl_ternary):
         "obtain every Study ?s where (?s; ?t; ?w) is a Term_weight "
         "and ?t is 'pain'."
     )
-    assert _first_column_values(result) == {1}
+    assert _column0_set(result) == {1}
 
 
 def test_execute_squall_prepositional_ternary_verb(nl_ternary):
@@ -487,7 +487,7 @@ def test_execute_squall_prepositional_ternary_verb(nl_ternary):
     result = nl_ternary.execute_squall_program(
         "obtain every Study ?s that weighs 'fear' with ?w."
     )
-    assert _first_column_values(result) == {1, 2}
+    assert _column0_set(result) == {1, 2}
 
 
 def test_execute_squall_too_many_verb_objects_is_explained(nl_ternary):
@@ -505,7 +505,7 @@ def test_execute_squall_adjective_complement_and_noun(nl_ternary):
         "obtain every Voxel that is reported by a Study "
         "and that is a Schaefer_voxels."
     )
-    assert _first_column_values(result) == {"v1"}
+    assert _column0_set(result) == {"v1"}
 
 
 def test_execute_squall_where_tuple_is_noun():
@@ -1051,7 +1051,7 @@ def test_execute_squall_count_over_nary_relation():
 
 
 @pytest.fixture
-def nl_tfidf():
+def nl_study_tfidf():
     """Engine with a 3-column term_in_study_tfidf(study, term, tfidf)."""
     engine = NeurolangPDL()
     engine.add_tuple_set([(1,), (2,)], name="study")
@@ -1063,34 +1063,34 @@ def nl_tfidf():
 
 
 def test_execute_squall_max_of_multicolumn_relation_asks_for_column(
-    nl_tfidf
+    nl_study_tfidf
 ):
     """Unlabelled Max over a 3-column relation must not use column 0."""
     with pytest.raises(SquallSemanticError, match=r"\(_; _; \?\w+\)"):
-        nl_tfidf.execute_squall_program(
+        nl_study_tfidf.execute_squall_program(
             "obtain the Max of the Term_in_study_tfidf."
         )
 
 
-def test_execute_squall_max_of_multicolumn_rule_asks_for_column(nl_tfidf):
+def test_execute_squall_max_of_multicolumn_rule_asks_for_column(nl_study_tfidf):
     """The same ambiguity in a rule definition is reported too."""
     with pytest.raises(SquallSemanticError, match="3 columns"):
-        nl_tfidf.execute_squall_program(
+        nl_study_tfidf.execute_squall_program(
             "define as Top_tfidf every Max of the Term_in_study_tfidf."
         )
 
 
-def test_execute_squall_max_of_named_column(nl_tfidf):
+def test_execute_squall_max_of_named_column(nl_study_tfidf):
     """``(_; _; ?w)`` selects the value column to aggregate."""
-    result = nl_tfidf.execute_squall_program(
+    result = nl_study_tfidf.execute_squall_program(
         "obtain the Max of the Term_in_study_tfidf (_; _; ?w)."
     )
     assert result.as_pandas_dataframe().values.tolist() == [[0.9]]
 
 
-def test_execute_squall_max_of_named_column_per_group(nl_tfidf):
+def test_execute_squall_max_of_named_column_per_group(nl_study_tfidf):
     """``(?s; _; ?w) per ?s`` aggregates ``?w`` for each study."""
-    result = nl_tfidf.execute_squall_program(
+    result = nl_study_tfidf.execute_squall_program(
         "obtain every Max of the Term_in_study_tfidf (?s; _; ?w) per ?s."
     )
     rows = set(map(tuple, result.as_pandas_dataframe().values.tolist()))
