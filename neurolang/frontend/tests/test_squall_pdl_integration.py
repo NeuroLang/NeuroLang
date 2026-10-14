@@ -917,6 +917,33 @@ def test_execute_squall_ambiguous_verb_lemma_not_resolved(nl_studies):
         )
 
 
+def test_execute_squall_lemma_candidate_needs_same_arity(nl_studies):
+    """A unary `mentioning` is not silently resolved to binary `mentions`."""
+    with pytest.raises(SymbolNotFoundError, match="mentioning"):
+        nl_studies.execute_squall_program(
+            "obtain every Study that is mentioning 'fear'."
+        )
+
+
+def test_execute_squall_lemma_arity_of_probabilistic_predicates(nl_studies):
+    """The probability column does not count in a predicate's arity."""
+    nl_studies.add_probabilistic_choice_from_tuples(
+        [(0.5, "s1"), (0.5, "s2")], name="choose"
+    )
+    nl_studies.execute_squall_program(
+        "define as probably Picks every Study. "
+        "define as Lucky every Study that is chosen. "
+        "define as Kept every Study that is picked."
+    )
+    symbol_table = nl_studies.program_ir.symbol_table
+    for head, body_predicate in (("lucky", "choose"), ("kept", "picks")):
+        rule = symbol_table[ir_Symbol(head)].formulas[0]
+        functors = {
+            atom.functor.name for atom in rule.antecedent.formulas
+        }
+        assert body_predicate in functors
+
+
 # ---------------------------------------------------------------------------
 # Probabilistic choice syntax
 # ---------------------------------------------------------------------------

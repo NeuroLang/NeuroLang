@@ -166,6 +166,31 @@ class TestPredicateLemmas:
         )
 
 
+    def test_lemma_candidate_with_other_arity_not_used(self):
+        """A unary `mentioning` atom never becomes the binary `mentions`."""
+        atom = Symbol("mentioning")(Symbol("x"))
+        resolver = ResolvePredicateLemmas({"mentions"}, {"mentions": 2}.get)
+        assert resolver.walk(atom) is atom
+        assert resolver.ambiguous == {}
+
+    def test_arity_filter_applies_before_ambiguity(self):
+        """Only candidates of the atom's arity compete."""
+        x, y = Symbol("x"), Symbol("y")
+        arities = {"reports": 2, "reported": 1}
+        resolver = ResolvePredicateLemmas(set(arities), arities.get)
+        assert resolver.walk(Symbol("report")(x, y)) == Symbol("reports")(x, y)
+        assert resolver.ambiguous == {}
+
+    def test_tuple_argument_counts_its_columns(self):
+        """A `(?i; ?j; ?k)` tuple argument counts as three columns."""
+        voxel = (Symbol("i"), Symbol("j"), Symbol("k"))
+        resolver = ResolvePredicateLemmas({"reports"}, {"reports": 3}.get)
+        assert (
+            resolver.walk(Symbol("reported")(voxel))
+            == Symbol("reports")(voxel)
+        )
+
+
 class TestMakeDimensionTypeStripper:
     """Tests for make_dimension_type_stripper factory."""
 
