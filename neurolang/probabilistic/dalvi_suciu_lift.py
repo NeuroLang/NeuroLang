@@ -76,7 +76,9 @@ from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from ..utils import OrderedSet, log_performance
 from .containment import is_contained
 from .expression_processing import (
+    STRICT_COMPARISONS,
     is_builtin,
+    is_comparison,
     lift_optimization_for_choice_predicates
 )
 from .probabilistic_ra_utils import (
@@ -271,9 +273,20 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
 
 
 def _verify_that_the_query_has_no_builtins(shattered_query, cpl_program):
+    """Builtins are only allowed as comparisons within existential
+    conjuncts, possibly negated, see `comparison_conjunct_plan`.
+    """
+    antecedent = RTO.walk(shattered_query.antecedent)
+    if isinstance(antecedent, Conjunction):
+        formulas = antecedent.formulas
+    else:
+        formulas = (antecedent,)
     if any(
-        is_builtin(atom, known_builtins=cpl_program.builtins())
-        for atom in extract_logic_atoms(shattered_query)
+        is_builtin(atom, known_builtins=cpl_program.builtins()) and not (
+            is_comparison(atom) and _is_existential_conjunct(formula)
+        )
+        for formula in formulas
+        for atom in extract_logic_atoms(formula)
     ):
         raise UnsupportedSolverError(
             "Builtins not allowed for Dalvi-Suciu lifting"
@@ -291,7 +304,10 @@ def _verify_that_the_query_is_unate(query, symbol_table):
             atom = predicate.formula
         else:
             atom = predicate
-        if is_atom_a_deterministic_relation(atom, symbol_table):
+        if (
+            is_comparison(atom) or
+            is_atom_a_deterministic_relation(atom, symbol_table)
+        ):
             continue
         if isinstance(predicate, Negation):
             while isinstance(predicate, Negation):
@@ -333,7 +349,9 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
     but not known to be complete. Shared probabilistic choices are not
     supported, as the queries these rules build would conjoin atoms of
     the same choice relation, which the choice optimisations applied
-    before shattering expect to have unified.
+    before shattering expect to have unified. Comparisons are supported
+    within existential conjuncts, possibly negated, by
+    `comparison_conjunct_plan`.
 
     [1] Fink, R. & Olteanu, D. Dichotomies for queries with negation in
     probabilistic databases. ACM TODS 41, 1–47 (2016).
@@ -355,6 +373,16 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
     """
     consequent, antecedent = rule.unapply()
     antecedent = RTO.walk(antecedent)
+    if any(is_comparison(atom) for atom in extract_logic_atoms(antecedent)):
+        split = _split_comparison_conjunct(antecedent)
+        if split is not None:
+            plan = comparison_conjunct_plan(
+                consequent, *split, symbol_table
+            )
+            if plan is not None:
+                return plan
+        return NonLiftable(antecedent)
+
     split = _split_dependent_conjunct(antecedent, Negation, symbol_table)
     if split is None:
         rule = Implication(consequent, antecedent)
@@ -364,9 +392,11 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
         ucq_rule = MNTA.walk(MQU.walk(convert_rule_to_ucq(rule)))
         plan = dalvi_suciu_lift(ucq_rule, symbol_table)
         if not is_pure_lifted_plan(plan):
-            plan = existential_shattering_plan(
+            shattered_plan = existential_shattering_plan(
                 consequent, antecedent, symbol_table
-            ) or plan
+            )
+            if shattered_plan is not None:
+                plan = shattered_plan
         return plan
 
     remainder, negation = split
@@ -502,72 +532,155 @@ def free_variable_shattering_plan(
         the plan, or None if the rule does not apply.
     """
     free_variables = extract_logic_free_variables(negated_formula)
-    body = negated_formula
-    while isinstance(body, ExistentialPredicate):
-        body = body.body
+    body = _existential_body(negated_formula)
+    remainder_variables = extract_logic_free_variables(remainder)
     for t in extract_logic_free_variables(body) - free_variables:
         psi_t = add_existentials_except(body, free_variables | {t})
-        separator_variables, _ = find_separator_variables(
-            ExistentialPredicate(t, psi_t), symbol_table
-        )
-        if t not in separator_variables:
+        if not _is_separator_variable(t, psi_t, symbol_table):
             continue
-        remainder_variables = extract_logic_free_variables(remainder)
         for x in sorted(remainder_variables, key=lambda v: v.name):
             psi_x = ReplaceExpressionWalker({t: x}).walk(psi_t)
             if not _are_different_tuples_when_different(
-                psi_t, t, Conjunction(remainder.formulas + (psi_x,)), x,
+                psi_t, t, Conjunction(remainder.formulas + (psi_x,)), {x},
                 symbol_table
             ):
                 continue
             plans = _lift_pure(
-                (
-                    Implication(
-                        consequent,
-                        Conjunction(remainder.formulas + (Negation(psi_x),))
-                    ),
-                    Implication(
-                        Symbol.fresh()(*free_variables | {t}), psi_t
-                    ),
-                ),
+                (Implication(
+                    consequent,
+                    Conjunction(remainder.formulas + (Negation(psi_x),))
+                ),),
                 symbol_table
             )
             if plans is None:
                 continue
-            remainder_plan, psi_plan = plans
-            return rap.Difference(
-                remainder_plan,
-                rap.IndependentProjection(
-                    rap.Selection(
-                        rap.NaturalJoin(
-                            psi_plan, rap.Support(remainder_plan)
-                        ),
-                        NE(
-                            str2columnstr_constant(t.name),
-                            str2columnstr_constant(x.name)
-                        )
-                    ),
-                    tuple(
-                        str2columnstr_constant(v.name)
-                        for v in remainder_variables
-                    )
-                )
+            separated_plan = _separated_existential_plan(
+                t, psi_t, (NE(t, x),), plans[0], remainder_variables,
+                symbol_table
             )
+            if separated_plan is not None:
+                return rap.Difference(plans[0], separated_plan)
     return None
 
 
-def _are_different_tuples_when_different(
-    formula, t, other_formula, x, symbol_table
+def comparison_conjunct_plan(consequent, remainder, conjunct, symbol_table):
+    """Plan for `A ∧ ∃t (ψ(t) ∧ C)` or `A ∧ ¬∃t (ψ(t) ∧ C)`, where `C`
+    is a conjunction of comparisons between `t`, the free variables and
+    constants, e.g. `P(x, y) ∧ ¬∃w (P(w, y) ∧ w ≠ x)`. Following
+    Olteanu & Huang [1], with `L = lift(A)`, the event
+    `E = ∃t (ψ(t) ∧ C)` is planned as
+
+        ind-π σ_C(lift(ψ(t)) ⋈ support(L))
+
+    and the plan is `L ⋈ E`, or `Difference(L, E)` if negated. This is
+    sound when `t` is a separator variable of `ψ`, and when every
+    probabilistic atom of `ψ(t)` is a different tuple from the atoms
+    of the same relation in `A`, because it has `t` in a position where
+    they have a term from which `C` makes `t` different.
+
+    [1] Olteanu, D. & Huang, J. Secondary-storage confidence computation
+    for conjunctive queries with inequalities. SIGMOD 2009, 389–402.
+
+    Parameters
+    ----------
+    consequent : FunctionApplication
+        head of the rule.
+    remainder : Conjunction
+        the conjunction `A`.
+    conjunct : LogicExpression
+        the existential conjunct, possibly negated.
+    symbol_table : Mapping of Symbol to Expression
+        symbol table for the relational symbols
+
+    Returns
+    -------
+    Optional[RelationalAlgebraOperation]
+        the plan, or None if the rule does not apply.
+    """
+    negated = isinstance(conjunct, Negation)
+    existential = conjunct.formula if negated else conjunct
+    free_variables = extract_logic_free_variables(existential)
+    body = _existential_body(existential)
+    formulas = body.formulas if isinstance(body, Conjunction) else (body,)
+    comparisons = tuple(f for f in formulas if is_comparison(f))
+    psi_body = Conjunction(tuple(
+        f for f in formulas if not is_comparison(f)
+    ))
+    if _shares_a_choice_relation(psi_body, remainder, symbol_table):
+        return None
+    remainder_variables = extract_logic_free_variables(remainder)
+    for t in extract_logic_free_variables(body) - free_variables:
+        if not all(
+            extract_logic_free_variables(comparison) <= free_variables | {t}
+            for comparison in comparisons
+        ):
+            continue
+        psi_t = add_existentials_except(psi_body, free_variables | {t})
+        if not (
+            _is_separator_variable(t, psi_t, symbol_table) and
+            _are_different_tuples_when_different(
+                psi_t, t, remainder,
+                _terms_different_from(t, comparisons), symbol_table
+            )
+        ):
+            continue
+        plans = _lift_pure(
+            (Implication(consequent, remainder),), symbol_table
+        )
+        if plans is None:
+            return None
+        separated_plan = _separated_existential_plan(
+            t, psi_t, comparisons, plans[0], remainder_variables,
+            symbol_table
+        )
+        if separated_plan is None:
+            continue
+        if negated:
+            return rap.Difference(plans[0], separated_plan)
+        return rap.NaturalJoin(plans[0], separated_plan)
+    return None
+
+
+def _separated_existential_plan(
+    t, psi_t, comparisons, remainder_plan, remainder_variables,
+    symbol_table
 ):
-    """Whether, when t ≠ x, every probabilistic atom of `formula` is a
-    different tuple from the atoms of the same relation in `other_formula`,
-    because it has `t` in a position where they have `x`.
+    """Plan for `∃t (ψ(t) ∧ C)`, `t` being a separator variable of `ψ`,
+    for each tuple of `remainder_plan`, which provides the values of the
+    free variables of `C` which are not free in `ψ`:
+
+        ind-π σ_C(lift(ψ(t)) ⋈ support(remainder_plan))
+    """
+    plans = _lift_pure(
+        (Implication(
+            Symbol.fresh()(*extract_logic_free_variables(psi_t)), psi_t
+        ),),
+        symbol_table
+    )
+    if plans is None:
+        return None
+    plan = rap.NaturalJoin(plans[0], rap.Support(remainder_plan))
+    for comparison in comparisons:
+        plan = rap.Selection(plan, _columns_comparison(comparison))
+    return rap.IndependentProjection(
+        plan,
+        tuple(str2columnstr_constant(v.name) for v in remainder_variables)
+    )
+
+
+def _are_different_tuples_when_different(
+    formula, t, other_formula, different_terms, symbol_table
+):
+    """Whether, when `t` is different from `different_terms`, every
+    probabilistic atom of `formula` is a different tuple from the atoms of
+    the same relation in `other_formula`, because it has `t` in a
+    position where they have one of `different_terms`.
     """
     deterministic_symbols = _deterministic_symbols(formula, symbol_table)
     other_atoms = extract_logic_atoms(other_formula)
     return all(
         any(
-            arg == t and other_arg == x
+            arg == t and other_arg in different_terms
             for arg, other_arg in zip(atom.args, other_atom.args)
         )
         for atom in extract_logic_atoms(formula)
@@ -575,6 +688,45 @@ def _are_different_tuples_when_different(
         for other_atom in other_atoms
         if other_atom.functor == atom.functor
     )
+
+
+def _is_separator_variable(t, formula, symbol_table):
+    separator_variables, _ = find_separator_variables(
+        ExistentialPredicate(t, formula), symbol_table
+    )
+    return t in separator_variables
+
+
+def _existential_body(formula):
+    while isinstance(formula, ExistentialPredicate):
+        formula = formula.body
+    return formula
+
+
+def _is_existential_conjunct(formula):
+    if isinstance(formula, Negation):
+        formula = formula.formula
+    return isinstance(formula, ExistentialPredicate)
+
+
+def _terms_different_from(t, comparisons):
+    """Terms from which the comparisons make `t` different."""
+    terms = set()
+    for comparison in comparisons:
+        if comparison.functor.value in STRICT_COMPARISONS:
+            left, right = comparison.args
+            if left == t:
+                terms.add(right)
+            elif right == t:
+                terms.add(left)
+    return terms
+
+
+def _columns_comparison(comparison):
+    return comparison.functor(*(
+        str2columnstr_constant(arg.name) if isinstance(arg, Symbol) else arg
+        for arg in comparison.args
+    ))
 
 
 def _lift_pure(rules, symbol_table):
@@ -587,6 +739,32 @@ def _lift_pure(rules, symbol_table):
     )
     if all(is_pure_lifted_plan(plan) for plan in plans):
         return plans
+    return None
+
+
+def _split_comparison_conjunct(antecedent):
+    """Find an existential conjunct, possibly negated, with comparisons
+    and whose free variables are among those of the rest.
+
+    Returns
+    -------
+    Optional[Tuple[Conjunction, LogicExpression]]
+        the conjunction without the conjunct and the conjunct, or None if
+        there is no such conjunct.
+    """
+    if not isinstance(antecedent, Conjunction):
+        return None
+    for i, formula in enumerate(antecedent.formulas):
+        remainder = Conjunction(
+            antecedent.formulas[:i] + antecedent.formulas[i + 1:]
+        )
+        if (
+            _is_existential_conjunct(formula) and
+            any(is_comparison(a) for a in extract_logic_atoms(formula)) and
+            extract_logic_free_variables(formula) <=
+            extract_logic_free_variables(remainder)
+        ):
+            return remainder, formula
     return None
 
 
