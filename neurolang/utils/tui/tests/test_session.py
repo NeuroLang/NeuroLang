@@ -761,3 +761,15 @@ def test_clear_lists_a_conditional_once(conditional):
         "removed marg (1 rule)"
     ]
     assert "removed mentions (3 facts)" in lines
+
+
+@pytest.mark.parametrize("command", [".ra", ".rewritten"])
+def test_rerun_warnings_are_short_notes(app, capsys, command):
+    app._execute_and_display("fan(x) :- person(x)")
+    app._execute_and_display("ans(x) :- fan(x), plays(x)")
+    _command(app, ".drop fan")
+    capsys.readouterr()
+    out = _command(app, command)
+    captured = capsys.readouterr()
+    assert "note: predicate fan has no facts or rules" in out
+    assert "warnings.warn" not in out + captured.out + captured.err
