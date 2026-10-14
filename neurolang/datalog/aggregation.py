@@ -48,15 +48,21 @@ AGG_MEAN = Symbol("mean")
 AGG_COUNT = Symbol("count")
 AGG_SUM = Symbol("sum")
 AGG_STD = Symbol("std")
+AGG_MIN = Symbol("min")
+AGG_AVG = Symbol("avg")
 
 
 def is_builtin_aggregation_functor(functor):
-    return functor in (AGG_MAX, AGG_MEAN, AGG_COUNT, AGG_SUM, AGG_STD)
+    return functor in (
+        AGG_MAX, AGG_MIN, AGG_MEAN, AGG_AVG, AGG_COUNT, AGG_SUM, AGG_STD
+    )
 
 
 class BuiltinAggregationMixin:
     constant_max = Constant(numpy.max)
+    constant_min = Constant(numpy.min)
     constant_mean = Constant(numpy.mean)
+    constant_avg = Constant(numpy.mean)
     constant_sum = Constant(sum)
     constant_std = Constant(numpy.std)
 

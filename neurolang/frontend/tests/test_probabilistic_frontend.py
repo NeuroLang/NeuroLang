@@ -1732,3 +1732,18 @@ def test_current_program_with_probfact():
         ] = e.TermInStudyTFIDF(e.s, e.t, e.tfidf)
     prog = nl.current_program
     assert len(prog) == 2
+
+
+def test_min_and_avg_aggregations():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("a", 3), ("a", 1), ("b", 2)], name="p")
+    low = nl.execute_datalog_program(
+        "low(x, v) :- AGGREGATE[x](p(x, y) @ min(y)) = v\n"
+        "ans(x, v) :- low(x, v)"
+    )
+    assert set(low) == {("a", 1), ("b", 2)}
+    average = nl.execute_datalog_program(
+        "average(v) :- AGGREGATE[](p(x, y) @ avg(y)) = v\n"
+        "ans(v) :- average(v)"
+    )
+    assert set(average) == {(2.0,)}
