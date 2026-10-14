@@ -196,6 +196,19 @@ def test_execute_squall_tilde_inversion_end_to_end(nl_author):
     assert rows == {"p1", "p2", "p3"}
 
 
+def test_execute_squall_tilde_inversion_in_relative_vp():
+    """``that ~mentions a Study`` reads ``mentions(study, term)`` backwards."""
+    engine = NeurolangPDL()
+    engine.add_tuple_set([(1,), (2,)], name="study")
+    engine.add_tuple_set([("pain",), ("fear",), ("joy",)], name="term")
+    engine.add_tuple_set([(1, "pain"), (2, "fear")], name="mentions")
+    result = engine.execute_squall_program(
+        "obtain every Term that ~mentions a Study."
+    )
+    rows = set(result.as_pandas_dataframe().iloc[:, 0].tolist())
+    assert rows == {"pain", "fear"}
+
+
 def test_execute_squall_marg_query_walks_without_error():
     """Smoke test: MARG syntax parses and IR is accepted by the solver walk."""
     from neurolang.logic.horn_clauses import Fol2DatalogTranslationException

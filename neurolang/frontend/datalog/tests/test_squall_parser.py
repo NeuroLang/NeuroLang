@@ -207,11 +207,11 @@ def verb1():
 
 @pytest.fixture(scope="module")
 def verb2():
-    # Parser now resolves InvertedFunctionApplication at parse time.
-    # _apply_ops pre-swaps inverse-verb args before the resolver reverses
-    # them back, so the final IR has normal subject-first order.
+    # ``~`` inverts the argument order: ``x ~sings y`` is ``sings(y, x)``,
+    # as documented in the tutorial (section 3.2) and consistent with the
+    # ``~author`` noun2 fixture below and with ``~verb`` in ``rel_vpn``.
     return [
-        ("~sings", lambda x, y: Symbol("sings")(x, y))  # pylint: disable=W0108
+        ("~sings", lambda x, y: Symbol("sings")(y, x))  # pylint: disable=W0108
     ]
 
 
@@ -724,6 +724,39 @@ def test_squall_transitive_inv_argument_order():
     assert isinstance(atom.args[1], Symbol), (
         f"Expected second arg to be a fresh Symbol, got {atom.args[1]}"
     )
+
+
+def test_squall_transitive_inv_in_verb_phrase_swaps_arguments():
+    """``~verb`` with subject and object swaps them in a verb phrase too."""
+    res = parser("squall ?x ~sings ?y")
+    assert res == Symbol("sings")(Symbol("y"), Symbol("x"))
+
+
+def test_squall_transitive_inv_in_relative_vp_swaps_arguments():
+    """``every T that ~mentions a S`` builds ``mentions(s, t)``."""
+    res = parser("define as mentioned every Term that ~mentions a Study.")
+    atoms = [
+        a for a in _collect_atoms(res.antecedent)
+        if a.functor == Symbol("mentions")
+    ]
+    assert len(atoms) == 1
+    term_var = res.consequent.args[0]
+    assert atoms[0].args[1] == term_var
+    assert atoms[0].args[0] != term_var
+
+
+def _collect_atoms(expression):
+    stack = [expression]
+    atoms = []
+    while stack:
+        expr = stack.pop()
+        if isinstance(expr, FunctionApplication):
+            atoms.append(expr)
+        elif hasattr(expr, 'formulas'):
+            stack.extend(expr.formulas)
+        elif hasattr(expr, 'body'):
+            stack.append(expr.body)
+    return atoms
 
 
 def test_squall_conditioned_prior_produces_condition_node():
