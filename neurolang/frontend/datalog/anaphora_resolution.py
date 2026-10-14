@@ -40,24 +40,31 @@ def _collect_anaphoras(expr, result):
         _collect_anaphoras(expr.body, result)
 
 
-def _find_matching_noun_var(expr, noun_name):
+def _find_matching_noun_var(expr, noun_name, exclude=None):
+    """
+    Return the variable of the first ``noun_name(var, …)`` atom in *expr*.
+
+    Atoms whose variable is *exclude* (the anaphora's own variable) are
+    skipped, so an anaphora is never unified with itself.
+    """
     if isinstance(expr, FunctionApplication):
         if (
             isinstance(expr.functor, Symbol)
             and expr.functor.name == noun_name
             and len(expr.args) > 0
             and isinstance(expr.args[0], Symbol)
+            and expr.args[0] != exclude
         ):
             return expr.args[0]
         return None
     if isinstance(expr, Conjunction):
         for f in expr.formulas:
-            result = _find_matching_noun_var(f, noun_name)
+            result = _find_matching_noun_var(f, noun_name, exclude)
             if result is not None:
                 return result
         return None
     if hasattr(expr, 'body'):
-        return _find_matching_noun_var(expr.body, noun_name)
+        return _find_matching_noun_var(expr.body, noun_name, exclude)
     return None
 
 
@@ -153,19 +160,17 @@ class AnaphoraResolutionWalker(ExpressionWalker):
         new_conditioned = self.walk(expression.conditioned)
         new_conditioning = self.walk(expression.conditioning)
 
-        replacement = {}
-        for head_sym, noun_name in anaphoras:
-            match = _find_matching_noun_var(new_conditioned, noun_name)
-            if match is not None:
-                replacement[head_sym] = match
-
-        if replacement:
-            new_conditioning = ReplaceSymbolWalker(replacement).walk(
-                new_conditioning
-            )
-
-        new_conditioning = _strip_anaphora_markers(
-            new_conditioning, resolved_heads=set(replacement.values())
+        # 'the X' on the conditioned side refers to a noun of that same side
+        # (e.g. 'every Term where a Study mentions the Term conditioned to
+        # …'). Resolve it there first: left in place, its marker made this
+        # rule match again on its own output, forever.
+        conditioned_anaphoras = []
+        _collect_anaphoras(new_conditioned, conditioned_anaphoras)
+        new_conditioned, _ = _resolve_anaphoras(
+            new_conditioned, conditioned_anaphoras, new_conditioned
+        )
+        new_conditioning, replacement = _resolve_anaphoras(
+            new_conditioning, anaphoras, new_conditioned
         )
 
         lifted_vars = set()
@@ -177,3 +182,26 @@ class AnaphoraResolutionWalker(ExpressionWalker):
         for var in lifted_vars:
             result = ExistentialPredicate(var, result)
         return result
+
+
+def _resolve_anaphoras(expr, anaphoras, source):
+    """
+    Unify the *anaphoras* of *expr* with their nouns in *source*.
+
+    Each ``(head, noun_name)`` anaphora whose noun has a variable in
+    *source* has its head replaced by that variable. All anaphora markers
+    of *expr* are then removed, so that the result has none left: resolved
+    ones are dropped, unresolved ones become plain existentials. Returns
+    the new expression and the replacement used.
+    """
+    replacement = {}
+    for head_sym, noun_name in anaphoras:
+        match = _find_matching_noun_var(source, noun_name, exclude=head_sym)
+        if match is not None:
+            replacement[head_sym] = match
+    if replacement:
+        expr = ReplaceSymbolWalker(replacement).walk(expr)
+    expr = _strip_anaphora_markers(
+        expr, resolved_heads=set(replacement.values())
+    )
+    return expr, replacement
