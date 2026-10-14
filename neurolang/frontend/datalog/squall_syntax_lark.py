@@ -1067,7 +1067,7 @@ class SquallTransformer(Transformer):
     def s_np_vp(self, args):
         np = args[0]
         vp = args[1]
-        return np(vp)
+        return np(_as_predicate(vp))
 
     def s_for(self, args):
         np = args[0]
@@ -2676,10 +2676,17 @@ def _as_predicate(item):
     if isinstance(item, tuple) and len(item) == 2 and item[0] == '_rel':
         item = item[1]
     if isinstance(item, Symbol):
-        return lambda x, _verb=item: (
-            _verb(*x) if isinstance(x, tuple) else _verb(x)
-        )
+        return functools.partial(_apply_verb, item)
     return item
+
+
+def _apply_verb(verb, *args):
+    """
+    Apply a bare verb to its subject, spreading a tuple subject.
+    """
+    if len(args) == 1 and isinstance(args[0], (tuple, list)):
+        args = tuple(args[0])
+    return verb(*args)
 
 
 def _is_predicate(item):
