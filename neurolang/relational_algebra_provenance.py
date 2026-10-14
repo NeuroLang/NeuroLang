@@ -136,6 +136,15 @@ class Subtraction(BinaryRelationalAlgebraOperation):
         return f"[{self.relation_left} \N{MINUS SIGN}_P {self.relation_right}]"
 
 
+class Support(UnaryRelationalAlgebraOperation):
+    """Tuples of a provenance set, all with provenance 1."""
+    def __init__(self, relation):
+        self.relation = relation
+
+    def __repr__(self):
+        return f"support({self.relation})"
+
+
 class WeightedNaturalJoin(NAryRelationalAlgebraOperation):
     def __init__(self, relations, weights):
         self.relations = relations
@@ -860,6 +869,21 @@ class RelationalAlgebraProvenanceExpressionSemringSolverMixin(
     )
     def subtraction(self, subtraction):
         return self._left_join_combine_provenances(subtraction, SUB)
+
+    @add_match(Support(ProvenanceAlgebraSet))
+    def support(self, support):
+        relation = support.relation
+        return self.walk(ProvenanceAlgebraSet(
+            ConcatenateConstantColumn(
+                Projection(
+                    relation.relation,
+                    tuple(relation.non_provenance_columns)
+                ),
+                relation.provenance_column,
+                ONE
+            ),
+            relation.provenance_column
+        ))
 
     def _left_join_combine_provenances(self, operation, combine):
         left = operation.relation_left

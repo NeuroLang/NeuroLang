@@ -28,7 +28,8 @@ from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolverMixin,
     RelationalAlgebraSolver,
-    Subtraction
+    Subtraction,
+    Support
 )
 
 EQ = Constant(operator.eq)
@@ -426,6 +427,27 @@ def test_subtraction():
 
     op = Subtraction(r_left, r_right)
     result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
+    assert testing.eq_prov_relations(result, r_expected)
+
+
+def test_support():
+    r = testing.build_ra_provenance_set_from_named_ra_set(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y"),
+            iterable=[(0.5, "a", "b"), (0.2, "b", "b")],
+        ),
+        ColumnStr("_p_"),
+    )
+    r_expected = ProvenanceAlgebraSet(
+        Constant[AbstractSet](NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y"),
+            iterable=[(1.0, "a", "b"), (1.0, "b", "b")],
+        )),
+        str2columnstr_constant("_p_"),
+    )
+    result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(
+        Support(r)
+    )
     assert testing.eq_prov_relations(result, r_expected)
 
 

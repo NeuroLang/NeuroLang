@@ -254,8 +254,8 @@ def _prepare_and_optimise_query(flat_query, cpl_program):
     _verify_that_the_query_has_no_builtins(shattered_query, cpl_program)
     if (
         config.get_probabilistic_solver_check_unate() and
-        _split_dependent_negation(
-            RTO.walk(shattered_query.antecedent), symbol_table
+        _split_dependent_conjunct(
+            RTO.walk(shattered_query.antecedent), Negation, symbol_table
         ) is None
     ):
         # Otherwise the checks are applied by
@@ -355,21 +355,23 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
     """
     consequent, antecedent = rule.unapply()
     antecedent = RTO.walk(antecedent)
-    split = _split_dependent_negation(antecedent, symbol_table)
+    split = _split_dependent_conjunct(antecedent, Negation, symbol_table)
     if split is None:
         rule = Implication(consequent, antecedent)
         if check and config.get_probabilistic_solver_check_unate():
             _verify_that_the_query_has_one_quantifier(rule)
             _verify_that_the_query_is_unate(rule, symbol_table)
         ucq_rule = MNTA.walk(MQU.walk(convert_rule_to_ucq(rule)))
-        return dalvi_suciu_lift(ucq_rule, symbol_table)
+        plan = dalvi_suciu_lift(ucq_rule, symbol_table)
+        if not is_pure_lifted_plan(plan):
+            plan = existential_shattering_plan(
+                consequent, antecedent, symbol_table
+            ) or plan
+        return plan
 
-    remainder, negated_formula = split
-    if any(
-        is_atom_a_probabilistic_choice_relation(atom, symbol_table)
-        for atom in extract_logic_atoms(negated_formula)
-        if atom.functor in _functors(remainder)
-    ):
+    remainder, negation = split
+    negated_formula = negation.formula
+    if _shares_a_choice_relation(negated_formula, remainder, symbol_table):
         return NonLiftable(antecedent)
     for plan_rule in (
         free_variable_shattering_plan, negation_subtraction_plan
@@ -378,6 +380,45 @@ def lift_with_dependent_negations(rule, symbol_table, check=False):
         if plan is not None:
             return plan
     return NonLiftable(antecedent)
+
+
+def existential_shattering_plan(consequent, antecedent, symbol_table):
+    """Plan for a conjunction `A ∧ ∃t ψ(t)` where `∃t ψ(t)` shares
+    probabilistic symbols with `A`, as P[A] - P[A ∧ ¬∃t ψ(t)], which
+    is sound for any `A` and `ψ`. The latter is planned with
+    `free_variable_shattering_plan`.
+
+    Parameters
+    ----------
+    consequent : FunctionApplication
+        head of the rule.
+    antecedent : LogicExpression
+        body of the rule.
+    symbol_table : Mapping of Symbol to Expression
+        symbol table for the relational symbols
+
+    Returns
+    -------
+    Optional[RelationalAlgebraOperation]
+        the plan, or None if the rule does not apply.
+    """
+    split = _split_dependent_conjunct(
+        antecedent, ExistentialPredicate, symbol_table
+    )
+    if split is None:
+        return None
+    remainder, existential = split
+    if _shares_a_choice_relation(existential, remainder, symbol_table):
+        return None
+    negation_plan = free_variable_shattering_plan(
+        consequent, remainder, existential, symbol_table
+    )
+    if negation_plan is None:
+        return None
+    plans = _lift_pure((Implication(consequent, remainder),), symbol_table)
+    if plans is None:
+        return None
+    return rap.Subtraction(plans[0], negation_plan)
 
 
 def negation_subtraction_plan(
@@ -422,14 +463,18 @@ def free_variable_shattering_plan(
     consequent, remainder, negated_formula, symbol_table
 ):
     """Plan for `A ∧ ¬∃t ψ(t)` when the dependency between `A` and `ψ`
-    comes from atoms in which a free variable `x` of `ψ` takes the place
-    of `t`, such as `R(x) ∧ ¬∃t (R(t) ∧ S(x, t))`. As
+    comes from atoms in which a free variable `x` of `A` takes the place
+    of `t`, such as `R(x) ∧ ¬∃t (R(t) ∧ S(x, t))` or
+    `R(x, y) ∧ ¬∃t (R(x, t) ∧ T(t))`. As
 
         ∃t ψ(t) ≡ ψ(x) ∨ ∃t (t ≠ x ∧ ψ(t))
 
-    the plan is
+    the plan is, with `L = lift(A ∧ ¬ψ(x))`,
 
-        Difference(lift(A ∧ ¬ψ(x)), ind-π σ_{t ≠ x}(lift(ψ(t))))
+        Difference(L, ind-π σ_{t ≠ x}(lift(ψ(t)) ⋈ support(L)))
+
+    where joining with the tuples of `L` provides the values of `x`
+    when it is not a free variable of `ψ`.
 
     which is sound when
 
@@ -467,7 +512,8 @@ def free_variable_shattering_plan(
         )
         if t not in separator_variables:
             continue
-        for x in sorted(free_variables, key=lambda v: v.name):
+        remainder_variables = extract_logic_free_variables(remainder)
+        for x in sorted(remainder_variables, key=lambda v: v.name):
             psi_x = ReplaceExpressionWalker({t: x}).walk(psi_t)
             if not _are_different_tuples_when_different(
                 psi_t, t, Conjunction(remainder.formulas + (psi_x,)), x,
@@ -493,7 +539,9 @@ def free_variable_shattering_plan(
                 remainder_plan,
                 rap.IndependentProjection(
                     rap.Selection(
-                        psi_plan,
+                        rap.NaturalJoin(
+                            psi_plan, rap.Support(remainder_plan)
+                        ),
                         NE(
                             str2columnstr_constant(t.name),
                             str2columnstr_constant(x.name)
@@ -501,7 +549,7 @@ def free_variable_shattering_plan(
                     ),
                     tuple(
                         str2columnstr_constant(v.name)
-                        for v in free_variables
+                        for v in remainder_variables
                     )
                 )
             )
@@ -542,21 +590,22 @@ def _lift_pure(rules, symbol_table):
     return None
 
 
-def _split_dependent_negation(antecedent, symbol_table):
-    """Find a negated conjunct sharing probabilistic symbols
-    with the rest of the conjunction.
+def _split_dependent_conjunct(antecedent, conjunct_class, symbol_table):
+    """Find a conjunct of class `conjunct_class` sharing probabilistic
+    symbols with the rest of the conjunction, and whose free variables
+    are among those of the rest.
 
     Returns
     -------
     Optional[Tuple[Conjunction, LogicExpression]]
-        the conjunction without the negated conjunct and the formula
-        under the negation, or None if there is no such conjunct.
+        the conjunction without the conjunct and the conjunct, or None if
+        there is no such conjunct.
     """
     if not isinstance(antecedent, Conjunction):
         return None
     deterministic_symbols = _deterministic_symbols(antecedent, symbol_table)
     for i, formula in enumerate(antecedent.formulas):
-        if not isinstance(formula, Negation):
+        if not isinstance(formula, conjunct_class):
             continue
         remainder = Conjunction(
             antecedent.formulas[:i] + antecedent.formulas[i + 1:]
@@ -567,8 +616,16 @@ def _split_dependent_negation(antecedent, symbol_table):
             (_functors(formula) & _functors(remainder)) -
             deterministic_symbols
         ):
-            return remainder, formula.formula
+            return remainder, formula
     return None
+
+
+def _shares_a_choice_relation(formula, other_formula, symbol_table):
+    return any(
+        is_atom_a_probabilistic_choice_relation(atom, symbol_table)
+        for atom in extract_logic_atoms(formula)
+        if atom.functor in _functors(other_formula)
+    )
 
 
 def solve_marg_query(rule, cpl):
