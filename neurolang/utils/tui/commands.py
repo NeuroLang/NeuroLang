@@ -315,15 +315,6 @@ def _switch(app, arg: str, attribute: str, label: str) -> None:
     app.console.print(f"{label}: {state}")
 
 
-@command(
-    ".ra", "Print the relational algebra plans instead of running queries",
-    ".ra [on|off]",
-)
-def cmd_ra(app, arg: str) -> None:
-    """Toggle the display of the relational algebra plans."""
-    _switch(app, arg, "show_ra", "RA plans")
-
-
 @command(".quit", "Exit the REPL (also Ctrl+D)")
 def cmd_quit(app, arg: str) -> None:
     """Exit the REPL."""
