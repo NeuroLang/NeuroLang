@@ -3,13 +3,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from neurolang.exceptions import (
-    ForbiddenDisjunctionError, SquallSemanticError,
-    WrongArgumentsInPredicateError,
-)
+from neurolang.exceptions import ForbiddenDisjunctionError
 from neurolang.expressions import Symbol as ir_Symbol
 
 from ..probabilistic_frontend import NeurolangPDL
+from neurolang.exceptions import (
+    SquallSemanticError, WrongArgumentsInPredicateError,
+)
 
 
 @pytest.fixture
