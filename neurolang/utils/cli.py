@@ -81,6 +81,7 @@ from neurolang.frontend.show_ra import ShowRAOptions
 from neurolang.logic import ExistentialPredicate
 from neurolang.probabilistic.expressions import Condition
 from neurolang.utils import engine_registry
+from neurolang.utils.sort_hints import sort_notes
 
 
 def _parse_sort_spec(specs: list[str]) -> list[tuple[str, bool]]:
@@ -826,15 +827,18 @@ def _debug_enabled(args) -> bool:
 
 def report_error(
     exc: Exception, program: str, *, squall: bool, debug: bool, nl=None,
-    file=None,
+    file=None, engine_name: str = "",
 ) -> None:
     """
     Print the query error *exc* as a formatted message.
 
     The message shows the location of the error in *program*, hints and
-    the symbols of the engine *nl* close to an unknown one. In *debug*
-    mode the traceback is printed first; otherwise unexpected errors get
-    a hint to use ``--debug``. *file* defaults to ``sys.stderr``.
+    the symbols of the engine *nl* close to an unknown one. When the
+    error concerns a predicate of the engine *engine_name* that spans
+    entities of several columns, a note tells how to write it (see
+    :func:`~neurolang.utils.sort_hints.sort_notes`). In *debug* mode the
+    traceback is printed first; otherwise unexpected errors get a hint
+    to use ``--debug``. *file* defaults to ``sys.stderr``.
     """
     stream = sys.stderr if file is None else file
     if debug:
@@ -847,6 +851,8 @@ def report_error(
         known_symbols=_known_symbol_names(nl),
         file=stream,
     )
+    for note in sort_notes(exc, program, engine_name, squall):
+        print(note, file=stream)
     if not (debug or isinstance(exc, (NeuroLangException, LarkError))):
         print(
             "Run with --debug (or NEUROLANG_DEBUG=1) to see the "
@@ -867,7 +873,7 @@ def _run_reporting_errors(action, program: str, args, nl=None):
     except Exception as exc:
         report_error(
             exc, program, squall=args.squall, debug=_debug_enabled(args),
-            nl=nl,
+            nl=nl, engine_name=getattr(args, "engine", ""),
         )
         sys.exit(1)
 

@@ -220,6 +220,7 @@ class InteractiveTuiApp:
             exc, program, squall=self.settings.squall,
             debug=self.settings.debug, nl=self._nl,
             file=self.err_console.file,
+            engine_name=self.settings.engine_name,
         )
 
     def _result_block(self, result, title: str, column_names) -> ResultBlock:
