@@ -47,7 +47,7 @@ def test_idb_lists_session_predicate(app):
 
 def test_clear_all_removes_session_idb(app):
     app._handle_dot_command(".clear")
-    assert "cleared" in _output(app)
+    assert "removed active (1 rule)" in _output(app)
     assert "active" not in _idb_names(app)
     app._execute_and_display("again(x) :- person(x)")
     assert "again" in _idb_names(app)
@@ -403,7 +403,9 @@ def test_clear_removes_loaded_relations(app, tmp_path, capsys):
     path = _write(tmp_path / "scores.csv", "Name\nalice\n")
     app._handle_dot_command(f".load {path}")
     out = _command(app, ".clear")
-    assert "IDB predicates and loaded relations cleared" in out
+    assert out.splitlines() == [
+        "removed active (1 rule)", "removed relation scores"
+    ]
     assert "scores" not in [s.name for s in app._nl.program_ir.symbol_table]
     assert app.loaded_relations == {}
     assert "loaded scores" in _command(app, f".load {path}")
@@ -708,3 +710,36 @@ def test_ra_of_a_query_with_its_rules(app, capsys):
     assert "fan" in out
     assert not app.failed
     assert _command(app, ".idb fan").count("fan(") == 1
+
+
+def test_clear_says_what_it_removed(two_rules, capsys):
+    _submit(two_rules, "foo(1)\nfoo(2)")
+    _submit(two_rules, "person('carol')")
+    assert _command(two_rules, ".clear").splitlines() == [
+        "removed active (1 rule)",
+        "removed both (2 rules)",
+        "removed foo (2 facts)",
+        "removed person (1 fact); its 2 engine facts remain",
+    ]
+    assert _command(two_rules, ".clear").splitlines() == ["nothing to clear"]
+    assert _query(two_rules, "ans(x) :- person(x)") == {("alice",), ("bob",)}
+
+
+def test_clear_keeps_the_engine_rules():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("alice",), ("bob",)], name="person")
+    nl.execute_datalog_program("named(x) :- person(x)")
+    console = Console(file=io.StringIO(), width=100)
+    app = InteractiveTuiApp(nl, console=console, err_console=console)
+    app._execute_and_display("named(x) :- person(x), person(x)")
+    assert _command(app, ".clear").splitlines() == [
+        "removed named (1 rule); its 1 engine rule remain"
+    ]
+
+
+def test_clear_lists_a_conditional_once(conditional):
+    lines = _command(conditional, ".clear").splitlines()
+    assert [line for line in lines if "marg" in line] == [
+        "removed marg (1 rule)"
+    ]
+    assert "removed mentions (3 facts)" in lines
