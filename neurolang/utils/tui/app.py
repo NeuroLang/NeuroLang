@@ -36,7 +36,7 @@ from .commands import (
 )
 from .interrupt import call_interruptibly
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
-from .session import open_session_scope, record_squall_rules
+from .session import Submission, open_session_scope, record_squall_rules
 from .statements import is_complete, split_statements
 from .transcript import Transcript, is_transcript_command
 
@@ -284,23 +284,45 @@ class InteractiveTuiApp:
             self.settings.engine_name, program, self.loaded_relations
         )
 
+    def _submit(self, program: str, submission: Submission):
+        """
+        Run *program* as the *submission* and return its result.
+
+        What it defines is kept only if it succeeds (see
+        :class:`~.session.Submission`).
+        """
+        with submission:
+            result = self._execute_noting_warnings(program)
+            if self.settings.squall:
+                record_squall_rules(self, program)
+        return result
+
+    def _note_discarded(self, submission: Submission) -> None:
+        """Tell that the failed *submission* defined nothing, if it tried."""
+        if submission.discarded:
+            self.err_console.print(
+                "nothing defined: the submission failed", style="yellow",
+                markup=False,
+            )
+
     def _execute_and_display(self, program: str) -> None:
         """Run a Datalog or SQUALL query and print its result."""
         self.last_query = (program, self.settings.squall)
         self.err_console.print("[dim]Running query...[/dim]")
         t0 = time.perf_counter()
+        submission = Submission(self._nl)
         try:
-            result = self._execute_noting_warnings(program)
-            if self.settings.squall:
-                record_squall_rules(self, program)
+            result = self._submit(program, submission)
             if not self.settings.show_ra:
                 self._show_result(result, self._column_names(program))
         except KeyboardInterrupt:
             self.failed = True
             self.err_console.print("[yellow]Query interrupted[/yellow]")
+            self._note_discarded(submission)
             return
         except Exception as exc:
             self._report_error(exc, program)
+            self._note_discarded(submission)
             return
         elapsed = time.perf_counter() - t0
         self.err_console.print(
