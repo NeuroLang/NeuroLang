@@ -24,6 +24,7 @@ from rich.table import Table
 
 from neurolang.datalog import Union as DatalogUnion
 from neurolang.datalog.basic_representation import UnionOfConjunctiveQueries
+from neurolang.datalog.expressions import AdornedSymbol
 from neurolang.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from neurolang.expressions import Symbol
 from neurolang.frontend.datalog.pretty_printer import DatalogPrettyPrinter
@@ -47,13 +48,31 @@ def open_session_scope(nl) -> None:
 
 
 def session_idb_symbols(nl) -> set:
-    """Return the symbols of the predicates defined in the session."""
+    """
+    Return the symbols of the predicates defined in the session.
+
+    The helpers NeuroLang compiles a conditional probability into, such
+    as ``P^cond_num`` and ``P^cond_den`` for ``P``, are left out: they
+    are named ``P`` too.
+    """
     symbol_table = nl.program_ir.symbol_table
     return {
         symbol
         for symbol in nl.program_ir.intensional_database()
         if symbol in symbol_table._symbols
+        and not isinstance(symbol, AdornedSymbol)
     }
+
+
+def _drop_helpers(app, name: str) -> None:
+    """Remove the session's helper predicates of the predicate *name*."""
+    symbol_table = app._nl.program_ir.symbol_table
+    helpers = [
+        symbol for symbol in symbol_table._symbols
+        if isinstance(symbol, AdornedSymbol) and symbol.name == name
+    ]
+    for symbol in helpers:
+        del symbol_table[symbol]
 
 
 def _warn(app, message: str) -> None:
@@ -155,6 +174,7 @@ def _engine_rules(app, name: str) -> tuple:
 def _drop_all_rules(app, name: str, rules: tuple) -> None:
     """Remove the session's rules of the predicate *name*."""
     del app._nl.program_ir.symbol_table[Symbol(name)]
+    _drop_helpers(app, name)
     kept = len(_engine_rules(app, name))
     message = f"removed {name} ({_plural(len(rules) - kept, 'rule')})"
     if kept:
@@ -181,6 +201,7 @@ def _drop_rule(app, name: str, rules: tuple, number: int) -> None:
         left = f"{_plural(len(remaining), 'rule')} left"
     else:
         del symbol_table[Symbol(name)]
+        _drop_helpers(app, name)
         left = f"no rules left: {name} removed"
     app.console.print(
         f"removed rule {number} of {name} ({left})", style="green",
