@@ -844,6 +844,37 @@ def test_execute_squall_where_label_is_constant_multiple_predicates(nl):
     )
 
 
+def test_execute_squall_where_label_is_constant_absent_from_set_column():
+    """
+    A ``where ?l is 'value'`` filter matching no row over a relation whose
+    columns come from destroying a set of tuples returns an empty result.
+
+    The constant is pushed below the set destruction, so the relation
+    exploded into ``(I, J, K)`` is empty.  Before the fix, exploding an
+    empty relation into several columns raised ``KeyError ['I', 'J']``.
+    """
+    engine = NeurolangPDL()
+    engine.add_tuple_set(
+        [("a", frozenset({(0, 0, 0), (1, 1, 1)})),
+         ("b", frozenset({(2, 2, 2)}))],
+        name="atlas",
+    )
+    engine.execute_datalog_program(
+        """
+        voxels(I, J, K, l) :- atlas(l, r), contains(r, (I, J, K)).
+        labels(l, i, j, k) :- voxels(i, j, k, l)
+        """
+    )
+    found = engine.execute_squall_program(
+        "obtain every Labels (?l; ?i; ?j; ?k) where ?l is 'a'."
+    )
+    assert set(found) == {("a", 0, 0, 0), ("a", 1, 1, 1)}
+    missing = engine.execute_squall_program(
+        "obtain every Labels (?l; ?i; ?j; ?k) where ?l is 'zzz'."
+    )
+    assert len(missing) == 0
+
+
 # ---------------------------------------------------------------------------
 # Probabilistic choice syntax
 # ---------------------------------------------------------------------------
