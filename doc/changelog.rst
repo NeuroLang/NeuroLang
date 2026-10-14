@@ -19,6 +19,17 @@ Unreleased
 
 **New features:**
 
+* Semantic search over document texts with SPECTER2
+  (:mod:`neurolang.utils.text_embeddings`).  Engines declare a
+  ``text_embeddings`` section in ``engines.yaml`` to register a function
+  ``f(query, doc)`` returning the cosine similarity between a document and
+  a free-text query.  The ``neurosynth`` engine provides
+  ``query_similarity``, used as
+  ``study(s) & (sim == query_similarity('visual word form reading', s))``,
+  over PubMed titles and abstracts; see the new gallery example
+  :ref:`sphx_glr_auto_examples_plot_text_embeddings_forward_inference.py`.
+  Requires ``pip install "neurolang[embeddings]"``.
+
 * Declarative engine registry for the ``neurolang-query`` CLI.
   Engines are defined in YAML and initialised by pluggable Python modules
   under :file:`neurolang/utils/engines/`.  Includes ``--list-engines`` for
@@ -80,6 +91,28 @@ Unreleased
   ``python_init`` module.  It is now fully declarative, using
   ``use_base_symbols`` and the ``atlases:`` section.  The
   :file:`neurolang/utils/engines/destrieux/init.py` module was removed.
+
+**Bug fixes:**
+
+* ``NeurolangPDL`` queries such as ``ans(s) :- p('a', s)`` now pass the
+  constants of the query to the rules of ``p`` through magic sets, as
+  ``NeurolangDL`` does, so a rule variable bound only by the query, e.g.
+  the argument of a function, can be computed.
+
+* Magic sets missed the initial magic fact of a constant when the same
+  predicate, with the same adornment, was called with another constant in
+  a rule rewritten earlier, e.g. ``a(y) :- r(1, y)`` and
+  ``b(y) :- r(2, y)``, so one of the calls gave no rows.
+
+* A rule body made only of equalities to constants, as the magic rules
+  of a query with two constants, e.g. ``ans(z) :- r(1, 2, z)``, lost all
+  but the last column.
+
+* The ``neurosynth`` engine stored study ids as floats in ``study`` and
+  ``peak_reported`` but as ``StudyID`` strings in ``term_in_study_tfidf``,
+  so joining them failed.  All three now use ``StudyID``, and the documented
+  column order of ``term_in_study_tfidf`` is fixed to
+  ``(study_id, term, tfidf)``.
 
 
 v0.0.1 (Alpha)

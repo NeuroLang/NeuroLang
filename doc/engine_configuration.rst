@@ -35,6 +35,8 @@ may specify the following keys, all of them optional:
   predicate, declared as YAML mappings (``source`` and an optional
   ``description``)
 - ``ontologies`` — list of ``{url}`` entries for OWL/RDF ontologies to load
+- ``text_embeddings`` — semantic search over document texts, registered as
+  a similarity function (see :ref:`text-embeddings-section` below)
 - ``predicates`` — schema metadata (arity, column names, description) used
   by ``--list-predicates``, the interactive REPL and the web UI; see
   :ref:`predicate-arguments` below
@@ -51,7 +53,7 @@ may specify the following keys, all of them optional:
 
 The init phases run in the order described in :doc:`concepts`: builtins,
 base symbols, Python init, downloads, templates, atlases, Datalog init,
-relations, probabilistic choices and ontologies.
+relations, text embeddings, probabilistic choices and ontologies.
 
 Example — the ``neurosynth`` engine (abridged)::
 
@@ -145,6 +147,42 @@ distinguish variables from predicate names by case, so ``S`` and ``s`` are
 both variables, and the final ``.`` of a rule is optional.  Comparisons must
 be written between parentheses, as in ``(v > 0.03)``.  See
 :doc:`tutorial_datalog` for the full syntax.
+
+.. _text-embeddings-section:
+
+Text embeddings
+---------------
+
+A ``text_embeddings`` entry embeds the title and abstract of every
+document of a relation with SPECTER2 and registers a function
+``function(query, doc)`` returning the cosine similarity between a
+free-text query and a document, ``nan`` for an id that is not in the
+relation (see :doc:`tutorial_text_embeddings`)::
+
+    text_embeddings:
+      study_abstracts:
+        ids_from: study                 # first column holds the document ids
+        source: pubmed                  # ids are PubMed ids
+        model: allenai/specter2_base
+        document_adapter: allenai/specter2
+        query_adapter: allenai/specter2_adhoc_query
+        function: query_similarity
+        description: "Similarity between a query and a study abstract"
+
+``source`` is either ``pubmed`` (titles and abstracts fetched from the NCBI
+E-utilities) or a table of texts, local or remote::
+
+        source:
+          file: https://example.org/documents.tsv
+          id_column: id
+          text_columns: [title, abstract]   # first column is the title
+
+``model``, ``document_adapter`` and ``query_adapter`` default to the values
+above.  The engine build only reads the ids.  Texts are fetched and
+embedded on the first query that uses the function, and cached under
+``{data_dir}/{engine}/embeddings/``.  The embeddings can be computed ahead
+of time with ``python -m neurolang.utils.text_embeddings --engine
+neurosynth --data-dir neurolang_data``.
 
 To add a new engine, append an entry to ``engines.yaml`` and (if needed)
 provide a ``python_init`` module whose ``init_engine`` function populates the
